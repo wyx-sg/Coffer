@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import InboundLifecycle
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.live_text import SeaTalkLiveText
+from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_send import (
     SEATALK_MENTION_EMAIL_TEMPLATE,
     SEATALK_MENTION_TEMPLATE,
@@ -132,12 +132,9 @@ async def test_non_json_upstream_surfaces_as_channel_send_failed(
         await adapter.stop()
 
 
-async def test_edit_and_delete_are_unsupported_capabilities(fake_seatalk: FakeSeaTalk) -> None:
+async def test_delete_is_an_unsupported_capability(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        assert adapter.capabilities.supports_edit is False
-        with pytest.raises(ChannelSendFailed):
-            await adapter.edit_text("emp-1", "m1", "new")
         with pytest.raises(ChannelSendFailed):
             await adapter.delete_message("emp-1", "m1")
     finally:
@@ -726,10 +723,9 @@ async def test_send_text_direct_without_thread_id_omits_thread_field(
     assert "thread_id" not in body["message"]
 
 
-async def test_capabilities_declare_groups_and_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
+async def test_capabilities_declare_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        assert adapter.capabilities.supports_groups is True
         assert adapter.capabilities.supports_history_fetch is True
     finally:
         await adapter.stop()
@@ -1722,9 +1718,8 @@ async def test_open_live_text_is_declared_and_returns_a_stream_surface(
 ) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        # supports_edit stays literally false — SeaTalk still cannot rewrite a
-        # delivered message — while the live-text capability is what the core asks.
-        assert adapter.capabilities.supports_edit is False
+        # SeaTalk cannot rewrite a delivered text message; the live-text
+        # capability is what the core asks.
         assert adapter.capabilities.supports_live_text is True
         live = await adapter.open_live_text("emp-1")
         assert isinstance(live, SeaTalkLiveText)
@@ -1993,3 +1988,104 @@ async def test_an_interim_snapshot_past_the_budget_keeps_its_mention(
     assert opening.startswith(mention)
     assert "…" in opening  # the body was clipped, the tag kept
     assert len(opening) <= 4096  # inside the platform's stream cap
+
+
+# -- group replies as withdrawable cards ---------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a group reply is cards with the trash button on the last"
+)
+async def test_a_long_group_reply_is_cards_with_the_trash_button_on_the_last(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    from coffer.domain.channel.envelopes import ChoiceButton
+
+    reply = "\n\n".join(f"paragraph {i} " + "word " * 120 for i in range(12))
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        sent = await adapter.send_text(
+            "gid-1",
+            reply,
+            chat_kind="group",
+            thread_id="t1",
+            buttons=[ChoiceButton(label="🗑", value="del:r1")],
+        )
+    finally:
+        await adapter.stop()
+
+    cards = [body["message"] for body, _auth in fake_seatalk.group_chat_calls]
+    assert len(cards) > 1
+    assert all(card["tag"] == "interactive_message" for card in cards)
+    assert len(sent.all_ids) == len(cards)
+    elements = [card["interactive_message"]["elements"] for card in cards]
+    for card_elements in elements:
+        descriptions = [e for e in card_elements if e["element_type"] == "description"]
+        assert 1 <= len(descriptions) <= 4
+        assert all(len(d["description"]["text"]) <= 1000 for d in descriptions)
+    has_buttons = [any(e["element_type"] == "button_group" for e in els) for els in elements]
+    assert has_buttons == [False] * (len(cards) - 1) + [True]
+    assert elements[1][0]["description"]["text"].startswith("(2/")
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a short group reply is one card with markdown rendered"
+)
+async def test_a_short_group_reply_is_one_rendered_card(fake_seatalk: FakeSeaTalk) -> None:
+    from coffer.domain.channel.envelopes import ChoiceButton
+
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.send_text(
+            "gid-1",
+            "Deploy is **green**.\n\n```\nok\n```",
+            chat_kind="group",
+            buttons=[ChoiceButton(label="🗑", value="del:r1")],
+        )
+    finally:
+        await adapter.stop()
+
+    [(body, _auth)] = fake_seatalk.group_chat_calls
+    description = body["message"]["interactive_message"]["elements"][0]["description"]
+    assert description["format"] == 1
+    assert "**green**" in description["text"] and "```" in description["text"]
+
+
+@pytest.mark.acceptance(spec="channels/seatalk", scenario="withdrawing rewrites each card blank")
+async def test_withdrawing_rewrites_the_card_blank_through_update_message(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    updates: list[dict[str, Any]] = []
+
+    async def handler(request: Request) -> JSONResponse:
+        updates.append(await request.json())
+        return JSONResponse(content={"code": 0})
+
+    fake_seatalk.app.post("/messaging/v2/update")(handler)
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        await adapter.withdraw_message("gid-1", "mid-9", chat_kind="group")
+    finally:
+        await adapter.stop()
+
+    [body] = updates
+    assert body["message_id"] == "mid-9"
+    elements = body["message"]["interactive_message"]["elements"]
+    assert elements == [
+        {"element_type": "description", "description": {"format": 1, "text": "🗑 Withdrawn"}}
+    ]
+
+
+@pytest.mark.acceptance(spec="channels/seatalk", scenario="a seatalk group turn does not stream")
+async def test_seatalk_declares_no_group_streaming_and_a_seven_day_card_window(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        caps = adapter.capabilities
+    finally:
+        await adapter.stop()
+    assert caps.supports_live_text and caps.live_text_persists  # direct chats still stream
+    assert caps.streams_in_groups is False
+    assert caps.withdraw_window_hours == 168
+    assert caps.withdraw_removes is False

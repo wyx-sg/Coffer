@@ -8,13 +8,24 @@ what already arrived on the update itself.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.channel.envelopes import InboundAttachment, InboundMessage
 from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded, quote_prefix
 
-__all__ = ["addressed_and_text", "build_inbound_message", "is_group", "prepend_context"]
+__all__ = [
+    "addressed_and_text",
+    "build_inbound_message",
+    "command_target",
+    "is_group",
+    "prepend_context",
+]
+
+#: ``/cmd@botname`` — the form Telegram's own menu inserts in a group, and the
+#: one a member types to pick one bot out of several.
+_ADDRESSED_COMMAND = re.compile(r"^(/[A-Za-z0-9_]+)@([A-Za-z0-9_]+)$")
 
 
 def _utf16_span(text: str, offset: int, length: int) -> str:
@@ -138,19 +149,38 @@ def _strip_span(text: str, offset: int, length: int) -> str:
     return (before + after).strip()
 
 
-def _forward_sender_name(message: dict[str, Any]) -> str:
-    """Best-effort display name for a forwarded message's original sender,
-    across both the modern ``forward_origin`` shape and the pre-Bot-API-7
-    ``forward_from`` / ``forward_sender_name`` fields it replaced.
+def command_target(
+    message: dict[str, Any], text: str, *, bot_username: str | None
+) -> tuple[bool, str] | None:
+    """Whether a leading ``/cmd@name`` names this bot, and ``text`` with it
+    normalised to ``/cmd`` (spec channels/telegram "Treat a command addressed
+    to this bot by name as the command").
 
-    The old fields are KEPT deliberately, as of 2026-09. Telegram's own cloud
-    stopped sending them at Bot API 7.0, but a channel may point at a
-    self-hosted Bot API server of any vintage — which is the same reason
-    ``telegram.py`` treats its 10.x capabilities as per-adapter and
-    ``telegram_draft.py`` latches a feature off when a server has never heard
-    of it. Two fields of tolerance against a forwarded message rendered with
-    no sender name. Drop them when the adapter stops supporting self-hosted
-    servers, not before."""
+    ``None`` when the message does not open with such a command — Telegram
+    marks one with a ``bot_command`` entity at offset 0, whose length is in
+    UTF-16 units. For another bot's command the text is returned unchanged:
+    it was never ours to rewrite. The name is matched case-insensitively, as
+    Telegram matches usernames.
+    """
+    for ent in message.get("entities") or message.get("caption_entities") or []:
+        if not isinstance(ent, dict) or ent.get("type") != "bot_command":
+            continue
+        length = ent.get("length")
+        if ent.get("offset") != 0 or not isinstance(length, int):
+            continue
+        match = _ADDRESSED_COMMAND.match(_utf16_span(text, 0, length))
+        if match is None:
+            return None
+        if not bot_username or match.group(2).casefold() != bot_username.casefold():
+            return False, text
+        _, after = _utf16_cut(text, 0, length)
+        return True, f"{match.group(1)}{after}"
+    return None
+
+
+def _forward_sender_name(message: dict[str, Any]) -> str:
+    """Best-effort display name for a forwarded message's original sender, from
+    ``forward_origin`` (Bot API 7.0+; the fields it replaced are not read)."""
     origin = message.get("forward_origin")
     if isinstance(origin, dict):
         otype = origin.get("type")
@@ -165,18 +195,11 @@ def _forward_sender_name(message: dict[str, Any]) -> str:
         if otype == "channel":
             chat = origin.get("chat") or {}
             return str(chat.get("title") or "")
-    forward_from = message.get("forward_from")
-    if isinstance(forward_from, dict):
-        return str(forward_from.get("first_name") or forward_from.get("username") or "")
-    return str(message.get("forward_sender_name") or "")
+    return ""
 
 
 def _is_forwarded(message: dict[str, Any]) -> bool:
-    return bool(
-        message.get("forward_origin")
-        or message.get("forward_from")
-        or message.get("forward_sender_name")
-    )
+    return bool(message.get("forward_origin"))
 
 
 def prepend_context(message: dict[str, Any], text: str) -> str:
@@ -193,6 +216,13 @@ def prepend_context(message: dict[str, Any], text: str) -> str:
             sender_name = str(sender.get("first_name") or sender.get("username") or "")
             body = f"{quote_prefix(sender_name, str(reply_text))}{body}"
     return body.strip()
+
+
+def _replied_to_id(message: dict[str, Any]) -> str:
+    """The id of the message this one replies to ("" for none) — what ``/del`` reads
+    to find the reply it withdraws."""
+    reply = message.get("reply_to_message")
+    return str(reply.get("message_id") or "") if isinstance(reply, dict) else ""
 
 
 def build_inbound_message(
@@ -214,13 +244,21 @@ def build_inbound_message(
     raw_text = str(message.get("text") or message.get("caption") or "")
     addressed, raw = (True, raw_text)
     mentions_other = False
+    named = command_target(message, raw_text, bot_username=bot_username)
     if group:
-        addressed, raw = addressed_and_text(
-            message, raw_text, bot_id=bot_id, bot_username=bot_username
-        )
         mentions_other = _mentions_other(
             message, raw_text, bot_id=bot_id, bot_username=bot_username
         )
+        if named is not None:
+            # ``/cmd@name`` says who it is for, over any reply or @mention: ours
+            # is addressed whatever require_mention says, another bot's is not.
+            addressed, raw = named
+        else:
+            addressed, raw = addressed_and_text(
+                message, raw_text, bot_id=bot_id, bot_username=bot_username
+            )
+    elif named is not None:
+        raw = named[1]
     text = prepend_context(message, raw)
     if notes:
         # An attachment that could not be fetched is stated in the turn text, so the answer can
@@ -235,6 +273,9 @@ def build_inbound_message(
         platform_message_id=str(message.get("message_id", "")),
         timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
         sender_id=str(sender.get("id") or ""),
+        # The id a mention links to — the same ``from.id`` (Telegram addresses a
+        # member by one id for both).
+        sender_mention_id=str(sender.get("id") or ""),
         chat_kind="group" if group else "direct",
         # Telegram hands the group's name over for free on every update ("Open every turn with its
         # message origin"); a DM's chat has no title.
@@ -242,6 +283,7 @@ def build_inbound_message(
         addressed=addressed,
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
+        replies_to_message_id=_replied_to_id(message),
         forwarded=_is_forwarded(message),
         attachments=attachments,
         # Present when the user sent an ephemeral command, and the

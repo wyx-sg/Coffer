@@ -7,7 +7,7 @@ for it. A set of skills would spend the resident budget several times over to
 describe things most sessions never touch.
 
 So there is one description, carrying what a model can actually match on, and
-one body carrying everything else: Coffer's two tools, the tiering contract that
+one body carrying everything else: Coffer's one tool, the tiering contract that
 means the tool list is not the whole catalogue, the read-it-yourself shape of
 the knowledge layer, the memory root an agent searches for a note, the
 ``coffer log`` readers of Coffer's own records, the fact that Coffer never
@@ -33,8 +33,8 @@ registers nothing, audits nothing and re-delivers nothing, and the row's
 ``version_hash`` means "the content moved" rather than "time passed".
 
 That is still why the knowledge and memory roots are rendered in their
-``~``-relative form whenever they sit in the default place — though the reason there has always been
-partly that a path an agent reads should be one a person can retype.
+``~``-relative form whenever they sit under the home — though the reason there has always
+been partly that a path an agent reads should be one a person can retype.
 """
 
 from __future__ import annotations
@@ -48,8 +48,9 @@ import yaml
 
 from coffer.domain.knowledge.entry import CollectionEntry, FileEntry
 
-#: The skill's name, its master folder name under ``~/.coffer/skills/``, and the
-#: directory name every agent receives it as.
+#: The skill's name, its master folder name (under ``~/.coffer/derived/skills/``:
+#: the folder is rendered from the build, so it is derived output, not vault
+#: content), and the directory name every agent receives it as.
 GUIDE_SKILL_NAME = "coffer-guide"
 
 #: Skill frontmatter descriptions are capped by the importers that read them;
@@ -64,9 +65,6 @@ _ROOT_PLACEHOLDER = "<KNOWLEDGE_ROOT>"
 #: Replaced in the asset with the memory root as ``display_memory_root`` gives it.
 _MEMORY_ROOT_PLACEHOLDER = "<MEMORY_ROOT>"
 
-#: Replaced in the asset with how many ``coffer__`` tools the manual describes.
-_TOOL_COUNT_PLACEHOLDER = "<TOOL_COUNT>"
-
 #: A line ``<!-- when:<feature> -->`` opens a span of the asset that belongs to
 #: one experimental feature, ``<!-- end:<feature> -->`` closes it; spans nest.
 #: The marker lines are never rendered, and a span is dropped whole while its
@@ -77,8 +75,6 @@ _SPAN_OPEN = re.compile(r"^<!-- when:([a-z_]+) -->$")
 _SPAN_CLOSE = re.compile(r"^<!-- end:([a-z_]+) -->$")
 
 _ASSET = "coffer-guide.md"
-
-_COUNT_WORDS = {1: "one tool", 2: "two tools"}
 
 _LEAD_WITH_KNOWLEDGE = (
     "Coffer, this machine's local vault — how to use it, and what it already holds"
@@ -101,30 +97,32 @@ _TAIL = (
 Catalogue = Sequence[tuple[CollectionEntry, Sequence[FileEntry]]]
 
 
-def _display(path: pathlib.Path, default: str, *, home: pathlib.Path | None) -> str:
-    base = (home or pathlib.Path.home()) / default
-    return f"~/{default}" if path == base else str(path)
+def _display(path: pathlib.Path, *, home: pathlib.Path | None) -> str:
+    base = home or pathlib.Path.home()
+    try:
+        return f"~/{path.relative_to(base).as_posix()}"
+    except ValueError:
+        return str(path)
 
 
 def display_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str:
     """The knowledge root as the skill should name it.
 
-    ``~/.coffer/knowledge`` when the root sits in its default place, and the
-    absolute path otherwise. The tilde form keeps the rendered bytes free of
-    this machine's home directory, and a path an agent reads should be one a
-    person can retype; the artifact itself does not converge (see the module
-    docstring), so this is not about two copies agreeing. When the root has
-    been moved (``COFFER_KNOWLEDGE_ROOT``), ``~`` would be a lie, and an
-    accurate path matters more than a stable one.
+    ``~/.coffer/vault/knowledge`` — the tilde form of any root under the home,
+    and the absolute path otherwise. The tilde form keeps the rendered bytes
+    free of this machine's home directory, and a path an agent reads should be
+    one a person can retype; the artifact itself does not converge (see the
+    module docstring), so this is not about two copies agreeing. A root
+    outside the home (a home that is itself a symlink resolved elsewhere) is
+    named absolutely, because an accurate path matters more than a stable one.
     """
-    return _display(root, ".coffer/knowledge", home=home)
+    return _display(root, home=home)
 
 
 def display_memory_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str:
     """The memory root as the skill names it, on the rule :func:`display_root`
-    states: ``~/.coffer/memory`` in its default place, absolute when moved
-    (``COFFER_MEMORY_ROOT``)."""
-    return _display(root, ".coffer/memory", home=home)
+    states (``~/.coffer/derived/memory``)."""
+    return _display(root, home=home)
 
 
 def _subject(entry: CollectionEntry) -> str:
@@ -143,11 +141,8 @@ def _subject(entry: CollectionEntry) -> str:
 
 def _lead(*, knowledge: bool, memory: bool) -> str:
     """The description's first sentence: what Coffer is and which tools it has."""
-    tools = [_SEARCH_TOOLS_GLOSS]
-    if knowledge:
-        tools.append("coffer__write")
     head = _LEAD_WITH_KNOWLEDGE if knowledge else _LEAD_WITHOUT_KNOWLEDGE
-    covers = f"Covers its own tools ({'; '.join(tools)})"
+    covers = f"Covers its own tool ({_SEARCH_TOOLS_GLOSS})"
     if memory:
         covers += ", where its memory notes live"
     if knowledge:
@@ -210,12 +205,10 @@ def _manual(root: str, *, knowledge: bool, memory_root: str | None) -> str:
     """The static half with the switched-off features' spans taken out."""
     memory = memory_root is not None
     enabled = {key for key, on in (("knowledge", knowledge), ("memory", memory)) if on}
-    count = 1 + int(knowledge)  # search_tools is always there; write is knowledge's
     return (
         _select_spans(_static_body(), enabled)
         .replace(_ROOT_PLACEHOLDER, root)
         .replace(_MEMORY_ROOT_PLACEHOLDER, memory_root or "")
-        .replace(_TOOL_COUNT_PLACEHOLDER, _COUNT_WORDS[count])
     )
 
 
@@ -302,7 +295,7 @@ def render(root: str, catalogue: Catalogue | None, *, memory_root: str | None = 
 
     ``catalogue`` is ``None`` while the knowledge feature is switched off: the
     skill is then rendered without its knowledge catalogue or the sections
-    that document ``coffer__write`` and the knowledge root. ``memory_root`` is
+    that document writing into the inbox and the knowledge root. ``memory_root`` is
     the memory root as :func:`display_memory_root` gives it, or ``None`` while
     the memory feature is off: the sections naming it are then left out (spec
     experimental-features "Withdraw what a switched-off feature put in front of

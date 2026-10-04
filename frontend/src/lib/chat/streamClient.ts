@@ -13,82 +13,45 @@
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
 import { ApiError, daemonNotReadyError } from "../api/errors";
+import type { components } from "../api/generated/chat";
 
 // ---------------------------------------------------------------------------
 // Event types
 // ---------------------------------------------------------------------------
 
-interface TurnStartEvent {
-  event: "turn_start";
-  // Backend TurnStarted dataclass has only `type`; no extra fields on the wire.
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  data: {};
-}
+/** The `data:` payloads of the chat contract (`TurnEventMessage`), by their `type`. */
+type TurnEventData = components["schemas"]["TurnEventMessage"];
+type EventName = TurnEventData["type"];
 
-interface TextDeltaEvent {
-  event: "text_delta";
-  data: { text: string };
-}
-
-interface ToolCallEvent {
-  event: "tool_call";
-  data: {
-    tool_use_id: string;
-    tool_name: string;
-    tool_input: Record<string, unknown>;
-  };
-}
-
-interface ToolResultEvent {
-  event: "tool_result";
-  data: {
-    tool_use_id: string;
-    tool_name: string;
-    output?: Record<string, unknown> | null;
-    error?: string | null;
-  };
-}
-
-interface TurnDoneEvent {
-  event: "turn_done";
-  // Backend TurnDone: prompt_tokens, completion_tokens, stop_reason, type.
-  data: {
-    prompt_tokens?: number | null;
-    completion_tokens?: number | null;
-    stop_reason: string;
-  };
-}
-
-interface TurnErrorEvent {
-  event: "turn_error";
-  data: { code: string; message: string };
-}
-
-interface QueueChangedEvent {
-  event: "queue_changed";
-  data: { pending: string[] };
-}
-
-export type AgentEvent =
-  | TurnStartEvent
-  | TextDeltaEvent
-  | ToolCallEvent
-  | ToolResultEvent
-  | TurnDoneEvent
-  | TurnErrorEvent
-  | QueueChangedEvent;
+/**
+ * One event off the wire: the SSE `event:` name beside its `data:` payload, which
+ * the contract types per name (each payload's `type` equals the name — spec chat
+ * "Use the wire event name as the type discriminator"). Derived from the generated
+ * schemas, so a field or an event the daemon adds, renames or drops changes this
+ * union and every reader of it fails to compile.
+ */
+export type AgentEvent = {
+  [E in EventName]: { event: E; data: Extract<TurnEventData, { type: E }> };
+}[EventName];
 
 /** SSE event names this client understands; anything else is skipped so the
- *  AgentEvent union cast stays honest. */
-const KNOWN_EVENTS: ReadonlySet<string> = new Set([
-  "turn_start",
-  "text_delta",
-  "tool_call",
-  "tool_result",
-  "turn_done",
-  "turn_error",
-  "queue_changed",
-]);
+ *  AgentEvent cast stays honest. Keyed by the contract's names, so adding or
+ *  removing an event there is a compile error here until this client follows. */
+const KNOWN_EVENTS: Record<EventName, true> = {
+  turn_start: true,
+  text_delta: true,
+  tool_call: true,
+  tool_result: true,
+  turn_done: true,
+  turn_error: true,
+  queue_changed: true,
+  question_asked: true,
+  question_closed: true,
+};
+
+function isKnownEvent(name: string): name is EventName {
+  return Object.hasOwn(KNOWN_EVENTS, name);
+}
 
 // ---------------------------------------------------------------------------
 // SSE frame parser
@@ -191,7 +154,7 @@ export async function* subscribeConversationEvents(
         if (!frame) continue;
 
         // Skip unrecognized event names so the union cast stays honest.
-        if (!KNOWN_EVENTS.has(frame.event)) continue;
+        if (!isKnownEvent(frame.event)) continue;
 
         let parsed: unknown;
         try {
@@ -201,8 +164,7 @@ export async function* subscribeConversationEvents(
           continue;
         }
 
-        const event = { event: frame.event, data: parsed } as AgentEvent;
-        yield event;
+        yield { event: frame.event, data: parsed } as AgentEvent;
         // The subscription is long-lived: it does NOT terminate on turn_done
         // or turn_error. It ends only when the stream closes or it is aborted.
       }
@@ -214,7 +176,7 @@ export async function* subscribeConversationEvents(
     const trimmed = buffer.trim();
     if (trimmed) {
       const frame = parseFrame(trimmed);
-      if (frame && KNOWN_EVENTS.has(frame.event)) {
+      if (frame && isKnownEvent(frame.event)) {
         let parsed: unknown;
         try {
           parsed = JSON.parse(frame.data);

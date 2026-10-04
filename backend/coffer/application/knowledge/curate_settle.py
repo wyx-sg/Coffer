@@ -6,8 +6,9 @@ an item cut off every time (``give_up``).
 
 An item is settled only once its pass completes (spec knowledge "Settle an item
 only after its pass completes"): material leaves the inbox, an edited document
-is stamped. A pass the recursion limit cuts off leaves its item owed, so the
-next sweep retries it.
+is recorded as settled by content (``infrastructure.knowledge.curation_state``).
+A pass the recursion limit cuts off leaves its item owed, so the next sweep
+retries it.
 
 Some items are cut off every time — too much for the recursion limit however
 often they are retried. Re-offered forever, such an item would burn a model pass
@@ -16,7 +17,7 @@ every sweep and re-render every agent's catalogue for nothing. So a pass counts
 it gives up and settles the item the way the no-model path does: material is
 **promoted** as it stands — the documents the cut-off passes wrote stay, and the
 material joins them whole, so nothing it held is lost even if the passes merged
-only part of it — and an edited document is stamped, since the person's edit is
+only part of it — and an edited document is settled, since the person's edit is
 already readable where they made it. The pass reports ``truncated`` with
 ``gave_up: true`` (and the promoted path) so a person sees it happened.
 
@@ -33,7 +34,7 @@ from typing import Any
 
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
-from coffer.infrastructure.knowledge import fs, inbox
+from coffer.infrastructure.knowledge import curation_state, fs, inbox
 
 #: Consecutive cut-offs of one item after which a pass stops retrying it.
 MAX_CONSECUTIVE_TRUNCATIONS = 3
@@ -66,14 +67,14 @@ def pending_items(collection: str) -> tuple[Pending, ...]:
     can read; an edited document is already readable as it stands.
     """
     return tuple(Pending(material=name) for name in inbox.inbox_items(collection)) + tuple(
-        Pending(document=relpath) for relpath in fs.edited_documents(collection)
+        Pending(document=relpath) for relpath in curation_state.edited_documents(collection)
     )
 
 
 def settle(collection: str, item: Pending) -> None:
     """Mark the item absorbed: material leaves the inbox, a document is
-    stamped — unless the pass retired it, in which case there is nothing left
-    to stamp."""
+    recorded as settled — unless the pass retired it, in which case there is
+    nothing left to settle."""
     if item.material is not None:
         inbox.discard_material(collection, item.material)
         return
@@ -98,7 +99,7 @@ def shelve_oversized(collection: str, item: Pending) -> dict[str, Any]:
     pass, and the collection's pending count would never drop. So material is
     promoted to a document as it stands — exactly what the no-model path does
     with it, since the model cannot merge it either — and an edited document,
-    which is already a document and has nothing to promote, is stamped as seen
+    which is already a document and has nothing to promote, is settled as seen
     so the sweep stops handing it back. Neither changes a word of the item.
     Material removed since the pass read it has nothing left to promote, and
     is reported as promoting nothing — as in :func:`give_up`.

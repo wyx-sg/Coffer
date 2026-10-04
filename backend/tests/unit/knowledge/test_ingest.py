@@ -2,7 +2,7 @@
 
 The upload contract under test (spec knowledge): an upload becomes **material**
 for a collection — the same submission, frontmatter and audit event as an
-agent's ``coffer__write`` — which a curation pass merges into the documents.
+agent's inbox file — which a curation pass merges into the documents.
 Nothing of the upload itself is kept: not the original bytes, not the extracted
 text as a file of its own. With no internal model to merge it, the material
 becomes a document as it stands (see "Promote material directly when no model
@@ -39,7 +39,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 # A uid a test can spell, and deliberately not the name: a
                 # lookup that worked because the two matched would prove
                 # nothing about addressing a collection by identity.
@@ -96,12 +95,12 @@ class _Completion:
         self._raises = raises
         self.calls: list[tuple[str, str]] = []
 
-    async def complete(self, *, system, user, model, credential_resolver, timeout=None):  # type: ignore[no-untyped-def]
+    async def complete(self, *, system, user, model, secret_resolver, timeout=None):  # type: ignore[no-untyped-def]
         self.calls.append((system, user))
         self.timeout = timeout
         if self._raises:
             raise RuntimeError("the internal connection is unreachable")
-        assert credential_resolver("provider/test") == "k"
+        assert secret_resolver("provider/test") == "k"
         return self._text or ""
 
 
@@ -111,7 +110,7 @@ def fake_connection() -> ResolvedConnection:
         config=ProviderConfig(
             protocol="openai",
             base_url="https://example.invalid/v1",
-            credential_ref="provider/test",
+            secret_ref="provider/test",
         ),
         model="agnes-2.0-flash",
     )
@@ -126,7 +125,6 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """A ``KnowledgeService`` over an isolated tree with one collection
     (``shopee``) and a model that could merge; ``elsewhere`` is a name no
     collection answers to."""
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
     return KnowledgeService(
         resources=_Resources(["shopee"]), audit=_Audit(), merge_available=_can_merge
@@ -136,7 +134,6 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 @pytest.fixture
 def knowledge_without_model(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """The same tree, with nothing configured to merge material."""
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
     return KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
 
@@ -155,13 +152,13 @@ class _EmptyRegistry:
         return Conversion(markdown=self._markdown, title="Scan", converter="markitdown")
 
 
-def _service(knowledge, *, models=None, completion=None, credential_resolver=None):  # type: ignore[no-untyped-def]
+def _service(knowledge, *, models=None, completion=None, secret_resolver=None):  # type: ignore[no-untyped-def]
     return IngestService(
         knowledge=knowledge,
         registry=default_registry(),
         models=models,
         completion=completion,
-        credential_resolver=credential_resolver or (lambda ref: "k"),
+        secret_resolver=secret_resolver or (lambda ref: "k"),
     )
 
 
@@ -282,7 +279,7 @@ async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing
     service = IngestService(
         knowledge=knowledge,
         registry=_EmptyRegistry(),
-        credential_resolver=lambda ref: "k",
+        secret_resolver=lambda ref: "k",
     )
 
     with pytest.raises(EmptyConversion) as exc_info:
@@ -300,7 +297,7 @@ async def test_a_whitespace_only_conversion_counts_as_nothing(knowledge) -> None
     service = IngestService(
         knowledge=knowledge,
         registry=_EmptyRegistry(markdown="\n   \n\t\n"),
-        credential_resolver=lambda ref: "k",
+        secret_resolver=lambda ref: "k",
     )
 
     with pytest.raises(EmptyConversion):

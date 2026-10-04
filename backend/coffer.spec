@@ -6,9 +6,18 @@
 # frozen detect-or-spawn resolution needs them co-located (ADR daemon-detect-or-spawn).
 #
 # The CLI is a thin HTTP client — it does NOT embed FastAPI / uvicorn /
-# SQLAlchemy / Alembic.  Those live only in the daemon binary.
+# starlette / the MCP SDK.  Those live only in the daemon binary.
+#
+# One command is not a client: `coffer migrate` (surfaces/cli/migrate_cmd.py)
+# runs the one-time vault upgrade in this process with the daemon stopped, and
+# that upgrade runs Alembic on runs.db. So SQLAlchemy, aiosqlite and Alembic
+# ride along, with the migration tree as data — the CLI imports them at start,
+# and a build that excluded them failed every command with
+# `ModuleNotFoundError: No module named 'sqlalchemy'`.
 
 # -*- mode: python ; coding: utf-8 -*-
+
+import os
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -21,6 +30,20 @@ hidden = (
     + collect_submodules("httpx")
     + collect_submodules("pydantic")
     + collect_submodules("keyring")
+    # `coffer migrate`: Alembic loads env.py and the revisions by path, and
+    # SQLAlchemy picks the aiosqlite dialect from the URL at run time.
+    + collect_submodules("alembic")
+    + collect_submodules("sqlalchemy.dialects.sqlite")
+    + collect_submodules("aiosqlite")
+    # What env.py and the revisions import. Alembic executes them from the
+    # shipped files, so the import graph traced from main.py never sees them.
+    + collect_submodules("coffer.domain")
+    + collect_submodules("coffer.infrastructure.persistence")
+    + collect_submodules("yaml")
+    + [
+        "coffer.infrastructure.channel.persistence",
+        "coffer.infrastructure.mcp.persistence",
+    ]
     + [
         # Anyio sniffio backend (pulled in by httpx/anyio)
         "anyio._backends._asyncio",
@@ -42,10 +65,14 @@ a = Analysis(
     ["coffer/surfaces/cli/main.py"],
     pathex=["."],
     binaries=[],
-    # No data files: the knowledge skill this binary used to carry as an asset
-    # directory is rendered per agent in code now, so there is nothing here
-    # that is not an importable module.
-    datas=[],
+    # The migration tree (alembic.ini, env.py, versions/) for `coffer migrate`:
+    # Alembic reads it from disk, so the import graph never sees it.
+    datas=[
+        (
+            "coffer/infrastructure/persistence/migrations",
+            "coffer/infrastructure/persistence/migrations",
+        ),
+    ],
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],
@@ -65,9 +92,6 @@ a = Analysis(
         "fastapi",
         "uvicorn",
         "starlette",
-        "sqlalchemy",
-        "aiosqlite",
-        "alembic",
         "structlog",
         "mcp",
         # Test/lint tooling
@@ -104,4 +128,11 @@ exe = EXE(
     runtime_tmpdir=None,
     console=True,
     target_arch=None,
+    # A signed release (scripts/release_signing.sh) sets both: PyInstaller then
+    # signs this executable AND every binary it collects with the Developer ID
+    # under the hardened runtime, so the libraries a one-file build unpacks at
+    # start pass library validation. Unset — every other build — it stays
+    # ad-hoc signed, exactly as before.
+    codesign_identity=os.environ.get("COFFER_CODESIGN_IDENTITY") or None,
+    entitlements_file=os.environ.get("COFFER_ENTITLEMENTS_FILE") or None,
 )

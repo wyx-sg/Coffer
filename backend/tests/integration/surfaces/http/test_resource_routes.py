@@ -14,14 +14,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 
 class _FakeConfig(BaseModel):
@@ -51,7 +49,7 @@ async def _client(tmp_path):
             supports_scope=True,
         ),
     }
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = ResourceService(kinds=kinds, repo=repo, audit=audit)
 
@@ -130,7 +128,7 @@ async def test_generic_register_rejects_lifecycle_kind_returns_409(tmp_path):
     }
     svc = ResourceService(
         kinds=kinds,
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     app = FastAPI()
@@ -394,7 +392,7 @@ async def test_resource_create_enforces_name_pattern(tmp_path):
 
 
 class _StubKeyring:
-    """Minimal CredentialStorePort stand-in for register-time credential probing."""
+    """Minimal SecretStorePort stand-in for register-time secret probing."""
 
     def __init__(self, store: dict[str, str] | None = None) -> None:
         self.store: dict[str, str] = dict(store or {})
@@ -411,7 +409,7 @@ class _StubKeyring:
 
 async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
     """Like _client(), but registers the real `mcp_server` Kind so we can
-    drive register-time credential probing against transport.credential_refs."""
+    drive register-time secret probing against transport.secret_refs."""
     from coffer.application.mcp.kind import make_mcp_kind
 
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -419,12 +417,12 @@ async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
 
-    # The production Kind wires the credential-ref extractor + audit redactor
+    # The production Kind wires the secret-ref extractor + audit redactor
     # that drive probing/redaction; build it the real way.
     kinds = {"mcp_server": make_mcp_kind({})}
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    svc = ResourceService(kinds=kinds, repo=repo, audit=audit, credentials=keyring)
+    svc = ResourceService(kinds=kinds, repo=repo, audit=audit, secrets=keyring)
 
     app = FastAPI()
     err_handlers.register(app)
@@ -440,13 +438,13 @@ async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
 
 
 @pytest.mark.asyncio
-async def test_register_with_missing_credential_returns_actionable_error(tmp_path):
+async def test_register_with_missing_secret_returns_actionable_error(tmp_path):
     """spec mcp-gateway "Manage MCP servers as resources": registering an MCP
-    server whose transport.credential_refs cites a key absent from the keychain
+    server whose transport.secret_refs cites a key absent from the keychain
     must fail BEFORE any DB write, name the missing ref in the error body, and
     leave the resources table unchanged.
     """
-    keyring = _StubKeyring()  # empty — no credentials stored
+    keyring = _StubKeyring()  # empty — no secrets stored
     c, engine, repo = await _client_with_mcp_kind(tmp_path, keyring)
     async with c:
         before = await repo.list()
@@ -460,15 +458,15 @@ async def test_register_with_missing_credential_returns_actionable_error(tmp_pat
                     "transport": {
                         "type": "http",
                         "url": "http://example.com/mcp",
-                        "credential_refs": {"Authorization": "github.GITHUB_TOKEN"},
+                        "secret_refs": {"Authorization": "github.GITHUB_TOKEN"},
                     },
                 },
             },
         )
-        # 400 per the existing CREDENTIAL_MISSING -> HTTP mapping in errors.py.
+        # 400 per the existing SECRET_MISSING -> HTTP mapping in errors.py.
         assert r.status_code == 400, r.text
         body = r.json()
-        assert body["error"]["code"] == "CREDENTIAL_MISSING"
+        assert body["error"]["code"] == "SECRET_MISSING"
         # The missing ref must be named in the message so the user can act.
         assert "github.GITHUB_TOKEN" in body["error"]["message"]
         # No partial state — the resources table is unchanged.
@@ -478,8 +476,8 @@ async def test_register_with_missing_credential_returns_actionable_error(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_register_with_present_credential_succeeds(tmp_path):
-    """Counterpart: with the credential present in the keychain, registration
+async def test_register_with_present_secret_succeeds(tmp_path):
+    """Counterpart: with the secret present in the keychain, registration
     proceeds normally."""
     keyring = _StubKeyring({"github.GITHUB_TOKEN": "ghp_xxx"})
     c, engine, _repo = await _client_with_mcp_kind(tmp_path, keyring)
@@ -493,7 +491,7 @@ async def test_register_with_present_credential_succeeds(tmp_path):
                     "transport": {
                         "type": "http",
                         "url": "http://example.com/mcp",
-                        "credential_refs": {"Authorization": "github.GITHUB_TOKEN"},
+                        "secret_refs": {"Authorization": "github.GITHUB_TOKEN"},
                     },
                 },
             },
@@ -579,7 +577,7 @@ async def test_a_rename_alone_does_not_rewrite_the_config(tmp_path):
     """A PATCH carrying only a name touches only the name.
 
     Writing the stored config back over itself is not a no-op — it re-validates,
-    re-probes every credential the config cites, fires the kind's update hook
+    re-probes every secret the config cites, fires the kind's update hook
     and records a `resource_updated` whose before and after are identical. A
     rename refused because of something the caller never touched is the failure
     this guards.

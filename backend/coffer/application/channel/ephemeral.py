@@ -3,8 +3,10 @@ chatter private in a group").
 
 "Act in a group only on an addressed message from the owner" stops the bot *acting* on
 everything said in a group. This is the other half: stopping it from *saying* everything
-out loud. ``/status``, ``/help`` and the selection cards are the asker's own business —
-announcing each one to everybody is how a useful bot becomes an unwelcome one.
+out loud. ``/status``, ``/help`` and the other command answers are the asker's own
+business — announcing each one to everybody is how a useful bot becomes an unwelcome
+one. Selection cards are the exception: a card is rewritten after it is used, which
+a privately-delivered message cannot be.
 
 Where the platform can deliver a message only the asker's client shows
 (Telegram ephemeral messages) those answers go that way. The agent's actual
@@ -24,9 +26,14 @@ from typing import Any
 
 from coffer.application.channel.ports import ChannelBinding
 from coffer.domain.channel.commands import is_group_private
-from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget, InboundMessage
+from coffer.domain.channel.envelopes import (
+    ChoiceButton,
+    EphemeralTarget,
+    InboundMessage,
+    SentMessage,
+)
 
-__all__ = ["private_send", "safe_send", "target_for_command"]
+__all__ = ["is_private", "private_send", "safe_send", "target_for_command"]
 
 _logger = logging.getLogger(__name__)
 
@@ -67,6 +74,12 @@ def private_send(send: Any, target: EphemeralTarget | None) -> Any:
     return functools.partial(send, ephemeral=target)
 
 
+def is_private(send: Any) -> bool:
+    """Whether ``send`` delivers to one member only (``private_send`` pinned a
+    target). A card cannot go that way, so a private answer is sent as text."""
+    return isinstance(send, functools.partial) and send.keywords.get("ephemeral") is not None
+
+
 async def safe_send(
     binding: ChannelBinding,
     chat_id: str,
@@ -78,7 +91,7 @@ async def safe_send(
     chat_kind: str = "direct",
     reply_to_message_id: str = "",
     ephemeral: EphemeralTarget | None = None,
-) -> None:
+) -> SentMessage | None:
     """Send one message through a binding, swallowing a transport failure.
 
     Every owner-gated reply goes through here — commands, errors, pairing
@@ -103,6 +116,7 @@ async def safe_send(
         "ephemeral": ephemeral,
     }
     try:
-        await binding.adapter.send_text(chat_id, text, **kwargs)
+        return await binding.adapter.send_text(chat_id, text, **kwargs)
     except Exception:
         _logger.exception("channel.send.failed", extra={"channel": binding.resource.name})
+        return None

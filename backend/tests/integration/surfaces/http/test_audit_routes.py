@@ -14,14 +14,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
+from tests.support.vault_stores import make_resource_repo
 
 
 class _FakeConfig(BaseModel):
@@ -49,7 +47,7 @@ async def _client(tmp_path):
                 config_schema=_FakeConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
 
@@ -79,7 +77,7 @@ async def test_list_audit_empty(tmp_path):
     async with c:
         r = await c.get("/api/v1/audit")
         assert r.status_code == 200
-        assert r.json() == {"entries": []}
+        assert r.json() == {"entries": [], "next_cursor": None, "total": 0}
     await engine.dispose()
 
 
@@ -170,7 +168,7 @@ async def test_list_audit_since_filter(tmp_path):
         future = (datetime.now(tz=UTC) + timedelta(hours=1)).isoformat()
         r = await c.get(f"/api/v1/audit?since={future}")
         assert r.status_code == 200
-        assert r.json() == {"entries": []}
+        assert r.json() == {"entries": [], "next_cursor": None, "total": 0}
     await engine.dispose()
 
 

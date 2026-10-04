@@ -8,7 +8,6 @@ run ``coffer daemon start``.
 from __future__ import annotations
 
 import contextlib
-import os
 import subprocess
 import sys
 import time
@@ -22,6 +21,7 @@ from coffer.infrastructure.daemon.bootstrap import live_daemon, probe_status
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.daemon.version_skew import skew_warning
+from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli._options import ExitCode
 
 # How long (seconds) to wait for daemon.json to appear after spawning.
@@ -33,21 +33,6 @@ _DAEMON_BOOT_TIMEOUT: float = 10.0
 OUTDATED_DAEMON = "the running daemon predates this CLI; restart it: coffer daemon restart"
 
 
-def status_machine_id(status: dict[str, object]) -> str | None:
-    """This machine's id off a ``/daemon/status`` body, ``None`` while the
-    daemon has not derived it yet.
-
-    A body without the key at all comes from a daemon that predates the field:
-    that is said, and the command exits 1, rather than being read as "not
-    derived yet — try again", which no amount of trying would change.
-    """
-    if "machine_id" not in status:
-        typer.echo(OUTDATED_DAEMON, err=True)
-        raise typer.Exit(1)
-    machine_id = status["machine_id"]
-    return str(machine_id) if machine_id else None
-
-
 class DaemonNotRunning(SystemExit):
     """Exit code 3 — daemon not reachable."""
 
@@ -55,7 +40,7 @@ class DaemonNotRunning(SystemExit):
 
 
 def _daemon_json_path() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
+    return daemon_json_path()
 
 
 def discover() -> DaemonInfo | None:
@@ -224,6 +209,12 @@ def render_http_error(
             )
             return ExitCode.GENERIC
         typer.echo(message, err=True)
+        # A refusal whose fix is a chore for an agent carries the prompt
+        # (``domain/handoff.py``); print it the way the web UI offers it.
+        handoff = ((envelope or {}).get("details") or {}).get("handoff")
+        if isinstance(handoff, dict) and handoff.get("prompt"):
+            typer.echo("\nTo hand this to your agent, give it this prompt:\n", err=True)
+            typer.echo(handoff["prompt"], err=True)
 
         status = err.response.status_code
         exit_code: ExitCode = {
@@ -233,8 +224,10 @@ def render_http_error(
             422: ExitCode.INVALID_INPUT,
         }.get(status, ExitCode.GENERIC)
 
-        if code_name in ("CREDENTIAL_MISSING", "CREDENTIAL_LOCKED"):
-            exit_code = ExitCode.CREDENTIAL_ISSUE
+        if code_name in ("SECRET_MISSING", "SECRET_LOCKED"):
+            exit_code = ExitCode.SECRET_ISSUE
+        if code_name == "SECRET_BINDING_PENDING":
+            exit_code = ExitCode.APPROVAL_PENDING
     elif isinstance(err, httpx.TransportError):
         # Refused, reset, closed without a response or timed out: from the
         # CLI's side each is the daemon not answering.

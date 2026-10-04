@@ -1,8 +1,8 @@
 // frontend/src/lib/hooks/useAgentConfig.test.tsx
 //
 // Covers the v2 agent config-file + Coffer-MCP-install hooks that the
-// AgentDetailPage drives. Like useAgents.test.tsx these call raw `fetch`
-// against `${getCofferBaseUrl()}/agents/*`, so we stub `globalThis.fetch` and
+// AgentDetailPage drives. Like useAgents.test.tsx these go through the typed
+// client, so we stub `globalThis.fetch` and
 // assert URL shaping, method, body, gating, and cache invalidation.
 //
 // Every one of those routes is addressed by the agent's `uid`, so the fixtures
@@ -10,9 +10,10 @@
 // URL and the query key must spell the uid, and only the rendered record ever
 // spells the name.
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { resetApiClient } from "@/lib/api/client";
 import type { PropsWithChildren } from "react";
 import {
   useAgent,
@@ -45,6 +46,8 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+// The typed client keeps the `fetch` it was built with; each test stubs its own.
+beforeEach(() => resetApiClient());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("useAgent", () => {
@@ -70,7 +73,7 @@ describe("useAgent", () => {
     const { result } = renderHook(() => useAgent("u-cur"), { wrapper: wrapperFor(makeClient()) });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.name).toBe("cur");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/u-cur$/);
   });
 });
 
@@ -92,10 +95,11 @@ describe("usePatchAgent", () => {
     const { result } = renderHook(() => usePatchAgent(), { wrapper: wrapperFor(makeClient()) });
     await result.current.mutateAsync({ uid: "u-cur", body: { config_dir: "/new/dir" } });
 
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-cur$/);
-    expect((init as RequestInit).method).toBe("PATCH");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ config_dir: "/new/dir" });
+    expect(request.method).toBe("PATCH");
+    expect(await request.clone().json()).toEqual({ config_dir: "/new/dir" });
   });
 });
 
@@ -126,7 +130,7 @@ describe("useAgentConfigFiles", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0].key).toBe("settings");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/config-files$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/u-cur\/config-files$/);
   });
 });
 
@@ -154,7 +158,9 @@ describe("useAgentConfigFile", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.content).toBe("{}");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/config-files\/settings$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(
+      /\/agents\/u-cur\/config-files\/settings$/,
+    );
   });
 });
 
@@ -173,7 +179,9 @@ describe("useAgentConnection", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.state).toBe("disconnected");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/coffer-connection$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(
+      /\/agents\/u-cur\/coffer-connection$/,
+    );
   });
 });
 
@@ -190,9 +198,10 @@ describe("useAgentConnect", () => {
     const { result } = renderHook(() => useAgentConnect("u-cur"), { wrapper: wrapperFor(qc) });
     await result.current.mutateAsync(true);
 
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-cur\/coffer-connection$/);
-    expect((init as RequestInit).method).toBe("POST");
+    expect(request.method).toBe("POST");
     expect(qc.getQueryData(["agents", "u-cur", "coffer-connection"])).toEqual(answer);
   });
 
@@ -207,8 +216,9 @@ describe("useAgentConnect", () => {
     });
     await result.current.mutateAsync(false);
 
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-cur\/coffer-connection$/);
-    expect((init as RequestInit).method).toBe("DELETE");
+    expect(request.method).toBe("DELETE");
   });
 });

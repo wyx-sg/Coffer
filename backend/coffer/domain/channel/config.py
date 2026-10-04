@@ -3,9 +3,9 @@
 `ChannelConfig` is what `Resource.config` holds when `kind == "channel"`.
 Telegram + SeaTalk as a Pydantic discriminated union on `channel_type`.
 
-Secrets never live here: every `*_ref` field is a credential-store ref. A
+Secrets never live here: every `*_ref` field is a secret-store ref. A
 value that *looks* like the raw secret itself (a Telegram bot token, a long
-high-entropy blob) is rejected with a pointer at the credential store.
+high-entropy blob) is rejected with a pointer at the secret store.
 """
 
 from __future__ import annotations
@@ -15,12 +15,13 @@ from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     RootModel,
     field_validator,
 )
 
-# A credential ref is a vault ADDRESS, not a secret: Coffer mints
+# A secret ref is a vault ADDRESS, not a secret: Coffer mints
 # "channel/<uuid4 hex>/<secret>" for one the UI stores, and a user may type a
 # path of their own. Raw secrets are longer and machine-shaped; reject the
 # obvious cases. The high-entropy pattern deliberately excludes "/": path-style
@@ -37,8 +38,8 @@ def _reject_raw_secret(field: str, value: str) -> str:
     for pat in _RAW_SECRET_PATTERNS:
         if pat.search(value):
             raise ValueError(
-                f"{field} looks like a raw secret; store the secret with "
-                f"`coffer credentials set <ref>` and put the ref here instead"
+                f"{field} looks like a raw secret; store the secret on the "
+                f"Secrets page (or `coffer secret set <ref>`) and put the ref here instead"
             )
     return value
 
@@ -46,8 +47,13 @@ def _reject_raw_secret(field: str, value: str) -> str:
 class _CommonChannelFields(BaseModel):
     """Fields shared by every channel type: the agent it routes to by default."""
 
+    # A key no channel type declares is refused, as for every kind's config,
+    # so a retired field (SeaTalk's webhook-era delivery keys) cannot linger
+    # in a stored config unnoticed.
+    model_config = ConfigDict(extra="forbid")
+
     # The **uid** of the agent resource this channel drives by default (ADR
-    # resource-identity-is-an-immutable-uid). It is a cross-resource reference,
+    # identity-is-the-uid-inside-the-file). It is a cross-resource reference,
     # so it holds the one thing about that agent the owner cannot change: not
     # its registry name, and not the turn platform's agent key either. The key
     # is derived from this at the one place the turn platform needs it (the
@@ -74,6 +80,25 @@ class _CommonChannelFields(BaseModel):
     # no text, before the held burst runs. 0 runs every message as its own turn.
     wait_after_text_seconds: float = Field(default=1.5, ge=0, le=60)
     wait_after_forward_seconds: float = Field(default=5.0, ge=0, le=60)
+    # "Show a turn's working state as one status line": whether the live status
+    # lists the turn's step lines under its header. Off keeps the header (time,
+    # step count) and the narration line and hides the steps — e.g. in a group.
+    show_steps: bool = True
+    # "Ping the asker when a long turn ends": a turn that ran at least this many
+    # seconds ends with one short completion line where its answer would not
+    # notify on its own. 0 turns the ping off.
+    notify_after_seconds: float = Field(default=90.0, ge=0, le=3600)
+    # "Open a new conversation after an idle period": a chat whose active
+    # conversation has been idle longer than this many hours opens a NEW
+    # conversation on the owner's next message (the old one stays in the list).
+    # 0 never rolls a conversation over.
+    new_conversation_after_idle_hours: float = Field(default=24.0, ge=0, le=8760)
+    # The working directories `/dir` may switch a conversation into (spec
+    # channels "Choose the working directory from chat"): absolute paths, each
+    # also admitting the directories beneath it. Empty means the channel's
+    # default directory is the only one — a chat cannot point an agent at an
+    # arbitrary folder on this machine.
+    directories: list[str] = Field(default_factory=list, max_length=32)
     # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
     # catalogue, refusing nothing — picking a model is the agent's business,
@@ -104,6 +129,29 @@ class _CommonChannelFields(BaseModel):
     # surfaces show an unbound channel as unbound and bind it in one click.
     runs_on: str | None = Field(default=None, max_length=64)
 
+    @field_validator("default_agent_config")
+    @classmethod
+    def _absolute_default_directory(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        # ``cwd`` here is the channel's default working directory: where its new
+        # conversations start (spec channels "Choose the working directory from chat").
+        cwd = (v or {}).get("cwd")
+        if cwd is not None and (not isinstance(cwd, str) or not cwd.startswith("/")):
+            raise ValueError(f"the default directory must be an absolute path; got {cwd!r}")
+        return v
+
+    @field_validator("directories")
+    @classmethod
+    def _absolute_directories(cls, v: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for raw in v:
+            path = raw.strip()
+            if not path.startswith("/") or len(path) > 1024:
+                raise ValueError(f"directories must be absolute paths; got {raw!r}")
+            path = path.rstrip("/") or "/"
+            if path not in cleaned:
+                cleaned.append(path)
+        return cleaned
+
 
 class TelegramChannelConfig(_CommonChannelFields):
     channel_type: Literal["telegram"] = "telegram"
@@ -124,9 +172,6 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     # outbound websocket connection"). Its register handshake authenticates
     # from exactly these two values, so the configuration carries nothing
     # else — no delivery switch, no signing secret, no public URL, no tunnel.
-    # A stored document still carrying those webhook-era keys (a second
-    # machine on an older build) is read cleanly: unknown keys are ignored,
-    # as for every channel config.
 
     @field_validator("app_secret_ref")
     @classmethod

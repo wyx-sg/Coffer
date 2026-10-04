@@ -1,75 +1,103 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory
-// "Present partitions as a table and a file tree").
+// frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Present a
+// partition as its memories", web-ui "Show memory delivery on the Memory page").
 //
-// Lists partitions: `global` plus one per repository, distilled from the
-// agents' own native memories, which Coffer only ever reads (ADR
-// aggregate-agent-memory-never-write-it) — nothing here is user-created, so
-// "Update memory" (not "Add") is the header action: read every agent's latest
-// memory and distil what is new (spec memory "Update memory in one action").
-// It is not called Sync: that name belongs to the vault-sync page, and this
-// action reads the agents' native memory rather than converging anything with
-// a remote.
+// Coffer reads each agent's own memory and distils it into
+// one memory per subject, in partitions — `global` plus one per repository
+// (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created (a person only edits a memory's body),
+// so the header's one action is Update memory: read every agent's latest
+// memory and distil what is new (spec memory "Update memory in one action"),
+// the page's one primary button, beside the Automatic control that does the
+// same on a timer and a quiet line saying when the agents' memory was last
+// read, or how far Update memory is. When the last read left an agent unread,
+// a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
 //
-// The table has no status column: every partition is served to every agent
-// (spec memory "Serve every partition to every agent"), so this page reads
-// only the partitions endpoint.
-//
-// An EMPTY vault gets the welcome panel every other first-run surface gives —
-// skills, knowledge, agents, channels, providers — so arriving at an empty
-// Memory reads like arriving at an empty anything else. Once a partition
-// exists it is the table, and the table's own empty row covers a search that
-// matched nothing.
-//
-// Two things that used to render here have moved out. Per-agent DELIVERY is
-// per-agent state — it installs a hook into one agent's own settings file — so
-// it belongs on that agent's detail page (components/agents/AgentMemoryTab).
-// The AUDIT LOG is the Activity page's Changes tab, which reads the whole
-// vault's trail; a second kind-scoped copy here was a duplicate surface.
+// Two blocks. "Delivered at session start" shows, per agent and over the last
+// seven days, how often memory was delivered and how many memories were read —
+// with no hook detail: the hook's state and Repair live only on the agent's
+// page. "Partitions" is the table, or the first-run state while there are
+// none. The audit trail is the Activity page's, not duplicated here.
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Brain } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
+import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
+import { MemoryDeliveriesSection } from "@/components/memory/MemoryDeliveriesSection";
+import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
+import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
+import { Section, SectionStack } from "@/components/Section";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
+import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { translateApiError } from "@/lib/api/errors";
+import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
+import { memoryKey } from "@/lib/api/queryKeys";
+import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 
 export function MemoryPage() {
   const { t } = useTranslation();
   const { data: partitions, isPending, error } = useMemoryPartitions();
   const rows = partitions ?? [];
+  const firstRun = !isPending && !error && rows.length === 0;
+  const updating = useMemoryUpdateRunning();
+  // A distil pass or a read finishing emits a memory change event: refetch
+  // everything read under memoryKey instead of waiting for a window focus.
+  const qc = useQueryClient();
+  useDaemonEvents({
+    onMessage: (m) => {
+      if (m.type === "change" && m.change.kind === "memory") {
+        void qc.invalidateQueries({ queryKey: memoryKey });
+      }
+    },
+  });
 
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Brain}
         title={t("memory.title")}
+        badges={<ExperimentalTag />}
         subtitle={t("memory.subtitle")}
         actions={
-          // Only once there is something to update: on an empty vault the
-          // welcome panel carries the same button, and two of them would be
-          // the page asking twice.
-          rows.length > 0 ? <MemoryUpdateButton /> : null
+          // On the first run the welcome carries the same button; two of them
+          // would be the page asking twice.
+          firstRun ? null : (
+            <>
+              <MemoryHeaderStatus />
+              <MemoryAutomaticPopover />
+              <MemoryUpdateButton running={updating} />
+            </>
+          )
         }
       />
 
-      {/* The header stays mounted through loading — the table renders skeleton
-          rows under it rather than the page swapping to a loading card. */}
-      {error ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-destructive">{t("memory.loadFailed")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
-          </CardContent>
-        </Card>
-      ) : !isPending && rows.length === 0 ? (
+      {firstRun ? null : <MemoryReadFailures />}
+
+      {firstRun ? (
         <MemoryWelcomePanel />
       ) : (
-        <MemoryPartitionsTable rows={rows} isLoading={isPending} />
+        <SectionStack>
+          <MemoryDeliveriesSection />
+          <Section
+            as="h2"
+            gap="snug"
+            labelled
+            title={t("memory.partitions.title")}
+            testId="memory-partitions"
+          >
+            {error ? (
+              <EmptyState
+                icon={Brain}
+                tone="error"
+                title={t("memory.loadFailed")}
+                description={translateApiError(t, error)}
+              />
+            ) : (
+              <MemoryPartitionsTable rows={rows} isLoading={isPending} />
+            )}
+          </Section>
+        </SectionStack>
       )}
     </div>
   );

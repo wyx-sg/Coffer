@@ -68,13 +68,18 @@ class NameImmutable(CofferError):  # noqa: N818
 
     code = "NAME_IMMUTABLE"
 
-    def __init__(self, kind: str, name: str, resets: str) -> None:
-        cost = f", which resets {resets}" if resets else ""
-        super().__init__(
-            f"the name of {kind} {name!r} cannot change: it is quoted outside Coffer. "
-            f"To use a new name, delete it and register it again under that name{cost}. "
-            "To change only what is shown, set its title instead."
-        )
+    def __init__(self, kind: str, name: str, resets: str, *, derived: bool = False) -> None:
+        if derived:
+            # ``Kind.name_from_config``: the name IS the type, so there is no
+            # other name to register it under.
+            message = f"the name of {kind} {name!r} is its type and cannot change"
+        else:
+            cost = f", which resets {resets}" if resets else ""
+            message = (
+                f"the name of {kind} {name!r} cannot change: it is quoted outside Coffer. "
+                f"To use a new name, delete it and register it again under that name{cost}."
+            )
+        super().__init__(message)
         self.kind = kind
         self.name = name
 
@@ -97,19 +102,13 @@ class ScopeInvalidError(CofferError):
     code = "SCOPE_INVALID"
 
 
-# credential-store error family: re-exported from coffer.domain.credential_errors
-# (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
-from coffer.domain.credential_errors import (  # noqa: E402, I001
-    CredentialInUse as CredentialInUse,
-    CredentialLocked as CredentialLocked,
-    CredentialMissing as CredentialMissing,
-    CredentialUnreadable as CredentialUnreadable,
-    MasterKeyMissing as MasterKeyMissing,
-)
-
-
 class UpstreamUnavailable(CofferError):  # noqa: N818
     code = "UPSTREAM_UNAVAILABLE"
+
+
+class UpstreamAuthRejected(UpstreamUnavailable):
+    """The upstream HTTP endpoint answered 401 or 403: the key it was given is
+    refused. Reaches callers as the same ``UPSTREAM_UNAVAILABLE`` envelope."""
 
 
 class UpstreamTimeout(CofferError):  # noqa: N818
@@ -179,6 +178,22 @@ class AgentConfigDirRegistered(CofferError):  # noqa: N818
         self.existing_name = existing_name
 
 
+class AgentTypeRegistered(CofferError):  # noqa: N818
+    """An agent of this type is already registered: there is one per type on a
+    machine (spec agent-registry "Keep one agent per type, named by it"). Maps
+    to 409; moving it to another directory is the existing agent's edit."""
+
+    code = "AGENT_TYPE_REGISTERED"
+
+    def __init__(self, agent_type: str, existing_uid: str) -> None:
+        super().__init__(
+            f"a {agent_type} agent is already registered ({existing_uid}); "
+            "change its config directory instead of adding a second one"
+        )
+        self.agent_type = agent_type
+        self.existing_uid = existing_uid
+
+
 class ConfigFileNotAllowed(CofferError):  # noqa: N818
     """Requested config-file key is not in the agent type's allowlist.
 
@@ -206,13 +221,13 @@ class ConfigFileFormatInvalid(CofferError):  # noqa: N818
 
 
 class ShimNotFound(CofferError):  # noqa: N818
-    """The coffer-mcp-shim binary could not be resolved. Maps to 422."""
+    """The coffer-mcp-shim binary could not be resolved (422); carries the hand-off prompt."""
 
     code = "SHIM_NOT_FOUND"
 
-    def __init__(self, looked_for: str = "coffer-mcp-shim") -> None:
+    def __init__(self, looked_for: str = "coffer-mcp-shim", handoff: str | None = None) -> None:
         super().__init__(f"could not resolve the {looked_for} binary on PATH or bundled location")
-        self.looked_for = looked_for
+        self.error_details = {"handoff": {"prompt": handoff}} if handoff else {}
 
 
 class FsPathNotBrowsable(CofferError):  # noqa: N818
@@ -300,15 +315,6 @@ class UpkeepAlreadyRunning(CofferError):  # noqa: N818
         super().__init__(f"an upkeep pass is already running for {kind}:{name}")
         self.kind = kind
         self.name = name
-
-
-class TargetConflict(CofferError):  # noqa: N818
-    code = "TARGET_CONFLICT"
-
-    def __init__(self, path: str, reason: str) -> None:
-        super().__init__(f"refusing to overwrite target ({reason}): {path}")
-        self.path = path
-        self.reason = reason
 
 
 class ResourceProtected(CofferError):  # noqa: N818

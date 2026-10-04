@@ -13,11 +13,13 @@ helpers from here.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
+import tomllib
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import tomlkit
 
@@ -53,13 +55,35 @@ def _parse_toml(text: str) -> tomlkit.TOMLDocument:
         raise ConfigFileFormatInvalid("toml", str(e)) from e
 
 
+@functools.lru_cache(maxsize=16)
+def _read_toml(text: str) -> Mapping[str, Any]:
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigFileFormatInvalid("toml", str(e)) from e
+
+
+def _parse_toml_readonly(text: str) -> Mapping[str, Any]:
+    """The TOML ``text`` as plain data, for readers that never edit it.
+
+    ``tomlkit`` keeps the layout a write must preserve, and pays for it: parsing
+    a Codex ``config.toml`` with a few dozen servers costs a few hundred
+    milliseconds, and the reconciler reads that file several times per pass. A
+    read needs none of that, so it takes the standard parser, memoised by
+    content — the shared result must not be mutated.
+    """
+    if not text.strip():
+        return {}
+    return _read_toml(text)
+
+
 @dataclass(frozen=True)
 class McpEntry:
     """One MCP server entry as configured in an agent's own file (derived, never stored)."""
 
     name: str
     source: str  # allowlist key of the file it came from
-    transport: str  # "stdio" | "http"
+    transport: Literal["stdio", "http"]
     command: str | None = None
     args: tuple[str, ...] = ()
     # repr=False: env/header values may contain secrets and must never reach logs
@@ -76,6 +100,9 @@ class McpEntry:
     # may keep a token here (Codex ``bearer_token``). compare=False: equality
     # is about the server, not about incidental keys a hand-edited file adds.
     extra: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+    # The entry exactly as the file holds it, plain Python (JSON-shaped even for
+    # TOML). Holds secret values: only ``redacted_config`` may let it out.
+    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
 
 #: The keys ``parse_entries`` reads into typed fields; anything else an entry
@@ -119,7 +146,7 @@ def _servers_map(
         if fmt is ConfigFileFormat.JSON:
             servers = _json_container(_parse_json(text), ck)
         else:  # TOML
-            servers = _parse_toml(text).get(ck)
+            servers = _parse_toml_readonly(text).get(ck)
     except ConfigFileFormatInvalid as e:
         raise AgentConfigParseError("<config>", str(e)) from e
     return servers if isinstance(servers, MutableMapping) else {}
@@ -191,6 +218,7 @@ def parse_entries(
                 is_coffer=str(name) == COFFER_SERVER_KEY,
                 cwd=str(cwd) if cwd is not None else None,
                 extra={str(k): _plain(v) for k, v in raw.items() if str(k) not in _CONSUMED_KEYS},
+                raw={str(k): _plain(v) for k, v in raw.items()},
             )
         )
     return out
@@ -304,7 +332,7 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
 
     ``secret_refs`` maps secret env/header key names to their keychain
     reference paths. Secret keys are moved out of the plain ``env``/``headers``
-    map and into ``credential_refs``; non-secret keys remain in place.
+    map and into ``secret_refs``; non-secret keys remain in place.
     """
     if entry.transport == "stdio":
         plain_env = {k: v for k, v in entry.env.items() if k not in secret_refs}
@@ -313,7 +341,7 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
             "command": entry.command,
             "args": list(entry.args),
             "env": plain_env,
-            "credential_refs": dict(secret_refs),
+            "secret_refs": dict(secret_refs),
         }
 
     # http transport
@@ -322,5 +350,5 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
         "type": "http",
         "url": entry.url,
         "headers": plain_headers,
-        "credential_refs": dict(secret_refs),
+        "secret_refs": dict(secret_refs),
     }

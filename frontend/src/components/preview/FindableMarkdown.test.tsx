@@ -76,6 +76,14 @@ describe("FindableMarkdown", () => {
     }
   });
 
+  test("the front matter is a key / value grid: mono keys in a 96 column, wrapping values, a hairline below", () => {
+    render(<FindableMarkdown>{"---\nname: s\ndescription: d\n---\n# H"}</FindableMarkdown>);
+    const meta = screen.getByTestId("markdown-frontmatter");
+    expect(meta).toHaveClass("grid-cols-[96px_minmax(0,1fr)]", "border-b");
+    expect(screen.getByText("name")).toHaveClass("font-mono", "text-text-subtle");
+    expect(screen.getByText("d")).toHaveClass("break-words");
+  });
+
   test("frontmatter splitting can be turned off for text that is not a file", () => {
     render(<FindableMarkdown frontmatter={false}>{"---\ntitle: T\n---\nbody"}</FindableMarkdown>);
     expect(screen.queryByTestId("markdown-frontmatter")).toBeNull();

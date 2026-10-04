@@ -11,13 +11,15 @@ So it is an **optional runtime dependency the operator supplies**. This module
 is the whole of that contract:
 
 * ``sdk_dir()`` — where we look: ``$COFFER_SEATALK_SDK_DIR`` when set, else
-  ``~/.coffer/vendor``. (Same per-subsystem env-override convention as
-  ``$COFFER_KNOWLEDGE_ROOT``.)
+  ``~/.coffer/vendor`` (machine state beside the class directories, ADR
+  storage-is-five-classes-by-nature). (Same per-subsystem env-override
+  convention as ``$COFFER_DB_URL``.)
 * ``load_sdk()`` — prepend that directory to ``sys.path`` *only when it exists*,
   then import the package. The import is attempted lazily, never at daemon
   import time, so a daemon with no SDK starts exactly as it always did.
 * When the package cannot be imported, ``SeaTalkSdkMissingError`` says where we
-  looked and where to get it. A websocket channel then reports ``sdk_missing``
+  looked and where to read about it; ``sdk_location()`` hands the same facts
+  to the hand-off that puts it there. A websocket channel then reports ``sdk_missing``
   and keeps retrying; nothing crashes. An installation without the SDK — which
   is what an outside user of this project gets — has no SeaTalk inbound: its
   SeaTalk channels report ``sdk_missing`` and still send (spec channels/seatalk
@@ -33,10 +35,14 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+from coffer.application.channel.sdk_handoff import SdkLocation
+from coffer.infrastructure.vault.home import vendor_dir
+
 _logger = logging.getLogger(__name__)
 
 _PACKAGE = "seatalk_oapi_sdk"
-_DOCS_URL = "https://open.seatalk.io/docs/WebSocket-Event-Callback"
+#: SeaTalk's own page for the SDK — where the person downloads it.
+DOCS_URL = "https://open.seatalk.io/docs/WebSocket-Event-Callback"
 
 
 class SeaTalkSdkMissingError(RuntimeError):
@@ -48,7 +54,7 @@ def sdk_dir() -> Path:
     override = os.environ.get("COFFER_SEATALK_SDK_DIR")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".coffer" / "vendor"
+    return vendor_dir()
 
 
 def load_sdk() -> ModuleType:
@@ -70,12 +76,19 @@ def load_sdk() -> ModuleType:
     try:
         return importlib.import_module(_PACKAGE)
     except ImportError as e:
+        # A statement of fact, not a procedure: the steps that put the SDK in
+        # place are a hand-off the status route builds from ``sdk_location()``
+        # (spec channels/seatalk "Load the websocket client library from an
+        # operator-supplied directory").
         raise SeaTalkSdkMissingError(
-            f"SeaTalk's WebSocket SDK ({_PACKAGE}) is not installed, so this channel's "
-            f"WebSocket delivery cannot start. Coffer does not ship the SDK — it is not on "
-            f"public PyPI and carries no public licence. Download it from SeaTalk's Open "
-            f"Platform and unpack the {_PACKAGE} package into {entry} (or point "
-            f"$COFFER_SEATALK_SDK_DIR at wherever you keep it), then the channel connects on "
-            f"its own. See {_DOCS_URL}. Until then the channel receives nothing; its "
-            f"outbound sends are unaffected."
+            f"SeaTalk's WebSocket SDK ({_PACKAGE}) was not found in {entry}, so this "
+            f"channel receives nothing until it is there; its outbound sends are "
+            f"unaffected. See {DOCS_URL}."
         ) from e
+
+
+def sdk_location() -> SdkLocation:
+    """Where the SDK is looked for, and whether an environment override chose it."""
+    return SdkLocation(
+        directory=str(sdk_dir()), from_env=bool(os.environ.get("COFFER_SEATALK_SDK_DIR"))
+    )

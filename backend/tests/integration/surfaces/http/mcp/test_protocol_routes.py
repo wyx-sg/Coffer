@@ -12,17 +12,16 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -30,10 +29,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
@@ -51,6 +48,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     router as mcp_router,
 )
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
 
@@ -86,7 +84,7 @@ async def _build_app(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
 
@@ -97,14 +95,14 @@ async def _build_app(
         actor="test",
     )
 
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
 
     def factory(session_id: str) -> MCPGatewaySession:
         supervisor = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         discovery = CapabilityDiscovery(
             resource_service=rsvc,
@@ -227,9 +225,9 @@ async def test_post_unexpected_exception_does_not_leak_message_to_wire(
     """An unexpected (non-Coffer) exception raised while handling a
     request must NOT have its ``str(e)`` echoed onto the JSON-RPC wire.
 
-    Upstream errors can embed credentials (an auth failure echoing the API
+    Upstream errors can embed secrets (an auth failure echoing the API
     key). The catch-all branch previously sent ``str(e)`` verbatim to the
-    downstream client, defeating the same secret-hygiene rule (spec credentials
+    downstream client, defeating the same secret-hygiene rule (spec secret
     "Hold plaintext only in memory at the moment of use") the invocation-log
     path already honours via ``_safe_error_summary``.
     """
@@ -408,6 +406,57 @@ async def test_get_with_session_id_accepted(
     # GET without session id → 400.
     r = await http_client.get("/mcp")
     assert r.status_code == 400
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a dropped session is answered 404 and the client handshakes again"
+)
+@pytest.mark.asyncio
+async def test_an_unknown_session_id_is_404_so_the_client_handshakes_again(
+    http_client: AsyncClient,
+) -> None:
+    """After the idle reaper (or a restart) drops a session, rebuilding it
+    silently would lose the identity ``initialize`` carried: anything but
+    ``initialize`` on an unknown id is 404, and ``initialize`` opens a session."""
+    init = await http_client.post(
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    )
+    session_id = init.headers["mcp-session-id"]
+    await reap_idle_sessions(max_idle_seconds=-1)
+    assert session_id not in _ACTIVE_SESSIONS
+
+    r = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert r.status_code == 404
+    assert session_id not in _ACTIVE_SESSIONS  # nothing was rebuilt
+    again = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {}},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert again.status_code == 200 and session_id in _ACTIVE_SESSIONS
+    # An open stream is a client waiting for it: GET on a dropped session is 404 too.
+    await reap_idle_sessions(max_idle_seconds=-1)
+    assert (
+        await http_client.get("/mcp", headers={"Mcp-Session-Id": session_id})
+    ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_client_cannot_name_a_session_after_the_daemons_own_registry_key(
+    http_client: AsyncClient,
+) -> None:
+    r = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        headers={"Mcp-Session-Id": "__process__"},
+    )
+    assert r.status_code == 200
+    assert r.headers["mcp-session-id"] != "__process__"
+    assert "__process__" not in _ACTIVE_SESSIONS
 
 
 @pytest.mark.asyncio

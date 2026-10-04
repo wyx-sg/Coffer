@@ -1,16 +1,10 @@
 // frontend/src/components/DataTableToolbar.tsx
-// The search box + dropdown filters row for DataTable, extracted so the table
+// The search box + filter pills row for DataTable, extracted so the table
 // component stays within its size budget. Purely presentational: it owns no
 // state — the parent passes the current values and gets change callbacks (and
 // resets pagination on change).
 import { SearchInput } from "@/components/SearchInput";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FilterPill } from "@/components/filters";
 import type { FilterDef } from "@/components/DataTable";
 
 interface Props<T> {
@@ -42,23 +36,14 @@ export function DataTableToolbar<T>({
         />
       ) : null}
       {filters.map((f) => (
-        <Select
+        <FilterPill
           key={f.key}
-          value={filterVals[f.key] ?? "all"}
-          onValueChange={(v) => onFilterChange(f.key, v)}
-        >
-          <SelectTrigger aria-label={f.label} className="h-9 w-auto min-w-[8rem]">
-            <SelectValue placeholder={f.label} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{f.allLabel}</SelectItem>
-            {f.options.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          mode="single"
+          label={f.label}
+          options={f.options}
+          value={filterVals[f.key] && filterVals[f.key] !== "all" ? filterVals[f.key] : null}
+          onChange={(v) => onFilterChange(f.key, v ?? "all")}
+        />
       ))}
     </div>
   );

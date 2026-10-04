@@ -24,7 +24,7 @@ from coffer.domain.mcp.namespace import (
     prefix_tool,
 )
 from coffer.domain.resource import Resource
-from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
+from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
 from coffer.surfaces.http.schemas import (
     CapabilityListOut,
     MCPPromptView,
@@ -90,7 +90,7 @@ def live_capability_list(
 
 async def cached_capability_list(
     resource: Resource,
-    prefs: MCPCapabilityPreferenceRepo,
+    prefs: MCPCapabilityPreferenceStore,
 ) -> CapabilityListOut | None:
     """Build the capability list from persisted enable/disable preferences.
 
@@ -104,12 +104,12 @@ async def cached_capability_list(
 
     Takes the resolved row, not a name: the route has already turned the uid in
     its path into this resource, and the preference rows are keyed on
-    ``resource.id``. Looking the server up a second time here — and swallowing
+    ``resource.uid``. Looking the server up a second time here — and swallowing
     the failure — used to be how an unknown server reached this path at all;
     with identity resolved up front it cannot, so there is nothing left to
     swallow.
     """
-    rows = await prefs.list_for(resource.id)
+    rows = await prefs.list_for(resource.uid)
     if not rows:
         return None
     name = resource.name

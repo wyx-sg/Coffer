@@ -1,10 +1,12 @@
 // frontend/src/lib/hooks/useResourceMutations.ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
-import { ownListKeyForKind, resourcesKey } from "@/lib/api/queryKeys";
+import { ownListKeysForKind, resourcesKey } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
 import { useToast } from "@/components/ui/toast";
+import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /**
  * What every kind-agnostic write needs: the `uid` it acts on, and the `kind` —
@@ -18,20 +20,26 @@ interface ResourceWriteInput {
 }
 
 /** A kind-agnostic write refreshes the generic list AND the kind's own list
- *  key, where it has one (`ownListKeyForKind`) — the skill detail page reads
- *  `skillKey(uid)`, not `resourcesKey`, and would otherwise keep rendering the
+ *  key, where it has one (`ownListKeysForKind`) — the Skills page reads
+ *  `skillsKey`, not `resourcesKey`, and would otherwise keep rendering the
  *  pre-toggle state. */
 function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): void {
   void qc.invalidateQueries({ queryKey: resourcesKey });
-  const own = ownListKeyForKind(kind);
-  if (own) void qc.invalidateQueries({ queryKey: own });
+  for (const own of ownListKeysForKind(kind)) {
+    void qc.invalidateQueries({ queryKey: own });
+  }
 }
+
+/** Mutation keys, so a row can show that its own enable / disable is running. */
+export const ENABLE_KEY = ["resource", "enable"] as const;
+export const DISABLE_KEY = ["resource", "disable"] as const;
 
 export function useEnableResource() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
+    mutationKey: ENABLE_KEY,
     mutationFn: ({ uid }: ResourceWriteInput) => resourcesApi.enable(uid),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),
@@ -43,6 +51,7 @@ export function useDisableResource() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
+    mutationKey: DISABLE_KEY,
     mutationFn: ({ uid }: ResourceWriteInput) => resourcesApi.disable(uid),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),
@@ -92,4 +101,17 @@ export function useSetResourceTitle() {
       resourcesApi.setTitle(uid, title),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
   });
+}
+
+/** Delete every row of a selection: each delete is attempted, one summary toast
+ *  says how many landed (see `useBulkMutate`), and the generic list refreshes
+ *  once. */
+export function useBulkDeleteResources() {
+  const bulk = useBulkMutate({ invalidate: [resourcesKey] });
+  const { run } = bulk;
+  const removeAll = useCallback(
+    <T extends { uid: string }>(rows: T[]) => run(rows, (r) => resourcesApi.remove(r.uid)),
+    [run],
+  );
+  return { run: removeAll, isPending: bulk.isPending };
 }

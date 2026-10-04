@@ -27,8 +27,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyRetentionRepo
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
+)
 from coffer.surfaces.http.app_mcp_composition import build_prunable_registry
 from tests.unit.chat.conftest import FakeAgentAdapter, make_registry
 
@@ -56,7 +59,7 @@ def _retention(sm) -> RetentionService:  # type: ignore[no-untyped-def]
     registry = build_prunable_registry()
     return RetentionService(
         registry=registry,
-        repo=SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
+        repo=FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
 
@@ -117,6 +120,51 @@ async def test_idle_conversations_are_archived_then_deleted_with_their_messages(
                 await s.execute(text("SELECT archived_at FROM conversations WHERE id='idle2'"))
             ).scalar_one()
         assert archived is None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="an archived conversation that receives a channel message is not deleted while active",
+)
+async def test_an_archived_conversation_still_being_written_to_is_not_deleted(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    engine, sm = await _db(tmp_path)
+    try:
+        svc = _retention(sm)
+        await svc.initialize_defaults()
+        async with sm() as s:
+            # Archived 31 days ago (past the delete window), but a channel message
+            # touched it yesterday.
+            await s.execute(
+                text(
+                    "INSERT INTO conversations "
+                    "(id, agent_key, title, created_at, updated_at, archived_at) "
+                    "VALUES ('active', 'agent', 't', :created, :touched, :arch)"
+                ),
+                {
+                    "created": _NOW - timedelta(days=60),
+                    "touched": _NOW - timedelta(days=1),
+                    "arch": _NOW - timedelta(days=31),
+                },
+            )
+            await s.execute(
+                text(_MSG_SQL), {"id": "m-live", "conv": "active", "ts": _NOW - timedelta(days=1)}
+            )
+            await s.commit()
+
+        await svc.prune(now=_NOW)
+        async with sm() as s:
+            kept = set((await s.execute(text("SELECT id FROM conversations"))).scalars().all())
+            msgs = set((await s.execute(text("SELECT id FROM chat_messages"))).scalars().all())
+        assert kept == {"active"}
+        assert msgs == {"m-live"}
+
+        # Once the last message is itself past the window, deletion proceeds.
+        await svc.prune(now=_NOW + timedelta(days=31))
+        async with sm() as s:
+            left = (await s.execute(text("SELECT COUNT(*) FROM conversations"))).scalar_one()
+        assert left == 0
     finally:
         await engine.dispose()
 

@@ -3,15 +3,17 @@
 **Status**: Accepted
 **Date**: 2026-09-22
 **Deciders**: Yuxing Wu
-**Related**: [Vault Sync](vault-sync.md), [Sync Machine Identity](sync-machine-identity.md), [Knowledge Curation](knowledge-curation.md), [Internal Engine Settings](internal-engine-settings.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), spec vault-sync, spec knowledge, spec channels, PRs #401, #409
+**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Internal Engine Settings](internal-engine-settings.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), spec vault-sync, spec knowledge, spec channels, PRs #401, #409
 
 ## Context
 
-The knowledge **curation** pass ([Knowledge Curation](knowledge-curation.md))
+The knowledge **curation** pass ([Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md))
 runs on a timer, with no human approving its diff, and rewrites synced vault
 content: it merges the material waiting in a collection's inbox into that
 collection's documents and deletes what it merged. On one machine that is
-safe. Once a vault [converges across machines](vault-sync.md) it is not:
+safe. Once a vault
+[converges with a remote](sync-applies-clean-merges-and-stops-on-any-conflict.md)
+it is not:
 
 - Run over the same corpus on two machines, each pass merges the same inbox
   material — but into *different* documents, because a model's choices are not
@@ -29,8 +31,8 @@ about where the pass runs.
 
 Which other unattended passes this touches, checked against the code: memory
 aggregation and distillation rewrite only the derived memory tree, which never
-leaves the machine (`memory` declares `converges=False`); the `coffer-guide`
-skill Coffer re-renders is derived output that sync withholds
+leaves the machine (`memory` is filed as derived); the `coffer-guide` skill
+Coffer re-renders is derived output that is stored outside the vault
 ([Sync Withholds Derived Output](sync-withholds-derived-output.md)); retention
 prunes the audit log, MCP invocation records and conversations, none of which
 sync. Curation is the one unattended rewriter of synced content today.
@@ -39,14 +41,13 @@ sync. Curation is the one unattended rewriter of synced content today.
 
 ### Option A — One owner machine, named in synced state (chosen)
 
-The owner is one field, `curate_owner_machine_id`, on the singleton
-`internal_engine_config` row beside the pass's switch `auto_curate_enabled`.
-It travels in the internal-engine state document
-(`application/engine_settings_sync.py`), so every machine agrees who the owner
-is. The timer asks `GlobalInternalEngineConfig.curate_runs_on(machine_id)`
-(`domain/internal_engine_config.py`) on every sweep: on, and either no owner
-named or the owner is this machine. On every other machine the pass is a clean
-no-op (spec vault-sync "Run an unattended rewriter on one owner machine";
+The owner is one field, `curate_owner_machine_id`, in the vault's `settings`
+state document (`application/vault/state_rules.py`), beside the pass's switch
+`auto_curate_enabled` ([Internal Engine Settings](internal-engine-settings.md)).
+Being vault state it converges with the rest of the vault, so every machine
+agrees who the owner is. The timer asks `curate_runs_on(machine_id)` (`domain/internal_engine_config.py`) on every
+sweep: on, and either no owner named or the owner is this machine. On every
+other machine the pass is a clean no-op (spec vault-sync "Run an unattended rewriter on one owner machine";
 spec knowledge "Curate on one owner machine only").
 
 The owner is reportable and changeable
@@ -64,19 +65,17 @@ one machine named in a document every machine holds.
 
 Two further rules keep the pass from colliding with convergence
 (`curation_may_run` in `surfaces/http/curation_wiring.py`): the pass takes the
-converge round's own lock, and it is skipped while a round is held for
-confirmation or stopped on a conflict
+sync round's own lock, and it is skipped while a round is held for
+confirmation, stopped on a conflict or waiting on a join's differing files
 (spec vault-sync "Never overlap a curation pass and a round"). When the owner's
-deletion does meet an edit made elsewhere, the edit wins
-(spec vault-sync "Let an edit beat a curation deletion").
+deletion does meet an edit made elsewhere, git reports a conflict and the
+person decides; Coffer does not pick the edit for them. While the `sync`
+feature is off the vault is a single-machine one and only the pass's own
+switch is read.
 
-With the `vault_sync` feature switched off, curation treats the vault as
-single-machine and reads only its own switch: no round runs, so there is no
-other machine to duplicate the work, and an owner or a hold the user cannot
-reach while sync is closed must not stall curation silently.
-
-Pros: removes the duplicate at its source; costs one field on a row that was
-already installation-wide and already synced; no coordination protocol.
+Pros: removes the duplicate at its source; costs one field in a settings
+document that was already installation-wide and already synced; no
+coordination protocol.
 
 Cons: if the owner is off, no pass happens until it returns — material waits in
 the inbox. An owner naming a machine that is **gone** (retired, reinstalled
@@ -137,7 +136,7 @@ only its own.
 Pros: work spreads across machines; nothing waits for one owner.
 
 Cons: provenance would have to travel with every inbox file; curation also
-carries a person's edit through *other* documents in the collection, so two
+carries an out-of-band edit through *other* documents in the collection, so two
 machines curating different material can still rewrite the same document; and a
 machine that never comes back leaves its material stranded.
 
@@ -163,6 +162,9 @@ that writes only machine-local or derived state need not.
 - Clearing the owner is an explicit act, never an automatic repair: it is
   right for a vault down to one machine and wrong for one that still spans
   several.
+- A layout upgrade of the vault is committed by the same owner
+  ([Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md)),
+  so a fleet has one owner to keep alive, not two.
 - An unbound channel runs **nowhere** while an unowned pass runs **here**. The
   difference is deliberate: a bot answering twice cannot be walked back, a
   duplicated note can.

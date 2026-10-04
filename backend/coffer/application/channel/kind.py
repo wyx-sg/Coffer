@@ -19,8 +19,8 @@ _REF_FIELDS = ("bot_token_ref", "app_secret_ref")
 AgentNames = Callable[[], Awaitable[Mapping[str, str]]]
 
 
-def _channel_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
-    """Every `*_ref` field is a credential ref to probe before registration."""
+def _channel_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """Every `*_ref` field is a secret ref to probe before registration."""
     refs: dict[str, str] = {}
     for field in _REF_FIELDS:
         value = config.get(field)
@@ -261,14 +261,14 @@ def make_channel_kind(
 
     ``on_delete`` is injected by the composition root: it evicts the channel
     from the runtime (stopping its adapter and, for SeaTalk, closing its
-    websocket connection) before the row — and, via FK cascade, the
-    peer binding — is removed. Channel config holds only credential refs, so
-    no audit redaction is needed.
+    websocket connection) before the row — and, as a follower
+    of the resource's lifecycle, the peer pairings document — is removed.
+    Channel config holds only secret refs, so no audit redaction is needed.
 
     ``agent_names`` (also injected by the composition root) maps every
     registered agent's uid to its name. It is the only reader this kind still
     needs, and it decides nothing: a channel's ``default_agent`` and its scope
-    are both agent uids (ADR resource-identity-is-an-immutable-uid), so the
+    are both agent uids (ADR identity-is-the-uid-inside-the-file), so the
     checks compare them directly. What the map buys is a refusal an owner can
     act on — labels instead of UUIDs — plus the one question a uid cannot
     answer by itself: whether any agent is registered under it at all.
@@ -303,7 +303,7 @@ def make_channel_kind(
         display_name="Channel",
         config_schema=ChannelConfigModel,
         on_delete=on_delete,
-        credential_ref_extractor=_channel_credential_ref_extractor,
+        secret_ref_extractor=_channel_secret_ref_extractor,
         # Registration and edit run the same check from the two ends of a
         # channel's life, so a ``default_agent`` naming no registered agent is
         # refused wherever it is written rather than only failing at start time.
@@ -319,7 +319,7 @@ def make_channel_kind(
         # (ADR per-agent-resource-scope). Elsewhere scope names the agents a resource is
         # DELIVERED to; a channel is not consumed by an agent at all — it is an
         # inbound surface — so its scope names **the agents this channel may
-        # drive**. Two enforcement seams: `/agent` lists, offers and accepts
+        # drive**. Two enforcement seams: `/new <agent>` lists and accepts
         # only agents inside the scope, and ``default_agent`` is held inside it
         # on every write path — config (``on_update_config``) and scope
         # (``validate_scope_for``) alike. An empty allow-list is dormant: the

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from .conftest import ChannelEnv
+from .conftest import ChannelEnv, uid_of
 
 _THIS_MACHINE = "aaaaaaaaaaaaaaaa"
 _OTHER_MACHINE = "bbbbbbbbbbbbbbbb"
@@ -30,6 +30,9 @@ def _config(**overrides: object) -> dict[str, object]:
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync", scenario="a channel travels and runs only on the machine it names"
+)
+@pytest.mark.acceptance(
     spec="channels", scenario="only the machine a channel names starts its adapter"
 )
 async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> None:
@@ -39,12 +42,12 @@ async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> Non
     there = env.runtime_for(_OTHER_MACHINE)
 
     await here.reconcile_once()
-    assert here.is_running("tg") is False
+    assert here.is_running(uid_of("tg")) is False
     assert env.created_adapters == []
 
     # The very same row, read by the machine it names.
     await there.reconcile_once()
-    assert there.is_running("tg") is True
+    assert there.is_running(uid_of("tg")) is True
     assert len(env.created_adapters) == 1
 
     # And the surface separates "not running" from "not mine to run", which is
@@ -68,12 +71,17 @@ async def test_a_binding_no_machine_claims_starts_nowhere(env: ChannelEnv) -> No
     unrecognised binding as permission would have them all start — the
     rival-consumer failure arriving through the back door.
     """
-    await env.register_channel("tg", config=_config(runs_on="cccccccccccccccc"))
+    resource = await env.register_channel("tg", config=_config(runs_on="cccccccccccccccc"))
 
     for machine in (_THIS_MACHINE, _OTHER_MACHINE):
         runtime = env.runtime_for(machine)
         await runtime.reconcile_once()
-        assert runtime.is_running("tg") is False
+        assert runtime.is_running(uid_of("tg")) is False
+        # The status reports the raw binding and that it is not this machine's;
+        # telling "unknown" from "elsewhere" takes the machine registry, which the
+        # surfaces join (web: channelState).
+        status = await env.service_for(runtime).status(resource.uid)
+        assert (status.runs_on, status.runs_here) == ("cccccccccccccccc", False)
     assert env.created_adapters == []
 
 
@@ -84,7 +92,7 @@ async def test_an_unbound_channel_runs_nowhere_and_is_reported(env: ChannelEnv) 
     for machine in (_THIS_MACHINE, _OTHER_MACHINE):
         runtime = env.runtime_for(machine)
         await runtime.reconcile_once()
-        assert runtime.is_running("tg") is False
+        assert runtime.is_running(uid_of("tg")) is False
     assert env.created_adapters == []
 
     status = await env.service_for(env.runtime_for(_THIS_MACHINE)).status(resource.uid)
@@ -104,22 +112,25 @@ async def test_rebinding_stops_here_and_starts_there(env: ChannelEnv) -> None:
 
     await here.reconcile_once()
     await there.reconcile_once()
-    assert here.is_running("tg") is True
-    assert there.is_running("tg") is False
+    assert here.is_running(uid_of("tg")) is True
+    assert there.is_running(uid_of("tg")) is False
     adapter = env.created_adapters[0]
 
     # An ordinary config edit — no restart, no command reaching another machine.
     await env.resources.update_config(
         resource.uid, await env.bound(_config(runs_on=_OTHER_MACHINE)), actor="test"
     )
+    # The binding is the resource document's own config, which is what the next
+    # sync round carries to every machine holding the file.
+    assert (await env.resources.get(resource.uid)).config["runs_on"] == _OTHER_MACHINE
 
     await here.reconcile_once()
-    assert here.is_running("tg") is False
+    assert here.is_running(uid_of("tg")) is False
     assert adapter.stopped is True
-    assert env.processor.binding("tg") is None
+    assert env.processor.binding(uid_of("tg")) is None
 
     await there.reconcile_once()
-    assert there.is_running("tg") is True
+    assert there.is_running(uid_of("tg")) is True
     assert len(env.created_adapters) == 2
 
     await there.dispose()
@@ -136,8 +147,8 @@ async def test_a_bound_channel_still_answers_to_reach(env: ChannelEnv) -> None:
     here = env.runtime_for(_THIS_MACHINE)
 
     await here.reconcile_once()
-    assert here.is_running("tg") is True
+    assert here.is_running(uid_of("tg")) is True
 
     await env.resources.set_enabled(resource.uid, False, actor="test")
     await here.reconcile_once()
-    assert here.is_running("tg") is False
+    assert here.is_running(uid_of("tg")) is False

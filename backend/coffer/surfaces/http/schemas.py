@@ -30,10 +30,10 @@ class ErrorResponse(BaseModel):
 # --- Resources (kind-agnostic) ---
 
 
-class ScopeOut(BaseModel):
-    """A resource's activation scope on the wire: one allow-list of agents
-    (ADR per-agent-resource-scope). ``null`` means unrestricted; ``[]`` matches
-    nothing, i.e. dormant.
+class ScopeIn(BaseModel):
+    """A resource's activation scope as a request writes it: one allow-list of
+    agents (ADR per-agent-resource-scope). ``null`` or absent means
+    unrestricted; ``[]`` matches nothing, i.e. dormant.
 
     Extra keys are REFUSED rather than ignored, which is the unusual choice and
     the deliberate one. This model used to carry a second axis, ``machines``,
@@ -51,13 +51,29 @@ class ScopeOut(BaseModel):
     #: the wrong vocabulary to everyone reading the generated client.
     agents: list[str] | None = Field(default=None, examples=[["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]])
 
+    def to_domain(self) -> Scope:
+        return Scope(agents=self.agents)
+
+
+class ScopeOut(BaseModel):
+    """A resource's activation scope as a response carries it. ``agents`` is
+    always present: ``null`` means unrestricted, ``[]`` dormant."""
+
+    agents: list[str] | None = Field(examples=[["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]])
+
     @classmethod
     def of(cls, scope: Scope | None) -> ScopeOut | None:
         """The wire shape of a stored scope; null stays null (unscoped)."""
         return None if scope is None else cls(agents=scope.agents)
 
-    def to_domain(self) -> Scope:
-        return Scope(agents=self.agents)
+
+class DeliveryResultOut(BaseModel):
+    """What delivering a reach change did for one agent."""
+
+    agent_uid: str
+    agent_name: str
+    ok: bool
+    reason: str | None = None  # why nothing was linked there; null when ok
 
 
 class ResourceOut(BaseModel):
@@ -77,9 +93,15 @@ class ResourceOut(BaseModel):
     # is True may set it. See GET/PUT .../scope below.
     scope: ScopeOut | None = None
     enabled: bool
+    #: Per agent, whether a reach change was delivered: only skills' PUT .../scope fills it.
+    delivery: list[DeliveryResultOut] | None = None
     #: ``Kind.toggleable``: False (knowledge, memory) means enable/disable is
     #: refused with RESOURCE_NOT_TOGGLEABLE, so a surface leaves the switch out.
     toggleable: bool
+    #: A stdio MCP server whose environment carries a secret: readable by any
+    #: other process of this user on this Mac (spec mcp-gateway "Mark a stdio
+    #: server whose environment carries a secret"). False for every other row.
+    secrets_readable_by_local_processes: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -126,27 +148,7 @@ class ResourceScopeUpdate(BaseModel):
     Scope is set per machine and does not sync: every machine holding this
     vault decides for itself which of its agents a resource activates for."""
 
-    scope: ScopeOut | None = None
-
-
-# --- Audit ---
-
-
-class AuditEntryOut(BaseModel):
-    id: int
-    timestamp: datetime
-    event_type: str
-    resource_kind: str | None = None
-    #: The label the resource carried WHEN THE EVENT HAPPENED, which is the
-    #: point of storing it: a renamed resource's history reads as the history
-    #: of a thing that was called different names at different times.
-    resource_name: str | None = None
-    actor: str
-    details: dict[str, Any] | None = None
-
-
-class AuditListOut(BaseModel):
-    entries: list[AuditEntryOut]
+    scope: ScopeIn | None = None
 
 
 # --- Retention ---
@@ -166,6 +168,17 @@ class RetentionPolicyListOut(BaseModel):
     policies: list[RetentionPolicyOut]
 
 
+class RetentionPreviewOut(BaseModel):
+    """What shortening one policy's window would delete, counted and not run."""
+
+    table_name: str
+    days: int
+    #: Every row the table holds now.
+    total_rows: int
+    #: The rows older than ``days`` — deleted at the next cleanup once saved.
+    rows_to_delete: int
+
+
 class RetentionPolicyUpdate(BaseModel):
     retention_days: int | None = Field(
         default=None,
@@ -173,6 +186,13 @@ class RetentionPolicyUpdate(BaseModel):
         le=3650,
         description="Null = keep forever; 1..3650 days otherwise.",
     )
+
+
+class PruneRequestIn(BaseModel):
+    """``POST /retention/prune`` body; the whole body is optional."""
+
+    #: The one table to prune; absent or null prunes every registered table.
+    table_name: str | None = None
 
 
 class PruneResultOut(BaseModel):
@@ -242,57 +262,24 @@ class CapabilityListOut(BaseModel):
     from_cache: bool = False
 
 
-class McpTestResultOut(BaseModel):
-    ok: bool
-    latency_ms: int
-    protocol_version: str | None = None
-    server_capabilities: dict[str, Any] | None = None
-    error_message: str | None = None
+# --- Secrets ---
 
 
-class InvocationOut(BaseModel):
-    timestamp: datetime
-    #: Which upstream server the call went to — the value actually recorded in
-    #: the log, and what to filter or link by. Required, not optional: the
-    #: cross-server timeline is unreadable without it, and the per-server route
-    #: knows it too. Two of its forms are not resource uids and resolve to
-    #: nothing: ``BUILTIN_SERVER_UID`` ("coffer"), the sentinel Coffer's own
-    #: built-in tools log under, and the ``DELETED_SERVER_UID_PREFIX`` form
-    #: ("deleted:<name>") given to rows whose server was already gone when the
-    #: log was re-keyed from names to uids.
-    resource_uid: str
-    #: The same server's label, resolved at read time by the route, so the
-    #: timeline is readable without a client holding the whole resource list.
-    #: Null when ``resource_uid`` resolves to no resource — a deleted server, or
-    #: the built-in sentinel — which is where a client falls back to showing the
-    #: uid's own text. Nullable but NOT defaulted: a projection that forgot to
-    #: resolve would otherwise silently emit null for every row.
-    resource_name: str | None
-    capability_type: str = Field(pattern="^(tool|resource|prompt)$")
-    capability_key: str
-    duration_ms: int
-    status: str
-    error_message: str | None = None
-    session_id: str | None = None
+#: A ref: slash-separated segments of ``[A-Za-z0-9_.-]``, none made only of dots
+#: (``.`` and ``..`` name no file, and would escape the store's directory).
+_REF_PATTERN = r"^\.*[A-Za-z0-9_-][A-Za-z0-9_.-]*(/\.*[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$"
 
 
-class InvocationListOut(BaseModel):
-    invocations: list[InvocationOut]
+class SecretSetIn(BaseModel):
+    """Request body for storing a secret in the secret store.
 
-
-# --- Credentials ---
-
-
-class CredentialSetIn(BaseModel):
-    """Request body for storing a secret in the credential store.
-
-    Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
+    Secrets are Fernet-encrypted into the vault; only ciphertext is
     persisted; audit rows carry the ref only.
     """
 
     ref: str = Field(
         min_length=1,
-        pattern=r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+        pattern=_REF_PATTERN,
         description=(
             "Reference key the secret is stored under. Slash-separated "
             "segments are allowed (e.g. channel/tg/bot-token)."
@@ -305,38 +292,60 @@ class CredentialSetIn(BaseModel):
     )
 
 
-class CredentialExistsOut(BaseModel):
+class SecretExistsOut(BaseModel):
     """Presence-only response — never carries the secret value."""
 
     present: bool = Field(description="Whether a secret is stored under the ref.")
 
 
-class CredentialCiterOut(BaseModel):
-    """A resource citing a credential ref — identity and label, never config."""
+class SecretCiterOut(BaseModel):
+    """A resource citing a secret ref — identity and label, never config."""
 
     uid: str
     kind: str
     name: str
 
 
-class CredentialRefOut(BaseModel):
-    """One cited credential ref and whether the store holds it."""
+class SecretBindingOut(BaseModel):
+    """One destination a secret is sent to (or waits to be sent to)."""
+
+    destination_kind: str
+    destination_uid: str
+    slot: str
+    status: Literal["approved", "pending"]
+    approval_id: str | None = None
+
+
+class SecretRefOut(BaseModel):
+    """One stored or cited secret ref: presence and references, never a value."""
 
     ref: str
     present: bool = Field(description="Whether a secret is stored under the ref.")
-    cited_by: list[CredentialCiterOut]
+    #: Stored, but this Mac's master key cannot open it (it came with the vault
+    #: from a machine holding another key). With ``present`` false, the row is
+    #: "Missing on this Mac".
+    locked: bool = False
+    created_at: str | None = None
+    #: When a consumer last had the value decrypted on this Mac.
+    last_used_at: str | None = None
+    cited_by: list[SecretCiterOut]
+    #: The ``coffer://secret/<name>`` a file cites, for a standalone secret.
+    uri: str | None = None
+    #: Skills in the master store whose files mention the standalone secret.
+    mentioned_by_skills: list[str] = Field(default_factory=list)
+    #: Nothing cites it — no resource, no skill: the cleanup candidate.
+    unreferenced: bool = False
+    #: Where its value is approved to go, and where it waits for approval.
+    bindings: list[SecretBindingOut] = Field(default_factory=list)
+    #: Whether another process of this user can read the value where Coffer
+    #: puts it: a stdio MCP server's environment, or a ``coffer run`` child.
+    readable_by_local_processes: bool = False
 
 
-class CredentialListOut(BaseModel):
-    """Every ref a registered resource cites, of any kind, sorted by ref."""
+class SecretListOut(BaseModel):
+    """Every stored ref and every ref a registered resource cites, sorted by ref."""
 
-    refs: list[CredentialRefOut]
-
-
-class CredentialGetOut(BaseModel):
-    """Secret-value response for an explicit read from the credential store."""
-
-    value: str = Field(description="The stored secret value.")
+    refs: list[SecretRefOut]
 
 
 # --- MCP capability enable/disable body ---
@@ -353,31 +362,22 @@ class CapabilityKeyBody(BaseModel):
     capability_key: str = Field(min_length=1, max_length=2048)
 
 
-# --- MCP server status ---
-
-
-class McpServerStatusOut(BaseModel):
-    """Cheap per-server status, derived from persisted state (no spawn)."""
-
-    status: Literal["healthy", "failing", "unknown"]
-    # A stdio server whose launcher command does not resolve on THIS machine
-    # (a synced server referencing e.g. uvx on a machine without uv). The UI
-    # renders "missing <runner>" so the cause is visible.
-    missing_runner: str | None = None
-
-
 # --- Settings ---
 
 
-class CredentialSettingsOut(BaseModel):
-    """Where the credential-store master key currently lives."""
+class SecretSettingsOut(BaseModel):
+    """Where the secret-store master key currently lives."""
 
-    master_key_storage: Literal["file", "keychain"] = Field(
-        description="file = ~/.coffer/master.key (default); keychain = OS keychain entry."
+    master_key_storage: Literal["file", "keychain", "keychain_access_group"] = Field(
+        description=(
+            "file = ~/.coffer/master.key (development default); keychain = OS keychain "
+            "entry (development opt-in); keychain_access_group = the signed release's "
+            "Keychain access group, the only place a release keeps it."
+        )
     )
 
 
-class CredentialSettingsIn(BaseModel):
+class SecretSettingsIn(BaseModel):
     """Request body to relocate the master key."""
 
     master_key_storage: Literal["file", "keychain"]

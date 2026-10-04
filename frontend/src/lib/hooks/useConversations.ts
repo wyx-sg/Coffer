@@ -1,4 +1,5 @@
 // frontend/src/lib/hooks/useConversations.ts — TanStack Query bindings for conversations.
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -8,13 +9,16 @@ import {
   type AgentConfigOut,
   type Conversation,
   type ConversationCreate,
+  type Message,
 } from "@/lib/api/chat";
+import { platformName, undeliveredMessageIds } from "@/lib/chat/mirror";
 import {
   agentConfigKey,
-  archivedConversationsKey,
   conversationKey,
   conversationsKey as CONVERSATIONS_KEY,
   messagesKey,
+  replyFileDiffKey,
+  replyFilesKey,
 } from "@/lib/api/queryKeys";
 import { useToast } from "@/components/ui/toast";
 
@@ -29,27 +33,32 @@ function useConversationToastError() {
 // Queries
 // ---------------------------------------------------------------------------
 
-export function useConversations() {
-  return useQuery({
-    queryKey: CONVERSATIONS_KEY,
-    queryFn: async () => (await chatApi.listConversations(false)).conversations,
-  });
-}
-
-export function useArchivedConversations(enabled = true) {
-  return useQuery({
-    queryKey: archivedConversationsKey,
-    queryFn: async () => (await chatApi.listConversations(true)).conversations,
-    enabled,
-  });
-}
-
 export function useConversation(id: string) {
   return useQuery({
     queryKey: conversationKey(id),
     queryFn: () => chatApi.getConversation(id),
     enabled: !!id,
   });
+}
+
+/**
+ * Where a reply typed in this conversation also goes (spec chat "Show where a
+ * reply will also be sent"): the mirror (null for a web conversation), and for
+ * a message id the platform its channel has not received that message on yet.
+ * The listing the page opens a conversation from leaves the mirror out, so a
+ * channel conversation reads it from its own GET — the key the send path
+ * invalidates when a reply is left pending.
+ */
+export function useChannelMirror(conversation: Conversation, messages: Message[]) {
+  const bound = conversation.channel_binding !== null;
+  const detail = useConversation(bound ? conversation.id : "");
+  const mirror = bound
+    ? (detail.data?.channel_binding?.mirror ?? conversation.channel_binding?.mirror ?? null)
+    : null;
+  const owed = useMemo(() => undeliveredMessageIds(mirror, messages), [mirror, messages]);
+  const notDeliveredTo = (messageId: string) =>
+    mirror && owed.has(messageId) ? platformName(mirror.platform ?? "") : undefined;
+  return { mirror, notDeliveredTo };
 }
 
 /**
@@ -64,6 +73,25 @@ export function useAgentConfig(id: string, enabled = true) {
   });
 }
 
+/** The files a finished reply changed, as recorded (empty for an older reply). */
+export function useReplyFiles(conversationId: string, messageId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: replyFilesKey(conversationId, messageId ?? ""),
+    queryFn: () => chatApi.listReplyFiles(conversationId, messageId!),
+    enabled: !!conversationId && !!messageId && enabled,
+    staleTime: Infinity,
+  });
+}
+
+/** One recorded file's unified diff for a reply. */
+export function useReplyFileDiff(conversationId: string, messageId: string, path: string) {
+  return useQuery({
+    queryKey: replyFileDiffKey(conversationId, messageId, path),
+    queryFn: () => chatApi.getReplyFileDiff(conversationId, messageId, path),
+    staleTime: Infinity,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -73,7 +101,7 @@ export function useCreateConversation() {
   // No onError toast here: ChatPage renders a contextual create-error banner
   // next to the draft composer, so a toast would double-surface the same failure.
   return useMutation({
-    mutationFn: (body: ConversationCreate | undefined) => chatApi.createConversation(body),
+    mutationFn: (body: ConversationCreate) => chatApi.createConversation(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
@@ -136,8 +164,8 @@ export function useDeleteConversation() {
   });
 }
 
-/** Archive (move to the archived list) or restore. Both lists are refreshed. */
-function useArchiveMutation(fn: (id: string) => Promise<Conversation>) {
+/** Archive (move to the archived list) or unarchive. Both lists are refreshed. */
+function useArchiveMutation(fn: (id: string) => Promise<Conversation>, onDone?: () => void) {
   const qc = useQueryClient();
   const onError = useConversationToastError();
   return useMutation({
@@ -145,6 +173,7 @@ function useArchiveMutation(fn: (id: string) => Promise<Conversation>) {
     onSuccess: (updated: Conversation) => {
       qc.setQueryData(conversationKey(updated.id), updated);
       void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+      onDone?.();
     },
     onError,
   });
@@ -155,5 +184,9 @@ export function useArchiveConversation() {
 }
 
 export function useUnarchiveConversation() {
-  return useArchiveMutation(chatApi.unarchiveConversation);
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useArchiveMutation(chatApi.unarchiveConversation, () =>
+    toast.success(t("conversations.history.unarchived")),
+  );
 }

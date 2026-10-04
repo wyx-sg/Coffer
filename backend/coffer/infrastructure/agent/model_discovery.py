@@ -169,4 +169,41 @@ class NativeConfigModelDiscovery:
             return None
 
 
-__all__ = ["ChainedModelDiscovery", "NativeConfigModelDiscovery"]
+class NativeDefaultModel:
+    """The model an agent's OWN config says it runs when nothing is chosen.
+
+    Not a catalogue entry and not a guess: Codex names it as the top-level
+    ``model`` in ``config.toml``; Claude Code as ``model`` (or the
+    ``ANTHROPIC_MODEL`` it exports) in ``settings.json``. Anything else — the
+    file missing, the key absent — is ``None``, because then the agent decides
+    on its own (account, plan, CLI version) and Coffer cannot know.
+    """
+
+    async def read(self, *, agent_key: str, config_dir: pathlib.Path | None) -> str | None:
+        if config_dir is None:
+            return None
+        if agent_key == "claude_code":
+            return await asyncio.to_thread(self._claude_code, config_dir)
+        if agent_key == "codex":
+            return await asyncio.to_thread(self._codex, config_dir)
+        return None
+
+    @staticmethod
+    def _claude_code(config_dir: pathlib.Path) -> str | None:
+        data = NativeConfigModelDiscovery._read_json(config_dir / "settings.json")
+        if data is None:
+            return None
+        env = data.get("env")
+        candidates = [data.get("model")]
+        if isinstance(env, dict):
+            candidates.append(env.get("ANTHROPIC_MODEL"))
+        return next((c.strip() for c in candidates if isinstance(c, str) and c.strip()), None)
+
+    @staticmethod
+    def _codex(config_dir: pathlib.Path) -> str | None:
+        data = NativeConfigModelDiscovery._read_toml(config_dir / "config.toml")
+        model = None if data is None else data.get("model")
+        return model.strip() if isinstance(model, str) and model.strip() else None
+
+
+__all__ = ["ChainedModelDiscovery", "NativeConfigModelDiscovery", "NativeDefaultModel"]

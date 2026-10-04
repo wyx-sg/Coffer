@@ -1,232 +1,183 @@
 // frontend/src/components/reach/ReachControl.tsx
+// A resource's reach: one button naming it, a popover choosing it (Foundations-Reach).
 //
-// A resource's reach, as ONE button whose label IS the current reach, opening a
-// panel where the states are the choices (ADR per-agent-resource-scope). Pure
-// UI: it owns the vocabulary and the panel, owns no resource data, fires no
-// request.
+// ONE button whose label IS the current reach — "Off", "All agents", or the
+// badges of the chosen agents — opening a popover where the three modes are the
+// choices (ADR per-agent-resource-scope). Pure UI: it owns the vocabulary and
+// the panel, owns no resource data, fires no request.
 //
-//   [ Every agent ▾ ]   [ 2 agents ▾ ]   [ Disabled ▾ ]
-//
-//   ○ Disabled     ● Every agent     ○ Only selected agents
-//                                          [✓] claude-code   [ ] codex
-//
-// One button states the answer; the panel is where it is changed (the older
-// three-buttons-per-row design spent three controls on two states).
+//   ○ Off            No agent can use it; your ticks are kept
+//   ● All agents     Including agents you add later
+//   ○ Chosen agents  Only the ones ticked below      [Filter agents] [✓] [ ]
 //
 // Two surfaces render this exact choice and must never drift apart:
-// ScopeControl (one resource, in a row or a detail header) and BulkReachActions
-// (the same choice over a whole selection).
+// ScopeControl (one resource, in a row or a detail header) and the add dialogs'
+// drafts. BulkReachActions is the same vocabulary over a selection.
 //
-// DISABLED IS A CHOICE, NEVER AN INFERENCE. It is an intent with its own
-// endpoint, its own audit events and its own kind-level hook, and disabling
-// deliberately leaves the scope untouched so re-enabling restores what the user
-// had picked. So it is its own radio writing `onDisabled`, and ticking nothing
-// under "only selected agents" is NOT it: that is a scope reaching nobody,
-// reported as "No agent selected" — a different label, because it is a
-// different thing. The panel keeps showing the remembered agent list while
-// Disabled is live, which is the plainest statement that the selection
-// survived.
+// EVERY CHANGE IS A WRITE. Each mode switch and each tick calls its callback at
+// once — there is no Done button — and the footer says how the write is going
+// (`saveState`). The panel keeps its own choice and ticks while it is open, so
+// the refetch that follows a write cannot move a row out from under it; it
+// re-reads the live values the next time it opens.
 //
-// Reach is MACHINE-LOCAL: held in this vault, never converged with a remote.
-// The panel says so, because nothing else the user touches would — and every
-// state is now chosen in front of that line.
+// OFF IS A CHOICE, NEVER AN INFERENCE. It is an intent with its own endpoint and
+// audit events, and it deliberately leaves the scope untouched so switching
+// back restores what the user had ticked. Choosing Chosen agents with nothing
+// ticked is NOT Off: it reaches nobody and is reported as "No agent selected".
+// The list sits dimmed under Off and All agents, ticks kept — the plainest
+// statement that the selection survived.
 //
-// WRITES ONCE, ON CLOSE. The panel stages a choice and hands it over exactly
-// once, as it closes — the two whole-value choices close it themselves, so
-// their write still lands on the way out. (Writing while the panel was open
-// refetched the list underneath it, and the row it is anchored to moved out
-// from under it.) An untouched panel writes NOTHING: with "Disabled" inside it,
-// reporting an untouched close would POST a disable on an already-disabled
-// resource — a real audit event for a glance — and the consumer has no "same
-// value" to dedupe that against the way it dedupes a scope write.
-//
-// `initialScope` seeds the pick-list: a single-resource consumer passes the
-// stored scope, the bulk consumer passes nothing, because a bulk write is a new
-// intent rather than an edit of any one row's value.
-import { useId, useState } from "react";
-import { ChevronDown } from "lucide-react";
+// `initialScope` seeds the tick list: a single-resource consumer passes the
+// stored scope, a fresh draft passes null.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentPicker } from "@/components/reach/AgentPicker";
-import { ReachChoice } from "@/components/reach/ReachChoice";
-import { liveMode, reachLabel, type ReachMode } from "@/components/reach/reachState";
-import { Button } from "@/components/ui/button";
+import { ReachButton } from "@/components/reach/ReachButton";
+import { ReachPanel } from "@/components/reach/ReachPanel";
+import {
+  chosenAgents,
+  liveMode,
+  pickableAgents,
+  reachLabel,
+  type ReachFailure,
+  type ReachMode,
+} from "@/lib/reach/reachState";
+import type { SaveState } from "@/lib/reach/useReachWrites";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAgents } from "@/lib/hooks/useAgents";
 import type { Scope } from "@/lib/hooks/useScope";
-import { cn } from "@/lib/utils";
-
-export type { ReachMode };
-
-/** Narrowing from "every agent" starts on an empty list — dormant until the
- *  user picks one, which is the prompt the choice is asking for. */
-const RESTRICTED_START: Scope = { agents: [] };
-
-const WARNING_CLASS =
-  "rounded-md border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn";
 
 interface Props {
-  /** The live state the button reports; `null` marks "no single state" — the
-   *  bulk bar, where a mixed selection has no current reach to name. */
-  mode: ReachMode | null;
-  /** Renders the button and every choice inert while a write is in flight. */
+  /** The live state the button reports. */
+  mode: ReachMode;
+  /** Renders the button inert while a draft or write is not ready. */
   busy?: boolean;
-  /** Seeds the pick-list and is the scope the button counts; `null` is
-   *  "everywhere", or a fresh intent for the bulk bar. */
+  /** Seeds the tick list and is the scope the button shows; `null` is "everywhere". */
   initialScope?: Scope | null;
-  /** Why this resource is inactive *here*, when it is. The bulk bar passes
-   *  nothing: a mixed selection has no single answer. */
+  /** Why this resource is inactive *here*, when it is. */
   note?: string;
+  /** The resource's name, shown in mono at the right of the panel's head. */
+  resourceName?: string;
   onDisabled: () => void;
   onEverywhere: () => void;
-  /** Fired once, on panel close, with the whole staged scope. */
-  onRestricted: (scope: Scope) => void;
+  /** Fired on every switch to Chosen agents and every tick, with the whole
+   *  scope; `changed` is the uid just ticked (the row a failure belongs to). */
+  onRestricted: (scope: Scope, changed?: string | null) => void;
+  /** How the last write is going; omitted for a draft nothing writes. */
+  saveState?: SaveState;
+  /** The write that failed, shown on the agent's row. */
+  failure?: ReachFailure | null;
+  /** Fired when the popover closes. */
+  onClose?: () => void;
   testId?: string;
-  /** Names the button for assistive tech; the bulk bar sets it so the
-   *  selection-wide control is distinguishable from the per-row ones. */
+  /** Names the button for assistive tech. */
   ariaLabel?: string;
 }
+
+/** The two modes a ReachControl panel offers besides Off, in panel order. */
+const MODE_ORDER: ReachMode[] = ["disabled", "everywhere", "restricted"];
 
 export function ReachControl({
   mode,
   busy = false,
   initialScope = null,
   note,
+  resourceName,
   onDisabled,
   onEverywhere,
   onRestricted,
+  saveState,
+  failure = null,
+  onClose,
   testId = "scope-control",
   ariaLabel,
 }: Props) {
   const { t } = useTranslation();
   const { data: agentsData } = useAgents();
-  const [open, setOpen] = useState(false);
-  // The staged choice: `null` until the user touches one, which is what tells
-  // an untouched close from a deliberate one.
+  // The panel's own choice and ticks: `null` until the user touches one, then
+  // theirs for as long as the panel is open.
   const [choice, setChoice] = useState<ReachMode | null>(null);
-  // The pick-list's staged selection: `null` while the panel is closed.
   const [draft, setDraft] = useState<Scope | null>(null);
-  // Native radios are mutually exclusive by `name`; per-instance so two
-  // controls on one page can never share a group.
-  const group = useId();
 
-  const staged = draft ?? initialScope ?? RESTRICTED_START;
-  const selected = staged.agents ?? [];
-  // The pick-list's vocabulary: what a tick writes (the uid) beside what it
-  // reads as (the name). Both, because a scope stores one and a person reads
-  // the other.
-  const registered = (agentsData ?? []).map((a) => ({ uid: a.uid, name: a.name }));
+  const registered = pickableAgents(agentsData);
   const live = liveMode(mode, initialScope);
-  // What reads as chosen: the staged choice, else the live state — `null` for
-  // an untouched bulk panel, whose selection has no single reach.
   const picked = choice ?? live;
+  const selected = (draft ?? initialScope)?.agents ?? [];
+  // Unknown uids get a row too, so they count towards the total.
+  const total = new Set([...registered.map((a) => a.uid), ...selected]).size;
 
-  // The one write: every path out of the panel runs through here, with the
-  // choice passed in rather than read from state, so a pick made in this same
-  // tick is not lost to a stale render.
-  const finish = (committed: ReachMode | null, scope: Scope) => {
-    setOpen(false);
+  const pick = (next: ReachMode) => {
+    if (next === picked) return;
+    setChoice(next);
+    if (next === "disabled") return onDisabled();
+    if (next === "everywhere") return onEverywhere();
+    // Always a list, never `{agents: null}`: that state is "All agents".
+    setDraft({ agents: selected });
+    onRestricted({ agents: selected }, null);
+  };
+
+  const toggle = (uid: string, checked: boolean) => {
+    const agents = checked ? [...selected, uid] : selected.filter((entry) => entry !== uid);
+    setChoice("restricted");
+    setDraft({ agents });
+    onRestricted({ agents }, checked ? uid : null);
+  };
+
+  const onOpenChange = (open: boolean) => {
     setChoice(null);
     setDraft(null);
-    if (committed === null) return;
-    if (committed === "disabled") return onDisabled();
-    if (committed === "everywhere") return onEverywhere();
-    // Always a list, never `{agents: null}`: that state has its own choice and
-    // callback, so no consumer has to normalise one into the other.
-    onRestricted({ agents: scope.agents ?? [] });
+    if (!open) onClose?.();
   };
 
-  const onOpenChange = (next: boolean) => {
-    if (next) {
-      setChoice(null);
-      setDraft(initialScope ?? RESTRICTED_START);
-      setOpen(true);
-      return;
-    }
-    finish(choice, staged);
+  const names: Record<ReachMode, [string, string]> = {
+    disabled: [t("scope.off"), t("scope.disabledSub")],
+    everywhere: [t("scope.everywhere"), t("scope.everywhereSub")],
+    restricted: [t("scope.restricted"), t("scope.restrictedSub")],
   };
-
-  // Ticking a row IS the pick of "only selected agents" — which is why the
-  // rows stay on screen under the other choices: narrowing is one click from
-  // where the user already is, not pick-the-radio-then-find.
-  const toggle = (uid: string, checked: boolean) => {
-    const base = staged.agents ?? [];
-    setChoice("restricted");
-    setDraft({ agents: checked ? [...base, uid] : base.filter((entry) => entry !== uid) });
-  };
-
-  const choiceRow = (value: ReachMode, text: string, onPick: () => void) => (
-    <ReachChoice group={group} checked={picked === value} disabled={busy} {...{ text, onPick }} />
-  );
+  const summary =
+    picked === "restricted"
+      ? t("scope.countOf", { selected: selected.length, total })
+      : names[picked ?? "everywhere"][0];
 
   return (
     <div className="inline-flex" data-testid={testId}>
-      <Popover open={open} onOpenChange={onOpenChange}>
+      <Popover onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
+          <ReachButton
+            live={live}
+            label={reachLabel(t, live, initialScope)}
+            chosen={chosenAgents(initialScope, registered)}
             disabled={busy}
             aria-label={ariaLabel}
-            // The note is about THIS resource: it colours the button (one
-            // button carrying the whole answer would otherwise read "2 agents"
-            // — perfectly healthy-looking — while reaching nobody on this
-            // machine) and is the one thing worth a tooltip on it; the
-            // standing machine-local fact is visible text inside the panel.
+            // The note is about THIS resource: it colours the button (a bare
+            // badge would otherwise look healthy while reaching nobody on this
+            // machine) and is the one thing worth a tooltip on it.
             title={note}
-            className={cn("gap-1.5 font-normal", note && "text-status-warn")}
-          >
-            {reachLabel(t, live, initialScope)}
-            <ChevronDown className="size-3.5" aria-hidden />
-          </Button>
+            warn={Boolean(note)}
+          />
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-96 space-y-3 p-3">
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">{t("scope.subtitle")}</p>
-            {/* Quiet, not amber: a standing fact about where reach is kept,
-                not a fault. Amber is for a scope that reaches nobody. */}
-            <p className="text-xs text-muted-foreground" data-testid="reach-machine-local">
-              {t("scope.machineLocal")}
-            </p>
-          </div>
-
-          {note ? <p className={WARNING_CLASS}>{note}</p> : null}
-
-          <div role="radiogroup" aria-label={t("scope.choicesLabel")} className="space-y-2">
-            {choiceRow("disabled", t("common.disabled"), () => finish("disabled", staged))}
-            {choiceRow("everywhere", t("scope.everywhere"), () => finish("everywhere", staged))}
-            {/* The one choice that leaves the panel open: it is asking a
-                question. Starting empty is also what keeps `{agents: null}`
-                out of `onRestricted`. */}
-            {choiceRow("restricted", t("scope.restricted"), () => {
-              setChoice("restricted");
-              setDraft({ agents: staged.agents ?? [] });
-            })}
-
-            <AgentPicker
-              className="space-y-2 pl-6"
-              registered={registered}
-              selected={selected}
-              dormant={picked === "restricted" && selected.length === 0}
-              busy={busy}
-              onToggle={toggle}
-            />
-            {/* The one choice that stays open needs an explicit way out:
-                Done commits the staged list exactly as closing does. */}
-            {picked === "restricted" ? (
-              <div className="flex justify-end pl-6">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => finish("restricted", staged)}
-                >
-                  {t("common.done")}
-                </Button>
-              </div>
-            ) : null}
-          </div>
+        <PopoverContent
+          align="start"
+          className="flex max-h-[480px] w-[316px] flex-col gap-2.5 p-3 text-text"
+        >
+          <ReachPanel
+            resourceName={resourceName}
+            note={note}
+            modes={MODE_ORDER.map((value) => ({
+              value,
+              text: names[value][0],
+              sub: names[value][1],
+            }))}
+            picked={picked}
+            listMode="restricted"
+            onPick={pick}
+            registered={registered}
+            selected={selected}
+            onToggle={toggle}
+            summary={summary}
+            saveState={saveState}
+            failure={failure}
+          />
         </PopoverContent>
       </Popover>
     </div>

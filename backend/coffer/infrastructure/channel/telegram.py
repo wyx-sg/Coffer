@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from coffer.application.channel.ports import AdapterCallbacks, FetchedContext
+from coffer.application.runtime.supervisor import spawn, spawn_restarting
 from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
@@ -27,6 +28,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
+from coffer.infrastructure.channel.telegram_caps import telegram_capabilities
 from coffer.infrastructure.channel.telegram_cards import edit_card
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_features import FeatureSet
@@ -43,7 +45,7 @@ from coffer.infrastructure.channel.telegram_profile import (
     probe_identity,
     register_profile,
 )
-from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
+from coffer.infrastructure.channel.telegram_reactions import set_reaction
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
 from coffer.infrastructure.channel.telegram_topics import open_private_topic
 from coffer.infrastructure.channel.telegram_transport import call
@@ -108,22 +110,7 @@ class TelegramAdapter:
 
     @property
     def capabilities(self) -> ChannelCapabilities:
-        return ChannelCapabilities(
-            supports_edit=True,
-            supports_live_text=True,  # the edit IS its live surface
-            supports_typing=True,
-            # "Render replies in the platform's rich format": a rich message carries 32k characters
-            # against an ordinary message's 4k, so the chunk budget follows whether the platform
-            # still accepts them — and drops back the moment it does not.
-            max_message_chars=(
-                RICH_MESSAGE_LIMIT if self._features.rich_messages.available else _CHUNK_LIMIT
-            ),
-            supports_buttons=True,
-            supports_card_update=True,  # editMessageText rewrites text + keyboard
-            supports_media=True,
-            supports_groups=True,
-            supports_reactions=True,
-        )
+        return telegram_capabilities(self._features)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -137,10 +124,11 @@ class TelegramAdapter:
         # awaited: it is up to six best-effort calls that nothing depends on,
         # and the reconciler is waiting on start() — against an unreachable API
         # they would hold up the channel for a minute to change nothing.
-        self._profile_task = asyncio.create_task(
-            register_profile(self._call), name=f"telegram-profile:{self._name}"
+        self._profile_task = spawn(
+            register_profile(self._call),
+            name=f"telegram-profile:{self._name}",
         )
-        self._task = asyncio.create_task(self._poll_loop(), name=f"telegram-poll:{self._name}")
+        self._task = spawn_restarting(self._poll_loop, name=f"telegram-poll:{self._name}")
 
     async def stop(self) -> None:
         # Drop pending album timers/flush tasks so none leak past stop.
@@ -330,14 +318,10 @@ class TelegramAdapter:
         where it exists: nothing is delivered, so nothing has to be deleted
         afterwards, and it carries the stop control routed back here.
 
-        Two things send a turn back to the older mechanism — one sent message,
-        rewritten in place. A Bot API server that has never heard of drafts is
-        the obvious one. The other is a group: ``sendMessageDraft`` addresses
-        "the target private chat" and has no group form, so a group turn would
-        spend a refused round trip per snapshot and show no progress at all.
-        Keeping the stop control out of groups is a second reason to prefer the
-        DM-only split: the stop update names no sender, so a button any member
-        could press is a button Coffer could not owner-gate.
+        Two things send a turn back to one sent message rewritten in place: a
+        Bot API server that has never heard of drafts, and a group —
+        ``sendMessageDraft`` addresses "the target private chat" only, and its
+        stop update names no sender, so a group's button could not be owner-gated.
         """
         if chat_kind != "group" and self._features.message_drafts.available:
             return TelegramDraftLiveText(
@@ -346,13 +330,22 @@ class TelegramAdapter:
                 channel=self._name,
                 feature=self._features.message_drafts,
                 thread_id=thread_id,
+                # A rich draft needs rich messages: a server refusing those
+                # knows neither.
+                rich=(
+                    self._features.rich_drafts if self._features.rich_messages.available else None
+                ),
             )
         return TelegramLiveText(self._call, chat_id, thread_id=thread_id)
 
-    async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
-        await self._call("editMessageText", chat_id=chat_id, message_id=message_id, text=text)
-
     async def delete_message(self, chat_id: str, message_id: str) -> None:
+        await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)
+
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        """Delete the message (``deleteMessage``, within the platform's 48 hours)."""
+        del chat_kind
         await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)
 
     async def send_typing(
@@ -376,12 +369,8 @@ class TelegramAdapter:
         )
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        # React on the user's message (👀 receipt / ✅ completion, both in
-        # Telegram's fixed allowed set). An empty list would clear; we only set.
-        reaction = [{"type": "emoji", "emoji": emoji}]
-        await self._call(
-            "setMessageReaction", chat_id=chat_id, message_id=message_id, reaction=reaction
-        )
+        # Only an emoji on Telegram's fixed list lands (see telegram_reactions).
+        await set_reaction(self._call, chat_id, message_id, emoji)
 
     # -- context fetch (ContextFetchPort) -------------------------------------
 

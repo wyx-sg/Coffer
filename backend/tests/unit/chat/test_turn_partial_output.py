@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from coffer.application.chat import turn_persistence
-from coffer.application.chat.turn_orchestrator import active_turns, clear_active_turns
+from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.application.chat.turn_runner import DAEMON_STOPPED
 from coffer.application.chat.turn_state import stop_all_turns
 from coffer.domain.chat.events import (
@@ -31,18 +31,12 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
+from tests.support.chat_turns import start_turn
 
 from .conftest import FakeAgentAdapter, FakeMessageRepo
 from .test_turn_orchestrator_with_fake_adapter import drain_queue, make_orchestrator
 
 pytestmark = pytest.mark.asyncio
-
-
-@pytest.fixture(autouse=True)
-def _clean() -> Any:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 def _assistant(msg_repo: FakeMessageRepo) -> Message:
@@ -96,7 +90,7 @@ async def test_a_stream_that_stops_without_a_terminal_is_a_stream_ended_error() 
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
     subscriber = orchestrator.subscribe(conv.id)
 
-    events = await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    events = await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
 
     backstop = TurnError(code=STREAM_ENDED, message=STREAM_ENDED_MESSAGE)
     assert events[-1] == backstop
@@ -120,7 +114,7 @@ async def test_an_adapter_error_is_not_doubled_by_the_backstop() -> None:
     orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    events = await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    events = await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
 
     assert [e for e in events if isinstance(e, TurnError)] == [err]
 
@@ -156,7 +150,7 @@ async def test_partial_output_is_flushed_to_the_streaming_row(
         clock.now += 5.0
 
     adapter.before_delta = [_pass_interval]  # only before the first delta
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.streamed.wait(), timeout=5.0)
     await asyncio.sleep(0)
 
@@ -192,7 +186,7 @@ async def test_the_flush_does_not_write_on_every_token(
     orchestrator._flush_interval = 1.0
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
 
     # At most one write per interval: ~20 s of streaming → ≤ 21 writes, not 200.
     assert 1 <= msg_repo.partial_writes <= 21
@@ -207,7 +201,7 @@ async def test_a_quick_turn_writes_no_partial_at_all() -> None:
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
 
     assert msg_repo.partial_writes == 0
     assistant = _assistant(msg_repo)
@@ -229,7 +223,7 @@ async def test_a_shutdown_cancellation_keeps_the_partial_marked_failed() -> None
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.streamed.wait(), timeout=5.0)
     task = active_turns()[conv.id].task
     assert task is not None
@@ -252,7 +246,7 @@ async def test_a_delete_still_discards_the_partial() -> None:
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.streamed.wait(), timeout=5.0)
     orchestrator.cancel_turn(conv.id)
     await drain_queue(queue)
@@ -260,12 +254,12 @@ async def test_a_delete_still_discards_the_partial() -> None:
     assert not [m for m in msg_repo.all_messages() if m.role is Role.ASSISTANT]
 
 
-async def test_a_user_interrupt_is_unchanged_complete_with_partial() -> None:
+async def test_a_user_interrupt_keeps_the_partial_as_stopped() -> None:
     adapter = _StreamThenBlock(["kept"])
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.streamed.wait(), timeout=5.0)
     orchestrator.interrupt_turn(conv.id)
     events = await drain_queue(queue)
@@ -274,7 +268,8 @@ async def test_a_user_interrupt_is_unchanged_complete_with_partial() -> None:
         prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
     )
     assistant = _assistant(msg_repo)
-    assert (assistant.status, _text(assistant)) == ("complete", "kept")
+    assert (assistant.status, _text(assistant)) == ("stopped", "kept")
+    assert assistant.finished_at is not None
 
 
 @pytest.mark.acceptance(
@@ -291,8 +286,8 @@ async def test_stopping_every_turn_at_shutdown_awaits_them_and_keeps_partials() 
     orch_b, _c2, repo_b, _p2 = make_orchestrator(adapter=second)
     conv_a = await orch_a._chat.create_conversation(agent_key="builtin")
     conv_b = await orch_b._chat.create_conversation(agent_key="builtin")
-    await orch_a.start_turn(conv_a.id, "hi")
-    await orch_b.start_turn(conv_b.id, "hi")
+    await start_turn(orch_a, conv_a.id, "hi")
+    await start_turn(orch_b, conv_b.id, "hi")
     await asyncio.wait_for(first.streamed.wait(), timeout=5.0)
     await asyncio.wait_for(second.streamed.wait(), timeout=5.0)
 
@@ -308,3 +303,43 @@ async def test_stopping_every_turn_at_shutdown_awaits_them_and_keeps_partials() 
 
 async def test_stopping_turns_with_none_running_is_a_no_op() -> None:
     assert await stop_all_turns(timeout=1.0) == 0
+
+
+async def test_stamp_times_a_tool_between_its_call_and_its_result(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.chat.events import ToolCall, ToolResult
+
+    ticks = iter([10.0, 10.25])
+    monkeypatch.setattr(turn_persistence, "_clock", lambda: next(ticks))
+    content = turn_persistence.TurnContent()
+    call = ToolCall(tool_use_id="t1", tool_name="Read", tool_input={})
+    result = ToolResult(tool_use_id="t1", tool_name="Read", output=None, error=None)
+    assert content.stamp(call) is call
+    stamped = content.stamp(result)
+    assert isinstance(stamped, ToolResult) and stamped.duration_ms == 250
+    # A result with no call seen stays unknown.
+    orphan = ToolResult(tool_use_id="x", tool_name="Read", output=None, error=None)
+    assert content.stamp(orphan) is orphan
+
+
+async def test_a_streamed_and_persisted_tool_result_carries_its_duration() -> None:
+    from coffer.domain.chat.events import ToolCall, ToolResult
+    from coffer.domain.chat.message import ToolResultBlock
+
+    done = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
+    adapter = FakeAgentAdapter(
+        [
+            TurnStarted(),
+            ToolCall(tool_use_id="t1", tool_name="Read", tool_input={}),
+            ToolResult(tool_use_id="t1", tool_name="Read", output={"ok": 1}, error=None),
+            done,
+        ]
+    )
+    orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+
+    events = await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
+
+    streamed = next(e for e in events if isinstance(e, ToolResult))
+    assert streamed.duration_ms is not None and streamed.duration_ms >= 0
+    block = next(b for b in _assistant(msg_repo).content if isinstance(b, ToolResultBlock))
+    assert block.duration_ms == streamed.duration_ms

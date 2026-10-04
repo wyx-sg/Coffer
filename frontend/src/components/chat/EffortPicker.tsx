@@ -10,6 +10,7 @@
 // one. Claude Code's catalogue says no model of its does, so nothing renders
 // for a Claude Code conversation and its bar looks exactly as it always has.
 import { useTranslation } from "react-i18next";
+import { Gauge } from "lucide-react";
 
 import {
   Select,
@@ -69,12 +70,22 @@ export function EffortPicker({ agentKey, model, value, onCommit, disabled = fals
       value={selectValue}
       onValueChange={(v) => commit(v === INHERIT ? null : v)}
     >
-      <SelectTrigger className="h-7 w-32 text-sm" aria-label={t("chat.effortPicker.label")}>
-        <SelectValue placeholder={t("chat.effortPicker.placeholder")} />
+      <SelectTrigger
+        className="h-7 w-auto max-w-48 gap-1.5 border-transparent bg-transparent px-2 text-xs font-medium text-text-muted shadow-none hover:bg-surface-hover"
+        aria-label={t("conversations.effortPicker.label")}
+      >
+        <Gauge className="size-3.5 shrink-0" aria-hidden />
+        <SelectValue placeholder={t("conversations.effortPicker.placeholder")}>
+          {selectValue === INHERIT
+            ? undefined
+            : t("conversations.effortPicker.shown", {
+                effort: selectValue.charAt(0).toUpperCase() + selectValue.slice(1),
+              })}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={INHERIT}>
-          {t("chat.effortPicker.inheritNoEffort")}
+          {t("conversations.effortPicker.inheritNoEffort")}
           {/* Naming the level the agent would pick makes "its own default" a
               fact the user can weigh, not a shrug. */}
           {entry?.default_effort && (

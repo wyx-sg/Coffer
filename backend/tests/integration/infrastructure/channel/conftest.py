@@ -82,9 +82,15 @@ class FakeTelegram:
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
         self.bad_payload_get_updates = False  # answer getUpdates ok:true with a non-list result
         self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
+        #: One ``retry_after`` per sendMessage to refuse with HTTP 429, in order.
+        self.rate_limited_sends: list[int] = []
         #: Canned ``result`` per method for the ones with no bespoke branch
         #: below (getMe, getMyDescription, …) — consulted before the {} default.
         self.results: dict[str, Any] = {}
+        #: Whether this server knows Bot API 10.1's sendRichMessageDraft. NO by
+        #: default, like the other 10.x surfaces: the plain draft is what most
+        #: draft tests exercise, and the rich one latches off on its refusal.
+        self.supports_rich_drafts = False
         #: Method → the description a 400 refusal of it carries, for the
         #: methods a test scripts the platform to refuse outright.
         self.refusals: dict[str, str] = {}
@@ -129,6 +135,10 @@ class FakeTelegram:
             except TimeoutError:
                 batch = []
             return JSONResponse(content={"ok": True, "result": batch})
+        if method == "sendRichMessageDraft" and not self.supports_rich_drafts:
+            return JSONResponse(
+                status_code=404, content={"ok": False, "description": "Not Found: method not found"}
+            )
         if method == "sendMessageDraft" and not self.supports_drafts:
             return JSONResponse(
                 status_code=404, content={"ok": False, "description": "Not Found: method not found"}
@@ -140,6 +150,15 @@ class FakeTelegram:
                 status_code=404, content={"ok": False, "description": "Not Found: method not found"}
             )
         if method in ("sendMessage", "sendRichMessage"):
+            if self.rate_limited_sends:
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "ok": False,
+                        "description": "Too Many Requests: retry after 0",
+                        "parameters": {"retry_after": self.rate_limited_sends.pop(0)},
+                    },
+                )
             if self.html_error_sends > 0:
                 # A gateway returns a 502 HTML page, not the Bot API JSON
                 # envelope — response.json() would raise JSONDecodeError.
@@ -304,7 +323,10 @@ class FakeSeaTalk:
 
 
 def make_telegram_adapter(
-    fake: FakeTelegram, *, poll_timeout: int = 1, media_dir: Any = None
+    fake: FakeTelegram,
+    *,
+    poll_timeout: int = 1,
+    media_dir: Any = None,
 ) -> TelegramAdapter:
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app), base_url="http://fake")
     return TelegramAdapter(

@@ -108,7 +108,7 @@ def test_run_server_builds_loopback_fd_config_and_releases_once_started(
         async def serve(self) -> None:
             self.started = True
 
-    monkeypatch.setattr(entry.uvicorn, "Server", _FakeServer)
+    monkeypatch.setattr(entry, "_DaemonServer", _FakeServer)
 
     started: list[bool] = []
     entry._run_server(_FakeSock(7), lambda: started.append(True))
@@ -132,7 +132,7 @@ def test_run_server_releases_even_if_startup_fails(monkeypatch: pytest.MonkeyPat
         async def serve(self) -> None:
             return  # exits without ever serving
 
-    monkeypatch.setattr(entry.uvicorn, "Server", _FailingServer)
+    monkeypatch.setattr(entry, "_DaemonServer", _FailingServer)
 
     started: list[bool] = []
     entry._run_server(_FakeSock(7), lambda: started.append(True))
@@ -157,7 +157,7 @@ def test_no_host_override_path_exists(tmp_path: Path, monkeypatch: pytest.Monkey
         async def serve(self) -> None:
             return
 
-    monkeypatch.setattr(entry.uvicorn, "Server", _FakeServer)
+    monkeypatch.setattr(entry, "_DaemonServer", _FakeServer)
     entry._run_server(_FakeSock(9), lambda: None)
 
     config = captured["config"]
@@ -286,3 +286,84 @@ def test_main_raises_fd_soft_limit_before_serving(
 
     assert order and order[0] == "fd", "fd soft limit must be raised before serving"
     assert "serve" in order
+
+
+def test_version_flag_prints_the_package_version_and_starts_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``coffer-daemon --version`` used to be ignored as an unknown argument,
+    so asking for the version started a daemon. It prints the package version
+    and returns before anything is scrubbed, locked or bound."""
+    from importlib.metadata import version
+
+    def _must_not_run(*_a: object, **_k: object) -> None:
+        raise AssertionError("--version reached the daemon start path")
+
+    monkeypatch.setattr(entry.sys, "argv", ["coffer-daemon", "--version"])
+    monkeypatch.setattr(entry, "scrub_agent_home_env", _must_not_run)
+    monkeypatch.setattr(entry.bootstrap, "acquire_or_existing", _must_not_run)
+
+    entry.main()
+
+    assert capsys.readouterr().out == f"{version('coffer')}\n"
+
+
+def test_run_server_gives_up_its_own_listening_fd_once_uvicorn_has_a_dup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The entry's socket would keep the port in LISTEN through the whole
+    shutdown with nobody accepting; uvicorn owns a dup once it has started."""
+
+    class _Started:
+        def __init__(self, config: object) -> None:
+            self.started = True
+
+        async def serve(self) -> None:
+            return
+
+    monkeypatch.setattr(entry, "_DaemonServer", _Started)
+    sock = _FakeSock(7)
+    entry._run_server(sock, lambda: None)
+    assert sock.closed is True
+
+
+def test_run_server_leaves_logging_to_the_root_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    """uvicorn's own log config would add a second, differently-shaped handler."""
+    captured: dict[str, object] = {}
+
+    class _Fake:
+        def __init__(self, config: object) -> None:
+            captured["config"] = config
+            self.started = True
+
+        async def serve(self) -> None:
+            return
+
+    monkeypatch.setattr(entry, "_DaemonServer", _Fake)
+    entry._run_server(_FakeSock(7), lambda: None)
+    assert captured["config"].log_config is None
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="a daemon that is shutting down reports draining")
+@pytest.mark.asyncio
+async def test_shutdown_reports_draining_before_the_listener_closes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Spec daemon: status reports ``draining`` once shutdown has begun — which
+    only a client can see if the server still answers when the phase flips."""
+    from coffer.infrastructure.daemon import phase
+
+    seen: list[str] = []
+
+    async def _base_shutdown(self: object, sockets: object = None) -> None:
+        seen.append(f"listener-closing phase={phase.get_daemon_phase()}")
+
+    monkeypatch.setattr(entry.uvicorn.Server, "shutdown", _base_shutdown)
+    monkeypatch.setattr(entry, "_DRAIN_VISIBLE_SECONDS", 0.0)
+    phase.set_daemon_phase("ready")
+    server = entry._DaemonServer(entry.uvicorn.Config("coffer.main:app", fd=None))
+    try:
+        await server.shutdown()
+        assert seen == ["listener-closing phase=draining"]
+    finally:
+        phase.set_daemon_phase("ready")

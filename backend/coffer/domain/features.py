@@ -1,4 +1,4 @@
-"""The experimental features, and the release channel that decides their default.
+"""The experimental features.
 
 One registry, and every surface takes the list from it (spec
 experimental-features "Declare the experimental features in one registry"). A
@@ -19,13 +19,10 @@ from typing import Literal
 
 from coffer.domain.error_base import CofferError
 
-#: The release channel a build carries. ``stable`` is stamped by the release
-#: workflow onto a tagged build; every other build is ``dev``.
-Channel = Literal["stable", "dev"]
-
 #: Where a feature's current state was decided, highest precedence first:
-#: a ``COFFER_FEATURES`` pin, the machine's own setting, the channel default.
-FeatureSource = Literal["pin", "setting", "channel"]
+#: a ``COFFER_FEATURES`` pin, the machine's own setting, the built-in default
+#: (off).
+FeatureSource = Literal["pin", "setting", "default"]
 
 
 @dataclass(frozen=True)
@@ -50,16 +47,54 @@ class ExperimentalFeature:
     kinds: tuple[str, ...] = ()
 
 
+#: The four experimental features (spec experimental-features "Declare the
+#: experimental features in one registry"). Everything else — the shell, the
+#: overview, Agents, the MCP gateway and its custom tools, Skills, Secrets,
+#: Activity, Settings, Conversations and Channels — is always on and owns no
+#: entry.
+#:
+#: ``knowledge`` — the knowledge collections. ``memory`` — agent memory.
+#: ``sync`` — vault sync. ``models`` — Model providers, the local model proxy
+#: and the Usage tab. Every one is off until the person switches it on, on this
+#: machine. A feature joins by adding one entry here and tagging its other
+#: surfaces with its key; it leaves by deleting that entry and every gate that
+#: names it (and, once released, a migration that strips its stored setting).
+KNOWLEDGE = "knowledge"
+MEMORY = "memory"
+SYNC = "sync"
+MODELS = "models"
+
 EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
-    ExperimentalFeature(key="vault_sync", route_prefixes=("/api/v1/sync",)),
     ExperimentalFeature(
-        key="knowledge", route_prefixes=("/api/v1/knowledge",), kinds=("knowledge",)
+        key=KNOWLEDGE,
+        route_prefixes=("/api/v1/knowledge",),
+        kinds=("knowledge",),
     ),
-    ExperimentalFeature(key="memory", route_prefixes=("/api/v1/memory",), kinds=("memory",)),
+    ExperimentalFeature(
+        key=MEMORY,
+        route_prefixes=("/api/v1/memory",),
+        kinds=("memory",),
+    ),
+    ExperimentalFeature(
+        key=SYNC,
+        route_prefixes=("/api/v1/sync",),
+    ),
+    ExperimentalFeature(
+        key=MODELS,
+        route_prefixes=(
+            "/api/v1/providers",
+            "/api/v1/models",
+            "/api/v1/proxy",
+            "/api/v1/usage",
+        ),
+        kinds=("provider",),
+    ),
 )
 
-_BY_KEY: dict[str, ExperimentalFeature] = {f.key: f for f in EXPERIMENTAL_FEATURES}
-_BY_KIND: dict[str, str] = {kind: f.key for f in EXPERIMENTAL_FEATURES for kind in f.kinds}
+
+# The lookups read the registry on every call rather than from an index built
+# at import: it holds a handful of entries at most, and a test registers a fake
+# feature by replacing ``EXPERIMENTAL_FEATURES`` alone.
 
 
 def feature_keys() -> tuple[str, ...]:
@@ -67,22 +102,21 @@ def feature_keys() -> tuple[str, ...]:
     return tuple(f.key for f in EXPERIMENTAL_FEATURES)
 
 
-def is_registered(key: str) -> bool:
-    return key in _BY_KEY
-
-
 def get_feature(key: str) -> ExperimentalFeature:
     """The registered feature named ``key``; raise :class:`FeatureUnknown` otherwise."""
-    try:
-        return _BY_KEY[key]
-    except KeyError:
-        raise FeatureUnknown(key) from None
+    for feature in EXPERIMENTAL_FEATURES:
+        if feature.key == key:
+            return feature
+    raise FeatureUnknown(key)
 
 
 def feature_for_kind(kind: str) -> str | None:
     """The feature that owns resource kind ``kind``, or ``None`` for a kind
     that is always there."""
-    return _BY_KIND.get(kind)
+    for feature in EXPERIMENTAL_FEATURES:
+        if kind in feature.kinds:
+            return feature.key
+    return None
 
 
 def feature_for_path(path: str) -> str | None:
@@ -92,11 +126,6 @@ def feature_for_path(path: str) -> str | None:
             if path == prefix or path.startswith(prefix + "/"):
                 return feature.key
     return None
-
-
-def channel_default(channel: Channel) -> bool:
-    """A feature's state when nothing pins it and the machine has no setting."""
-    return channel == "dev"
 
 
 class FeatureUnknown(CofferError):  # noqa: N818
@@ -126,6 +155,6 @@ class FeatureDisabled(CofferError):  # noqa: N818
 
     def __init__(self, key: str) -> None:
         super().__init__(
-            f"{key} is switched off on this machine — run: coffer config set feature.{key} on"
+            f"{key} is switched off on this machine — switch it on in Settings › Features"  # noqa: RUF001
         )
         self.feature = key

@@ -50,7 +50,7 @@ def test_the_shell_declares_no_dialog_or_opener_plugin() -> None:
     for cap in caps:
         for permission in cap.get("permissions", []):
             name = permission if isinstance(permission, str) else permission.get("identifier", "")
-            assert not name.startswith(("dialog:", "opener:", "fs:", "shell:")), (
+            assert not name.startswith(("dialog:", "opener:", "fs:", "shell:", "updater:")), (
                 f"capability {cap.get('identifier')!r} grants {name!r}; the webview "
                 f"is allowed the core baseline and nothing more"
             )
@@ -117,10 +117,13 @@ def test_the_shell_writes_into_the_daemon_log_and_opens_no_second_file() -> None
 _FRONTEND_SRC = _REPO / "frontend" / "src"
 
 # The only frontend modules allowed to know which host they run in: the
-# credential supplier itself, and the offline banner whose Restart control only
-# the shell can offer.
+# secret supplier itself, its update-check half (split out of it to keep
+# it within its size cap, and reaching the shell only through its
+# `shellInvoke` / `onShellEvent`), and the offline banner whose Restart control
+# only the shell can offer.
 _HOST_AWARE_MODULES = {
     Path("lib/tauri.ts"),
+    Path("lib/shellUpdates.ts"),
     Path("components/DaemonOfflineBanner.tsx"),
 }
 
@@ -169,10 +172,10 @@ def test_the_shell_and_the_frozen_daemon_ship_the_same_frontend_build() -> None:
             host_aware.add(source.relative_to(_FRONTEND_SRC))
     assert scanned > 50, "the frontend source tree was not found"
     assert host_aware <= _HOST_AWARE_MODULES, (
-        f"only the credential supplier and the offline banner may branch on the host; "
+        f"only the secret supplier and the offline banner may branch on the host; "
         f"also branching: {sorted(str(p) for p in host_aware - _HOST_AWARE_MODULES)}"
     )
-    assert Path("lib/tauri.ts") in host_aware, "the credential supplier must be the host-aware seam"
+    assert Path("lib/tauri.ts") in host_aware, "the secret supplier must be the host-aware seam"
 
 
 def _csp_directives() -> dict[str, list[str]]:

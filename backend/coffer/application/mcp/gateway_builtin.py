@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +22,7 @@ from coffer.application.mcp.gateway_tool_search import (
 )
 from coffer.application.mcp.ports import MCPInvocationRepoPort
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime import correlation
 from coffer.domain.errors import ResourceNotFound, UpstreamUnavailable
 from coffer.domain.mcp.capability import BUILTIN_SERVER_UID, MCPInvocation
 
@@ -36,6 +37,7 @@ async def dispatch_builtin_tool(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    session_agent_uid: str | None = None,
 ) -> dict[str, Any]:
     """Invoke a `coffer__*` built-in tool and record it in mcp_invocations.
 
@@ -62,11 +64,12 @@ async def dispatch_builtin_tool(
             status="ok",
             error_message=None,
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         return _to_call_tool_result(result)
     except Exception as exc:
         duration_ms = int((clock() - started).total_seconds() * 1000)
-        # No secret in the invocation log (spec credentials "Hold plaintext only
+        # No secret in the invocation log (spec secret "Hold plaintext only
         # in memory at the moment of use"): Coffer-authored errors keep their message; arbitrary
         # downstream exceptions are logged as the class name only, so a built-in
         # tool can never leak args/returned content into the invocation log
@@ -79,6 +82,7 @@ async def dispatch_builtin_tool(
             status="error",
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         # Per the MCP spec, TOOL-execution failures are in-band ``isError``
         # results the model can read and self-correct from; JSON-RPC errors
@@ -127,6 +131,7 @@ async def _log(
     status: str,
     error_message: str | None,
     session_id: str,
+    agent_uid: str | None,
 ) -> None:
     try:
         await invocations.insert(
@@ -140,6 +145,8 @@ async def _log(
                 status=status,  # type: ignore[arg-type]
                 error_message=error_message,
                 session_id=session_id,
+                agent_uid=agent_uid,
+                trace_id=correlation.current().trace_id,
             )
         )
     except Exception:
@@ -166,7 +173,7 @@ SESSION_CONTEXT_PROPERTIES = ("cwd",)
 #: The uid has its own, separate job in this session — gating what the agent can
 #: see, via ``is_active(resource.scope, session_agent_uid)`` — and that job is
 #: untouched. Letting one value serve both would be the "one field answering two
-#: questions" shape that ADR resource-identity-is-an-immutable-uid exists to
+#: questions" shape that ADR identity-is-the-uid-inside-the-file exists to
 #: remove: a label must follow a rename, an identity must not.
 AGENT_ARGUMENT = "agent"
 
@@ -263,12 +270,14 @@ async def dispatch_tool_search(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    session_agent_uid: str | None = None,
+    exposure: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
     started = clock()
     try:
         args = params.get("arguments") or {}
-        result = await execute_tool_search(args, aggregated_tools)
+        result = await execute_tool_search(args, aggregated_tools, exposure)
         # Capture the (intent -> ranked tools) shape for the eval flywheel.
         # Best-effort and opt-in (ADR eval-capture-and-regression-gate); a no-op unless
         # COFFER_EVAL_CAPTURE is set. ``query`` is a validated non-empty str by
@@ -283,6 +292,7 @@ async def dispatch_tool_search(
             status="ok",
             error_message=None,
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         return _to_call_tool_result(result)
     except Exception as exc:
@@ -295,6 +305,7 @@ async def dispatch_tool_search(
             status="error",
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}
 
@@ -308,6 +319,9 @@ async def run_tool_search(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    hidden: frozenset[str] = frozenset(),
+    session_agent_uid: str | None = None,
+    exposure: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Aggregate the catalogue, then search it.
 
@@ -317,11 +331,13 @@ async def run_tool_search(
     reachable is more useful than one that refuses, and ``tools/list`` is the
     path that owns the degraded-server retry.
     """
-    outcome = await list_tools_across(discovery, ensure_subscribed, servers)
+    outcome = await list_tools_across(discovery, ensure_subscribed, servers, hidden)
     return await dispatch_tool_search(
         params=params,
         aggregated_tools=outcome.items,
         invocations=invocations,
         session_id=session_id,
         clock=clock,
+        session_agent_uid=session_agent_uid,
+        exposure=exposure,
     )

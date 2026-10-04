@@ -191,3 +191,47 @@ async def test_tools_call_is_resent_after_a_401(
     assert daemons.new_calls == ["tools/call"]
     reply = json.loads(capsys.readouterr().out.strip())
     assert reply == {"jsonrpc": "2.0", "id": 10, "result": {"ok": True}}
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a dropped session is answered 404 and the client handshakes again"
+)
+@pytest.mark.asyncio
+async def test_a_dropped_session_is_handshaken_again_and_the_call_resent(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The daemon's idle reaper drops a session; its next answer is 404. The shim
+    replays the cached ``initialize`` (which carries the agent identity), then
+    resends the call on the new session. Nothing ran, so even a tools/call is resent."""
+    bridge = _bridge()
+    bridge._session_id = "s-dropped"
+    seen: list[tuple[str, str | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        envelope = json.loads(request.content)
+        session = request.headers.get("Mcp-Session-Id")
+        seen.append((envelope["method"], session))
+        if envelope["method"] == "initialize":
+            return httpx.Response(
+                200,
+                json={"jsonrpc": "2.0", "id": envelope["id"], "result": {}},
+                headers={"Mcp-Session-Id": "s-fresh"},
+            )
+        if session == "s-dropped":
+            return httpx.Response(404, json={"error": {"message": "unknown session"}})
+        return _ok(envelope)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url=f"http://127.0.0.1:{_OLD_PORT}",
+        headers={"X-Coffer-Token": _OLD_TOKEN},
+    ) as client:
+        await bridge._handle_envelope(client, _tools_call(7))
+
+    assert seen == [
+        ("tools/call", "s-dropped"),
+        ("initialize", None),
+        ("tools/call", "s-fresh"),
+    ]
+    assert bridge._session_id != "s-dropped"
+    assert '"ok":true' in capsys.readouterr().out

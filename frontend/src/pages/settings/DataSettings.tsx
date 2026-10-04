@@ -1,122 +1,126 @@
 // frontend/src/pages/settings/DataSettings.tsx
 //
-// The Data settings tab: the "Data retention" card — a row per log table
-// plus the manual prune — following one layout rhythm: an explanation on
-// the left, the action on the right. Every row auto-saves and says so with a
-// toast; the manual prune confirms first, because it deletes rows right now.
-import { useState } from "react";
+// Settings → Data (canvas 1.4.11, 1.4.12; spec web-ui "Group the Data tab by
+// what kind of data it is"): what Coffer keeps, where it lives and for how
+// long, in four sections — Vault (the git repository at ~/.coffer/vault: size
+// with .git, versions, Open folder, its location), Local
+// content (not synced, the user backs it up: chat and channel attachments),
+// History (the records, their retention, Clear expired now) and Rebuildable
+// cache (the memory tree and transcript summary cache, one confirmed Clear).
+// No "This Mac only" block. Sizes come from GET /api/v1/storage; folders open
+// through the daemon's /fs routes. Every edit auto-saves.
 import { useTranslation } from "react-i18next";
+import { FolderOpen } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
+import { LoadError } from "@/components/LoadError";
+import { CacheBlock } from "@/components/settings/storage/CacheBlock";
+import { DataBlock } from "@/components/settings/storage/DataBlock";
+import { HistoryBlock } from "@/components/settings/storage/HistoryBlock";
 import {
-  useRetentionPolicies,
-  useUpdateRetentionPolicy,
-  usePruneNow,
-} from "@/lib/hooks/useRetention";
-import { RetentionPolicySection } from "./RetentionPolicySection";
+  SETTINGS_STACK,
+  SettingRow,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { abbreviateHomePath } from "@/lib/agents/display";
+import { useFsActions } from "@/lib/fsActions";
+import { translateApiError } from "@/lib/api/errors";
+import { useStorageSummary } from "@/lib/hooks/useStorage";
+import { formatBytes } from "@/lib/utils";
+
+function Location({ path }: { path: string }) {
+  return <span className="font-mono text-xs text-text-muted">{abbreviateHomePath(path)}</span>;
+}
 
 export function DataSettings() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { data, isPending, error } = useRetentionPolicies();
-  const update = useUpdateRetentionPolicy();
-  const prune = usePruneNow();
-  const [pruneResult, setPruneResult] = useState<string | null>(null);
-  const [confirmPrune, setConfirmPrune] = useState(false);
+  const fs = useFsActions();
+  const storage = useStorageSummary();
+  const data = storage.data;
 
-  if (isPending)
-    return (
-      <Card>
-        <CardContent className="py-6">{t("common.loading")}</CardContent>
-      </Card>
+  const open = (path: string, reveal = false) => {
+    (reveal ? fs.reveal(path) : fs.open(path)).catch((err: unknown) =>
+      toast.error(translateApiError(t, err)),
     );
-  if (error)
-    return (
-      <Card>
-        <CardContent className="py-6 text-destructive">{translateApiError(t, error)}</CardContent>
-      </Card>
-    );
-
-  // One line per table that lost rows, named the way the rows above name it —
-  // never the raw table name. Nothing removed anywhere is its own message.
-  const summarise = (tables: Record<string, number>) => {
-    const lines = Object.entries(tables)
-      .filter(([, rows]) => rows > 0)
-      .map(([table, rows]) =>
-        t("settings.retention.pruneRow", {
-          rows,
-          name: t(`settings.retention.policy.${table}.name`, { defaultValue: table }),
-        }),
-      );
-    return lines.length > 0 ? lines.join("; ") : t("settings.retention.pruneNothing");
   };
+  const openButton = (path: string | undefined) => (
+    <Button size="sm" variant="outline" disabled={!path} onClick={() => path && open(path)}>
+      <FolderOpen aria-hidden /> {t("settings.data.openFolder")}
+    </Button>
+  );
 
-  const runPrune = () => {
-    setConfirmPrune(false);
-    prune.mutate(undefined, {
-      onSuccess: (result) => setPruneResult(summarise(result?.tables ?? {})),
-    });
-  };
+  const vaultSize = data
+    ? data.vault.versions === null || data.vault.versions === undefined
+      ? formatBytes(data.vault.bytes)
+      : t("settings.data.vault.size", {
+          size: formatBytes(data.vault.bytes),
+          count: data.vault.versions,
+          versions: data.vault.versions.toLocaleString(),
+        })
+    : null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("settings.retention.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="divide-y divide-border p-0">
-        {data!.policies.map((policy) => (
-          <div key={policy.table_name} className="p-6">
-            <RetentionPolicySection
-              policy={policy}
-              onUpdate={(retentionDays) =>
-                update.mutate(
-                  { tableName: policy.table_name, retentionDays },
-                  { onSuccess: () => toast.success(t("common.saved")) },
-                )
-              }
-              updating={update.isPending}
-            />
-          </div>
-        ))}
-        {update.isError ? (
-          <p className="px-6 py-3 text-xs text-destructive" role="alert">
-            {translateApiError(t, update.error)}
-          </p>
-        ) : null}
-        <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            {t("settings.retention.pruneDescription")}
-          </p>
-          <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
-            <Button onClick={() => setConfirmPrune(true)} disabled={prune.isPending}>
-              {prune.isPending ? t("settings.retention.pruning") : t("settings.retention.pruneAll")}
-            </Button>
-            {prune.isError ? (
-              <p className="text-xs text-destructive" role="alert">
-                {translateApiError(t, prune.error)}
-              </p>
-            ) : pruneResult ? (
-              <p className="text-xs text-muted-foreground" role="status">
-                {pruneResult}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </CardContent>
+    <div className="flex flex-col gap-5">
+      <SettingsTabHeader title={t("settings.tabs.data")} intro={t("settings.data.intro")} />
+      {storage.error ? (
+        <LoadError error={storage.error} onRetry={() => void storage.refetch()} />
+      ) : null}
+      <div className={SETTINGS_STACK}>
+        <DataBlock
+          title={t("settings.data.vault.title")}
+          size={storage.error ? "—" : vaultSize}
+          description={
+            data && data.vault.versions == null
+              ? t("settings.data.vault.notRepository")
+              : t("settings.data.vault.description")
+          }
+          action={openButton(data?.vault.path)}
+          testId="settings-data-vault"
+        >
+          {data ? (
+            <SettingRow label={t("settings.data.location")}>
+              <Location path={data.vault.path} />
+            </SettingRow>
+          ) : null}
+        </DataBlock>
 
-      <ConfirmDialog
-        open={confirmPrune}
-        onOpenChange={setConfirmPrune}
-        title={t("settings.retention.pruneConfirmTitle")}
-        description={t("settings.retention.pruneConfirmBody")}
-        confirmLabel={t("settings.retention.pruneAll")}
-        pending={prune.isPending}
-        onConfirm={runPrune}
-      />
-    </Card>
+        <DataBlock
+          title={t("settings.data.local.title")}
+          size={storage.error ? "—" : data ? formatBytes(data.local_content.bytes) : null}
+          description={t("settings.data.local.description")}
+          action={openButton(data?.local_content.folder)}
+          testId="settings-data-local"
+        >
+          {data ? (
+            <>
+              <SettingRow
+                label={t("settings.data.local.attachments")}
+                description={t("settings.data.local.attachmentsHelp")}
+              >
+                <span className="text-sm text-text" data-visual-volatile>
+                  {formatBytes(data.local_content.bytes)}
+                </span>
+              </SettingRow>
+              <SettingRow label={t("settings.data.location")}>
+                <div className="flex flex-col items-end gap-0.5">
+                  {data.local_content.locations.map((p) => (
+                    <Location key={p} path={p} />
+                  ))}
+                </div>
+              </SettingRow>
+            </>
+          ) : null}
+        </DataBlock>
+
+        <HistoryBlock
+          size={storage.error ? "—" : data ? formatBytes(data.history.bytes) : null}
+          onReveal={data?.history.path ? () => open(data.history.path, true) : undefined}
+        />
+
+        <CacheBlock bytes={storage.error ? 0 : (data?.cache.bytes ?? null)} />
+      </div>
+    </div>
   );
 }

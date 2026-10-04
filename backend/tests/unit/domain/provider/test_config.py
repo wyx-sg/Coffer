@@ -17,20 +17,19 @@ def test_valid_config_defaults() -> None:
     c = ProviderConfig(
         protocol="anthropic",  # type: ignore[arg-type]
         base_url="https://x",
-        credential_ref="provider/acme/key",
+        secret_ref="provider/acme/key",
     )
     assert c.protocol is Protocol.ANTHROPIC
-    assert c.is_active is False
     assert c.internal_default is False
 
 
 def test_unknown_protocol_member_is_valid() -> None:
     # ``unknown`` is a first-class protocol (the probe was inconclusive); a
-    # connection with it still requires a credential like any cloud wire.
+    # connection with it still requires a secret like any cloud wire.
     c = ProviderConfig(
         protocol="unknown",  # type: ignore[arg-type]
         base_url="https://x",
-        credential_ref="r",
+        secret_ref="r",
     )
     assert c.protocol is Protocol.UNKNOWN
 
@@ -40,7 +39,7 @@ def test_bogus_protocol_rejected() -> None:
         ProviderConfig(
             protocol="bogus",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref="r",
+            secret_ref="r",
         )
 
 
@@ -49,34 +48,34 @@ def test_empty_base_url_rejected() -> None:
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="   ",
-            credential_ref="r",
+            secret_ref="r",
         )
 
 
-def test_malformed_credential_ref_rejected() -> None:
+def test_malformed_secret_ref_rejected() -> None:
     with pytest.raises(ValidationError):
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref="bad ref!",
+            secret_ref="bad ref!",
         )
 
 
-def test_ollama_must_not_carry_credential() -> None:
+def test_ollama_must_not_carry_secret() -> None:
     with pytest.raises(ValidationError):
         ProviderConfig(
             protocol="ollama",  # type: ignore[arg-type]
             base_url="http://localhost:11434",
-            credential_ref="r",
+            secret_ref="r",
         )
 
 
-def test_cloud_protocol_requires_credential() -> None:
+def test_cloud_protocol_requires_secret() -> None:
     with pytest.raises(ValidationError):
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref=None,
+            secret_ref=None,
         )
 
 
@@ -86,7 +85,7 @@ def test_only_a_keyless_wire_starts_dormant() -> None:
     The ``provider`` Kind asks this at registration (ADR per-agent-resource-scope)
     to decide between a dormant connection and an unscoped one. It cannot ask
     for a starting agent LIST any more: a scope holds agent uids
-    (ADR resource-identity-is-an-immutable-uid), and this module — a pure
+    (ADR identity-is-the-uid-inside-the-file), and this module — a pure
     function of the config, which is all ``Kind.default_scope`` is handed —
     knows none. That is what retired the table of ``claude_code`` / ``codex``
     strings this domain module used to spell out.
@@ -113,20 +112,20 @@ def test_compatible_agents_is_no_longer_a_config_field() -> None:
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref="r",
+            secret_ref="r",
             compatible_agents=["claude_code"],  # type: ignore[call-arg]
         )
 
 
-def test_ollama_still_refuses_a_credential() -> None:
+def test_ollama_still_refuses_a_secret() -> None:
     """The one wire rule that survives on the config: a keyless connection
-    holds no credential ref. That it projects into no agent is now its empty
+    holds no secret ref. That it projects into no agent is now its empty
     starting scope, enforced at the projection seam, not here."""
     with pytest.raises(ValidationError):
         ProviderConfig(
             protocol="ollama",  # type: ignore[arg-type]
             base_url="http://x",
-            credential_ref="r",
+            secret_ref="r",
         )
 
 
@@ -135,7 +134,7 @@ def test_extra_field_forbidden() -> None:
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref="r",
+            secret_ref="r",
             bogus=1,
         )
 
@@ -145,7 +144,7 @@ def test_models_defaults_to_unrestricted() -> None:
     c = ProviderConfig(
         protocol="openai",  # type: ignore[arg-type]
         base_url="x",
-        credential_ref="r",
+        secret_ref="r",
     )
     assert c.models == []
 
@@ -156,7 +155,7 @@ def test_models_are_opaque_strings_kept_in_order() -> None:
     c = ProviderConfig(
         protocol="unknown",  # type: ignore[arg-type]
         base_url="x",
-        credential_ref="r",
+        secret_ref="r",
         models=[{"id": "agnes-2.0"}, {"id": "not-a-real-model"}, {"id": "gpt-5"}],
     )
     assert c.model_ids() == ["agnes-2.0", "not-a-real-model", "gpt-5"]
@@ -168,7 +167,7 @@ def test_models_default_to_text_modality() -> None:
     c = ProviderConfig(
         protocol="openai",  # type: ignore[arg-type]
         base_url="x",
-        credential_ref="r",
+        secret_ref="r",
         models=[{"id": "gpt-5"}],
     )
     assert c.models[0].modality is Modality.TEXT
@@ -184,7 +183,7 @@ def test_one_connection_curates_several_modalities() -> None:
     c = ProviderConfig(
         protocol="openai",  # type: ignore[arg-type]
         base_url="x",
-        credential_ref="r",
+        secret_ref="r",
         models=[
             {"id": "gpt-5"},
             {"id": "text-embedding-3-large", "modality": "embedding"},
@@ -203,7 +202,7 @@ def test_stored_modality_is_not_re_inferred_on_load() -> None:
     c = ProviderConfig(
         protocol="openai",  # type: ignore[arg-type]
         base_url="x",
-        credential_ref="r",
+        secret_ref="r",
         models=[{"id": "text-embedding-3-large", "modality": "text"}],
     )
     assert c.model_ids(Modality.TEXT) == ["text-embedding-3-large"]
@@ -214,7 +213,7 @@ def test_models_dedupe_and_strip() -> None:
     c = ProviderConfig(
         protocol="openai",  # type: ignore[arg-type]
         base_url="x",
-        credential_ref="r",
+        secret_ref="r",
         models=[{"id": "gpt-5"}, {"id": " gpt-5 "}, {"id": "o3"}],
     )
     assert c.model_ids() == ["gpt-5", "o3"]
@@ -225,7 +224,7 @@ def test_blank_model_id_rejected() -> None:
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref="r",
+            secret_ref="r",
             models=[{"id": "gpt-5"}, {"id": "   "}],
         )
 
@@ -235,7 +234,7 @@ def test_unknown_modality_rejected() -> None:
         ProviderConfig(
             protocol="openai",  # type: ignore[arg-type]
             base_url="x",
-            credential_ref="r",
+            secret_ref="r",
             models=[{"id": "gpt-5", "modality": "hologram"}],
         )
 
@@ -246,7 +245,7 @@ def test_absurd_model_ids_rejected() -> None:
             ProviderConfig(
                 protocol="openai",  # type: ignore[arg-type]
                 base_url="x",
-                credential_ref="r",
+                secret_ref="r",
                 models=models,
             )
 

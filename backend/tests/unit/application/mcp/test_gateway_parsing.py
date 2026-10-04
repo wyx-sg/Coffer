@@ -24,15 +24,6 @@ def test_extract_agent_uid_meta_present_without_agent_key_returns_none():
     assert _extract_agent_uid({"_meta": {"coffer/cwd": "/p"}}) is None
 
 
-def test_extract_agent_uid_ignores_the_retired_name_shaped_key():
-    """A shim installed by an older Coffer stamps ``coffer/agent`` with a NAME.
-    There is no fallback to it (ADR resource-identity-is-an-immutable-uid): the
-    scope it would be compared against holds uids, so honouring the old key
-    could only match the wrong thing or nothing. Such a session is unidentified,
-    which means it sees strictly less, never more."""
-    assert _extract_agent_uid({"_meta": {"coffer/agent": "claude_code"}}) is None
-
-
 def test_extract_agent_uid_ignores_non_string_value():
     assert _extract_agent_uid({"_meta": {"coffer/agent-uid": 123}}) is None
 

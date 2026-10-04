@@ -8,11 +8,14 @@ defining their own copies.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
+
 from coffer.application.chat.registry import AgentProviderRegistry
+from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.audit import AuditEntry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
@@ -20,6 +23,15 @@ from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
+
+
+@pytest.fixture(autouse=True)
+def _clear_active_turns_between_tests() -> Iterator[None]:
+    """The per-conversation turn registry is process-global; start and end clean."""
+    clear_active_turns()
+    yield
+    clear_active_turns()
+
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -54,9 +66,24 @@ class FakeConversationRepo:
     async def get(self, conversation_id: str) -> Conversation | None:
         return self._store.get(conversation_id)
 
-    async def list(self, *, archived: bool = False) -> list[Conversation]:
+    async def list(
+        self,
+        *,
+        archived: bool = False,
+        limit: int | None = None,
+        after: tuple[datetime, str] | None = None,
+        contains: str | None = None,
+    ) -> list[Conversation]:
         rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
-        return sorted(rows, key=lambda c: c.updated_at, reverse=True)
+        if contains:
+            rows = [c for c in rows if contains.casefold() in (c.title or "").casefold()]
+        rows.sort(key=lambda c: (c.updated_at, c.id), reverse=True)
+        if after is not None:
+            rows = [c for c in rows if (c.updated_at, c.id) < after]
+        return rows if limit is None else rows[:limit]
+
+    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
+        return len(await self.list(archived=archived, contains=contains))
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         conv = self._store[conversation_id]
@@ -102,6 +129,7 @@ class FakeMessageRepo:
         self._messages: list[Message] = []
         # How many mid-stream partial flushes reached the store.
         self.partial_writes = 0
+        self.files: dict[str, list[Any]] = {}
 
     async def append(self, message: Message) -> Message:
         self._messages.append(message)
@@ -113,8 +141,10 @@ class FakeMessageRepo:
         *,
         content: list[Any],
         status: str,
+        model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
+        finished_at: datetime | None = None,
     ) -> None:
         for i, m in enumerate(self._messages):
             if m.id == message_id:
@@ -122,8 +152,10 @@ class FakeMessageRepo:
                     m,
                     content=content,
                     status=status,  # type: ignore[arg-type]
+                    model_id=model_id if model_id is not None else m.model_id,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
+                    finished_at=finished_at,
                 )
                 return
 
@@ -133,6 +165,15 @@ class FakeMessageRepo:
             if m.id == message_id and m.status == "streaming":
                 self._messages[i] = dataclasses.replace(m, content=content)
                 return
+
+    async def record_files(self, message_id: str, files: Sequence[Any]) -> None:
+        self.files[message_id] = list(files)
+
+    async def list_files(self, message_id: str) -> list[Any]:
+        return list(self.files.get(message_id, []))
+
+    async def get_file(self, message_id: str, path: str) -> Any:
+        return next((f for f in self.files.get(message_id, []) if f.path == path), None)
 
     async def delete_message(self, message_id: str) -> None:
         self._messages = [m for m in self._messages if m.id != message_id]
@@ -146,6 +187,18 @@ class FakeMessageRepo:
         )
         return rows if limit is None else rows[-limit:]
 
+    async def latest_with_text(
+        self, conversation_ids: Any, *, depth: int
+    ) -> dict[str, list[Message]]:
+        out: dict[str, list[Message]] = {}
+        for m in sorted(self._messages, key=lambda m: m.seq, reverse=True):
+            has_text = any(isinstance(b, TextBlock) for b in m.content)
+            if m.conversation_id in conversation_ids and has_text:
+                rows = out.setdefault(m.conversation_id, [])
+                if len(rows) < depth:
+                    rows.append(m)
+        return out
+
     async def next_seq(self, conversation_id: str) -> int:
         msgs = [m for m in self._messages if m.conversation_id == conversation_id]
         return len(msgs)
@@ -153,12 +206,12 @@ class FakeMessageRepo:
     async def delete_by_conversation(self, conversation_id: str) -> None:
         self._messages = [m for m in self._messages if m.conversation_id != conversation_id]
 
-    async def sweep_streaming(self) -> int:
-        """Flip all ``status='streaming'`` rows to ``'failed'``; return count."""
+    async def sweep_streaming(self, *, before: Any = None) -> int:
+        """Flip ``status='streaming'`` rows to ``'failed'``; return count."""
         flipped = 0
         updated: list[Message] = []
         for msg in self._messages:
-            if msg.status == "streaming":
+            if msg.status == "streaming" and (before is None or msg.created_at < before):
                 updated.append(dataclasses.replace(msg, status="failed"))  # type: ignore[call-overload]
                 flipped += 1
             else:
@@ -211,7 +264,7 @@ class FakeAgentProvider:
 
     ``build_error`` makes ``build_adapter`` raise unconditionally — used to
     exercise the turn path's clean failure when a provider can't build its
-    adapter (e.g. a missing credential).
+    adapter (e.g. a missing secret).
     """
 
     def __init__(

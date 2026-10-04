@@ -20,23 +20,17 @@ from typing import Any
 import pytest
 
 from coffer.application.chat import turn_persistence
-from coffer.application.chat.turn_orchestrator import active_turns, clear_active_turns
+from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.application.chat.turn_state import peek, stop_all_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnError, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
+from tests.support.chat_turns import start_turn
 
 from .conftest import FakeAgentAdapter, FakeAgentProvider, FakeMessageRepo
 from .test_turn_orchestrator_with_fake_adapter import drain_queue, make_orchestrator
 from .test_turn_partial_output import _StreamThenBlock
 
 pytestmark = pytest.mark.asyncio
-
-
-@pytest.fixture(autouse=True)
-def _clean() -> Any:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 class _CountingProvider(FakeAgentProvider):
@@ -154,7 +148,7 @@ async def test_a_shutdown_cancel_during_finalize_does_not_end_the_turn_twice() -
         await real_finalize(message_id, **kwargs)
 
     repo.finalize = slow_finalize  # type: ignore[method-assign]
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(entered.wait(), timeout=5.0)
     task = active_turns()[conv.id].task
     assert task is not None
@@ -212,7 +206,7 @@ async def test_an_early_chunk_before_a_quiet_stretch_is_flushed(
     orchestrator._flush_interval = 1.0
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.streamed.wait(), timeout=5.0)
     await _settle()
 
@@ -244,7 +238,7 @@ async def test_trailing_flushes_keep_writes_bounded(
     orchestrator._flush_interval = 1.0
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
     await _settle()
 
     # Trailing writes included, still at most one per interval: ~20 s of
@@ -273,7 +267,7 @@ async def test_no_partial_write_after_the_turn_is_finalized(
     orchestrator._flush_interval = 1.0
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
     gate.set()  # a trailing flush still pending would now fire
     await _settle()
 

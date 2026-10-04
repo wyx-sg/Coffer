@@ -4,8 +4,8 @@
 A turn has to reach an agent the same way whoever asked for it — an IM channel,
 the web page, anything later. Chat is the **turn platform**: the agent-provider
 registry, the agent adapters, the conversation and message store, the turn
-lifecycle with its pending queue, the typed event stream — and the **web Chat
-page** that drives all of it, so the owner can watch and steer from a browser
+lifecycle with its pending queue, the typed event stream — and the web UI's
+**Conversations page** that drives all of it, so the owner can watch and steer from a browser
 what they started on a phone. The platform and the page are one capability
 because the page owns no state of its own: every row it renders and every
 control it offers belongs to the platform underneath it. A channel
@@ -23,14 +23,15 @@ client; a turn started from any surface is observable, interruptible and
 continuable from every other surface with no per-surface branch on the turn
 path; no turn ever ends silently, and a daemon killed mid-turn leaves no
 conversation showing a reply that will never arrive; and from a fresh install
-with one managed agent present, a user can open the Chat page, send a first
+with one managed agent present, a user can open the Conversations page, send a first
 message and receive a streamed reply without configuring a Coffer LLM
 connection first.
 
-Known boundaries. **The platform ships no CLI, and that is a known gap**: no
-`chat` command group is registered, so conversations, the pending queue and the
-agent-provider registry are reachable over REST and from the web page only,
-against the REST/CLI parity rule in [`.agents/openspec.md`](../../../.agents/openspec.md).
+Known boundaries. **The platform ships no CLI, by design**: no `chat` command
+group is registered, so conversations, the pending queue and the agent-provider
+registry are reachable over REST and from the web page only, as the minimal-CLI
+rule in [`.agents/openspec.md`](../../../.agents/openspec.md) asks of anything
+that is neither a program's entry point, an offline operation nor a hand-off.
 Two route prefixes serve this one capability: `/api/v1/chat` carries everything
 about a conversation, and `/api/v1/agent-providers` carries the registry itself,
 because its subject is the adapters that can drive a turn and not the `agent`
@@ -42,10 +43,12 @@ does not converge across machines. A channel keeps its own table mapping a chat
 thread to a conversation id; that pointer is soft, may dangle, and chat neither
 maintains nor validates it. Attachment bytes never enter chat's database. A
 file a channel downloaded lives in that channel's media directory, whose prune
-belongs to [channels](../channels/spec.md); a file attached on the Chat page is
-chat's own, uploaded to `~/.coffer/chat-media` and pruned by the same age rule.
+belongs to [channels](../channels/spec.md); a file attached on the Conversations page is
+chat's own, uploaded to `~/.coffer/content/chat-media` and pruned by the same age rule.
 Either way a conversation persists only the reference and reads the bytes at
 turn time.
+
+Conversations are always on: no experimental feature gates them. The knowledge and memory features only change what a conversation's turns carry (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces").
 
 ## Requirements
 
@@ -88,8 +91,8 @@ message.
 ### Requirement: Expose the registered agents and their models
 The platform MUST expose its registered agents — each with a stable key, a
 display name, and a current availability flag — over the REST API, so a caller
-offers only agents that exist and marks the ones whose CLI is absent on this
-host. It MUST likewise expose, per agent, the models that agent can be put on;
+offers only agents that exist; whether one is offered is decided by "Offer and run
+only managed agents". It MUST likewise expose, per agent, the models that agent can be put on;
 the route is the platform's, while the catalogue behind it is the agent kind's
 answer ([agent-registry](../agent-registry/spec.md)), reaching this route
 through a port rather than an import.
@@ -101,6 +104,22 @@ through a port rather than an import.
   display name and an availability flag, the `builtin` agent is **not** among
   them ([Coffer's Model Is an Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)),
   and the list is reachable from the REST API.
+
+### Requirement: Offer and run only managed agents
+Chat MUST offer an agent only when its CLI is installed on this host and an
+enabled agent of its type is registered with Coffer (added on the Agents page);
+an agent that is not installed, or installed but not added or enabled, MUST NOT
+be offered for selection. A turn for a type with no enabled agent MUST be
+refused with an `agent_not_managed` rejection rather than run against the CLI's
+own default config directory, which Coffer was told to leave alone. With no
+managed agent at all, the draft surface is replaced by a state that links to the
+Agents page.
+
+#### Scenario: an unmanaged agent type is not offered and runs no turn
+- **GIVEN** the `claude_code` CLI is installed but no enabled `claude_code` agent is registered
+- **WHEN** the provider is asked whether it is available and a turn is started on it
+- **THEN** it is not available and the turn is refused as `agent_not_managed`
+- **AND** once an enabled agent of that type is registered, the provider is available and the turn runs
 
 ### Requirement: Distinguish a missing agent path from a bad turn body
 An `agent_key` no provider answers for MUST be **404** on a subresource path —
@@ -126,65 +145,6 @@ the orchestrator MUST NOT inject them.
 - **WHEN** a turn runs on that conversation
 - **THEN** the adapter receives the conversation history and the turn's attachments
 - **AND** it is handed no model, tool list or configuration by the orchestrator
-
-### Requirement: Ship Claude Code and Codex subprocess providers
-System MUST ship subprocess-backed agent providers for Claude Code and Codex.
-Each runs in a working directory (its `agent_config.cwd`); when a turn supplies
-none, the provider MUST default to the Coffer-managed workspace
-`~/.coffer/workspace` (created on first use) rather than reject the turn — so a
-client with no configured workspace works out of the box. An
-explicitly-supplied cwd MUST be an existing directory or the configuration is
-rejected. Availability MUST reflect whether the agent's binary is resolvable on
-the daemon's PATH; an unavailable agent is listed but not selectable.
-
-A turn MUST stream the tool's line-delimited JSON output mapped onto the
-platform's turn events, and persist the upstream session id so the next turn
-continues the same session. Claude Code is driven through the Claude Agent SDK
-and Codex through `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed);
-both run with full permissions — owner pairing
-([channels](../channels/spec.md)) is the security gate.
-
-Both MUST emit the reply as text increments *as it is written*, not as one
-block at the end of the turn, otherwise a live surface has nothing to grow and
-a reply lands all at once after a long silence. The Claude Agent SDK does this
-only when asked (`include_partial_messages`), and it then delivers BOTH the
-increments and the finished assistant message, so the adapter MUST subtract
-what it already emitted and send the reply exactly once.
-
-A turn MUST run against the config directory of the agent that answers for its
-type — the first enabled agent of that type in name order (the order the
-agent registry lists agents in), the same one whose models the pickers offer
-([agent-registry](../agent-registry/spec.md) "Serve each agent type's model
-catalogue"). Two agents of one type can be registered when their config
-directories differ; which of them answers is then decided by their names alone,
-so renaming one can change it, and a disabled agent never answers. Coffer delivers skills, installs its
-MCP entry and edits config files in that directory, so a turn that read any
-other one would not see them. When that agent's `config_dir` is not its type's
-standard location, the spawned process's environment MUST carry the variable the
-product reads it from — `CLAUDE_CONFIG_DIR=<config_dir>` for Claude Code,
-`CODEX_HOME=<config_dir>` for Codex — merged with the daemon's own environment
-and with any key the provider projects; for the standard location (or when no
-agent of the type is registered) the environment MUST be left as the daemon's
-own, so the process behaves as when the user runs the CLI themselves.
-
-#### Scenario: a streamed reply reaches the consumer exactly once
-- **GIVEN** a Claude Code turn whose SDK delivers the reply as streamed increments and then as the finished assistant message
-- **WHEN** the adapter maps the turn onto platform events
-- **THEN** the reply arrives as one text delta per increment, in order
-- **AND** the joined deltas equal the reply once, not doubled by the finished message
-- **AND** the stream ends with a terminal turn-done
-
-#### Scenario: a turn on an agent with its own config directory runs against that directory
-- **GIVEN** a `claude_code` agent registered with a `config_dir` other than `~/.claude`, and a `codex` agent registered with a `config_dir` other than `~/.codex`
-- **WHEN** a turn runs on each
-- **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment (and a projected provider key) intact
-- **AND** a turn on an agent whose `config_dir` is its type's standard location starts its process with the environment untouched
-
-#### Scenario: two agents of one type — the one first by name answers
-- **GIVEN** two enabled `claude_code` agents with different config directories, `zeta-work` registered before `alpha-home`
-- **WHEN** a turn's environment is resolved for the `claude_code` type
-- **THEN** it runs against `alpha-home`'s config directory, whichever was registered first
-- **AND** after `zeta-work` is renamed to `aardvark-work` the next turn runs against its config directory instead
 
 ### Requirement: End every adapter stream with a terminal event
 The adapter seam is a contract in both directions. An adapter MUST yield a
@@ -243,8 +203,10 @@ name a model.
   note says the agent's own default is in use and names no model.
 
 ### Requirement: Persist conversations and messages in SQLite
-System MUST persist conversations and their messages in SQLite as the system of
-record; they are not Resources of the kind-agnostic Resource framework. A
+System MUST persist conversations and their messages in SQLite — the history
+database, `~/.coffer/runs.db` — as the system of record; they are history of this
+machine, never written into the vault, and are not Resources of the kind-agnostic
+Resource framework. A
 message MUST store its role and an ordered list of content blocks of types
 `text`, `tool_use`, `tool_result`, and `attachment` (see "Re-materialise
 attachments from persisted history"); assistant messages MUST also store token
@@ -283,7 +245,7 @@ than being named after boilerplate.
 A turn's own record is the conversation it ran in. The user message, the
 assistant message, its tool-call and tool-result blocks, its model and its
 token usage are all persisted (see "Persist conversations and messages in
-SQLite") and readable from the REST API and the Chat page, so "which agent did
+SQLite") and readable from the REST API and the Conversations page, so "which agent did
 what" is answerable after the fact from the timeline rather than from a second
 ledger. Turn activity MUST therefore NOT be written to the audit log: a turn is
 neither irreversible nor security-sensitive nor invisible afterwards, and an
@@ -313,13 +275,22 @@ Conversations MUST list newest-activity first, and a conversation's activity
 timestamp MUST be bumped both when a turn **starts** and when it **finalises**
 — a long turn moves its conversation to the top of the list when it begins, and
 is still ordered correctly when it ends. Active and archived are two listings,
-never one list with a flag every caller must remember.
+never one list with a flag every caller must remember. Both listings MUST page
+by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor")
+with the conversation id as the tie-break, so a conversation whose activity is
+bumped while a reader pages moves to the head rather than appearing twice.
 
 #### Scenario: the conversation list is ordered by activity, not by creation
 - **GIVEN** two conversations created in order,
 - **WHEN** a turn starts on the older one and then completes,
 - **THEN** it heads the active listing both while the turn runs and after it
   ends.
+
+#### Scenario: the conversation list pages by cursor
+- **GIVEN** three active conversations
+- **WHEN** the active listing is read with `limit=2` and then with the answer's `next_cursor`
+- **THEN** the first page holds the two with the latest activity and the second the third, with a `null` `next_cursor`
+- **AND** both pages report a `total` of 3
 
 ### Requirement: Require every writer to name the agent
 `agent_key` MUST have no storage-level default. Every writer names the agent
@@ -340,7 +311,10 @@ conversation with no new message for the auto-archive window (default 7 days),
 then deletes archived conversations and their messages the configured number of
 days after archiving (default 30 days). Either window may be set to
 keep-forever to disable that stage. Auto-archiving is reversible; only deletion
-is destructive.
+is destructive, so the delete stage MUST also require that the conversation has
+had no new message for the delete window: an archived conversation that is
+still being written to (a chat thread resumed from a phone) is never deleted
+mid-use.
 
 #### Scenario: an idle conversation is archived, then deleted with its messages
 - **GIVEN** the default retention windows, a conversation idle for longer than the auto-archive window, and an archived conversation with messages archived longer ago than the delete window
@@ -348,6 +322,12 @@ is destructive.
 - **THEN** the idle conversation is archived but kept
 - **AND** the long-archived conversation and its messages are deleted
 - **AND** with the auto-archive window set to keep-forever, an idle conversation is left unarchived
+
+#### Scenario: an archived conversation that receives a channel message is not deleted while active
+- **GIVEN** an archived conversation whose archive time is older than the delete window, but which received a message (from a channel) within that window
+- **WHEN** the retention worker prunes
+- **THEN** the conversation and its messages are kept
+- **AND** once that last message is itself older than the delete window, the conversation is deleted
 
 ### Requirement: Register conversation retention in the framework registry
 Both windows MUST be registered as ordinary entries of the framework's own
@@ -417,8 +397,9 @@ resumes the held queue.
 An interrupted or failed turn — user interrupt, adapter failure, a stream that
 ends without a terminal event, timeout, daemon shutdown, or a daemon that dies
 outright — MUST leave its partial assistant message persisted rather than
-discarded: marked `complete` when the owner interrupted it, and `failed` in every
-other case. Only deleting the conversation discards a turn: the running turn is
+discarded: marked `stopped` when the owner interrupted it, and `failed` in every
+other case. A reply that ran to its end is `complete`; every assistant reply
+that is no longer streaming carries the time it ended (`finished_at`). Only deleting the conversation discards a turn: the running turn is
 cancelled and its placeholder row removed with the conversation. Stopping a turn
 is distinct from discarding the conversation.
 
@@ -451,7 +432,8 @@ and delivered ahead of the notice.
 - **GIVEN** a turn that has streamed partial text and is still running,
 - **WHEN** it is interrupted,
 - **THEN** the stream ends with a terminal turn-done carrying stop reason
-  `interrupted`, and the partial assistant message is persisted as complete.
+  `interrupted`, and the partial assistant message is persisted as `stopped`
+  with its `finished_at` set.
 
 #### Scenario: a silent turn is cancelled by the idle watchdog
 - **GIVEN** an agent that streams part of a reply and then produces nothing,
@@ -512,6 +494,14 @@ inferred from silence. The owner resumes the queue after fixing the cause.
 - **THEN** the message is put back at the head, the queue is paused, a turn
   error is published, and the message is still there when the owner resumes.
 
+#### Scenario: a held queue is resumed from the page, not retried
+- **GIVEN** a turn error that arrives on the event stream while no turn is
+  running and messages are waiting in the pending queue
+- **WHEN** the page shows that error
+- **THEN** it is presented as a held queue with a Resume action that replaces the
+  pending queue with itself (`PUT .../pending`), and offers no Retry that would
+  send the last user message again
+
 ### Requirement: Reconcile a replaced queue against existing entries
 Replacing the pending queue MUST reconcile the new ordered texts against the
 existing entries, reusing an entry for each text it still contains (first
@@ -544,13 +534,22 @@ not carry ten thousand buses.
 ### Requirement: Express a turn as typed events
 System MUST express a turn as a sequence of typed events covering, at minimum,
 turn start, text deltas, tool calls, tool results, turn completion, turn error,
-and pending-queue change.
+and pending-queue change. The event stream (`GET /api/v1/chat/conversations/{id}/events`)
+MUST declare each event's `data:` shape in the chat contract, one model per event
+type with the SSE `event:` name equal to its `type`, so the frontend's types are
+generated from the contract and a field renamed in the domain events fails a gate.
 
 #### Scenario: send a message and receive a streamed reply
 - **GIVEN** a conversation on a registered agent,
 - **WHEN** a turn is started,
 - **THEN** the turn's events stream in order — start, text deltas, completion —
   and the assistant reply is persisted.
+
+#### Scenario: the event stream's wire shape is generated from the contract
+- **GIVEN** the seven turn event types,
+- **WHEN** a domain event gains, loses or renames a field,
+- **THEN** the wire model for that event no longer matches it and the test suite
+  fails, and the generated contract differs until it is regenerated.
 
 ### Requirement: Replay the in-flight turn to late subscribers
 System MUST publish those events on a per-conversation in-process bus that any
@@ -592,26 +591,95 @@ history instead.
 - **THEN** it receives the latest pending-queue snapshot and no turn content,
   because that content is now loaded from history.
 
-### Requirement: Show every conversation on the Chat page
-The web UI MUST carry a **Chat page**: two columns, the conversation list on
-the left and the selected conversation's message thread with its draft surface
-on the right. The list MUST show every conversation in the vault not owned by
-another surface, whatever opened it — a conversation carrying an `owner` belongs
-to that surface, is left out of the list, and stays readable by id — so a
-conversation an IM channel created is listed, readable,
-watchable, and continuable from the page, and carries a badge naming the
-channel it is also reachable on. There is no web-only conversation kind: the
-page and the channel are two windows onto one timeline, driven by one owner,
-and an agent cannot tell which window a turn arrived through.
+### Requirement: Show every conversation on the Conversations page
+The web UI MUST carry a **Conversations** page (`/conversations`): the conversation list on the left and the selected conversation on the right. The list MUST show every
+conversation Coffer runs, whatever opened it — a conversation an IM channel (SeaTalk, Telegram)
+opened, and one opened from Coffer's own UI, which is modelled as a built-in source named
+**Coffer** — shown as a list with no header row, grouped by day (**Today**, **Yesterday**, **Earlier**; the
+group titles carry no counts) and newest activity first. A row MUST show the title, a status word
+(**Running** with a success-coloured dot while a turn runs; **Needs you** with a warning dot while the
+agent waits for an answer, when the conversation says so), the latest message's words on one muted
+line, its **source** (the platform's logo and name with where in the chat it lives — `SeaTalk · DM`, a
+group by its name when Coffer knows it, a thread or topic rather than the chat's main timeline, a
+parallel thread as `DM · Thread 2` — or the Coffer mark and **Coffer**), the agent's badge and name, and
+its last activity (the clock time for today and yesterday, a date such as `Sep 22` for earlier). Hovering
+a row shows a leading checkbox and a trailing **⋯** menu (Rename, Archive, Delete…; an archived
+conversation's menu is Unarchive, Delete…). Rename opens the conversation with its title already being
+edited; Archive and Unarchive act at once and answer with a toast that has Undo; Delete… asks first,
+naming the conversation, and says its messages are removed from Coffer while the files the agent changed
+stay. The filter row reads, in order, an **Active / Archived** switch, a search box over titles and
+message text (`/` focuses it), a **Source** pill (Coffer and each channel, several at once, each
+channel shown as its platform's logo and `SeaTalk · Team bot`), an **Agent** pill, and **Clear filters**
+once anything narrows the list; it shows no result count. All of it is in the URL — `?q=`,
+`?source=coffer,<channel uid>`, `?agent=`, `?archived=1` — so a filtered list is a link, and a channel's
+**Conversations from this channel** link opens `?source=<uid>`; a link carrying the earlier
+`?channel=<uid>` is read once as that source and the address rewritten. Ticking a row (a shift-click
+ticks the range) replaces the filter row with a selection bar — "3 of 8 selected", **Archive**
+(**Unarchive** in the archived view), **Delete…** and **Clear** — and a bulk delete asks first, listing
+the titles (five, then **Show all**). The list reads 30 conversations and then 50 more as it is
+scrolled. With no conversation at all the page is its header and one message; with filters that match
+nothing it says so and offers **Clear filters**; a list that fails to load shows the error in its own
+area with **Retry**. A conversation's page MUST show the full exchange and a reply box
+that continues it, whichever source opened it; **New conversation** is the header's primary action, and the
+page opens on the list rather than on a welcome or suggestions page, which it does not have. The
+composer carries no voice input: a voice message reaches an agent only through a channel, which
+transcribes it (see "Transcribe audio attachments when transcription is configured"). There is no
+web-only conversation kind: the page and the channel are two windows onto one timeline, driven by
+one owner, and an agent cannot tell which window a turn arrived through.
 
 #### Scenario: a channel's conversation is listed beside the web's with a badge
-- **GIVEN** one conversation started on the web page and one opened by an IM channel
-- **WHEN** the Chat page's conversation list renders
-- **THEN** both conversations are listed
-- **AND** only the channel's conversation carries a badge naming its channel
+- **GIVEN** one conversation started from Coffer's own UI and one opened by an IM channel
+- **WHEN** the Conversations page's list renders
+- **THEN** both conversations are listed, the first with a Coffer badge and the second with a badge naming its channel
+- **AND** filtering by that channel lists only the second
+
+#### Scenario: a row names the chat and thread it came from
+- **GIVEN** a conversation a SeaTalk direct chat opened, one a group thread opened, and one a `/thread` parallel conversation opened, whose turn is running
+- **WHEN** the Conversations page's list renders
+- **THEN** the first row's badge names SeaTalk and the direct chat, the second the group and its thread, and the third its `Thread N` mark
+- **AND** each row shows its latest message's line, and the third is marked running
+
+#### Scenario: rows are grouped by day without counts
+- **GIVEN** conversations last active today, yesterday and weeks ago
+- **WHEN** the Conversations page's list renders
+- **THEN** the list has no header row and shows the groups Today, Yesterday and Earlier, none of them with a count
+- **AND** a row from today shows its clock time and an earlier row its date
+
+#### Scenario: the Source pill filters by several sources
+- **GIVEN** conversations from Coffer and from two channels
+- **WHEN** the user ticks Coffer and one channel in the Source pill
+- **THEN** only those sources' conversations are listed, `?source=` names both, and Clear filters is offered
+- **AND** a link carrying the earlier `?channel=<uid>` is read once as that source and its address rewritten to `?source=<uid>`
+
+#### Scenario: a row's menu acts on one conversation
+- **GIVEN** a conversation in the list
+- **WHEN** the user opens its ⋯ menu
+- **THEN** it offers Rename, Archive and Delete…, and Rename opens the conversation with its title being edited
+- **AND** Archive acts at once with a toast that has Undo, and Delete… asks first, naming the conversation
+
+#### Scenario: ticking rows replaces the filter row with a selection bar
+- **GIVEN** a list of conversations
+- **WHEN** the user ticks two rows
+- **THEN** the filter row is replaced by "2 of N selected" with Archive, Delete… and Clear
+- **AND** Delete… lists the two titles in its confirmation, and a list of more than five shows five and Show all
+
+#### Scenario: a list that fails to load says so
+- **GIVEN** the conversation list request fails
+- **WHEN** the page renders
+- **THEN** the list area shows an error with Retry, and Retry reads the list again
+
+#### Scenario: a channel's conversation is continued from the page
+- **GIVEN** a conversation a SeaTalk channel opened
+- **WHEN** the user opens it on the Conversations page and sends a reply
+- **THEN** the page shows the full exchange and the reply starts a turn in that same conversation
+
+#### Scenario: the page opens on the list with no welcome page
+- **GIVEN** conversations from two sources
+- **WHEN** the user opens `/conversations`
+- **THEN** it opens the Conversations list with New conversation as the header's primary action, with no welcome or suggestions page and no voice-input control in the composer
 
 ### Requirement: Put the open conversation in the URL
-The open conversation MUST be part of the URL (`/chat/:id`), so a refresh, a
+The open conversation MUST be part of the URL (`/conversations/:id`), so a refresh, a
 deep link and a second tab all reopen the same thread. A link to a conversation
 that no longer exists MUST say so explicitly, with a way back to a new draft —
 never drop silently into the draft surface as though the link had been to
@@ -625,7 +693,15 @@ nothing.
 
 ### Requirement: Create, rename, archive, unarchive and delete conversations
 The conversation list MUST support create, rename, archive, unarchive, and
-delete. Archiving takes a conversation out of the default (active) listing and
+delete. An open conversation's title, and its **⋯** menu (Rename, Archive, Delete…;
+an archived conversation's menu has no Archive, and its Unarchive is in the notice
+that stands in for the reply box), are shown in the window title bar — or, in a
+browser tab, in a bar at the top of the content — and the page carries no header strip
+and no back link of its own. Rename MUST edit the title **in place** — the title
+becomes an input, Enter saves and Esc cancels — with no dialog; the list's Rename
+opens the conversation already in that state. Delete MUST ask first, naming the
+conversation, and say that its messages are removed from Coffer while the files the
+agent changed stay. Archiving takes a conversation out of the default (active) listing and
 into the archived listing **without destroying it**; unarchiving returns it to
 the active listing. Deleting removes the conversation and its messages and
 cancels any turn in flight on it — deletion is the destructive one, archiving
@@ -637,6 +713,18 @@ rejected.
 - **WHEN** conversations are created, renamed, and deleted,
 - **THEN** each operation persists and the listing reflects it; a deleted
   conversation and its messages are removed.
+
+#### Scenario: rename a conversation in place
+- **GIVEN** an open conversation
+- **WHEN** the user chooses Rename from its ⋯ menu, types a new title and presses Enter
+- **THEN** the title is saved and no dialog was shown
+- **AND** pressing Esc instead keeps the old title
+
+#### Scenario: delete asks first, naming the conversation
+- **GIVEN** an open conversation titled "Test Conv"
+- **WHEN** the user chooses Delete… from its ⋯ menu
+- **THEN** a confirmation titled "Delete “Test Conv”?" says its messages are removed from Coffer and the files the agent changed stay
+- **AND** nothing is deleted until the user confirms
 
 #### Scenario: archive and restore a conversation
 - **GIVEN** a conversation in the active listing,
@@ -653,7 +741,7 @@ deliberately, not a thread that silently accepts a turn and unarchives itself.
 
 #### Scenario: an archived conversation opens read-only
 - **GIVEN** an archived conversation,
-- **WHEN** it is opened on the Chat page,
+- **WHEN** it is opened on the Conversations page,
 - **THEN** its history reads normally, the composer and the model/effort
   controls are disabled, and a restore control is offered.
 
@@ -680,12 +768,28 @@ A dropped event stream MUST be recovered by re-subscribing — the replay of
 "Replay the in-flight turn to late subscribers" is what makes that safe — with
 a backoff and a bounded number of attempts, so a hard failure surfaces as an
 error the owner can act on rather than as a client hammering the endpoint.
+When every attempt has failed, the reply that lost its stream MUST carry a
+warning banner inside it, left-aligned with its text — "Lost the live stream
+from the daemon", that the turn may still be running and that reloading shows
+what it has written so far, and a Reload conversation action — and MUST stop
+showing a typing cursor or "Thinking…"; a tool call with no result then reads
+"Unknown" rather than Running.
 
 #### Scenario: a dropped event stream reconnects and is bounded
 - **GIVEN** an open conversation whose event subscription drops mid-turn,
 - **WHEN** the client recovers,
 - **THEN** it re-subscribes with a backoff and replays the in-flight turn; after
-  a bounded number of failed attempts it stops and reports the error.
+  a bounded number of failed attempts it stops and reports the error
+  as a warning banner inside the reply, with Reload conversation and no typing
+  cursor.
+
+#### Scenario: an idle event stream is re-subscribed
+- **GIVEN** an open conversation whose event subscription is closed while no turn
+  is running, or whose connection fails
+- **WHEN** the client recovers
+- **THEN** it re-subscribes with a backoff, so a turn started later from any
+  surface still streams; an HTTP error response such as 404 is reported and not
+  retried
 
 ### Requirement: Show a just-sent prompt immediately
 A just-sent prompt MUST appear in the thread immediately, before its persisted
@@ -724,7 +828,13 @@ The page MUST be able to interrupt the turn it is watching — whichever surface
 started it — via `POST .../interrupt`, with the semantics of "Pause the pending
 queue on interrupt": the turn stops with its partial output kept and persisted,
 and the pending queue is **paused** rather than auto-advanced into the turn
-that was just stopped.
+that was just stopped. The stopped reply MUST say so at its end in a muted line,
+"Stopped by you.", and its header reads "Stopped after 12s"; when a tool call
+was still running at the stop, the line adds that the edit (for a file-writing
+tool) or the command (for a shell tool) was not finished and that sending a
+message continues — another tool adds nothing — and that call reads "Stopped"
+rather than Running. The persisted reply carries the status `stopped`, so a
+reload shows the same.
 
 #### Scenario: the page stops a turn another surface started
 - **GIVEN** a turn started by another surface, with a message queued behind it,
@@ -732,13 +842,23 @@ that was just stopped.
 - **THEN** the turn stops with its partial output persisted,
 - **AND** the queued message is held rather than auto-run.
 
+#### Scenario: a stopped reply says it was stopped
+- **GIVEN** a reply the user stopped while an edit tool call was still running
+- **WHEN** the thread renders it, live or after a reload
+- **THEN** its header reads "Stopped after" its length and its last line reads
+  "Stopped by you. The edit was not finished; send a message to continue."
+
 ### Requirement: Render tool calls as cards
 The message thread MUST render a turn's tool calls as their own cards rather
 than as prose: each card names the tool, shows what it was called with, and
 shows the result once one arrives, so a reader can see what the agent *did* and
 not only what it said. Text and tool-call blocks appear in the order the turn
-emitted them, and a card whose result has not arrived yet reads as still
-running.
+emitted them. A card whose result has not arrived yet reads as still running
+(muted text with a spinner, no warning colour); a finished card reads
+"Done · 0.3s" with the tool's duration when the daemon recorded one, and plain
+"Done" when it did not; a failed card reads "Error"; and a card with no result
+in a reply that was stopped or whose stream was lost reads "Stopped" or
+"Unknown" instead.
 
 #### Scenario: a tool call renders as a card between the text around it
 - **GIVEN** an assistant message whose blocks are text, a tool call with its result, then more text, and a second tool call with no result yet
@@ -746,6 +866,21 @@ running.
 - **THEN** each tool call is a card naming its tool, placed between the text blocks in the order the turn emitted them
 - **AND** opening the finished card shows what the tool was called with and its result
 - **AND** the card with no result reads as still running
+
+### Requirement: Summarise the files a reply changed
+Under an assistant reply that is no longer streaming, the thread MUST show a
+"Files changed" card listing each file the reply changed, with the lines added and
+removed, read from the reply's recorded files (see "Record what each reply changed
+in each file"); a reply recorded before files were recorded falls back to the
+files its tool calls wrote, with repeated edits to one file summed into one row. A
+reply that changed no file shows no card. The card sits inside the reply, after
+its text and before its token line, and its title carries no count.
+
+#### Scenario: a reply's file edits are summed into one row per file
+- **GIVEN** an assistant reply whose tool calls edit one file twice, write a second file, and read a third
+- **WHEN** the thread renders it
+- **THEN** the Files changed card lists the two written files only, one row each, with their added and removed line counts
+- **AND** a reply with no file-writing tool call shows no card
 
 ### Requirement: Render assistant text as GitHub-flavoured markdown
 Assistant text MUST render as GitHub-flavoured markdown with single newlines
@@ -761,9 +896,13 @@ control, because the code is what a reader most often wants out of a reply.
 
 ### Requirement: Show a failed turn as one inline banner with Retry
 A failed turn MUST replace the in-progress bubble with a single inline error
-banner in the flow above the composer — never a floating notice and never two
-error surfaces at once — carrying a Retry that re-sends the message that failed
-and a dismiss that clears it.
+banner inside the reply that failed, left-aligned with its text (a bare reply
+carries it when the turn left none) — never a floating notice, never above the
+composer and never two error surfaces at once. It reads "The turn failed:" and
+the reason, adds that Retry sends the same message again, and carries a Retry
+that re-sends the message that failed and a dismiss that clears it; the reply's
+header reads "Failed after 38s". At the end of a reply that carries its token
+counts, a Copy reply control copies the reply's text.
 
 The Retry MUST re-send the failed message whole: its text AND every attachment
 it carried, whether the files came from the web composer or a channel. A
@@ -783,8 +922,8 @@ stays in the composer, so the banner shows the reason with no Retry.
 #### Scenario: a failed turn offers a retry in the thread
 - **GIVEN** a turn that fails,
 - **WHEN** the thread renders it,
-- **THEN** the in-progress bubble is replaced by one inline banner in the flow,
-  carrying a Retry that re-sends the failed message and a dismiss.
+- **THEN** the in-progress bubble is replaced by one inline banner inside the
+  failed reply, carrying a Retry that re-sends the failed message and a dismiss.
 
 #### Scenario: a retry re-sends the failed message's attachments
 - **GIVEN** a user message sent with an attached file, whose turn failed
@@ -826,17 +965,24 @@ not a prerequisite ([provider-switching](../provider-switching/spec.md), and
 #### Scenario: chat runs on the built-in model when no connection
 - **GIVEN** a running daemon with no Coffer LLM connection configured for the
   agent,
-- **WHEN** the Chat page is opened,
+- **WHEN** the Conversations page is opened,
 - **THEN** the draft surface is available with no blocking empty state, and a
   sent turn runs on the agent's own built-in model and login — a Coffer
   connection is an optional override, not a prerequisite.
 
 ### Requirement: Create the conversation on the first send
-The draft is not a conversation row. The page opens on a blank draft surface,
+The draft is not a conversation row. **New conversation** opens a blank draft surface,
 and the **first send** is what creates the conversation — so a user who opens
 the page and changes their mind leaves nothing behind. Where no managed agent
 is available at all, the draft MUST be replaced by a state saying how to get
-one rather than by a composer that can only fail.
+one rather than by a composer that can only fail. That state says "No agent
+connected", names Claude Code and Codex, and offers one **Open Agents** link to the
+Agents page, where connecting an agent is Coffer's own action; it carries no install
+prompt and no install command (handing an install to an assistant belongs to the
+Agents page). The draft's title bar says "New conversation", and with an agent its
+centre says which agent will run in which folder; the folder picker, agent, model
+and effort sit in the reply box's toolbar, and a draft opened from Ask an agent
+says under the box that nothing is sent until Send.
 
 When the conversation is created but the daemon refuses its first message (for
 example `ATTACHMENT_NOT_FOUND`), the message MUST NOT be lost: its text and
@@ -844,11 +990,16 @@ attachment chips are put back into the new conversation's composer and the
 refusal is shown in the thread's banner, without a Retry.
 
 #### Scenario: the draft creates the conversation on first send
-- **GIVEN** the Chat page with no conversation open,
+- **GIVEN** the Conversations page's New conversation draft,
 - **WHEN** the first message is sent from the draft surface,
 - **THEN** the conversation is created by that send and the turn runs in it;
   opening the draft and leaving creates nothing. With no managed agent
   available, the draft is replaced by a state saying how to get one.
+
+#### Scenario: with no managed agent the draft links to the Agents page
+- **GIVEN** no managed agent is available
+- **WHEN** the user opens the New conversation draft
+- **THEN** it says no agent is connected and offers Open Agents, which links to the Agents page, with no composer, no Copy prompt and no install command
 
 #### Scenario: a draft's first message refused after its conversation is created keeps its text and files
 - **GIVEN** the draft surface with typed text and an attached file
@@ -862,9 +1013,9 @@ with a **Default** option, which clears the conversation's model so the agent
 runs its projected default and is what the picker shows while no model is set.
 After it come the models the platform offers for the agent
 ([provider-switching](../provider-switching/spec.md) "Serve one model list to
-every surface": the agent's own catalogue, or the active connection's curated
-`text` ids when one is active — an active connection that curates models, none
-of them `text`, offers none) and the **current value** — which MUST stay
+every surface": the agent's own catalogue, or the curated
+`text` ids of the connection the agent runs on, when it runs on one — a
+connection that curates models, none of them `text`, offers none) and the **current value** — which MUST stay
 selectable whatever that list contains, so a conversation never shows a picker
 that cannot represent the model it is actually on. Those are the only options:
 the page does not introspect a connection's endpoint itself.
@@ -902,7 +1053,7 @@ speech-to-text connection and model ([internal-engine](../internal-engine/spec.m
 connection, flagged `transcribe_default`, never the one Coffer's engine runs
 on. This is the one place in Coffer where user content may leave the machine,
 and it is **off by default**: with no connection marked for transcription, no
-model chosen for it, an unsupported protocol, or a credential that will not
+model chosen for it, an unsupported protocol, or a secret that will not
 resolve, nothing is uploaded and the audio is handed to the agent as an
 ordinary file instead. Transcription that yields nothing degrades the same way;
 it never wedges or fails the turn.
@@ -932,7 +1083,10 @@ being handed over as a file attachment.
 ### Requirement: Compose the agent's prompt appends in one place
 The appends an agent receives on top of its own prompt MUST be composed in
 **one** place, shared by every provider, in a fixed order: the note telling a
-channel-driven agent it is on a chat channel; then, for a channel-driven turn
+channel-driven agent it is on a chat channel — written from facts only the
+channel kind holds (the platform, the chat kind, what renders there;
+[channels](../channels/spec.md) "Tell a channel-driven agent it is on a chat
+channel"), which it hands over as a value chat reads without importing it; then, for a channel-driven turn
 only, the memory digest, whose content is memory's own ([memory](../memory/spec.md) "Deliver to channel turns through the system prompt") and
 whose injection point is this one; then the model note of "Tell the agent which
 model it is on", on every turn. Composing it here is what lets memory reach an
@@ -946,21 +1100,24 @@ through its own hook instead, never both.
 - **THEN** the channel note, the memory digest and the model note are appended in
   that order; a conversation with no channel receives the model note only.
 
-### Requirement: Search the conversation list by title
-The Chat page's conversation list MUST offer a search box that filters the
-listed conversations by title as the owner types: a conversation stays listed
-when its title contains the query, compared case-insensitively with the query
-trimmed, and clearing the query lists every conversation again. The filter runs
-over the list already loaded for the current view (active or archived). A query
-that matches nothing MUST show a no-match state that is distinct from the
-empty-list state, and the search box MUST stay so the query can be changed; a
-list with no conversations at all shows its empty state and offers no search.
+### Requirement: Search the conversation list by title and message text
+The conversation list endpoint MUST accept a query `q` that keeps the
+conversations whose title, or the text of any of their messages, contains it,
+compared case-insensitively with the query trimmed; a blank query lists every
+conversation. Only message text counts — tool names, tool input and output do
+not. The listing's `total` is how many conversations match the archived flag and
+`q`, whatever the paging, and a cursor is bound to the `q` it was issued for.
+The Conversations page's search box sends the owner's query as `q` and lists what
+comes back (active or archived view). A query that matches nothing MUST show a
+no-match state that is distinct from the empty-list state, and the search box
+MUST stay so the query can be changed; a view with no conversations at all shows
+its empty state and offers no search.
 
-#### Scenario: search narrows the conversation list by title
-- **GIVEN** active conversations titled "Alpha rollout", "beta notes" and "Gamma"
-- **WHEN** the owner types " ALP " into the list's search box
-- **THEN** only "Alpha rollout" is listed
-- **AND** clearing the search lists all three again
+#### Scenario: search matches titles and message text
+- **GIVEN** active conversations titled "Alpha rollout" and "Gamma", the second having a message saying "roll back ALPHA"
+- **WHEN** the list is read with `q` " alpha "
+- **THEN** both are listed and `total` is 2
+- **AND** a `q` that appears only in a tool call's name or input lists neither
 
 #### Scenario: a search that matches nothing is not an empty list
 - **GIVEN** a conversation list holding one conversation
@@ -974,9 +1131,9 @@ list with no conversations at all shows its empty state and offers no search.
 - **THEN** it shows the empty-list message and no search box
 
 ### Requirement: Upload a file for a web message
-The web Chat page MUST be able to hand the daemon a file before sending the
+The Conversations page MUST be able to hand the daemon a file before sending the
 message that carries it. `POST /api/v1/chat/attachments` takes one file per
-call, stores its bytes under `~/.coffer/chat-media` — never in the chat
+call, stores its bytes under `~/.coffer/content/chat-media` — never in the chat
 database — and answers with an opaque id, the file's display name (its last
 path segment), the type it is stored under and its size. The local path MUST
 NOT appear in the response. The upload is not tied to a conversation, so a
@@ -997,7 +1154,7 @@ See [Chat Attachment Uploads](../../../docs/decisions/chat-attachment-uploads.md
 - **GIVEN** a running daemon
 - **WHEN** a PNG is uploaded to `POST /api/v1/chat/attachments`
 - **THEN** the response is 201 with an id, the file's name, `image/png` and its size
-- **AND** the bytes are stored under `~/.coffer/chat-media`, and no local path appears in the response
+- **AND** the bytes are stored under `~/.coffer/content/chat-media`, and no local path appears in the response
 
 #### Scenario: an oversized upload is refused naming the limit
 - **GIVEN** a file larger than 20 MB
@@ -1077,7 +1234,7 @@ never fails the turn. A channel's images take the same path.
 
 ### Requirement: Prune uploaded chat media on the retention cadence
 The web composer's uploads MUST NOT accumulate without bound. On the retention
-cadence, `~/.coffer/chat-media` MUST be swept by the same rule as the channel
+cadence, `~/.coffer/content/chat-media` MUST be swept by the same rule as the channel
 media directory: a file whose mtime is more than 30 days old is deleted, with
 no size cap and no reference check. A full prune reports the count under
 `chat_media`, beside `channel_media`. A reference whose file is gone degrades
@@ -1085,25 +1242,30 @@ to a note that the file could not be read, and sending its id again is refused
 as unknown.
 
 #### Scenario: the chat-media prune deletes stale uploads and keeps fresh ones
-- **GIVEN** `~/.coffer/chat-media` holding one upload older than 30 days and one recent one
+- **GIVEN** `~/.coffer/content/chat-media` holding one upload older than 30 days and one recent one
 - **WHEN** a full retention prune runs
 - **THEN** the stale upload is deleted and the recent one is kept
 - **AND** the prune result reports one deleted file under `chat_media`
 
-### Requirement: Attach files from the Chat page composer
-The Chat page's composer MUST let the owner attach files three ways: an attach
+### Requirement: Attach files from the Conversations page composer
+The Conversations page's composer MUST let the owner attach files three ways: an attach
 button that opens the file picker, dropping files onto the composer, and
-pasting an image. Each attached file MUST show as a chip with its name, its
-size and a control that removes it, and it MUST be uploaded at once, the chip
-saying so while it uploads. A failed upload MUST stay on its chip with the
-reason — the size limit, an unsupported type — and is never sent. Send MUST be
-disabled while any upload is in flight or failed, so a message never leaves
-without a file its owner attached; a message with only attachments may be
-sent. Sending clears the chips, and the files travel with the message by the
-ids their uploads returned.
+pasting an image. While files are dragged over it, only the reply box changes
+— an accent border and the placeholder "Drop to attach" — with no overlay over
+the page. Each attached file MUST show as a chip with its name, its size and a
+control that removes it, and it MUST be uploaded at once, the chip saying so
+while it uploads. A file over 20 MB, or one past the tenth, MUST NOT be
+attached or uploaded: it is dropped, and one line under the reply box says
+"<file> was not attached: <reason>. Up to 10 files, 20 MB each." — the limits
+appear nowhere else. A file the daemon refuses on upload (an unsupported type)
+MUST stay on its chip with the reason and is never sent. Send MUST be disabled
+while any upload is in flight or failed, so a message never leaves without a
+file its owner attached; a message with only attachments may be sent. Sending
+clears the chips, and the files travel with the message by the ids their
+uploads returned.
 
 #### Scenario: attaching a file shows a chip and sends it with the message
-- **GIVEN** an open conversation on the Chat page
+- **GIVEN** an open conversation on the Conversations page
 - **WHEN** the owner attaches a file with the attach button and sends a message
 - **THEN** a chip with the file's name and size appears, and the message is sent with that file's upload id
 - **AND** the chips are cleared after the send
@@ -1119,19 +1281,275 @@ ids their uploads returned.
 - **THEN** its chip shows the reason and Send is disabled
 - **AND** removing the chip enables Send again
 
+#### Scenario: a file past the limits is not attached and the reply box says why
+- **GIVEN** the composer of an open conversation
+- **WHEN** the owner picks a file over 20 MB
+- **THEN** nothing is uploaded and no chip appears
+- **AND** one line under the reply box names the file, the reason and the limits
+
 #### Scenario: a pasted image is attached
 - **GIVEN** the composer has focus
 - **WHEN** the owner pastes an image
 - **THEN** it is attached and uploaded like a picked file
 
 ### Requirement: Show a message's attachments in the thread
-A user message's attachments MUST be shown in the thread as chips naming each
-file and its type, under the message's text — including the just-sent echo of
-a message before its row lands. Because they are read from the persisted
+A user message's attachments MUST be shown in the thread under the message's
+text — an image as a thumbnail, any other file as a chip naming it and its
+type — including the just-sent echo of a message before its row lands. Because they are read from the persisted
 references, a reload, a second tab and a message sent from a channel show the
 same chips. The path is never shown.
 
+A web upload's reference MUST carry its id and byte size, and
+`GET /api/v1/chat/conversations/{id}/attachments/{attachment_id}` MUST stream
+its bytes under their stored type, only when a message of THAT conversation
+references the id and only by resolving it through the media store (never from
+a client path); anything else, including a file the retention sweep has
+deleted, MUST be `ATTACHMENT_UNAVAILABLE` (404), and the chip then stays a
+plain chip with the type. References saved without an id keep the plain chip.
+
 #### Scenario: an attached file is shown in the thread after a reload
-- **GIVEN** a message sent from the Chat page with an attached file
+- **GIVEN** a message sent from the Conversations page with an attached file
 - **WHEN** the conversation is reloaded
 - **THEN** the message shows a chip naming the file under its text
+
+#### Scenario: an attached image is fetched by its id for the thread's thumbnail
+- **GIVEN** a message sent with an uploaded image
+- **WHEN** the thread fetches the attachment route with the reference's id
+- **THEN** the image's bytes are returned under its type and the message shows a thumbnail with its size
+
+#### Scenario: another conversation's attachment and a pruned one are not served
+- **GIVEN** an uploaded image referenced by one conversation's message
+- **WHEN** another conversation asks for its id, or the file has been pruned
+- **THEN** the response is 404 `ATTACHMENT_UNAVAILABLE` and the chip stays a plain chip
+
+### Requirement: Ship Claude Code and Codex subprocess providers on the type's one agent
+System MUST ship subprocess-backed agent providers for Claude Code and Codex.
+Each runs in a working directory (its `agent_config.cwd`); when a turn supplies
+none, the provider MUST default to the Coffer-managed workspace
+`~/.coffer/content/workspace` (created on first use) rather than reject the turn — so a
+client with no configured workspace works out of the box. An
+explicitly-supplied cwd MUST be an existing directory or the configuration is
+rejected. Availability MUST reflect two things: whether the agent's binary is
+resolvable on the user's PATH (the login shell's PATH merged with the daemon's
+inherited one), and whether an **enabled agent of that type is registered** with
+Coffer; an agent failing either is unavailable and is not offered (see "Offer
+and run only managed agents").
+
+A turn MUST stream the tool's line-delimited JSON output mapped onto the
+platform's turn events, and persist the upstream session id so the next turn
+continues the same session. Claude Code is driven through the Claude Agent SDK
+and Codex through `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed);
+both run with full permissions — owner pairing
+([channels](../channels/spec.md)) is the security gate.
+
+Both MUST emit the reply as text increments *as it is written*, not as one
+block at the end of the turn, otherwise a live surface has nothing to grow and
+a reply lands all at once after a long silence. The Claude Agent SDK does this
+only when asked (`include_partial_messages`), and it then delivers BOTH the
+increments and the finished assistant message, so the adapter MUST subtract
+what it already emitted and send the reply exactly once.
+
+A turn MUST run against the config directory of its type's one agent
+([agent-registry](../agent-registry/spec.md) "Keep one agent per type, named by
+it") while that agent is enabled — the same one whose models the pickers offer
+([agent-registry](../agent-registry/spec.md) "Serve each agent type's model
+catalogue from its one agent"); a disabled agent never answers, and a type with
+no enabled agent has no turn at all. Coffer delivers skills, installs its
+MCP entry and edits config files in that directory, so a turn that read any
+other one would not see them. When that agent's `config_dir` is not its type's
+standard location, the spawned process's environment MUST carry the variable the
+product reads it from — `CLAUDE_CONFIG_DIR=<config_dir>` for Claude Code,
+`CODEX_HOME=<config_dir>` for Codex — merged with the daemon's own environment;
+for the standard location the environment MUST be left as the daemon's own, so
+the process behaves as when the user runs the CLI themselves. No provider key
+rides the environment: an API-key connection is reached through Coffer's model
+proxy.
+
+#### Scenario: a streamed reply reaches the consumer exactly once
+- **GIVEN** a Claude Code turn whose SDK delivers the reply as streamed increments and then as the finished assistant message
+- **WHEN** the adapter maps the turn onto platform events
+- **THEN** the reply arrives as one text delta per increment, in order
+- **AND** the joined deltas equal the reply once, not doubled by the finished message
+- **AND** the stream ends with a terminal turn-done
+
+#### Scenario: a turn on an agent with its own config directory runs against that directory
+- **GIVEN** a `claude_code` agent registered with a `config_dir` other than `~/.claude`, and a `codex` agent registered with a `config_dir` other than `~/.codex`
+- **WHEN** a turn runs on each
+- **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment intact
+- **AND** a turn on an agent whose `config_dir` is its type's standard location starts its process with the environment untouched
+
+#### Scenario: a disabled agent does not answer for its type
+- **GIVEN** a `claude_code` agent registered with a `config_dir` other than `~/.claude`, then disabled
+- **WHEN** the `claude_code` provider is asked whether it is available and a turn is started on it
+- **THEN** the provider is not available and carries no `CLAUDE_CONFIG_DIR`
+- **AND** the turn is refused as `agent_not_managed`, exactly as when no agent of the type is registered
+
+### Requirement: Mirror a web reply into the channel it came from
+A message the owner sends from the Conversations page into a conversation an IM channel
+opened MUST also reach that channel, so the phone sees the whole conversation
+and not only its own half. The message goes to the chat and thread the
+conversation belongs to — never anywhere else, and never a group's main chat —
+marked as coming from Coffer (a first line `<owner name> · from Coffer`, then the text), and the agent's answer to
+it is delivered to the channel exactly as the answer to a message typed there
+would be. Only the send route mirrors; a Retry resends on the web alone.
+
+Where the conversation lives decides whether it can be mirrored at all: a direct
+chat (and any of its threads) and a group thread can; a group's main chat
+cannot, and a reply there stays in Coffer. When the channel cannot send right
+now — it is not running on this machine, or the platform refused — the reply is
+kept, the conversation lists it as not delivered to that channel, the agent's
+answer is collected behind it, and both are delivered, oldest first, once the
+channel is running again. A reply is never dropped because a send failed. The
+send is answered with what happened to the mirror: `sent`, `pending` (kept for
+later) or `kept` (stays in Coffer); `null` for a conversation no channel opened.
+
+This is the chat half of the channel's own return address (see
+[Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md)):
+chat declares the port, the channel kind implements it, and chat never imports
+the channel kind.
+
+#### Scenario: a web reply reaches the channel chat marked as from Coffer
+- **GIVEN** a conversation a paired channel opened in a direct chat
+- **WHEN** the owner sends a message to it from the Conversations page
+- **THEN** the channel chat receives the message prefixed with the line `<owner name> · from Coffer`, and
+  the send answers `sent`
+
+#### Scenario: the agent's answer to a web reply is delivered to the channel
+- **GIVEN** a conversation a paired channel opened
+- **WHEN** the owner sends a message to it from the Conversations page and the agent answers
+- **THEN** the answer is delivered into the same channel chat and thread
+
+#### Scenario: a web reply to a group main-chat conversation stays in Coffer
+- **GIVEN** a conversation bound to a group's main chat
+- **WHEN** the owner sends a message to it from the Conversations page
+- **THEN** nothing is sent to the group, the send answers `kept`, and the turn
+  still runs on the web
+
+#### Scenario: a reply the channel cannot send is kept and retried
+- **GIVEN** a conversation a channel opened, while that channel is not running
+- **WHEN** the owner sends a message to it from the Conversations page, the agent answers,
+  and the channel starts again
+- **THEN** the send answers `pending`, the conversation lists the reply as not
+  delivered, and once the channel runs the reply and then the answer are
+  delivered and no longer listed
+
+#### Scenario: the conversation says where a reply will also go
+- **GIVEN** a conversation a channel opened in a direct chat's parallel thread
+- **WHEN** a client reads the conversation
+- **THEN** its channel binding says a reply is deliverable and names the target,
+  the platform and the thread's mark
+
+### Requirement: Show where a reply will also be sent
+The Conversations page MUST tell the owner, before they send, where a reply to a channel's
+conversation will also go — the source in the title bar beside the conversation's title
+("SeaTalk · coffer-dev › thread"), which means replies typed here also go there — or that
+it will stay in Coffer ("Replies stay in Coffer", with the reason one tap away), and MUST
+mark each reply the channel has not received yet as not delivered to that channel until it
+is, in a quiet warning line under the message: "Not delivered to SeaTalk yet · will retry".
+The reply box carries no line of its own about this.
+
+#### Scenario: the Conversations page shows where a reply also goes
+- **GIVEN** an open conversation a channel opened, with one reply not yet delivered
+- **WHEN** the page renders its composer
+- **THEN** the title bar names the source the reply will also be sent to, and the
+  undelivered reply is marked as not delivered to that channel
+
+### Requirement: Pause a turn on a question for the owner
+A question an agent raises in a turn — through `coffer__ask`, or through Claude
+Code's own `AskUserQuestion`, which the Claude Code adapter MUST intercept before
+it runs and turn into the same question — MUST be stored as a `question` block of
+the reply that asked, with its context, its questions and options, and its state:
+pending, answered (the answers, where they were given — the web page or a named
+channel —, by whom and when) or cancelled. The turn MUST stay running while the
+question is pending. The first answer MUST win: a later answer to a closed
+question is refused with `QUESTION_CLOSED` and changes nothing. Stopping the turn,
+the turn ending or the daemon shutting down MUST cancel a pending question, and
+the agent is told no answer came. The answers MUST go back to the agent as the
+tool's result; nothing is added to the conversation as the owner's message.
+
+#### Scenario: AskUserQuestion waits for the owner and gets the answer
+- **GIVEN** a Claude Code turn in a Coffer conversation
+- **WHEN** Claude Code calls `AskUserQuestion` with the options "Yes" and "No", and the owner answers "Yes" on the Conversations page
+- **THEN** the reply holds a question block that went from pending to answered "Yes" via the web page
+- **AND** Claude Code receives "Yes" as its answer and carries on, and no user message was added
+
+#### Scenario: the second answer to one question is refused
+- **GIVEN** a question answered "Yes" in SeaTalk
+- **WHEN** the web page sends the answer "No" for it
+- **THEN** the request is refused with `QUESTION_CLOSED` and the answer stays "Yes"
+
+#### Scenario: stopping a turn cancels its question
+- **GIVEN** a turn waiting on a pending question
+- **WHEN** the owner presses Stop
+- **THEN** the question is cancelled and the agent is told the owner stopped the task
+
+### Requirement: Answer a question in the conversation
+While a reply waits on a question, its header MUST read "Waiting for you" and a
+question card MUST sit at the end of the reply, above the reply box: the context
+(markdown, a diff as a code block), each question with its options as equal
+buttons — a single-choice tap answers, a multi-select question toggles its
+options and sends them with Submit — with each option's description under its
+label, and the line "<agent> is waiting for your answer.". Text sent from the reply box
+while a question is pending MUST answer the first unanswered question instead of
+queueing a message; the box's placeholder says so ("Reply, or answer with the
+buttons above"). In a channel conversation the card notes it was also asked in
+that chat. An answered question MUST collapse to one line, "✓ <question> ·
+Answered: <answer> · HH:MM", adding "in <platform>" when it was answered in the
+chat, and a cancelled one to "Not answered".
+
+#### Scenario: a multi-select question is answered with Submit
+- **GIVEN** a pending question with three options and multi-select on
+- **WHEN** the owner toggles two options and presses Submit
+- **THEN** the agent receives both labels, and the card collapses to one line naming them
+
+#### Scenario: text typed while a question waits is the answer
+- **GIVEN** a pending question
+- **WHEN** the owner types "only on staging" and sends it
+- **THEN** the question is answered with that text and no message is queued
+
+### Requirement: Show which conversations wait on you
+A conversation with a pending question MUST carry `needs_you` in the list, and its
+row MUST show the status "Needs you" (warning colour) where a running one shows
+"Running", in its usual place by time — no separate group or filter. The sidebar
+MUST NOT carry a count for it.
+
+#### Scenario: a waiting conversation is marked
+- **GIVEN** two conversations, one waiting on a question
+- **WHEN** the Conversations page renders
+- **THEN** that row shows "Needs you" and the other does not
+- **AND** once the question is answered the status goes away
+
+### Requirement: Record what each reply changed in each file
+For every assistant reply, the daemon MUST record a unified diff per file the
+reply wrote: for Claude Code, the file's content before the reply's first write to
+that path compared with its content when the reply ends; for Codex, the diffs its
+file-change items carry. Each file MUST keep its added and removed line counts; a
+file over 1 MB or not text keeps only its counts and says why its diff is omitted;
+a file whose content ends unchanged is not recorded. The records MUST be readable
+per reply — the file list, and one file's diff — and MUST be deleted with the
+reply.
+
+#### Scenario: a reply's edits to one file become one diff
+- **GIVEN** a Claude Code reply that edits `ws_client.py` twice and writes a new file `test_ws.py`
+- **WHEN** the reply ends and its files are read
+- **THEN** two files are listed, `ws_client.py` with one diff covering both edits against its content before the first, and `test_ws.py` as all added lines
+
+#### Scenario: a binary file is listed without a diff
+- **GIVEN** a reply that writes a 3 MB file
+- **WHEN** its files are read
+- **THEN** the file is listed with its counts and the diff is omitted as too large
+
+### Requirement: Open a changed file's diff in a drawer
+A row of "Files changed" whose reply has a recorded diff MUST open a drawer on the
+right, 640 wide and starting under the title bar, holding that file's diff for
+that reply: the path with its added and removed counts, "<n> of <N>" with previous
+and next file and a close control (Esc closes too), and the diff with old and new
+line numbers, hunk headers and added and removed lines marked. The open file's row
+MUST be highlighted in the card. A reply recorded before this existed keeps its
+estimated rows, which open nothing.
+
+#### Scenario: the drawer walks the reply's files
+- **GIVEN** a reply with two changed files, both with diffs
+- **WHEN** the owner clicks the first row and then next file
+- **THEN** the drawer shows "1 of 2" with the first file's diff, then "2 of 2" with the second's, and the second row is highlighted
+- **AND** Esc closes the drawer

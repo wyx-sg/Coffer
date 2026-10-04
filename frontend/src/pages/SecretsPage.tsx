@@ -1,0 +1,127 @@
+// src/pages/SecretsPage.tsx — /secrets: every stored and cited secret with what uses it (spec web-ui "Manage stored secrets on the Secrets page").
+//
+// One filterable, sortable list (status and search; Last used and Created sort) under up to two
+// banners: no value on this Mac (Add value(s)), then changes waiting for approval (Review) — each
+// closable with × = Ignore, shared with Overview. Add secret stores a standalone secret; Find
+// plaintext keys moves values out of files into the store. Each row's ⋯ menu replaces, reveals
+// (in the desktop app only), copies its reference, opens Activity, or deletes — which, for a
+// secret something still uses, says what does instead. No value is ever on this page until
+// Reveal is chosen.
+import { useState } from "react";
+import { IdCard, Plus, RotateCcw, ScanSearch } from "lucide-react";
+import { useTranslation } from "react-i18next";
+
+import { AddSecretDialog } from "@/components/secret/AddSecretDialog";
+import { AddValuesDialog } from "@/components/secret/AddValuesDialog";
+import { DeleteSecretDialog } from "@/components/secret/DeleteSecretDialog";
+import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
+import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
+import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
+import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
+import { ApprovalsOffNote } from "@/components/secret/ApprovalsOffNote";
+import { SecretsBanners } from "@/components/secret/SecretsBanners";
+import { SecretsBrowser } from "@/components/secret/SecretsBrowser";
+import { isMissingHere } from "@/components/secret/secretRows";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import type { SecretRef } from "@/lib/api/secret";
+import { translateApiError } from "@/lib/api/errors";
+import { usePendingApprovals } from "@/lib/hooks/useApprovals";
+import { useSecrets } from "@/lib/hooks/useSecrets";
+
+type Open =
+  | { dialog: "add" | "scan" | "values" }
+  | { dialog: SecretRowAction; row: SecretRef }
+  | null;
+
+export function SecretsPage() {
+  const { t } = useTranslation();
+  const secrets = useSecrets();
+  const approvals = usePendingApprovals();
+  const waitingApprovals = approvals.data?.approvals ?? [];
+  const [open, setOpen] = useState<Open>(null);
+  const rows = secrets.data?.refs ?? [];
+  const missing = rows.filter(isMissingHere);
+  const firstRun = !secrets.isPending && !secrets.error && rows.length === 0;
+
+  const rowFor = (dialog: SecretRowAction) =>
+    open && open.dialog === dialog && "row" in open ? open.row : null;
+  const closeTo = (next: boolean) => {
+    if (!next) setOpen(null);
+  };
+  const addButton = (
+    <Button onClick={() => setOpen({ dialog: "add" })}>
+      <Plus aria-hidden /> {t("secrets.add.open")}
+    </Button>
+  );
+  const scanButton = (
+    <Button variant="outline" onClick={() => setOpen({ dialog: "scan" })}>
+      <ScanSearch aria-hidden /> {t("secrets.scan.open")}
+    </Button>
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={t("secrets.title")}
+        subtitle={t("secrets.subtitle")}
+        actions={
+          firstRun ? null : (
+            <div className="flex flex-wrap items-center gap-2">
+              {scanButton}
+              {addButton}
+            </div>
+          )
+        }
+      />
+
+      <ApprovalsOffNote />
+
+      <SecretsBanners
+        rows={rows}
+        approvals={waitingApprovals}
+        onAddValues={() => setOpen({ dialog: "values" })}
+      />
+
+      {secrets.error ? (
+        <EmptyState
+          tone="error"
+          title={t("secrets.loadFailed")}
+          description={translateApiError(t, secrets.error)}
+          action={
+            <Button variant="outline" onClick={() => void secrets.refetch()}>
+              <RotateCcw aria-hidden /> {t("common.retry")}
+            </Button>
+          }
+        />
+      ) : firstRun ? (
+        <EmptyState
+          icon={IdCard}
+          title={t("secrets.empty.title")}
+          description={t("secrets.empty.body")}
+          action={addButton}
+          secondaryAction={scanButton}
+        />
+      ) : (
+        <SecretsBrowser
+          rows={rows}
+          isLoading={secrets.isPending}
+          onAction={(dialog, row) => setOpen({ dialog, row })}
+        />
+      )}
+
+      <AddSecretDialog
+        open={open?.dialog === "add"}
+        onOpenChange={closeTo}
+        existing={rows}
+        onReplaceInstead={(row) => setOpen({ dialog: "replace", row })}
+      />
+      <AddValuesDialog open={open?.dialog === "values"} onOpenChange={closeTo} rows={missing} />
+      <ScanSecretsDialog open={open?.dialog === "scan"} onOpenChange={closeTo} />
+      <ReplaceSecretDialog row={rowFor("replace")} onOpenChange={closeTo} />
+      <RevealSecretDialog row={rowFor("reveal")} onOpenChange={closeTo} />
+      <DeleteSecretDialog row={rowFor("delete")} onOpenChange={closeTo} />
+    </div>
+  );
+}

@@ -1,14 +1,14 @@
 // components/chat/AgentModelBar.tsx
-// Top bar in the message thread: which Coffer-managed agent the conversation is
-// bound to (Claude Code / Codex), plus a per-conversation model picker. The
+// The agent / model / effort cluster at the right of an open conversation's
+// reply box toolbar: which Coffer-managed agent the conversation is bound to (Claude Code /
+// Codex, by its mark), plus a per-conversation model picker. The
 // picker sets agent_config.model — the agent's own model, passed through to its
 // CLI (the coffer-model-is-an-internal-engine and provider-switching
 // ADRs), mirroring the channel `/model` command. An empty
 // value inherits the active provider profile's projected default. Beside it,
 // for the agents whose models take one, the reasoning effort that model runs
 // at; it renders nothing for the agents that have no such setting.
-import { Bot } from "lucide-react";
-
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { useAgentConfig, useSetAgentEffort, useSetAgentModel } from "@/lib/hooks/useConversations";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
@@ -29,12 +29,15 @@ export function AgentModelBar({ conversationId, agentKey, agentLabel, disabled =
   const setEffort = useSetAgentEffort();
 
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-card/50 px-4 py-2">
-      {/* Agent label — sourced from the registry via the agents API. */}
-      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-        <Bot className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
-        <span>{agentLabel}</span>
-      </div>
+    <div className="flex shrink-0 items-center gap-2">
+      {/* The agent is fixed at creation: a plain label, no control, nothing to
+          explain. The model and the effort switch here, as `/model` does in a channel. */}
+      <span
+        data-testid="conversation-agent"
+        className="inline-flex items-center px-1 text-xs font-medium text-text-muted"
+      >
+        <AgentBadge type={agentKey} name={agentLabel} size="sm" showName tooltip={false} />
+      </span>
       <ModelPicker
         agentKey={agentKey}
         value={agentConfig.data?.model ?? null}

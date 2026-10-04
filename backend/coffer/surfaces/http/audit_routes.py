@@ -1,4 +1,8 @@
-"""/api/v1/audit — read-only query over the audit log."""
+"""/api/v1/audit — read-only query over the audit log.
+
+Paged newest first by an opaque cursor (spec resource-framework "Page growing
+lists by an opaque cursor"); ``since`` stays a filter.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEntry
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
-from coffer.surfaces.http.schemas import AuditEntryOut, AuditListOut
+from coffer.surfaces.http.log_schemas import AuditEntryOut, AuditListOut
 
 router = APIRouter(
     prefix="/api/v1/audit",
@@ -59,6 +63,9 @@ def _to_out(e: AuditEntry) -> AuditEntryOut:
         resource_name=e.resource_name,
         actor=e.actor,
         details=e.details,
+        trace_id=e.trace_id,
+        conversation_id=e.conversation_id,
+        turn_id=e.turn_id,
     )
 
 
@@ -79,6 +86,37 @@ async def list_audit(
     event_prefix: str | None = Query(default=None),
     since: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
+    cursor: str | None = Query(
+        default=None,
+        description=(
+            "The previous page's next_cursor. Bound to the filters it was "
+            "issued with; any other value is 400 CURSOR_INVALID."
+        ),
+    ),
+    trace_id: str | None = Query(
+        default=None,
+        description=(
+            "Only the rows written under this correlation id: one HTTP request's "
+            "or one chat/channel turn's, the same id its MCP invocations and "
+            "daemon log lines carry."
+        ),
+    ),
+    q: str | None = Query(
+        default=None,
+        description=(
+            "Free text, matched in any case against the event code, the resource "
+            "name, the actor and the details of each row, and against the events "
+            "named by ``q_type``."
+        ),
+    ),
+    q_type: list[str] | None = Query(  # noqa: B008
+        default=None,
+        description=(
+            "With ``q``: event types that also match, because the caller found "
+            "``q`` in their localized wording (the sentence a reader sees is "
+            "composed in the client, not stored)."
+        ),
+    ),
     svc: AuditService = Depends(get_audit_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> AuditListOut:
@@ -87,12 +125,29 @@ async def list_audit(
     # "that resource has no events" are different answers and the caller acts
     # on them differently.
     resource = await resources.get(resource_uid) if resource_uid is not None else None
-    entries = await svc.query(
+    page = await svc.page(
         resource=resource,
         kind=kind,
         event_type=event_type,
         event_prefix=event_prefix,
         since=since_dt,
         limit=limit,
+        cursor=cursor,
+        trace_id=trace_id,
+        q=q or None,
+        q_types=q_type or (),
     )
-    return AuditListOut(entries=[_to_out(e) for e in entries])
+    # The page is validated first so a bad cursor is refused before counting.
+    total = await svc.count(
+        resource=resource,
+        kind=kind,
+        event_type=event_type,
+        event_prefix=event_prefix,
+        since=since_dt,
+        trace_id=trace_id,
+        q=q or None,
+        q_types=q_type or (),
+    )
+    return AuditListOut(
+        entries=[_to_out(e) for e in page.items], next_cursor=page.next_cursor, total=total
+    )

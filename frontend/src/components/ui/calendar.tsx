@@ -1,3 +1,5 @@
+// src/components/ui/calendar.tsx
+// The date picker grid: react-day-picker with its --rdp-* variables pointed at the design tokens.
 import "react-day-picker/style.css";
 import * as React from "react";
 import { DayPicker } from "react-day-picker";
@@ -12,19 +14,26 @@ import { cn } from "@/lib/utils";
  * no fragile per-element classNames mapping to drift across versions.
  */
 const THEME_VARS = {
-  "--rdp-accent-color": "hsl(var(--primary))",
-  "--rdp-accent-background-color": "hsl(var(--accent))",
-  "--rdp-day-width": "2.25rem",
-  "--rdp-day-height": "2.25rem",
-  "--rdp-day_button-width": "2.25rem",
-  "--rdp-day_button-height": "2.25rem",
-  "--rdp-day_button-border-radius": "var(--radius)",
-  "--rdp-selected-border": "2px solid hsl(var(--primary))",
-  "--rdp-today-color": "hsl(var(--primary))",
-  "--rdp-range_start-color": "hsl(var(--primary-foreground))",
-  "--rdp-range_end-color": "hsl(var(--primary-foreground))",
-  "--rdp-range_middle-background-color": "hsl(var(--accent))",
-  "--rdp-range_middle-color": "hsl(var(--accent-foreground))",
+  "--rdp-accent-color": "rgb(var(--accent))",
+  "--rdp-accent-background-color": "rgb(var(--accent-soft))",
+  "--rdp-day-width": "34px",
+  "--rdp-day-height": "34px",
+  "--rdp-day_button-width": "32px",
+  "--rdp-day_button-height": "32px",
+  "--rdp-day_button-border-radius": "7px",
+  "--rdp-selected-border": "2px solid rgb(var(--accent))",
+  "--rdp-today-color": "rgb(var(--accent))",
+  "--rdp-range_start-color": "rgb(var(--on-accent))",
+  "--rdp-range_end-color": "rgb(var(--on-accent))",
+  "--rdp-range_middle-background-color": "rgb(var(--accent-soft))",
+  "--rdp-range_middle-color": "rgb(var(--accent-text))",
+  "--rdp-disabled-opacity": "0.45",
+  "--rdp-outside-opacity": "0.6",
+  "--rdp-weekday-opacity": "1",
+  "--rdp-nav_button-width": "30px",
+  "--rdp-nav_button-height": "30px",
+  "--rdp-nav_button-disabled-opacity": "0.45",
+  "--rdp-animation_duration": "180ms",
 } as React.CSSProperties;
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
@@ -36,7 +45,10 @@ export function Calendar({ className, style, ...props }: CalendarProps) {
   return (
     <DayPicker
       locale={locale}
-      className={cn("text-sm", className)}
+      className={cn(
+        "text-sm text-text [&_.rdp-weekday]:text-2xs [&_.rdp-weekday]:font-semibold [&_.rdp-weekday]:text-text-subtle",
+        className,
+      )}
       style={{ ...THEME_VARS, ...style }}
       {...props}
     />

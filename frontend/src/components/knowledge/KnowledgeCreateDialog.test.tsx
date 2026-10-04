@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { KnowledgeCreateDialog } from "./KnowledgeCreateDialog";
 import { ToastProvider } from "@/components/ui/toast";
@@ -27,7 +28,15 @@ function renderDialog(onOpenChange = vi.fn()) {
   render(
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <KnowledgeCreateDialog open onOpenChange={onOpenChange} />
+        <MemoryRouter initialEntries={["/knowledge"]}>
+          <Routes>
+            <Route
+              path="/knowledge"
+              element={<KnowledgeCreateDialog open onOpenChange={onOpenChange} />}
+            />
+            <Route path="/knowledge/:uid" element={<p>opened the new collection</p>} />
+          </Routes>
+        </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -40,11 +49,11 @@ describe("KnowledgeCreateDialog", () => {
 
     // The regression: a missing key makes i18next echo the key itself.
     expect(screen.queryByText(/^[a-z][A-Za-z]*(\.[A-Za-z]+)+$/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Create" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create collection" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  test("submitting sends the trimmed name and closes on success", async () => {
+  test("submitting sends the trimmed name, closes on success and opens the collection", async () => {
     createCollectionMock.mockResolvedValue({
       // The daemon mints the collection's identity; the dialog only ever sends
       // the name it was typed under.
@@ -53,23 +62,33 @@ describe("KnowledgeCreateDialog", () => {
       description: "what we know",
       document_count: 0,
       pending_count: 0,
+      folder_path: "/home/u/.coffer/knowledge/team-notes",
+      updated_at: null,
     });
     const onOpenChange = renderDialog();
 
-    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "  team-notes  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: "  team-notes  " } });
+    fireEvent.change(screen.getByLabelText(/^what belongs in here/i), {
+      target: { value: " what we know " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create collection" }));
 
     await waitFor(() =>
       expect(createCollectionMock).toHaveBeenCalledWith({
         name: "team-notes",
-        description: null,
+        description: "what we know",
       }),
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(await screen.findByText("opened the new collection")).toBeInTheDocument();
   });
 
-  test("a blank name cannot be submitted", () => {
+  test("a blank name or a blank description cannot be submitted", () => {
     renderDialog();
-    expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create collection" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: "team-notes" } });
+    // A collection has no title: its description is what agents know it by,
+    // so it is required too.
+    expect(screen.getByRole("button", { name: "Create collection" })).toBeDisabled();
   });
 });

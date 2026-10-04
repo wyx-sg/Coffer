@@ -27,9 +27,10 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.live_text import SeaTalkLiveText
+from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
 from coffer.infrastructure.channel.seatalk_history import THREAD_PAGE_MAX, SeaTalkContextReader
+from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,
@@ -41,15 +42,12 @@ from coffer.infrastructure.channel.seatalk_parse import (
     mentions_others,
     strip_group_mentions,
 )
-from coffer.infrastructure.channel.seatalk_send import (
-    SEATALK_MENTION_EMAIL_TEMPLATE,
-    SEATALK_MENTION_TEMPLATE,
-    send_text_pieces,
-)
+from coffer.infrastructure.channel.seatalk_send import send_text_pieces
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
-_CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
+#: What a withdrawn reply's card is rewritten to say.
+WITHDRAWN_TEXT = "🗑 Withdrawn"
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
 
@@ -81,30 +79,7 @@ class SeaTalkAdapter:
 
     @property
     def capabilities(self) -> ChannelCapabilities:
-        return ChannelCapabilities(
-            supports_edit=False,  # no API rewrites a delivered SeaTalk message
-            # But a message CAN grow in place — init_stream/update_stream.
-            supports_live_text=True,
-            live_text_persists=True,  # the streamed message IS the reply
-            # Both chat kinds: single_chat_typing and group_chat_typing. The
-            # group one silently no-ops above 200 members (code 7003), so this
-            # promises an attempt, never a delivered receipt.
-            supports_typing=True,
-            max_message_chars=_CHUNK_LIMIT,
-            supports_buttons=True,
-            # Update Message covers interactive cards (never text — see supports_edit).
-            supports_card_update=True,
-            supports_media=True,
-            supports_groups=True,
-            supports_history_fetch=True,
-            # "Mention the asker in a group answer": SeaTalk mentions from a bare id, so a group
-            # reply can open by @mentioning whoever asked without resolving a display name. Its
-            # documented email form is the fallback for a sender with no id.
-            mention_template=SEATALK_MENTION_TEMPLATE,
-            mention_email_template=SEATALK_MENTION_EMAIL_TEMPLATE,
-            # Any DM message can root a thread, so a DM thread is a casual reply.
-            direct_threads_are_replies=True,
-        )
+        return SEATALK_CAPABILITIES
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -175,10 +150,10 @@ class SeaTalkAdapter:
                     str(body.get("plain_text", "")), body.get("mentioned_list")
                 )
             message_id = str(message.get("message_id", ""))
-            # A group reply must land in a thread, never the main chat. A thread's
-            # id == its root message_id, so an in-thread @mention already carries it
-            # and a main-chat one ("") roots a fresh thread here — fall back to this id.
-            reply_thread_id = str(message.get("thread_id", "")) or message_id
+            # A group reply lands in a thread: an in-thread @mention carries its root id, a
+            # main-chat one ("") roots a thread at itself and is marked (spec channels/seatalk
+            # "Mark a main-chat mention as the group's main chat").
+            in_thread = str(message.get("thread_id", ""))
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -203,7 +178,8 @@ class SeaTalkAdapter:
                     mentions_others=mentions_others(
                         (message.get("text") or {}).get("mentioned_list")
                     ),
-                    thread_id=reply_thread_id,
+                    thread_id=in_thread or message_id,
+                    group_main=not in_thread,
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     forwarded=tag == "combined_forwarded_chat_history",
                     attachments=await media_attachments(
@@ -252,6 +228,9 @@ class SeaTalkAdapter:
                     platform_message_id=str(event.get("message_id", "")),
                     chat_kind="group" if group_id else "direct",
                     thread_id=str(event.get("thread_id", "")),
+                    sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
+                    sender_mention_id=str(sender.get("seatalk_id", "")),
+                    sender_mention_email=str(sender.get("email", "")),
                 )
             )
 
@@ -309,13 +288,15 @@ class SeaTalkAdapter:
         """SeaTalk cannot edit, but it can stream — one message that
         re-renders from the full snapshot until the stream is finished."""
         return SeaTalkLiveText(
-            self._post, chat_id, name=self._name, thread_id=thread_id, chat_kind=chat_kind
+            self._post,
+            chat_id,
+            name=self._name,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
+            send=self._send,
+            char_limit=self.capabilities.max_message_chars,
+            byte_limit=_BYTE_LIMIT,
         )
-
-    async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
-        # No SeaTalk API rewrites a delivered TEXT message: live progress goes
-        # through open_live_text, a delivered CARD through update_card below.
-        raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
 
     async def update_card(
         self,
@@ -332,6 +313,14 @@ class SeaTalkAdapter:
 
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot delete messages")
+
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        """SeaTalk cannot delete, so a withdrawn card is rewritten into a neutral
+        one with no buttons (Update Message: 7 days, cards only, sender only)."""
+        del chat_id, chat_kind
+        await update_interactive_card(self._post, message_id, WITHDRAWN_TEXT, ())
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         # "Acknowledge receipt and completion by capability": SeaTalk has no outbound reaction API

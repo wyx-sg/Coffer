@@ -1,7 +1,7 @@
 """End-to-end HTTP coverage for /api/v1/skills/* (spec agent-registry).
 
 Every route that addresses one skill takes its ``uid`` — the immutable identity
-the daemon minted — never its name (ADR resource-identity-is-an-immutable-uid).
+the daemon minted — never its name (ADR identity-is-the-uid-inside-the-file).
 So these tests read the uid off the response that created the resource (import,
 or agent registration) and address it with that from then on. The one place a
 name may still find a resource is ``GET /api/v1/resources?kind=...&name=...``,
@@ -13,6 +13,7 @@ from __future__ import annotations
 import pathlib
 import re
 import textwrap
+import time
 
 import pytest
 from starlette.testclient import TestClient
@@ -67,7 +68,7 @@ def _skill_uid_by_name(c: TestClient, name: str) -> str:
     return matches[0]["uid"]
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
+@pytest.mark.acceptance(spec="skill-manager", scenario="the web UI and REST cover every operation")
 def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
     """End-to-end HTTP coverage — the surface both desktop and CLI consume."""
     app = _app(tmp_path, monkeypatch, 59600)
@@ -83,7 +84,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # register an agent
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+            json={"type": "claude_code", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
         # The agent's uid is what every reference to it is written with here
@@ -109,7 +110,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         assert re.fullmatch(r"[0-9a-f]{32}", uid), uid
         # A binding carries both halves of the agent: the uid a client follows,
         # the name it prints.
-        assert [b["agent_name"] for b in skill["bindings"]] == ["cur"]
+        assert [b["agent_name"] for b in skill["bindings"]] == ["claude-code"]
         assert [b["agent_uid"] for b in skill["bindings"]] == [agent_uid]
         # Delivery is decided by these two fields and nothing else.
         assert skill["enabled"] is True
@@ -176,7 +177,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
 
         # delete
         r = c.delete(f"/api/v1/skills/{uid}")
-        assert r.status_code == 204
+        assert r.status_code == 200 and r.json() == {"kept_copies": []}
         assert not link.exists()
         r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 404
@@ -199,7 +200,7 @@ def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatc
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+            json={"type": "claude_code", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
         agent_uid = r.json()["uid"]
@@ -221,7 +222,7 @@ def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatc
         r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 200
         assert all(b["agent_uid"] != agent_uid for b in r.json()["bindings"])
-        assert all(b["agent_name"] != "cur" for b in r.json()["bindings"])
+        assert all(b["agent_name"] != "claude-code" for b in r.json()["bindings"])
 
 
 # TEST21-010: error envelope shape for non-SSRF errors. The envelope is
@@ -349,6 +350,21 @@ def test_import_without_overwrite_still_reports_the_reservation(tmp_path, monkey
         assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
 
 
+def _wait_for_quiet_reconciler(timeout: float = 5.0) -> None:
+    """Until no hinted pass is pending or running (the daemon's loop runs in
+    the TestClient's thread)."""
+    from coffer.surfaces.http.reconcile_dependencies import get_reconciler
+
+    reconciler = get_reconciler()
+    deadline = time.monotonic() + timeout
+    quiet = 0
+    while quiet < 3:
+        assert time.monotonic() < deadline, "the reconciler never went quiet"
+        busy = bool(reconciler.pending_hints) or reconciler._lock.locked()
+        quiet = 0 if busy else quiet + 1
+        time.sleep(0.2)
+
+
 def test_skill_repair_route(tmp_path, monkeypatch):
     """POST /skills/repair re-delivers MISSING_LINK and leaves REPLACED_WITH_REGULAR intact.
 
@@ -369,7 +385,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         # Register agent and import skill (creates binding + link).
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+            json={"type": "claude_code", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
         agent_uid = r.json()["uid"]
@@ -377,28 +393,30 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 201, r.text
         uid = r.json()["uid"]
+        src2 = tmp_path / "src2"
+        _write_skill_folder(src2, name="foreign")
+        r2 = c.post("/api/v1/skills/import", json={"path": str(src2)})
+        assert r2.status_code == 201, r2.text
 
         link = agent_config_dir / "skills" / "fix-me"
-        assert link.exists()
+        foreign_link = agent_config_dir / "skills" / "foreign"
+        assert link.exists() and foreign_link.exists()
+        # Every write asks the reconciler for a pass; drift induced while one
+        # of those is still pending would be repaired before verify reads it.
+        _wait_for_quiet_reconciler()
 
         # Introduce MISSING_LINK drift by removing the symlink.
         link.unlink()
         assert not link.exists()
 
-        # Introduce a REPLACED_WITH_REGULAR drift for another skill.
-        src2 = tmp_path / "src2"
-        _write_skill_folder(src2, name="foreign")
-        r2 = c.post("/api/v1/skills/import", json={"path": str(src2)})
-        assert r2.status_code == 201, r2.text
-        foreign_link = agent_config_dir / "skills" / "foreign"
-        # Replace the symlink with a regular directory (simulates REPLACED_WITH_REGULAR).
+        # Replace the other symlink with a regular directory (REPLACED_WITH_REGULAR).
         foreign_link.unlink()
         foreign_link.mkdir()
         (foreign_link / "file.txt").write_text("foreign content")
 
         # And a master folder no resource row claims — ORPHAN_MASTER, the one
         # drift kind with no identity on either side.
-        (tmp_path / ".coffer" / "skills" / "adopted-by-nobody").mkdir(parents=True)
+        (tmp_path / ".coffer" / "vault" / "skills" / "adopted-by-nobody").mkdir(parents=True)
 
         # Verify first: the report a client reads before deciding to repair.
         r = c.post("/api/v1/skills/verify")
@@ -406,11 +424,21 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         entries = r.json()["entries"]
 
         missing = next(e for e in entries if e["skill_name"] == "fix-me")
-        assert missing["agent_name"] == "cur"
+        assert missing["agent_name"] == "claude-code"
         # The entry is exactly these five fields — no uid rides along, so a
-        # client cannot start addressing one entry out of the report.
-        fields = {"skill_name", "agent_name", "kind", "target_path", "suggested_remedy"}
+        # client cannot start addressing one entry out of the report, and no
+        # remedy text: each surface says the remedy for a kind in its own words.
+        fields = {"skill_name", "agent_name", "kind", "target_path", "handoff"}
         assert set(missing) == fields
+        # Repair is the fix for a missing link, so nothing is handed off.
+        assert missing["handoff"] is None
+        # A folder in the way is handed to an agent: compare, advise, touch nothing.
+        foreign = next(e for e in entries if e["skill_name"] == "foreign")
+        prompt = foreign["handoff"]["prompt"]
+        assert str(foreign_link) in prompt
+        assert str(tmp_path / ".coffer" / "vault" / "skills" / "foreign") in prompt
+        assert "Adopt this folder" in prompt and "Replace it with Coffer's link" in prompt
+        assert "Do not move, delete or edit any folder yourself" in prompt
         # What it prints is a LABEL, not an address: the name does not resolve
         # against a skill route, and a client that wants the resource behind it
         # goes the one way a name may still find one — the resources lookup.
@@ -421,6 +449,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         # A folder on disk with no row behind it: nothing to look up at all,
         # which is why the report is in names and why repair skips the kind.
         assert orphan["skill_name"] == "adopted-by-nobody"
+        assert orphan["target_path"] in orphan["handoff"]["prompt"]
         lookup = c.get("/api/v1/resources", params={"kind": "skill", "name": orphan["skill_name"]})
         assert lookup.json()["resources"] == [], lookup.text
 
@@ -432,7 +461,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         # The MISSING_LINK should be remediated, re-delivered to the agent the
         # entry names — whose uid the restored delivery row still records.
         remediated = next(e for e in body["remediated"] if e["skill_name"] == "fix-me")
-        assert remediated["agent_name"] == "cur"
+        assert remediated["agent_name"] == "claude-code"
         bindings = c.get(f"/api/v1/skills/{uid}").json()["bindings"]
         assert [b["agent_uid"] for b in bindings] == [agent_uid]
         # The link is restored.

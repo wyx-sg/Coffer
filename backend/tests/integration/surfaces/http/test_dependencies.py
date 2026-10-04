@@ -24,9 +24,9 @@ from typing import Any
 import pytest
 
 from coffer.surfaces.http import agent_dependencies as agent_deps
-from coffer.surfaces.http import credential_composition as cred_comp
 from coffer.surfaces.http import dependencies as deps
 from coffer.surfaces.http import provider_dependencies as provider_deps
+from coffer.surfaces.http import secret_composition as cred_comp
 from coffer.surfaces.http import skill_dependencies as skill_deps
 from coffer.surfaces.http import workspace_dependencies as workspace_deps
 from coffer.surfaces.http.chat import dependencies as chat_deps
@@ -53,6 +53,7 @@ _PROVIDERS: list[_Provider] = [
         "_audit_service",
         "_retention_service",
         "_internal_engine_config_service",
+        "_platform",
     ),
     # mcp kind
     *_pairs(
@@ -78,14 +79,20 @@ _PROVIDERS: list[_Provider] = [
         "_agent_plugin_service",
         "_agent_native_memory_service",
         "_agent_transcript_service",
+        "_agent_hooks_service",
     ),
     # skill kind
-    *_pairs(skill_deps, "_skill_service"),
+    *_pairs(skill_deps, "_skill_service", "_skill_source_service"),
     # knowledge kind — two services, not three: there is no search service to
-    # provide any more (spec knowledge "Expose exactly one knowledge tool").
-    *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service"),
+    # provide any more (spec knowledge "Expose no knowledge tool").
+    *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service", "_history_service"),
     # memory kind
-    *_pairs(memory_deps, "_memory_service", "_memory_delivery_service"),
+    *_pairs(
+        memory_deps,
+        "_memory_service",
+        "_memory_hook_service",
+        "_memory_stats_service",
+    ),
     # turn platform (chat)
     *_pairs(
         chat_deps,
@@ -96,9 +103,23 @@ _PROVIDERS: list[_Provider] = [
         "_attachment_service",
     ),
     # provider kind
-    *_pairs(provider_deps, "_provider_service", "_introspection_service"),
-    # credential store + master key
-    *_pairs(cred_comp, "_credential_store", "_master_key_manager"),
+    *_pairs(provider_deps, "_provider_service", "_introspection_service", "_price_resolver"),
+    # secret store + master key
+    *_pairs(cred_comp, "_secret_store", "_master_key_manager"),
+]
+
+# Providers a surface works without: the getter answers ``None`` while unset
+# instead of raising. The chat routes mirror a web reply into its channel only
+# when the channel kind has published its mirror (spec chat "Mirror a web reply
+# into the channel it came from"), and a channel turn's note says more than the
+# channel's name only once it has published its note reader (spec channels "Tell
+# a channel-driven agent it is on a chat channel").
+_OPTIONAL_PROVIDERS: list[_Provider] = [
+    *_pairs(chat_deps, "_channel_mirror", "_channel_note_reader"),
+    # None in a graph built without the secret store.
+    *_pairs(skill_deps, "_skill_secret_presence", "_skill_tool_states"),
+    # A status read lists no requirements until the MCP composition publishes them.
+    *_pairs(mcp_deps, "_server_requirements"),
 ]
 
 _MODULES: list[ModuleType] = sorted(
@@ -122,7 +143,7 @@ def _reset_globals(monkeypatch):
     monkeypatch.setattr restores the original module-level value automatically,
     so a test that sets a provider can't leak into the next test.
     """
-    for mod, attr, _getter, _setter in _PROVIDERS:
+    for mod, attr, _getter, _setter in [*_PROVIDERS, *_OPTIONAL_PROVIDERS]:
         monkeypatch.setattr(mod, attr, None)
     yield
 
@@ -144,6 +165,19 @@ def test_setter_then_getter_returns_value(mod, attr, getter, setter, _reset_glob
     assert getattr(mod, attr) is sentinel
 
 
+@pytest.mark.parametrize(
+    ("mod", "attr", "getter", "setter"),
+    _OPTIONAL_PROVIDERS,
+    ids=[_id(mod, attr) for mod, attr, _g, _s in _OPTIONAL_PROVIDERS],
+)
+def test_optional_getter_is_none_when_unset(mod, attr, getter, setter, _reset_globals):
+    assert getter() is None
+    sentinel = object()
+    setter(sentinel)
+    assert getter() is sentinel
+    assert getattr(mod, attr) is sentinel
+
+
 @pytest.mark.parametrize("mod", _MODULES, ids=[m.__name__ for m in _MODULES])
 def test_every_setter_in_the_module_is_enumerated(mod):
     """A ``set_*`` added to any DI module must be added to ``_PROVIDERS`` too,
@@ -153,7 +187,7 @@ def test_every_setter_in_the_module_is_enumerated(mod):
         for name, obj in inspect.getmembers(mod, inspect.isfunction)
         if name.startswith("set_") and obj.__module__ == mod.__name__
     }
-    enumerated = {attr for m, attr, _g, _s in _PROVIDERS if m is mod}
+    enumerated = {attr for m, attr, _g, _s in [*_PROVIDERS, *_OPTIONAL_PROVIDERS] if m is mod}
     assert declared == enumerated, (
         f"{mod.__name__}: setters {sorted(declared - enumerated)} are not enumerated; "
         f"enumerated {sorted(enumerated - declared)} have no setter"

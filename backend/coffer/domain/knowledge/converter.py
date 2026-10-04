@@ -4,8 +4,8 @@ Pure: this module describes what the knowledge layer needs from a converter,
 so ``domain/`` never imports ``markitdown`` or any other conversion engine —
 those live in ``infrastructure/knowledge/converters/`` and are dispatched by
 the registry there. This module only turns bytes + a filename into Markdown
-text; writing the resulting file, filling in its description, and keeping the
-``.raw/`` original are a different layer's job.
+text; submitting it as material and filling in its description are a
+different layer's job.
 """
 
 from __future__ import annotations

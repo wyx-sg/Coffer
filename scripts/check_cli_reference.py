@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Keep the generated reference pages level with the code they describe.
 
-`docs-site/reference/cli.md` and `docs-site/reference/rest-api.md` are
-generated: the first from the Typer command tree, the second from the daemon's
-OpenAPI document. A command, option or route added without regenerating them
-leaves the published reference silently wrong, so this regenerates both in
-memory and fails when either file differs from what the code produces.
+The CLI reference (`docs-site/reference/cli.md`, one page per command group
+under `docs-site/reference/cli/`, and their Chinese twins under
+`docs-site/zh/reference/`) is generated from the Typer command tree. A command
+or option added without regenerating them leaves the published reference
+silently wrong, so this regenerates every page in memory and fails when a file
+differs from what the code produces, or when a group page is left over from a
+group the CLI no longer has.
 
 Fix a failure with `make docs-reference` and commit the result.
 
@@ -22,7 +24,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / "docs-site" / "scripts"
 
-GENERATORS = ("gen_cli_reference", "gen_rest_reference")
+GENERATORS = ("gen_cli_reference",)
 
 
 def _load(name: str):  # type: ignore[no-untyped-def]
@@ -39,10 +41,14 @@ def main() -> int:
     stale: list[str] = []
     for name in GENERATORS:
         module = _load(name)
-        expected = module.render()
-        path: Path = module.OUTPUT
-        actual = path.read_text(encoding="utf-8") if path.exists() else ""
-        if actual != expected:
+        pages: dict[Path, str] = module.render_all()
+        for path, expected in pages.items():
+            actual = path.read_text(encoding="utf-8") if path.exists() else ""
+            if actual != expected:
+                stale.append(str(path.relative_to(REPO_ROOT)))
+        # A page in a directory the generator owns that it no longer
+        # produces (a removed command group) is stale too.
+        for path in getattr(module, "stale_pages", lambda _pages: [])(pages):
             stale.append(str(path.relative_to(REPO_ROOT)))
     for rel in stale:
         print(f"check_cli_reference: {rel} is stale — run `make docs-reference`", file=sys.stderr)

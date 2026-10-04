@@ -51,15 +51,15 @@ The forces:
 ### Option A — Thin transport adapters declaring capabilities, one shared core, in-daemon reconciler (chosen)
 
 - **Channels are a resource kind** (`channel`), riding the generic lifecycle,
-  audit and credential-reference machinery; secrets live in the credential
-  store and config carries refs, probed at registration.
+  audit and secret-reference machinery; secrets live in the secret store
+  and config carries refs, probed at registration.
 - **An adapter is transport only**: start/stop, outbound send/edit/stream,
   normalising inbound platform payloads into the envelopes in
   `domain/channel/envelopes.py` (`InboundMessage`, `InboundCallback`,
   `InboundLifecycle`), and a `ChannelCapabilities` declaration —
-  `supports_edit`, `supports_live_text`, `live_text_persists`,
+  `supports_live_text`, `live_text_persists`,
   `supports_typing`, `supports_reactions`, `supports_buttons`,
-  `supports_card_update`, `supports_media`, `supports_groups`,
+  `supports_card_update`, `supports_media`,
   `supports_history_fetch`, `max_message_chars`, mention templates.
 - **The core** (`application/channel/`) owns pairing and the owner gate,
   commands, conversation mapping, queueing, rendering strategy and turn
@@ -160,7 +160,7 @@ abstraction in the way.
 
 Cons: the owner gate, the security boundary, would be written once per
 platform, and a fix to one would not reach the others. Command semantics
-(`/agent`, `/model`, `/stop`) would drift between platforms. The cost of a new
+(`/new`, `/model`, `/stop`) would drift between platforms. The cost of a new
 platform becomes the cost of a whole bot.
 
 Loses because the security boundary and the command vocabulary must be single
@@ -219,6 +219,16 @@ Rules a future change must respect:
 - Adding a platform: one adapter module set under `infrastructure/channel/`,
   one member of the config union in `domain/channel/config.py`, its
   import-linter entries, and a child spec under `openspec/specs/channels/`.
+- A platform that delivers events only by webhook (none of the supported ones
+  do: Telegram long-polls, SeaTalk holds a websocket) cannot be added as-is,
+  because no channel code path may listen. The webhook listener, signature
+  check and supervised tunnel that PR #431 deleted are not the pattern to
+  bring back ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md),
+  Option B). The expected shape is an owner-held relay outside the machine —
+  it receives the platform's webhook and queues the event — which the adapter
+  drains over an outbound connection, so the machine still has no public
+  address and one relay can serve every webhook-only platform. That design
+  gets its own ADR when the first such platform is added.
 - A channel's reported status is what is actually running, because only the
   reconciler changes it; a channel that is dark because it is bound to another
   machine or routes nowhere logs why once rather than every tick.

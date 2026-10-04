@@ -1,5 +1,5 @@
 """The frozen daemon's sidecar deployment (spec daemon "Deploy frozen sibling
-binaries and back up the vault before migrating").
+binaries and back up the history database before migrating").
 
 The desktop shell used to place these binaries in ``~/.coffer/bin``; the daemon
 does it now. Each build lands in its own ``<version>/`` directory and the public
@@ -105,15 +105,6 @@ def test_link_pointing_elsewhere_forces_a_deploy(tmp_path: Path) -> None:
     assert needs_deploy(tmp_path / "bin" / "shim", source, "2.0.0") is True
 
 
-def test_legacy_in_place_binary_forces_a_deploy(tmp_path: Path) -> None:
-    """An install from before versioned directories: a real file at the public
-    name, with its sentinel beside it."""
-    source = _write(tmp_path / "src" / "shim", b"aaaa")
-    legacy = _write(tmp_path / "bin" / "shim", b"aaaa")
-    _sentinel_for(legacy).write_text("1.0.0\n")
-    assert needs_deploy(legacy, source, "1.0.0") is True
-
-
 # --------------------------------------------------------------------------- #
 # deploy + symlink flip                                                        #
 # --------------------------------------------------------------------------- #
@@ -158,19 +149,6 @@ def test_new_version_keeps_the_previous_build_for_rollback(tmp_path: Path) -> No
     # Rollback is pointing the link back — nothing else is needed.
     _flip_symlink(bin_dir / "shim", old)
     assert (bin_dir / "shim").read_bytes() == b"old-build"
-
-
-def test_flip_replaces_a_legacy_in_place_binary_and_its_sentinel(tmp_path: Path) -> None:
-    bin_dir = tmp_path / "bin"
-    legacy = _write(bin_dir / "shim", b"legacy")
-    _sentinel_for(legacy).write_text("0.9.0\n")
-    target = _write(bin_dir / "1.0.0" / "shim", b"new")
-
-    _flip_symlink(bin_dir / "shim", target)
-
-    assert (bin_dir / "shim").is_symlink()
-    assert (bin_dir / "shim").read_bytes() == b"new"
-    assert not _sentinel_for(bin_dir / "shim").exists()
 
 
 # --------------------------------------------------------------------------- #

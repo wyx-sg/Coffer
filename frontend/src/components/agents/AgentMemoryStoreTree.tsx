@@ -1,160 +1,136 @@
-// frontend/src/components/agents/AgentMemoryStoreTree.tsx
+// frontend/src/components/agents/AgentMemoryStoreTree.tsx — spec agent-registry
+// "Read one native memory store's files read-only".
 //
-// Two-pane browser for ONE of the agent's own native memory stores: a recursive
-// left tree of the store directory, and a right pane previewing the selected
-// file (AgentMemoryStoreFileViewer).
+// ONE bordered surface for ONE of the agent's own native memory stores
+// (boards 2.1.51, 2.1.61): the store directory as the shared read-only file
+// tree (header strip "Files" with a lock, a lock at each row, a row menu with
+// Copy path and Reveal in Finder) beside the selected file's viewer
+// (AgentMemoryStoreFileViewer). The index file (MEMORY.md) opens first when
+// the store has one.
 //
 // The store IS that directory — Claude Code writes one Markdown file per fact
 // into it, Codex keeps one global document — so showing the folder is the most
 // honest surface available: what the reader sees here is exactly what the agent
-// will be handed, with no interpretation layered over it that could drift from
-// the bytes on disk.
-//
-// Deliberately the same component shape as the skill Files tab
-// (components/skills/SkillFileTree.tsx) and the memory partition browser
-// (kinds/memory/MemoryFileTree.tsx). It is a fourth instance of that shape
-// rather than a shared component those three could import because the
-// import-linter-style fence around each kind's frontend folder is the reason
-// the third one exists at all — extracting one now would mean editing surfaces
-// that belong to other specs. Two file browsers in one app that look and behave
-// differently teach the reader nothing, so the shape is what is kept identical.
+// will be handed, with no interpretation layered over it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
-import {
-  FILE_PANE_COLUMN,
-  FILE_PANE_GRID,
-  FILE_PANE_SCROLL,
-  useFillToBottom,
-} from "@/components/filePane";
+import { LoadError } from "@/components/LoadError";
 import { AgentMemoryStoreFileViewer } from "@/components/agents/AgentMemoryStoreFileViewer";
-import { translateApiError } from "@/lib/api/errors";
+import { FileBrowserFrame } from "@/components/files/FileBrowserFrame";
+import { FileTree, FileTreePanel, type FileTreeRow } from "@/components/files/FileTree";
+import { ActionMenu } from "@/components/ui/menu";
+import { useToast } from "@/components/ui/toast";
 import type { NativeMemoryFileNode } from "@/lib/api/agentNativeMemory";
+import { useFsActions } from "@/lib/fsActions";
 import { useNativeMemoryFiles } from "@/lib/hooks/useAgentNativeMemory";
-import { cn } from "@/lib/utils";
+
+function RowMenu({ name, absPath }: { name: string; absPath: string }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const { reveal } = useFsActions();
+  return (
+    <ActionMenu
+      label={t("agents.memoryStore.moreFor", { name })}
+      actions={[
+        {
+          key: "copy",
+          label: t("agents.memoryStore.copyPath"),
+          onSelect: () =>
+            void navigator.clipboard
+              .writeText(absPath)
+              .then(() => toast.success(t("common.copied")))
+              .catch(() => toast.error(t("agents.memoryStore.copyFailed"))),
+        },
+        {
+          key: "reveal",
+          label: t("fileActions.reveal"),
+          onSelect: () =>
+            void reveal(absPath).catch(() => toast.error(t("fileActions.revealFailed"))),
+        },
+      ]}
+    />
+  );
+}
 
 export function AgentMemoryStoreTree({ agentUid, dir }: { agentUid: string; dir: string }) {
   const { t } = useTranslation();
   const tree = useNativeMemoryFiles(agentUid, dir);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const fill = useFillToBottom();
+  const [picked, setPicked] = useState<string | null>(null);
+  // Folders the reader flipped from their default (the first level starts open).
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
+  const root = tree.data?.root;
+  // Until the reader picks one, the store's index file is the one to read.
+  const index = root?.children.find((c) => c.type === "file" && c.name === "MEMORY.md");
+  const selectedPath = picked ?? index?.path ?? null;
 
-  return (
-    <div
-      ref={fill.ref}
-      style={fill.style}
-      className={cn(FILE_PANE_GRID, "md:grid-cols-[18rem_minmax(0,1fr)]")}
-    >
-      {/* Left: the recursive file tree. */}
-      <div className={FILE_PANE_COLUMN}>
-        <p className="shrink-0 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {t("agents.memoryStore.tree")}
-        </p>
-        {tree.isPending ? (
-          <p className="px-1 text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : tree.error ? (
-          <p className="px-1 text-sm text-destructive">{translateApiError(t, tree.error)}</p>
-        ) : tree.data ? (
-          <ul className={cn("space-y-0.5", FILE_PANE_SCROLL)}>
-            <TreeNode
-              node={tree.data.root}
-              depth={0}
-              selectedPath={selectedPath}
-              onSelectFile={setSelectedPath}
-              isRoot
-            />
-          </ul>
-        ) : null}
-      </div>
+  const rows: FileTreeRow[] = [];
+  const walk = (nodes: NativeMemoryFileNode[], depth: number) => {
+    for (const node of nodes) {
+      if (node.type === "dir") {
+        const open = depth < 1 !== flipped.has(node.path);
+        rows.push({
+          key: node.path,
+          name: node.name,
+          kind: "folder",
+          depth,
+          open,
+          leaf: node.children.length === 0,
+        });
+        if (open) walk(node.children, depth + 1);
+      } else {
+        rows.push({
+          key: node.path,
+          name: node.name,
+          kind: "file",
+          depth,
+          selected: selectedPath === node.path,
+          locked: true,
+          title: node.path,
+          menu: <RowMenu name={node.name} absPath={`${dir.replace(/\/+$/, "")}/${node.path}`} />,
+        });
+      }
+    }
+  };
+  if (root) walk(root.children, 0);
 
-      {/* Right: read-only content of the selected file. */}
-      <div className={FILE_PANE_COLUMN}>
-        {selectedPath ? (
-          <AgentMemoryStoreFileViewer agentUid={agentUid} dir={dir} path={selectedPath} />
-        ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
-            {t("agents.memoryStore.selectFile")}
-          </div>
-        )}
-      </div>
+  const side = (
+    <FileTreePanel title={t("agents.memoryStore.tree")} locked>
+      {tree.isPending ? (
+        <p className="px-2 text-sm text-text-muted">{t("common.loading")}</p>
+      ) : tree.error ? (
+        <LoadError className="px-1" error={tree.error} onRetry={() => void tree.refetch()} />
+      ) : (
+        <FileTree
+          rows={rows}
+          label={t("agents.memoryStore.tree")}
+          onActivate={(row) => {
+            if (row.kind === "file") setPicked(row.key);
+            else
+              setFlipped((prev) => {
+                const next = new Set(prev);
+                if (next.has(row.key)) next.delete(row.key);
+                else next.add(row.key);
+                return next;
+              });
+          }}
+        />
+      )}
+    </FileTreePanel>
+  );
+
+  const main = selectedPath ? (
+    <AgentMemoryStoreFileViewer
+      key={selectedPath}
+      agentUid={agentUid}
+      dir={dir}
+      path={selectedPath}
+    />
+  ) : (
+    <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-text-muted">
+      {t("agents.memoryStore.selectFile")}
     </div>
   );
-}
 
-function TreeNode({
-  node,
-  depth,
-  selectedPath,
-  onSelectFile,
-  isRoot = false,
-}: {
-  node: NativeMemoryFileNode;
-  depth: number;
-  selectedPath: string | null;
-  onSelectFile: (path: string) => void;
-  isRoot?: boolean;
-}) {
-  // Root + its immediate children start expanded so the tree is useful at a glance.
-  const [expanded, setExpanded] = useState(depth < 2);
-  const indent = { paddingLeft: `${depth * 0.75 + 0.25}rem` };
-
-  if (node.type === "dir") {
-    return (
-      <li>
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          style={indent}
-          aria-expanded={expanded}
-          className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          {expanded ? (
-            <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-          ) : (
-            <ChevronRight className="size-3.5 shrink-0 opacity-70" />
-          )}
-          {expanded ? (
-            <FolderOpen className="size-4 shrink-0 opacity-70" />
-          ) : (
-            <Folder className="size-4 shrink-0 opacity-70" />
-          )}
-          <span className="truncate">{isRoot ? node.name || "/" : node.name}</span>
-        </button>
-        {expanded && node.children.length > 0 ? (
-          <ul className="space-y-0.5">
-            {node.children.map((child) => (
-              <TreeNode
-                key={child.path}
-                node={child}
-                depth={depth + 1}
-                selectedPath={selectedPath}
-                onSelectFile={onSelectFile}
-              />
-            ))}
-          </ul>
-        ) : null}
-      </li>
-    );
-  }
-
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelectFile(node.path)}
-        style={indent}
-        className={cn(
-          "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors",
-          selectedPath === node.path
-            ? "bg-primary/10 text-primary"
-            : "hover:bg-secondary hover:text-foreground",
-        )}
-      >
-        <span className="size-3.5 shrink-0" />
-        <FileText className="size-4 shrink-0 opacity-70" />
-        <span className="truncate">{node.name}</span>
-      </button>
-    </li>
-  );
+  return <FileBrowserFrame side={side} main={main} />;
 }

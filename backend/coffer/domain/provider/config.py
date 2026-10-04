@@ -1,7 +1,7 @@
 """``ProviderConfig`` — the ``Resource.config`` payload for kind ``provider``.
 
 Value-level validation only (types, well-formedness). No I/O. A connection is a
-credentialed endpoint: ``{protocol, base_url, credential_ref}``. The MODEL it
+credentialed endpoint: ``{protocol, base_url, secret_ref}``. The MODEL it
 runs is NOT stored here — it is chosen at the point of use (per-agent binding,
 the internal-engine selector, the chat surface), per spec provider-switching
 "Take projected model keys from the agent's binding".
@@ -20,14 +20,14 @@ resource row (ADR per-agent-resource-scope), which the user may set to anything 
 openai-compatible gateway routed to Claude Code). The wire only decides whether
 a newly created connection starts DORMANT (``starts_dormant``) — it cannot
 supply a starting agent LIST any more, because a scope holds agent uids and no
-pure function of this config knows one. Activation lives in
-``is_active`` (≤1 active per agent type, enforced by the switch op);
+pure function of this config knows one. Which connection an agent runs on is
+NOT recorded here: it is ``AgentConfig.connection_uid`` on the agent.
 ``internal_default`` (global, ≤1) marks the connection Coffer's internal engine
 uses.
 
-The credential is referenced by ``credential_ref`` only — the raw key lives in
+The secret is referenced by ``secret_ref`` only — the raw key lives in
 the Fernet vault and is never stored here, mirroring the MCP kind. ``ollama``
-connections carry no credential (``credential_ref`` is ``None``).
+connections carry no secret (``secret_ref`` is ``None``).
 """
 
 from __future__ import annotations
@@ -35,13 +35,25 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
+from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
-# Same ref grammar the credential store accepts (slash-namespaced segments).
-_CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
+# Same ref grammar the secret store accepts (slash-namespaced segments).
+_CRED_REF_PATTERN = re.compile(
+    r"^\.*[A-Za-z0-9_\-][A-Za-z0-9_.\-]*(/\.*[A-Za-z0-9_\-][A-Za-z0-9_.\-]*)*$"
+)
 
 #: Shape-only bounds for the curated ``models`` set. Model ids are OPAQUE — they
 #: are passed verbatim to the vendor, and Coffer writes down no model name of its
@@ -53,11 +65,33 @@ _MAX_MODELS = 200
 _MAX_MODEL_ID_LEN = 200
 
 
+#: Curated-model facts that are omitted from the document while unknown.
+_OPTIONAL_FACTS = ("context_window", "effort_levels", "default_effort", "price")
+
+
+class CuratedPrice(BaseModel):
+    """What the user says this connection charges for a model, in USD per
+    million tokens (web search per thousand requests). Relays and resellers
+    price differently from the vendor, so a connection's own price wins over
+    every other source when usage is costed (spec provider-switching "Resolve
+    each model's price from the provider, its API, or the bundled list"). A cache category
+    left out is charged at the input rate, so an estimate errs high."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: float = Field(ge=0)
+    output: float = Field(ge=0)
+    cache_write_5m: float | None = Field(default=None, ge=0)
+    cache_write_1h: float | None = Field(default=None, ge=0)
+    cache_read: float | None = Field(default=None, ge=0)
+    web_search: float | None = Field(default=None, ge=0)
+
+
 class CuratedModel(BaseModel):
     """One entry of a connection's offered set: an opaque id plus its kind.
 
     The modality is what lets one connection serve several surfaces from a
-    single credential — a chat picker narrows to ``text`` — instead of every id
+    single secret — a chat picker narrows to ``text`` — instead of every id
     being offered everywhere. It records what the ENDPOINT serves, which is why
     ``embedding`` remains a valid kind although Coffer embeds nothing. It
     is STORED, not derived: Coffer guesses a value only when introspection
@@ -68,6 +102,32 @@ class CuratedModel(BaseModel):
 
     id: str
     modality: Modality = Modality.TEXT
+    #: The context window the endpoint serves this model with, in tokens —
+    #: read from the endpoint where it reports one (a local runtime's served
+    #: window); the person never chooses it. ``None`` is unknown, and an
+    #: unknown window is left out of what Coffer writes rather than guessed
+    #: (spec provider-switching "Record a context window and effort levels with
+    #: each curated model").
+    context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
+    #: The reasoning-effort levels the model accepts, in order; the last is
+    #: not implied to be the default. ``None``/empty: the model takes no
+    #: effort, so Codex is sent none and the Model tab hides Effort.
+    effort_levels: list[str] | None = None
+    #: The level used when the agent's binding names none.
+    default_effort: str | None = None
+    #: This connection's own price for the model; ``None``: resolved elsewhere.
+    price: CuratedPrice | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unknowns(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """An unrecorded fact is left out of the stored (and synced) document
+        rather than written as ``null``, so an entry that records nothing new
+        reads exactly as it did before these fields existed."""
+        data: dict[str, Any] = handler(self)
+        for key in _OPTIONAL_FACTS:
+            if data.get(key) is None:
+                data.pop(key, None)
+        return data
 
 
 class Protocol(StrEnum):
@@ -87,11 +147,25 @@ class Protocol(StrEnum):
     UNKNOWN = "unknown"
 
 
+def is_loopback_url(url: str) -> bool:
+    """Whether ``url`` names this machine (``localhost`` or a loopback IP)."""
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = (urlparse(url if "://" in url else f"http://{url}").hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def starts_dormant(protocol: str) -> bool:
     """Whether a connection on ``protocol`` is CREATED scoped to no agent.
 
     The whole of what the wire still says about scope, and all it can say. A
-    scope names agents by uid (ADR resource-identity-is-an-immutable-uid), and
+    scope names agents by uid (ADR identity-is-the-uid-inside-the-file), and
     a uid is not derivable from this config — so the old table that handed each
     wire a starting agent LIST is gone, along with the ``claude_code`` /
     ``codex`` name strings this module had to spell out to build it. What
@@ -118,8 +192,8 @@ class ProviderConfig(BaseModel):
     # derived from anything the user can change; multiple connections MAY
     # share one ref. Required for anthropic/openai/unknown; ``None`` for ollama
     # (no key). Probed for existence at register/update time by the kind's
-    # credential_ref_extractor.
-    credential_ref: str | None = None
+    # secret_ref_extractor.
+    secret_ref: str | None = None
     # Which of the endpoint's models the user actually intends to use — the
     # OFFERED set, not a chosen model. A picker that offers THIS connection's
     # models (the per-agent binding, the internal-engine selector) narrows to
@@ -129,9 +203,6 @@ class ProviderConfig(BaseModel):
     # narrowed by this. Ids are opaque strings passed verbatim to the vendor;
     # Coffer never checks them against a list of its own.
     models: list[CuratedModel] = Field(default_factory=list)
-    # At most one active connection per agent type (enforced by the switch op).
-    # ollama never projects to an agent, so it stays inactive.
-    is_active: bool = False
     # At most one connection globally is Coffer's internal-engine default
     # (enforced by ``ProviderService.set_internal_default``).
     internal_default: bool = False
@@ -144,6 +215,35 @@ class ProviderConfig(BaseModel):
     # nothing marked here means Coffer transcribes nothing and hands the agent
     # the audio file untouched.
     transcribe_default: bool = False
+    # Set when the endpoint is a model runtime on this machine (Ollama, LM
+    # Studio, vLLM, llama-server): what detection found there. Such a
+    # connection carries no key and is reached through the model proxy like
+    # any other (spec provider-switching "Configure a local model connection").
+    local_runtime: LocalRuntime | None = None
+    # Whether the model proxy may send another provider's request here when
+    # that provider fails before its first byte ("Use as fallback for other
+    # providers"; spec provider-switching "Fail over only before the first
+    # content byte"). On by default; a local runtime is never a fallback
+    # whatever this says.
+    fallback: bool = True
+    # Where the connection sits in the Model providers list, which is also the
+    # order fallbacks are tried in. ``None`` sorts after every placed one, by
+    # name, so a connection nobody has moved keeps the old alphabetical place.
+    position: int | None = Field(default=None, ge=0)
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_runtime(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """A connection that is no local runtime carries no ``local_runtime``
+        key at all, and one at its defaults no ``fallback`` / ``position``, so
+        every existing document keeps its shape."""
+        data: dict[str, Any] = handler(self)
+        if data.get("local_runtime") is None:
+            data.pop("local_runtime", None)
+        if data.get("fallback") is True:
+            data.pop("fallback", None)
+        if data.get("position") is None:
+            data.pop("position", None)
+        return data
 
     @field_validator("base_url")
     @classmethod
@@ -152,14 +252,14 @@ class ProviderConfig(BaseModel):
             raise ValueError("must not be empty")
         return v.strip()
 
-    @field_validator("credential_ref")
+    @field_validator("secret_ref")
     @classmethod
     def _valid_ref(cls, v: str | None) -> str | None:
         if v is None:
             return None
         if not _CRED_REF_PATTERN.match(v):
             raise ValueError(
-                f"invalid credential_ref {v!r}: must match ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+                f"invalid secret_ref {v!r}: slash-separated [A-Za-z0-9_.-] segments, none only dots"
             )
         return v
 
@@ -180,22 +280,40 @@ class ProviderConfig(BaseModel):
                 raise ValueError("model id must not be empty")
             if len(model) > _MAX_MODEL_ID_LEN:
                 raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            cleaned.setdefault(model, CuratedModel(id=model, modality=entry.modality))
+            levels = [lv.strip() for lv in (entry.effort_levels or []) if lv and lv.strip()]
+            default = entry.default_effort if entry.default_effort in levels else None
+            cleaned.setdefault(
+                model,
+                entry.model_copy(
+                    update={"id": model, "effort_levels": levels or None, "default_effort": default}
+                ),
+            )
         return list(cleaned.values())
 
     @model_validator(mode="after")
-    def _credential_matches_protocol(self) -> ProviderConfig:
-        """anthropic/openai/unknown connections require a ``credential_ref``; an
-        ollama connection (no key) must not carry one. That it projects into no
-        agent is no longer a config rule: it is the empty SCOPE such a
-        connection is created with, and a keyless connection projects nothing
-        whatever its scope says (see ``application.provider.targets``)."""
+    def _secret_matches_protocol(self) -> ProviderConfig:
+        """anthropic/openai/unknown connections require a ``secret_ref``
+        unless they are a local runtime, whose key is optional (LM Studio,
+        vLLM and llama-server can be started with one); an ollama-protocol
+        connection (Coffer's own engine, no key) must not carry one."""
         if self.protocol is Protocol.OLLAMA:
-            if self.credential_ref is not None:
-                raise ValueError("ollama connection must not carry a credential_ref")
-        elif not self.credential_ref:
-            raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
+            if self.secret_ref is not None:
+                raise ValueError("ollama connection must not carry a secret_ref")
+        elif not self.secret_ref and self.local_runtime is None:
+            raise ValueError(f"{self.protocol.value} connection requires a secret_ref")
+        if self.local_runtime is not None and not is_loopback_url(self.base_url):
+            raise ValueError("a local runtime connection must point at this machine (loopback)")
         return self
+
+    @property
+    def offers_fallback(self) -> bool:
+        """Whether another provider's request may fail over to this one."""
+        return self.fallback and not self.is_local
+
+    @property
+    def is_local(self) -> bool:
+        """A model runtime on this machine."""
+        return self.local_runtime is not None
 
     def model_ids(self, modality: Modality | None = None) -> list[str]:
         """The curated ids, in the user's order, optionally of ONE modality.
@@ -209,6 +327,18 @@ class ProviderConfig(BaseModel):
         """
         return [m.id for m in self.models if modality is None or m.modality is modality]
 
+    def curated(self, model_id: str | None) -> CuratedModel | None:
+        """The curated entry for ``model_id``, or ``None``."""
+        if model_id is None:
+            return None
+        return next((m for m in self.models if m.id == model_id), None)
+
+
+def list_order(name: str, position: int | None) -> tuple[int, int, str]:
+    """The sort key of the Model providers list — and of fallback priority:
+    placed connections by position, then the rest by name."""
+    return (0, position, name) if position is not None else (1, 0, name)
+
 
 @dataclass(frozen=True)
 class ResolvedConnection:
@@ -217,7 +347,7 @@ class ResolvedConnection:
     The model lives apart from the connection (spec provider-switching
     "Take projected model keys from the agent's binding"), so the two travel
     together when Coffer's internal engine builds a chat model: the connection
-    supplies the endpoint + protocol + credential, the ``model`` is resolved
+    supplies the endpoint + protocol + secret, the ``model`` is resolved
     separately (the internal-engine selector, the per-agent binding, …).
     """
 

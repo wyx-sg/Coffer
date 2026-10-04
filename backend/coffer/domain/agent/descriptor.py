@@ -10,9 +10,13 @@ low-level primitives (the ``AgentType`` enum, the ``ConfigFileSpec`` dataclass)
 and read this table back via a *lazy* import inside their functions — this module
 imports them at top level, they import this module only on demand.
 
-:class:`AgentDescriptor` carries every per-type answer Coffer needs: identity,
-the config-file allowlist, MCP injection, the skill directory, and the plugin
-capability.
+:class:`AgentDescriptor` carries every per-type *value* Coffer needs: identity,
+the program it runs as, the config-file allowlist, MCP injection, the skill
+directory, and the plugin capability. It also names the four *mechanism*
+facets — ``projection``, ``driver``, ``memory_reader``, ``dependency_probe``
+(``facets.py``) — which are ``None`` in this pure table and bound to their
+implementations at the composition root (ADR
+agent-mechanisms-are-optional-facets-on-the-descriptor).
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from coffer.domain.agent.allowlists import _claude_code_files, _codex_files, _home
 from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileSpec
@@ -30,6 +35,12 @@ from coffer.domain.agent.plugin_capability import (
     UninstallStrategy,
 )
 from coffer.domain.agent.types import AgentType
+from coffer.domain.channel_turn import TURN_TOKEN_ENV
+
+if TYPE_CHECKING:
+    from coffer.application.chat.ports import AgentDriver
+    from coffer.domain.agent.facets import AgentProjection, DependencyProbe
+    from coffer.domain.memory.reader import MemoryReader
 
 
 @dataclass(frozen=True)
@@ -61,13 +72,29 @@ class AgentDescriptor:
     home_env_var: str = ""
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept).
     plugins: PluginCapability | None = None
+    #: Allowlist keys of the agent's own files that carry hooks, read by the
+    #: hooks view (spec agent-registry "List every hook in the agent's native
+    #: config"). Plugin hook files are found through the plugin listing.
+    hook_source_keys: tuple[str, ...] = ()
+    #: The executable the agent runs as (``claude``, ``codex``) — what the
+    #: dependency probe looks for on the agent's ``PATH``.
+    program: str = ""
+    #: The product's official install page — where the Overview's first-run
+    #: card sends a person whose machine does not have the program.
+    install_url: str = ""
+
+    # --- mechanism facets (bound at the composition root; None here) ----------
+    #: What Coffer can place into the agent, keyed by asset type x landing.
+    projection: AgentProjection | None = None
+    #: How Coffer runs a turn on the agent.
+    driver: AgentDriver[Any] | None = None
+    #: How the agent's native memory is read (read only).
+    memory_reader: MemoryReader | None = None
+    #: Whether the agent's program is installed here, and which version.
+    dependency_probe: DependencyProbe | None = None
 
     def default_config_dir(self) -> pathlib.Path:
         return _home() / self.config_subpath
-
-    def detect_marker(self) -> pathlib.Path:
-        # The install root is the config directory for every current agent.
-        return self.default_config_dir()
 
     def default_skill_dir(self) -> pathlib.Path:
         return self.default_config_dir() / self.skill_subpath
@@ -87,6 +114,9 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         config_subpath=".claude",
         config_files=_claude_code_files,
         home_env_var="CLAUDE_CONFIG_DIR",
+        program="claude",
+        install_url="https://docs.claude.com/en/docs/claude-code/setup",
+        hook_source_keys=("settings", "settings_local"),
         mcp=McpInjectionSpec(
             config_key="global",
             container_key="mcpServers",
@@ -111,11 +141,21 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         config_subpath=".codex",
         config_files=_codex_files,
         home_env_var="CODEX_HOME",
+        program="codex",
+        install_url="https://developers.openai.com/codex/cli",
+        hook_source_keys=("hooks",),
         mcp=McpInjectionSpec(
             config_key="config",
             container_key="mcp_servers",
             format=ConfigFileFormat.TOML,
             entry_style=McpEntryStyle.COMMAND_MAP,
+            # Codex hands an MCP server only a default environment and cuts a
+            # tool call off after 60 s: pass the turn token through and let
+            # ``coffer__ask`` wait a day.
+            entry_extras=(
+                ("env_vars", (TURN_TOKEN_ENV,)),
+                ("tool_timeout_sec", 24 * 60 * 60),
+            ),
         ),
         mcp_source_keys=("config",),
         plugins=PluginCapability(

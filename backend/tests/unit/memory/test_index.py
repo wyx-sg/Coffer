@@ -141,35 +141,43 @@ def test_an_empty_partition_still_renders_an_index() -> None:
     assert "No notes yet." in text
 
 
-def test_notes_are_grouped_project_first_then_the_personal_types() -> None:
+def _slugs(text: str) -> list[str]:
+    return [
+        line.split("(`")[1].split(".md")[0] for line in text.split("\n") if line.startswith("- **")
+    ]
+
+
+def test_notes_of_every_type_are_one_newest_first_list_with_no_type_headings() -> None:
+    """The delivered index sorts across types by recency, so the file must too:
+    "the same lines in the same newest-first order" (spec memory "Write each index
+    line to stand on its own")."""
     text = render_index(
         [
-            _note("u", type=TYPE_USER),
-            _note("f", type=TYPE_FEEDBACK),
-            _note("p", type=TYPE_PROJECT),
+            _note("old-project", type=TYPE_PROJECT, updated_at="2026-01-01"),
+            _note("new-user", type=TYPE_USER, updated_at="2026-09-01"),
+            _note("mid-feedback", type=TYPE_FEEDBACK, updated_at="2026-05-01"),
+            _note("odd-newest", type="invented", updated_at="2026-09-02"),
         ],
         partition="coffer",
         repository_path="/r",
     )
-    headings = [line for line in text.split("\n") if line.startswith("## ")]
-    assert headings == [
-        "## Project",
-        "## About the developer",
-        "## Feedback and standing instructions",
+
+    assert _slugs(text) == ["odd-newest", "new-user", "mid-feedback", "old-project"]
+    assert not [line for line in text.split("\n") if line.startswith("## ")]
+
+
+def test_the_file_and_the_delivered_order_agree_on_mixed_types() -> None:
+    notes = [
+        _note("a", type=TYPE_FEEDBACK, updated_at="2026-03-01"),
+        _note("b", type=TYPE_PROJECT, updated_at="2026-04-01"),
+        _note("c", type=TYPE_USER, updated_at="2026-02-01"),
     ]
+    text = render_index(notes, partition="coffer", repository_path="/r")
+
+    assert _slugs(text) == [n.slug for n in sorted(notes, key=recency, reverse=True)]
 
 
-def test_a_stray_type_is_rendered_after_the_known_ones_rather_than_dropped() -> None:
-    text = render_index(
-        [_note("p", type=TYPE_PROJECT), _note("odd", type="invented")],
-        partition="coffer",
-        repository_path="/r",
-    )
-    assert "`odd.md`" in text
-    assert text.index("## Project") < text.index("## invented")
-
-
-def test_within_a_group_the_newest_note_is_listed_first() -> None:
+def test_the_newest_note_is_listed_first() -> None:
     text = render_index(
         [
             _note("older", updated_at="2026-01-01"),
@@ -179,12 +187,7 @@ def test_within_a_group_the_newest_note_is_listed_first() -> None:
         partition="coffer",
         repository_path="/r",
     )
-    body = text.split("## Project\n", 1)[1]
-    assert [line.split("(`")[1].split(".md")[0] for line in body.strip().split("\n") if line] == [
-        "newest",
-        "middle",
-        "older",
-    ]
+    assert _slugs(text) == ["newest", "middle", "older"]
 
 
 def test_the_file_uses_the_same_line_function_the_delivery_does() -> None:

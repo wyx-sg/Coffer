@@ -1,15 +1,10 @@
 // frontend/src/lib/hooks/useAudit.ts
 import { useQuery } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
-import type { components } from "@/lib/api/types";
+import { fetchAuditPage } from "@/lib/api/activity";
 import { auditListKey } from "@/lib/api/queryKeys";
-
-type AuditListOut = components["schemas"]["AuditListOut"];
 
 interface UseAuditArgs {
   kind?: string;
-  name?: string;
   eventType?: string;
   since?: string;
   limit?: number;
@@ -18,23 +13,10 @@ interface UseAuditArgs {
 }
 
 export function useAudit(args: UseAuditArgs) {
-  const { kind, name, eventType, since, limit = 50, enabled = true } = args;
+  const { kind, eventType, since, limit = 50, enabled = true } = args;
   return useQuery({
-    queryKey: auditListKey({ kind, name, eventType, since, limit }),
-    queryFn: async (): Promise<AuditListOut> => {
-      const client = getApiClient();
-      const query: Record<string, string | number> = { limit };
-      if (kind) query.kind = kind;
-      if (name) query.name = name;
-      if (eventType) query.event_type = eventType;
-      if (since) query.since = since;
-      const { data, error } = await client.GET("/audit", {
-        params: { query: query as never },
-      });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "list audit failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty audit response");
-      return data;
-    },
+    queryKey: auditListKey({ kind, eventType, since, limit }),
+    queryFn: () => fetchAuditPage({ kind, eventType, since }, limit),
     enabled,
   });
 }

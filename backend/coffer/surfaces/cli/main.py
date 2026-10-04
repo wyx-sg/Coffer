@@ -7,26 +7,31 @@ import sys
 import httpx
 import typer
 
+from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
-    agent_cmd,
-    channel_cmd,
     config_cmd,
-    credentials_cmd,
     daemon_cmd,
-    knowledge_cmd,
     log_cmd,
     memory_cmd,
-    open_cmd,
+    migrate_cmd,
     path_cmd,
-    provider_cmd,
-    scan_cmd,
-    skill_cmd,
-    sync_cmd,
+    proxy_cmd,
+    run_cmd,
+    secret_cmd,
+    vault_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
 
 app = typer.Typer(help="Coffer CLI", no_args_is_help=True)
+
+
+def _print_version(value: bool) -> None:
+    """``--version``: the package version, the same line ``coffer-daemon
+    --version`` prints, and exit without reaching any daemon."""
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
 
 
 @app.callback()
@@ -38,6 +43,13 @@ def root(
         "-v",
         help="Show full tracebacks and HTTP request/response context on error.",
     ),
+    _version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,
+        help="Print Coffer's version and exit.",
+    ),
 ) -> None:
     """Coffer — local-first AI agent vault."""
     ctx.ensure_object(dict)
@@ -45,22 +57,20 @@ def root(
 
 
 app.add_typer(daemon_cmd.app, name="daemon")
-app.add_typer(open_cmd.app, name="open")
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(log_cmd.app, name="log")
 app.add_typer(path_cmd.app, name="path")
-app.command("scan")(scan_cmd.scan)
-app.add_typer(scan_cmd.adopt_app, name="adopt")
-app.add_typer(scan_cmd.discard_app, name="discard")
 app.add_typer(mcp_cmd.app, name="mcp")
-app.add_typer(credentials_cmd.app, name="credentials")
-app.add_typer(agent_cmd.app, name="agent")
-app.add_typer(channel_cmd.app, name="channel")
-app.add_typer(skill_cmd.app, name="skill")
-app.add_typer(knowledge_cmd.app, name="knowledge")
+app.add_typer(secret_cmd.app, name="secret")
+# `coffer run [--secret …] -- cmd`: everything after `--` is the child's argv.
+app.command(
+    "run",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)(run_cmd.run)
 app.add_typer(memory_cmd.app, name="memory")
-app.add_typer(provider_cmd.app, name="provider")
-app.add_typer(sync_cmd.app, name="sync")
+app.add_typer(proxy_cmd.app, name="proxy")
+app.add_typer(vault_cmd.app, name="vault")
+app.command("migrate")(migrate_cmd.migrate_command)
 
 
 def run() -> None:

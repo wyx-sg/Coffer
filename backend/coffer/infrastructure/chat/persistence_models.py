@@ -1,4 +1,5 @@
-"""The two tables chat is stored in: ``conversations`` and ``chat_messages``.
+"""The tables chat is stored in: ``conversations``, ``chat_messages`` and
+``chat_reply_files``.
 
 Beside the repos rather than inside them, because a table's shape is read far
 more often than the queries over it — a migration, a retention policy and a
@@ -13,6 +14,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     TIMESTAMP,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -48,22 +50,16 @@ class ConversationModel(Base):
     #
     # The channel resource's uid, not its name. This is a cross-resource
     # reference and the name is a mutable label (ADR
-    # resource-identity-is-an-immutable-uid) — storing the label would leave
+    # identity-is-the-uid-inside-the-file) — storing the label would leave
     # every row written before a rename pointing at a channel that no longer
     # answers to it. The name the user and the agent read is resolved from this
     # uid at read time.
     channel_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Whose conversation this is. NULL is the developer's own — the only kind
-    # the chat list shows — and a name is the surface that owns it. Chat needs
-    # no idea what any such name means: it lists the unowned ones, and
-    # everything else belongs to whoever put a name here.
-    owner: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_conversations_updated", "updated_at"),
         Index("idx_conversations_archived", "archived_at"),
-        Index("idx_conversations_owner", "owner"),
     )
 
 
@@ -82,11 +78,35 @@ class MessageModel(Base):
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("conversation_id", "seq", name="uq_chat_messages_conv_seq"),
         Index("idx_chat_messages_conv", "conversation_id", "seq"),
     )
+
+
+class ReplyFileModel(Base):
+    """Row in the ``chat_reply_files`` table: one file one assistant reply changed.
+
+    Deleted with the reply (``ON DELETE CASCADE``), so a conversation's delete and
+    retention's prune, which both delete message rows, take these with them."""
+
+    __tablename__ = "chat_reply_files"
+
+    message_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chat_messages.id", ondelete="CASCADE"), primary_key=True
+    )
+    path: Mapped[str] = mapped_column(String, primary_key=True)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    added: Mapped[int] = mapped_column(Integer, nullable=False)
+    removed: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The unified diff; NULL when it is left out (see ``diff_omitted``).
+    diff: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "binary" | "too_large" when the diff is left out; NULL otherwise.
+    diff_omitted: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (Index("idx_chat_reply_files_message", "message_id", "seq"),)
 
 
 # ---------------------------------------------------------------------------

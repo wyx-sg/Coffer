@@ -19,7 +19,7 @@
 // Nothing is persisted. A stored token was the whole bug: the daemon mints a
 // new one on every start, so anything kept from a previous daemon is dead, and
 // a page that trusted it got 401 on every call with no way to recover but
-// re-running `coffer open`. Every supplier above reads from something the
+// reopening the Coffer app. Every supplier above reads from something the
 // running daemon published, so none of them can hand over a dead token.
 
 type InjectedGlobals = {
@@ -70,7 +70,7 @@ export function getCofferBaseUrl(): string | null {
 export function getCofferToken(): string | null {
   // Empty counts as absent: a page that was served before the daemon published
   // a token carries no script at all, and tests blank the global to stand in
-  // for that. Either way the answer is "this page has no credential".
+  // for that. Either way the answer is "this page has no secret".
   return injectedGlobals().__COFFER_TOKEN__ || null;
 }
 

@@ -1,7 +1,7 @@
 """Knowledge scenarios observed through ``/api/v1/knowledge``.
 
 ``client`` (from ``conftest.py``) boots the full app with
-``COFFER_KNOWLEDGE_ROOT`` pinned under ``tmp_path`` and no internal model, so
+``HOME`` pinned to ``tmp_path`` and no internal model, so
 submitted material is promoted to a document as it arrives.
 """
 
@@ -12,7 +12,7 @@ import pytest
 from coffer.infrastructure.knowledge import fs, inbox
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
-from .conftest import _create_collection, _hold_material, _submit
+from .conftest import _create_collection, _hold_material, _submit, _submit_material
 
 
 @pytest.mark.acceptance(
@@ -31,7 +31,7 @@ def test_two_documents_of_one_title_get_a_slug_and_a_suffix(client, tmp_path) ->
     assert (first, second) == ("shopee/session-ownership.md", "shopee/session-ownership-2.md")
     for relpath in (first, second):
         frontmatter, _ = split_frontmatter(
-            (tmp_path / "knowledge" / relpath).read_text(encoding="utf-8")
+            (tmp_path / ".coffer" / "vault" / "knowledge" / relpath).read_text(encoding="utf-8")
         )
         assert "id" not in frontmatter
 
@@ -42,15 +42,13 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
 ) -> None:
     _create_collection(client, "shopee")
     document = _submit(client, collection="shopee", title="Gateway", description="d", body="b")
-    scratch = tmp_path / "knowledge" / "shopee" / ".scratch" / "hidden.md"
+    scratch = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".scratch" / "hidden.md"
     scratch.parent.mkdir(parents=True)
     scratch.write_text("---\ntitle: Hidden\ndescription: d\n---\n\nb\n", encoding="utf-8")
     _hold_material(monkeypatch)
-    waiting = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "d", "body": "b"},
-    )
-    assert waiting.status_code == 201, waiting.text
+    assert _submit_material(
+        client, collection="shopee", title="Waiting", description="d", body="b"
+    ).pending
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
     assert entry["document_count"] == 1
@@ -112,7 +110,9 @@ def test_a_save_keeps_frontmatter_and_a_stale_one_is_refused(client, tmp_path) -
     )
     assert stale.status_code == 409, stale.text
     assert stale.json()["error"]["code"] == "KNOWLEDGE_FILE_CONFLICT"
-    on_disk = (tmp_path / "knowledge" / written.path).read_text(encoding="utf-8")
+    on_disk = (tmp_path / ".coffer" / "vault" / "knowledge" / written.path).read_text(
+        encoding="utf-8"
+    )
     frontmatter, body = split_frontmatter(on_disk)
     assert body.strip() == "second"
     assert frontmatter["title"] == "Cache"
@@ -131,5 +131,9 @@ def test_a_nested_read_carries_absolute_file_and_folder_paths(client, tmp_path) 
     resp = client.get("/api/v1/knowledge/file", params={"path": written.path})
     assert resp.status_code == 200, resp.text
     out = resp.json()
-    assert out["file_path"] == str(tmp_path / "knowledge" / "shopee" / "infra" / "cache.md")
-    assert out["folder_path"] == str(tmp_path / "knowledge" / "shopee" / "infra")
+    assert out["file_path"] == str(
+        tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "infra" / "cache.md"
+    )
+    assert out["folder_path"] == str(
+        tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "infra"
+    )

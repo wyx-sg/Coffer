@@ -97,7 +97,7 @@ a discovery file is needed anyway. Loses on portability for no saving.
 
 ### Option F — A fixed port and no discovery file
 
-Clients assume `127.0.0.1:8000` and read the token from somewhere else. Pros:
+Clients assume `127.0.0.1:38470` and read the token from somewhere else. Pros:
 one less file. Cons: the token is minted per start and the pid is per process,
 so per-start state has to be written somewhere regardless; a user-set port
 would have to be found too. One private file for all of it is simpler than

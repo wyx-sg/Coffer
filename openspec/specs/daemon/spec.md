@@ -27,7 +27,7 @@ daemon-to-daemon protocol; the daemon spawns children but does not install runti
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
 wraps the same three binaries this spec builds.
 
-Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate. The pre-bind port setting is CLI-only by design, because it must work with no daemon
+The CLI carries only what needs it (see [resource-framework](../resource-framework/spec.md) "Keep the command line to what needs it"), so most daemon operations are REST and web UI only, and three differences are deliberate. The pre-bind port setting is reachable from the CLI as well as from Settings, because it must work with no daemon
 running. The `/api/v1/fs/*` routes are REST-only because their only caller is a web page that
 cannot reach the OS by itself, while a terminal user already has `cd`, `$EDITOR` and their
 platform's own open command. `POST /daemon/shutdown` has no dedicated CLI verb because
@@ -93,12 +93,16 @@ serving, because it is the readiness probe every other rule here keys off. The p
 the daemon has finished wiring itself up — the server accepts connections after its startup hook
 returns — so no request can be answered before then, and a client that has just spawned the daemon
 MUST wait a bounded time for the probe to answer rather than read a refused connection as a
-failure. It MUST report the lifecycle phase (`ready`, or `draining` once shutdown has begun), the
+failure. It MUST report the lifecycle phase (`ready`, or `draining` once shutdown has begun — the
+daemon keeps answering for a short moment after shutdown begins, before it stops listening, so the
+phase can be observed, and it MUST NOT leave its port listening with nobody accepting once it has),
+the
 bound port, the start time, the build's version and the executable answering. It MUST also report
-the build's release channel, the on/off state of every experimental feature (spec
-[experimental-features](../experimental-features/spec.md) "Decide a feature's state per machine"),
-and this machine's id and name — the identity a channel is bound to, which cannot sit behind the
-sync routes because those close while `vault_sync` is switched off. It MAY carry a count of registered,
+the on/off state of every registered experimental feature as a `features` map — one
+entry each for `knowledge`, `memory`, `sync` and `models` (spec
+[experimental-features](../experimental-features/spec.md) "Decide a feature's state per machine") —
+and this machine's id and name, the identity a channel is bound to, which is on the status because
+it belongs to the machine rather than to sync. It MAY carry a count of registered,
 enabled, healthy and unhealthy upstreams when those are available, and MUST still answer when they
 are not.
 
@@ -109,10 +113,16 @@ are not.
 - **AND** the call succeeds with no token, because it is the readiness probe every other lifecycle rule keys off,
 - **AND** a CLI or shim whose own version differs from the reported one prints a one-line warning naming both builds and the executable, and carries on.
 
+#### Scenario: a daemon that is shutting down reports draining
+- **GIVEN** a running daemon that has been asked to stop
+- **WHEN** `GET /api/v1/daemon/status` is called after shutdown has begun and before the daemon stops listening
+- **THEN** the response reports `status: "draining"`
+- **AND** once the daemon has stopped listening, a connection to its port is refused rather than left waiting
+
 #### Scenario: daemon status names this machine and its features
-- **GIVEN** a running daemon with `vault_sync` switched off
+- **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/status` is called with no token
-- **THEN** the response carries `channel`, a `features` map naming `vault_sync`, `knowledge` and `memory`, and this machine's `machine_id` and `machine_name`
+- **THEN** the response carries a `features` map with one entry per registered experimental feature (`knowledge`, `memory`, `sync` and `models`), and this machine's `machine_id` and `machine_name`
 
 ### Requirement: Decide liveness by the status call
 Liveness MUST be decided by that status call against the recorded port — never by a bare TCP
@@ -171,10 +181,13 @@ than tearing down inline, so an API stop and a signal stop cannot diverge. Exit 
 - **AND** an unauthenticated shutdown request is rejected without stopping anything.
 
 ### Requirement: Manage the daemon from the command line
-Users MUST be able to run `coffer daemon start`, `stop`, `restart`, `status [--json]`,
-`rotate-token` and `service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
+Users MUST be able to run `coffer daemon start`, `stop`, `restart` and `status [--json]`, with the daemon down or wedged. `start` MUST key off the liveness probe rather than the
 presence of `daemon.json`, MUST diagnose a port that is already held *before* spawning rather than
-after a boot timeout, and MUST wait a bounded time for the daemon to publish itself. That pre-flight
+after a boot timeout, and MUST wait a bounded time for the spawned daemon to **answer its status call** — a published
+`daemon.json` is not that, because the file is written before the daemon has finished starting and a
+stale one left by a crash is there before it has started at all. A daemon that exits before it
+answers (a vault migration is required, git is too old) MUST be reported as failed with a pointer to
+`daemon.log`, never as started. That pre-flight
 check MUST be allowed to report "free" when the port is not — a port in `TIME_WAIT` from the daemon
 a `restart` has just stopped is bindable and must not be called a conflict — and MUST never err the
 other way: a missed conflict resolves downstream as "already running", while a false one blocks a
@@ -187,9 +200,13 @@ start one. With a daemon answering, `status` MUST also report the passes in flig
 [resource-framework](../resource-framework/spec.md) "Report the passes in flight in one cross-kind read"
 defines, each with its kind, its target and when it started — in its own section of the table form,
 which says so when nothing is running, and as part of the object under `--json`. The daemon port is
-read and changed with `coffer config get|set|unset daemon.port`, and it and the `service` group MUST
-work with no daemon running (see "Bind a fixed, settable port" and "Change residency from the
-settings page or the command line").
+read and changed with `coffer config get|set|unset daemon.port`, which MUST work with no daemon
+running (see "Bind a fixed, settable port").
+
+#### Scenario: start reports a daemon that refused to start
+- **GIVEN** a stale `~/.coffer/daemon.json` and a vault the daemon refuses to open
+- **WHEN** the user runs `coffer daemon start`
+- **THEN** the command exits non-zero saying the daemon exited at startup and pointing at `daemon.log`, and does not print that the daemon started
 
 #### Scenario: a recorded pid that is not ours is never signalled
 - **GIVEN** a `~/.coffer/daemon.json` whose recorded pid has been recycled onto an unrelated process,
@@ -227,7 +244,7 @@ somebody a running daemon while a missed one costs only a port the next start re
 ### Requirement: Bind a fixed, settable port
 The daemon's listening port MUST be **fixed by default and settable**, so a browser bookmark to
 Coffer's UI keeps working across restarts. With nothing configured the daemon MUST bind exactly
-`8000` and MUST NOT scan for an alternative; a drifting origin is not merely a broken bookmark,
+`38470` and MUST NOT scan for an alternative; a drifting origin is not merely a broken bookmark,
 because browser `localStorage` is keyed by origin, so the UI language, sidebar state, page size and
 preferred editor silently reset when the port moves and nothing connects the two events for the
 user.
@@ -248,23 +265,33 @@ stopping the boot, since an unbootable daemon cannot be repaired from the UI it 
 Users MUST be able to read and change the setting **from the CLI** as the key `daemon.port` of the
 generic `coffer config` command ([resource-framework](../resource-framework/spec.md): one key
 registry, typed validation, `unset` returns a key to its default) — `coffer config get daemon.port`
-prints the configured port or the 8000 default, `coffer config set daemon.port <n>` pins one, and
-`coffer config unset daemon.port` returns to 8000. Those three MUST read and write the pre-bind file
+prints the configured port or the 38470 default, `coffer config set daemon.port <n>` pins one, and
+`coffer config unset daemon.port` returns to 38470. Those three MUST read and write the pre-bind file
 directly and MUST work with no daemon running, because a daemon that cannot bind its port is exactly
-the state the setting has to be fixable from. It MUST NOT have a REST endpoint or a settings panel: a
-port that is correct by default does not earn a place in the UI, and the escape hatch belongs where a
-squatted port is diagnosed; `daemon.port` is therefore the one `coffer config` key no route stores. A
-change takes effect at the next start, which `coffer daemon restart` applies in one
-command. This setting is deliberately outside the audit obligation every kind inherits: it is
+the state the setting has to be fixable from — the CLI stays the escape hatch where a squatted port
+is diagnosed. The running daemon MUST also accept a new port from the web UI's Settings → Daemon,
+through `PUT /api/v1/daemon/port`: the value MUST be a whole number from 1024 to 65535 and a port no
+other process holds — the port the daemon itself answers on counts as free — and is otherwise
+refused with the reason, naming the holder of a taken port. The route MUST write the pre-bind file
+exactly as `coffer config set daemon.port` does and answer that the change is pending: the daemon
+keeps answering on its current port. A change takes effect at the next start, which
+`coffer daemon restart` — or Restart now on Settings → Daemon, which is the desktop shell's restart
+in the shell and the daemon's own ("Restart itself on request") in a browser — applies in one step. After a restart on a
+new port the daemon records it in `~/.coffer/daemon.json`, so the desktop shell, the CLI and the MCP
+shim find it by the discovery file as they find any daemon, and no agent's configuration needs a
+rewrite: Coffer's MCP entry in an agent's config runs
+the shim, and the memory delivery hook runs `coffer memory hook` (an internal entry point, hidden from help), and both find the daemon through
+`daemon.json` when they run rather than naming a port, so every agent reconnects without a manual
+step. This setting is deliberately outside the audit obligation every kind inherits: it is
 neither a resource nor a capability but process configuration read before the database opens, and
 the CLI that owns it must work with no daemon running — so the audit table is unreachable on
 exactly the path that matters most, and recording a change only when a daemon happens to be up
 would be less honest than recording none.
 
 #### Scenario: the daemon binds the same port every start
-- **GIVEN** no port has been configured, so the daemon's default of 8000 applies,
+- **GIVEN** no port has been configured, so the daemon's default of 38470 applies,
 - **WHEN** the daemon is stopped and started again — by the user, by the CLI, or auto-spawned by an MCP shim, which inherits no shell profile,
-- **THEN** it binds 8000 every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working and nothing the browser stored against that origin is lost.
+- **THEN** it binds 38470 every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working and nothing the browser stored against that origin is lost.
 
 #### Scenario: a configured daemon port survives restarts
 - **GIVEN** the user has moved the daemon's port with `coffer config set daemon.port <n>`,
@@ -272,15 +299,26 @@ would be less honest than recording none.
 - **THEN** it binds that same port every time and records it in `~/.coffer/daemon.json`.
 
 #### Scenario: a port that is taken refuses to start and says what holds it
-- **GIVEN** the port the daemon would bind — its 8000 default, or one the user configured — is already held by another process,
+- **GIVEN** the port the daemon would bind — its 38470 default, or one the user configured — is already held by another process,
 - **WHEN** the daemon starts,
 - **THEN** it refuses to start rather than binding a different port, and the message names the process holding the port and the commands that resolve it — free that process, or `coffer config set daemon.port <other>`.
 
 #### Scenario: the port key is read and changed with no daemon running
 - **GIVEN** no daemon is running and no port has been configured,
 - **WHEN** the user runs `coffer config get daemon.port`, then `coffer config set daemon.port 8123`, then `coffer config get daemon.port`, then `coffer config unset daemon.port`,
-- **THEN** the first prints the 8000 default, the set writes 8123 into `~/.coffer/daemon-config.json`, the second get prints 8123, and the unset leaves the file carrying no port so the default applies again,
+- **THEN** the first prints the 38470 default, the set writes 8123 into `~/.coffer/daemon-config.json`, the second get prints 8123, and the unset leaves the file carrying no port so the default applies again,
 - **AND** no daemon is spawned, no database is opened and no audit entry is recorded.
+
+#### Scenario: a port set from the settings page is pending until restart
+- **GIVEN** a running daemon on port 38470
+- **WHEN** `PUT /api/v1/daemon/port` is sent with 8123, and then with a port another process holds
+- **THEN** the first answers that 8123 is pending, `~/.coffer/daemon-config.json` carries 8123 and the daemon still answers on 38470
+- **AND** the second is refused naming the process that holds the port, and the file is unchanged
+
+#### Scenario: after a restart on a new port every agent reconnects
+- **GIVEN** a daemon configured for 8123 while answering on 38470, and Claude Code and Codex connected to Coffer
+- **WHEN** the daemon is restarted
+- **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry and delivery hook name no port and are left as they are, and the discovery the CLI, an MCP shim and the hook share finds the daemon on 8123
 
 ### Requirement: Run as a login service
 The daemon MUST be installable as a **login service** — on macOS, a per-user launchd agent — so
@@ -303,12 +341,14 @@ nothing — and the environment the install itself runs in is no better a source
 the daemon's, which was commonly spawned by a GUI-launched editor and has exactly that minimal
 `PATH`. It MUST start the build that is current rather than the one that was current when it was
 installed: deployed binaries live under a per-version directory whose older entries are pruned (see
-"Deploy frozen sibling binaries and back up the vault before migrating"), so a service pinned to a
+"Deploy frozen sibling binaries and back up the history database before migrating"), so a service pinned to a
 versioned path stops working two upgrades later, and a supervisor that cannot execute its program
 fails silently — which is the one way autostart could stop without anyone finding out. It MUST
 write to the daemon log (see "Write one bounded daemon log in one format") rather than a file of
-its own. Installing and removing it MUST be available from the CLI with no daemon running, and MUST
-be reversible without trace; removing it MUST NOT stop a daemon that is already running. See
+its own. Installing and removing it MUST be done from Settings → Daemon (see "Change residency from the settings page"), and MUST
+be reversible without trace: removing it MUST NOT stop a daemon that is already running, and MUST
+unload it from launchd — at once when no process runs under it, otherwise as that daemon exits, so a
+crash after the user switched the service off is never restarted. See
 [Detect-or-Spawn](../../../docs/decisions/daemon-detect-or-spawn.md).
 
 #### Scenario: the daemon is up before anything asks for it
@@ -316,6 +356,12 @@ be reversible without trace; removing it MUST NOT stop a daemon that is already 
 - **WHEN** the user logs in,
 - **THEN** the daemon is started by the system, with the user's own `PATH`, logging to the daemon log,
 - **AND** a daemon that dies badly is restarted, while one that exited cleanly on purpose is left alone.
+
+#### Scenario: removing the login service unloads it without stopping the daemon
+- **GIVEN** an installed login service whose launchd job is the running daemon
+- **WHEN** the service is removed
+- **THEN** the daemon keeps running and answers the request that removed it
+- **AND** when that daemon exits, its launchd job is booted out, and a service whose job has no running process is booted out at once
 
 ### Requirement: Bind every endpoint to loopback only
 The daemon MUST bind every HTTP endpoint it exposes — the management API and the MCP protocol
@@ -331,7 +377,9 @@ endpoint alike — to the loopback interface only.
 The daemon MUST require an authentication token on every management API call. The token is minted
 locally at startup, published only in the user-only-readable `daemon.json` (see "Publish one
 private discovery file"), and rotatable. `GET /api/v1/daemon/status` is the one deliberate
-exemption (see "Answer the status probe without a token").
+exemption (see "Answer the status probe without a token"). The API's schema,
+`GET /api/v1/openapi.json`, MUST need the token like any other management call, and the
+daemon MUST NOT serve the framework's interactive API pages (`/docs`, `/redoc`) at all.
 
 #### Scenario: a management call without the token is refused
 - **GIVEN** a daemon with an active token,
@@ -339,9 +387,14 @@ exemption (see "Answer the status probe without a token").
 - **THEN** it is refused with `401` before the route does anything,
 - **AND** `/api/v1/daemon/status` still answers with no token.
 
-### Requirement: Rotate the token from REST or the command line
-Rotation MUST be reachable from both `POST /api/v1/daemon/rotate-token` and
-`coffer daemon rotate-token`. It MUST mint a fresh token, rewrite `daemon.json` atomically at mode
+#### Scenario: the API schema is served only to a token holder
+- **GIVEN** a daemon with an active token,
+- **WHEN** `/api/v1/openapi.json` is read with no token, with a wrong one and with the active one, and `/openapi.json`, `/docs` and `/redoc` are requested,
+- **THEN** the schema is refused with `401` until the active token is sent, and then answers with the management routes,
+- **AND** nothing answers at `/openapi.json`, `/docs` or `/redoc`.
+
+### Requirement: Rotate the token over REST
+Rotation MUST be reachable through `POST /api/v1/daemon/rotate-token`, and no command rotates the token. It MUST mint a fresh token, rewrite `daemon.json` atomically at mode
 `0600` — never leaving the file at wider permissions for any window — publish the new value to the
 in-process check so the accepted token and the token "Hand the browser its token in the served
 page" injects cannot drift apart, and record a `token_rotated` audit entry. That audit obligation
@@ -351,24 +404,47 @@ is worth recording.
 
 #### Scenario: rotating the daemon token invalidates the previous one
 - **GIVEN** the daemon has issued an auth token,
-- **WHEN** the user invokes the rotate-token operation, through either `POST /api/v1/daemon/rotate-token` or `coffer daemon rotate-token`,
+- **WHEN** the user invokes the rotate-token operation, through `POST /api/v1/daemon/rotate-token`,
 - **THEN** subsequent management API calls with the previous token are rejected with 401, calls with the new token succeed, the new value reaches `~/.coffer/daemon.json` without the file ever existing at wider than user-only permissions, and the rotation is recorded as a `token_rotated` audit entry.
 
-### Requirement: Refuse a request whose Host is not loopback
-The daemon MUST refuse any request whose `Host` header does not name a loopback authority —
-`127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code
-`HOST_NOT_LOOPBACK` instead of serving it. This is what makes "Hand the browser its token in the
-served page" safe: binding to loopback (see "Bind every endpoint to loopback only") stops a remote
-host, but not a **browser** on a page whose hostname an attacker re-resolves to `127.0.0.1` — DNS
-rebinding, which the browser then treats as same-origin, so CORS does not apply. Rebinding does not
-change the `Host` header, so a rebound request still names the attacker's own hostname and is
-refused before it can read a token out of the served document. The rule MUST hold for every surface
-the daemon exposes.
+### Requirement: Refuse a request whose Host or Origin is not the daemon's own
+The daemon MUST check two headers on every request it answers before any route sees the request. This covers the management API, the `/mcp` endpoint, the `/api/v1/events` stream, any websocket, the status probe and the served web UI. It applies to every listener the daemon opens.
+
+- **Host.** The daemon MUST refuse a request whose `Host` header does not name `127.0.0.1`, `localhost` or `[::1]` together with the port the request arrived on. It answers `403` with error code `HOST_NOT_ALLOWED`. A missing `Host` is refused. A `Host` with no port means port 80. Binding to loopback (see "Bind every endpoint to loopback only") stops a remote host. It does not stop a **browser** on a page whose hostname an attacker re-resolves to `127.0.0.1`. That is DNS rebinding: the browser treats the page as same-origin, so CORS does not apply. Rebinding does not change the `Host` header, so the request still names the attacker's hostname and is refused before it can read a token out of the served document. This check is what makes "Hand the browser its token in the served page" safe.
+- **Origin.** The daemon MUST refuse a request that carries an `Origin` header unless that origin is one of Coffer's own, answering `403` with error code `ORIGIN_NOT_ALLOWED`. Coffer's own origins are:
+  - the daemon's web origins on the port the request arrived on: `http://127.0.0.1:<port>`, `http://localhost:<port>` and `http://[::1]:<port>`;
+  - the desktop app's origins, `tauri://localhost` and `http://tauri.localhost`;
+  - the Vite dev origins `http://localhost:5173` and `http://127.0.0.1:5173`, only when `COFFER_DEV_CORS=1` is set;
+  - when `COFFER_CORS_ORIGINS` is set, exactly the origins it lists, in place of the desktop and dev entries.
+- **No Origin.** A request with no `Origin` header MUST go on to the ordinary token check. This is how the CLI, the shim, agents' MCP clients and `curl` send requests.
+- **CORS.** CORS MUST grant only these origins. It never grants a wildcard and never allows credentials.
+- **Logging.** Each distinct refused value is logged once.
+
+See [Daemon Auth and Origin Guard](../../../docs/decisions/daemon-auth-and-origin-guard.md).
 
 #### Scenario: a rebound page is refused before it can read the token
 - **GIVEN** a page on an attacker-controlled origin whose hostname resolves to `127.0.0.1`, which the browser therefore treats as same-origin with the daemon,
-- **WHEN** it fetches any daemon URL, including `/`,
-- **THEN** the daemon refuses the request with `421 HOST_NOT_LOOPBACK` because the `Host` header still names the attacker's hostname — while the same request addressed to `127.0.0.1`, `localhost` or `::1` is served normally.
+- **WHEN** it fetches any daemon URL, including `/`, so that the request carries `Host: evil.example:<port>`,
+- **THEN** the daemon refuses the request with `403 HOST_NOT_ALLOWED` and the body carries no token,
+- **AND** a request that names a loopback address on another port is refused the same way, while the same request addressed to `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>` is served normally.
+
+#### Scenario: a request from a page on another site is refused on every surface
+- **GIVEN** a running daemon with no development opt-in,
+- **WHEN** a request carrying `Origin: https://evil.example`, the Vite origin, a loopback origin on another port, or `Origin: null` reaches a management route, `/mcp`, `/api/v1/events`, the status probe, the served page, or a CORS preflight, even with the right `Host` and a valid token,
+- **THEN** the daemon answers `403 ORIGIN_NOT_ALLOWED` without running the route, and grants no `Access-Control-Allow-Origin`.
+
+#### Scenario: Coffer's own pages and clients that send no Origin are let through
+- **GIVEN** a running daemon on `<port>`,
+- **WHEN** a request arrives with no `Origin`, or with `Origin` set to `http://127.0.0.1:<port>`, `http://localhost:<port>`, `http://[::1]:<port>`, `tauri://localhost` or `http://tauri.localhost`,
+- **THEN** the guard lets it through: the status probe answers, and a management route, `/mcp` and `/api/v1/events` answer with their own token check,
+- **AND** the desktop app's preflight is granted its origin.
+
+#### Scenario: a development origin is let through only when opted in
+- **GIVEN** a daemon started without `COFFER_DEV_CORS` or `COFFER_CORS_ORIGINS`,
+- **WHEN** a request carries `Origin: http://localhost:5173`,
+- **THEN** it is refused with `403 ORIGIN_NOT_ALLOWED`,
+- **AND** with `COFFER_DEV_CORS=1` the same request is let through while a foreign origin is still refused,
+- **AND** with `COFFER_CORS_ORIGINS=http://localhost:5174` only the listed origin and the daemon's own origins are let through.
 
 ### Requirement: Serve the built web UI from the daemon's own origin
 The daemon MUST serve the built web UI itself, as static files, at its own loopback origin, so the
@@ -397,13 +473,13 @@ restarted daemon's browser the previous daemon's dead token. The page MUST NOT p
 stored token outlives the daemon that minted it, and the daemon mints a new one on every start. The
 API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would
 contradict the loopback-plus-token posture of "Bind every endpoint to loopback only" and "Require a
-token on every management call"; the response body is subject to none of that. `coffer open` MUST
-therefore carry no credential of its own: it reads the daemon's real port from `daemon.json` and
-opens the browser at that origin.
+token on every management call"; the response body is subject to none of that. The desktop shell, which opens the UI, MUST
+therefore carry no secret of its own: it reads the daemon's real port from `daemon.json` and
+opens its window at that origin.
 
 #### Scenario: a page served by the daemon is authenticated by the daemon
 - **GIVEN** a daemon that has restarted since the browser last loaded the UI, and therefore minted a new token,
-- **WHEN** the browser opens any page the daemon serves — the bare `/`, a client-side route such as `/agents`, a bookmark, or a plain reload — whether it got there through `coffer open` or by typing the address,
+- **WHEN** the browser opens any page the daemon serves — the bare `/`, a client-side route such as `/agents`, a bookmark, or a plain reload — whether it got there through the desktop shell or by typing the address,
 - **THEN** the served `index.html` carries that daemon's live token as `window.__COFFER_TOKEN__`, the UI renders authenticated with no user action, and the token appears in no URL and in no browser storage,
 - **AND** the document is served `no-store` with no validators, so the browser can never revalidate its way back to a previous daemon's token.
 
@@ -489,8 +565,8 @@ MUST be bounded by rotation rather than by deletion, and the retention sweep tha
 per-process and per-upstream log files MUST NOT delete it or its rotations: it is held open, and
 deleting it would leave the daemon logging nowhere until the next restart.
 
-Because several writers share it — Coffer's own structured JSON, uvicorn, a rich-rendered upstream,
-some of it colour-escaped — the file is deliberately not one format, and every
+Because several writers share it — Coffer's own structured JSON, other processes' uvicorn-style
+lines, a rich-rendered upstream, some of it colour-escaped — the file is deliberately not one format, and every
 reader of it is obliged to normalise rather than to assume (see "Serve the daemon log tail
 normalised"). What the daemon *itself* writes, however, MUST be one format: every record produced
 inside the daemon process — its own modules and the libraries logging alongside them, alembic and
@@ -499,16 +575,24 @@ created, its level, the logger that emitted it and the message, with a traceback
 record that raised it rather than spread across lines that state none of those. A library MUST NOT
 be able to change that by configuring logging for its own purposes: the daemon owns its root logger
 for its whole life, and any library configuration that would replace it is removed at the call site
-rather than tolerated and parsed around. Each record MUST appear in the file exactly once — the file
+rather than tolerated and parsed around; the daemon's own HTTP server is configured not to install
+its own handlers, so its records take the same path. Each record MUST appear in the file exactly once — the file
 is also the redirect target for the daemon's own stdout and stderr (see "Spawn a detached daemon
 from any surface that needs one"), so a process writing to both that file and its stderr would
-record everything twice and make one event read as two.
+record everything twice and make one event read as two. Rotation MUST NOT strand the process's
+own stdout and stderr in a rotated-away file: after each rollover they MUST follow to the new
+`daemon.log`, so a traceback written straight to stderr stays readable where the reader looks.
 
 #### Scenario: every line the daemon writes carries the same fields
 - **GIVEN** a configured daemon, and a record emitted on an ordinary logger — one of Coffer's own modules, or a library's such as `alembic.runtime.migration` — after a migration has already run,
 - **WHEN** `daemon.log` is read back,
 - **THEN** that record is one line stating the instant it was created, its level, its logger and its message, and a record logged with an exception carries the traceback inside that same line rather than as lines stating none of those,
 - **AND** the record appears exactly once, even though the detached daemon's own stderr is that same file.
+
+#### Scenario: output written to stderr after a rotation lands in the current log
+- **GIVEN** a detached daemon whose stderr is `daemon.log`, and a log that has just been rotated
+- **WHEN** the process writes to stderr
+- **THEN** the text is in `daemon.log` and in none of its rotations
 
 #### Scenario: the command line names the daemon log file
 - **GIVEN** an install whose log directory is relocated with `COFFER_LOG_DIR`, and a running daemon that has written to its log,
@@ -524,7 +608,10 @@ bounded `limit`, and MUST read from the tail rather than the head so a large fil
 into memory whole. Every record MUST carry the timestamp, level and logger its line actually
 stated, whichever writer produced it; escape sequences MUST be stripped; continuation lines such as
 a traceback MUST ride with the record that raised them; and a line no format fits MUST be kept whole
-rather than dropped, because it is often the interesting one.
+rather than dropped, because it is often the interesting one. The answer MUST also carry `path`,
+the absolute path of the file the tail was read from — also when that file does not exist yet — so
+the Activity page's Daemon log tab can name the file it shows and open it through
+`POST /api/v1/fs/open`.
 
 `coffer log daemon [--since <when>] [--errors] [--limit <n>] [--json]` MUST read the same tail
 through that route — the one the Activity page reads — so a terminal sees the same normalised
@@ -534,10 +621,15 @@ prints the records as the route returns them. A refusal from the route MUST be p
 route's error and a non-zero exit.
 
 #### Scenario: the daemon log tail reads every writer's format
-- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a line in the format the daemon wrote before "Write one bounded daemon log in one format" was met, a uvicorn line, a colour-escaped line from an upstream, and a multi-line traceback,
+- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a uvicorn-style line from another process, a `LEVEL - logger - message` line from an upstream, a colour-escaped line from an upstream, and a multi-line traceback,
 - **WHEN** `GET /api/v1/daemon/logs` is called with a token,
 - **THEN** the response is newest-first and bounded by `limit`, every record carries the time, level and logger its line actually stated, escape sequences are stripped, the traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped,
 - **AND** `level` and `since` narrow the window, while the same call with no token is rejected even though `/daemon/status` on the same router is open.
+
+#### Scenario: the daemon log tail names the file it read
+- **GIVEN** a daemon whose log directory holds `daemon.log`, and one whose log directory holds none yet
+- **WHEN** `GET /api/v1/daemon/logs` is called with a token on each
+- **THEN** both answers carry `path`, the absolute path of that directory's `daemon.log`, the second with no records
 
 #### Scenario: the command line reads the daemon log tail
 - **GIVEN** a running daemon whose `daemon.log` holds an info record, an error record carrying a traceback, and a record older than one hour,
@@ -565,7 +657,7 @@ of "Spawn a detached daemon from any surface that needs one" finds `coffer-daemo
 `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never
 validated end to end. This archive carries the "no system Python required" promise on its own: on a
 machine with no system Python, extracting it and running `coffer daemon start` reaches
-`status: ready`, and `coffer open` renders the UI authenticated. Both tiers ship per tag: this
+`status: ready`, and the daemon serves the UI, which renders authenticated at the origin `daemon.json` names. Both tiers ship per tag: this
 archive is the terminal install, and the `.dmg` of [desktop-app](../desktop-app/spec.md) "Ship the desktop tier as a macOS arm64 dmg" is the double-click one;
 neither is a substitute for the other.
 
@@ -587,7 +679,7 @@ downloaders can verify integrity without trusting the GitHub Release UI alone.
 - **THEN** the release holds exactly one `SHA256SUMS`, listing every staged artifact exactly once,
 - **AND** every artifact verifies against it with a stock SHA-256 checker.
 
-### Requirement: Deploy frozen sibling binaries and back up the vault before migrating
+### Requirement: Deploy frozen sibling binaries and back up the history database before migrating
 When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its
 sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim` — into
 `~/.coffer/bin/` at startup. `coffer` is in that list so that a user who installed only the desktop
@@ -605,9 +697,13 @@ name this build does not ship, so a binary a release dropped stops resolving to 
 instead of lingering on the user's `PATH`; anything at such a path that is not a symlink into a
 version directory is not Coffer's deployment and MUST be left alone.
 
-Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon MUST copy it (and any
-`-wal`/`-shm` companions) to `coffer.db.pre-<revision>`, keeping the three newest copies; an
-already-current schema or an in-memory database MUST NOT be copied. A source install MUST NOT do
+Before `alembic upgrade head` changes the on-disk history database, `~/.coffer/runs.db`, the
+daemon MUST copy it (and any `-wal`/`-shm` companions) to `runs.db.pre-<revision>`, keeping the
+three newest copies; an already-current schema or an in-memory database MUST NOT be copied.
+Before any of that the daemon MUST refuse a home that still holds only the single database of
+the layout before the vault, naming `coffer migrate`: moving a home into the vault layout is a
+step of its own that backs the old database up as `coffer.db.pre-vault` first, never a startup
+migration ([vault-storage](../vault-storage/spec.md) "Move an existing home into the vault layout once, on request, reversibly"). A source install MUST NOT do
 any of this: `pip install` already puts the console scripts on `PATH` (see "Install the console
 scripts from source"). The daemon owns the deployment because it is the one process every frozen install starts,
 whichever tier it came from.
@@ -624,14 +720,14 @@ whichever tier it came from.
 - **THEN** `~/.coffer/bin/coffer-callback` no longer exists, while `coffer`, `coffer-daemon` and `coffer-mcp-shim` point into the new build's version directory,
 - **AND** a regular file at `~/.coffer/bin/<name>` for a name the build does not ship is left untouched.
 
-#### Scenario: a schema upgrade keeps a copy of the vault
-- **GIVEN** a daemon starting against a `coffer.db` whose Alembic revision is behind this build's head,
+#### Scenario: a schema upgrade keeps a copy of the history database
+- **GIVEN** a daemon starting against a `runs.db` whose Alembic revision is behind this build's head,
 - **WHEN** the migrations run at startup,
-- **THEN** `coffer.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
+- **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
-### Requirement: Change residency from the settings page or the command line
+### Requirement: Change residency from the settings page
 The one residency setting — whether the login service is installed (see "Run as a login service")
-— MUST be readable and settable both over REST and from the CLI. The daemon never stands down on
+— MUST be readable and settable over REST, from Settings → Daemon. The daemon never stands down on
 its own: once started it serves until it is stopped, or until another daemon supersedes it (see
 "Stand down only when provably superseded"), so there is no idle window to configure.
 
@@ -644,19 +740,10 @@ MUST report what is true after the change, and the change MUST be audited as
 
 This setting has a REST surface where the port deliberately does not: a port is changed when the
 daemon cannot start, so a route the daemon would have to serve is useless exactly then, while
-residency is a settings question asked of a daemon that is working.
+residency is a settings question asked of a daemon that is working, so it has no command.
 
-`coffer daemon service install|uninstall|status` MUST read and write the same setting directly,
-with no daemon involved and none required, since the state it is most often reached from is "no
-daemon is running". On a host that has no login service, `service install` and `service uninstall`
-MUST refuse with a clear message and a non-zero exit, while `service status` MUST exit successfully
-and report that a login service is not supported there. The CLI path records no audit entry, for
-the reason the port records none: it must work with no daemon running, so the audit table is
-unreachable on exactly the path it serves.
-
-`~/.coffer/daemon-config.json` MUST NOT carry an idle window. An `idle_shutdown_hours` key an earlier
-build wrote there MUST be ignored when the file is read and MUST be dropped the next time the file
-is written, so the file only ever states settings that still decide something.
+There MUST be no command line for it: no `daemon` subcommand installs or removes the login service or
+sets an idle window, and the login service is installed and removed only through the route above.
 
 #### Scenario: the settings page changes residency in one request
 - **GIVEN** a running daemon on a host that supports a login service, with nothing configured,
@@ -664,17 +751,11 @@ is written, so the file only ever states settings that still decide something.
 - **THEN** the read reports a supported login service that is not installed, and the login service is installed at once,
 - **AND** the response and a `daemon_residency_updated` audit entry both report `login_service_installed: true`, and neither carries an idle window.
 
-#### Scenario: the command line changes residency with no daemon running
+#### Scenario: residency has no command
 - **GIVEN** no daemon running, on a host that supports a login service,
-- **WHEN** the user runs `coffer daemon service install`, `coffer daemon service status` and `coffer daemon service uninstall`,
-- **THEN** the login service is installed, reported installed, and removed,
-- **AND** no database is opened and no audit entry recorded, and `coffer daemon idle` is not a command.
-
-#### Scenario: an idle window left in the daemon config is ignored and dropped
-- **GIVEN** a `~/.coffer/daemon-config.json` an earlier build wrote, carrying `idle_shutdown_hours: 6` beside a pinned port,
-- **WHEN** the daemon starts, and the user then runs `coffer config set daemon.port` with another port,
-- **THEN** the daemon serves on the pinned port and never stands down on its own,
-- **AND** the rewritten file carries the new port and no `idle_shutdown_hours` key.
+- **WHEN** the user runs `coffer daemon` with a `service` subcommand, install or status,
+- **THEN** each exits non-zero as an unknown command and the login service is neither installed nor removed,
+- **AND** no database is opened and no audit entry recorded, and no `idle` subcommand exists either.
 
 ### Requirement: Clear inherited agent-home variables at start
 The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type's home variable — from its own environment when it starts, before it spawns anything, and log once which ones it removed. A daemon started from a shell that exports one would otherwise hand it to every agent process it spawns, so an agent registered on the default directory would run against the exported one while Coffer delivers its skills, MCP entry and config into the default. An agent gets the variable only from its own registered config directory ([agent-registry](../agent-registry/spec.md)), set on that agent's process alone.
@@ -684,3 +765,235 @@ The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type
 - **WHEN** the daemon is started from it
 - **THEN** the daemon's environment holds neither variable and the daemon log names both once
 - **AND** a turn for an agent on its default directory is spawned with neither variable, while an agent with a custom directory gets its own directory in its type's variable
+
+### Requirement: Supervise the model proxy from the daemon
+The daemon MUST supervise the local model proxy as its one sibling process, started from the
+daemon's own binary in proxy mode (`coffer-daemon proxy`): at start it re-attaches to a running
+proxy of the same version found through `~/.coffer/proxy.json` (`port`, `pid`, `started_at`,
+`version` and a control token, mode `0600`), asks a proxy of another version to drain and replaces
+it once it exits, and spawns one when none is running; it health-checks the proxy on a short period
+and restarts it after a crash. It pushes the proxy what it serves — the agents' token digests and
+each agent's route with the decrypted keys, held only in the proxy's memory — over the proxy's
+authenticated loopback control route after every reconcile pass and whenever a token changes. The
+daemon stopping or restarting MUST NOT stop the proxy, so agents' in-flight model streams outlive a
+daemon upgrade. `GET /api/v1/proxy/status` reports whether it runs, its
+port, pid, version, restart count and last error.
+
+#### Scenario: the daemon restarts a crashed proxy
+- **GIVEN** a supervised proxy
+- **WHEN** the proxy process is killed
+- **THEN** the supervisor spawns a new one on the same port, pushes it the current state, and counts the restart
+
+#### Scenario: a daemon restart re-attaches to the running proxy
+- **GIVEN** a proxy started by an earlier supervisor that has since stopped
+- **WHEN** a new supervisor starts
+- **THEN** it attaches to the same proxy process rather than spawning another
+
+### Requirement: Restart itself on request
+A page in a browser is served by the daemon, so it cannot stop the daemon and
+start another from outside the way the desktop shell and `coffer daemon restart`
+do; restarting is Coffer's own deterministic work, so the daemon MUST restart
+itself on the token-gated `POST /api/v1/daemon/restart`. It MUST be a true
+restart, in this order: the daemon starts a successor — the same command every
+surface spawns, detached, with the daemon's own environment and the pid it
+succeeds — and only then answers `202` with the port the successor binds (the
+pre-bind config's, so a port saved on Settings → Daemon applies), and only
+after the answer is sent takes the one graceful exit of "Shut down through one
+graceful exit path". The successor MUST wait for that pid to have exited before
+it takes the spawn lock or binds anything, and then starts as any daemon
+starts — the same detect-or-spawn lock and liveness probe — so a predecessor
+that never exits makes the successor stand down as "already running" rather
+than start a second daemon. A successor that cannot be started MUST answer an
+error and leave the daemon serving. A second request while a restart is under
+way MUST NOT start a second successor. The frozen one-file build MUST start its
+successor as a new instance of itself, so the successor never relies on the
+predecessor's unpacked files. A restart is recorded as a `daemon_restarted`
+audit entry naming the port and the successor's pid. The successor mints a new
+token, as every start does; the page reloads from the successor's origin to
+receive it.
+
+The mechanism is the same however the daemon was started — by a surface's
+detached spawn, by the desktop shell or by the login service: the login
+service restarts only an exit that failed, so it is not asked to restart a
+deliberate one. `coffer daemon restart` keeps its own stop-then-start from
+outside, because it must also work when the daemon is wedged or not running and
+no route answers.
+
+#### Scenario: a restart asked from the web ui starts a successor
+- **GIVEN** a running daemon whose pre-bind config names port 8123
+- **WHEN** an authenticated `POST /api/v1/daemon/restart` arrives
+- **THEN** the daemon starts its successor first, answers 202 with port 8123, and only then exits gracefully
+- **AND** a `daemon_restarted` audit entry records the port and the successor's pid, and a second request starts no second successor
+
+#### Scenario: a successor that cannot start leaves the daemon serving
+- **GIVEN** a running daemon whose successor cannot be started
+- **WHEN** an authenticated `POST /api/v1/daemon/restart` arrives
+- **THEN** it answers an error, does not exit, and records no restart
+
+#### Scenario: the successor binds only after its predecessor has exited
+- **GIVEN** a successor started by a restart, naming the pid of the daemon it succeeds
+- **WHEN** it starts while that daemon is still exiting
+- **THEN** it waits until that pid is gone before taking the spawn lock or binding, and gives up waiting after a bounded time so the ordinary liveness check decides
+- **AND** nothing it spawns inherits the predecessor's pid
+
+### Requirement: Hand an upgrade of Coffer to an agent
+The desktop shell checks for and installs updates itself. A browser has
+nothing to install with, and how a copy of Coffer is upgraded depends on how it
+was installed, so the daemon MUST answer the token-gated
+`GET /api/v1/daemon/upgrade` with the install method it detects — `binaries`
+(the installer's or a release archive's frozen binaries), `app` (the macOS
+desktop app) or `source` (a source checkout) — and a `handoff` prompt for the
+person's agent. The prompt MUST name the running version,
+the install method with the daemon's executable (and the checkout for a source
+run), the machine, and the install page's Upgrade section, and MUST tell the
+agent to keep `~/.coffer` exactly as it is, to restart the daemon, and to
+confirm with `coffer --version` and `coffer daemon status` that both report the
+new version. It carries the standing rules of every hand-off.
+
+#### Scenario: the upgrade hand-off names how this copy was installed
+- **GIVEN** a daemon running Coffer 0.3.1 from the installer's frozen binaries
+- **WHEN** `GET /api/v1/daemon/upgrade` is read
+- **THEN** the answer's install method is `binaries` and its prompt names 0.3.1, the executable, the machine and the install page's `#upgrade` section
+- **AND** the prompt says to keep `~/.coffer` and to verify with `coffer --version` and `coffer daemon status`
+
+### Requirement: Report the state the shell shows
+The daemon's state MUST be visible to the user while starting it stays automatic. Every fact the
+web UI's Settings → Daemon tab and its About tab show about the daemon —
+lifecycle phase, bound port, start time, version, executable, process id, the
+commit a release build was stamped with, Coffer's data folder and how many agents carry Coffer's
+connection — MUST come from
+`GET /api/v1/daemon/status` (see "Answer the status probe without a token"), so the page can show a
+daemon's state without a token and without a route of its own, and so the footer, the Daemon tab,
+`coffer daemon status` and the desktop shell's version check all read one answer. The one daemon
+setting those surfaces also show, whether it starts at login, comes from
+`GET /api/v1/daemon/residency` (see "Change residency from the settings page"). Showing the state MUST NOT move starting the daemon onto the user: every surface that needs
+a daemon and finds none still starts one itself (see "Spawn a detached daemon from any surface that
+needs one").
+
+#### Scenario: the status probe carries what the shell shows
+- **GIVEN** a running daemon,
+- **WHEN** `GET /api/v1/daemon/status` is called with no token,
+- **THEN** the response carries the phase, port, start time, version, executable, channel, pid, commit, data folder and connected-agent count Settings → Daemon and About show,
+- **AND** `coffer daemon status --json` reports the same version, channel and port.
+
+### Requirement: Report what Coffer stores and clear the rebuildable cache
+The daemon MUST report, for Settings › Data, what Coffer keeps on this machine in the four kinds
+of [Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)
+the user acts on, through `GET /api/v1/storage`: the **vault** (the vault repository
+`~/.coffer/vault/`, a git repository whether or not it syncs — its path, its size with its
+history and how many versions it holds; no version count before the repository has been created), the
+**local content** (chat uploads and channel media under `~/.coffer/content/`, which never sync:
+their locations, the one folder to open, and their size), the **history** (the database file
+holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
+its size) and the **rebuildable cache** (the memory tree and the transcript summary cache under
+`~/.coffer/derived/`, and their size). Every path MUST come from the same place its owner
+resolves it, so an override the owner honours is honoured here.
+
+`POST /api/v1/storage/cache/clear` MUST delete the files of the memory tree and of the transcript
+summary cache, and nothing else: no vault, local content, history or other file
+under `derived/`, and no partition row, so the next memory update rebuilds each partition from the
+agents' own memory. It MUST be refused (`UPKEEP_ALREADY_RUNNING`) while a memory pass is running,
+because that pass is writing into the tree, and MUST record the clear in the audit log with the
+bytes freed.
+
+#### Scenario: the storage summary reports the four kinds
+- **GIVEN** a vault repository of three commits, chat and channel media, a database with its WAL, a memory tree and a transcript summary cache
+- **WHEN** `GET /api/v1/storage` is called
+- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with both media locations under `~/.coffer/content` and their size, the history as `runs.db` with its WAL, and the cache as the size of the memory tree and the transcript cache
+- **AND** before the vault repository has been created it reports the vault with no version count
+
+#### Scenario: clearing the cache leaves everything else
+- **GIVEN** a memory tree, a transcript summary cache, a knowledge document in the vault, chat media, a sync round's hand-merge copy and the database
+- **WHEN** `POST /api/v1/storage/cache/clear` is called
+- **THEN** the memory tree and the transcript cache are empty, everything else is untouched, the answer carries the bytes freed and the audit log records the clear
+- **AND** while a memory pass is running the clear is refused and nothing is deleted
+
+### Requirement: Supervise every background task the daemon starts
+Work the daemon starts to run beside the call that started it — a channel
+adapter's inbound loop, a channel or chat turn, a periodic worker, a
+fire-and-forget write — MUST run under one task supervisor rather than as a
+bare `asyncio` task, because a bare task that raises dies silently: the
+exception surfaces only if something later retrieves it. The supervisor MUST
+give every task a name, and when a task ends by raising it MUST write one
+`runtime.task.crashed` line to `daemon.log` carrying the task's name and the
+exception with its traceback at that moment, and count the crash. A task MUST
+be restarted after a crash only when its owner asked for that, with a backoff
+that doubles from one second up to a cap; a clean return ends it. Each channel
+adapter's inbound loop — a Telegram channel's long poll, a SeaTalk channel's
+websocket supervisor — MUST be restarted on its own, so one adapter's crash
+never stops or restarts another channel; the SeaTalk websocket's blocking
+listen call keeps its own thread (spec
+[channels/seatalk](../channels/seatalk/spec.md) "Receive every event over one
+outbound websocket connection"). At shutdown, after every owner has stopped
+its own work in the teardown's order, the supervisor MUST cancel whatever is
+still running, bounded so a task that ignores cancellation cannot hold the
+daemon up (see "Shut down through one graceful exit path"). A task the same
+function awaits or cancels before it returns — the two sides of an
+`asyncio.wait` race, a shielded write — is not background work; the lint gate
+`scripts/check_bare_tasks.py`, run by `make lint`, MUST refuse any other bare
+`create_task` or `ensure_future` outside the supervisor and MUST name each
+allowed one, per file, with the reason it is awaited in place.
+
+#### Scenario: a background task that crashes is logged with its name
+- **GIVEN** a supervised task named `telegram-poll:family`
+- **WHEN** it raises `RuntimeError`
+- **THEN** `daemon.log` receives one `runtime.task.crashed` line naming `telegram-poll:family`, the exception class and its traceback
+- **AND** the daemon's crash count goes up by one
+
+#### Scenario: a crashed channel adapter restarts without touching the others
+- **GIVEN** two running Telegram channels, each polling in its own supervised loop
+- **WHEN** the first channel's loop raises an error its own retry ladder does not catch
+- **THEN** the crash is logged under that channel's task name and its loop runs again after the backoff
+- **AND** the second channel's loop keeps running and is never restarted
+
+#### Scenario: shutdown cancels the background tasks still running
+- **GIVEN** supervised tasks still running when the daemon shuts down
+- **WHEN** the teardown reaches the supervisor's sweep
+- **THEN** every one of them is cancelled, and none is counted as a crash
+
+#### Scenario: a new bare background task fails the lint gate
+- **GIVEN** a module under `backend/coffer/` that starts a task with `asyncio.create_task` and is not on the gate's allow-list
+- **WHEN** `scripts/check_bare_tasks.py` runs
+- **THEN** it fails and names the file, pointing at the supervisor's `spawn`
+- **AND** an allow-list entry for more calls than a file makes fails too, as stale
+
+### Requirement: Report event-loop lag and background task crashes on the status
+The daemon MUST sample how late its event loop wakes a periodic probe and keep
+the samples for a rolling window, because a synchronous call that blocks the
+loop stalls every request, channel and turn at once and is otherwise visible
+only as general slowness. `GET /api/v1/daemon/status` MUST carry a `runtime`
+block with the window's 99th-percentile and maximum lag in milliseconds (null
+before the first sample), the number of samples and the window's length, the
+number of supervised tasks running, the number of background task crashes
+since the daemon started, and the most recent crash's task name, exception
+class, time and whether it was restarted. The crash's exception message MUST
+NOT appear there — the probe answers without a token, and a message can carry
+what it failed on — only in `daemon.log`. `coffer daemon status` MUST print the
+lag and the task counts, and `--json` MUST carry the `runtime` block as the
+route answers it.
+
+#### Scenario: the status reports loop lag and task crashes
+- **GIVEN** a running daemon whose probe has taken a sample, and a supervised task that has crashed with `LookupError`
+- **WHEN** `GET /api/v1/daemon/status` is called with no token
+- **THEN** its `runtime` block carries the lag's p99 and maximum over a 300-second window, the tasks running and the crash count including that crash
+- **AND** `last_crash` names the task and `LookupError`, and the exception's message is nowhere in the block
+
+#### Scenario: the command line prints loop lag and task crashes
+- **GIVEN** a running daemon whose probe has taken a sample
+- **WHEN** the user runs `coffer daemon status`, and `coffer daemon status --json`
+- **THEN** the first prints a `loop lag:` line with the p99 and maximum and the window, and a `tasks:` line with the running and crashed counts
+- **AND** the second carries the route's `runtime` block
+
+### Requirement: Hand a daemon error about the environment to an agent
+A record of `GET /api/v1/daemon/logs` that is an ERROR (or CRITICAL) whose message
+or folded lines show a cause outside Coffer — a refused or reset connection, a
+timeout, a name that does not resolve, a certificate error, a missing or
+unreadable file or program — MUST carry `handoff`: a prompt with the logger, the
+message and the traceback, every line passed through the secret scrub, and this
+machine, asking for the cause and a proposed fix before anything changes. Every
+other record — a warning, an error with no such cause — carries none.
+
+#### Scenario: an environment error carries a hand-off and an internal one does not
+- **GIVEN** a daemon log holding an ERROR about a refused connection with a traceback, an ERROR that is a Coffer `KeyError`, and a warning that mentions a refused connection
+- **WHEN** the log is read
+- **THEN** only the first carries a `handoff`, and it quotes the logger, the message and the traceback

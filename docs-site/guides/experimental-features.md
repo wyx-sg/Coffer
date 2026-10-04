@@ -1,78 +1,43 @@
 ---
 title: Experimental features
-description: Which Coffer features are experimental, what each one gates, and how to switch them on or off per machine from Settings, the CLI or COFFER_FEATURES.
+description: The four capabilities that ship switched off — Knowledge, Memory, Sync and Model providers — how to switch each one on per machine from Settings or COFFER_FEATURES, and what a switched-off feature looks like.
 ---
 
 # Experimental features
 
-Some Coffer features are still being designed. They ship in every build but are switched off by default in a release build, and each machine decides for itself whether to turn them on. This page lists the experimental features, what each one controls, and how to switch them.
+Coffer ships one build with every capability in it. A few capabilities are not proven yet, so they start **switched off** and you decide, machine by machine, which ones to try. This page explains the four experimental features and what you see while one is off.
 
-## Release channels
+A stable release and a build from source behave the same way here: every experimental feature is off until you switch it on.
 
-Every Coffer build carries a release channel:
+## The four features
 
-| Channel | Which builds | Experimental features by default |
+| Key | Name | What it covers |
 | --- | --- | --- |
-| `stable` | Builds the release workflow makes from a tag: the desktop app and the release archive | Off |
-| `dev` | Every other build, including a source install and a local desktop build | On |
+| `knowledge` | Knowledge | The Knowledge page and its files, and the knowledge sections of the `coffer-guide` skill. |
+| `memory` | Memory | The Memory page, the memory delivery hook in your agents, and memory in channel turns. |
+| `sync` | Sync | Vault sync to your own git remote. |
+| `models` | Model providers | Model providers, the local model proxy and Usage, and the projection of connections into your agents' own config files. |
 
-See which channel you are on:
+Everything else is always on: the app shell, Overview, Agents, the MCP gateway and custom tools, Skills, Secrets, Activity, Settings, Conversations and Channels. The agent list and its model catalogue, Coffer's own model settings, the vault and an agent's own transcripts and memory files are not gated either.
 
-```sh
-coffer daemon status
-```
+### How the features relate
 
-```text
-status:  ready
-version: 0.2.0
-channel: stable
-port:    8000
-pid:     41822
-```
+No feature needs another. When one is off, the others keep working:
 
-The **Experimental features** card in **Settings → General** names the channel too.
-
-## The features
-
-| Key | Name in the UI | What it gates |
-| --- | --- | --- |
-| `vault_sync` | Sync | Converging this vault with a git remote you own: the **Sync** page, `coffer sync`, the `/api/v1/sync` routes and the background converge rounds. See [Vault sync](/guides/vault-sync). |
-| `knowledge` | Knowledge | Knowledge collections under `~/.coffer/knowledge/`: the **Knowledge** page, `coffer knowledge`, the `/api/v1/knowledge` routes, the `coffer__write` tool, the knowledge catalogue in the `coffer-guide` skill, the curation pass, and saving to knowledge from a chat channel. See [Knowledge](/guides/knowledge). |
-| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the aggregation and distil passes, and the session-start hook that delivers memory into agents. See [Memory](/guides/memory). |
-
-Everything else in Coffer is always on.
+| When this is off | What happens |
+| --- | --- |
+| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, curation skips. Memory is unaffected. |
+| `memory` | The Memory page and its API are gone, the handshake does not name the memory root, the memory hook is taken out of your agents (and put back when you switch it on), distil and aggregate skip, and channel turns carry no memory. Knowledge is unaffected. |
+| `sync` | The vault is single-machine for curation. |
+| `models` | The local proxy and Usage are gone, and Coffer's keys are taken out of your agents' own configs, so agents use their own login. Knowledge and memory keep working on the model connection already chosen for Coffer's engine. |
 
 ## Switch a feature on or off
 
-A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon-config.json` on this machine only. It is never synced, so switching a feature on the laptop leaves the desktop as it was.
+Every feature is off by default. You switch it on for this machine on the Settings page, or pin it with `COFFER_FEATURES` (below). **Settings → Features** lists the four features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so. **Reset to default** returns a feature to off, and **Decided by** shows whether a pin, this machine's setting or the default decided it.
 
-::: code-group
+A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon-config.json` on this machine only. It never syncs, so switching a feature on in your laptop leaves your desktop as it was. The same switch is `PUT /api/v1/daemon/features/{key}`, and `DELETE` on that path returns it to off.
 
-```sh [CLI]
-coffer config list feature.
-coffer config set feature.vault_sync on
-coffer config set feature.memory off
-coffer config unset feature.memory        # back to the channel default
-```
-
-```text [Web UI]
-Settings → General → Experimental features
-```
-
-:::
-
-`config list feature.` shows each feature's state and what decided it:
-
-```text
-Key                  Value                      Default   Type
-feature.vault_sync   on (set on this machine)   channel   on|off
-feature.knowledge    off (channel default)      channel   on|off
-feature.memory       off (channel default)      channel   on|off
-```
-
-On the settings page each feature has a switch and a line naming the source: **Set on this machine**, **Default for the stable channel**, or a pin (below). The sidebar entry of a feature you switch on appears without a reload.
-
-The `feature.*` keys go through the running daemon, because only it can make a switch take effect immediately. Add `--json` to `config list` for scripts.
+Settings that name a feature Coffer does not know are ignored, and a request for an unknown key is refused with `FEATURE_UNKNOWN`.
 
 ## How a feature's state is decided
 
@@ -80,51 +45,44 @@ For each feature, the first of these that has an answer wins:
 
 1. **A pin** in the `COFFER_FEATURES` environment variable of the daemon process.
 2. **This machine's setting**, written by the switch above.
-3. **The channel default**: off on `stable`, on on `dev`.
+3. **The default**, which is off for every feature.
+
+The listing shows which one decided each feature: `pin`, `setting` or `default`.
 
 ### Pin a feature with `COFFER_FEATURES`
 
 `COFFER_FEATURES` fixes features for the lifetime of one daemon, which is useful for tests and scripted setups:
 
 ```sh
-COFFER_FEATURES=vault_sync=on,memory=off coffer daemon restart
+COFFER_FEATURES=knowledge=on,models=off coffer daemon restart
 ```
 
 Entries are comma-separated `key=value` pairs; `on`, `true` and `1` switch a feature on, `off`, `false` and `0` switch it off. An unknown key or a malformed entry is logged as a warning and ignored.
 
-A pinned feature cannot be switched: the settings switch is disabled and labelled **Pinned by COFFER_FEATURES — change it where the daemon is started**, and a write answers `409 FEATURE_PINNED`. The variable must be in the environment of the process that starts the daemon. The daemon is started by whichever surface needs it first (a CLI command, an agent's MCP shim, the desktop app, the login service), so a variable exported in one shell does not reach a daemon started from elsewhere.
+A pinned feature cannot be switched: a write answers `409 FEATURE_PINNED`. The variable must be in the environment of the process that starts the daemon. The daemon is started by whichever surface needs it first (a CLI command, an agent's MCP shim, the desktop app, the login service), so a variable exported in one shell does not reach a daemon started from elsewhere.
 
-## What "off" means
+## What "off" looks like
 
-Switching a feature off closes it everywhere on this machine:
+A switched-off feature looks absent. Nothing in the web UI mentions it:
 
-- **REST:** its routes answer `404` with the code `FEATURE_DISABLED` and the feature's key. Resources of a kind the feature owns (`knowledge` collections, `memory` partitions) are also hidden from the generic `/api/v1/resources` routes.
-- **CLI:** its commands print one line and exit 1:
-  ```text
-  vault_sync is switched off on this machine — run: coffer config set feature.vault_sync on
-  ```
-- **MCP:** its tools leave the tool list, and a call to one answers as an unknown tool. The handshake instructions and the `coffer-guide` skill stop mentioning them.
-- **Web UI:** its sidebar entry disappears, and its pages show a notice ("Knowledge is switched off") with a link to **Settings → General**.
+- **Web UI:** its sidebar entries are gone (and a group left with no entries disappears), it is not in the command palette, its tiles and first-run cards are not on Overview, and no other page shows a section for it. A link straight to one of its pages shows the standard not-found page. There is no notice and no **Switch on** button outside Settings → Features.
+- **REST:** its routes answer `404` with the code `FEATURE_DISABLED` and the feature's key. Resources of a kind the feature owns are also hidden from the generic `/api/v1/resources` routes.
+- **MCP:** a built-in tool that belongs to the feature leaves the tool list, and a call to one answers as an unknown tool.
 - **Background passes:** its passes skip their rounds.
 
-Some features also withdraw what they placed in front of agents:
-
-- Switching `memory` off removes the memory delivery hook from every agent it was installed in; switching it on installs it into every agent connected to Coffer.
-- Switching `knowledge` off rewrites `coffer-guide` without the knowledge catalogue, and a channel `/save` replies that knowledge is switched off instead of saving.
-- Switching `vault_sync` off stops every sync attention mark in the web UI and the desktop app and removes the tray's Sync item. While it is off, the knowledge curation pass treats the vault as a single-machine one.
+While a feature is on, its sidebar entries carry an **Experimental** label, so nobody takes it for a finished part of the product.
 
 ::: tip Nothing is deleted
-Switching a feature off never deletes, moves or rewrites what it holds: collections and their files, memory partitions, a configured sync remote, history. Switch it back on and it resumes from exactly that state. Database migrations run whatever the switches say, so switching a feature on never needs a schema change.
+Switching a feature off never deletes, moves or rewrites what it holds. Switch it back on and it resumes from exactly that state. Database migrations run whatever the switches say, so switching a feature on never needs a schema change.
 :::
 
 ## How it works
 
-Coffer keeps every capability on one line of development and gates the unfinished ones instead of maintaining a separate release branch. The trade-offs are recorded in [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md). A feature leaves the registry once it is ready, and its gates are removed.
+Keeping unfinished work behind a registry entry, rather than on a separate release branch, is recorded in [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md). The architecture is in [Distribution and releases](/architecture/distribution#experimental-features).
 
 ## Related
 
 - [Running the daemon](/guides/daemon)
-- [Vault sync](/guides/vault-sync) · [Knowledge](/guides/knowledge) · [Memory](/guides/memory)
 - [Configuration reference](/reference/configuration)
 - [Error codes](/reference/error-codes)
 - Spec: [experimental-features](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)

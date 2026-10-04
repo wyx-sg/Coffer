@@ -12,11 +12,8 @@ on:
     branches: [main]
     paths: &eval_paths
       - "evals/**"
-      - "backend/coffer/application/mcp/**"
       - "backend/coffer/domain/mcp/**"
-      - "backend/coffer/infrastructure/knowledge/**"
-      - "backend/coffer/application/knowledge/**"
-      - "backend/coffer/application/memory/**"
+      - "backend/uv.lock"
       - ".github/workflows/evals.yml"
   pull_request:
     branches: [main]

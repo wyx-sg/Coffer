@@ -1,94 +1,51 @@
-// pages/ModelProvidersPage.tsx — the model-provider surface (spec provider-switching).
+// src/pages/ModelProvidersPage.tsx — Model providers: one header over two tabs, Providers | Usage.
 //
-// A provider here is a credentialed endpoint: `{protocol, base_url,
-// credential_ref}`. Which MODEL an agent runs on is still chosen at the point of
-// use (the per-agent binding on Agent detail → Overview) — this page manages
-// vendor endpoints and their keys; the connection's own CURATED model set (which
-// of the endpoint's models are offered at all) lives on its detail page.
-//
-// It lives under RESOURCES rather than Settings because `provider` is a
-// resource kind like any other, and spec web-ui's rule is that RESOURCES holds
-// the kinds with a list UI. It was the only one of the five filed elsewhere.
-//
-// The page is now nothing but that connection library, rendered through the
-// shared DataTable like every other list surface (ConnectionsTable): the page
-// itself owns only the header + the add dialog. Editing a connection moved to
-// its detail page. Coffer's own engine (which connection + model its memory
-// organizer runs on) lives in Settings → Coffer's model: it configures Coffer itself
-// rather than being a resource served to agents.
+// Three addresses render this one page, so moving between them keeps the
+// header and the open dialog: `/model-providers` (the list opens on its first
+// provider), `/model-providers/<uid>` (a provider open) and
+// `/model-providers?tab=usage` (the Usage tab). Providers is a split — the list is
+// the fallback order, the detail stacks Used by → Endpoint → Models; with no
+// provider yet it is the first-run state. Which agent runs on what is changed
+// on each agent's Change model; Coffer's own model in Settings › General.
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Boxes, Plus } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ConnectionsTable } from "@/components/settings/ConnectionsTable";
-import { ProviderForm } from "@/components/settings/ProviderForm";
-import { ProviderWelcomePanel } from "@/components/settings/ProviderWelcomePanel";
-import { useProviders, useCreateProvider } from "@/lib/hooks/useProviders";
-import { translateApiError } from "@/lib/api/errors";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+
+import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
+import { ModelProvidersHeader } from "@/components/providers/ModelProvidersHeader";
+import { ProvidersSplit } from "@/components/providers/ProvidersSplit";
+import { UsageTab } from "@/components/usage/UsageTab";
+import type { PresetId } from "@/lib/providers/presets";
+import { providersTabPath } from "@/lib/providers/tabs";
 
 export function ModelProvidersPage() {
-  const { t } = useTranslation();
-  const { data: providers = [], isPending, error } = useProviders();
-  const createProvider = useCreateProvider();
+  const { uid } = useParams<{ uid: string }>();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const [adding, setAdding] = useState<PresetId | null>(null);
+  const usage = !uid && params.get("tab") === "usage";
 
-  const [adding, setAdding] = useState(false);
-  const hasItems = providers.length > 0;
-
-  const closeAdd = () => {
-    setAdding(false);
-    createProvider.reset();
-  };
-
-  // The header stays mounted through loading and error — the page never goes
-  // blank — and the Add action moves into the welcome panel while the library
-  // is empty, so the one obvious next step is stated exactly once.
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={Boxes}
-        title={t("settings.connections.title")}
-        subtitle={t("settings.connections.subtitle")}
-        actions={
-          hasItems ? (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="mr-1.5 size-4" />
-              {t("settings.connections.add")}
-            </Button>
-          ) : null
-        }
+    // Full-bleed like Skills and Knowledge: Layout pads every page, and this
+    // one is a workspace whose panes scroll on their own.
+    <div className="-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden">
+      <ModelProvidersHeader
+        tab={usage ? "usage" : "providers"}
+        onAdd={() => setAdding("anthropic")}
       />
-
-      {error ? (
-        <Card className="border-destructive/40">
-          <CardContent className="py-6 text-sm text-destructive">
-            {translateApiError(t, error)}
-          </CardContent>
-        </Card>
-      ) : !isPending && !hasItems ? (
-        <ProviderWelcomePanel onAdd={() => setAdding(true)} />
-      ) : (
-        <ConnectionsTable providers={providers} isLoading={isPending} />
-      )}
-
-      <Dialog open={adding} onOpenChange={(open) => !open && closeAdd()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("settings.connections.addTitle")}</DialogTitle>
-          </DialogHeader>
-          <ProviderForm
-            submitError={createProvider.error}
-            pending={createProvider.isPending}
-            onCancel={closeAdd}
-            onSubmit={async (values) => {
-              await createProvider.mutateAsync(values);
-              closeAdd();
-            }}
+      {usage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-10 pt-5">
+          <UsageTab
+            onOpenProviders={() => navigate(providersTabPath("providers"), { replace: true })}
           />
-        </DialogContent>
-      </Dialog>
+        </div>
+      ) : (
+        <ProvidersSplit uid={uid} onAdd={setAdding} />
+      )}
+      <AddProviderDialog
+        preset={adding}
+        onClose={() => setAdding(null)}
+        onCreated={(p) => navigate(`/model-providers/${encodeURIComponent(p.uid)}`)}
+      />
     </div>
   );
 }

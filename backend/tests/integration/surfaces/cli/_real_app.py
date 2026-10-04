@@ -42,21 +42,26 @@ class _PersistentClient:
         return getattr(self._inner, item)
 
 
+#: A ``COFFER_FEATURES`` value that pins nothing.
+NO_PIN = ""
+
+
 def boot(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, *, features: str | None = None
 ) -> Iterator[TestClient]:
-    """Yield an HTTP client on a real app whose CLI client points at it."""
+    """Yield an HTTP client on a real app whose CLI client points at it.
+
+    ``features`` is the ``COFFER_FEATURES`` pin the daemon boots with; left
+    out, it keeps the suite's own (every feature on, ``tests/conftest.py``).
+    ``NO_PIN`` boots it with none, so each feature is decided by the machine's
+    setting and then by its default, off.
+    """
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59940")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59949")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "skills"))
     monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path / "logs"))
-    if features is None:
-        monkeypatch.delenv("COFFER_FEATURES", raising=False)
-    else:
+    if features is not None:
         monkeypatch.setenv("COFFER_FEATURES", features)
 
     app = create_app()

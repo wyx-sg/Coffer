@@ -55,7 +55,7 @@ def test_agent_routes_refuse_a_skill_uid(tmp_path, monkeypatch):
         skill_uid = _guide_skill_uid(c)
 
         _assert_not_found(c.get(f"/api/v1/agents/{skill_uid}"))
-        _assert_not_found(c.patch(f"/api/v1/agents/{skill_uid}", json={"description": "x"}))
+        _assert_not_found(c.patch(f"/api/v1/agents/{skill_uid}", json={"model": "x"}))
         _assert_not_found(c.get(f"/api/v1/agents/{skill_uid}/config-files"))
         _assert_not_found(c.delete(f"/api/v1/agents/{skill_uid}"))
 
@@ -76,12 +76,12 @@ def test_patch_config_dir_onto_another_agents_dir_is_409(tmp_path, monkeypatch):
     with _client(app) as c:
         r1 = c.post(
             "/api/v1/agents",
-            json={"type": "codex", "name": "one", "config_dir": str(first_dir)},
+            json={"type": "codex", "config_dir": str(first_dir)},
         )
         assert r1.status_code == 201, r1.text
         r2 = c.post(
             "/api/v1/agents",
-            json={"type": "codex", "name": "two", "config_dir": str(second_dir)},
+            json={"type": "claude_code", "config_dir": str(second_dir)},
         )
         assert r2.status_code == 201, r2.text
         second_uid = r2.json()["uid"]
@@ -90,7 +90,7 @@ def test_patch_config_dir_onto_another_agents_dir_is_409(tmp_path, monkeypatch):
         assert r.status_code == 409, r.text
         body = r.json()
         assert body["error"]["code"] == "AGENT_CONFIG_DIR_REGISTERED"
-        assert "one" in body["error"]["message"]
+        assert "codex" in body["error"]["message"]
 
         # Nothing moved: the second agent still lives in its own dir.
         after = c.get(f"/api/v1/agents/{second_uid}").json()
@@ -99,8 +99,8 @@ def test_patch_config_dir_onto_another_agents_dir_is_409(tmp_path, monkeypatch):
         # An agent re-saving its own dir is not a collision with itself.
         same = c.patch(
             f"/api/v1/agents/{second_uid}",
-            json={"config_dir": str(second_dir), "description": "kept"},
+            json={"config_dir": str(second_dir), "model": "kept"},
         )
         assert same.status_code == 200, same.text
         assert same.json()["config_dir"] == str(second_dir)
-        assert same.json()["description"] == "kept"
+        assert same.json()["model"] == "kept"

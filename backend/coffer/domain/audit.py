@@ -22,17 +22,39 @@ class AuditEventType(StrEnum):
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
+    # spec mcp-gateway "Forward tools, resources and prompts": tools pinned into
+    # the listing, left to search, or handed back to the usage ranking.
+    TOOL_EXPOSURE_CHANGED = "tool_exposure_changed"
     TOKEN_ROTATED = "token_rotated"
-    # spec daemon "Change residency from the settings page or the command line":
+    # spec daemon "Change residency from the settings page":
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
+    # spec daemon "Restart itself on request": the web UI asked the daemon to
+    # start its successor and exit
+    DAEMON_RESTARTED = "daemon_restarted"
     RETENTION_UPDATED = "retention_updated"
+    # spec web-ui "Let the user ignore any item on Overview": a
+    # "needs you" item ignored on this machine, or no longer.
+    ATTENTION_IGNORED = "attention_ignored"
+    ATTENTION_UNIGNORED = "attention_unignored"
+    # Settings > Data "Rebuildable cache": the memory tree and the transcript
+    # summary cache were cleared, to be rebuilt by the next memory update.
+    STORAGE_CACHE_CLEARED = "storage_cache_cleared"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
-    CREDENTIAL_SET = "credential_set"
-    CREDENTIAL_READ = "credential_read"
-    CREDENTIAL_DELETED = "credential_deleted"
-    CREDENTIAL_MIGRATED = "credential_migrated"
+    SECRET_SET = "secret_set"
+    SECRET_DELETED = "secret_deleted"
     MASTER_KEY_RELOCATED = "master_key_relocated"
+    # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
+    # somewhere-new): a value shown to a present human in the desktop app, a
+    # standalone secret resolved into one `coffer run` child, the approvals a
+    # new destination waits on, and plaintext secret files moved into the store.
+    SECRET_REVEALED = "secret_revealed"
+    SECRET_RESOLVED = "secret_resolved"
+    SECRET_APPROVAL_REQUESTED = "secret_approval_requested"
+    SECRET_APPROVAL_APPROVED = "secret_approval_approved"
+    SECRET_APPROVAL_REJECTED = "secret_approval_rejected"
+    SECRET_PROTECTION_ENABLED = "secret_protection_enabled"
+    SECRET_IMPORTED = "secret_imported"
     # spec agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
@@ -46,12 +68,19 @@ class AuditEventType(StrEnum):
     # spec skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_UPDATED = "skill_updated"
+    #: The pin moved to an upstream commit merged into local edits by hand;
+    #: the master's files were not touched.
+    SKILL_UPDATE_MERGED = "skill_update_merged"
     SKILL_BOUND = "skill_bound"
     SKILL_UNBOUND = "skill_unbound"
     SKILL_RELINKED = "skill_relinked"
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
+    # spec skill-manager "Declare the commands a skill requires"
+    CLI_TOOL_ADDED = "cli_tool_added"
+    CLI_TOOL_EDITED = "cli_tool_edited"
+    CLI_TOOL_REMOVED = "cli_tool_removed"
     # spec knowledge
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"
@@ -63,9 +92,16 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
+    MEMORY_NOTE_EDITED = "memory_note_edited"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
+    CHANNEL_PERSON_REMOVED = "channel_person_removed"
+    CHANNEL_REPLY_WITHDRAWN = "channel_reply_withdrawn"
+    # spec vault-storage: a person's edit found on disk and committed as a
+    # ``disk`` write, and a version of a vault file or folder put back.
+    VAULT_FILE_EDITED = "vault_file_edited"
+    VAULT_FILE_RESTORED = "vault_file_restored"
     # spec vault-sync
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
@@ -74,6 +110,7 @@ class AuditEventType(StrEnum):
     SYNC_REJECTED = "sync_rejected"
     SYNC_ROLLED_BACK = "sync_rolled_back"
     SYNC_MACHINE_REMOVED = "sync_machine_removed"
+    SYNC_PLAINTEXT_PUSHED = "sync_plaintext_pushed"
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
@@ -81,6 +118,14 @@ class AuditEventType(StrEnum):
     # A projection write refused because the agent's native config file changed
     # on disk between Coffer's read and its write (optimistic concurrency).
     PROVIDER_PROJECTION_REFUSED = "provider_projection_refused"
+    # The reconciler rewrote, or removed, an agent's projection whose keys no
+    # longer matched the connection the registry marks active.
+    PROVIDER_PROJECTION_REPAIRED = "provider_projection_repaired"
+    # The model proxy moved a request off a connection before its first byte
+    # (spec provider-switching "Log every failover in Activity").
+    PROVIDER_FAILOVER = "provider_failover"
+    # The Model providers list was reordered: the fallback priority changed.
+    PROVIDER_REORDERED = "provider_reordered"
 
 
 @dataclass
@@ -91,13 +136,20 @@ class AuditEntry:
     timestamp: datetime
     event_type: str
     actor: str
-    #: The resource this happened TO, by its stable row id. It is what makes a
-    #: trail survive a rename: the kind+name below are the LABEL the resource
-    #: carried AT THE TIME, so old rows keep saying what was true then instead
-    #: of being rewritten to the new name. All three are ``None`` for an event
-    #: that names no resource, and the id is ``None`` for rows written before
-    #: the column existed.
-    resource_id: int | None = None
+    #: The resource this happened TO, by its uid. It is what makes a trail
+    #: survive a rename: the kind+name below are the LABEL the resource carried
+    #: AT THE TIME, so old rows keep saying what was true then instead of being
+    #: rewritten to the new name. All three are ``None`` for an event that
+    #: names no resource, and the uid is ``None`` for rows written before the
+    #: trail was keyed on identity.
+    resource_uid: str | None = None
     resource_kind: str | None = None
     resource_name: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
+    #: The correlation ids bound when the row was written (migration 0137): the
+    #: HTTP request's or the turn's ``trace_id`` — the key that joins this row to
+    #: the MCP invocations and the daemon log lines of the same request or turn —
+    #: and, for a row a chat or channel turn wrote, its conversation and turn.
+    trace_id: str | None = None
+    conversation_id: str | None = None
+    turn_id: str | None = None

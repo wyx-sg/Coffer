@@ -1,50 +1,43 @@
 // src/components/PageHeader.tsx — the one page header for every surface.
 //
-// Icon + title on the left (with optional badges beside the title and an
-// optional "← back" link above it for detail pages), optional subtitle
-// beneath, and optional actions (buttons) on the right. Keeps page chrome
-// visually uniform across the app.
-import type { LucideIcon } from "lucide-react";
-import { ArrowLeft } from "lucide-react";
+// The boards draw one header (1.1.02 title bar, every list and detail board):
+// one row — the title (18/650), anything that sits beside it (a count, a
+// status, "Unsaved changes"), and the page's actions pushed to the right — and
+// an optional subtitle line under the row. A page that is an experimental
+// feature passes `experimental`: its tag sits 8px after the title (0.7.05).
+// Pages carry no back button; the
+// sidebar and the browser's own history are the way out. Detail pages keep one
+// fixed action order: reach → test/refresh → edit → delete. An item ignored on
+// Overview that belongs to the page shows under the subtitle (IgnoredHere).
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+
+import { ExperimentalTag } from "@/components/ExperimentalTag";
+import { IgnoredHere } from "@/components/IgnoredHere";
+import { useCanReadIgnored } from "@/lib/overview/useIgnoredHere";
 
 interface Props {
-  /** Optional — list pages carry their kind icon; detail pages usually omit it. */
-  icon?: LucideIcon;
   title: ReactNode;
   subtitle?: ReactNode;
-  /** Right-aligned slot for the page's primary buttons. */
+  /** Right-aligned slot for the page's primary buttons, on the title's row. */
   actions?: ReactNode;
-  /** Inline slot beside the title — status pills, kind chips. */
+  /** Inline slot beside the title — a count, a status, a kind chip. */
   badges?: ReactNode;
-  /** Detail pages: a "← label" link back to the list, rendered above the title. */
-  back?: { to: string; label: string };
+  /** Mark the page as an experimental feature: the "Experimental" tag right after the title. */
+  experimental?: boolean;
 }
 
-export function PageHeader({ icon: Icon, title, subtitle, actions, badges, back }: Props) {
+export function PageHeader({ title, subtitle, actions, badges, experimental }: Props) {
+  const canReadIgnored = useCanReadIgnored();
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-1">
-        {back ? (
-          <Link
-            to={back.to}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-            {back.label}
-          </Link>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="flex items-center gap-3 text-3xl tracking-tight">
-            {Icon ? <Icon className="size-7 text-primary" strokeWidth={1.5} aria-hidden /> : null}
-            {title}
-          </h1>
-          {badges}
-        </div>
-        {subtitle ? <p className="max-w-prose text-sm text-muted-foreground">{subtitle}</p> : null}
+    <header className="flex flex-col gap-1.5">
+      <div className="flex min-h-control-md flex-wrap items-center gap-x-2.5 gap-y-2">
+        <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-bold">{title}</h1>
+        {experimental ? <ExperimentalTag className="-ml-0.5" /> : null}
+        {badges}
+        {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
       </div>
-      {actions}
+      {subtitle ? <p className="truncate text-sm text-text-subtle">{subtitle}</p> : null}
+      {canReadIgnored ? <IgnoredHere /> : null}
     </header>
   );
 }

@@ -11,12 +11,13 @@ Code and Codex providers) and in tests (fakes).
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
-from typing import Any, Protocol
+from collections.abc import AsyncIterator, Mapping, Sequence
+from typing import Any, Protocol, TypeVar
 
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
+from coffer.domain.chat.mirror import ChannelPlaceView, MirrorResult, MirrorView
 
 
 class AgentAdapter(Protocol):
@@ -80,6 +81,31 @@ class AgentProvider(Protocol):
         ...
 
 
+_DepsT = TypeVar("_DepsT", contravariant=True)
+
+
+class AgentDriver(Protocol[_DepsT]):
+    """The driver facet of an agent (ADR agent-mechanisms-are-optional-facets-
+    on-the-descriptor): how Coffer runs a turn on it.
+
+    Bound to the agent's descriptor at the composition root — the driver says
+    which agent it serves by ``agent_key`` (the agent type's value) — and asked
+    by the chat composition to ``build`` the ``AgentProvider`` once the chat
+    kind's own dependencies (``_DepsT``) exist. Drivers are direct: the Claude
+    Agent SDK for Claude Code, ``codex app-server`` for Codex.
+    """
+
+    @property
+    def agent_key(self) -> str: ...
+
+    @property
+    def display_name(self) -> str:
+        """The name the agent picker shows."""
+        ...
+
+    def build(self, deps: _DepsT) -> AgentProvider: ...
+
+
 class CatalogueModel(Protocol):
     """One model an agent can be put on, as the agent itself reports it.
 
@@ -122,6 +148,8 @@ class ModelCatalogPort(Protocol):
 
     async def offered(self, agent_key: str) -> Sequence[CatalogueModel]: ...
 
+    async def native_default_model(self, agent_key: str) -> str | None: ...
+
 
 class ChatMediaStore(Protocol):
     """Where the web composer's uploads live until — and after — they are sent.
@@ -144,4 +172,30 @@ class ChatMediaStore(Protocol):
     async def present(self, attachment: Attachment) -> bool:
         """Whether a persisted reference's bytes are still on disk — a web
         upload's or a channel's, which the same 30-day sweep ages out."""
+        ...
+
+
+class ChannelMirrorPort(Protocol):
+    """A reply typed on the web into a conversation a channel opened, also sent
+    to that channel's chat (spec chat "Mirror a web reply into the channel it
+    came from").
+
+    Declared here, by the kind that consumes it; the channel kind satisfies it
+    and the composition root wires the two, so chat never imports channel code.
+    Absent (``None``) when no channel kind is wired — chat works without it."""
+
+    async def describe(self, conversation_id: str, channel_uid: str) -> MirrorView:
+        """Where a reply on this conversation would also go, and what is still
+        waiting to get there."""
+        ...
+
+    async def mirror(self, conversation_id: str, channel_uid: str, text: str) -> MirrorResult:
+        """Send ``text`` to the chat now, or keep it for later; the result's
+        ``on_start`` is what the reply's turn is queued with."""
+        ...
+
+    async def places(self, conversation_ids: Sequence[str]) -> Mapping[str, ChannelPlaceView]:
+        """Where in its channel each of ``conversation_ids`` lives, for the ones
+        a channel opened; the others are absent. A constant number of reads
+        whatever the number of ids — the listing calls it once per page."""
         ...

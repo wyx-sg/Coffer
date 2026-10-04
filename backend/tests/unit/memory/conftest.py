@@ -1,9 +1,9 @@
 """Fakes the memory unit tier shares: resources, audit, readers, completions.
 
 Every file under here drives the real ``infrastructure.memory`` store against
-``COFFER_MEMORY_ROOT``, which the suite-wide ``_isolated_memory_root`` fixture
-in ``backend/tests/conftest.py`` pins to that test's own ``tmp_path`` — so no
-test here can reach a developer's real ``~/.coffer/memory``, and none of them
+the memory root, which resolves from the fresh ``HOME`` the suite-wide
+``_real_home_guard`` fixture in ``backend/tests/conftest.py`` gives every test —
+so no test here can reach a developer's real memory tree, and none of them
 reads a real ``~/.claude`` or ``~/.codex`` either: a reader is either a fake or
 is handed a fixture ``config_dir`` built under ``tmp_path``.
 
@@ -143,7 +143,6 @@ class FakeResources:
     ) -> Resource:
         now = datetime.now(tz=UTC)
         row = Resource(
-            id=self._next_id,
             uid=uuid.uuid4().hex,
             kind=kind,
             name=name,
@@ -301,7 +300,7 @@ class ScriptedCompletion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         # ``timeout`` is recorded, not just tolerated: a bound the operator set
@@ -321,7 +320,7 @@ class ExplodingCompletion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         raise AssertionError("no model may be called without an internal connection")

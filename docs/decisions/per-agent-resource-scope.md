@@ -3,9 +3,9 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md),
+**Related**: [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md),
 [Kind Plugin Contract](kind-plugin-contract.md),
-[Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md),
+[A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md),
 [Channel Owner Gate](channel-owner-gate.md),
 [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md),
 [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md),
@@ -41,7 +41,12 @@ has to be told who is on the other end of each session.
 ### Option A — one framework-owned allow-list of agent uids, enforced by each kind at its own choke point (chosen)
 
 `Resource.scope` (`backend/coffer/domain/resource.py`) is one nullable value,
-owned by the framework rather than by any kind's config:
+owned by the framework rather than by any kind's config. It is reach, so it is
+a fact about this machine: it lives in `local/reach.json` beside `enabled`,
+never in the resource's vault file and never synced
+([Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md)).
+A resource with no record there reaches as registration would have made it:
+enabled, with the kind's `default_scope` or unrestricted.
 
 ```
 scope == None                           → every agent
@@ -56,7 +61,7 @@ does not have. An unidentified asker (`agent_uid=None`) matches only an
 unrestricted scope — it sees strictly less, never more.
 
 Each kind declares `supports_scope` on its `Kind` descriptor; a non-null scope
-on a kind that declares none is refused with 422 (`validate_scope`). The value,
+on a kind that declares none is refused with 422 (`validate_scope` in `domain/scope.py`). The value,
 its validation and its one kind-agnostic write path
 (`application/resource_scope_ops.py`, audited as `resource_scope_updated`) are
 the framework's. **Enforcement is not**: each kind calls `is_active` at the
@@ -65,8 +70,8 @@ seam where it already knows the asking agent.
 | Kind | Scope | Where it is enforced |
 | --- | --- | --- |
 | `mcp_server` | yes | The gateway session: `tools/list` / `resources/list` / `prompts/list` are built from the scope-filtered server list (`application/mcp/gateway_scope.py`), and the call seam re-checks before asking the supervisor for a connection (`application/mcp/gateway_handlers.py`), so a guessed `<server>__<tool>` name is refused as `TOOL_DISABLED` and logged as `denied`. Management routes (including the connection test) are not scope-gated. |
-| `skill` | yes | Delivery: a skill reaches an agent iff it is `enabled` and `is_active(scope, agent)`; anything else is reclaimed (`application/skill/delivery_ops.py`). See [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md). |
-| `channel` | yes, **inverted** | A channel is consumed by no agent, so its scope names the agents it may *drive*; `/agent`, the default agent and adapter start all read it. See [Channel Owner Gate](channel-owner-gate.md). |
+| `skill` | yes | Delivery: a skill reaches an agent iff it is `enabled` and `is_active(scope, agent)`; anything else is reclaimed (`application/skill/link_reconcile.py`, the skill-link reconcile target). See [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md). |
+| `channel` | yes, **inverted** | A channel is consumed by no agent, so its scope names the agents it may *drive*; `/new <agent>`, the default agent and adapter start all read it. See [Channel Owner Gate](channel-owner-gate.md). |
 | `provider` | yes | Projection: a connection is written into the config of the agents its scope reaches (`application/provider/targets.py`); `compatible_agents` became this scope plus a `default_scope` pre-fill from the wire. See [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md). |
 | `agent` | no | It *is* the agent; there is nothing for an agent scope to narrow. |
 | `knowledge`, `memory` | no | Withdrawn 2026-09-18 (Option F). |
@@ -121,17 +126,17 @@ as a second `AND`-ed machine allow-list in PR #381 (2026-09-14), removed the
 next day in PR #382 (migration 0076 resolved each row against the machine it
 was on, taking dormant when unsure). Lost because reach does not travel between
 machines at all; argued in
-[Resource Reach Is Machine-Local](resource-reach-is-machine-local.md).
+[Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md).
 
 ### Option F — scope on every kind, `knowledge` and `memory` included
 
-Both had `supports_scope` at times. Withdrawn in PR #404 (migration 0088 NULLs
-their `scope_json`) because for those two kinds scope withheld a *name* and
+Both had `supports_scope` at times. Withdrawn in PR #404 (migration 0088 cleared
+their stored scope) because for those two kinds scope withheld a *name* and
 nothing else: both serve files on disk that the agent is handed the path of,
 enforcement sat only on the MCP tool surface, and the skill knowledge delivers
-tells the agent to grep the whole root. The vault bore it out — every
-`knowledge` row's scope was `NULL` for the field's whole life, while every
-`memory` row carried an auto-default nobody chose, which hid the Coffer
+tells the agent to grep the whole root. The stored data bore it out — every
+`knowledge` resource's scope was `NULL` for the field's whole life, while every
+`memory` resource carried an auto-default nobody chose, which hid the Coffer
 project's memory from Codex sessions in that repository. Lost: a control the
 system's own instructions route around is not a boundary, and removing it
 widened reach on purpose.
@@ -143,7 +148,7 @@ scope naming it, and the channel kind carried a translation module because its
 `default_agent` and its scope named agents in two vocabularies. Lost: a scope
 is a reference to another resource, and references hold the immutable uid
 (migration 0096; see
-[Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md)).
+[A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md)).
 
 ### How the gateway learns the asking agent
 
@@ -211,4 +216,4 @@ Rules a future change must respect:
   serves a remote or multi-user client, Option "verified identity" must be
   revisited.
 - Where scope applies — on which machine — is the subject of
-  [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md).
+  [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md).

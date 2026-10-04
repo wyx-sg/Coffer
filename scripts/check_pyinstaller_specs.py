@@ -5,9 +5,11 @@ The three specs under `backend/` name paths as strings: the entry script each
 binary is frozen from, and the data files it has to carry because they are not
 importable modules. Nothing imports those strings, so when the file they point
 at is deleted or moved the spec keeps naming it and every gate stays green —
-PyInstaller is the only thing that reads them, and no CI job runs it. The cost
+PyInstaller is the only thing that reads them, and the only job that runs it
+is the release build. The cost
 lands on whoever next builds a release: `Unable to find '<path>' when adding
 binary and data files`, after the earlier binaries have already been built.
+`release.yml` runs PyInstaller, but only at release time.
 
 That is how `coffer.spec` went on carrying
 `coffer/application/knowledge/skill_assets` for the whole time the knowledge
@@ -23,7 +25,8 @@ fails on the first file whose text is not ASCII.
 Checks, for each `backend/*.spec`:
 
   1. The `Analysis([...])` entry script exists.
-  2. Every source path in `datas=[...]` exists.
+  2. Every source path in `datas=` exists (a literal list, or a variable
+     assigned earlier in the spec).
   3. The `EXE(...)` run-time options carry `("X utf8", None, "OPTION")`.
 
 Both are resolved from `backend/`, which is where the specs' own paths are
@@ -63,6 +66,35 @@ def _string(node: ast.expr) -> str | None:
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 
+def _datas_pairs(tree: ast.Module, value: ast.expr) -> list[ast.expr]:
+    """The `(source, dest)` tuples behind a `datas`/`binaries` value.
+
+    A literal list is read directly. A bare name (`datas=datas`) is resolved to
+    every assignment of that name at the spec's top level (`=` and `+=`), and the
+    tuples inside any list literal in those right-hand sides are collected, so
+    `collect_data_files(...) + [(...), (...)]` is covered too.
+    """
+    if isinstance(value, ast.Name):
+        roots: list[ast.expr] = []
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+                names = [node.target.id]
+            else:
+                continue
+            if value.id in names:
+                roots.append(node.value)
+    else:
+        roots = [value]
+    entries: list[ast.expr] = []
+    for root in roots:
+        for sub in ast.walk(root):
+            if isinstance(sub, ast.List):
+                entries.extend(sub.elts)
+    return entries
+
+
 def declared_paths(spec: Path) -> list[str]:
     """Every literal path `spec` asks PyInstaller to read.
 
@@ -70,7 +102,8 @@ def declared_paths(spec: Path) -> list[str]:
     source half of each `datas` pair. `binaries` follows the same shape but is
     empty in every spec here; it is read too, so that stays true.
     """
-    call = _analysis_call(ast.parse(spec.read_text(encoding="utf-8")))
+    tree = ast.parse(spec.read_text(encoding="utf-8"))
+    call = _analysis_call(tree)
     if call is None:
         return []
 
@@ -80,9 +113,7 @@ def declared_paths(spec: Path) -> list[str]:
     for keyword in call.keywords:
         if keyword.arg not in {"datas", "binaries"}:
             continue
-        if not isinstance(keyword.value, ast.List):
-            continue
-        for entry in keyword.value.elts:
+        for entry in _datas_pairs(tree, keyword.value):
             if isinstance(entry, ast.Tuple) and entry.elts:
                 source = _string(entry.elts[0])
                 if source:

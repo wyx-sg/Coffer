@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.chat.attachment import Attachment
 from coffer.surfaces.http.auth import set_active_token
 from tests.integration.chat.test_web_attachments import (
@@ -31,11 +30,9 @@ from tests.integration.chat.test_web_attachments import (
 
 @pytest.fixture(autouse=True)
 def _reset_turns() -> Generator[None, None, None]:
-    clear_active_turns()
     set_active_token(_TOKEN)
     yield
     set_active_token(None)
-    clear_active_turns()
 
 
 @pytest.fixture
@@ -84,7 +81,11 @@ def test_resend_carries_the_original_attachments(env: _Env) -> None:
         ("attachment", "shot.png"),
     ]
     stored = Attachment(
-        path=str(env.media / f"{png['id']}.png"), mime="image/png", filename="shot.png"
+        path=str(env.media / f"{png['id']}.png"),
+        mime="image/png",
+        filename="shot.png",
+        id=png["id"],
+        size=png["size"],
     )
     # Both the original turn and the retry hand the agent the same file.
     assert env.adapter.recorded_attachments == [[stored], [stored]]

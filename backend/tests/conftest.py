@@ -1,85 +1,95 @@
 """Root test configuration.
 
-Redirect every coffer log file away from the developer's real ``~/.coffer``
-before any test imports a module that calls ``configure_logging()`` (e.g.
-importing the HTTP app). ``configure_logging`` honours ``COFFER_LOG_DIR``
-(see ``coffer.infrastructure.logging.setup._log_dir``); without this, a test
-run pollutes the live ``~/.coffer/logs/daemon.log`` and makes it useless for
-debugging the real daemon.
+First, before anything imports ``coffer``: the real-home guard
+(``tests/support/real_home_guard.py``). ``HOME`` is pointed at a throwaway
+directory, every ``COFFER_*`` variable inherited from the developer's shell is
+stripped, and an audit hook refuses — and records — any filesystem, SQLite or
+spawn event under the real home's ``.coffer`` / agent config trees. A test that
+trips it fails in teardown even when the code under test swallowed the
+``PermissionError``. See ``.agents/testing.md`` "The Real-Home Guard".
 
-This is set at import time — not in a fixture — because conftest.py is imported
-before any test module, and some modules call ``configure_logging()`` at import
-or app-construction time. ``setdefault`` lets CI override the location.
+Every tree Coffer keeps — the vault with its knowledge and skill masters,
+``local/``, ``content/``, ``derived/`` with the memory tree — resolves from
+``HOME`` at the moment it is asked for, with no per-tree override (ADR
+storage-is-five-classes-by-nature), so the fresh ``HOME`` each test gets from
+``_real_home_guard`` below is what isolates every one of them.
+
+The log directory is set at import time — not in a fixture — because
+conftest.py is imported before any test module, and some modules call
+``configure_logging()`` at import or app-construction time.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
+from tests.support import real_home_guard
 
-_TEST_LOG_DIR = Path(tempfile.gettempdir()) / "coffer-test-logs"
+#: This process's own scratch root. Everything the run needs outside a test's
+#: ``tmp_path`` — the throwaway ``HOME`` and the log directory below — lives
+#: under it, so two pytest processes (xdist workers, a nested pytest, a
+#: second session's run) never share a directory or a log file.
+_RUN_ROOT = Path(tempfile.mkdtemp(prefix="coffer-test-run-"))
+
+_GUARD = real_home_guard.install(_RUN_ROOT / "home")
+
+import pytest  # noqa: E402
+
+from tests.support import hypothesis_profiles  # noqa: E402
+
+hypothesis_profiles.register()
+
+#: The isolated-HOME builders as fixtures (``isolated_home``, ``two_homes``,
+#: ``claude_code_dir``, ``codex_dir``, ``fake_channel_adapter``).
+pytest_plugins = ["tests.support.fixtures"]
+
+_TEST_LOG_DIR = _RUN_ROOT / "logs"
 os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
 
-# Same reason, and a far worse failure mode: ``paths.knowledge_root()`` falls
-# back to ``$HOME/.coffer/knowledge`` when ``COFFER_KNOWLEDGE_ROOT`` is unset,
-# so any test that boots the app without pinning it runs the knowledge
-# migration over the developer's REAL vault — moving their files, not just
-# writing a log line. Pinned at import time so no test can reach the live tree
-# by forgetting a fixture; a test that wants its own tree overrides it per-test
-# with monkeypatch, which takes precedence over this default.
-_TEST_KNOWLEDGE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-knowledge"
-os.environ.setdefault("COFFER_KNOWLEDGE_ROOT", str(_TEST_KNOWLEDGE_ROOT))
-
-# Same failure mode again, one layer over: ``paths.memory_root()`` (spec
-# memory) falls back to ``$HOME/.coffer/memory`` when ``COFFER_MEMORY_ROOT``
-# is unset, and that tree is a developer's real aggregated memory — a test
-# that forgets to pin this would delete and rewrite it, not just pollute a log.
-_TEST_MEMORY_ROOT = Path(tempfile.gettempdir()) / "coffer-test-memory"
-os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
-
-# And once more for the agent layer's own derived state (the transcript
-# summary sidecar): ``paths.agent_state_root()`` falls back to
-# ``$HOME/.coffer/cache/agent``. Nothing under it is a truth — deleting it
-# only costs a slow listing — but a test run has no business writing into the
-# developer's ``~/.coffer`` at all, and a sidecar shared between tests would
-# hand one test the summaries another test's tree left behind.
-_TEST_AGENT_STATE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-agent-state"
-os.environ.setdefault("COFFER_AGENT_STATE_ROOT", str(_TEST_AGENT_STATE_ROOT))
+# Nearly every integration test boots the app, and the lifespan supervises the
+# local model proxy — which would spawn a real subprocess per test. The tests
+# of the proxy and its supervisor build their own; everything else runs
+# without one (``surfaces/http/model_proxy_wiring.AUTOSTART_ENV``).
+os.environ.setdefault("COFFER_MODEL_PROXY", "off")
+# The daily price-list refresh fetches genai-prices over the network
+# (``infrastructure/usage/price_refresh.REFRESH_ENV``); tests price from the
+# snapshot in the tree.
+os.environ.setdefault("COFFER_PRICE_REFRESH", "off")
+# Every experimental feature is off until switched on, and almost every test
+# drives routes, tools or passes of one of them, so the suite pins all four on
+# (``COFFER_FEATURES``). The tests of the feature mechanism itself, and the
+# gate tests of each feature's off state, replace the pin with
+# ``tests.support.features.pin_features`` / ``monkeypatch``.
+os.environ.setdefault("COFFER_FEATURES", "knowledge=on,memory=on,sync=on,models=on")
 
 
 @pytest.fixture(autouse=True)
-def _isolated_knowledge_root(tmp_path, monkeypatch):
-    """Give every test its own knowledge tree.
+def _real_home_guard(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Give every test its own ``$HOME`` — and with it its own vault, knowledge,
+    skill, memory, media and cache trees — and fail it if it touched the real one.
 
-    The import-time default above is the safety net — it keeps a forgotten
-    fixture off the developer's real vault. This is the isolation: the tree is
-    shared state on disk, and the migration registers a Resource for every
-    collection directory it finds, so one test's leftover folder would show up
-    in another test's resource list. A test that wants a specific path (a
-    migration walk, say) overrides it with its own monkeypatch, which wins.
+    Declared first so it is set up before, and torn down after, every other
+    autouse fixture — their setup and teardown are inside the check. The home
+    comes from ``tmp_path_factory``, not ``tmp_path``, so a test that lists its
+    own ``tmp_path`` finds nothing it did not put there. A test that wants a
+    particular home still sets ``HOME`` itself; its monkeypatch wins.
     """
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge-root"))
-
-
-@pytest.fixture(autouse=True)
-def _isolated_memory_root(tmp_path, monkeypatch):
-    """Give every test its own memory tree, for the same reason as knowledge's."""
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory-root"))
-
-
-@pytest.fixture(autouse=True)
-def _isolated_agent_state_root(tmp_path, monkeypatch):
-    """Give every test its own transcript sidecar.
-
-    Isolation, not just safety: the sidecar is keyed by absolute path, and two
-    tests that both build a transcript tree under their own ``tmp_path`` would
-    otherwise share one file — so a test asserting "a cold reader parses every
-    file" would find another test's entries already sitting in it.
-    """
-    monkeypatch.setenv("COFFER_AGENT_STATE_ROOT", str(tmp_path / "agent-state"))
+    home = real_home_guard.write_home_skeleton(tmp_path_factory.mktemp("home"))
+    monkeypatch.setenv("HOME", str(home))
+    stray = _GUARD.drain()  # left by collection or a session fixture
+    yield
+    caught = stray + _GUARD.drain()
+    if caught:
+        pytest.fail(
+            "touched the real home (see tests/support/real_home_guard.py):\n  "
+            + "\n  ".join(str(v) for v in caught),
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -93,6 +103,19 @@ def _no_channel_burst_window(monkeypatch):
     monkeypatch.setattr(inbound_burst, "MAX_WINDOW_SECONDS", 0.0)
 
 
+@pytest.fixture(autouse=True)
+def _restore_feature_service() -> Iterator[None]:
+    """``create_app`` publishes the feature service process-wide, and a bare app
+    in a later test reads it (``kind_enabled``): without this, whichever app an
+    earlier test on the worker booted decides which features a test of a bare app
+    sees."""
+    from coffer.surfaces.http import feature_dependencies
+
+    prior = feature_dependencies._feature_service
+    yield
+    feature_dependencies._feature_service = prior
+
+
 # Accept any Host header across the suite. The loopback-Host guard
 # (``coffer.surfaces.http.host_guard``) exists to stop a DNS-rebound *browser*
 # page from reading the daemon's responses; these tests drive the ASGI app
@@ -101,3 +124,12 @@ def _no_channel_burst_window(monkeypatch):
 # authorities like ``testserver``. The guard's own tests clear this variable
 # and assert both directions for real.
 os.environ.setdefault("COFFER_ALLOWED_HOSTS", "*")
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """A violation outside any test (a session fixture's teardown, an import
+    after the last test) still fails the run."""
+    stray = _GUARD.drain()
+    if stray:
+        print("\nreal-home guard: touched outside any test:\n  " + "\n  ".join(map(str, stray)))
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-25
 **Deciders**: Yuxing Wu
-**Related**: spec chat ("Upload a file for a web message", "Send uploaded files with a web message", "Prune uploaded chat media on the retention cadence", "Attach files from the Chat page composer", "Show a message's attachments in the thread");
+**Related**: spec chat ("Upload a file for a web message", "Send uploaded files with a web message", "Prune uploaded chat media on the retention cadence", "Attach files from the Conversations page composer", "Show a message's attachments in the thread");
 [Channel Attachments](channel-attachments.md) (the reference-in-the-message design this reuses),
 [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md) (the send is fire-and-return),
 [Audit and Retention](audit-and-retention.md) (the age sweep)
@@ -32,10 +32,10 @@ Three things constrain how the browser hands a file over:
 
 ## Options Considered
 
-### Option A — A separate upload call that returns an opaque id; the send carries ids; bytes in `~/.coffer/chat-media` (chosen)
+### Option A — A separate upload call that returns an opaque id; the send carries ids; bytes in `~/.coffer/content/chat-media` (chosen)
 
 `POST /api/v1/chat/attachments` takes one multipart file, checks its size and
-type, writes it under `~/.coffer/chat-media` as `<id><ext>` beside an
+type, writes it under `~/.coffer/content/chat-media` as `<id><ext>` beside an
 `<id>.json` record (name, type, size), and answers `{id, filename, mime,
 size}`. `POST …/messages` gains `attachment_ids`; the route resolves each id to
 an `Attachment` and calls the same `enqueue_message(…, attachments=…)` a
@@ -84,14 +84,14 @@ and a 20 MB file becomes a 27 MB JSON document parsed in one piece.
 
 Loses for the reasons B does, and heavier.
 
-### Option D — Store web uploads in `~/.coffer/channel-media`
+### Option D — Store web uploads in `~/.coffer/content/channel-media`
 
 How it works: Option A's upload, into the channel directory, so one prune
 covers both.
 
 Pros: one directory, one sweep.
 
-Cons: the filesystem reference, the channels spec and [Channel
+Cons: the storage classes, the channels spec and [Channel
 Attachments](channel-attachments.md) all say that directory holds what a
 channel downloaded; a reader cleaning up after a channel would find the page's
 uploads there. The two entrances share a rule, not an owner.
@@ -116,7 +116,7 @@ Loses as churn without a consumer.
 ## Decision
 
 The web composer uploads each file to `POST /api/v1/chat/attachments`, which
-stores it under `~/.coffer/chat-media` and returns an opaque id; a send names
+stores it under `~/.coffer/content/chat-media` and returns an opaque id; a send names
 the ids in `attachment_ids`, and the route resolves them to the same
 `Attachment` references a channel hands the orchestrator. A file is at most
 20 MB, a message carries at most ten, and only images, audio, documents and

@@ -13,7 +13,7 @@ repository, the audit log or a resource; none of them can fail a write. The
 service keeps thin delegates so callers see no change.
 
 Free functions over the registry rather than methods, because two of them —
-``audit_safe_config`` and ``credential_refs`` — were already free functions
+``audit_safe_config`` and ``secret_refs`` — were already free functions
 taking a resolved ``Kind``, and nothing here needs the service at all.
 """
 
@@ -24,6 +24,7 @@ from typing import Any
 
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, normalise_title, validate_resource_name
+from coffer.domain.vault.layout import StorageClass
 
 Registry = Mapping[str, Kind]
 
@@ -41,69 +42,36 @@ def audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
     return kind_def.audit_redactor(config)
 
 
-def credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
-    """Return ``{key: credential_ref}`` for ``config`` using the kind's extractor.
+def secret_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
+    """Return ``{key: secret_ref}`` for ``config`` using the kind's extractor.
 
-    Kinds without a ``credential_ref_extractor`` declare no credentials and are
+    Kinds without a ``secret_ref_extractor`` declare no secrets and are
     not probed.
     """
-    if kind_def.credential_ref_extractor is None:
+    if kind_def.secret_ref_extractor is None:
         return {}
-    return kind_def.credential_ref_extractor(config)
+    return kind_def.secret_ref_extractor(config)
 
 
-def converges(kinds: Registry, kind: str) -> bool:
-    """Whether this kind's rows travel to the sync remote (spec vault-sync).
+def storage_of(kinds: Registry, kind: str, config: Mapping[str, Any]) -> StorageClass:
+    """The storage class a new resource of ``kind`` with ``config`` is filed in
+    (ADR storage-is-five-classes-by-nature): the kind's ``storage`` refined by
+    its per-row ``storage_row``.
 
-    Public on the service for the same reason ``supports_scope`` is: the sync
-    layer has to ask, and the answer belongs to the kind.
-
-    An unregistered kind answers **True**, which is the conservative answer
-    and not the obvious one. This flag exists only to withhold, so a kind
-    nobody has declared anything about must keep whatever behaviour it had:
-    an unknown kind arriving in a document still reaches ``register`` and is
-    still refused there by name (``UnknownKind``). Answering False would have
-    turned that named refusal into a silent skip — a document quietly doing
-    nothing is exactly what a converge round must not produce.
-    """
-    kind_def = kinds.get(kind)
-    return kind_def.converges if kind_def is not None else True
-
-
-def converges_row(kinds: Registry, kind: str, config: Mapping[str, Any]) -> bool:
-    """Whether **this one row** travels to the sync remote (spec vault-sync).
-
-    The kind-level answer refined by the kind's own per-row predicate. A kind
-    that declares nothing answers exactly as :func:`converges` does, so this is
-    the question the sync layer should ask everywhere — there is no case where
-    "the kind travels" is the right answer but "this row travels" is not asked.
-
-    Note what it is **not**: it is not the machine-local kind list the
-    exporter's header refuses to reintroduce. That list was a table in the sync
-    layer naming kinds it had opinions about, so the sync layer had to be
-    edited whenever a kind changed its mind, and it could only ever speak about
-    a kind as a whole. This is the opposite direction — the kind still
-    declares, and the sync layer still only asks; all that has widened is the
-    granularity of what a kind may declare. The answer comes out of the row's
-    own config, so no name and no table appears in the sync slice at all.
-
-    ``config`` is accepted as a plain mapping because the sync applier asks
-    this of a document that has just arrived and has no row behind it yet; the
-    predicate reads raw keys and never parses, so a shape an older build wrote
-    answers rather than raising.
+    An unregistered kind answers ``vault``: the vault is where a person's
+    resources live, and a kind this build does not know (a newer build's) is
+    kept there, inert, rather than guessed into a class that would not travel.
     """
     kind_def = kinds.get(kind)
     if kind_def is None:
-        return True
-    if not kind_def.converges:
-        return False
-    if kind_def.converges_row is None:
-        return True
-    return kind_def.converges_row(dict(config))
+        return StorageClass.VAULT
+    if kind_def.storage_row is not None:
+        return kind_def.storage_row(dict(config))
+    return kind_def.storage
 
 
 def check_name(kind_def: Kind, name: str) -> None:
-    """Framework rule then kind rule, BEFORE any DB write.
+    """Framework rule then kind rule, BEFORE any write.
 
     One helper because registration and rename must apply the same rules;
     while rename lived in one kind's service the two had already drifted —
@@ -128,35 +96,39 @@ def check_name(kind_def: Kind, name: str) -> None:
             raise ConfigValidationError(str(e)) from e
 
 
-def check_new_name(kind_def: Kind, name: str) -> None:
-    """The kind's rule for the name of a resource created on this machine.
-
-    Asked by registration only when it mints the uid, after :func:`check_name`
-    — so a rule tightened today refuses new names without refusing a row that
-    was registered before it, whether that row is loaded here or arrives from
-    another machine carrying its own uid.
-    """
-    if kind_def.validate_new_name is not None:
-        try:
-            kind_def.validate_new_name(name)
-        except ValueError as e:
-            raise ConfigValidationError(str(e)) from e
-
-
-def checked_title(title: str | None) -> str | None:
+def checked_title(kind_def: Kind, title: str | None) -> str | None:
     """The title to store — ``None`` for a blank one — or ``ConfigValidationError``
-    for one over the cap, before any write."""
+    for one over the cap, or for any title on a kind that carries none
+    (``Kind.titled``), before any write."""
     try:
-        return normalise_title(title)
+        wanted = normalise_title(title)
     except ValueError as e:
         raise ConfigValidationError(str(e)) from e
+    if wanted is not None and not kind_def.titled:
+        raise ConfigValidationError(
+            f"the {kind_def.name} kind carries no title: it is shown by its name, which is fixed"
+        )
+    return wanted
+
+
+def check_derived_name(kind_def: Kind, name: str, config: dict[str, Any]) -> None:
+    """Refuse a name other than the one the kind derives from ``config``
+    (``Kind.name_from_config``) — an agent is named by its type."""
+    if kind_def.name_from_config is None:
+        return
+    wanted = kind_def.name_from_config(config)
+    if name != wanted:
+        raise ConfigValidationError(
+            f"the name of this {kind_def.name} is its type's: it must be {wanted!r}, not {name!r}"
+        )
 
 
 __all__ = [
     "Registry",
     "audit_safe_config",
+    "check_derived_name",
     "check_name",
-    "converges",
-    "converges_row",
-    "credential_refs",
+    "checked_title",
+    "secret_refs",
+    "storage_of",
 ]

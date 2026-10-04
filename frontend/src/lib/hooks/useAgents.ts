@@ -3,24 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import {
-  agentsApi,
-  type AdoptMcpEntryBody,
-  type AgentCreate,
-  type AgentPatch,
-} from "@/lib/api/agents";
+import { agentsApi, type AgentCreate, type AgentPatch } from "@/lib/api/agents";
+import type { AdoptMcpEntryBody, AdoptSkillVars } from "@/lib/api/agents-workspace";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  agentCandidatesKey,
+  agentTypesKey,
   agentConfigChildKey,
   agentConfigFileKey,
   agentConfigFilesKey,
+  agentHooksKey,
+  agentPluginKey,
+  agentPluginsKey,
   agentKey,
   agentMcpEntriesKey,
   agentConnectionKey,
   agentMcpEntryKey,
-  agentPluginKey,
-  agentPluginsKey,
   agentsKey,
   agentUnmanagedSkillsKey,
   resourcesByKindKey,
@@ -55,9 +52,13 @@ export function useAgent(uid: string) {
 // No onError toast on register / patch: the add dialog and the edit form each
 // render the failure inline next to the field it concerns (e.g. the 409 for an
 // already-registered config dir), so a toast would double-surface it.
+export const AGENT_REGISTER_KEY = ["agent", "register"] as const;
+export const agentConnectMutationKey = (uid: string) => ["agent", "connect", uid] as const;
+
 export function useRegisterAgent() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: AGENT_REGISTER_KEY,
     mutationFn: (body: AgentCreate) => agentsApi.register(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: agentsKey });
@@ -75,25 +76,17 @@ export function usePatchAgent() {
   });
 }
 
-export function useRemoveAgent() {
-  const qc = useQueryClient();
-  const onError = useAgentToastError();
-  return useMutation({
-    mutationFn: (uid: string) => agentsApi.remove(uid),
-    onSuccess: (_data, uid) => {
-      qc.removeQueries({ queryKey: agentKey(uid) });
-      qc.invalidateQueries({ queryKey: agentsKey });
-    },
-    onError,
-  });
-}
-
-// Read-only discovery of installed-but-unregistered agents; gated on `enabled`.
-export function useAgentCandidates(enabled: boolean) {
+/** Every supported type with its detection state and — when added — its uid:
+ *  the Agents page's two fixed rows and the type → uid step of every page
+ *  under /agents/:type. Detection is automatic (spec agent-registry "Expose
+ *  agent discovery over REST and on the Agents page"): read on load, when the window regains
+ *  focus, and every few minutes, never behind a Detect action. */
+export function useAgentTypes() {
   return useQuery({
-    queryKey: agentCandidatesKey,
-    queryFn: async () => (await agentsApi.candidates()).candidates,
-    enabled,
+    queryKey: agentTypesKey,
+    queryFn: async () => (await agentsApi.types()).types,
+    refetchOnWindowFocus: true,
+    refetchInterval: 3 * 60_000,
   });
 }
 
@@ -130,10 +123,13 @@ export function useAgentConnect(uid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
+    mutationKey: agentConnectMutationKey(uid),
     mutationFn: (connect: boolean) =>
       connect ? agentsApi.connect(uid) : agentsApi.disconnect(uid),
     onSuccess: (data) => {
       qc.setQueryData(agentConnectionKey(uid), data);
+      // Connecting (re)installs Coffer's hook, whose health the Hooks tab shows.
+      void qc.invalidateQueries({ queryKey: agentHooksKey(uid) });
     },
     onError,
   });
@@ -183,6 +179,16 @@ export function useAdoptMcpEntry(agentUid: string) {
       qc.invalidateQueries({ queryKey: agentMcpEntriesKey(agentUid) });
       qc.invalidateQueries({ queryKey: resourcesByKindKey("mcp_server") });
     },
+  });
+}
+
+// --- Hooks (spec agent-registry "List every hook in the agent's native config") — read-only ---
+
+export function useAgentHooks(uid: string) {
+  return useQuery({
+    queryKey: agentHooksKey(uid),
+    queryFn: () => agentsApi.hooks(uid),
+    enabled: !!uid,
   });
 }
 
@@ -258,14 +264,15 @@ function invalidateUnmanagedSkills(qc: ReturnType<typeof useQueryClient>, agentU
   qc.invalidateQueries({ queryKey: agentKey(agentUid) });
 }
 
-export function useAdoptUnmanagedSkill(agentUid: string) {
+export function useAdoptUnmanagedSkill(agentUid: string, { toastErrors = true } = {}) {
   const qc = useQueryClient();
-  const onError = useAgentToastError();
+  const toastError = useAgentToastError();
   return useMutation({
-    mutationFn: ({ skill, location }: { skill: string; location: string }) =>
-      agentsApi.adoptUnmanagedSkill(agentUid, skill, location),
+    mutationFn: ({ skill, location, ...options }: AdoptSkillVars) =>
+      agentsApi.adoptUnmanagedSkill(agentUid, skill, location, options),
     onSuccess: () => invalidateUnmanagedSkills(qc, agentUid),
-    onError,
+    // A dialog that shows the failure itself turns the toast off.
+    onError: toastErrors ? toastError : undefined,
   });
 }
 

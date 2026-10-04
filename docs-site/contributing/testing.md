@@ -1,11 +1,11 @@
 ---
 title: Testing
-description: Coffer's four test tiers, where each lives and how to run it, acceptance markers, the mocking philosophy, every gate make verify runs, and the CI workflows.
+description: Coffer's four test tiers, where each lives and how to run it, the real-home guard and isolated homes, acceptance markers, the mocking philosophy, every gate make verify runs, and the CI workflows.
 ---
 
 # Testing
 
-This page covers how Coffer is tested: the four tiers and where each lives, how to run them, how tests link to spec scenarios, what counts as a good test here, and every gate that `make verify` and CI apply. The full convention is in [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md).
+This page covers how Coffer is tested: the four tiers and where each lives, how to run them, how the suite keeps tests away from your real home, how tests link to spec scenarios, what counts as a good test here, and every gate that `make verify` and CI apply. The full convention is in [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md).
 
 The standard is simple to state: **a green `make verify` plus `make verify-e2e` must mean the product works**, with no manual re-testing.
 
@@ -15,7 +15,7 @@ The standard is simple to state: **a green `make verify` plus `make verify-e2e` 
 | --- | --- | --- | --- | --- |
 | **Unit** | Pure logic: domain functions, value objects, one class. No I/O | `backend/tests/unit/`, plus colocated `frontend/src/**/*.test.ts(x)` | < 100 ms | `make verify-unit` |
 | **Integration** | Several modules with real local infrastructure: real SQLite, real subprocesses, real filesystem, the `keyring` test backend. No network | `backend/tests/integration/` | < 2 s | `make verify-integration` |
-| **Contract** | Wire-format conformance: the hand-written `api.openapi.yaml` files against the Pydantic models and the runtime OpenAPI document | `backend/tests/contract/` | < 1 s | `make verify-contract` |
+| **Contract** | Wire conformance that freshness cannot see: every route the daemon serves has an owning capability, and the MCP endpoint and built-in tools behave as the protocol and the specs say | `backend/tests/contract/` | < 1 s | `make verify-contract` |
 | **E2E** | The assembled product through real surfaces: a browser against the UI, and a real MCP client through the shim and daemon to upstream servers | `e2e/web/specs/`, `e2e/mcp/specs/` | < 30 s | `make verify-e2e` |
 
 The budgets are guidance, not gates. A test that drifts an order of magnitude past its budget is a hint that it belongs in another tier.
@@ -37,7 +37,7 @@ cd frontend && npx vitest run src/components/PageHeader.test.tsx
 cd e2e && npx playwright test --project=web shell_skills
 ```
 
-`make verify-benchmark` runs the perf-budget tests marked `benchmark` with `COFFER_RUN_BENCHMARKS=1`. `make verify` excludes them, and a separate CI job runs them. `make coverage` produces pytest and Vitest coverage reports. Use it to find untested branches, not as a target.
+`make verify-benchmark` runs every perf-budget test marked `benchmark`. It sets `COFFER_RUN_BENCHMARKS=1` so that the ones too slow for `make verify` run too, and a separate CI job runs it. See [Performance budgets](#performance-budgets) for which budget runs where. `make coverage` produces pytest and Vitest coverage reports. Use it to find untested branches, not as a target.
 
 ## What a good test looks like
 
@@ -60,9 +60,45 @@ Prefer the real thing whenever it is fast enough:
 
 Mock only what is **non-local** (an external HTTP service, an LLM API), **non-deterministic** in a way the test cares about (the clock, randomness), or, as a last resort, **slow**. A test that needs to mock something slow is often in the wrong tier.
 
-### Tests never touch your real vault
+### Property-based tests
 
-`backend/tests/conftest.py` sets `COFFER_LOG_DIR`, `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT` and `COFFER_AGENT_STATE_ROOT` to temporary directories at import time. Autouse fixtures then give each test its own knowledge, memory and agent-state tree. Without these pins, a test that boots the app would run migrations on the developer's real `~/.coffer`. Keep new fixtures inside this safety net. A test that wants a specific path overrides it with `monkeypatch.setenv`.
+Some rules must hold for every input, not only for a few chosen ones. For those, the test states the rule and lets [Hypothesis](https://hypothesis.readthedocs.io/) generate the inputs. The sync deletion breaker and a sync round's merge decision are tested this way:
+
+- **The breaker.** Generated areas are checked against the threshold written in whole numbers (twenty files, or more than a fifth of the area). A move is checked never to count as a loss.
+- **A round.** Generated forks of a vault run through the real round engine over an in-memory git. Any conflict must stop the round, and a merge that loses too much must be held. Neither may check anything out or push. Every other clean merge must be applied and pushed, and the next round must find nothing to do.
+
+These tests live in the unit tier and run in `make verify`. The default profile draws 100 examples per test, the same 100 on every run. It sets no time limit per example and writes no example database into the checkout. After you change the code under test, run `HYPOTHESIS_PROFILE=thorough make verify-unit` for a deeper search: it draws 2,000 random examples per test. When a property fails, Hypothesis shrinks the input to the smallest failing case and prints it. Turn that case into an ordinary example test beside the property.
+
+### Tests run in parallel
+
+The backend unit and integration tiers spread their tests across one worker process per core, which turns the integration tier from the slowest step of a local verify into one of the quicker ones. Each worker is a complete, separate test run: it gets its own throwaway home, its own scratch directory and its own temporary folders, so the protections described below hold in every worker exactly as they do in a single process.
+
+When you need one process — to step through a test in a debugger, to read output that is not interleaved, or to chase a failure that depends on test order — set the worker count to zero and the tier runs serially.
+
+For a test to be safe alongside others, nothing it creates may have a name another process could choose too. Build files inside the test's own temporary directory, ask the operating system for a free port instead of writing one down, and never write into the checkout itself. When a test depends on something the code under test fixes and the test cannot move, mark it as belonging to a named group: every test in a group runs on the same worker, one after another. Use this last, because each group is a small serial island inside the parallel run.
+
+### Tests never touch your real home
+
+Nearly everything Coffer keeps on disk lives under your home directory: the vault with its database, notes and logs, and the configuration of the coding agents that Coffer connects to. A test that forgets to point one of those somewhere else does not fail. It quietly runs against your real data.
+
+This has happened. When the setting that locates the knowledge tree was left unset, Coffer fell back to the default location in the home directory. A test that started the app without setting it ran the knowledge migration over a developer's real vault and moved their files. Setting one more variable would only have closed that one path, so the suite now enforces the rule for every path at once, in two layers.
+
+**Redirect the home.** Before any Coffer code loads, the test run points the home directory at a throwaway location. It also drops every Coffer setting inherited from your shell, along with the variables that could send an agent or git to a different directory. Each test then gets a fresh home of its own, already set up so git can commit in it. Programs that a test starts, such as the daemon, the MCP shim or the command line, inherit the same throwaway home, so they cannot reach the real one either.
+
+**A tripwire on the real home.** Redirection can still be undone, most easily by a test that changes or removes the home variable. Without one, the system falls back to your real home. So the suite also watches the interpreter's own file, database and process-start events. Any attempt to read or write inside Coffer's directory or an agent's configuration directory under your real home is refused *before* it happens, so nothing is ever written. Starting a program with no home set, or with the real one, is refused the same way. Each refusal is also recorded, because code that tolerates an unreadable file might quietly swallow the error. The test then fails with a list of what it tried to touch, even when nothing else went wrong. A dedicated set of tests proves this: they aim at the real home on purpose, and they check both that every attempt is refused and that nothing appeared.
+
+If the tripwire fails your test, the message names each path. The fix is almost always to build that path inside the test's own temporary directory, or to use one of the isolated setups below. Do not point anything at your real home.
+
+### Isolated homes
+
+In a test, a "machine" is simply a home directory. The suite provides ready-made isolated setups, so a test never has to assemble its own:
+
+- **A single machine.** A fresh home that the test process is already using. Coffer derives every one of its directories from it, exactly as an installed copy would. The same home can be handed to a program the test starts, so the program runs as that machine.
+- **Two machines sharing a remote.** Two independent homes that share nothing except one real git repository they can both reach. Vault sync scenarios are played out between them through the real sync code and real git, with nothing faked.
+- **Fake agent configuration.** An agent's configuration directory, such as Claude Code's or Codex's, laid out inside an isolated home from the same description of that agent that Coffer itself uses. A file the test writes therefore lands exactly where Coffer will look for it. Both the default location and a custom one are supported.
+- **A fake chat channel.** A stand-in for an instant-messaging platform. It records everything Coffer sends (messages, cards, edits, typing indicators, reactions, files) and lets a test deliver incoming messages and button taps. Its capabilities can be switched on and off, so the same fake can act like a platform that edits messages in place or like one that streams its replies.
+
+When a test needs a new kind of isolated setup, add it next to these rather than building a one-off inside a single test file.
 
 ## Acceptance markers
 
@@ -72,9 +108,10 @@ Every `#### Scenario:` in `openspec/specs/**/spec.md` needs at least one coverin
 
 ```python [pytest]
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="a source build reports the dev channel"
+    spec="experimental-features",
+    scenario="a stored setting for a feature the registry does not name is ignored",
 )
-async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(client): ...
+def test_a_stored_setting_for_a_retired_feature_is_ignored(home): ...
 ```
 
 ```ts [Vitest]
@@ -88,7 +125,7 @@ acceptance("chat", "chat runs on the built-in model when no connection", () => {
 ```ts [Playwright]
 import { acceptance } from "./_acceptance";
 
-acceptance("web-ui", "legacy /audit redirects to activity", async ({ page }) => {
+acceptance("web-ui", "activity gives each record its own tab", async ({ page }) => {
   // ...
 });
 ```
@@ -104,7 +141,7 @@ fn a_spawned_daemon_leaves_the_apps_process_group() { /* ... */ }
 `make verify-acceptance` runs two checks. First, `openspec validate --all --strict` fails any requirement without a scenario. Then `scripts/audit_acceptance.py` fails on:
 
 - a scenario with no covering marker
-- a marker naming a capability or scenario that does not exist
+- a marker naming a capability or scenario that does not exist (a scenario that a change in progress adds counts as existing, and is listed, until that change is archived)
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 
@@ -113,6 +150,20 @@ The pytest marker is registered in `backend/pyproject.toml` and runs under `--st
 ## Unit purity
 
 `scripts/check_unit_purity.py` runs first in `make verify-unit`. It parses every file under `backend/tests/unit/` and fails on an import of an I/O module: `subprocess`, `sqlite3`, `httpx`, `fastapi.testclient`, `socket`, `requests`, `urllib.request`, `aiohttp` or `keyring`. The failure message names the file and line and points you to the integration tier. To ban another module, add it to the `BANNED` dict in the script.
+
+## Performance budgets
+
+A few costs have a budget that a test enforces. Each ceiling sits a few times above what was measured. It fails when the code starts doing work it should not, not when the machine is busy.
+
+| Budget | Measured | Ceiling | Test | Runs in |
+| --- | --- | --- | --- | --- |
+| Daemon startup: the CPU time the daemon and its child processes spend from spawn to the first `ready` status, on a fake home with an empty vault | 2.4–2.7 s CPU (2.4–22 s wall-clock) | 8 s CPU, plus 60 s wall-clock as a hang guard | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
+| Gateway overhead: the median extra time an MCP tool call takes through the gateway, compared with a direct connection | 2–5 ms | 50 ms | `backend/tests/integration/perf/test_gateway_overhead.py` | `make verify` |
+| One steady-state reconcile pass, with two connected agents, twenty skills and an active provider connection | 27–40 ms | 2 s (`PASS_BUDGET_SECONDS`) | `backend/tests/integration/perf/test_reconcile_pass_cost.py` | `make verify-benchmark` only |
+
+The measurements were taken on an Apple Silicon laptop while other work was running. Startup is budgeted in CPU time because its wall-clock time depends on the machine: on that laptop, starting a process took seconds under load, and the same boot took anywhere from 2.4 to 22 seconds. Its CPU time stayed between 2.4 and 2.7 seconds. The startup and gateway tests take a few seconds each, so they run with the rest of the integration tier. The reconcile test needs close to a minute to set up its machine, so only `make verify-benchmark` and its CI job run it. All three tests are marked `benchmark`, so `make verify-benchmark` runs every budget.
+
+No test retries itself. A test that fails only on a loaded machine has a bug, in the test or in the code: find the assumption about wall-clock time and remove it.
 
 ## End-to-end tests with Playwright
 
@@ -136,7 +187,9 @@ Playwright starts two web servers:
 - **Vite** on port 5173, with `VITE_COFFER_BASE_URL=http://127.0.0.1:18000/api/v1`. The Vite server is never reused, because a leftover `make dev` Vite would point at the wrong daemon.
 
 ::: warning Changing the ports
-The daemon's development CORS allowlist is fixed to `http://localhost:5173` and `http://127.0.0.1:5173`. If you serve the UI from any other port, also set `COFFER_CORS_ORIGINS` to that origin. It replaces the allowlist entirely. Without it, every browser request fails with "Failed to fetch" and the `web` specs fail even though nothing is broken.
+The daemon's development CORS allowlist is fixed to `http://localhost:5173` and `http://127.0.0.1:5173`. If you serve the UI from any other port, also set `COFFER_CORS_ORIGINS` to that origin. It replaces the allowlist entirely. Without it, the daemon refuses every browser request with `403 ORIGIN_NOT_ALLOWED`, the page reports "Failed to fetch", and the `web` specs fail even though nothing is broken.
+
+When another checkout's dev server already holds those ports, move the suite: `COFFER_E2E_WEB_PORT=5183 COFFER_E2E_PORT=18200 make verify-e2e`. The config then passes the matching `COFFER_CORS_ORIGINS` itself and keeps its own HOME pointer, so the two runs don't share a daemon.
 :::
 
 On a CI failure, the `e2e` job uploads the Playwright report and traces, plus the isolated daemon's log directory and `daemon.json`, as workflow artifacts.
@@ -149,32 +202,43 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 
 ## What `make verify` runs
 
-`make verify` runs `lint`, then `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`. When everything passes, it writes `.coffer-verify.stamp`, a content fingerprint of the source files. The Claude Code harness hook reads that stamp and warns when a commit happens while it is stale. `make verify-all` adds `verify-e2e`.
+Only one integration run happens on a machine at a time. `make verify-integration` takes a machine-wide lock (`~/.cache/coffer/verify-integration.lock`), so a second run from another worktree or session waits for the first instead of slowing it down until time-based tests fail; `COFFER_VERIFY_LOCK=off` skips the lock. Each integration test also has a 300-second cap (`PYTEST_TIMEOUT`), so a hung test fails by name instead of stalling the run.
+
+`make verify` runs `lint`, then `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, one after another. At the end, pass or fail, it prints how long each stage took and keeps the list in `.coffer-verify.timings`. `make verify-all` adds `verify-e2e`.
 
 `make lint` is the whole static gate, not only a formatter pass. It runs these steps in order:
 
 | Gate | What it protects |
 | --- | --- |
 | `scripts/check_file_sizes.py` | File-size limits: backend Python and desktop Rust ≤ 400 lines, frontend page ≤ 200, component ≤ 250, hook and utility ≤ 300. Generated files are excluded |
+| Contract freshness | Each capability's `api.openapi.yaml` is regenerated from the Pydantic models and must equal the checked-in file, and every served route must belong to a capability. Fix with `make contracts` |
 | `scripts/check_response_models.py` | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and file responses), so no route returns an untyped `dict` |
-| `scripts/check_doc_numbering.py` | Specs, ADRs and requirements stay named, not numbered. Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
-| `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement, and retired id forms stay out |
+| `scripts/check_adr_index.py` | Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
+| `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement. Inside `openspec/`, a link relative to the spec (`[x](../skill-manager/spec.md) "<Title>"`) and a `see "<Title>"` of the file's own capability are checked too. A title wrapped across lines is read as one line |
 | `scripts/check_architecture_doc.py` | The code-layout tree in `docs-site/architecture/layering.md` names every package, names nothing that is gone, and the architecture pages name every built-in `coffer__*` tool |
 | `scripts/check_pyinstaller_specs.py` | The three PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
-| `scripts/check_cli_reference.py` | This site's generated CLI and REST API reference pages match the code. Fix drift with `make docs-reference` |
-| `scripts/check_removed_commands.py` | No page under `docs-site/`, shipped skill body or e2e spec quotes a `coffer` command or `coffer__` tool that the CLI and MCP reshape removed. Each hit names the command to use instead |
+| `scripts/check_cli_reference.py` | This site's generated CLI reference pages (English and Chinese) match the code. Fix drift with `make docs-reference` |
+| `scripts/check_docs_locales.py` | This site's English and Chinese trees are one to one: pages, sidebar entries, heading anchors, and Chinese pages linking Chinese pages |
+| `scripts/check_error_codes_reference.py` | [Error codes](/reference/error-codes), in English and Chinese, lists every code the daemon maps in `surfaces/http/errors.py`, each at the HTTP status it is sent with, and no code the daemon does not map |
+| `scripts/check_removed_commands.py` | No page under `docs-site/`, repository guide (`README.md`, `README.zh-CN.md`, `AGENTS.md`, `CONTRIBUTING.md`, `.agents/`, `docs/` except the ADRs), spec, desktop shell source file, shipped skill body, web UI source file or e2e spec quotes a `coffer` command, option or `coffer__` tool that has been removed. Each hit names the command to use instead; a line that names one on purpose, such as a scenario asserting it is gone, is listed in the script's `ALLOWED` |
+| `scripts/check_platform_calls.py` | No code outside the platform part of the infrastructure layer asks which operating system it runs on. Tests are exempt. See [Platform port](/architecture/platform) |
+| `scripts/check_coffer_paths.py` | Every `~/.coffer` path is built in `infrastructure/vault/home.py`, the one module that knows the layout and honours `HOME`; any other module that builds one fails. Migrations and the real-home test guard are allowed |
+| `scripts/check_agent_type_branches.py` | No code outside the agent descriptor and its facets branches on an agent type. See [Agent facets](/architecture/agent-facets) |
+| `scripts/check_frontend_colors.py` | No colour literal in the frontend outside `src/index.css`; every colour is a theme token |
+| `scripts/check_ignored_sources.py` | No `.gitignore` rule hides a file in a source tree, and no unanchored pattern names a common source-folder word such as `lib/` or `env/`, which would hide that folder at any depth |
+| `scripts/check_bare_tasks.py` | No module under `backend/coffer/` starts a bare `asyncio.create_task` or `ensure_future` beyond its listed allowance. Background work goes through the supervisor, which names a task, logs its crash and cancels it at shutdown. A task that is awaited in place is listed in the script with its reason |
 | `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |
-| `mypy --strict` | Type-checks the whole `coffer` package |
-| `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the credentials code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
+| `mypy` | Type-checks the whole `coffer` package under `backend/pyproject.toml`, which sets `strict = true` |
+| `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the secrets code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
 | `scripts/dump_i18n_backend_keys.py --check` | Every backend error code and audit event type has an entry in the fixture that the frontend's locale-coverage test reads, so none ships untranslated |
-| `npm run lint` | `codegen:check` (generated API types match the contracts), then ESLint |
+| `npm run lint` | `codegen:check` (generated API types match the contracts, and no wire type in the API modules is written by hand), then ESLint |
 | `npm run typecheck` | `tsc` over the frontend |
 | `npm run knip` | Dead frontend code: unused files, exports and dependencies |
 
 The four frontend steps are skipped when `frontend/node_modules` is missing. CI always installs it. `lint-imports` runs with `PYTHONPATH=backend` so that in a git worktree it analyses this checkout rather than the one the editable install points at.
 
 ::: tip Docs-only changes can fail `make lint`
-The citation, numbering, architecture-doc and reference gates all read Markdown. Run `make lint` after editing docs too.
+The citation, ADR-index, architecture-doc, removed-command and reference gates all read Markdown. Run `make lint` after editing docs too.
 :::
 
 The pre-commit hooks from `make hooks` add fast checks at commit time: trailing whitespace, end-of-file, YAML, TOML and JSON syntax, merge-conflict markers, large files, ruff, prettier and commitlint on the message.
@@ -183,11 +247,11 @@ The pre-commit hooks from `make hooks` add fast checks at commit time: trailing 
 
 | Workflow | Trigger | What it runs |
 | --- | --- | --- |
-| `verify.yml` | Pull requests to `main`, pushes to `main` | Eight parallel jobs, all required: `lint`, `test-unit`, `test-integration`, `test-benchmark`, `audit-acceptance`, `secrets-scan` (gitleaks over the full history), `test-contract`, `test-e2e` |
-| `ci.yml` | Pushes to `main` and `feature/**`, weekly schedule | One `make verify` job. The scheduled run is the **latest-deps canary**: it installs with `uv sync --upgrade` instead of the lockfile, so an upstream release that breaks Coffer shows up on a schedule |
+| `verify.yml` | Pull requests to `main`, pushes to `main` | Parallel jobs, each running one Makefile target: `lint` (`make lint`), `test-unit`, `test-integration`, `test-contract`, `test-benchmark`, `test-e2e`, `test-visual` (`make verify-<tier>`; the visual job is report-only, `continue-on-error`, until baselines are committed), `audit-acceptance` (`make verify-acceptance`) and `secrets-scan` (gitleaks over the full history, as `make verify-secrets` runs it locally). The integration tier is split into four shards that run side by side, balanced by how long each test took last time it was measured, with one final check that passes only when every shard passed. A pull request that changes only documentation no test reads skips the test jobs; the gates that check documentation still run, and the skipped checks count as passed |
+| `ci.yml` | Pushes to `main` and `feature/**`, manual dispatch (`workflow_dispatch`), weekly schedule | One `make verify` job. The scheduled run is the **latest-deps canary**: it installs with `uv sync --upgrade` instead of the lockfile, so an upstream release that breaks Coffer shows up on a schedule |
 | `pr-title.yml` | Pull request opened or edited | The title against `.commitlintrc.yaml` |
-| `desktop.yml` | Changes to `desktop/**` or the `Makefile` | `make desktop-lint` and `make desktop-test` |
-| `evals.yml` | Changes to `evals/` or to the MCP, knowledge or memory code | `make eval`: the deterministic eval suites, gated on regression against the committed baseline |
+| `desktop.yml` | Changes to `desktop/**` or the `Makefile`, on `main` | `make desktop-lint` and `make desktop-test` |
+| `evals.yml` | Changes to `evals/`, to the MCP domain code (`backend/coffer/domain/mcp/`) or to the lockfile, on `main` | `make eval`: the deterministic eval suites, gated on regression against the committed baseline |
 | `pages.yml` | Changes to `docs-site/**` | Builds this site, and deploys it from `main` |
 | `release.yml` | A `v*` tag | Frozen binaries, the CLI archive and the desktop `.dmg` for macOS on Apple Silicon, then a GitHub Release |
 

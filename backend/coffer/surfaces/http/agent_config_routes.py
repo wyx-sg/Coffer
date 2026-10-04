@@ -20,15 +20,18 @@ from coffer.application.agent.config_file_service import (
     ConfigFileContent,
     ConfigFileInfo,
 )
-from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.surfaces.http.agent_dependencies import get_agent_config_file_service
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileKind
+from coffer.surfaces.http.agent_dependencies import (
+    get_agent_config_file_service,
+)
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 
@@ -44,7 +47,7 @@ class ConfigFileInfoOut(BaseModel):
     path: str
     folder_path: str
     format: ConfigFileFormat
-    kind: str
+    kind: ConfigFileKind
     exists: bool
     size: int | None
     modified_at: datetime | None
@@ -77,7 +80,7 @@ def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
         path=i.path,
         folder_path=i.folder_path,
         format=i.format,
-        kind=i.kind,
+        kind=ConfigFileKind(i.kind),
         exists=i.exists,
         size=i.size,
         modified_at=i.modified_at,

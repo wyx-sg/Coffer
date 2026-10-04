@@ -9,38 +9,48 @@ Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
 from coffer.application.chat.attachments import ChatAttachmentService
+from coffer.application.chat.question_agents import QuestionService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECONDS
 from coffer.application.provider.introspection import ModelIntrospectionService
-from coffer.application.provider.targets import projection_targets
+from coffer.application.provider.targets import connection_for_agent
 from coffer.application.resource_service import ResourceService
-from coffer.domain.errors import CredentialMissing, ResourceNotFound
-from coffer.domain.provider.config import ProviderConfig
+from coffer.application.runtime.supervisor import spawn
+from coffer.application.turn_ask import set_turn_ask
+from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.chat.channel_note import ChannelNote
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.modality import Modality
+from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
 from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.agent.model_discovery import (
     ChainedModelDiscovery,
     NativeConfigModelDiscovery,
+    NativeDefaultModel,
 )
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.provider.introspector import ProviderIntrospector
+from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
+from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS, ProviderIntrospector
+from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
 from coffer.surfaces.http.chat.dependencies import (
+    get_channel_note_reader,
     set_agent_registry,
     set_attachment_service,
     set_chat_service,
@@ -85,15 +95,14 @@ class _ActiveProviderModels:
     half of the catalogue's provider question.
 
     Resolves ``ProviderService`` lazily per call (through the provider kind's
-    getter — this runs at request time, by design), so activating, re-targeting
+    getter — this runs at request time, by design), so switching, re-targeting
     or curating a connection takes effect on the next card render with no
     rewiring.
 
-    Matches the connection the same way the turn machinery does when it injects a
-    key (``resolve_active_key_for_agent``): the first one flagged ``is_active``
-    whose per-agent SCOPE reaches this agent type (ADR per-agent-resource-scope) — and a
-    disabled connection reaches none. An agent with no such connection runs on
-    its own login, which is what ``None`` says.
+    Asks the one question every consumer asks, ``connection_for_agent``: the
+    connection the AGENT's record names, when it is switched on and its scope
+    reaches the agent (ADR per-agent-resource-scope). An agent on no connection
+    runs on its own login, which is what ``None`` says.
 
     Narrowed to ``text``: the question is what a CHAT picker may offer, and the
     same endpoint's embedding, image, video and speech models would be rejected
@@ -103,40 +112,35 @@ class _ActiveProviderModels:
     answers ``[]``.
     """
 
-    #: Held rather than resolved lazily like the provider service: a
-    #: connection's reach names agent UIDS, so answering a question about an
-    #: agent TYPE needs the agent registry, and that is a plain dependency.
+    #: Held rather than resolved lazily like the provider service: the agent
+    #: key names a TYPE, and finding the agent row of that type needs the agent
+    #: registry, which is a plain dependency.
     resources: ResourceService
 
     async def curated_models(self, agent_key: str) -> list[str] | None:
         try:
             connections = await get_provider_service().list()
-            # A connection's reach is now an allow-list of agent UIDS, so
-            # answering "does it cover this agent TYPE" means asking which
-            # registered agents it reaches and what type each of those is. The
-            # rows are fetched once, not per connection.
             agents = await self.resources.list(kind="agent")
         except Exception:
             # Nothing is wired yet, or the provider kind is unhappy: a catalogue
             # read degrades to "no active provider", never to an error.
             _log.debug("agent.catalogue.provider_lookup_failed", exc_info=True)
             return None
-        for resource in connections:
+        for agent in agents:
             try:
-                cfg = ProviderConfig.model_validate(resource.config)
+                if AgentConfig.model_validate(agent.config).type.value != agent_key:
+                    continue
             except ValueError:
-                # A row this build cannot parse is not a candidate; the
-                # provider kind's own validation reports it where it is edited.
-                _log.debug("agent.catalogue.provider_config_invalid", extra={"name": resource.name})
                 continue
-            if cfg.is_active and any(
-                t.value == agent_key for t in projection_targets(resource, cfg, agents)
-            ):
-                # Curating nothing is "no restriction" (``None``); curating
-                # something but nothing ``text`` is an empty chat list (``[]``),
-                # never the agent's own catalogue (spec provider-switching
-                # "Offer only text models to chat pickers").
-                return cfg.model_ids(Modality.TEXT) if cfg.models else None
+            chosen = connection_for_agent(agent, connections)
+            if chosen is None:
+                return None
+            _, cfg = chosen
+            # Curating nothing is "no restriction" (``None``); curating
+            # something but nothing ``text`` is an empty chat list (``[]``),
+            # never the agent's own catalogue (spec provider-switching
+            # "Offer only text models to chat pickers").
+            return cfg.model_ids(Modality.TEXT) if cfg.models else None
         return None
 
 
@@ -157,17 +161,21 @@ class ChatWiring:
 
 def wire_chat(
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     agent_service: AgentService,
     resource_service: ResourceService,
+    agent_catalog: AgentCatalog,
     compose_memory_context: MemoryContextComposer | None = None,
+    retrieve_memory: MemoryRetriever | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec chat) into the running app.
 
     ``compose_memory_context`` is the memory kind's closure
-    (``memory_wiring.memory_context_composer``) every provider appends to a
+    (``memory_turn_wiring.memory_context_composer``) every provider appends to a
     channel turn's system prompt (spec memory "Deliver to channel turns through
-    the system prompt"); ``None`` wires no memory append.
+    the system prompt"); ``None`` wires no memory append. ``retrieve_memory``
+    ranks each channel turn's prompt against the notes (spec memory "Retrieve
+    the notes a prompt names for a channel turn"); ``None`` wires none.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
     former ``builtin`` chat persona is retired (ADR coffer-model-is-an-internal-engine).
@@ -176,37 +184,45 @@ def wire_chat(
     conv_repo = ConversationRepo(sm)
     msg_repo = MessageRepo(sm)
 
-    # 2. Credential resolver: resolve a credential ref → raw API key from the
-    #    encrypted credential store.
-    def _credential_resolver(ref: str) -> str:
-        value: str | None = credential_store.get(ref)
+    # 2. Secret resolver: resolve a secret ref → raw API key from the
+    #    encrypted secret store.
+    def _secret_resolver(ref: str) -> str:
+        value: str | None = secret_store.get(ref)
         if value is None:
             # A domain error so a missing/revoked key surfaces as a mapped 400
-            # (CREDENTIAL_MISSING) and the conversation stays usable, rather
+            # (SECRET_MISSING) and the conversation stays usable, rather
             # than a generic 500 from a bare ValueError.
-            raise CredentialMissing(ref)
+            raise SecretMissing(ref)
         return value
 
     # 3. The agent-provider registry — the platform seam (chat_provider_wiring:
     #    adding an agent is one more register() call there).
-    async def _channel_name(channel_uid: str) -> str | None:
-        """The channel's current label, for the system-prompt line naming it.
+    async def _channel_note(channel_uid: str, conversation_id: str) -> ChannelNote | None:
+        """The facts the channel note is written from (spec channels "Tell a
+        channel-driven agent it is on a chat channel").
 
-        A conversation stores the channel's UID, so this is the read-time half
-        of that split: the binding survives a rename and the model is told what
-        the channel is called now. ``None`` for a channel that has since been
-        deleted — the turn still came from a channel, it just has no name left.
+        The channel kind publishes a reader that knows the platform, the chat
+        kind and what renders (``set_channel_note_reader``); before it is wired,
+        the note names the channel only. A conversation stores the channel's
+        UID, so this is the read-time half of that split: the binding survives
+        a rename. ``None`` for a channel that has since been deleted — the turn
+        still came from a channel, it just has no facts left.
         """
+        reader = get_channel_note_reader()
+        if reader is not None:
+            return await reader(channel_uid, conversation_id)
         try:
-            return (await resource_service.get(channel_uid)).name
+            return ChannelNote(name=(await resource_service.get(channel_uid)).name)
         except ResourceNotFound:
             return None
 
     registry = build_agent_provider_registry(
         conv_repo,
-        _credential_resolver,
+        agent_catalog,
+        _secret_resolver,
         compose_memory_context=compose_memory_context,
-        resolve_channel_name=_channel_name,
+        resolve_channel=_channel_note,
+        retrieve_memory=retrieve_memory,
     )
 
     # 4. Application services + the agent-agnostic turn orchestrator.
@@ -221,22 +237,33 @@ def wire_chat(
 
     # 5. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).
-    loop = asyncio.get_running_loop()
+
+    # It runs as a background task, so a turn can begin before it does: it only
+    # touches rows older than this daemon (spec chat "Sweep streaming rows left by
+    # a crashed daemon").
+    daemon_started = datetime.now(tz=UTC)
 
     async def _sweep() -> None:
         try:
-            n = await TurnOrchestrator.sweep_streaming_messages(msg_repo)
+            n = await TurnOrchestrator.sweep_streaming_messages(msg_repo, before=daemon_started)
             if n:
                 _log.info("chat.startup_sweep: flipped %d streaming rows to failed", n)
         except Exception:
             _log.exception("chat.startup_sweep.failed")
 
-    loop.create_task(_sweep())  # noqa: RUF006
+    spawn(_sweep(), name="chat-startup-sweep")
 
     # 6. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the
-    #    service resolves credential refs to keys server-side.
-    introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
+    #    service resolves secret refs to keys server-side.
+    #    What an endpoint's API reports its models cost is remembered here, so
+    #    usage is costed from it without asking per request.
+    introspection_svc = ModelIntrospectionService(
+        ProviderIntrospector(),
+        _secret_resolver,
+        reported_prices=reported_price_store(),
+        default_base_url=PROTOCOL_BASE_URLS.get,
+    )
 
     # 7. The model catalogue — one list of models per managed agent, shared by
     #    the web picker, the channel /model card, and the note each turn tells
@@ -268,6 +295,7 @@ def wire_chat(
             ]
         ),
         provider_models=_ActiveProviderModels(resources=resource_service),
+        native_default=NativeDefaultModel(),
     )
 
     # 8. Register dependency providers. The catalogue is published twice on
@@ -275,7 +303,10 @@ def wire_chat(
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
     set_chat_service(chat_svc)
-    # The web composer's uploads live in ``~/.coffer/chat-media`` (spec chat
+    # ``coffer__ask``: the gateway offers it to a session whose X-Coffer-Turn token
+    # names a live turn, and serves it through this port.
+    set_turn_ask(QuestionService())
+    # The web composer's uploads live in ``~/.coffer/content/chat-media`` (spec chat
     # "Upload a file for a web message"); the retention sweep over the same
     # directory is bound in ``build_retention_service``.
     set_attachment_service(ChatAttachmentService(FileChatMediaStore(default_chat_media_dir())))

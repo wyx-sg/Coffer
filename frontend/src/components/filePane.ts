@@ -13,8 +13,9 @@
 // it is measured rather than guessed.
 //
 // How: `useFillToBottom` is put on the two-pane grid. It measures where the
-// grid starts inside the app's scrolling `<main>` (Layout.tsx: the shell pins
-// the app to the viewport, and `<main>` is the one scroll container), and what
+// grid starts inside the app's scrolling page wrapper (Layout.tsx: the shell pins
+// the app to the viewport, and the page wrapper under the status bar is the one
+// scroll container), and what
 // sits BELOW it (a pager, the page's bottom padding), and gives the grid
 // exactly the height in between — so the page itself does not scroll, and both
 // columns end on the same line. It re-measures when the window resizes and
@@ -28,27 +29,31 @@
 // the grid's two rows split the same height between tree and preview.
 import { useCallback, useLayoutEffect, useState, type CSSProperties } from "react";
 
-/** The two-pane grid: stacked below `md` (tree above preview, sharing the
- *  height), side by side from `md` up. Callers add their own
- *  `md:grid-cols-[…]`. */
-export const FILE_PANE_GRID =
-  "grid gap-4 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] md:grid-rows-[minmax(0,1fr)]";
-
 /** One column of that grid: fixed rows on top, one scrolling region below. */
 export const FILE_PANE_COLUMN = "flex min-h-0 min-w-0 flex-col gap-2";
 
 /** The part of a column that scrolls — it takes whatever height is left. */
 export const FILE_PANE_SCROLL = "min-h-0 flex-1 overflow-auto";
 
-/** A viewer inside a column: itself a flex column taking the height left, so
- *  its own fixed rows stay put and its preview (`fill`) takes the rest. */
-export const FILE_PANE_BODY = "flex min-h-0 flex-1 flex-col gap-2";
-
 /** Below this the pane stops shrinking (px; 20rem). */
 const FILE_PANE_MIN_HEIGHT = 320;
 
+/** The element the page scrolls in: the nearest ancestor whose overflow-y
+ *  scrolls. Layout.tsx puts `overflow-y-auto` on a wrapper INSIDE `<main>`
+ *  (under the daemon status bar), so `<main>` itself is not the scroller;
+ *  measuring against it left the pane's height off by the bar and the page's
+ *  padding. `<main>` stays the fallback where no style says (a test, a bare
+ *  page). */
+export function scrollContainer(el: HTMLElement): HTMLElement | null {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const overflowY = window.getComputedStyle(node).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return el.closest("main");
+}
+
 function measure(el: HTMLElement): number {
-  const scroller = el.closest("main");
+  const scroller = scrollContainer(el);
   const rect = el.getBoundingClientRect();
   // Outside the app shell (a test, a bare page) the window is the container.
   if (!scroller) return Math.floor(window.innerHeight - rect.top);
@@ -87,7 +92,7 @@ export function useFillToBottom<T extends HTMLElement = HTMLDivElement>(): {
     const update = () => setHeight(Math.max(FILE_PANE_MIN_HEIGHT, measure(el)));
     update();
     window.addEventListener("resize", update);
-    const scroller = el.closest("main");
+    const scroller = scrollContainer(el);
     const observed = [scroller, scroller?.firstElementChild].filter(
       (n): n is Element => n instanceof Element,
     );

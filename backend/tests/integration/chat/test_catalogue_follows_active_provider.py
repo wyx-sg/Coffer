@@ -1,4 +1,4 @@
-"""The model catalogue follows the provider Coffer activated for the agent.
+"""The model catalogue follows the connection the agent runs on.
 
 Real ``ProviderService`` over a real SQLite file, the real composition-root
 adapter (``_ActiveProviderModels``), and the real on-disk discovery source, so
@@ -12,7 +12,7 @@ failed the turn at the SDK.
 
 The agents are REGISTERED rows here rather than a hand-built list, which they
 did not have to be before: a connection's reach is a scope holding agent UIDS
-(ADR resource-identity-is-an-immutable-uid), so resolving that reach back into
+(ADR identity-is-the-uid-inside-the-file), so resolving that reach back into
 the agent TYPE this catalogue is asked about only works against a registry that
 actually holds the agents.
 """
@@ -47,13 +47,15 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_model_catalog
 from coffer.surfaces.http.chat_wiring import _ActiveProviderModels
 from coffer.surfaces.http.provider_dependencies import set_provider_service
+from tests.support.facets import agent_catalog
+from tests.support.vault_stores import make_resource_repo
 from tests.unit.chat.conftest import FakeAgentProvider
 
 _NOW = dt.datetime(2026, 9, 11, tzinfo=dt.UTC)
@@ -68,7 +70,7 @@ _GATEWAY_MODELS = ["agnes-2.5-pro-beta", "agnes-video-2.5"]
 
 #: The agents this vault holds, as a user names them — deliberately not the
 #: agent keys they map to, so nothing here can pass by comparing the two.
-_AGENTS = {AgentType.CLAUDE_CODE: "claude-code", AgentType.CODEX: "codex-cli"}
+_AGENTS = {t: t.default_name() for t in (AgentType.CLAUDE_CODE, AgentType.CODEX)}
 
 
 def _text(*ids: str) -> list[CuratedModel]:
@@ -104,12 +106,17 @@ class _RegisteredAgents:
     async def list(self) -> list[Resource]:
         return await self._resources.list(kind="agent")
 
-
-class _NoAgents:
-    """An empty registry, for the projector only — see the fixture."""
-
-    async def list(self) -> list[Resource]:
-        return []
+    async def set_connection(
+        self, uid: str, connection_uid: str | None, *, actor: str = "api"
+    ) -> Resource:
+        """What the agent kind does for a switch: write the field on the record."""
+        row = await self._resources.get(uid)
+        return await self._resources.update_config(
+            uid,
+            {**row.config, "connection_uid": connection_uid},
+            actor,
+            allow_lifecycle_kind=True,
+        )
 
 
 class _Env:
@@ -148,9 +155,9 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resources = ResourceService(
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
-        credentials=store,
+        secrets=store,
     )
     # One agent per type, registered through the service (the agent kind
     # refuses the generic create path) so each has a real uid to be scoped by.
@@ -169,15 +176,15 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
         )
         agent_uids[agent_type] = registered.uid
     providers = ProviderService(
+        agent_catalog=agent_catalog(),
         resources=resources,
-        credentials=store,
+        secrets=store,
         config_store=ConfigFileStore(),
-        # Nothing to project into: this test reads, not writes. The registry
-        # handed here decides only which agents' native config files a switch
-        # writes — the catalogue resolves a connection's REACH through the real
-        # resource table (``_ActiveProviderModels`` below), which is the seam
-        # under test.
-        agents=_NoAgents(),
+        # The switch writes the agent's record (and its tmp config dir); the
+        # catalogue then resolves the connection each AGENT runs on through the
+        # real resource table (``_ActiveProviderModels`` below), which is the
+        # seam under test.
+        agents=_RegisteredAgents(resources),
         audit=audit,
     )
     set_provider_service(providers)
@@ -209,14 +216,15 @@ async def _gateway(
     )
     # Which agents a connection reaches is its framework scope now, not a
     # create argument (ADR per-agent-resource-scope) — and the scope names them
-    # by uid, not by agent type (ADR resource-identity-is-an-immutable-uid), so
+    # by uid, not by agent type (ADR identity-is-the-uid-inside-the-file), so
     # the types a test reads at are resolved through the registered rows.
     await env.resources.update_scope(
         connection.uid,
         Scope(agents=[env.agent_uids[a] for a in agents]),
         actor="test",
     )
-    await env.providers.activate(connection.uid)
+    for agent in agents:
+        await env.providers.activate(connection.uid, agent)
 
 
 async def test_without_a_provider_the_agent_s_own_models_are_offered(env: _Env) -> None:
@@ -308,7 +316,7 @@ async def test_a_connection_curating_no_text_model_offers_no_chat_model(env: _En
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["models"] == []
-    # The channel ``/model`` card and ``/effort`` card read the same answer.
+    # The channel ``/model`` card's model and effort steps read the same answer.
     assert await env.catalogue.suggest("claude_code") == []
     assert await env.catalogue.efforts("claude_code", None) == []
     # The login's own catalogue is still the full truth, just not offered.

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", PRs #317, #376, #386
+**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", PRs #317, #376, #386
 
 ## Context
 
@@ -153,12 +153,20 @@ carry both commands (spec desktop-app "Document clearing the quarantine
 attribute"). Pros: free, and it ships today. Cons: a real first-run hurdle,
 worst on the desktop tier.
 
-#### Option K — Developer ID signing and notarisation
+#### Option K — Developer ID signing and notarisation (built, gated on credentials)
 
-Pros: the app opens on double-click; the right end state. Cons: requires a paid
-Apple Developer account, which does not exist. It is not rejected on merit; it
-is the single highest-value thing that account would buy, and the release job
-has no signing step until then.
+Pros: the app opens on double-click; the right end state, and the precondition
+of the master key's Keychain access group
+([The Master Key Lives in the macOS Keychain](master-key-lives-in-the-macos-keychain.md)).
+Cons: requires a paid Apple Developer account. The release job now carries every
+step — PyInstaller signs the three binaries and each library they collect with
+the Developer ID under the hardened runtime and the `keychain-access-groups`
+entitlement, the access group is stamped into `backend/coffer/infrastructure/secret/build_identity.py` and the shell,
+Tauri signs, notarises and staples the app, and the workflow notarises the CLI
+binaries and notarises and staples the `.dmg` — and each step runs only when its
+secrets are present (`scripts/release_plan.py`). Until the owner adds them the
+release is Option J's unsigned build, unchanged. `RELEASING.md` lists what to
+create.
 
 ## Decision
 
@@ -182,11 +190,15 @@ under one `SHA256SUMS`.** Rules that follow:
   install starts, whichever tier it came from; the desktop shell is forbidden
   from writing `~/.coffer/bin/` (spec desktop-app "Reimplement no daemon route
   in the shell"). A source install skips it — `pip` already put the scripts on
-  `PATH`.
-- **The release channel is stamped before the freeze.** On a tag,
+  `PATH`. The same frozen start, before it migrates the history database,
+  copies `~/.coffer/runs.db` to `runs.db.pre-<revision>` (the three newest
+  are kept), so a bad upgrade leaves the previous state beside the live file.
+- **The build stamp is written before the freeze.** On a tag,
   `scripts/stamp_channel.py stable` rewrites `backend/coffer/build_channel.py`
   before `build_binaries.sh` runs, because PyInstaller freezes the module as it
-  is ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)).
+  is. The stamp changes nothing a person sees: a tagged build only ignores the
+  developer-only switches for the allowed hosts and CORS origins, so the
+  hardening cannot be loosened by an environment variable on a shipped binary.
 - **The desktop leg reuses the CLI leg's binaries.** No second PyInstaller run.
 - **The spec files stay honest.** A path a spec names must exist and every
   `EXE` keeps `-X utf8` (`check_pyinstaller_specs.py`); the release refuses to
@@ -208,5 +220,5 @@ under one `SHA256SUMS`.** Rules that follow:
   user does.
 - A local `make desktop` takes roughly 50 minutes because it freezes all three
   binaries first; the release pays the freeze once for both tiers.
-- Until an Apple Developer ID exists, every install starts with a quarantine
+- Until the Developer ID secrets are added (Option K), every install starts with a quarantine
   command, and the desktop tier is where it hurts most.

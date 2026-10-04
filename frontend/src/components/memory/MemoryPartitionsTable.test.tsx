@@ -1,101 +1,114 @@
 // frontend/src/components/memory/MemoryPartitionsTable.test.tsx
 //
-// The partitions list: each row carries the repository it is keyed on and its
-// note count (spec memory "Present partitions as a table and a file tree").
-// It carries no status control, no status filter and no bulk bar: every
-// partition is served to every agent (spec memory "Serve every partition to
-// every agent"), so there is nothing to switch.
-import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+// The partitions list (spec memory "Present a partition as its memories"): a
+// row per partition with its path ("Every project" for global) and its memory
+// count. No status control, no filter, no selection: every partition is served
+// to every agent. Only a partition whose repository is gone offers Delete, and
+// the delete goes through the kind-agnostic resource route after a confirm.
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import type { PropsWithChildren } from "react";
+import type { ReactNode } from "react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
+import { pathText } from "@/test/truncatedPath";
 import { MemoryPartitionsTable } from "./MemoryPartitionsTable";
+import { COFFER, GLOBAL, GONE } from "./memoryTestData";
 
-function wrap(ui: React.ReactNode) {
+vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn() } }));
+const { resourcesApi } = await import("@/lib/api/resources");
+const removeMock = vi.mocked(resourcesApi.remove);
+
+function renderTable(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return ({ children }: PropsWithChildren) => (
+  return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <MemoryRouter>{children ?? ui}</MemoryRouter>
+        <MemoryRouter>{ui}</MemoryRouter>
       </TooltipProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
-// A partition carries three strings that are easy to confuse and are three
-// different things: the `uid` every route takes, the `name` that is its folder
-// and its label, and the `repository_key` a working directory resolves
-// through. None of them is derived from another.
-const ROWS: PartitionOut[] = [
-  {
-    uid: "mp-4410",
-    name: "global",
-    repository_path: "",
-    repository_key: "",
-    note_count: 12,
-    unresolvable: false,
-  },
-  {
-    uid: "mp-be27",
-    name: "coffer",
-    repository_path: "/Users/dev/coffer",
-    // A repository with an `origin` is keyed on the remote, so a worktree and a
-    // second clone are one partition — the row names the repository, not the
-    // working directory some session happened to run in.
-    repository_key: "remote:github.com/wyx-sg/coffer",
-    note_count: 34,
-    unresolvable: false,
-  },
-];
-
-/** A partition whose repository has been deleted from disk (see "Report
- *  unresolvable partitions"). */
-const GONE: PartitionOut = {
-  uid: "mp-0d5c",
-  name: "old-api",
-  repository_path: "/Users/dev/old-api",
-  repository_key: "path:/Users/dev/old-api",
-  note_count: 3,
-  unresolvable: true,
-};
-
 describe("MemoryPartitionsTable", () => {
-  afterEach(() => vi.clearAllMocks());
-
-  test("partitions render with their repository and note counts", () => {
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    expect(screen.getByText("global")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText("coffer")).toBeInTheDocument();
-    expect(screen.getByText("34")).toBeInTheDocument();
-    expect(screen.getByText("/Users/dev/coffer")).toBeInTheDocument();
+  // A braced body: an arrow that returns the mock would hand vitest a
+  // teardown function, and it would call the failing mock after the test.
+  beforeEach(() => {
+    removeMock.mockReset();
   });
 
-  test("a partition whose repository is gone stays listed and says so", () => {
-    // "Report unresolvable partitions": an orphaned partition is delivered to nobody, and deleting
-    // it is the developer's call — so it must be VISIBLE and marked, never filtered
-    // out of the list where nobody would ever meet it again.
-    render(<MemoryPartitionsTable rows={[...ROWS, GONE]} />, { wrapper: wrap(null) });
+  test("each row carries its path and its memories; global reads Every project", () => {
+    renderTable(<MemoryPartitionsTable rows={[GLOBAL, COFFER]} />);
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(expect.arrayContaining(["Partition", "Path", "Memories"]));
+    const global = within(screen.getByText("global").closest("tr") as HTMLElement);
+    expect(global.getByText("Every project")).toBeInTheDocument();
+    expect(global.getByText("12")).toBeInTheDocument();
+    const coffer = within(
+      screen
+        .getByText("coffer", { selector: "[data-truncated-text]" })
+        .closest("tr") as HTMLElement,
+    );
+    expect(coffer.getByText(pathText("~/work/coffer"))).toBeInTheDocument();
+    // No search box: the design has none.
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.queryByPlaceholderText(/search/i)).toBeNull();
+  });
 
-    const goneRow = within(screen.getByText("old-api").closest("tr") as HTMLElement);
-    expect(goneRow.getByText("/Users/dev/old-api")).toBeInTheDocument();
-    expect(goneRow.getByTestId("partition-unresolvable-badge")).toHaveTextContent(
+  test("only a partition whose repository is gone is marked and offers Delete", () => {
+    renderTable(<MemoryPartitionsTable rows={[COFFER, GONE]} />);
+    const gone = within(
+      screen
+        .getByText("old-prototype", { selector: "[data-truncated-text]" })
+        .closest("tr") as HTMLElement,
+    );
+    expect(gone.getByTestId("partition-unresolvable-badge")).toHaveTextContent(
       /repository missing/i,
     );
+    expect(gone.getByRole("button", { name: /delete: old-prototype/i })).toBeInTheDocument();
+    const coffer = within(
+      screen
+        .getByText("coffer", { selector: "[data-truncated-text]" })
+        .closest("tr") as HTMLElement,
+    );
+    expect(coffer.queryByRole("button", { name: /delete/i })).toBeNull();
+    expect(coffer.queryByTestId("partition-unresolvable-badge")).toBeNull();
   });
 
-  test("a partition whose repository is still there carries no such mark", () => {
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    expect(screen.queryByTestId("partition-unresolvable-badge")).toBeNull();
+  acceptance("memory", "deleting a partition still asks", async () => {
+    removeMock.mockResolvedValue(undefined);
+    renderTable(<MemoryPartitionsTable rows={[COFFER, GONE]} />);
+    fireEvent.click(screen.getByRole("button", { name: /delete: old-prototype/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Delete old-prototype?")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/deletes its 6 distilled memories and stops delivering them/i),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/own memory for that folder is not touched/i),
+    ).toBeInTheDocument();
+    expect(removeMock).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete partition" }));
+    await waitFor(() => expect(removeMock).toHaveBeenCalledWith(GONE.uid));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  test("a failed delete keeps the dialog open with its reason", async () => {
+    removeMock.mockRejectedValue(new Error("disk is read-only"));
+    renderTable(<MemoryPartitionsTable rows={[GONE]} />);
+    fireEvent.click(screen.getByRole("button", { name: /delete: old-prototype/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete partition" }));
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   acceptance("web-ui", "a kind that cannot be disabled shows no status control", () => {
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
+    renderTable(<MemoryPartitionsTable rows={[GLOBAL, COFFER]} />);
     expect(screen.queryByTestId("scope-control")).toBeNull();
     expect(screen.queryByRole("columnheader", { name: /^status$/i })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: /^reach$/i })).toBeNull();

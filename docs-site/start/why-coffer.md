@@ -21,7 +21,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 ## The agent's own files stay the source of truth
 
-**The decision.** Coffer never copies an agent's configuration, MCP entries, plugins, memory or transcripts into its database. It reads them from the agent's files each time it needs them. When Coffer writes, it writes only documented, allowlisted entries: its own `coffer` MCP entry, a config file you edit in the UI, a plugin switch. Each write is atomic and leaves a `.bak` backup. Codex's TOML is edited in a way that keeps your comments and ordering.
+**The decision.** Coffer never copies an agent's configuration, MCP entries, plugins, memory or transcripts into its own store. It reads them from the agent's files each time it needs them. When Coffer writes, it writes only documented, allowlisted entries: its own `coffer` MCP entry, a config file you edit in the UI, a plugin switch. Each write is atomic and leaves a `.bak` backup. Codex's TOML is edited in a way that keeps your comments and ordering.
 
 **Why.** A second copy of an agent's settings goes stale the moment you edit the original, and then someone has to decide which copy wins. Reading from the original means there is nothing to reconcile.
 
@@ -39,7 +39,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 **What it means for you.**
 
-- Register a server once with `coffer mcp add`. Every agent with Coffer installed gets its tools in its next session.
+- Register a server once on the **MCP servers** page. Every agent with Coffer installed gets its tools in its next session.
 - Once the catalogue grows past a budget (50 upstream tools by default), `tools/list` shows only the most-used tools. The built-in `coffer__search_tools` tool searches the full catalogue, and every tool can still be called.
 - Each agent session gets its own upstream subprocesses, so two agents working at the same time do not interfere with each other.
 
@@ -47,33 +47,33 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 ## Knowledge is pulled, not pushed
 
-**The decision.** Coffer does not insert knowledge into an agent's prompt. A knowledge collection is a folder of Markdown files under `~/.coffer/knowledge/`. Coffer delivers one skill of its own, `coffer-guide`, which lists every collection's documents with their paths, titles and descriptions. The agent reads what it needs with its own `Read` and `Grep` tools. Coffer does not index, chunk or embed the files.
+**The decision.** Coffer does not insert knowledge into an agent's prompt. A knowledge collection is a folder of Markdown files under `~/.coffer/vault/knowledge/`. Coffer delivers one skill of its own, `coffer-guide`, which lists every collection's documents with their paths, titles and descriptions. The agent reads what it needs with its own `Read` and `Grep` tools. Coffer does not index, chunk or embed the files.
 
 **Why.** Retrieval that depends on the agent remembering to call a special tool gets skipped. Every supported agent can already read files. What an agent needs is to know which files exist and where they are, and a catalogue gives it that. Keeping the files as the only copy also means you can edit a document in your own editor and the next read picks up the change.
 
 **What it means for you.**
 
 - Your knowledge is plain Markdown you can open, grep, version and edit in any tool.
-- Agents add material through `coffer__write`. A curation pass, run by Coffer's own model if you set one up, merges new material into the existing documents.
-- Memory works the other way round. Coffer's distilled memory index is pushed at session start, through a hook that you install explicitly for each agent. The [memory guide](/guides/memory) explains how.
+- Agents add knowledge by writing a Markdown file into a collection's `.inbox/` folder, and change a document by editing it. A curation pass, run by Coffer's own model if you set one up, fills in missing frontmatter and folds new material into the existing documents. When two statements disagree, the newer one wins unless the older is shown to be right.
+- Memory works the other way round. Coffer's distilled memory is pushed, through a hook that you install explicitly for each agent: the index at session start and the notes a prompt names. The [memory guide](/guides/memory) explains how.
 
 ## Secrets are encrypted with a key you hold
 
-**The decision.** Secrets are stored only as Fernet ciphertext in the `credentials` table. Configuration never holds a secret; it holds a *credential ref*, a name such as `github.token`. The daemon decrypts the secret only at the moment it starts an upstream server or sends a request header. By default the master key is a `0600` file beside the database. You can move it into the macOS keychain instead.
+**The decision.** Secrets are stored only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Configuration never holds a secret; it holds a *secret ref*, a name such as `github.token`. The daemon decrypts the secret only at the moment it starts an upstream server or sends a request header. By default the master key is a `0600` file, `~/.coffer/master.key`, and it never enters the vault. You can move it into the macOS keychain instead.
 
 **Why.** MCP server configs and provider profiles need API keys. If keys were stored as plain text, every export, log line and sync commit would put them at risk. With refs, the rest of the system never handles the plaintext.
 
 **What it means for you.**
 
-- Store a secret with `coffer credentials set <ref>`, which prompts for the value without echoing it or reads it from stdin, and refer to it by name everywhere else.
-- Plaintext never reaches the database, the logs or the audit log.
+- Store a secret with `coffer secret set <ref>`, which prompts for the value without echoing it or reads it from stdin, and refer to it by name everywhere else.
+- Plaintext never reaches the vault, the logs or the audit log.
 - If you lose the master key, you lose every stored secret. Treat `~/.coffer/master.key` the way you would treat an SSH private key.
 
 See [Security model](/architecture/security) for the full threat model.
 
 ## Sync goes through a git remote you own
 
-**The decision.** To share one vault between your machines, point each of them at a git repository you own. Sync is off until you set it up. A background worker exports this machine's changes and merges them with git's three-way merge. It then applies to the vault only the difference from the last state this vault is known to have held, never a full overwrite. A round that would delete more than a set share of the vault stops and asks you first. Secrets travel only as ciphertext. The master key moves between machines only when you run the out-of-band transfer (`coffer sync key`) yourself.
+**The decision.** To share one vault between your machines, point each of them at a git repository you own. Sync is off until you set it up. The vault is already a git repository, so a background worker only fetches, lets git merge, and pushes. A clean merge is applied; any conflict stops the round, with nothing changed on either side, until you choose per file. A round that would delete more than a set share of the vault stops and asks you first, and every round can be rolled back. Secrets travel only as ciphertext. The master key moves between machines only when you carry the key yourself: the desktop app writes a backup, and **Settings › Security › Import a master key** installs it.
 
 **Why.** A service run by Coffer would break the local-first rule. A git remote under your control is a meeting point, not a system of record: every machine keeps the complete vault, so you can delete the remote and rebuild it from any single machine.
 
@@ -81,9 +81,9 @@ See [Security model](/architecture/security) for the full threat model.
 
 - You choose the host (GitHub, GitLab, your own server) and can read every commit Coffer makes.
 - Some settings stay on each machine. A resource's *reach* (whether it is enabled here, and which agents may use it) does not sync, so each machine decides for itself.
-- A new machine joins with `coffer sync adopt <url>`. It reports what it is about to apply and asks you before applying it.
+- A new machine joins from the **Sync** page. It shows what joining would do, deletes nothing, and asks you before applying it.
 
-See [Vault sync](/architecture/vault-sync) for the convergence round in detail.
+See [Vault sync](/architecture/vault-sync) for the round in detail.
 
 ## Related
 

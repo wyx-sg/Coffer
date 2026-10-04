@@ -3,7 +3,7 @@
 An upload is one of the entrances new knowledge arrives by — the Knowledge page's upload
 button and a channel attachment (see "Convert uploads into material without keeping
 them" and "Ingest documents sent to a channel"). The document is converted to Markdown
-and **submitted as material**, exactly as an agent's ``coffer__write`` is: it goes
+and **submitted as material**, exactly as an agent's inbox file is: it goes
 through :meth:`KnowledgeService.submit`, so a curation pass folds what is new in it into
 the collection's documents, and with no internal model it becomes a document of its own
 (see "Promote material directly when no model is configured"). Nothing else of the
@@ -36,7 +36,6 @@ from typing import Protocol, runtime_checkable
 
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
 from coffer.application.engine_timeout import (
-    DEFAULT_MODEL_TIMEOUT_S,
     TimeoutReader,
     resolve_timeout,
 )
@@ -44,6 +43,7 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.converter import Conversion, EmptyConversion
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import UploadTooLarge
+from coffer.infrastructure.knowledge.naming import opening_prose
 
 
 @runtime_checkable
@@ -71,15 +71,6 @@ class ConverterRegistry(Protocol):
 #: phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-#: A one-line description is a small job (spec knowledge "Fill frontmatter on converted
-#: material"), not an agentic loop; bounded generously so a slow provider cannot hang an
-#: upload, but nowhere near indefinite. Superseded by the operator's own bound (spec
-#: internal-engine "Run every internal model call under the bound"). The twenty seconds
-#: this used to carry was the tightest bound anywhere in Coffer, and a description that
-#: times out costs the catalogue its one line about a document — the line every later
-#: search reads it by.
-_DESCRIPTION_TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
-
 _DESCRIPTION_SYSTEM = (
     "You write the one-line description for a knowledge-base catalogue entry. "
     "Reply with exactly one plain sentence describing what the document is "
@@ -89,9 +80,6 @@ _DESCRIPTION_SYSTEM = (
 #: How much of a converted document to hand the model — enough to describe
 #: it, small enough to keep the call cheap regardless of the source file size.
 _DESCRIPTION_SOURCE_CHARS = 4000
-
-#: Length of the opening-prose fallback description, for the same reason.
-_FALLBACK_DESCRIPTION_CHARS = 240
 
 
 @dataclass(frozen=True)
@@ -121,14 +109,14 @@ class IngestService:
         registry: ConverterRegistry,
         models: ModelSelectorPort | None = None,
         completion: LlmCompletionPort | None = None,
-        credential_resolver: Callable[[str], str] | None = None,
+        secret_resolver: Callable[[str], str] | None = None,
         read_timeout: TimeoutReader | None = None,
     ) -> None:
         self._knowledge = knowledge
         self._registry = registry
         self._models = models
         self._completion = completion
-        self._credential_resolver = credential_resolver
+        self._secret_resolver = secret_resolver
         self._read_timeout = read_timeout
 
     async def ingest(
@@ -188,7 +176,7 @@ class IngestService:
         configured and reachable, else the document's own opening prose."""
         if self._models is not None and self._completion is not None:
             model = await self._models.get_default()
-            if model is not None and self._credential_resolver is not None:
+            if model is not None and self._secret_resolver is not None:
                 with contextlib.suppress(Exception):
                     timeout = await resolve_timeout(self._read_timeout)
                     described = await asyncio.wait_for(
@@ -196,7 +184,7 @@ class IngestService:
                             system=_DESCRIPTION_SYSTEM,
                             user=markdown[:_DESCRIPTION_SOURCE_CHARS],
                             model=model,
-                            credential_resolver=self._credential_resolver,
+                            secret_resolver=self._secret_resolver,
                             timeout=timeout,
                         ),
                         timeout=timeout,
@@ -208,25 +196,9 @@ class IngestService:
 
 
 def _fallback_description(markdown: str, *, title: str) -> str:
-    """The document's own opening prose — first paragraph, headings skipped.
-
-    Never empty ("Carry title, description and actor in frontmatter" makes the
-    description required): a document with no
-    prose of its own — a bare table, a blank file — falls back to its title,
-    which ``derive_title`` guarantees is never empty either.
-    """
-    paragraph: list[str] = []
-    for line in markdown.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            continue
-        if not stripped:
-            if paragraph:
-                break
-            continue
-        paragraph.append(stripped)
-    text = " ".join(paragraph).strip()
-    return text[:_FALLBACK_DESCRIPTION_CHARS] if text else title
+    """The document's own opening prose, or its title — never empty ("Carry
+    title, description and actor in frontmatter" makes the description required)."""
+    return opening_prose(markdown, fallback=title)
 
 
 __all__ = [

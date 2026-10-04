@@ -1,64 +1,49 @@
-// frontend/src/lib/hooks/useAgentConnectionDraft.ts — the draft → test → confirm
-// state machine behind the Agent Overview LLM-connection panel.
+// frontend/src/lib/hooks/useAgentConnectionDraft.ts — the draft behind the agent's Change model dialog
+// (spec provider-switching "Offer every connection operation on REST and the web").
 //
-// Picking a connection/model is a DRAFT: it stages a choice but projects nothing
-// (spec provider-switching "Offer every connection operation on REST, CLI and
-// web"). The user must «测试连接» (test-connection) a custom connection and
-// only then «确认切换», which PATCHes the per-agent model
-// binding and activates the connection — the only step that writes native config.
-// Switching to the built-in login needs no test. The model lives on the agent
-// binding, not the connection (spec provider-switching "Take projected model
-// keys from the agent's binding").
+// Picking a provider, model, effort or tier is a DRAFT: nothing is written
+// until the user has reviewed the change (`useModelSwitch`). The hook holds the
+// draft, derives what the form offers, and builds the request the review and
+// the apply both send.
 //
-// On the built-in login there is nothing to bind — `agent.model` is only read
-// when projecting a connection — so the panel offers NO model control at all
-// there, only a line saying where the model is chosen instead (per
-// conversation, in chat with /model). This hook carries nothing for that case
-// beyond `draftIsBuiltin`.
-//
-// Where the model options come from depends on the draft connection. A
-// connection with a CURATED set (`models` non-empty, chosen on its detail page)
-// IS the catalogue: those ids are the only options and the endpoint is never
-// introspected. With an empty `models` — "no restriction" — the options come
-// from live introspection of the endpoint, as they always have. Either way the
-// staged model(s) are seeded first, so a model already bound to the agent never
-// vanishes from the list.
-//
-// Both sources are narrowed to modality `text` (spec provider-switching "Offer
-// only text models to chat pickers"):
-// this is a CHAT binding, so an endpoint's embedding / image / video / audio
-// models are never offered as the model an agent runs on.
+// Model options: a connection with a CURATED set (`models` non-empty) IS the
+// catalogue and is never introspected; an empty set means "no restriction" and
+// the endpoint is introspected. Both are narrowed to modality `text` (spec
+// provider-switching "Offer only text models to chat pickers"), and the staged
+// model is seeded first so it never vanishes from the list. Effort levels come
+// from what the connection records for the chosen model, else from the agent's
+// own catalogue entry for that id. The built-in login writes nothing: no
+// model, effort or tiers, so the dialog shows only the provider.
 import { useEffect, useMemo, useState } from "react";
 
-import type { AgentOut, AgentPatch } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import type { ModelSwitchIn } from "@/lib/api/modelSwitch";
 import { modelIds, WIRE_BY_AGENT } from "@/lib/api/providers";
-import { usePatchAgent } from "@/lib/hooks/useAgents";
-import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
-import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
+import { activeProviderFor } from "@/lib/providers/usedBy";
+import { useAgentModels } from "@/lib/hooks/useAgentModels";
+import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
+import { useProviders } from "@/lib/hooks/useProviders";
+import {
+  BUILTIN,
+  isLocal,
+  suggestTiers,
+  tiersFor,
+  tiersKey,
+  type Tier,
+  type TierModels,
+} from "@/lib/agents/connectionDraft";
 
-// Radix forbids an empty value, so the "use built-in login" option is a token.
-export const BUILTIN = "__builtin__";
+export { BUILTIN, type Tier } from "@/lib/agents/connectionDraft";
 
 export function useAgentConnectionDraft(agent: AgentOut) {
   const wire = WIRE_BY_AGENT[agent.type];
-
   const providers = useProviders();
-  const activate = useActivateProvider();
-  const useBuiltin = useUseBuiltinProvider();
-  const patchAgent = usePatchAgent();
+  const catalogue = useAgentModels(agent.type);
   const list = useListProviderModels();
-  const test = useTestConnection();
+  const hasTiers = wire === "anthropic";
 
-  // Filter by the connection's explicit compatible-agents set (not its wire), so
-  // a connection the user routed to this agent type shows up even if its endpoint
-  // speaks a different wire (the agnes case: an openai gateway → Claude Code).
-  //
-  // `enabled` is a separate test and has to be made here: `compatible_agents`
-  // reports the CONFIGURED reach, deliberately not narrowed by the switch (so a
-  // management surface can still show a disabled connection's agent list). This
-  // picker offers connections to project RIGHT NOW, so it wants the
-  // intersection — without it, a connection the user switched off stayed
-  // offerable here.
+  // Offerable = routed to this agent type AND switched on (`compatible_agents`
+  // is the configured reach and deliberately ignores `enabled`).
   const compatible = useMemo(
     () =>
       (providers.data ?? []).filter(
@@ -66,168 +51,146 @@ export function useAgentConnectionDraft(agent: AgentOut) {
       ),
     [providers.data, agent.type],
   );
-  const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);
+  // The agent's record names its connection; a pointer that no longer resolves
+  // (deleted, switched off, out of scope) reads as the built-in login.
+  const active = activeProviderFor(agent, providers.data ?? []);
 
-  // The APPLIED (currently projected) state: the active connection and the
-  // model(s) bound to it. Built-in login = no active connection, no model
-  // override.
-  //
-  // The connection is tracked by UID throughout — it is what `activate` takes,
-  // and what the picker's option values are — while the picker's LABELS are
-  // `Provider.name`. A draft holding the name would stop matching any
-  // connection the moment one was renamed under it.
+  // APPLIED state. Tracked by uid: a renamed connection must stay selected.
   const appliedConn = active?.uid ?? BUILTIN;
   const appliedModel = active === null ? "" : (agent.model ?? "");
-  const appliedFast = active === null ? "" : (agent.fast_model ?? "");
+  const appliedEffort = agent.effort ?? null;
+  const appliedTiers: TierModels = hasTiers ? ((agent.tier_models ?? {}) as TierModels) : {};
+  const appliedTiersJson = tiersKey(appliedTiers);
 
-  // DRAFT state — re-syncs to the applied state whenever the latter changes
-  // (initial load, after a confirm, an external change); a same-value refetch
-  // leaves an in-progress draft untouched (the effect only fires when the applied
-  // identity actually changes).
   const [draftConn, setDraftConn] = useState(appliedConn);
   const [draftModel, setDraftModel] = useState(appliedModel);
-  const [draftFast, setDraftFast] = useState(appliedFast);
+  const [draftEffort, setDraftEffort] = useState<string | null>(appliedEffort);
+  const [draftTiers, setDraftTiers] = useState<TierModels>(appliedTiers);
   const [fetched, setFetched] = useState<string[]>([]);
 
+  // The draft starts from what is applied, which is known once providers load.
+  const loaded = !providers.isPending;
   useEffect(() => {
+    if (!loaded) return;
     setDraftConn(appliedConn);
     setDraftModel(appliedModel);
-    setDraftFast(appliedFast);
-    setFetched([]);
-    test.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedConn, appliedModel, appliedFast]);
+    setDraftEffort(appliedEffort);
+    setDraftTiers(appliedTiers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the applied state arrives
+  }, [loaded]);
 
-  const draftConnObj = useMemo(
-    () => compatible.find((p) => p.uid === draftConn) ?? null,
-    [compatible, draftConn],
+  const draftConnObj = compatible.find((p) => p.uid === draftConn) ?? null;
+  const draftIsBuiltin = draftConn === BUILTIN;
+  const local = isLocal(draftConnObj);
+
+  // "Restricted" is asked of the WHOLE curated set; the options are its text
+  // entries — a set curating only embeddings offers no chat model at all.
+  const restricted = (draftConnObj?.models ?? []).length > 0;
+  const models = useMemo(() => {
+    const source = restricted ? modelIds(draftConnObj?.models ?? [], "text") : fetched;
+    const out: string[] = [];
+    for (const m of [draftModel, ...source]) if (m && !out.includes(m)) out.push(m);
+    return out;
+  }, [draftModel, fetched, draftConnObj, restricted]);
+
+  const entries = catalogue.data ?? [];
+  const curatedEntry = (draftConnObj?.models ?? []).find((m) => m.id === draftModel);
+  const effortLevels = draftIsBuiltin
+    ? []
+    : (curatedEntry?.effort_levels ?? entries.find((m) => m.id === draftModel)?.efforts ?? []);
+
+  const showTiers = hasTiers && !draftIsBuiltin;
+  const tiers = tiersFor(models);
+  const suggestion = useMemo(
+    () => suggestTiers(models, draftModel, local),
+    [models, draftModel, local],
   );
 
-  // A curated set on the draft connection replaces introspection as the source
-  // of the options; empty means "no restriction" and leaves that to `fetched`.
-  // Whether the connection is RESTRICTED is asked of the whole curated set, and
-  // the options are its `text` entries only — so a connection curating nothing
-  // but embedding models offers no chat model at all, rather than falling back
-  // to the endpoint's full catalogue (the same rule the daemon applies).
-  const restricted = (draftConnObj?.models ?? []).length > 0;
-  const curated = modelIds(draftConnObj?.models ?? [], "text");
-
-  const models = useMemo(() => {
-    const out: string[] = [];
-    // Seed the staged model(s) so they show before the dropdown is opened
-    // (the catalogue populates the rest on open).
-    for (const m of [draftModel, draftFast]) if (m && !out.includes(m)) out.push(m);
-    for (const m of restricted ? curated : fetched) if (!out.includes(m)) out.push(m);
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftModel, draftFast, fetched, draftConnObj]);
-
-  // Introspect the DRAFT connection's endpoint using its OWN wire (how to call it),
-  // which can differ from the agent's (an openai gateway routed to Claude Code).
-  // A curated connection needs no probe — its list IS the catalogue.
   const introspect = () => {
     if (!draftConnObj || restricted) return;
     list.mutate(
       {
         provider: draftConnObj.protocol,
         base_url: draftConnObj.base_url,
-        credential_ref: draftConnObj.credential_ref,
+        secret_ref: draftConnObj.secret_ref,
       },
       { onSuccess: (r) => setFetched(modelIds(r.models, "text")) },
     );
   };
 
+  // Staging a model resets its effort and tier prefill.
+  const stageModel = (m: string, pool: string[], onLocal: boolean) => {
+    setDraftModel(m);
+    setDraftEffort(null);
+    setDraftTiers(hasTiers ? suggestTiers(pool, m, onLocal) : {});
+  };
+
   const pickConnection = (uid: string) => {
     setDraftConn(uid);
-    setDraftModel("");
-    setDraftFast("");
     setFetched([]);
-    test.reset();
-    if (uid === BUILTIN) return;
+    if (uid === BUILTIN) return stageModel("", [], false);
     const conn = compatible.find((p) => p.uid === uid);
     if (!conn) return;
-    // Stage (do NOT apply) a default model so the user has something to test:
-    // default both slots to the first model. A curated connection answers that
-    // from its own list; only an unrestricted one is introspected.
+    const connLocal = isLocal(conn);
     if ((conn.models ?? []).length > 0) {
       const pinned = modelIds(conn.models ?? [], "text");
-      setFetched([]);
-      setDraftModel(pinned[0] ?? "");
-      if (wire === "anthropic") setDraftFast(pinned[0] ?? "");
-      return;
+      return stageModel(pinned[0] ?? "", pinned, connLocal);
     }
+    stageModel("", [], connLocal);
     list.mutate(
-      { provider: conn.protocol, base_url: conn.base_url, credential_ref: conn.credential_ref },
+      { provider: conn.protocol, base_url: conn.base_url, secret_ref: conn.secret_ref },
       {
         onSuccess: (r) => {
           const ids = modelIds(r.models, "text");
           setFetched(ids);
-          const def = ids[0] ?? "";
-          setDraftModel(def);
-          if (wire === "anthropic") setDraftFast(def);
+          stageModel(ids[0] ?? "", ids, connLocal);
         },
       },
     );
   };
 
-  // Changing a model invalidates any prior test result for the draft.
-  const pickModel = (m: string) => {
-    setDraftModel(m);
-    test.reset();
-  };
-  const pickFast = (m: string) => {
-    setDraftFast(m);
-    test.reset();
-  };
-
-  const runTest = () => {
-    if (!draftConnObj || !draftModel) return;
-    test.mutate({
-      provider: draftConnObj.protocol,
-      model: draftModel,
-      base_url: draftConnObj.base_url,
-      credential_ref: draftConnObj.credential_ref,
-    });
-  };
-
-  // Confirm = persist the per-agent binding, then activate so projection reads it.
-  // Built-in confirm reverts the agent to its own login (no model override).
-  const confirm = () => {
-    if (draftConn === BUILTIN) {
-      useBuiltin.mutate(wire);
-      return;
-    }
-    const body: AgentPatch = { model: draftModel };
-    if (wire === "anthropic" && draftFast) body.fast_model = draftFast;
-    patchAgent.mutate({ uid: agent.uid, body }, { onSuccess: () => activate.mutate(draftConn) });
-  };
-
-  const draftIsBuiltin = draftConn === BUILTIN;
   const dirty =
-    draftConn !== appliedConn || draftModel !== appliedModel || draftFast !== appliedFast;
-  // A custom connection must pass a test (for the CURRENT draft — any model change
-  // resets test.data) before it can be confirmed; built-in needs no test.
-  const canConfirm = dirty && (draftIsBuiltin ? true : !!draftModel && test.data?.ok === true);
-  const busy = activate.isPending || patchAgent.isPending || useBuiltin.isPending;
+    draftConn !== appliedConn ||
+    draftModel !== appliedModel ||
+    (!draftIsBuiltin && draftEffort !== appliedEffort) ||
+    (showTiers && tiersKey(draftTiers) !== appliedTiersJson);
+  // A model is needed on a provider; Review is for something to change.
+  const canReview = dirty && (draftIsBuiltin || !!draftModel);
+
+  /** What the review and the apply send. */
+  const request: ModelSwitchIn = {
+    agent_type: agent.type,
+    connection_uid: draftIsBuiltin ? null : draftConn,
+    model: draftIsBuiltin ? null : draftModel,
+    effort: draftIsBuiltin || effortLevels.length === 0 ? null : draftEffort,
+    tier_models: showTiers ? (draftTiers as Record<string, string>) : null,
+  };
 
   return {
-    wire,
     compatible,
+    appliedConn,
     draftConn,
-    draftModel,
-    draftFast,
-    models,
+    draftConnObj,
     draftIsBuiltin,
+    draftModel,
+    models,
+    local,
+    effortLevels,
+    draftEffort,
+    showTiers,
+    tiers,
+    draftTiers,
+    tiersAreSuggested: tiersKey(draftTiers) === tiersKey(suggestion),
+    loading: providers.isPending,
     dirty,
-    canConfirm,
-    busy,
-    testPending: test.isPending,
-    testResult: test.data ?? null,
+    canReview,
+    request,
     introspect,
     pickConnection,
-    pickModel,
-    pickFast,
-    runTest,
-    confirm,
+    pickModel: (m: string) => stageModel(m, models, local),
+    pickEffort: setDraftEffort,
+    pickTier: (tier: Tier, m: string) => setDraftTiers((cur) => ({ ...cur, [tier]: m })),
   };
 }
+
+export type ConnectionDraft = ReturnType<typeof useAgentConnectionDraft>;

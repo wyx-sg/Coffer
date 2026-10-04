@@ -1,22 +1,28 @@
 // frontend/src/lib/hooks/useSync.ts
 //
-// Every query and mutation for the Sync page's remote / round / master-key
-// half (spec vault-sync). The machine registry lives in `useMachines.ts`,
-// because it is the other tab and has its own invalidation story.
+// The Sync page's status, rounds, remote, and rollback queries and
+// mutations (spec vault-sync). What a stopped round asks of a person — the
+// conflict answers, the held deletions, the join — lives in `useSyncStop.ts`;
+// the machine registry in `useMachines.ts`.
 //
-// One query for the whole card: `GET /sync/status` carries the remote, the
-// last round and this machine's id together, so the form reads the remote out
-// of the status it already has rather than fetching the same record twice.
-// Anything that can change the round — running one, confirming or rejecting a
-// held one — invalidates the status, the registry (a round republishes
-// descriptors), and the resource caches a round can have rewritten underneath
-// the page.
+// One query carries most of the page: `GET /sync/status` holds the remote, the
+// last round, what is waiting to push and what is wrong, so the cards read out
+// of the status they already have rather than fetching pieces twice. Anything
+// that can move a round invalidates the status, the registry, and the resource
+// caches a round can have rewritten underneath the page.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { syncApi, type ConvergeRound, type JoinChoice, type SyncRemoteInput } from "@/lib/api/sync";
+import {
+  syncApi,
+  type RemoteCheckInput,
+  type SyncRemoteInput,
+  type SyncRound,
+} from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
+import { FIRST_PAGE, MORE_PAGE, useInfiniteList } from "@/lib/hooks/useInfiniteList";
+import { invalidateSync } from "@/lib/syncInvalidate";
 import { roundToast } from "@/lib/syncRoundToast";
 import {
   agentsKey,
@@ -24,29 +30,19 @@ import {
   resourcesKey,
   skillsKey,
   syncKey,
-  syncKeyFingerprintKey,
   syncRunsKey,
   syncStatusKey,
 } from "@/lib/api/queryKeys";
 
 /**
- * The remote, the last round and this machine's id.
- *
- * Polled, because `SyncAttentionBanner` mounts this on every page and a round
- * that needs a human can start needing one while the user sits on some other
- * page. Slowly, though: the timer converges on the order of minutes and a hold
- * is an at-most-once-an-hour event, so a minute's lag costs nothing and a
- * background tab wakes the daemon for nothing. The key is shared with the Sync
- * page, so answering a hold there clears the banner through the same
- * invalidation rather than on the next tick.
+ * The status. Polled, because a round that needs a person can start needing
+ * one while the user sits on the page. Slowly: rounds run on the order of minutes, so a minute's lag
+ * costs nothing and a background tab wakes the daemon for nothing.
  */
 export function useSyncStatus(enabled = true) {
   return useQuery({
     queryKey: syncStatusKey,
     queryFn: () => syncApi.status(),
-    // False from the sidebar's attention dot while `vault_sync` is switched
-    // off: that caller is on every page, and polling a gated route there
-    // would be a 404 a minute for nothing.
     enabled,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
@@ -54,26 +50,30 @@ export function useSyncStatus(enabled = true) {
 }
 
 /**
- * Every round this vault has run, newest first — the History tab.
- *
- * `enabled` is false while another tab is in front: Radix unmounts the others,
- * and the query is gated besides, so nothing is fetched and thrown away. The
- * key is under `syncKey`, so running, confirming, rejecting or rolling back a
- * round refreshes the history along with the status.
+ * The rounds, newest first: 30, then 50 more as the reader reaches the end of
+ * the table. A refresh after a round re-reads the first page only
+ * (`invalidateSync`). `enabled` is false while another tab is in front.
  */
 export function useSyncRuns(enabled = true) {
-  return useQuery({ queryKey: syncRunsKey, queryFn: () => syncApi.runs(), enabled });
+  return useInfiniteList<SyncRound>({
+    queryKey: syncRunsKey,
+    enabled,
+    fetchPage: async (cursor, signal) => {
+      const page = await syncApi.runs({ cursor, limit: cursor ? MORE_PAGE : FIRST_PAGE }, signal);
+      return { items: page.rounds, next: page.next_cursor ?? null, total: page.total };
+    },
+  });
 }
 
 /**
- * Invalidate everything a converge round can have moved. A round applies the
- * remote's diff straight into the vault — resources, skills, agents, knowledge
- * — so the page's own caches are not the only stale ones afterwards.
+ * Invalidate everything a round can have moved. A round checks the merged
+ * tree out into the vault — resources, skills, agents, knowledge — so the
+ * page's own caches are not the only stale ones afterwards.
  */
 function useRoundInvalidation() {
   const qc = useQueryClient();
   return () => {
-    void qc.invalidateQueries({ queryKey: syncKey });
+    invalidateSync(qc);
     void qc.invalidateQueries({ queryKey: resourcesKey });
     void qc.invalidateQueries({ queryKey: skillsKey });
     void qc.invalidateQueries({ queryKey: agentsKey });
@@ -82,187 +82,104 @@ function useRoundInvalidation() {
 }
 
 /**
- * Store the remote, replacing any previous one — behind the card's Save
- * button, or from the "converge automatically" switch flipping the stored
- * remote. `worktree_path` rides along unchanged when the daemon already has
- * one: the card does not offer it, and omitting it would silently reset an
- * adopted working tree to the default.
+ * A mutation that ends in a round: invalidates what the round moved and
+ * toasts its outcome, so a click is never answered by silence. Stopped, held
+ * and join-required rounds come back as a 200 carrying their story, so the
+ * toast reads the round's status, not the HTTP status.
+ *
+ * `toastErrors: false` for calls made from a ConfirmDialog, which renders the
+ * failure in place and stays open — a toast as well would report it twice.
  */
+export function useRoundMutation<A>(
+  fn: (arg: A) => Promise<SyncRound>,
+  { toastErrors = true }: { toastErrors?: boolean } = {},
+) {
+  const invalidate = useRoundInvalidation();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (round: SyncRound) => {
+      invalidate();
+      const { variant, message } = roundToast(t, round);
+      toast[variant](message);
+    },
+    onError: toastErrors ? (error) => toast.error(translateApiError(t, error)) : undefined,
+  });
+}
+
+/** "Sync now": run one round. */
+export function useRunSync() {
+  return useRoundMutation<void>(() => syncApi.run());
+}
+
+/** "Push anyway": push what the last round refused as a plaintext secret. */
+export function usePushAnyway() {
+  return useRoundMutation<void>(() => syncApi.pushAnyway());
+}
+
+/** Store the remote, replacing any previous one. Pause and resume are this
+ *  same call with `enabled` flipped. */
 export function useSaveSyncRemote() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
     mutationFn: (remote: SyncRemoteInput) => syncApi.putRemote(remote),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 
-/**
- * Run one converge round now. Held and conflicted rounds come back as a 200
- * carrying the story, not as an error, so the page renders them as banners —
- * and every completed round toasts its outcome, so a click on "Converge now"
- * is never answered by silence. The counts sum both directions: what the
- * round applied here plus what it published, which is what the round moved.
- */
-export function useRunConverge() {
-  const invalidate = useRoundInvalidation();
-  const { t } = useTranslation();
-  const { toast } = useToast();
+/** "Move vault": relocate the vault out of a synchronised folder. Reached only from its
+ *  dialog, which renders a failure in place. */
+export function useMoveVault() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => syncApi.run(),
-    onSuccess: (round: ConvergeRound) => {
-      invalidate();
-      const { variant, message } = roundToast(t, round);
-      toast[variant](message);
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
+    mutationFn: (to: string) => syncApi.moveVault(to),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 
-/**
- * Ask what joining would do, applying nothing (spec vault-sync "Report a join
- * before applying it"). "Converge now" asks this first: a machine already
- * converged here runs its round, a joining one is shown the case and the
- * counts and joins only from the dialog.
- */
-export function usePreviewJoin() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
+/** "Stop syncing": forget the remote. It runs at once; the caller's toast offers Undo
+ *  (`useRestoreSyncRemote`) when the answer says it is `restorable`. */
+export function useClearSyncRemote() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (choice?: JoinChoice) => syncApi.previewJoin(choice),
-    onError: (error) => toast.error(translateApiError(t, error)),
+    mutationFn: () => syncApi.clearRemote(),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 
-/**
- * Join the remote, after its preview was shown. No `onError` toast: this is
- * only reached from a ConfirmDialog, which renders the failure in place.
- */
-export function useAdoptRemote() {
-  const invalidate = useRoundInvalidation();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (choice?: JoinChoice) => syncApi.adopt(choice),
-    onSuccess: (round: ConvergeRound) => {
-      invalidate();
-      const { variant, message } = roundToast(t, round);
-      toast[variant](message);
-    },
-  });
-}
-
-/** Accept a round the deletion guard held, and let it finish. */
-export function useConfirmRound() {
-  const invalidate = useRoundInvalidation();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => syncApi.confirm(),
-    onSuccess: invalidate,
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Discard a held round. Nothing is applied and nothing is published. */
-export function useRejectRound() {
-  const invalidate = useRoundInvalidation();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => syncApi.reject(),
-    onSuccess: invalidate,
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Rebuild this machine from the remote, discarding local-only documents.
- *  Destructive on purpose: only offered where a publish-side hold means this
- *  machine is the damaged one, and only ever on an explicit click. */
-export function useRebuildFromRemote() {
-  const invalidate = useRoundInvalidation();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => syncApi.rebuild(),
-    onSuccess: invalidate,
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/**
- * Undo the last applied round, from the pre-apply snapshot it left behind.
- *
- * The round is reversed in the vault and the pointer stays put, so the undo is
- * an ordinary local change the NEXT round publishes — which is why this
- * invalidates everything a round can move, exactly as running one does.
- *
- * No `onError` toast, against the default (.agents/frontend.md §5): this is
- * only ever reached from a ConfirmDialog, which renders the failure in place
- * and stays open so it can be read and retried. A toast as well would report
- * the same refusal twice.
- */
-export function useRollbackRound() {
-  const invalidate = useRoundInvalidation();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => syncApi.rollback(),
-    onSuccess: (round: ConvergeRound) => {
-      invalidate();
-      // The daemon does not record a rollback as a round of its own, so the
-      // history this was clicked in looks unchanged afterwards. The toast is
-      // the only report the click gets; without it the undo is silent.
-      toast.success(
-        t("sync.rollback.done", {
-          added: round.applied.added,
-          modified: round.applied.modified,
-          deleted: round.applied.deleted,
-        }),
-      );
-    },
-  });
-}
-
-/** The key's short hash — never the key. Null when this vault holds none. */
-export function useKeyFingerprint() {
-  return useQuery({
-    queryKey: syncKeyFingerprintKey,
-    queryFn: () => syncApi.keyFingerprint(),
-  });
-}
-
-/**
- * Hand this machine's key back to the page so it can be downloaded as a file.
- * The material crosses only the loopback origin the user is already
- * authenticated against; it is never written into the repository.
- */
-export function useExportMasterKey() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => syncApi.exportKey(),
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/**
- * Install a key the user carried here as a FILE, read in the browser. The
- * daemon never resolves a path the page named, and the browser never has to
- * learn one. Refreshes the fingerprint and the round, whose `locked_refs` this
- * is the answer to.
- */
-export function useImportMasterKey() {
+/** Undo "Stop syncing": the forgotten remote comes back as it was. A refusal
+ *  (nothing to restore, or a remote set up since) is a toast. */
+export function useRestoreSyncRemote() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (material: string) => syncApi.importKey(material),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: syncKey });
-    },
+    mutationFn: () => syncApi.restoreRemote(),
+    onSuccess: () => invalidateSync(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
+}
+
+/** Ask what a repository holds before it becomes the remote. The answer is
+ *  rendered in place, failures included, so there is no error toast. */
+export function useCheckRemote() {
+  return useMutation({ mutationFn: (body: RemoteCheckInput) => syncApi.checkRemote(body) });
+}
+
+/** What rolling round `runId` back would do — fetched only while its dialog is open. */
+export function useRollbackPlan(runId: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: [...syncKey, "rollback-plan", runId],
+    queryFn: () => syncApi.rollbackPlan(runId as number),
+    enabled: enabled && runId !== null,
+  });
+}
+
+/** Roll a round back, as a new commit the next round pushes. From a dialog. */
+export function useRollbackRound() {
+  return useRoundMutation<number>((runId) => syncApi.rollback(runId), { toastErrors: false });
 }

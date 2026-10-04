@@ -91,7 +91,10 @@ class FakeCodexAppServer:
         frames: list[_Frame] | None = None,
         fail_methods: set[str] | None = None,
         die_on_methods: set[str] | None = None,
+        model: str | None = None,
     ) -> None:
+        # The model the app-server names in its thread/start|resume result.
+        self._model = model
         self.client_to_server = _FakePipe()  # adapter -> peer
         self.server_to_client = _FakePipe()  # peer -> adapter
         self._thread_id = thread_id
@@ -178,6 +181,8 @@ class FakeCodexAppServer:
             }
         elif method in ("thread/start", "thread/resume"):
             result = {"thread": {"id": self._thread_id, "path": "/tmp/x.jsonl"}}
+            if self._model is not None:
+                result["model"] = self._model
         elif method == "turn/start":
             result = {"turn": {"id": self._turn_id, "status": "running"}}
         elif method == "turn/interrupt":
@@ -362,6 +367,87 @@ async def test_adapter_streams_events_and_persists_thread_id():
     assert start_params["sandbox"] == "danger-full-access"
     assert factory.session is not None
     assert factory.session.closed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
+async def test_adapter_reports_the_model_the_thread_runs_on():
+    server = FakeCodexAppServer(frames=_basic_frames(), model="gpt-test-5")
+    adapter = _adapter(_Factory(server))
+    assert adapter.model_id is None
+
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    assert adapter.model_id == "gpt-test-5"
+
+
+@pytest.mark.asyncio
+async def test_missing_binary_is_a_connect_error_not_an_unhandled_raise():
+    def factory(cwd: str, env: dict[str, str] | None) -> Any:
+        raise RuntimeError("codex binary not found on PATH")
+
+    adapter = CodexAppServerAdapter(
+        cwd="/tmp",
+        resume_session=None,
+        extra={},
+        session_factory=factory,
+        on_session=_dummy_sink,
+    )
+    events = await _collect(adapter, _user_turn("hi"))
+
+    errors = [e for e in events if isinstance(e, TurnError)]
+    assert [e.code for e in errors] == ["codex_connect_error"]
+
+
+@pytest.mark.asyncio
+async def test_cancel_while_the_app_server_starts_closes_the_session():
+    class _HangingStart(_FakeSession):
+        async def start(self) -> None:
+            await asyncio.sleep(3600)
+
+    sessions: list[_HangingStart] = []
+
+    def factory(cwd: str, env: dict[str, str] | None) -> _HangingStart:
+        sessions.append(_HangingStart(FakeCodexAppServer()))
+        return sessions[-1]
+
+    adapter = CodexAppServerAdapter(
+        cwd="/tmp",
+        resume_session=None,
+        extra={},
+        session_factory=factory,
+        on_session=_dummy_sink,
+    )
+    stream = await adapter.run_turn(history=_user_turn("go"))
+
+    async def consume() -> None:
+        async for _ in stream:
+            pass
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert sessions[0].closed is True
+
+
+@pytest.mark.asyncio
+async def test_a_pruned_attachment_degrades_to_a_could_not_be_read_note(tmp_path: Any):
+    gone = Attachment(path=str(tmp_path / "gone.png"), mime="image/png", filename="gone.png")
+    kept_file = tmp_path / "kept.txt"
+    kept_file.write_text("x")
+    kept = Attachment(path=str(kept_file), mime="text/plain", filename="kept.txt")
+    server = FakeCodexAppServer(frames=_basic_frames())
+    adapter = _adapter(_Factory(server))
+
+    stream = await adapter.run_turn(history=_user_turn("look"), attachments=[gone, kept])
+    await asyncio.wait_for(_collect_stream(stream), timeout=5)
+
+    text = next(p for m, p in server.requests if m == "turn/start")["input"][0]["text"]
+    assert "Attached file 'gone.png' could not be read" in text
+    assert f"saved at {kept_file}" in text
 
 
 @pytest.mark.asyncio
@@ -769,11 +855,13 @@ async def test_pdf_reaches_codex_as_extracted_text() -> None:
 
 
 @pytest.mark.asyncio
-async def test_document_without_extractor_degrades_to_a_path_note() -> None:
+async def test_document_without_extractor_degrades_to_a_path_note(tmp_path: Any) -> None:
     server = FakeCodexAppServer(frames=_basic_frames())
     factory = _Factory(server)
     adapter = _adapter(factory, document_extractor=None)  # no engine available
-    pdf = Attachment(path="/tmp/report.pdf", mime="application/pdf", filename="report.pdf")
+    report = tmp_path / "report.pdf"
+    report.write_bytes(b"%PDF-1.4")
+    pdf = Attachment(path=str(report), mime="application/pdf", filename="report.pdf")
 
     stream = await adapter.run_turn(history=_user_turn("look"), attachments=(pdf,))
     await asyncio.wait_for(_collect_stream(stream), timeout=5)
@@ -781,7 +869,7 @@ async def test_document_without_extractor_degrades_to_a_path_note() -> None:
     # Degrades gracefully: the document is handed over as a file path, turn intact.
     turn_params = next(p for m, p in server.requests if m == "turn/start")
     sent = turn_params["input"][0]["text"]
-    assert "/tmp/report.pdf" in sent
+    assert str(report) in sent
     assert "saved at" in sent
     assert "[Document:" not in sent
 

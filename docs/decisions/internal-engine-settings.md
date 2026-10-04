@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
-**Related**: [Coffer's Own Model Is an Internal Engine](coffer-model-is-an-internal-engine.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Single Owner Machine for Unattended Rewrites](single-owner-machine-for-unattended-rewrites.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one global row", spec internal-engine "Resolve the engine's connection and model together", spec internal-engine "Drop the engine model when its connection moves", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep at most one internal-engine default", spec provider-switching "Keep an independent speech-to-text default"
+**Related**: [Coffer's Own Model Is an Internal Engine](coffer-model-is-an-internal-engine.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Single Owner Machine for Unattended Rewrites](single-owner-machine-for-unattended-rewrites.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Resolve the engine's connection and model together", spec internal-engine "Drop the engine model when its connection moves", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep at most one internal default connection", spec provider-switching "Keep an independent speech-to-text default"
 
 ## Context
 
@@ -15,7 +15,8 @@ often, how long one call may take).
 
 The endpoints and keys already exist. They are the user's LLM connections
 (`kind='provider'`, [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md)),
-stored once, encrypted, synced, and shown on one page. A gateway account there
+stored once as vault files whose key is a secret reference, synced with the
+vault, and shown on one page. A gateway account there
 typically serves dozens of models.
 
 Forces on the shape:
@@ -23,10 +24,11 @@ Forces on the shape:
 - **First run has nothing.** A fresh install has no connection and no model.
   The most frequent consumer — transcription, on every inbound voice message —
   would be the loudest error in the log if "not configured" were an error.
-- **Settings converge across machines.** The engine settings travel through
-  [vault sync](vault-sync.md) as the `settings` state area, so a change arrives
-  from another machine as often as from a local write, and there is no local
-  event to fire when it does.
+- **Settings converge across machines.** The engine settings are a vault
+  document, so they travel through
+  [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md),
+  and a change arrives from another machine as often as from a local write,
+  with no engine-side event to fire when it does.
 - **Chat and speech are different endpoints.** The gateway a user points the
   engine at usually serves chat completions and often serves no
   `/audio/transcriptions` at all. When transcription borrowed the engine's
@@ -42,12 +44,16 @@ Forces on the shape:
 
 ## Options Considered
 
-### Option A — One global settings row owns the model; a flag on one connection lends the endpoint (chosen)
+### Option A — One global settings document owns the model; a flag on one connection lends the endpoint (chosen)
 
-`internal_engine_config` is a singleton row (`domain/internal_engine_config.py`)
-holding the engine `model`, the speech-to-text `transcribe_model`, each
+The settings are one vault state document, `state/settings/internal-engine.json`
+(read and written by `infrastructure/persistence/internal_engine_repo.py`, typed
+by `domain/internal_engine_config.py`), holding the engine `model`, the speech-to-text `transcribe_model`, each
 unattended pass's switch and interval (`aggregate`, `distil`, `curate`), the
-bound on one model call (`model_timeout_s`) and the curation owner machine. The
+bound on one model call (`model_timeout_s`) and the curation owner machine. A key the document does not
+carry reads as that key's default, and the time of the last write is not in it
+(two machines stamping it would conflict on every edit): it is this machine's
+own record, `local/engine.json`. The
 endpoint and key come from the connection flagged `internal_default`; speech
 comes from the connection flagged `transcribe_default`. Each flag is held by at
 most one connection, set by clear-then-set
@@ -98,7 +104,7 @@ same thing everywhere.
 
 ### Option C — The engine owns its own endpoint and key
 
-The settings row holds a base URL, a credential ref and a model, independent of
+The settings document holds a base URL, a secret reference and a model, independent of
 the provider connections.
 
 Pros: fully self-contained; no cross-kind notification. Cons: the same gateway
@@ -126,9 +132,24 @@ A chat gateway commonly has no transcription endpoint, so a safe state — "no
 transcription, the agent gets the audio file" — became a 404 on every voice
 message. It lost on that incident.
 
+### Option F — A singleton row in the database
+
+The design this replaced: the same fields as one row of a settings table, the
+way every other piece of configuration then lived.
+
+- **Pros.** A transaction around the write; no file format to version; one
+  place for configuration.
+- **Cons.** The row was not meant to travel, so sync needed its own translator,
+  a row has no absent state (a fresh machine and a configured one disagreed
+  about whether the "document" existed), and the settings could not be read or
+  edited as a file.
+- **Why it loses.** Configuration is now files in the vault, which is what sync
+  already merges; the engine's settings gain the same history, writer and
+  convergence as every other state document for no extra mechanism.
+
 ## Decision
 
-The engine's settings are one global row that owns the engine model, the
+The engine's settings are one global vault document that owns the engine model, the
 speech-to-text model, each unattended pass's switch and interval, the call
 bound and the curation owner. Endpoints and keys are borrowed from the
 connections flagged `internal_default` and `transcribe_default`, which are
@@ -147,19 +168,19 @@ separate flags with no fallback between them. The shape carries these rules:
   sync. `use_default_interval` exists because JSON cannot tell "use the default"
   from "not sent".
 - **Defaults are reported, not stored.** An unchosen interval or bound is
-  `NULL` in the row and reported beside the default that applies
+  absent or `null` in the document and reported beside the default that applies
   (`application/upkeep_schedule.py`, `application/engine_timeout.py`), so raising
   a default later reaches every vault that never chose one.
 - **The schedule polls in slices.** Workers wait in 30-second slices and
   re-read the interval each slice (`SLICE_S`). A change that arrives through a
   converge round has no local event to subscribe to, so re-reading is the only
   wait that covers both local and remote writes.
-- **Sync publishes a decision, not the row.** The `settings` area writes
-  `internal-engine.yaml` only while some machine holds a non-default choice.
-  Deleting it means "back to the defaults" everywhere
-  (`application/engine_settings_sync.py`). A singleton has no absent state, so
-  exporting the row itself would make a fresh machine and a configured one
-  delete and re-add the document on every round.
+- **The document is a decision, not a row.** A machine that holds every default
+  writes no document, and a change back to all defaults removes it, so "the
+  defaults" is always the absence of one. Deleting the document anywhere means
+  "back to the defaults" everywhere. A document that always existed would have a
+  fresh machine and a configured one write and delete it against each other on
+  every round.
 - **The engine never imports the provider kind.** The provider kind answers
   "which connection" through `InternalDefaultConnectionPort` and
   `TranscribeConnectionPort` and is told about flag moves through
@@ -170,10 +191,10 @@ separate flags with no fallback between them. The shape carries these rules:
 
 - Surfaces: `/api/v1/internal-engine-config` (plus `/upkeep`, `/timeout`,
   `/transcribe-model`, `/curation-owner`), the `engine.*` and `transcribe.*`
-  keys of `coffer config`, and Settings → Coffer's model (`/settings/engine`).
+  keys of `coffer config`, and Settings › General → Coffer's model.
   The connection flags are set on the provider kind's own routes and, from the
   CLI, as `coffer config set engine.provider|transcribe.provider <name>`.
-- Every write to the row records `internal_engine_model_set` with the values
+- Every write to the settings records `internal_engine_model_set` with the values
   after the write (spec internal-engine "Audit every write to the engine
   settings"). The event name is narrower than what it records, and renaming it
   would need a migration of the audit enum.

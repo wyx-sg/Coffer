@@ -25,12 +25,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import shutil
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 from coffer.infrastructure.daemon.child_process import ChildProcess
+from coffer.infrastructure.platform.user_path import which_on_user_path
 
 _logger = logging.getLogger(__name__)
 
@@ -99,7 +100,9 @@ class CodexSubprocessSession:
         if proc.stdin is None or proc.stdout is None:
             raise RuntimeError("codex app-server subprocess has no stdin/stdout pipe")
         if proc.stderr is not None:
-            self._stderr_task = asyncio.create_task(self._drain_stderr(proc.stderr))
+            self._stderr_task = spawn(
+                self._drain_stderr(proc.stderr), name="codex-app-server-stderr"
+            )
         self._rpc = CodexRpcClient(proc.stdout, proc.stdin)
         self._rpc.start()
 
@@ -131,10 +134,10 @@ class CodexSubprocessSession:
 def default_app_server_session(cwd: str, env: dict[str, str] | None) -> CodexAppServerSession:
     """Build a real ``codex app-server`` session (production seam).
 
-    Resolves the ``codex`` binary on ``PATH`` at call time so the adapter never
+    Resolves the ``codex`` binary on the agent's real ``PATH`` at call time so the adapter never
     hard-codes a path. Raises ``RuntimeError`` if ``codex`` is not installed.
     """
-    binary = shutil.which("codex")
+    binary = which_on_user_path("codex")
     if binary is None:
         raise RuntimeError("codex binary not found on PATH")
     return CodexSubprocessSession([binary, "app-server"], cwd, env)

@@ -11,17 +11,18 @@ from coffer.application.retention_registry import (
 )
 from coffer.application.retention_service import RetentionService
 from coffer.domain.audit import AuditEventType
+from coffer.infrastructure.chat import persistence_models as _chat_models  # noqa: F401
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
 from coffer.infrastructure.persistence.models import AuditLogModel
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyRetentionRepo,
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
 )
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 
 
 async def _service(tmp_path, *, extra_tables=()):
@@ -41,7 +42,7 @@ async def _service(tmp_path, *, extra_tables=()):
     )
     for t in extra_tables:
         registry.register(t)
-    repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
+    repo = FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     return RetentionService(registry=registry, repo=repo, audit=audit), sm, engine
 

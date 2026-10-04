@@ -2,7 +2,7 @@
 
 A ``knowledge`` row's name is a path segment under ``~/.coffer/knowledge/``,
 so the rename the framework offers every kind (ADR
-resource-identity-is-an-immutable-uid) is only half a rename here until the
+identity-is-the-uid-inside-the-file) is only half a rename here until the
 folder follows. These tests drive the kind's own ``on_rename`` hook — the same
 callable ``ResourceService.rename`` invokes — rather than a helper written for
 the test, because the hook is the whole of what rename costs this kind and a
@@ -25,6 +25,7 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource
 from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 class _Resources:
@@ -45,7 +46,6 @@ class _Audit:
 def _row(name: str) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
-        id=1,
         uid="uid-1",
         kind=KIND_KNOWLEDGE,
         name=name,
@@ -60,8 +60,7 @@ def _row(name: str) -> Resource:
 
 @pytest.fixture(autouse=True)
 def knowledge_root(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    return tmp_path / "knowledge"
+    return _knowledge_root()
 
 
 @pytest.fixture

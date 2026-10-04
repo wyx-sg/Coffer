@@ -2,7 +2,7 @@
 
 Application code must depend on abstract Protocols, never on
 infrastructure classes directly. The concrete implementations in
-``coffer.infrastructure.{credentials,mcp}.*`` are wired at composition root
+``coffer.infrastructure.{secrets,mcp}.*`` are wired at composition root
 (``coffer.surfaces.http.app``) and pass through these Protocol types.
 
 These mirror the existing concrete shapes — they exist so application
@@ -24,7 +24,7 @@ from coffer.domain.mcp.capability import (
 )
 
 
-class CredentialStorePort(Protocol):
+class SecretStorePort(Protocol):
     """Secret storage bridge — encrypted SQLite store (default) wired at
     composition root. Confined to infrastructure via importlinter Contract 4."""
 
@@ -49,22 +49,23 @@ class UpstreamConnectionPort(Protocol):
 
 
 class MCPCapabilityPreferenceRepoPort(Protocol):
-    """Persisted user preferences (enabled/disabled per capability)."""
+    """The person's switch per capability of one server (by the server's
+    uid), and when this machine saw each one."""
 
     async def find(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
     ) -> MCPCapabilityPreference | None: ...
     async def list_for(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType | None = None,
     ) -> list[MCPCapabilityPreference]: ...
     async def insert(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
         enabled: bool,
@@ -73,20 +74,27 @@ class MCPCapabilityPreferenceRepoPort(Protocol):
     ) -> MCPCapabilityPreference: ...
     async def set_enabled(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
         enabled: bool,
     ) -> MCPCapabilityPreference | None: ...
     async def reconcile(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         current_keys: list[str],
         *,
         default_enabled: bool,
         when: datetime,
     ) -> list[str]: ...
+    def exposure_for(self, resource_uid: str) -> dict[str, str]:
+        """Tool name -> ``listed`` | ``search`` for the tools the person set."""
+        ...
+
+    async def set_exposure(self, resource_uid: str, changes: dict[str, str]) -> bool:
+        """Set tools' exposure (``auto`` clears) in one write; False when a tool is unknown."""
+        ...
 
 
 class MCPInvocationRepoPort(Protocol):
@@ -99,8 +107,23 @@ class MCPInvocationRepoPort(Protocol):
         resource_uid: str | None = None,
         status: Any | None = None,
         since: datetime | None = None,
+        agent_uid: str | None = None,
         limit: int = 50,
+        after: tuple[datetime, int] | None = None,
+        trace_id: str | None = None,
     ) -> list[MCPInvocation]: ...
+    async def count(
+        self,
+        *,
+        resource_uid: str | None = None,
+        status: Any | None = None,
+        since: datetime | None = None,
+        agent_uid: str | None = None,
+        trace_id: str | None = None,
+    ) -> int:
+        """How many rows :meth:`query` would page through with these filters."""
+        ...
+
     async def usage_counts(
         self,
         *,

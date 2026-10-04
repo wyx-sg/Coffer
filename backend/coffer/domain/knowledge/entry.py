@@ -36,10 +36,12 @@ class CollectionEntry:
     description: str
     document_count: int = 0
     pending_count: int = 0
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on every resource"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
+    #: The collection directory's absolute path, so a surface can reveal it
+    #: ("Return absolute paths on reads"); empty where it was not read.
+    folder_path: str = ""
+    #: When a document in the collection was last written (ISO 8601, UTC);
+    #: ``None`` when it holds none.
+    updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,8 +99,9 @@ class KnowledgeFile:
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
-    #: When curation last had this document in front of it; empty when it
-    #: never has ("Settle an item only after its pass completes").
+    #: When curation last settled this document as it now reads; empty when
+    #: it never has, or it changed since ("Settle an item only after its pass
+    #: completes").
     curated_at: str = ""
     #: sha256 hex of the file's bytes as read — what an edit hands back so a
     #: file changed on disk since is refused rather than overwritten (spec
@@ -135,3 +138,18 @@ class Pending:
 
     material: str | None = None
     document: str | None = None
+
+
+@dataclass(frozen=True)
+class Submission:
+    """What became of one piece of submitted material.
+
+    ``document`` is set when the material was promoted on the spot, and is the
+    document it became; ``pending`` is the inbox item's name when it waits for
+    a pass instead. Exactly one of the two is set.
+    """
+
+    collection: str
+    title: str
+    document: KnowledgeFile | None = None
+    pending: str | None = None

@@ -21,6 +21,7 @@ from coffer.application.agent.service import AgentService
 from coffer.application.features import FeatureService
 from coffer.application.memory.delivery import DeliveryService
 from coffer.domain.agent.types import AgentType
+from coffer.domain.features import MEMORY
 from coffer.surfaces.http.agent_dependencies import set_agent_connection_service
 
 #: The memory delivery hook's part key.
@@ -46,7 +47,7 @@ class MemoryHookConnectionPart:
         return self._delivery.supports(agent_type)
 
     def enabled(self) -> bool:
-        return self._features.is_enabled("memory")
+        return self._features.is_enabled(MEMORY)
 
     async def status(self, agent_uid: str) -> PartStatus:
         st = await self._delivery.status(agent_uid)

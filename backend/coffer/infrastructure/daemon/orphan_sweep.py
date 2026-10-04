@@ -7,12 +7,14 @@ import json
 import logging
 import os
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import psutil
+
+from coffer.infrastructure.vault.home import coffer_home, upstream_pids_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ def _coffer_dir_for(home: str | None) -> Path | None:
     if not home:
         return None
     try:
-        return (Path(home).expanduser() / ".coffer").resolve()
+        return coffer_home(Path(home).expanduser()).resolve()
     except (OSError, RuntimeError):
         return None
 
@@ -37,21 +39,20 @@ def _own_coffer_dir() -> Path | None:
 
 
 def _pid_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "upstream-pids"
+    return upstream_pids_dir()
 
 
 def record_spawn(server_uid: str, pid: int, command_line: list[str]) -> Path:
     """Called by spawn_and_initialize after the SDK has spawned the upstream.
 
     Filed under the server's **uid**, not its name (ADR
-    resource-identity-is-an-immutable-uid). A pid file outlives the process that
+    identity-is-the-uid-inside-the-file). A pid file outlives the process that
     wrote it — that is the whole point, it is read by the NEXT daemon after a
     crash — so it must not be titled with a label the user can change in
     between. The uid is also a safe path segment by construction, where a name is
     only a safe one by a rule this module would otherwise have to trust.
 
-    A file written by an older Coffer carries ``server`` (a name) instead of
-    ``server_uid``; nothing about reaping depends on either field, because
+    Nothing about reaping depends on ``server_uid``, because
     :func:`reap_pidfile` matches on pid + command line. The key is read only to
     say which server was reaped in the log.
     """
@@ -166,6 +167,24 @@ def _exe_basename(proc: psutil.Process) -> str | None:
     return os.path.basename(exe) if exe else None
 
 
+def is_proxy_argv(cmdline: Sequence[str]) -> bool:
+    """True for the frozen binary's second mode, ``coffer-daemon proxy …``.
+
+    The model proxy runs the same executable, against the same ``HOME``, as the
+    daemon, so neither the basename nor the vault tells them apart; only argv
+    does. The proxy is deliberately outlived by daemons (agents' in-flight model
+    streams survive an upgrade), so a daemon sweep must never select it.
+    """
+    return len(cmdline) > 1 and cmdline[1] == "proxy"
+
+
+def _is_proxy_proc(proc: psutil.Process) -> bool:
+    try:
+        return is_proxy_argv(proc.cmdline())
+    except (psutil.Error, OSError):
+        return False
+
+
 def _proc_coffer_dir(proc: psutil.Process) -> Path | None:
     """The vault ``proc`` is serving, read from its own ``HOME``; ``None`` if
     it cannot be read.
@@ -259,6 +278,8 @@ def reap_stale_daemons() -> int:
         # handful that could possibly match; everything else is rejected on the
         # executable name it already failed.
         base = _exe_basename(proc)
+        if base == own_base and _is_proxy_proc(proc):
+            return (proc.pid, None, None)
         return (proc.pid, base, _proc_coffer_dir(proc) if base == own_base else None)
 
     stale = set(

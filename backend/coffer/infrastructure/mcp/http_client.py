@@ -5,7 +5,7 @@ request, on_notification, close), but the underlying transport is the
 official mcp SDK's `streamable_http_client` against a remote HTTP MCP
 endpoint.
 
-Headers (including materialised credentials) are injected via an
+Headers (including materialised secrets) are injected via an
 httpx2.AsyncClient that we create and manage here; this is the SDK-blessed
 approach — the legacy `streamablehttp_client` helper that accepted headers
 directly was removed in mcp 2.0. httpx2 (not httpx) is the client library the
@@ -40,13 +40,14 @@ from contextlib import AsyncExitStack, suppress
 from typing import Any
 
 import httpx2
-from mcp import ClientSession
+from mcp import ClientSession, MCPError
 from mcp.client.session import ListRootsFnT, SamplingFnT
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.types import ServerNotification
 
-from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
+from coffer.application.runtime.supervisor import spawn
+from coffer.domain.errors import UpstreamAuthRejected, UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.dispatch import dispatch_method
 
@@ -61,6 +62,9 @@ _TEARDOWN_SECONDS = 5.0
 # NOT bound initialize — spawn_and_initialize enforces spawn_timeout_seconds
 # itself, from outside the anyio scopes.
 _STREAM_READ_SECONDS = 300.0
+
+# The statuses that say the key or token the upstream was given is refused.
+_AUTH_STATUSES = (401, 403)
 
 
 def _leaf_exception(exc: BaseException) -> BaseException:
@@ -95,6 +99,14 @@ class HttpUpstreamConnection:
         # from a broken Coffer.
         self._server_name = server_name
 
+        #: The first HTTP error status the upstream answered with (>= 400). The
+        #: SDK folds every non-2xx answer into one generic JSON-RPC error, so
+        #: this is how a 401 from a revoked key stays distinguishable.
+        self.first_error_status: int | None = None
+        #: The status of the most recent response the upstream sent. A request
+        #: that fails right after a 401/403 was refused for its key, even though
+        #: the SDK reports it as a generic JSON-RPC error.
+        self.last_status: int | None = None
         self._session: ClientSession | None = None
         # The lifetime task and the two handles spawn/close talk to it with.
         self._runner: asyncio.Task[None] | None = None
@@ -127,7 +139,7 @@ class HttpUpstreamConnection:
         """Open the HTTP/SSE connection and complete MCP initialize.
 
         Returns the server's capabilities as a plain dict.
-        Headers from the transport config and the credential overlay are
+        Headers from the transport config and the secret overlay are
         merged and injected into every request via the httpx2.AsyncClient.
 
         Timeout enforcement: the whole connect + initialize phase is bounded
@@ -140,7 +152,7 @@ class HttpUpstreamConnection:
         same way and the CancelledError is re-raised untouched, so a daemon
         shutdown is never mistaken for an upstream failure.
         """
-        # Combine static headers from config with materialised credentials.
+        # Combine static headers from config with materialised secrets.
         merged_headers: dict[str, str] = {**self._transport.headers, **self._header_overlay}
 
         # httpx2.Timeout: connect/write/pool use spawn_timeout_seconds; the
@@ -150,12 +162,14 @@ class HttpUpstreamConnection:
             timeout=httpx2.Timeout(float(self._spawn_timeout), read=_STREAM_READ_SECONDS),
         )
 
+        http_client.event_hooks["response"].append(self._note_status)
+
         loop = asyncio.get_running_loop()
         ready: asyncio.Future[Any] = loop.create_future()
         close_event = asyncio.Event()
         self._ready = ready
         self._close_event = close_event
-        self._runner = asyncio.create_task(
+        self._runner = spawn(
             self._run_lifetime(http_client, ready, close_event),
             name=f"coffer-mcp-http-upstream:{self._server_name}",
         )
@@ -188,6 +202,11 @@ class HttpUpstreamConnection:
             capabilities = {}
         return capabilities
 
+    async def _note_status(self, response: httpx2.Response) -> None:
+        self.last_status = response.status_code
+        if response.status_code >= 400 and self.first_error_status is None:
+            self.first_error_status = response.status_code
+
     def _init_error(self, exc: BaseException) -> UpstreamTimeout | UpstreamUnavailable:
         """Map a lifetime-task failure onto a domain error.
 
@@ -196,6 +215,8 @@ class HttpUpstreamConnection:
         the exception type; callers chain the original via ``from``.
         """
         leaf = _leaf_exception(exc)
+        if self.first_error_status in _AUTH_STATUSES:
+            return self._auth_rejected(self.first_error_status)
         if isinstance(leaf, httpx2.TimeoutException):
             return UpstreamTimeout(
                 f"MCP server {self._server_name!r} did not finish starting within "
@@ -207,6 +228,11 @@ class HttpUpstreamConnection:
             # this is all we know.
             return UpstreamUnavailable(f"upstream init cancelled: {type(leaf).__name__}")
         return UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__}")
+
+    def _auth_rejected(self, status: int | None) -> UpstreamAuthRejected:
+        return UpstreamAuthRejected(
+            f"MCP server {self._server_name!r} rejected its credentials (HTTP {status})"
+        )
 
     async def _run_lifetime(
         self,
@@ -300,6 +326,12 @@ class HttpUpstreamConnection:
                 self._dispatch_method(method, params, progress_callback=progress_callback),
                 timeout=float(self._request_timeout),
             )
+        except MCPError as exc:
+            # The SDK folds a 401/403 into a generic JSON-RPC error; the status
+            # the response hook saw says it was the key that was refused.
+            if self.last_status in _AUTH_STATUSES:
+                raise self._auth_rejected(self.last_status) from exc
+            raise
         except TimeoutError as exc:
             raise UpstreamTimeout(
                 f"MCP server {self._server_name!r} did not answer {method} within "

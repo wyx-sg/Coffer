@@ -13,27 +13,25 @@ from pathlib import Path
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.supervisor import (
     SubprocessSupervisor,
     UpstreamHealth,
 )
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import InMemoryKeyring, install_in_memory_keyring
+from tests.support.vault_stores import make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -47,7 +45,7 @@ async def _make_services(tmp_path, *, register_servers: list[tuple[str, dict]]):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     kinds = {
         "mcp_server": Kind(
@@ -82,7 +80,7 @@ async def test_lazy_spawn_returns_initialized_connection(tmp_path, monkeypatch):
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     try:
         assert sup.health("fs") == UpstreamHealth.UNHEALTHY
@@ -106,7 +104,7 @@ async def test_get_or_spawn_is_idempotent(tmp_path, monkeypatch):
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     try:
         a = await sup.get_or_spawn("fs")
@@ -128,7 +126,7 @@ async def test_disabled_resource_rejected(tmp_path, monkeypatch):
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     try:
         with pytest.raises(UpstreamUnavailable, match="disabled"):
@@ -155,7 +153,7 @@ async def test_spawn_failure_retries_then_enters_cooldown(tmp_path, monkeypatch)
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         retry_delays=(0.01, 0.01, 0.01),  # snappy for tests
         cooldown_seconds=1,
     )
@@ -165,7 +163,7 @@ async def test_spawn_failure_retries_then_enters_cooldown(tmp_path, monkeypatch)
         assert sup.health("bad") == UpstreamHealth.COOLDOWN
 
         # While in cooldown, no new spawn is attempted
-        with pytest.raises(UpstreamUnavailable, match="cooldown"):
+        with pytest.raises(UpstreamUnavailable, match="unreachable"):
             await sup.get_or_spawn("bad")
     finally:
         await sup.dispose()
@@ -195,7 +193,7 @@ async def test_cooldown_expires_and_allows_new_attempt(tmp_path, monkeypatch):
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         retry_delays=(0.01,),
         cooldown_seconds=60,
         clock=clock,
@@ -234,7 +232,7 @@ async def test_evict_closes_connection_and_marks_unhealthy(tmp_path, monkeypatch
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     try:
         await sup.get_or_spawn("fs")
@@ -262,7 +260,7 @@ async def test_dispose_closes_all_connections(tmp_path, monkeypatch):
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     try:
         await sup.get_or_spawn("fs")
@@ -307,7 +305,7 @@ async def test_concurrent_get_or_spawn_yields_one_subprocess(tmp_path, monkeypat
 
     sup = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         upstream_factory=_counting_factory,  # type: ignore[arg-type]
     )
 
@@ -373,7 +371,7 @@ async def test_concurrent_get_or_spawn_on_dead_upstream_runs_one_retry_ladder(
     retry_delays = (0.01, 0.01, 0.01)
     sup = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         upstream_factory=_failing_factory,  # type: ignore[arg-type]
         retry_delays=retry_delays,
         cooldown_seconds=60,
@@ -398,8 +396,8 @@ async def test_concurrent_get_or_spawn_on_dead_upstream_runs_one_retry_ladder(
 
 
 @pytest.mark.asyncio
-async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
-    """Verify the supervisor materialises credentials through the resolver."""
+async def test_secret_overlay_passed_through(tmp_path, monkeypatch):
+    """Verify the supervisor materialises secrets through the resolver."""
     backend = _with_in_memory(monkeypatch)
     backend.set_password("coffer", "github_pat_main", "ghp_abc123")
     resource_svc, engine = await _make_services(
@@ -412,7 +410,7 @@ async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
                         "type": "stdio",
                         "command": sys.executable,
                         "args": [str(_FAKE), "--tools", "x"],
-                        "credential_refs": {"GITHUB_TOKEN": "github_pat_main"},
+                        "secret_refs": {"GITHUB_TOKEN": "github_pat_main"},
                     },
                 },
             )
@@ -421,13 +419,13 @@ async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     try:
         conn = await sup.get_or_spawn("gh")
         # If we got here, materialize succeeded — the env was set on the
         # subprocess. We don't probe the actual env value (the fake server
-        # doesn't echo it) but a CredentialMissing would have been raised
+        # doesn't echo it) but a SecretMissing would have been raised
         # by the resolver if the keychain entry was absent.
         assert conn is not None
     finally:
@@ -476,7 +474,7 @@ async def test_evicting_a_server_does_not_wait_for_a_spawn_that_will_never_work(
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         retry_delays=(5.0, 5.0),
     )
     try:

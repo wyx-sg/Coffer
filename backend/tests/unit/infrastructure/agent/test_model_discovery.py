@@ -348,3 +348,24 @@ async def test_codex_configured_models_answer_when_the_rpc_cannot_be_reached(
     ).discover(agent_key="codex", config_dir=config_dir)
 
     assert [m.id for m in models] == ["gpt-5-codex"]
+
+
+async def test_native_default_model_reads_what_the_config_names(tmp_path: pathlib.Path) -> None:
+    """The default is the config's own `model`, never the first catalogue entry;
+    a config that names none leaves it to the agent (None)."""
+    from coffer.infrastructure.agent.model_discovery import NativeDefaultModel
+
+    codex = tmp_path / "codex"
+    codex.mkdir()
+    (codex / "config.toml").write_text('model = "gpt-x"\n[profiles.p]\nmodel = "other"\n')
+    claude = tmp_path / "claude"
+    claude.mkdir()
+    (claude / "settings.json").write_text('{"env": {"ANTHROPIC_MODEL": "opus-env"}}')
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    reader = NativeDefaultModel()
+    assert await reader.read(agent_key="codex", config_dir=codex) == "gpt-x"
+    assert await reader.read(agent_key="claude_code", config_dir=claude) == "opus-env"
+    assert await reader.read(agent_key="claude_code", config_dir=empty) is None
+    assert await reader.read(agent_key="codex", config_dir=None) is None

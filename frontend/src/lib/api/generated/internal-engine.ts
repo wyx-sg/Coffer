@@ -4,33 +4,17 @@
  */
 
 export interface paths {
-    "/internal-engine-config": {
+    "/api/v1/internal-engine-config": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Coffer's own operating settings
-         * @description The single global row: the model Coffer's internal engine runs on, and
-         *     every unattended pass's switch and timer. The engine takes its endpoint
-         *     and key from the `internal_default` connection but its MODEL from here
-         *     (internal-engine "Resolve the engine's connection and model together");
-         *     `model` is `null` until one is chosen, and while it is, every internal
-         *     pass is a clean no-op ("Make every internal pass a clean no-op when
-         *     nothing is configured").
-         */
-        get: operations["getInternalEngineConfig"];
-        /**
-         * Set the model the internal engine runs on
-         * @description Sets the engine model (`null` or empty clears it). Overlaid onto the
-         *     resolved `internal_default` connection before the engine builds its chat
-         *     model. Emits an `internal_engine_model_set` audit entry naming the actor
-         *     (internal-engine "Report and set the engine model over HTTP", "Audit
-         *     every write to the engine settings").
-         */
-        put: operations["updateInternalEngineConfig"];
+        /** Get Config */
+        get: operations["get_config_api_v1_internal_engine_config_get"];
+        /** Update Config */
+        put: operations["update_config_api_v1_internal_engine_config_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -38,7 +22,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal-engine-config/upkeep": {
+    "/api/v1/internal-engine-config/curation-owner": {
         parameters: {
             query?: never;
             header?: never;
@@ -47,26 +31,15 @@ export interface paths {
         };
         get?: never;
         /**
-         * Change one unattended pass's switch or timer
-         * @description Coffer runs three passes on its own behalf — `aggregate` (spec memory
-         *     "Aggregate on an interval and on demand"), `distil` (spec memory
-         *     "Distil incrementally in two stages") and `curate` (spec knowledge
-         *     "Curate through a fenced four-tool pass") — each with a switch and an
-         *     interval.
+         * Update Curation Owner
+         * @description Name the machine that runs the curation pass; ``null`` clears it.
          *
-         *     ONE pass per request, and each half left alone when it is not sent: a
-         *     settings page toggles one row at a time, and a body carrying all three
-         *     would make every toggle a chance to write back a stale copy of the other
-         *     two (internal-engine "Change one unattended pass per write").
-         *     `use_default_interval` returns a pass to its own built-in interval,
-         *     which a null `interval_s` cannot express ("Report an unchosen interval
-         *     beside its default"). An interval below the floor and an unknown pass
-         *     name are both refused ("Refuse an interval below the floor or an
-         *     unknown pass"). A running worker picks the change up without a restart
-         *     ("Apply a changed switch or interval without a restart"). Emits an
-         *     `internal_engine_model_set` audit entry.
+         *     Clearing returns the vault to "curate wherever this is read", which is
+         *     correct for a vault down to one machine and wrong for one that still spans
+         *     several — so it is something the user asks for, never a repair anything
+         *     performs on its own.
          */
-        put: operations["updateUpkeep"];
+        put: operations["update_curation_owner_api_v1_internal_engine_config_curation_owner_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -74,7 +47,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal-engine-config/curation-owner": {
+    "/api/v1/internal-engine-config/timeout": {
         parameters: {
             query?: never;
             header?: never;
@@ -83,31 +56,14 @@ export interface paths {
         };
         get?: never;
         /**
-         * Name the machine that runs the curation pass
-         * @description Curation rewrites a collection's documents with no diff anyone
-         *     approved, so once a vault spans machines exactly one may run it: two
-         *     machines fold the same material into two DIFFERENT documents, git merges
-         *     that cleanly as two additions at different paths, and the vault ends up
-         *     holding the same knowledge twice with nothing in conflict (spec
-         *     vault-sync "Run an unattended rewriter on one owner machine").
+         * Update Model Timeout
+         * @description Bound one call to Coffer's own model, or return it to the default.
          *
-         *     This is how that machine is chosen — the counterpart of binding a
-         *     channel, and it exists for the same reason: the owner travels with the
-         *     settings document, so a machine that is retired leaves an owner nobody
-         *     claims, curation stops on every machine, and until this route there was
-         *     no way to say so or to take it back.
-         *
-         *     `null` (or a blank id) clears the owner, which returns the vault to
-         *     "curate wherever this is read". That is the right answer for a vault
-         *     down to one machine and the wrong one for a vault that still spans
-         *     several, so it is an explicit choice rather than a repair anything
-         *     performs on its own. Only the owner changes; the rest of the row is
-         *     left as it stands. Emits an `internal_engine_model_set` audit entry
-         *     naming the actor, whose details carry the owner after the write
-         *     (spec internal-engine "Report and change the curation owner from
-         *     every surface").
+         *     ``null`` is the way back to the default and the only way: it keeps the
+         *     default in one place, so raising it later reaches every vault that never
+         *     chose one rather than none of them.
          */
-        put: operations["updateCurationOwner"];
+        put: operations["update_model_timeout_api_v1_internal_engine_config_timeout_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -115,7 +71,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal-engine-config/timeout": {
+    "/api/v1/internal-engine-config/transcribe-model": {
         parameters: {
             query?: never;
             header?: never;
@@ -124,29 +80,14 @@ export interface paths {
         };
         get?: never;
         /**
-         * Bound one call to Coffer's own model
-         * @description How long ONE call to the internal engine's model may take before the
-         *     caller gives up (internal-engine "Carry the bound on one model call").
-         *     The right number is a property of the operator's endpoint, not of
-         *     Coffer: against a gateway whose typical answer takes 25-30 seconds the
-         *     built-in 60 leaves barely a factor of two, and a pass that times out
-         *     defers its work and reports success — so the layer converges at a
-         *     fraction of its rate while nothing looks broken.
+         * Update Transcribe Model
+         * @description Choose the model Coffer transcribes speech with, or stop transcribing.
          *
-         *     `null` returns the bound to `default_model_timeout_s`, which is the
-         *     only way back and keeps the default in one place. A value outside the
-         *     allowed range is REFUSED here rather than clamped, because this is the
-         *     operator asking for a number; the background passes clamp instead, so
-         *     a row written by an older build cannot take a pass down.
-         *
-         *     A value outside the range is refused by this route and by the CLI with
-         *     the same error ("Refuse an out-of-range bound at a surface and clamp it
-         *     in a pass"). One setting per request, for the reason `UpkeepUpdate`
-         *     records ("Change the bound and the speech-to-text model one value at a
-         *     time"). Emits an `internal_engine_model_set` audit entry naming the
-         *     actor.
+         *     Clearing it is an operating decision an operator may want — with no model
+         *     the recording never leaves the machine — which is why it is expressed here
+         *     rather than by deleting the connection that carries the endpoint.
          */
-        put: operations["updateModelTimeout"];
+        put: operations["update_transcribe_model_api_v1_internal_engine_config_transcribe_model_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -154,7 +95,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal-engine-config/transcribe-model": {
+    "/api/v1/internal-engine-config/upkeep": {
         parameters: {
             query?: never;
             header?: never;
@@ -163,20 +104,13 @@ export interface paths {
         };
         get?: never;
         /**
-         * Set the model Coffer transcribes speech with
-         * @description The speech-to-text model (internal-engine "Transcribe speech on its own
-         *     connection and model"). Its ENDPOINT and key come from the connection
-         *     flagged `transcribe_default`, which spec provider-switching serves under
-         *     `/api/v1/providers` — NOT from the `internal_default` one, and there is
-         *     deliberately no fallback between them: they are different models, and a
-         *     chat gateway commonly serves no `/audio/transcriptions` at all.
+         * Update Upkeep
+         * @description Change one pass's switch or timer.
          *
-         *     `null` or empty stops transcription, which is a real answer rather than
-         *     an unset one — with no model, or no connection marked, a turn carrying
-         *     audio hands the agent the file untouched and the recording never leaves
-         *     the machine. Emits an `internal_engine_model_set` audit entry.
+         *     Each half is left alone when the client does not send it, so a settings
+         *     page can flip a switch without restating a timer it never looked at.
          */
-        put: operations["updateTranscribeModel"];
+        put: operations["update_upkeep_api_v1_internal_engine_config_upkeep_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -188,112 +122,147 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description The machine that may run the curation pass. `null` clears the owner and returns the vault to curating wherever the setting is read. */
+        /**
+         * CurationOwnerUpdate
+         * @description Name the machine that may run the curation pass; ``null`` clears it.
+         *
+         *     Deliberately NOT validated against the registry. A vault that has never
+         *     converged has no registry at all and must still be able to name its own
+         *     machine — the one install where checking would refuse the only correct
+         *     answer.
+         */
         CurationOwnerUpdate: {
-            /** @description A machine id as `GET /sync/machines` reports it. Not validated against the registry: a vault that has never converged has no registry, and must still be able to name its own machine. */
+            /** Machine Id */
             machine_id?: string | null;
         };
-        /** @description Coffer's own operating settings: the model its internal engine runs on (the connection used is the `internal_default` — endpoint + key), and the switch and timer of every pass it runs unattended. */
-        InternalEngineConfigOut: {
-            /** @description The chosen model id, or null when unset. */
-            model?: string | null;
-            /** Format: date-time */
-            updated_at?: string | null;
-            /** @description Keyed by pass name (`aggregate`, `distil`, `curate`). */
-            upkeep?: {
-                [key: string]: components["schemas"]["UpkeepSettingOut"];
-            };
-            /** @description The one machine allowed to run the curation pass, or null on a vault that has never named one (which curates wherever it is read — a vault with no owner is a vault with one machine). Resolve it against `GET /sync/machines`, the same way a channel's `runs_on` is resolved: an id no entry there claims is a FAULT, because the pass then runs on no machine at all and nothing else in the product reports it. An empty registry is not that fault — a vault that has never converged has no registry to be absent from. */
-            curate_owner_machine_id?: string | null;
-            /** @description The chosen bound on one model call, or null while none has been chosen. */
-            model_timeout_s?: number | null;
-            /** @description What bounds a call while `model_timeout_s` is null — reported for the same reason `default_interval_s` is, so a settings surface can name the default rather than show a blank. */
-            default_model_timeout_s: number;
-            /** @description The speech-to-text model, or null when Coffer transcribes nothing and hands the agent the audio file untouched. */
-            transcribe_model?: string | null;
-        };
-        /** @description One unattended pass's switch and timer. */
-        UpkeepSettingOut: {
-            enabled: boolean;
-            /** @description The chosen interval, or null while none has been chosen. */
-            interval_s?: number | null;
-            /** @description What runs while `interval_s` is null — reported so a settings surface can name the default rather than show a blank. */
-            default_interval_s: number;
-        };
-        /** @description Change one pass. An omitted field leaves that half of the pass alone. */
-        UpkeepUpdate: {
-            /** @enum {string} */
-            pass: "aggregate" | "distil" | "curate";
-            enabled?: boolean | null;
-            /** @description Seconds between runs of this pass. The minimum is the floor below which a pass would busy-loop a model over the user's files. */
-            interval_s?: number | null;
+        /** ErrorDetail */
+        ErrorDetail: {
             /**
-             * @description Return this pass to its own built-in interval.
-             * @default false
+             * Code
+             * @example RESOURCE_NOT_FOUND
              */
-            use_default_interval: boolean;
-        };
-        /** @description Set the internal-engine model; null/empty clears it. */
-        InternalEngineConfigUpdate: {
-            model?: string | null;
-        };
-        /** @description Bound one call to Coffer's own model; null returns it to the default. */
-        ModelTimeoutUpdate: {
-            /** @description Seconds one model call may take. The floor is not politeness — below it the bound would expire before a healthy endpoint could answer — and the ceiling bounds the damage a typo does, since an unattended pass holding a wedged connection for an hour is the failure the bound exists to prevent. */
-            seconds?: number | null;
-        };
-        /** @description Set the speech-to-text model; null/empty stops transcription. */
-        TranscribeModelUpdate: {
-            model?: string | null;
-        };
-        /** @description The app-wide error envelope `{error: {code, message, details}}`. */
-        ErrorOut: {
-            error: {
-                /** @description Machine-readable error code. */
-                code: string;
-                /** @description Human-readable description. */
-                message: string;
-                /** @description Optional structured error details. */
-                details?: {
-                    [key: string]: unknown;
-                };
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
             };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
         };
-    };
-    responses: {
-        /** @description Missing or invalid X-Coffer-Token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * InternalEngineConfigOut
+         * @description Coffer's own operating settings: its model, and its unattended work.
+         */
+        InternalEngineConfigOut: {
+            /** Curate Owner Machine Id */
+            curate_owner_machine_id: string | null;
+            /** Default Model Timeout S */
+            default_model_timeout_s: number;
+            /** Model */
+            model: string | null;
+            /** Model Timeout S */
+            model_timeout_s: number | null;
+            /** Transcribe Model */
+            transcribe_model: string | null;
+            /** Updated At */
+            updated_at: string | null;
+            /** Upkeep */
+            upkeep: {
+                [key: string]: components["schemas"]["UpkeepSettingOut"];
             };
         };
         /**
-         * @description Validation failure. The cases this surface has:
-         *     - an unknown `pass` name
-         *     - an `interval_s` below the floor
-         *     - a `seconds` outside the allowed bound range
+         * InternalEngineConfigUpdate
+         * @description Set the internal-engine model; ``null``/empty clears it.
          */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
+        InternalEngineConfigUpdate: {
+            /** Model */
+            model?: string | null;
         };
-        /** @description Server error while reading or writing the settings row. Check the audit log for what was recorded. */
-        InternalError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
+        /**
+         * ModelTimeoutUpdate
+         * @description Bound one call to Coffer's own model; ``null`` restores the default.
+         *
+         *     The range is checked by the service rather than declared here, so the
+         *     terminal, this route and a synced document are all refused by one rule that
+         *     says which numbers are allowed and why — and the operator reads the reason
+         *     instead of a generated constraint message.
+         */
+        ModelTimeoutUpdate: {
+            /** Seconds */
+            seconds?: number | null;
+        };
+        /**
+         * TranscribeModelUpdate
+         * @description Choose the speech-to-text model; ``null``/empty stops transcription.
+         *
+         *     Deliberately NOT defaulted to the engine's own model: a gateway that serves
+         *     chat completions commonly serves no transcription endpoint, so borrowing
+         *     the engine's choice would aim every voice message at a 404 instead of at
+         *     the behaviour an unconfigured vault already has.
+         */
+        TranscribeModelUpdate: {
+            /** Model */
+            model?: string | null;
+        };
+        /**
+         * UpkeepSettingOut
+         * @description One unattended pass's switch and timer, as a surface needs to show them.
+         *
+         *     ``interval_s`` is ``null`` while the operator has chosen none;
+         *     ``default_interval_s`` is what runs in that case, reported so a settings
+         *     page can name the default instead of showing a blank where a number
+         *     belongs.
+         */
+        UpkeepSettingOut: {
+            /** Default Interval S */
+            default_interval_s: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Interval S */
+            interval_s: number | null;
+            /** Last Pass At */
+            last_pass_at: string | null;
+            /** Next Pass At */
+            next_pass_at: string | null;
+        };
+        /**
+         * UpkeepUpdate
+         * @description Change ONE unattended pass, leaving the others exactly as they stand.
+         *
+         *     One pass at a time on purpose: a settings page toggles one row, and a body
+         *     carrying all three would make every toggle a chance to write back a stale
+         *     copy of the other two — on settings the operator may also be changing on
+         *     another machine, since they converge through vault sync.
+         *
+         *     Omitting a field leaves that half of the pass alone, so a switch and a
+         *     timer can be changed independently.
+         */
+        UpkeepUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Interval S */
+            interval_s?: number | null;
+            /**
+             * Pass
+             * @enum {string}
+             */
+            pass: "aggregate" | "distil" | "curate";
+            /**
+             * Use Default Interval
+             * @default false
+             */
+            use_default_interval?: boolean;
         };
     };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -301,16 +270,18 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getInternalEngineConfig: {
+    get_config_api_v1_internal_engine_config_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -319,14 +290,33 @@ export interface operations {
                     "application/json": components["schemas"]["InternalEngineConfigOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateInternalEngineConfig: {
+    update_config_api_v1_internal_engine_config_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -336,7 +326,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -345,41 +335,33 @@ export interface operations {
                     "application/json": components["schemas"]["InternalEngineConfigOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    updateUpkeep: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpkeepUpdate"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalError"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateCurationOwner: {
+    update_curation_owner_api_v1_internal_engine_config_curation_owner_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -389,7 +371,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -398,15 +380,33 @@ export interface operations {
                     "application/json": components["schemas"]["InternalEngineConfigOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalError"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateModelTimeout: {
+    update_model_timeout_api_v1_internal_engine_config_timeout_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -416,7 +416,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -425,15 +425,33 @@ export interface operations {
                     "application/json": components["schemas"]["InternalEngineConfigOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            422: components["responses"]["UnprocessableEntity"];
-            500: components["responses"]["InternalError"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateTranscribeModel: {
+    update_transcribe_model_api_v1_internal_engine_config_transcribe_model_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -443,7 +461,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -452,8 +470,69 @@ export interface operations {
                     "application/json": components["schemas"]["InternalEngineConfigOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_upkeep_api_v1_internal_engine_config_upkeep_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpkeepUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEngineConfigOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
 }

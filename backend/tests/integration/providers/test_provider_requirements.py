@@ -19,6 +19,8 @@ from starlette.testclient import TestClient
 from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
+from coffer.surfaces.http.secret_composition import get_secret_store
 from tests.fixtures.keyring import install_in_memory_keyring
 
 TOKEN = "test-token-provider-requirements"
@@ -106,31 +108,34 @@ def test_a_connection_is_a_provider_resource_addressed_by_its_uid(env: pathlib.P
 def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path) -> None:
     with _daemon() as c:
         uid = _new(c, _anthropic("acme", secret="sk-before-rotation"))
-        ref = c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
-        assert c.get(f"/api/v1/providers/{uid}/key").json()["value"] == "sk-before-rotation"
+        ref = c.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
+        assert get_secret_store().get(ref) == "sk-before-rotation"
 
         r = c.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-after-rotation"})
         assert r.status_code == 200, r.text
-        assert r.json()["credential_ref"] == ref
+        assert r.json()["secret_ref"] == ref
         assert "sk-after-rotation" not in r.text
 
-        assert c.get(f"/api/v1/providers/{uid}").json()["credential_ref"] == ref
-        assert c.get(f"/api/v1/credentials/{ref}").json()["value"] == "sk-after-rotation"
-        assert c.get(f"/api/v1/providers/{uid}/key").json()["value"] == "sk-after-rotation"
+        assert c.get(f"/api/v1/providers/{uid}").json()["secret_ref"] == ref
+        # A replacement is stored at once, with no approval (spec secret "Store a
+        # secret through the API"). No secret route returns a value; read the
+        # daemon's own store.
+        assert get_secret_boundary().list(status="pending") == []
+        assert get_secret_store().get(ref) == "sk-after-rotation"
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="boot clears an active flag the agent's config does not carry",
+    scenario="boot clears a connection the agent's config does not carry",
 )
-def test_boot_clears_an_active_flag_the_agents_config_does_not_carry(env: pathlib.Path) -> None:
+def test_boot_clears_a_connection_the_agents_config_does_not_carry(env: pathlib.Path) -> None:
     cfg = env / "cc-config"
     with _daemon() as c:
         _register_agent(c, "claude_code", "cc", cfg)
         uid = _new(c, _anthropic("acme"))
-        act = c.post(f"/api/v1/providers/{uid}/activate")
+        act = c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": "claude_code"})
         assert act.status_code == 200, act.text
-        assert c.get(f"/api/v1/providers/{uid}").json()["is_active"] is True
+        assert c.get("/api/v1/agents/claude_code").json()["connection_uid"] == uid
 
     # While the daemon was down, something else rewrote the agent's config —
     # it carries none of Coffer's keys any more.
@@ -139,7 +144,7 @@ def test_boot_clears_an_active_flag_the_agents_config_does_not_carry(env: pathli
     settings.write_text(user_owned, encoding="utf-8")
 
     with _daemon() as c:
-        assert c.get(f"/api/v1/providers/{uid}").json()["is_active"] is False
+        assert c.get("/api/v1/agents/claude_code").json()["connection_uid"] is None
 
     # The heal corrects Coffer's own record only: nothing was written back.
     assert settings.read_text(encoding="utf-8") == user_owned
@@ -162,7 +167,12 @@ def test_each_provider_operation_records_its_own_audit_event(env: pathlib.Path) 
             },
         )
 
-        assert c.post(f"/api/v1/providers/{acme}/activate").status_code == 200
+        assert (
+            c.post(
+                f"/api/v1/providers/{acme}/activate", json={"agent_type": "claude_code"}
+            ).status_code
+            == 200
+        )
         assert c.post(f"/api/v1/providers/{acme}/internal-default").status_code == 200
         assert c.post(f"/api/v1/providers/{other}/transcribe-default").status_code == 200
 

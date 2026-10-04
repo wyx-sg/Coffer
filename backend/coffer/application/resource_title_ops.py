@@ -5,15 +5,14 @@ Extracted to keep ``resource_service.py`` under the file-size limit, beside
 instance and reaches into its (private) attributes.
 
 A title is display text a person chose (spec resource-framework "Carry an
-optional editable title on every resource"). It is deliberately NOT routed
-through ``update_config``, for two reasons:
+optional editable title on the kinds that have one"); a kind that carries none
+(``Kind.titled`` false — `agent`, `knowledge`, `mcp_server`, `memory`, `skill`)
+refuses a non-empty one. It is deliberately NOT routed through ``update_config``, for two reasons:
 
-- It is editable on every kind, including one that owns its lifecycle
-  (``generic_create_allowed=False`` — `skill`, `agent`), whose config the
-  kind-agnostic update refuses to rewrite. A title has no on-disk artifact
-  behind it for the generic path to desync, so that seam has nothing to guard.
-- Writing it re-validates nothing, probes no credential and fires no kind hook:
-  a title edit refused because a credential the config cites has since been
+- A title has no on-disk artifact behind it for the generic path to desync, so
+  the lifecycle seam that refuses a kind's config rewrite has nothing to guard.
+- Writing it re-validates nothing, probes no secret and fires no kind hook:
+  a title edit refused because a secret the config cites has since been
   deleted would be a refusal about something the caller did not touch.
 """
 
@@ -21,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coffer.application.resource_actor import acting_as
 from coffer.application.resource_kind_ops import checked_title
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource
@@ -37,11 +37,12 @@ async def set_title(
 ) -> Resource:
     """Set, change or clear a resource's title; see ``ResourceService.set_title``."""
     before = await service.get(uid)  # 404 before anything is written
-    wanted = checked_title(title)
+    wanted = checked_title(service._require_kind(before.kind), title)
     if wanted == before.title:
         # Idempotent and silent, like a rename to the name it already has.
         return before
-    updated = await service._repo.set_title(uid, wanted)
+    with acting_as(actor):
+        updated = await service._repo.set_title(uid, wanted)
     # Audited as the update it is. ``details`` says which field moved, so the
     # trail does not read as a config edit with identical before and after.
     await service._audit.record(

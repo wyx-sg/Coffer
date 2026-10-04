@@ -1,79 +1,107 @@
-// frontend/src/pages/MemoryDetailPage.tsx
+// frontend/src/pages/MemoryDetailPage.tsx — one partition, at /memory/<uid>[/delivered]
+// (spec memory "Present a partition as its memories").
 //
-// Detail surface for ONE partition: the folder it is on disk, plus the one act
-// that belongs to memory as a whole — Update memory, the same button the
-// partitions page carries (spec memory "Update memory in one action").
+// The header is the partition's name alone (no back link, no Experimental tag,
+// no Automatic control) over one description line: the repository it is keyed
+// on in mono — a worktree and a second clone are one partition ("Identify a
+// partition by its repository") — how many memories it holds and when it was
+// distilled; a partition whose repository is gone says so ("Report
+// unresolvable partitions"). Its actions: Update memory, secondary (spinning
+// while the daemon reports a distil pass over THIS partition, by uid, so
+// leaving mid-pass and coming back still reads busy) and the ⋯ menu. Boards
+// 5.2.06–5.2.09.
 //
-// There is no status or reach control here: every partition is served to every
-// agent (spec memory "Serve every partition to every agent"), so a header
-// control would offer a choice with nothing behind it.
-//
-// Nothing here acts on an individual note, and that is the rule rather than an
-// omission (see "Present partitions as a table and a file tree"). A partition
-// is a folder of derived Markdown: `MEMORY.md`, `notes/` and `RETIRED.md`.
-// Coffer's own passes rewrite all of it on their own schedule, so a verdict
-// recorded against one note — hide it, pin it, mark it dead — would be a
-// promise the surface could not keep. What is left is the truth it can keep:
-// here are the files, this is what they say, open one if you want to change it.
-//
-// The heading shows the partition's title when one is set (the name beside
-// it), and the header carries the Edit dialog that sets or clears it.
-//
-// The header names the REPOSITORY the partition is keyed on, not a working
-// directory: a worktree and a second clone are one partition (see
-// "Identify a partition by its repository"). When
-// that repository is gone from disk the header says so, because such a
-// partition is delivered to nobody and only the developer can decide whether
-// it should still exist (see "Report unresolvable partitions").
-import { useTranslation } from "react-i18next";
+// Two tabs in the path: Memories (default) and Delivered. There is no status
+// or reach control — every partition is served to every agent — and no
+// per-memory action but Edit: memories are derived by distillation, and
+// a person's edit is the memory until newer evidence revises it.
+import { Brain } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
-import { PageHeader } from "@/components/PageHeader";
-import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
-import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
+import { DetailNotFound } from "@/components/DetailNotFound";
+import { PartitionDeliveredTab } from "@/components/memory/PartitionDeliveredTab";
+import { PartitionMemoriesTab } from "@/components/memory/PartitionMemoriesTab";
+import { PartitionMenu } from "@/components/memory/PartitionMenu";
+import { useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
+import { distilState } from "@/components/memory/partitionFacts";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
+import { PageHeader } from "@/components/PageHeader";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { abbreviateHomePath } from "@/lib/agents/display";
+import { useDetailTab } from "@/lib/detailTabs";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
-export function MemoryDetailPage() {
-  const { t } = useTranslation();
-  const uid = useParams<{ uid: string }>().uid ?? "";
+const MEMORY_TABS = ["memories", "delivered"] as const;
 
-  // The partition's label, repository path and whether it still resolves all
-  // live on the dedicated endpoint, matched here by uid.
+export function MemoryDetailPage() {
+  const { t, i18n } = useTranslation();
+  const uid = useParams<{ uid: string }>().uid ?? "";
   const partitions = useMemoryPartitions();
   const row = partitions.data?.find((p) => p.uid === uid);
-  const partition = row?.name ?? "";
-  // Whether a distil pass over THIS partition is running is the DAEMON's
-  // answer, not this component's: a pass outlives the page, so leaving mid-pass
-  // and coming back must still show the button busy rather than invite a
-  // second concurrent pass over the same files. Matched by NAME because that
-  // is what a run reports: `/upkeep/runs` names the folder being rewritten,
-  // and the folder is named after the partition.
-  const passRunning = useUpkeepRunning("memory", partition);
+  const distilling = useUpkeepRunning("memory", uid);
+  const updating = useMemoryUpdateRunning();
+  const running = distilling || updating;
+  const [tab, setTab] = useDetailTab(MEMORY_TABS, "memories", `/memory/${encodeURIComponent(uid)}`);
+
+  if (partitions.isPending) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <Skeleton className="h-8 w-64" />
+      </div>
+    );
+  }
+  if (!row) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("memory.title")} />
+        <DetailNotFound kind="memory" id={uid} backTo="/memory" icon={Brain} />
+      </div>
+    );
+  }
+
+  const where = row.repository_path ? (
+    <span className="font-mono text-xs">{abbreviateHomePath(row.repository_path)}</span>
+  ) : (
+    t("memory.cols.global")
+  );
+  const subtitle = (
+    <span className="text-text-muted">
+      {where} · {t("memory.partitions.memories", { count: row.note_count })} ·{" "}
+      {distilState(t, i18n.language, row, distilling).toLowerCase()}
+    </span>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-h-0 flex-col gap-4">
       <PageHeader
-        back={{ to: "/memory", label: t("common.backTo", { label: t("nav.memory") }) }}
-        title={row ? <ResourceLabel resource={row} heading /> : partition}
-        badges={row?.unresolvable ? <UnresolvableBadge /> : null}
-        subtitle={
-          row?.repository_path ? (
-            <span className="font-mono text-xs">{row.repository_path}</span>
-          ) : null
-        }
+        title={row.name}
+        badges={row.unresolvable ? <UnresolvableBadge /> : null}
+        subtitle={subtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <MemoryUpdateButton variant="outline" size="sm" running={passRunning} />
-            {row ? <EditTitleDialog kind="memory" resource={row} /> : null}
+            <MemoryUpdateButton variant="outline" running={running} />
+            <PartitionMenu partition={row} />
           </div>
         }
       />
 
-      <MemoryFileTree uid={uid} />
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-col">
+        <TabsList>
+          <TabsTrigger value="memories">{t("memory.detail.tabs.memories")}</TabsTrigger>
+          <TabsTrigger value="delivered">{t("memory.detail.tabs.delivered")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value={tab} className="mt-[18px] min-h-0">
+          {tab === "memories" ? (
+            <PartitionMemoriesTab uid={uid} name={row.name} partition={row} />
+          ) : (
+            <PartitionDeliveredTab uid={uid} repositoryPath={row.repository_path} />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

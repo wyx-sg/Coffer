@@ -1,5 +1,5 @@
 """Deploy a frozen build's sibling binaries into ``~/.coffer/bin`` (spec daemon "Deploy
-frozen sibling binaries and back up the vault before migrating").
+frozen sibling binaries and back up the history database before migrating").
 
 The daemon owns the job because it is the one process every frozen install
 starts, whichever tier it came from, and ``coffer-mcp-shim`` must be able to
@@ -42,6 +42,8 @@ import stat
 import sys
 from pathlib import Path
 
+from coffer.infrastructure.vault.home import bin_dir
+
 log = logging.getLogger(__name__)
 
 # The binaries a frozen daemon deploys beside itself. `coffer-daemon` is
@@ -61,7 +63,7 @@ KEEP_VERSIONS = 2
 
 def user_bin_dir() -> Path:
     """Where deployed binaries land — ``~/.coffer/bin``."""
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "bin"
+    return bin_dir()
 
 
 def versioned_target(link: Path, version: str) -> Path:
@@ -78,8 +80,8 @@ def needs_deploy(link: Path, source: Path, version: str) -> bool:
 
     Deploys when the versioned copy is missing, differs in size, lacks its
     sentinel (a copy that never completed), or when the public name does not
-    yet point at it — a fresh install, a legacy in-place file, or a link left
-    on an older version after a manual rollback the user has since undone.
+    yet point at it — a fresh install, or a link left on an older version
+    after a manual rollback the user has since undone.
     """
     target = versioned_target(link, version)
     try:
@@ -107,16 +109,13 @@ def _flip_symlink(link: Path, target: Path) -> None:
     """Point ``link`` at ``target`` atomically (a temp link renamed over it).
 
     Relative, so the whole ``bin`` directory can be moved as a unit. Replaces
-    whatever ``link`` was before — a legacy in-place binary included — in one
-    rename, so a concurrent exec sees either the old file or the new one.
+    whatever ``link`` was before in one rename, so a concurrent exec sees
+    either the old binary or the new one.
     """
     tmp = link.with_name(f".{link.name}.link.tmp")
     tmp.unlink(missing_ok=True)
     os.symlink(os.path.relpath(target, link.parent), tmp)
     os.replace(tmp, link)
-    # The legacy layout kept a sentinel beside the in-place binary; it is
-    # meaningless next to a symlink and would be read as the link's version.
-    _sentinel_for(link).unlink(missing_ok=True)
 
 
 def _is_version_dir(path: Path) -> bool:
@@ -175,7 +174,7 @@ def retire_unshipped_links(
 ) -> list[str]:
     """Remove each public symlink into a version directory under a name not shipped.
 
-    Spec daemon "Deploy frozen sibling binaries and back up the vault before
+    Spec daemon "Deploy frozen sibling binaries and back up the history database before
     migrating": a binary a release dropped must stop resolving to an old build
     rather than linger on the user's ``PATH``. Generic by design, so the next
     binary a release drops needs no special case. Anything at such a path that

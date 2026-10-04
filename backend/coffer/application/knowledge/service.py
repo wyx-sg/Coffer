@@ -1,10 +1,10 @@
 """The knowledge layer's one service.
 
-Every operation resolves to a filesystem operation over ``~/.coffer/knowledge/``. A
+Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``. A
 collection is one tree of documents that a person and Coffer's curation pass write
 together (spec knowledge "Store each collection as one tree of Markdown files"). What
 this layer adds on top of the directory is the one rule about *how new knowledge
-arrives*: every entrance — an upload, an agent's ``coffer__write``, the CLI — submits
+arrives*: every entrance — an upload, an agent's inbox file, a channel's ``/kb`` — submits
 **material**, which waits in the collection's hidden inbox until a pass folds it into
 the documents (see "Submit every entrance's input as material"). With no internal model
 to fold it, the material becomes a document of its own on the spot (see "Promote
@@ -22,9 +22,9 @@ import dataclasses
 import logging
 import pathlib
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
 from coffer.application.audit_service import AuditService
+from coffer.application.knowledge.recording import recording, writer_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import (
@@ -34,15 +34,28 @@ from coffer.domain.knowledge.entry import (
     FileEntry,
     GrepOutcome,
     KnowledgeFile,
+    Submission,
 )
 from coffer.domain.knowledge.errors import (
     CollectionExists,
     CollectionNotFound,
     KnowledgeFileNotFound,
 )
+from coffer.domain.knowledge.history import (
+    OP_CREATE,
+    OP_DELETE,
+    OP_PROMOTE,
+    OP_REMOVE,
+    OP_RENAME,
+    OP_SAVE,
+    OP_SUBMIT,
+    WRITER_USER,
+)
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.domain.vault.writers import CommitMeta
+from coffer.infrastructure.knowledge import catalogue, curation_state, fs, inbox, paths
 from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSearch
+from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 logger = logging.getLogger(__name__)
 
@@ -57,21 +70,6 @@ CatalogueChanged = Callable[[], Awaitable[object]]
 MergeAvailable = Callable[[], Awaitable[bool]]
 
 
-@dataclass(frozen=True)
-class Submission:
-    """What became of one piece of submitted material.
-
-    ``document`` is set when the material was promoted on the spot, and is the
-    document it became; ``pending`` is the inbox item's name when it waits for
-    a pass instead. Exactly one of the two is set.
-    """
-
-    collection: str
-    title: str
-    document: KnowledgeFile | None = None
-    pending: str | None = None
-
-
 KIND_KNOWLEDGE = "knowledge"
 
 
@@ -84,8 +82,15 @@ class KnowledgeService:
         search: RipgrepSearch | None = None,
         on_catalogue_changed: CatalogueChanged | None = None,
         merge_available: MergeAvailable | None = None,
+        history: KnowledgeHistory | None = None,
+        announce: Callable[[str], None] | None = None,
     ) -> None:
+        # Told a collection's uid when its files change outside a resource write.
+        self._announce = announce
         self._merge_available = merge_available
+        # Every write below is one commit naming its writer (see "Keep every
+        # document's history and undo a pass as a whole"); None records nothing.
+        self.history = history
         self._resources = resources
         self._audit = audit
         self._search = search or RipgrepSearch()
@@ -95,19 +100,28 @@ class KnowledgeService:
         # it lives outside this kind.
         self._on_catalogue_changed = on_catalogue_changed
 
+    def announce(self, collection_uid: str) -> None:
+        """Say that a collection's inbox or documents changed."""
+        if self._announce is not None:
+            self._announce(collection_uid)
+
+    @property
+    def audit(self) -> AuditService:
+        """The audit port, for the passes that record what they did."""
+        return self._audit
+
     # ----- collections -------------------------------------------------
 
     async def collection_names(self) -> list[str]:
         """Every registered collection, in name order.
 
         The registry is the authority, not the directory: a folder nobody registered is
-        not a collection (see "Create collections only deliberately"). Whether a row is
-        stored enabled is not consulted — every collection is served (see "Serve every
-        collection to every agent").
+        not a collection (see "Create collections only deliberately"), and every one is
+        served whether or not its row is enabled (see "Serve every collection to every agent").
         """
-        return sorted(r.name for r in await self._rows())
+        return sorted(r.name for r in await self.collection_rows())
 
-    async def _rows(self) -> list[Resource]:
+    async def collection_rows(self) -> list[Resource]:  # the sweep walks these directories
         return await self._resources.list(kind=KIND_KNOWLEDGE)
 
     async def collection(self, uid: str) -> Resource:
@@ -133,7 +147,7 @@ class KnowledgeService:
         write path repeating the lookup.
         """
         name = paths.collection_of(relpath)
-        for row in await self._rows():
+        for row in await self.collection_rows():
             if row.name == name:
                 return row
         raise CollectionNotFound(name)
@@ -154,34 +168,33 @@ class KnowledgeService:
         directory = paths.collection_dir(name)
         if directory.exists():
             raise CollectionExists(name)
-        registered = await self._resources.register(
-            kind=KIND_KNOWLEDGE,
-            name=name,
-            config={},
-            actor=actor,
-            # Deliberately not the description (see "Read a collection's description from
-            # its README"): for this kind it lives
-            # in the collection's own README, where the person browsing the
-            # folder can see and change it. A copy in the row would be written
-            # once, read by nothing, and wrong the moment they edited the file.
-            allow_lifecycle_kind=True,
-        )
-        fs.create_collection_dir(name)
-        if description:
-            paths.readme_path(name).write_text(f"# {name}\n\n{description}\n", encoding="utf-8")
+        registered = await self.register_row(name, actor=actor)
+        meta = CommitMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
+        async with recording(self.history, meta) as tx:
+            fs.create_collection_dir(name)
+            if description:
+                readme = paths.readme_path(name)
+                readme.write_text(f"# {name}\n\n{description}\n", encoding="utf-8")
+            tx.touch(name)
         await self.catalogue_changed()
         return CollectionEntry(
-            uid=registered.uid, name=name, description=catalogue.readme_description(name)
+            uid=registered.uid,
+            name=name,
+            description=catalogue.readme_description(name),
+            folder_path=str(paths.collection_dir(name)),
+        )
+
+    async def register_row(self, name: str, *, actor: str) -> Resource:
+        """The collection's ``resources`` row — without its description, which
+        lives in the README (see "Read a collection's description from its README")."""
+        return await self._resources.register(
+            kind=KIND_KNOWLEDGE, name=name, config={}, actor=actor, allow_lifecycle_kind=True
         )
 
     async def catalogue_changed(self) -> None:
-        """Tell whoever renders the catalogue that it moved.
-
-        Never raises: the collection has already been created, deleted or
-        switched by the time this runs, and a failure to re-render must not
-        turn a completed operation into an error the caller sees. The next
-        boot renders it anyway.
-        """
+        """Every registered collection with every document in it — the one read of
+        the whole corpus, for the skill (see "Merge the manual and the catalogue
+        in the skill body")."""
         if self._on_catalogue_changed is None:
             return
         try:
@@ -190,16 +203,11 @@ class KnowledgeService:
             logger.warning("knowledge.catalogue_changed.notify_failed", exc_info=True)
 
     async def list_collections(self) -> list[CollectionEntry]:
-        """The registered collections, each carrying the uid its routes address.
-
-        The catalogue is generated by walking the directory, so it knows names
-        and counts but no identities; the registry knows identities. Joining
-        them here — once — is what lets a caller act on a row it just rendered,
-        and what keeps a folder nobody registered out of the list.
-        """
-        row_by_name = {r.name: r for r in await self._rows()}
+        """The registered collections joined with the catalogue walk, each carrying
+        the uid its routes address; a folder nobody registered is left out."""
+        row_by_name = {r.name: r for r in await self.collection_rows()}
         return [
-            dataclasses.replace(c, uid=row_by_name[c.name].uid, title=row_by_name[c.name].title)
+            dataclasses.replace(c, uid=row_by_name[c.name].uid)
             for c in catalogue.list_collections()
             if c.name in row_by_name
         ]
@@ -207,16 +215,9 @@ class KnowledgeService:
     # ----- reading, for the human surfaces -----------------------------
 
     async def list_level(self, relpath: str) -> CatalogueLevel:
-        """One level of one collection, generated by walking the directory.
-
-        This serves the web page and the CLI. It is **not** an agent's
-        retrieval path — an agent reads the files themselves at the absolute
-        paths its delivered skill carries (see "Expose exactly one knowledge tool" and
-        "Merge the manual and the catalogue in the skill body").
-
-        A collection's ``.inbox`` is listable too, so a person can see what
-        waits to be merged (see "Hide dot-prefixed entries except the inbox").
-        """
+        """One level of one collection (or its ``.inbox``, see "Hide dot-prefixed
+        entries except the inbox"), for the page and the CLI — never an agent's
+        retrieval path (see "Expose exactly one knowledge tool")."""
         in_inbox = paths.inbox_parts(relpath)
         if in_inbox is not None:
             collection, item = in_inbox
@@ -249,7 +250,10 @@ class KnowledgeService:
         hidden — is refused before the file is looked at.
         """
         collection = await self.require_collection(relpath)
-        saved = fs.save_body(relpath, body, expected_fingerprint=expected_fingerprint)
+        meta = CommitMeta(WRITER_USER, OP_SAVE, f"Edit {relpath}", actor=actor)
+        async with recording(self.history, meta) as tx:
+            # Compared again under the vault's write lock (``fs.save_body``).
+            saved = fs.save_body(relpath, body, expected_fingerprint=expected_fingerprint, tx=tx)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_EDITED.value,
             resource=collection,
@@ -296,23 +300,40 @@ class KnowledgeService:
         read (see "Promote material directly when no model is configured").
         """
         row = await self.require_collection(collection)
-        name = inbox.submit_material(
-            row.name, title=title, description=description, body=body, actor=actor_kind
+        can_merge = await self._can_merge()
+        meta = CommitMeta(
+            writer_of(actor_kind),
+            OP_SUBMIT if can_merge else OP_PROMOTE,
+            f"{'Submit' if can_merge else 'Add'} {title}",
+            actor=actor,
+            agent=actor if actor_kind == ACTOR_AGENT else None,
+            collection=row.name,
         )
         document: KnowledgeFile | None = None
-        if not await self._can_merge():
-            document = inbox.promote(row.name, name)
+        async with recording(self.history, meta) as tx:
+            name = inbox.submit_material(
+                row.name, title=title, description=description, body=body, actor=actor_kind
+            )
+            tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
+            if not can_merge:
+                document = inbox.promote(row.name, name)
+                tx.touch(document.path)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,
             actor=actor,
             details={
                 "title": title,
+                # The inbox item, so a pass can name the agent who wrote it.
+                "item": name,
                 "path": document.path if document else None,
                 "pending": document is None,
             },
         )
+        self.announce(row.uid)
         if document is not None:
+            # A promoted document is a new entry in the catalogue the skill carries.
+            await self.catalogue_changed()
             return Submission(collection=row.name, title=title, document=document)
         return Submission(collection=row.name, title=title, pending=name)
 
@@ -330,7 +351,11 @@ class KnowledgeService:
     async def delete_document(self, relpath: str, *, actor: str) -> None:
         """Remove a document. A person's action — no agent-facing tool deletes."""
         collection = await self.require_collection(relpath)
-        fs.delete_file(relpath)
+        async with recording(
+            self.history, CommitMeta(WRITER_USER, OP_DELETE, f"Delete {relpath}", actor=actor)
+        ) as tx:
+            tx.touch(relpath)
+            fs.delete_file(relpath)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_DELETED.value,
             resource=collection,
@@ -347,14 +372,9 @@ class KnowledgeService:
         collection: str,
         max_matches: int = DEFAULT_MAX_MATCHES,
     ) -> GrepOutcome:
-        """Literal matches among one collection's documents.
-
-        Ripgrep survives the removal of ``coffer__grep`` as an *internal* mechanism: it
-        is how a curation pass finds which existing documents a new material might
-        belong to (see "Assemble a pass from a bounded context"). It is not reachable by
-        any caller outside this process. The inbox is never searched: ripgrep skips
-        hidden directories, and material there is not a document yet.
-        """
+        """Literal matches among one collection's documents — curation's candidate
+        selection (see "Assemble a pass from a bounded context"); the inbox is
+        never searched, and no caller outside this process reaches it."""
         roots: list[pathlib.Path] = [paths.collection_dir(collection)]
         return await self._search.grep(roots, pattern, max_matches=max_matches)
 
@@ -362,15 +382,19 @@ class KnowledgeService:
 
     async def cleanup_collection(self, name: str) -> None:
         """Remove a collection's directory when its Resource is deleted."""
-        fs.remove_collection_dir(name)
+        async with recording(
+            self.history,
+            CommitMeta(WRITER_USER, OP_REMOVE, f"Remove collection {name}", collection=name),
+        ) as tx:
+            tx.touch(name)
+            fs.remove_collection_dir(name)
 
     async def move_collection(self, old_name: str, new_name: str) -> None:
-        """Move a collection's directory when its Resource is renamed.
-
-        The other half of ``cleanup_collection``: the row's name is this
-        layer's directory, so the framework hands the kind both labels and the
-        directory follows. Raises ``FileExistsError`` when something already
-        occupies the new name on disk — the kind turns that into the same
-        collision the framework reports for a taken row (see ``kind.py``).
-        """
-        fs.rename_collection_dir(old_name, new_name)
+        """Move a collection's directory when its Resource is renamed; raises
+        ``FileExistsError`` when the new name is taken on disk (see ``kind.py``)."""
+        meta = CommitMeta(WRITER_USER, OP_RENAME, f"Rename collection {old_name} to {new_name}")
+        async with recording(self.history, meta) as tx:
+            tx.touch(old_name)
+            fs.rename_collection_dir(old_name, new_name)
+            tx.touch(new_name)
+        curation_state.move(old_name, new_name)  # the documents moved unchanged

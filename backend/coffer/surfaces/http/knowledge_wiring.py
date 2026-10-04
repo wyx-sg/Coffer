@@ -4,9 +4,9 @@ Three things are built here: the directory service, ``IngestService`` (document
 upload), and the renderer for Coffer's own skill, which carries the catalogue.
 
 There is no ``SearchService`` any more, and no retrieval tool to register
-alongside it. The layer exposes exactly one built-in, ``coffer__write``
-(spec knowledge "Expose exactly one knowledge tool"); reading is the agent's
-own, at the absolute paths the delivered skill carries. ``IngestService`` takes
+alongside it. The layer exposes no built-in tool (spec knowledge "Expose no
+knowledge tool"); reading and writing are the agent's own, at the absolute paths
+the delivered skill carries. ``IngestService`` takes
 an optional ``completion`` port and so cannot fail to build: with no internal
 connection configured it falls back to the document's own opening prose ("Fill
 frontmatter on converted material"). The model port is handed in rather than
@@ -27,12 +27,13 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from typing import TYPE_CHECKING
 
-from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.knowledge import guide_render
-from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
+from coffer.application.knowledge.history_service import KnowledgeHistoryService
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.service import (
@@ -40,12 +41,17 @@ from coffer.application.knowledge.service import (
     CatalogueChanged,
     KnowledgeService,
 )
+from coffer.domain.features import KNOWLEDGE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
+from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.infrastructure.platform.host import machine_label
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
+from coffer.surfaces.http.event_dependencies import announce_change
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
+    set_history_service,
     set_ingest_service,
     set_knowledge_service,
 )
@@ -60,7 +66,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class KnowledgeWiring:
     """What the knowledge kind hands back: the directory service and its
-    consumers (the channel ``/save`` card takes the first two), the
+    consumers (the channel ``/kb`` card takes the first two), the
     internal-model selector the curation pass shares, and the renderer for
     Coffer's own skill, which the pass re-runs whenever the corpus changes."""
 
@@ -76,7 +82,7 @@ def wire_knowledge_kind(
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     on_catalogue_changed: CatalogueChanged,
 ) -> KnowledgeWiring:
     """Wire the ``knowledge`` kind into the app and return what it built."""
@@ -92,15 +98,28 @@ def wire_knowledge_kind(
         audit=audit,
         on_catalogue_changed=on_catalogue_changed,
         merge_available=_merge_available,
+        # Every write a commit naming its writer (spec knowledge "Keep every
+        # document's history and undo a pass as a whole"), in the vault's repository.
+        history=KNOWLEDGE_HISTORY,
+        announce=lambda uid: announce_change(KIND_KNOWLEDGE, uid),
     )
     set_knowledge_service(service)
+    set_history_service(
+        KnowledgeHistoryService(
+            knowledge=service,
+            history=KNOWLEDGE_HISTORY,
+            audit=audit,
+            # The OS and architecture do not change while the daemon runs.
+            machine=cache(machine_label),
+        )
+    )
 
     ingest_service = IngestService(
         knowledge=service,
         registry=default_registry(),
         models=models,
         completion=LangchainLlmCompletion(),
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         read_timeout=read_internal_engine_timeout,
     )
     set_ingest_service(ingest_service)
@@ -110,12 +129,12 @@ def wire_knowledge_kind(
     async def _render_guide() -> str:
         # One rendering for the whole machine: the catalogue carries no
         # per-agent slice, so there is one text and every agent gets it.
-        # While the knowledge feature is off the skill carries no catalogue
-        # and documents no knowledge tool, and while memory is off it does not
-        # name the memory root (spec experimental-features); nothing either
-        # holds moves. The memory root is read off the registry the memory
-        # kind put it in, which answers None while that feature is off.
-        on = features.is_enabled("knowledge")
+        # While the ``knowledge`` feature is off the skill carries no catalogue,
+        # documents no knowledge tool and does not name the memory root (spec
+        # experimental-features); nothing the feature holds moves. The memory
+        # root is read off the registry the memory kind put it in, which
+        # answers None while that feature is off.
+        on = features.is_enabled(KNOWLEDGE)
         memory_root = builtin_tools.directory("memory")
         return guide_render.render(
             guide_render.display_root(paths.knowledge_root()),
@@ -127,7 +146,13 @@ def wire_knowledge_kind(
             ),
         )
 
-    register_knowledge_builtin_tools(builtin_tools, knowledge_service=service)
+    # No tool: knowledge is plain files an agent reads and writes with its own
+    # tools; the directory entry is how the handshake learns the layer is on.
+    builtin_tools.register_directory(
+        AgentDirectory(
+            name="knowledge", path=lambda: str(paths.knowledge_root()), feature=KNOWLEDGE
+        )
+    )
     app.state.kinds[KIND_KNOWLEDGE] = make_knowledge_kind(service)
     return KnowledgeWiring(
         service=service,

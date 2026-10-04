@@ -1,6 +1,6 @@
 """Acceptance scenarios for notes, the distil pass, the index and the read paths.
 
-Every test drives the real store under the suite-pinned ``COFFER_MEMORY_ROOT``
+Every test drives the real store under the per-test ``HOME``
 and the real distil pass; the internal connection is always a fake that either
 answers from a script or records what it was asked.
 """
@@ -19,7 +19,14 @@ from coffer.application.memory.context import compose_context
 from coffer.application.memory.distil import distil_partition
 from coffer.application.memory.index import index_line
 from coffer.application.memory.service import KIND_MEMORY
-from coffer.domain.memory.note import NOTE_TYPES, TYPE_PROJECT, TYPE_USER, Note, Origin
+from coffer.domain.memory.note import (
+    NOTE_TYPES,
+    TYPE_FEEDBACK,
+    TYPE_PROJECT,
+    TYPE_USER,
+    Note,
+    Origin,
+)
 from coffer.domain.memory.reader import RawEntry
 from coffer.infrastructure.memory import paths, raw_store, store
 from coffer.infrastructure.memory.paths import UnsafeMemoryPath
@@ -117,7 +124,7 @@ class _RecordingCompletion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         payload = json.loads(user)
@@ -386,9 +393,22 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
         search_terms=("coffer daemon", "port drift"),
     )
     await distil_partition("global", completion=None, model_selector=NoModelSelector())
+    # A third, newest, of another type: the two surfaces interleave types by recency.
+    _raw(
+        "Reply tersely",
+        "no trailing summaries",
+        anchor="newest",
+        partition="global",
+        type=TYPE_FEEDBACK,
+    )
+    await distil_partition("global", completion=None, model_selector=NoModelSelector())
 
     notes = {n.title: n for n in store.list_notes("global")}
-    newer, older = notes["Daemon restart"], notes["Plain preference"]
+    newest, newer, older = (
+        notes["Reply tersely"],
+        notes["Daemon restart"],
+        notes["Plain preference"],
+    )
     assert newer.search_terms == ("coffer daemon", "port drift")
     assert older.search_terms == ()
     assert newer.updated_at > older.updated_at
@@ -401,10 +421,10 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
     composed = await compose_context(service, cwd="")
     context_lines = [line for line in composed.text.splitlines() if line.startswith("- **")]
 
-    assert index_lines[0].endswith(" · look up: coffer daemon, port drift")
-    assert "look up" not in index_lines[1]
+    assert index_lines[1].endswith(" · look up: coffer daemon, port drift")
+    assert "look up" not in index_lines[2]
     assert context_lines == index_lines
-    assert context_lines == [index_line(newer), index_line(older)]
+    assert context_lines == [index_line(newest), index_line(newer), index_line(older)]
 
 
 # --- Send file content out only for distil -----------------------------------------

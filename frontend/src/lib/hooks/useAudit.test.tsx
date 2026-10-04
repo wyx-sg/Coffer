@@ -6,7 +6,10 @@ import type { PropsWithChildren } from "react";
 import { useAudit } from "./useAudit";
 import { mockApiClient } from "@/test/mockApiClient";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -69,7 +72,6 @@ describe("useAudit", () => {
       () =>
         useAudit({
           kind: "mcp_server",
-          name: "fs",
           eventType: "resource_created",
           since: "2026-05-01T00:00:00Z",
           limit: 25,
@@ -83,7 +85,6 @@ describe("useAudit", () => {
         params: {
           query: expect.objectContaining({
             kind: "mcp_server",
-            name: "fs",
             event_type: "resource_created",
             since: "2026-05-01T00:00:00Z",
             limit: 25,

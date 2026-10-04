@@ -18,10 +18,13 @@ from typing import Any, NoReturn
 import pytest
 
 from coffer.domain.provider import projection
+from coffer.domain.provider.api_key_helper import proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 
 _EXISTING_SETTINGS = json.dumps({"theme": "dark", "env": {"OTHER": "1"}}, indent=2) + "\n"
 _EXISTING_TOML = '# user comment\napproval_policy = "never"\n'
 _CATALOG = pathlib.Path("/absolute/elsewhere/coffer-models.json")
+_AUTH = CodexAuthCommand("/opt/coffer/bin/coffer", ("proxy", "token", "--agent-uid", "a1"))
 
 
 def _forbid_file_access(monkeypatch: pytest.MonkeyPatch, attempts: list[str]) -> None:
@@ -56,7 +59,7 @@ def _forbid_file_access(monkeypatch: pytest.MonkeyPatch, attempts: list[str]) ->
 def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts: list[str] = []
     _forbid_file_access(monkeypatch, attempts)
-    helper = projection.anthropic_api_key_helper(
+    helper = proxy_token_helper(
         "0123456789abcdef0123456789abcdef", coffer_cli="/opt/coffer/bin/coffer"
     )
 
@@ -64,7 +67,7 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
         _EXISTING_SETTINGS,
         base_url="https://gw/anthropic",
         model="m-primary",
-        fast_model="m-fast",
+        tier_models={"haiku": "m-fast"},
         api_key_helper=helper,
     )
     removed_settings = projection.remove_anthropic_settings(applied_settings)
@@ -73,9 +76,9 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
         _EXISTING_TOML,
         base_url="https://gw/v1",
         model="m-codex",
-        wire_api="responses",
         display_name="Coffer (acme)",
         catalog_path=_CATALOG,
+        auth=_AUTH,
     )
     removed_toml = projection.remove_codex_provider(applied_toml)
 
@@ -86,7 +89,7 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
     settings = json.loads(applied_settings)
     assert settings["apiKeyHelper"] == helper
     assert settings["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
-    assert settings["env"]["ANTHROPIC_MODEL"] == "m-primary"
+    assert settings["model"] == "m-primary"
     assert settings["theme"] == "dark"
     after = json.loads(removed_settings)
     assert "apiKeyHelper" not in after

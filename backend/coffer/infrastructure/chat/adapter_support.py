@@ -24,6 +24,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
+from coffer.domain.chat.channel_note import ChannelNote
+from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.domain.chat.message import Message, Role, TextBlock
 
 #: Persist a discovered upstream session id back onto the conversation.
@@ -35,6 +37,8 @@ class ParseState:
     """Mutable state threaded through an adapter's per-turn output parsing."""
 
     session_id: str | None = None
+    #: The model the agent reported running this turn on, once it has said.
+    model: str | None = None
     tool_names: dict[str, str] = field(default_factory=dict)
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -49,37 +53,52 @@ def last_user_text(history: Sequence[Message]) -> str:
     return ""
 
 
-def channel_system_context(channel_name: str | None) -> str:
-    """A system-prompt append telling a channel-driven agent where it is.
+def _where(note: ChannelNote | None) -> str:
+    """``a SeaTalk group thread`` / ``a Telegram direct chat`` / ``a chat channel``."""
+    if note is None:
+        return "a chat channel"
+    kind = {"direct": "direct chat", "group": "group chat"}.get(note.chat_kind, "chat")
+    if note.in_thread:
+        kind = "group thread" if note.chat_kind == "group" else "thread"
+    platform = f"{note.platform} " if note.platform else ""
+    named = f" (the {note.name} channel)" if note.name else ""
+    article = "an" if (platform or kind)[:1].lower() in "aeiou" else "a"
+    return f"{article} {platform}{kind}{named}"
+
+
+def channel_system_context(note: ChannelNote | None) -> str:
+    """A system-prompt append telling a channel-driven agent where it is and how
+    to shape a reply for it (spec channels "Tell a channel-driven agent it is on a
+    chat channel").
 
     Without it the agent has no idea it is bridged to a phone chat: it dumps
-    terminal-sized replies, waits on OS permission dialogs nobody can click, and
-    reinvents ways to reach the user. Kept short — it rides on every channel turn.
+    terminal-sized replies, narrates steps Coffer already shows, writes Markdown
+    the platform cannot render, and waits on OS dialogs nobody can click. Kept
+    short — it rides on every channel turn.
 
-    ``channel_name`` is a label resolved from the conversation's stored channel
-    uid, so it can come back ``None`` — the channel was deleted while a thread
-    still pointed at it. The name is only colour here; every instruction below
-    it holds regardless. So an unresolvable name drops the name and keeps the
-    append, rather than leaving a channel turn with no channel context at all.
+    ``note`` can be ``None`` (the channel was deleted while a thread still pointed
+    at it) or thin (not running, so what renders is unknown). It then says less,
+    and every instruction that holds regardless stays.
     """
-    where = f"the {channel_name} chat channel" if channel_name else "a chat channel"
+    renders = f" {note.renders}" if note is not None and note.renders else ""
     return (
-        f"You are talking with the user over {where} — "
-        "most likely on their phone, not at a terminal. Keep replies short and "
-        "easy to read on a small screen: lead with the answer, and skip large "
-        "tables or long code dumps unless asked. Short never means dropping "
-        "evidence: when you report what you found while investigating, quote the "
-        "few log lines, error messages and IDs that prove it verbatim (trimmed, in "
-        "code blocks) — they are not a code dump. You cannot click permission or "
-        "confirmation dialogs on the user's computer, and they may be away from "
-        "it — if something needs a click or an OS permission, say so and do what "
-        "you can instead of waiting on it. To send the user a file or image, put "
-        "it on its own line as `MEDIA:/absolute/path` (optionally "
-        "`MEDIA:/absolute/path | a caption`). The file must exist on this machine; "
-        "the channel uploads it — an image by extension is sent as a photo, "
-        "otherwise as a document — and removes the line from your reply. Ordinary "
-        "prose and markdown image links are never sent, so use this sentinel only "
-        "for files you actually want to deliver."
+        f"You are replying in {_where(note)}, most likely on the user's phone. Coffer "
+        "already shows that you are working and which tools you run, so do not "
+        "narrate your steps — write only the answer. The first line is the outcome "
+        "in one sentence (it becomes the notification); then at most about 15 lines; "
+        "put anything longer under a `## Details` heading, which Coffer collapses or "
+        f"attaches.{renders} Keep code blocks under 30 lines and attach longer logs "
+        "or diffs as a file. Draw a diagram or chart as a PNG file and attach it, "
+        "never as diagram source. Short never means dropping evidence: quote the few "
+        "log lines, errors and IDs that prove a finding verbatim, in code blocks. If "
+        "you need the person to confirm or choose before you continue, call "
+        "`coffer__ask`: the question reaches them in this chat as buttons and their "
+        "answer comes back to you. You "
+        "cannot click permission or confirmation dialogs on the user's computer; if "
+        "something needs one, say so and do what you can. To send a file or image, "
+        "put `MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "
+        "channel uploads that existing file and removes the line — nothing else you "
+        "write is sent as a file."
     )
 
 
@@ -134,23 +153,41 @@ __all__ = [
 
 #: Resolves the models an agent could be switched to, for the per-turn note.
 ModelLister = Callable[[str], Awaitable[Sequence[str]]]
-#: (agent_key, cwd) -> the memory digest for this turn, or None (spec memory
-#: "Deliver to channel turns through the system prompt").
-MemoryContextComposer = Callable[[str, str], Awaitable[str | None]]
-#: channel uid -> the channel's current name, or None when no channel carries
-#: that uid any more. A conversation stores the uid of the channel it is bridged
-#: to (ADR resource-identity-is-an-immutable-uid); the system prompt wants the
-#: label a human would use. This callable is the one place the two meet — a
-#: narrow seam rather than a ``ResourceService`` dependency, so this layer keeps
-#: reading one field out of the registry instead of importing it.
-ChannelNameResolver = Callable[[str], Awaitable[str | None]]
+#: (agent_key, cwd, conversation_id) -> the memory digest for this turn, or
+#: None (spec memory "Deliver to channel turns through the system prompt").
+MemoryContextComposer = Callable[[str, str, str], Awaitable[str | None]]
+#: (channel uid, conversation id) -> the facts the channel note is written from,
+#: or None when no channel carries that uid any more. A conversation stores the
+#: uid of the channel it is bridged to (ADR identity-is-the-uid-inside-the-file);
+#: the note wants the name a human uses, the platform, whether this conversation
+#: is a direct chat or a group thread, and what renders there. This callable is
+#: the one place those meet — a narrow seam rather than a channel dependency, so
+#: chat never imports the channel kind.
+ChannelNoteResolver = Callable[[str, str], Awaitable[ChannelNote | None]]
 #: () -> the environment overrides that point the agent's runtime at the config
 #: directory of the agent answering for this provider's type —
 #: ``{"CLAUDE_CONFIG_DIR": dir}`` / ``{"CODEX_HOME": dir}`` for a custom one,
 #: ``{}`` for the default (spec chat "Ship Claude Code and Codex subprocess
-#: providers"). A narrow seam so chat never imports the agent kind; the
+#: providers on the type's one agent"). A narrow seam so chat never imports the agent kind; the
 #: composition root builds it over the agent registry.
 HomeEnvResolver = Callable[[], Awaitable[dict[str, str]]]
+#: () -> whether an ENABLED agent of this provider's type is registered with
+#: Coffer. Chat talks to managed agents only (spec chat "Offer and run only
+#: managed agents"): without one the provider is not offered and runs no turn.
+#: ``None`` at a provider means "no registry to ask" (tests), never "unmanaged".
+ManagedCheck = Callable[[], Awaitable[bool]]
+
+
+async def require_managed(check: ManagedCheck | None, agent_key: str) -> None:
+    """Refuse a turn for an agent type no enabled managed agent answers for."""
+    if check is not None and not await check():
+        raise AgentConfigRejected(
+            reason="agent_not_managed",
+            message=(
+                f"no enabled {agent_key} agent is managed by Coffer; add or enable it on "
+                "the Agents page"
+            ),
+        )
 
 
 async def compose_system_context(
@@ -161,7 +198,8 @@ async def compose_system_context(
     model: str | None,
     list_models: ModelLister | None,
     compose_memory: MemoryContextComposer | None,
-    resolve_channel_name: ChannelNameResolver | None = None,
+    resolve_channel: ChannelNoteResolver | None = None,
+    conversation_id: str = "",
 ) -> str:
     """The appends every provider owes its agent, joined into one.
 
@@ -172,7 +210,9 @@ async def compose_system_context(
     * a channel-driven turn also carries the memory digest (spec memory "Deliver to
       channel turns through the system prompt"): Coffer composes this turn's
       context itself, so memory reaches the agent with no session-start hook and
-      no install. **Only** a channel turn gets it — an agent the developer
+      no install, and the provider marks the turn's process so an installed
+      hook leaves that moment to the turn (``coffer.domain.channel_turn``).
+      **Only** a channel turn gets it — an agent the developer
       drives themselves receives memory through its own hook (spec memory
       "Install delivery hooks explicitly and removably"), never both;
     * every conversation gets the model note, because the agent cannot see
@@ -182,11 +222,11 @@ async def compose_system_context(
     thing: Codex went without any of it until this was extracted, which is
     exactly the drift a second copy invites.
 
-    ``channel_uid`` is what the conversation stores, and ``resolve_channel_name``
-    turns it into the label the prompt reads. They are kept apart on purpose:
-    the uid answers "is this a channel turn, and which channel", which has to
-    stay true across a rename, and the name answers "what does the user call
-    it", which is only ever read here and now.
+    ``channel_uid`` is what the conversation stores, and ``resolve_channel``
+    turns it into the facts the note reads. They are kept apart on purpose: the
+    uid answers "is this a channel turn, and which channel", which has to stay
+    true across a rename, and the facts answer "what is it called, where is this
+    conversation, what renders there", which are only ever read here and now.
     """
     parts: list[str] = []
     # Whether this is a channel turn is decided by the stored uid, never by
@@ -195,12 +235,14 @@ async def compose_system_context(
     # "keep it short, you cannot click dialogs" contract and the memory digest
     # with it — for the one reason least related to where the user is sitting.
     if channel_uid:
-        channel_name = (
-            await resolve_channel_name(channel_uid) if resolve_channel_name is not None else None
+        note = (
+            await resolve_channel(channel_uid, conversation_id)
+            if resolve_channel is not None
+            else None
         )
-        parts.append(channel_system_context(channel_name))
+        parts.append(channel_system_context(note))
         if compose_memory is not None:
-            memory = await compose_memory(agent_key, cwd)
+            memory = await compose_memory(agent_key, cwd, conversation_id)
             if memory:
                 parts.append(memory)
     available = await list_models(agent_key) if list_models else []

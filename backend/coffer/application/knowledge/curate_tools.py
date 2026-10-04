@@ -13,6 +13,10 @@ prompt (spec knowledge "Curate through a fenced four-tool pass"):
 * **A document may not name another file** (see "Refuse file-name references in
   documents"). Checked at the write, because asking for it in a prompt is what produced
   343 dead references.
+* **A write must not overwrite what it did not read.** A document the pass read
+  (or was shown) is written only while its bytes are still the ones the pass saw: a
+  person's edit that landed mid-pass is refused rather than silently reverted
+  (see "Let the newer or better-evidenced statement win").
 * **A retire must follow the write that kept its content.** A document may be
   retired only after this pass has seen it — in the brief or through
   ``read_document`` — and has since written a *different* document. Code
@@ -26,9 +30,10 @@ the loop runs and what it reports.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -108,17 +113,26 @@ def build_tools(
     actor: str,
     counters: Counters,
     shown: Iterable[str] = (),
+    shown_fingerprints: Mapping[str, str] | None = None,
+    on_touch: Callable[[str], None] | None = None,
 ) -> list[CurationTool]:
     """The four operations, fenced to one collection's documents.
 
     ``shown`` names the documents the pass's brief carries in full (the item
     and its candidates): the pass has their content without reading them.
+    ``shown_fingerprints`` maps those to the fingerprint of the bytes the brief
+    carried, so a write over one a person edited since is refused.
     The returned tools share per-pass state, so build them once per pass.
+    ``on_touch`` is told every document path a write or retire reaches, so the
+    pass's one commit holds exactly what it wrote.
     """
+    touch = on_touch or (lambda _path: None)
     # Per-pass record of what was written, in order, and of the point in that
     # order at which each document's content was last in front of the model.
     written_paths: list[str] = []
     seen_at: dict[str, int] = dict.fromkeys(shown, 0)
+    # The fingerprint of each document's bytes as the pass last saw them.
+    seen_bytes: dict[str, str] = dict(shown_fingerprints or {})
 
     def _document_path(relpath: str) -> str | None:
         """``relpath`` if it names a document in this collection."""
@@ -159,6 +173,16 @@ def build_tools(
             for entry in catalogue.walk_files(paths.collection_dir(collection))
         )
 
+    def _moved_since_seen(relpath: str) -> bool:
+        """True when ``relpath`` changed on disk since the pass last saw it."""
+        seen = seen_bytes.get(relpath)
+        if seen is None:
+            return False
+        try:
+            return fs.read_file(relpath).fingerprint != seen
+        except KnowledgeError:
+            return False
+
     async def _list_documents(_args: dict[str, Any]) -> dict[str, Any]:
         entries = catalogue.walk_files(paths.collection_dir(collection))
         return {
@@ -176,6 +200,7 @@ def build_tools(
         except KnowledgeError as exc:
             return {"error": str(exc)}
         seen_at[found.path] = len(written_paths)
+        seen_bytes[found.path] = found.fingerprint
         return {
             "path": found.path,
             "title": found.title,
@@ -185,6 +210,7 @@ def build_tools(
 
     async def _write_document(args: dict[str, Any]) -> dict[str, Any]:
         if counters.writes >= MAX_WRITES_PER_PASS:
+            counters.refused += 1
             return {
                 "error": (
                     f"this pass has already written {MAX_WRITES_PER_PASS} files, which is "
@@ -196,7 +222,9 @@ def build_tools(
         if relpath is not None and _document_path(relpath) is None:
             return _outside(relpath)
         body = str(args.get("body") or "")
-        offender = offending_reference(body, _known_names(), collection=collection)
+        offender = offending_reference(
+            body, await asyncio.to_thread(_known_names), collection=collection
+        )
         if offender is not None:
             counters.refused += 1
             return {
@@ -205,6 +233,17 @@ def build_tools(
                     "corpus is reorganised, so name the subject in prose instead of the file."
                 )
             }
+        if relpath is not None and await asyncio.to_thread(_moved_since_seen, relpath):
+            counters.refused += 1
+            return {
+                "error": (
+                    f"{relpath!r} changed since this pass read it, so writing it now would "
+                    "overwrite someone's edit. Read it again and integrate their text, or "
+                    "leave it for the next pass."
+                )
+            }
+        if relpath is not None:
+            touch(relpath)
         try:
             written = fs.write_file(
                 directory="/".join([collection, *_folder(folder)]),
@@ -217,10 +256,12 @@ def build_tools(
             )
         except KnowledgeError as exc:
             return {"error": str(exc)}
+        touch(written.path)
         counters.written += 1
         written_paths.append(written.path)
         # What the pass just wrote is content it has in front of it.
         seen_at[written.path] = len(written_paths)
+        seen_bytes[written.path] = written.fingerprint
         return {
             "ok": True,
             "path": written.path,
@@ -229,6 +270,7 @@ def build_tools(
 
     async def _retire_document(args: dict[str, Any]) -> dict[str, Any]:
         if counters.writes >= MAX_WRITES_PER_PASS:
+            counters.refused += 1
             return {"error": f"this pass has already written {MAX_WRITES_PER_PASS} files."}
         relpath = str(args.get("path") or "")
         if _document_path(relpath) is None:
@@ -243,6 +285,7 @@ def build_tools(
                     "document that should own them with write_document, then retire it."
                 )
             }
+        touch(relpath)
         try:
             fs.delete_file(relpath)
         except KnowledgeError as exc:

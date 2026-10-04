@@ -2,7 +2,7 @@
 lock), and the foundation of "Drive every managed agent from one bot" — one bot
 runs a different agent in each thread.
 
-Conversation identity is keyed ``(resource_id, chat_id, thread_id)``: two
+Conversation identity is keyed ``(resource_uid, chat_id, thread_id)``: two
 threads of one group (same ``chat_id``, the group id) resolve to two different
 conversations, so concurrent turns in different threads never collide on a
 single conversation ("a turn is already running").
@@ -73,8 +73,7 @@ async def test_group_threads_are_independent_conversations(env: ChannelEnv) -> N
     await env.processor.on_message(_group_msg("th-A"))
     await env.processor.on_message(_group_msg("th-B"))
     # Both turns enter concurrently. If the two threads shared one conversation,
-    # the second start_turn would raise TurnInProgress and the bot would post the
-    # "a turn is already running" notice instead of running the turn.
+    # the second message would queue behind the first instead of running at once.
     await wait_until(lambda: len(gated.runs) >= 2)
 
     conv_a = await env.active_conversation(resource, "grp-1", "th-A")
@@ -98,7 +97,7 @@ async def test_one_bot_runs_different_agents_in_different_threads(env: ChannelEn
     resource, adapter = await env.paired_channel(sender_id="owner-1")
 
     # Thread A switches to codex; thread B keeps the channel default (builtin).
-    await env.processor.on_message(_group_msg("th-A", "/agent codex"))
+    await env.processor.on_message(_group_msg("th-A", "/new codex"))
     await wait_until(lambda: any("codex" in t.lower() for t in adapter.texts()))
     await env.processor.on_message(_group_msg("th-B", "hello"))
     await wait_until(lambda: "Hello world" in adapter.texts())

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -47,7 +48,7 @@ async def test_spawn_records_pidfile_named_after_child_and_pid(pid_dir: Path) ->
         # The record keys the child by the uid it was spawned under
         # (``record_spawn``'s ``server_uid``): a pidfile outlives the daemon
         # that wrote it, so it must not be titled with a label the user can
-        # change in between (ADR resource-identity-is-an-immutable-uid). The
+        # change in between (ADR identity-is-the-uid-inside-the-file). The
         # assertion is the same one as before — the name this child was spawned
         # under is written down — under the key that now carries it.
         assert recorded["server_uid"] == "unit-child"
@@ -60,9 +61,10 @@ async def test_spawn_records_pidfile_named_after_child_and_pid(pid_dir: Path) ->
 
 async def test_spawn_passes_stdio_pipes_and_env_through(pid_dir: Path) -> None:
     argv = [sys.executable, "-c", "import os, sys; sys.stdout.write(os.environ['COFFER_X'])"]
-    child = await ChildProcess.spawn(
-        "echo-child", argv, env={"COFFER_X": "marker"}, stdout=asyncio.subprocess.PIPE
-    )
+    # A hand-built env carries the test's HOME: without it the child would fall
+    # back to the real home, which the real-home guard refuses.
+    env = {"COFFER_X": "marker", "HOME": os.environ["HOME"]}
+    child = await ChildProcess.spawn("echo-child", argv, env=env, stdout=asyncio.subprocess.PIPE)
     assert child.process.stdout is not None
     out = await child.process.stdout.read()
     assert out == b"marker"

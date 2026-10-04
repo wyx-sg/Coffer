@@ -3,66 +3,205 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Design tokens for the Coffer-warm visual language (spec web-ui "Express
-   every surface in one visual language").
+   Coffer design tokens (spec web-ui "Draw every colour from the theme tokens").
 
-   Palette is built around a cream paper background (#FAF9F5) and a clay
-   accent (#C96442) — both chosen for an Anthropic / Claude.ai-adjacent feel
-   that signals "calm, considered, local-first" rather than the bright
-   default Tailwind palette. All values are in HSL so tailwind's
-   hsl(var(--token)) consumers work without changes.
+   The values are the Foundations boards' tokens (ds/coffer/tokens.json on the
+   design canvas), defined once per theme. This file is the ONLY place in
+   frontend/src where a colour literal may appear; scripts/check_frontend_colors.py
+   fails the build on one anywhere else. Components ask for a role
+   (`bg-surface-raised`, `text-text-muted`, `border-border-subtle`), never a hex.
+
+   Colours are RGB channels ("67 83 216") so Tailwind's `/opacity` modifiers
+   work; tailwind.config.js wraps each as rgb(var(--x) / <alpha-value>). The
+   dark theme's status tints are translucent on the boards; here they are that
+   tint flattened over `surface`, so they stay channel values.
+
+   Theme: <html data-theme="light|dark"> is always the RESOLVED theme, set by
+   src/lib/theme.ts before the first render — "system" follows
+   prefers-color-scheme live, "light"/"dark" are the viewer's override
+   (localStorage `coffer.theme`). There is no `dark:` variant anywhere: a
+   component that uses tokens is already themed.
 --------------------------------------------------------------------------- */
+
+/* Bundled fonts (desktop shell CSP is font-src 'self' data:, so nothing is
+   fetched from a font CDN). Figtree and JetBrains Mono, both SIL OFL 1.1 — the
+   licence files sit next to the woff2 files. Latin + Latin Extended subsets;
+   CJK falls back to the system face. */
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url("./assets/fonts/figtree-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url("./assets/fonts/figtree-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("./assets/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("./assets/fonts/jetbrains-mono-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
 
 @layer base {
   :root {
-    /* warm paper background + near-black ink */
-    --background: 41 36% 96%; /* #FAF9F5 */
-    --foreground: 32 14% 11%; /* #1F1B17 */
+    color-scheme: light;
 
-    /* white cards float gently above the cream background */
-    --card: 0 0% 100%;
-    --card-foreground: 32 14% 11%;
+    /* --- colour: light --------------------------------------------------- */
+    --surface: 255 255 255; /* #ffffff */
+    --surface-sidebar: 251 251 252; /* #fbfbfc */
+    --surface-raised: 255 255 255; /* #ffffff */
+    --surface-sunken: 246 247 249; /* #f6f7f9 */
+    --surface-selected: 238 240 246; /* #eef0f6 */
+    --surface-hover: 244 245 248; /* #f4f5f8 */
+    --surface-footer: var(--surface-sunken);
+    --border: 230 232 236; /* #e6e8ec */
+    --border-subtle: 240 241 244; /* #f0f1f4 */
+    --text: 22 24 29; /* #16181d */
+    --text-muted: 75 81 93; /* #4b515d */
+    --text-subtle: 107 113 125; /* #6b717d */
+    --accent: 67 83 216; /* #4353d8 */
+    --on-accent: 255 255 255; /* #ffffff */
+    --accent-soft: 238 240 252; /* #eef0fc */
+    --accent-text: 51 66 196; /* #3342c4 */
+    --success: 23 122 79; /* #177a4f */
+    --warning: 148 88 0; /* #945800 */
+    --danger: 200 55 45; /* #c8372d */
+    --neutral: 160 165 174; /* #a0a5ae */
+    --data: 124 133 153; /* #7c8599 — chart bars and data marks (0.6.06) */
+    --success-soft: 233 245 239; /* #e9f5ef */
+    --warning-soft: 251 243 228; /* #fbf3e4 */
+    --on-warning: 255 255 255; /* #ffffff */
+    --danger-soft: 251 237 235; /* #fbedeb */
+    --danger-strong: 200 55 45; /* #c8372d */
+    --neutral-soft: 241 242 244; /* #f1f2f4 */
+    --on-status: 255 255 255; /* #ffffff */
+    --chip: 238 240 244; /* #eef0f4 */
+    --control-off: 213 216 222; /* #d5d8de */
+    --knob: 255 255 255; /* #ffffff */
+    --scrim: rgba(22, 24, 29, 0.32);
+    --code: 246 247 249; /* #f6f7f9 */
+    --focus-ring: 67 83 216; /* #4353d8 */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 32 14% 11%;
+    /* --- elevation: the one real shadow, plus the in-page lift ----------- */
+    --shadow-overlay: 0 12px 32px rgba(22, 24, 29, 0.14), 0 0 0 1px rgba(22, 24, 29, 0.06);
+    --shadow-lifted: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgb(var(--border));
+    --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-focus: 0 0 0 2px rgb(var(--focus-ring));
 
-    /* primary = clay accent (#C96442). Used sparingly: primary buttons,
-       active nav, focus rings. Not for body text. */
-    --primary: 14 56% 53%;
-    --primary-foreground: 41 36% 96%;
+    /* --- motion ---------------------------------------------------------- */
+    --duration-fast: 120ms;
+    --duration-base: 180ms;
+    --duration-slow: 240ms;
+    --ease-out: cubic-bezier(0.2, 0, 0, 1);
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* secondary = warm beige fill (#F0EBE0) for chips / muted buttons */
-    --secondary: 36 28% 91%;
-    --secondary-foreground: 32 14% 11%;
-
-    /* muted = warm grey for sub-text + table rules */
-    --muted: 36 22% 93%;
-    --muted-foreground: 32 8% 39%; /* #6B645A */
-
-    /* accent = clay hover wash, slightly lighter than primary */
-    --accent: 14 56% 95%;
-    --accent-foreground: 14 56% 32%;
-
-    --destructive: 8 49% 47%; /* #A14D3F */
-    --destructive-foreground: 41 36% 96%;
-
-    --border: 36 18% 85%; /* #E8E4DA */
-    --input: 36 18% 85%;
-    --ring: 14 56% 53%; /* clay focus ring */
-
-    /* status hues used by health badges / invocation rows */
-    --status-ok: 130 18% 42%; /* #5B7C5C warm green */
-    --status-warn: 33 60% 43%; /* #B07A2D amber */
-    --status-err: 8 49% 47%; /* #A14D3F */
-
-    --radius: 0.625rem; /* slightly chunkier than shadcn default */
+    /* --- shadcn aliases ---------------------------------------------------
+       The shadcn names the pages were written against, pointed at the
+       Foundations roles so every existing surface picks up the new look.
+       New code uses the role names above. */
+    --background: var(--surface);
+    --foreground: var(--text);
+    --card: var(--surface-raised);
+    --card-foreground: var(--text);
+    --popover: var(--surface-raised);
+    --popover-foreground: var(--text);
+    --primary: var(--accent);
+    --primary-foreground: var(--on-accent);
+    --secondary: var(--chip);
+    --secondary-foreground: var(--text);
+    --muted: var(--surface-sunken);
+    --muted-foreground: var(--text-muted);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--on-status);
+    --input: var(--border);
+    --ring: var(--focus-ring);
+    --status-ok: var(--success);
+    --status-warn: var(--warning);
+    --status-err: var(--danger);
 
     /* in-preview find highlights (domFind.ts / ::highlight below) */
     --highlight: 253 224 71;
     --highlight-active: 251 191 36;
   }
 
-  /* Dark mode is intentionally omitted — see spec web-ui §Out of Scope. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* --- colour: dark ---------------------------------------------------- */
+    --surface: 26 27 32; /* #1a1b20 */
+    --surface-sidebar: 22 23 27; /* #16171b */
+    --surface-raised: 32 33 39; /* #202127 */
+    --surface-sunken: 22 23 27; /* #16171b */
+    --surface-selected: 38 40 51; /* #262833 */
+    --surface-hover: 31 32 38; /* #1f2026 */
+    --surface-footer: var(--surface-raised);
+    --border: 44 46 54; /* #2c2e36 */
+    --border-subtle: 36 38 45; /* #24262d */
+    --text: 228 229 234; /* #e4e5ea */
+    --text-muted: 163 166 177; /* #a3a6b1 */
+    --text-subtle: 134 138 151; /* #868a97 */
+    --accent: 90 102 230; /* #5a66e6 */
+    --on-accent: 255 255 255; /* #ffffff */
+    --accent-soft: 38 42 69; /* #262a45 */
+    --accent-text: 163 171 255; /* #a3abff */
+    --success: 76 183 130; /* #4cb782 */
+    --warning: 217 164 65; /* #d9a441 */
+    --danger: 229 105 94; /* #e5695e */
+    --neutral: 107 111 123; /* #6b6f7b */
+    --data: 107 116 137; /* #6b7489 */
+    --success-soft: 32 46 44; /* rgba(76, 183, 130, 0.12) over surface */
+    --warning-soft: 49 43 36; /* rgba(217, 164, 65, 0.12) over surface */
+    --on-warning: 22 23 27; /* #16171b */
+    --danger-soft: 50 36 39; /* rgba(229, 105, 94, 0.12) over surface */
+    --danger-strong: 201 70 60; /* #c9463c */
+    --neutral-soft: 35 37 44; /* #23252c */
+    --on-status: 255 255 255; /* #ffffff */
+    --chip: 42 44 53; /* #2a2c35 */
+    --control-off: 58 60 70; /* #3a3c46 */
+    --knob: 228 229 234; /* #e4e5ea */
+    --scrim: rgba(0, 0, 0, 0.5);
+    --code: 22 23 27; /* #16171b */
+    --focus-ring: 116 128 242; /* #7480f2 */
+
+    --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /* Before theme.ts has run (one frame at most) a dark-system viewer would see
+     a white flash; paint the dark surface until the attribute lands. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      background-color: #1a1b20;
+    }
+  }
 }
 
 @layer base {
@@ -74,34 +213,139 @@
     scrollbar-gutter: stable;
   }
   body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "cv11", "ss01", "ss03";
+    @apply bg-surface font-sans text-sm text-text antialiased;
+    font-variant-numeric: tabular-nums;
   }
   h1,
   h2,
   h3 {
-    @apply font-serif tracking-tight;
-    font-feature-settings: "kern", "liga", "calt";
+    @apply tracking-tight;
+  }
+  ::selection {
+    background-color: rgb(var(--accent) / 0.2);
+  }
+  /* Motion confirms cause and effect (Foundations-Motion). With reduced
+     motion every transform goes, fades stay but are capped at the fast
+     duration, and loops stop:
+     - the enter/exit animations (tailwindcss-animate) keep their fade but lose
+       their scale, slide and spin, and run for 120ms;
+     - an infinite animation (shimmer, spinner) plays once, then holds still;
+     - transitions (hover fills, the switch knob, a pressed button's scale)
+       snap instead of tweening, so nothing moves or resizes on screen. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      --tw-enter-scale: 1 !important;
+      --tw-exit-scale: 1 !important;
+      --tw-enter-rotate: 0 !important;
+      --tw-exit-rotate: 0 !important;
+      --tw-enter-translate-x: 0 !important;
+      --tw-enter-translate-y: 0 !important;
+      --tw-exit-translate-x: 0 !important;
+      --tw-exit-translate-y: 0 !important;
+      animation-duration: var(--duration-fast) !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
+/* Desktop window chrome: where the native title bar is replaced by traffic
+   lights floating over the page (src/lib/windowChrome.ts), the sidebar's top
+   row steps down by this much. Zero everywhere else. */
+:root {
+  --titlebar-inset: 0px;
+}
+:root[data-chrome="overlay"] {
+  --titlebar-inset: 44px;
+}
+/* The shell root is `h-[100vh]`; the full-bleed workspace pages are `h-screen`
+   inside a scroll area that starts below the strip, so they give the strip's
+   height back instead of overflowing by it. */
+:root[data-chrome="overlay"] .h-screen {
+  height: calc(100vh - var(--titlebar-inset));
+}
+
 @layer components {
-  /* Sidebar small-caps group label */
+  /* Sidebar and palette group label (label role: 11 / 600, sentence case,
+     padding 0 10 4). The space above a group belongs to the list that
+     stacks the groups, not to the label. */
   .nav-group-label {
-    @apply px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground/70;
+    @apply px-2.5 pb-1 text-2xs font-semibold text-text-muted;
   }
 
-  /* Subtle paper card with warm shadow */
+  /* A scroll window's thin overlay-style thumb (Overview 1.2.09): 4px, the
+     text colour at .22 (rgba(22,24,29,.22) in light), no track, so a list that
+     scrolls looks the same as one that does not. */
+  .scroll-overlay {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--text) / 0.22) transparent;
+  }
+  .scroll-overlay::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scroll-overlay::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-overlay::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: rgb(var(--text) / 0.22);
+  }
+
+  /* A flat card: hairline, no shadow (elevation 0). */
   .paper-card {
-    @apply rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(31,27,23,0.04),0_0_0_0.5px_rgba(31,27,23,0.02)];
+    @apply rounded-xl border border-border bg-surface-raised;
   }
 
-  /* Chat markdown code blocks: the wrapping <pre> owns the padding + warm
-     background (MarkdownContent); the highlight.js github theme only colors the
-     text, so neutralise its white background + inner padding here. */
+  /* Chat markdown code blocks: the wrapping <pre> owns the padding + the code
+     fill (MarkdownContent); highlight.js only colours the text, so neutralise
+     its own background + inner padding here. */
   .markdown-body pre code.hljs {
     @apply bg-transparent p-0;
   }
+}
+
+/* highlight.js ships the light GitHub theme (main.tsx); in the dark theme its
+   token colours are re-pointed at readable ones. */
+:root[data-theme="dark"] .hljs {
+  color: rgb(var(--text));
+}
+:root[data-theme="dark"] .hljs-comment,
+:root[data-theme="dark"] .hljs-quote {
+  color: rgb(var(--text-subtle));
+}
+:root[data-theme="dark"] .hljs-keyword,
+:root[data-theme="dark"] .hljs-selector-tag,
+:root[data-theme="dark"] .hljs-type {
+  color: #ff7b72;
+}
+:root[data-theme="dark"] .hljs-string,
+:root[data-theme="dark"] .hljs-regexp,
+:root[data-theme="dark"] .hljs-addition {
+  color: #a5d6ff;
+}
+:root[data-theme="dark"] .hljs-number,
+:root[data-theme="dark"] .hljs-literal,
+:root[data-theme="dark"] .hljs-attr,
+:root[data-theme="dark"] .hljs-attribute,
+:root[data-theme="dark"] .hljs-variable,
+:root[data-theme="dark"] .hljs-built_in {
+  color: #79c0ff;
+}
+:root[data-theme="dark"] .hljs-title,
+:root[data-theme="dark"] .hljs-section,
+:root[data-theme="dark"] .hljs-function {
+  color: #d2a8ff;
+}
+:root[data-theme="dark"] .hljs-deletion {
+  color: #ffa198;
+}
+:root[data-theme="dark"] .hljs-meta,
+:root[data-theme="dark"] .hljs-name,
+:root[data-theme="dark"] .hljs-tag {
+  color: #7ee787;
 }
 
 /* In-preview find highlights for rendered Markdown (CSS Custom Highlight API).
@@ -111,5 +355,5 @@
 }
 ::highlight(coffer-find-active) {
   background-color: rgb(var(--highlight-active) / 0.9);
-  color: hsl(var(--foreground));
+  color: rgb(var(--text));
 }

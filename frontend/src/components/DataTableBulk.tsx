@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { TableSelection } from "@/components/DataTable.types";
-import { BulkBar } from "@/components/DataTableSelection";
+import { ListSelectionBar } from "@/components/ListSelectionBar";
 import { Button } from "@/components/ui/button";
 
 export interface PageSelectAll {
@@ -106,7 +106,7 @@ function SelectAllBar({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-surface-sunken px-3 py-1.5 text-xs text-muted-foreground">
       {state === "offer" ? (
         <>
           <span>{t("common.bulk.pageSelected")}</span>
@@ -126,7 +126,7 @@ function SelectAllBar({
   );
 }
 
-/** The selection escalation banner + bulk-action bar. */
+/** The selection escalation banner + bulk-action bar (ListSelectionBar). */
 export function TableBulkBar<T>({
   selection,
   ps,
@@ -136,6 +136,7 @@ export function TableBulkBar<T>({
   ps: PageSelectAll;
   selectedRows: T[];
 }) {
+  const { t } = useTranslation();
   const show = selectedRows.length > 0 || ps.allMatching;
   return (
     <>
@@ -148,9 +149,10 @@ export function TableBulkBar<T>({
         />
       ) : null}
       {show ? (
-        <BulkBar
-          label={selection.bulkLabel(ps.count)}
-          clearLabel={selection.clearLabel}
+        <ListSelectionBar
+          label={t("common.bulk.bar")}
+          count={ps.count}
+          total={ps.total}
           onClear={ps.clearAll}
         >
           {selection.renderBulkActions({
@@ -158,7 +160,7 @@ export function TableBulkBar<T>({
             clear: ps.clearAll,
             allMatching: ps.allMatching,
           })}
-        </BulkBar>
+        </ListSelectionBar>
       ) : null}
     </>
   );

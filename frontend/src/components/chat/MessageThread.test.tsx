@@ -2,16 +2,19 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageThread } from "./MessageThread";
 import { acceptance } from "@/test/acceptance";
 import type { Conversation, Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listMessages: vi.fn(),
     getAgentConfig: vi.fn().mockResolvedValue({ cwd: null, model: null }),
+    answerQuestion: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -29,8 +32,13 @@ const BASE_CONV: Conversation = {
   id: "conv-1",
   agent_key: "claude_code",
   title: "Test",
+  archived_at: null,
+  channel_binding: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
+  preview: null,
+  running: false,
+  needs_you: false,
 };
 
 const makeMsg = (overrides: Partial<Message>): Message => ({
@@ -38,8 +46,12 @@ const makeMsg = (overrides: Partial<Message>): Message => ({
   conversation_id: "conv-1",
   seq: 1,
   role: "user",
-  content: [{ type: "text", text: "Hello" }],
+  content: [contentBlock({ type: "text", text: "Hello" })],
   status: "complete",
+  prompt_tokens: null,
+  completion_tokens: null,
+  model_id: null,
+  finished_at: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
@@ -55,7 +67,9 @@ function renderThread(props?: Partial<React.ComponentProps<typeof MessageThread>
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <MessageThread {...defaultProps} {...props} />
+        <TooltipProvider>
+          <MessageThread {...defaultProps} {...props} />
+        </TooltipProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -66,22 +80,11 @@ describe("MessageThread", () => {
     vi.clearAllMocks();
   });
 
-  test("renders the thread with a per-conversation agent model picker", async () => {
-    // Chat talks only to managed agents (Claude Code, Codex). The per-conversation
-    // model is the agent's own model (agent_config.model, the
-    // coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs), so
-    // the thread bar carries a model picker — but never the built-in agent's
-    // "No model configured" empty state.
-    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
-    renderThread();
-    await waitFor(() => expect(chatApiMock.listMessages).toHaveBeenCalled());
-    expect(screen.getByLabelText(/agent model/i)).toBeInTheDocument();
-    expect(screen.queryByText("No model configured")).not.toBeInTheDocument();
-  });
-
   test("renders user messages right-aligned", async () => {
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "Hey there" }] })],
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "Hey there" })] }),
+      ],
     });
     renderThread();
     await waitFor(() => expect(screen.getByText("Hey there")).toBeInTheDocument());
@@ -94,8 +97,8 @@ describe("MessageThread", () => {
       messages: [
         makeMsg({
           content: [
-            { type: "text", text: "what is in this?" },
-            { type: "attachment", filename: "report.pdf", mime: "application/pdf" },
+            contentBlock({ type: "text", text: "what is in this?" }),
+            contentBlock({ type: "attachment", filename: "report.pdf", mime: "application/pdf" }),
           ],
         }),
       ],
@@ -130,7 +133,7 @@ describe("MessageThread", () => {
         makeMsg({
           id: "msg-2",
           role: "assistant",
-          content: [{ type: "text", text: "Hello from assistant" }],
+          content: [contentBlock({ type: "text", text: "Hello from assistant" })],
         }),
       ],
     });
@@ -141,7 +144,10 @@ describe("MessageThread", () => {
   test("renders live streaming message text", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
-      liveMessage: { blocks: [{ type: "text", text: "Streaming reply..." }], streaming: true },
+      liveMessage: {
+        blocks: [contentBlock({ type: "text", text: "Streaming reply..." })],
+        streaming: true,
+      },
     });
     await waitFor(() => expect(screen.getByText("Streaming reply...")).toBeInTheDocument());
   });
@@ -152,12 +158,12 @@ describe("MessageThread", () => {
       liveMessage: {
         streaming: true,
         blocks: [
-          {
+          contentBlock({
             type: "tool_use",
             tool_use_id: "tc-1",
             tool_name: "search",
             tool_input: { query: "test" },
-          },
+          }),
         ],
       },
     });
@@ -231,7 +237,7 @@ describe("MessageThread", () => {
     });
     renderThread({
       isStreaming: true,
-      liveMessage: { blocks: [{ type: "text", text: "live text" }], streaming: true },
+      liveMessage: { blocks: [contentBlock({ type: "text", text: "live text" })], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("live text")).toBeInTheDocument());
     // Exactly one in-progress bubble: the live one; the fetched placeholder is filtered.
@@ -248,7 +254,7 @@ describe("MessageThread", () => {
       pendingEchoes: [
         { id: "echo-1", text: "my question", attachments: [], sentAt: Date.now(), afterSeq: -1 },
       ],
-      liveMessage: { blocks: [{ type: "text", text: "replying" }], streaming: true },
+      liveMessage: { blocks: [contentBlock({ type: "text", text: "replying" })], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("my question")).toBeInTheDocument());
     expect(screen.getByText("replying")).toBeInTheDocument();
@@ -263,12 +269,12 @@ describe("MessageThread", () => {
     // both rather than suppress the echo because its text already appears.
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
-        makeMsg({ role: "user", content: [{ type: "text", text: "again" }] }),
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "again" })] }),
         makeMsg({
           id: "msg-2",
           seq: 2,
           role: "assistant",
-          content: [{ type: "text", text: "first answer" }],
+          content: [contentBlock({ type: "text", text: "first answer" })],
         }),
       ],
     });
@@ -299,34 +305,89 @@ describe("MessageThread", () => {
     expect(texts).toEqual(["first send", "second send"]);
   });
 
-  test("readOnly hides the composer and shows a restore call-to-action", async () => {
+  test("readOnly hides the composer and shows an unarchive call-to-action", async () => {
     // spec chat "Open an archived conversation read-only": archived
-    // conversations open read-only; restoring re-enables chat.
+    // conversations open read-only; unarchiving re-enables chat.
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ content: [{ type: "text", text: "old message" }] })],
+      messages: [makeMsg({ content: [contentBlock({ type: "text", text: "old message" })] })],
     });
-    const onRestore = vi.fn();
-    renderThread({ readOnly: true, onRestore });
+    const onUnarchive = vi.fn();
+    renderThread({ readOnly: true, onUnarchive });
     await waitFor(() => expect(screen.getByText("old message")).toBeInTheDocument());
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByText("This conversation is archived.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /restore/i }));
-    expect(onRestore).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /unarchive/i }));
+    expect(onUnarchive).toHaveBeenCalled();
   });
 
-  test("shows the agent's display name from props, not a hardcoded one", async () => {
+  test("the composer invites a message to the conversation's agent, by its name", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({ agentLabel: "Research Bot" });
-    await waitFor(() => expect(screen.getByText("Research Bot")).toBeInTheDocument());
+    expect(await screen.findByRole("textbox", { name: /message input/i })).toHaveAttribute(
+      "placeholder",
+      "Message Research Bot…",
+    );
   });
 
-  test("does not render a per-conversation model selector", async () => {
-    // Managed agents carry no Coffer-registered model, so the thread bar shows
-    // only the agent label — there is no model selector.
+  test("a stream lost mid-turn hangs inside the live reply, drops the cursor, and offers Reload", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderThread({ agentLabel: "Other Agent" });
-    await waitFor(() => expect(screen.getByText("Other Agent")).toBeInTheDocument());
-    expect(screen.queryByRole("combobox", { name: /select.*model/i })).not.toBeInTheDocument();
+    const onReload = vi.fn();
+    renderThread({
+      streamLost: true,
+      onReload,
+      liveMessage: {
+        blocks: [contentBlock({ type: "text", text: "partial words" })],
+        streaming: true,
+        startedAt: "2026-01-01T10:14:00Z",
+      },
+    });
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("Lost the live stream from the daemon");
+    // Inside the reply, under its text — not a strip above the composer.
+    const reply = screen.getByText("partial words").closest(".pl-\\[30px\\]") as HTMLElement;
+    expect(reply).toContainElement(banner);
+    expect(screen.queryByText(/working/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /reload conversation/i }));
+    expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  test("a stream lost before any reply started still shows the banner in a reply of its own", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({ streamLost: true });
+    expect(await screen.findByText("Lost the live stream from the daemon")).toBeInTheDocument();
+  });
+
+  test("a failed turn's banner sits inside the failed reply and says why", async () => {
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "go" })] }),
+        makeMsg({
+          id: "msg-2",
+          seq: 2,
+          role: "assistant",
+          status: "failed",
+          content: [contentBlock({ type: "text", text: "half an answer" })],
+          created_at: "2026-01-01T10:14:00Z",
+          finished_at: "2026-01-01T10:14:38Z",
+        }),
+      ],
+    });
+    renderThread({ turnError: new Error("Company gateway returned 529") });
+    const answer = await screen.findByText("half an answer");
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent("The turn failed: Company gateway returned 529");
+    expect(banner).toHaveTextContent("Retry sends the same message again.");
+    const reply = answer.closest(".pl-\\[30px\\]") as HTMLElement;
+    expect(reply).toContainElement(banner);
+    expect(screen.getByText(/Failed after 38s/)).toBeInTheDocument();
+  });
+
+  test("the composer is given the conversation's working folder", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.getAgentConfig.mockResolvedValue({ cwd: "/Users/me/proj", model: null });
+    renderThread();
+    await waitFor(() => expect(chatApiMock.getAgentConfig).toHaveBeenCalled());
+    expect(await screen.findByText(/proj/)).toBeInTheDocument();
   });
 
   test("a failed turn shows the error banner and never a 'Thinking…' bubble beside it", async () => {
@@ -334,7 +395,7 @@ describe("MessageThread", () => {
     // empty placeholder; with the error set, neither may keep "thinking".
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
-        makeMsg({ role: "user", content: [{ type: "text", text: "my question" }] }),
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "my question" })] }),
         makeMsg({ id: "msg-2", seq: 2, role: "assistant", status: "streaming", content: [] }),
       ],
     });
@@ -352,9 +413,34 @@ describe("MessageThread", () => {
     expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
   });
 
+  acceptance("chat", "a held queue is resumed from the page, not retried", async () => {
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "older prompt" })] }),
+      ],
+    });
+    const onResume = vi.fn();
+    const onResend = vi.fn();
+    renderThread({
+      turnError: new Error("agent could not start"),
+      queueHeld: true,
+      pending: ["queued prompt"],
+      onResumeQueue: onResume,
+      onResend,
+    });
+    await waitFor(() => expect(screen.getByText("older prompt")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/queue is on hold/i);
+    expect(screen.queryByRole("button", { name: /^retry$/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /resume queue/i }));
+    expect(onResume).toHaveBeenCalledOnce();
+    expect(onResend).not.toHaveBeenCalled();
+  });
+
   acceptance("chat", "a failed turn offers a retry in the thread", async () => {
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "try again" }] })],
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "try again" })] }),
+      ],
     });
     const onSend = vi.fn();
     const onResend = vi.fn();
@@ -388,7 +474,9 @@ describe("MessageThread", () => {
 
   test("a refused send offers no Retry — its message is still in the composer", async () => {
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "older" }] })],
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "older" })] }),
+      ],
     });
     const onResend = vi.fn();
     renderThread({ turnError: new Error("refused"), retryable: false, onResend });
@@ -448,5 +536,72 @@ describe("MessageThread", () => {
     // The second message appears as a removable queued chip.
     expect(screen.getByText("my queued question")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove from queue/i })).toBeInTheDocument();
+  });
+
+  describe("a pending question", () => {
+    const pendingBlock = contentBlock({
+      type: "question",
+      question: {
+        question_id: "q1",
+        context: null,
+        questions: [
+          {
+            header: "Restart",
+            question: "Restart the channel?",
+            multi_select: false,
+            options: [
+              { label: "Yes", description: null },
+              { label: "No", description: null },
+            ],
+          },
+        ],
+        status: "pending",
+        answers: [],
+        answered_via: null,
+        answered_by: null,
+        answered_at: null,
+      },
+    });
+
+    acceptance("chat", "text typed while a question waits is the answer", async () => {
+      chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+      const onSend = vi.fn();
+      renderThread({
+        onSend,
+        isStreaming: true,
+        agentLabel: "Claude Code",
+        liveMessage: { blocks: [pendingBlock], streaming: true },
+      });
+      expect(await screen.findByText("Restart the channel?")).toBeInTheDocument();
+      expect(screen.getAllByText(/Waiting for you/).length).toBeGreaterThan(0);
+      const box = screen.getByPlaceholderText("Reply, or answer with the buttons above");
+      fireEvent.change(box, { target: { value: "only on staging" } });
+      fireEvent.keyDown(box, { key: "Enter" });
+      await waitFor(() => expect(chatApiMock.answerQuestion).toHaveBeenCalledTimes(1));
+      expect(chatApiMock.answerQuestion).toHaveBeenCalledWith(
+        "conv-1",
+        "q1",
+        [{ selected: [], text: "only on staging" }],
+        0,
+      );
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    test("a tap on an option answers through the same route", async () => {
+      chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+      renderThread({
+        isStreaming: true,
+        liveMessage: { blocks: [pendingBlock], streaming: true },
+      });
+      fireEvent.click(await screen.findByRole("button", { name: "No" }));
+      await waitFor(() =>
+        expect(chatApiMock.answerQuestion).toHaveBeenCalledWith(
+          "conv-1",
+          "q1",
+          [{ selected: ["No"] }],
+          0,
+        ),
+      );
+    });
   });
 });

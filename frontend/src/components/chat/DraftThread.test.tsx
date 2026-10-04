@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -42,11 +42,11 @@ const activeConnection = {
   name: "official",
   protocol: "anthropic",
   base_url: "https://api.anthropic.com",
-  credential_ref: "ref",
+  secret_ref: "ref",
   compatible_agents: ["claude_code"],
-  is_active: true,
   internal_default: false,
   transcribe_default: false,
+  fallback: true,
   enabled: true,
   description: null,
   created_at: "",
@@ -84,10 +84,45 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
 }
 
 describe("DraftThread", () => {
-  test("shows the start guide and a composer right away (no working directory needed)", () => {
+  test("shows the draft's composer right away, with no welcome page", () => {
     renderDraft();
-    expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(screen.getByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+    // The draft's title is in the title bar.
+    expect(screen.getByRole("heading", { name: "New conversation" })).toBeInTheDocument();
+  });
+
+  test("says which agent runs in which folder, the folder in mono", () => {
+    renderDraft({ cwd: "/Users/me/WorkEnv/AI/Coffer" });
+    const line = screen.getByText(/New conversation with Claude Code in/);
+    expect(line).toHaveTextContent(
+      "New conversation with Claude Code in ~/WorkEnv/AI/Coffer — send a message to start.",
+    );
+    expect(within(line).getByText("~/WorkEnv/AI/Coffer")).toHaveClass("font-mono");
+  });
+
+  test("with no folder chosen the line names Coffer's workspace", () => {
+    renderDraft();
+    expect(screen.getByText(/New conversation with Claude Code in/)).toHaveTextContent(
+      "in Coffer’s workspace — send a message",
+    );
+  });
+
+  test("the folder picker sits in the composer toolbar, beside the paperclip", () => {
+    renderDraft();
+    const toolbar = screen.getByTestId("composer");
+    expect(within(toolbar).getByRole("button", { name: "Workspace" })).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "Attach files" })).toBeInTheDocument();
+  });
+
+  test("a draft opened from Ask an agent says nothing is sent until Send", () => {
+    renderDraft({ fromHandoff: true });
+    expect(screen.getByText("Nothing is sent until you press Send.")).toBeInTheDocument();
+  });
+
+  test("a plain draft carries no such line", () => {
+    renderDraft();
+    expect(screen.queryByText("Nothing is sent until you press Send.")).not.toBeInTheDocument();
   });
 
   test("sends the typed first message through onSend", () => {
@@ -98,10 +133,31 @@ describe("DraftThread", () => {
     expect(onSend).toHaveBeenCalledWith("first message", []);
   });
 
-  test("shows the no-managed-agent empty state when none is available", () => {
+  acceptance("chat", "with no managed agent the draft links to the Agents page", () => {
     renderDraft({ noManagedAgent: true });
-    expect(screen.getByText("No managed agent available")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New conversation" })).toBeInTheDocument();
+    expect(screen.getByText("No agent connected")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Conversations run on an agent Coffer manages. Connect Claude Code or Codex on the Agents page first.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
+    // Connecting an agent is the Agents page's job: no install prompt to copy here.
+    expect(screen.getByRole("link", { name: "Open Agents" })).toHaveAttribute("href", "/agents");
+    expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
+  });
+
+  test("only agents that can run are offered in the picker", () => {
+    renderDraft({
+      agents: [
+        { agent_key: "claude_code", display_name: "Claude Code", available: true },
+        { agent_key: "codex", display_name: "Codex", available: false },
+      ],
+    });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: /agent$/i }), { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: "Claude Code" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /codex/i })).not.toBeInTheDocument();
   });
 
   test("offers a model picker beside the agent selector and commits the choice", () => {
@@ -118,11 +174,11 @@ describe("DraftThread", () => {
     // A Coffer LLM connection is an OPTIONAL override: with none configured the
     // agent runs on its own built-in login (chat shells out to its SDK/CLI), so
     // the draft must NOT block — the composer is available and there is no
-    // "no connection" empty state (spec provider-switching "Revert an agent to
-    // its built-in login").
+    // "no connection" empty state (spec provider-switching "Revert an agent type
+    // to its built-in login").
     useProvidersMock.mockReturnValue({ data: [] });
     renderDraft();
-    expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(screen.getByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
     expect(screen.queryByText("No connection configured")).not.toBeInTheDocument();
   });
@@ -151,11 +207,58 @@ describe("DraftThread", () => {
     expect(screen.getByRole("combobox", { name: /agent model/i })).toBeInTheDocument();
   });
 
-  test("no longer renders a working-directory input or folder picker", () => {
-    // The per-turn working-directory UI was removed; turns default to the
-    // Coffer-managed workspace on the backend.
+  test("names the folder the turn will run in — Coffer's workspace when none was chosen", () => {
     renderDraft();
-    expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /browse/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Workspace" })).toHaveTextContent(
+      "Coffer’s workspace",
+    );
+  });
+
+  test("the workspace is a picker: Coffer's workspace, recent folders, a typed path", () => {
+    localStorage.setItem(
+      "coffer.conversations.recentWorkingDirs",
+      JSON.stringify(["/Users/me/a", "/Users/me/b"]),
+    );
+    const onCwdChange = vi.fn();
+    renderDraft({ cwd: "/Users/me/a", onCwdChange });
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+
+    const list = screen.getByRole("list", { name: "Workspace" });
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Coffer’s workspace", "~/a", "~/b"]);
+    expect(screen.getByRole("button", { name: "Choose a folder…" })).toBeInTheDocument();
+
+    fireEvent.click(within(list).getByRole("button", { name: "~/b" }));
+    expect(onCwdChange).toHaveBeenLastCalledWith("/Users/me/b");
+  });
+
+  test("Coffer's workspace and a typed path can be chosen", () => {
+    const onCwdChange = vi.fn();
+    renderDraft({ cwd: "/Users/me/a", onCwdChange });
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Coffer’s workspace" }));
+    expect(onCwdChange).toHaveBeenLastCalledWith(null);
+
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+    expect(screen.getByRole("button", { name: "Use" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Or type a folder path" }), {
+      target: { value: "  /srv/project " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    expect(onCwdChange).toHaveBeenLastCalledWith("/srv/project");
+  });
+
+  test("an agent that cannot run is not offered", () => {
+    renderDraft({
+      agents: [
+        { agent_key: "claude_code", display_name: "Claude Code", available: true },
+        { agent_key: "codex", display_name: "Codex", available: false },
+      ],
+    });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Agent" }), { key: "ArrowDown" });
+    expect(screen.queryByRole("option", { name: "Codex" })).not.toBeInTheDocument();
   });
 });

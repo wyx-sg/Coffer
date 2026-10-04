@@ -22,18 +22,15 @@ CapabilityType = Literal["tool", "resource", "prompt"]
 #: 32-character ``uuid4().hex``, so this literal can never collide with one.
 BUILTIN_SERVER_UID = "coffer"
 
-#: The prefix migration 0097 gave an invocation whose server had already been
-#: deleted when the log was re-keyed from names to uids. The identity of such a
-#: row was never recorded and cannot be recovered, so the label it *did* carry is
-#: preserved behind a marker that is visibly not a uid — the history survives, the
-#: row joins to no resource, and nothing mistakes the leftover for an identity.
-DELETED_SERVER_UID_PREFIX = "deleted:"
-
 
 class MCPTool(BaseModel):
     name: str
     description: str | None = None
     input_schema: dict[str, Any]
+    #: The MCP annotations the upstream declared (``readOnlyHint``,
+    #: ``destructiveHint``, …), in their wire spelling; passed to the agent as
+    #: they are (spec mcp-gateway "Annotate every tool with whether it changes data").
+    annotations: dict[str, Any] | None = None
 
 
 class MCPResource(BaseModel):
@@ -57,10 +54,10 @@ class MCPPrompt(BaseModel):
 
 @dataclass
 class MCPCapabilityPreference:
-    """One row in mcp_capability_preferences. ID is None until persisted."""
+    """One capability's switch, with when this machine saw it. The switch is
+    the person's (a vault document per server); the times are derived."""
 
-    id: int | None
-    resource_id: int
+    resource_uid: str
     capability_type: CapabilityType
     capability_key: str
     enabled: bool
@@ -75,13 +72,12 @@ class MCPInvocation:
     id: int | None
     timestamp: datetime
     #: WHICH server was invoked, by its immutable identity rather than by the
-    #: label it happened to carry at the time (ADR resource-identity-is-an-immutable-uid).
+    #: label it happened to carry at the time (ADR identity-is-the-uid-inside-the-file).
     #: The log outlives a rename, so a name here would have split one server's
     #: history in two at the moment the user relabelled it — and joined two
     #: unrelated servers' histories together if a later registration reused the
-    #: freed name. Two reserved non-uid values exist and are documented at the
-    #: top of this module: ``BUILTIN_SERVER_UID`` and the
-    #: ``DELETED_SERVER_UID_PREFIX`` form.
+    #: freed name. One reserved non-uid value exists, ``BUILTIN_SERVER_UID``,
+    #: documented at the top of this module.
     resource_uid: str
     capability_type: CapabilityType
     capability_key: str
@@ -89,3 +85,10 @@ class MCPInvocation:
     status: Literal["ok", "error", "timeout", "denied"]
     error_message: str | None = None
     session_id: str | None = None
+    #: The agent whose session made the call, as the uid its shim reported on
+    #: ``initialize``. ``None`` when the session reported none (a hand-configured
+    #: shim, a bare MCP client): the log records what it was told, never a guess.
+    agent_uid: str | None = None
+    #: The ``/mcp`` request's trace id (migration 0137): the key that joins this
+    #: call to the audit rows and daemon log lines it caused.
+    trace_id: str | None = None

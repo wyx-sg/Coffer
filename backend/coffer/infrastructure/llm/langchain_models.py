@@ -8,7 +8,7 @@ while the chat page was their only consumer — is explicitly forbidden one now
 
 Lazy per-provider imports prevent an ``ImportError`` when an optional
 integration package is absent. Cloud connections (anthropic/openai) need an API
-key resolved at call time via the injected ``credential_resolver``; ``ollama``
+key resolved at call time via the injected ``secret_resolver``; ``ollama``
 needs only its ``base_url``. Every connection carries a ``base_url`` (its
 endpoint), which is passed to the client so a custom/proxy endpoint is honoured.
 The model id lives apart from the connection (spec provider-switching "Take
@@ -22,22 +22,23 @@ from collections.abc import Callable
 from typing import Any
 
 from coffer.domain.provider.config import Protocol, ResolvedConnection
+from coffer.infrastructure.net.redirects import stop_following_redirects
 
 
 def build_chat_model(
     resolved: ResolvedConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     *,
     timeout: float | None = None,
 ) -> Any:  # returns langchain_core.language_models.chat_models.BaseChatModel
     """Construct a LangChain ``BaseChatModel`` for *resolved*.
 
     Args:
-        resolved: The connection (protocol / base_url / credential_ref) paired
+        resolved: The connection (protocol / base_url / secret_ref) paired
             with the ``model`` id to run — the model lives apart from the
             connection (spec internal-engine "Resolve the engine's connection
             and model together"), so both are supplied together here.
-        credential_resolver: Callable that accepts a credential reference and
+        secret_resolver: Callable that accepts a secret reference and
             returns the resolved secret (e.g. the raw API key). The composition
             root injects this so this module stays infrastructure-pure (no
             keyring import here).
@@ -51,21 +52,40 @@ def build_chat_model(
         A LangChain ``BaseChatModel`` instance ready for use.
 
     Raises:
-        ValueError: When the protocol is unsupported or a required parameter
-            (credential for a cloud wire) is missing.
+        ValueError: When a required parameter (the secret of a connection that
+            is not a local runtime) is missing.
         ImportError: When the required LangChain integration package is not
             installed.
     """
     protocol = resolved.config.protocol
 
     if protocol is Protocol.ANTHROPIC:
-        return _build_anthropic(resolved, credential_resolver, timeout)
-    if protocol is Protocol.OPENAI:
-        return _build_openai(resolved, credential_resolver, timeout)
-    if protocol is Protocol.OLLAMA:
-        return _build_ollama(resolved, timeout)
+        return _build_anthropic(resolved, secret_resolver, timeout)
+    # ``unknown`` is a first-class wire (an endpoint the probe could not
+    # classify); the engine drives it over the OpenAI-compatible API, as
+    # speech-to-text already does.
+    if protocol in (Protocol.OPENAI, Protocol.UNKNOWN):
+        return _build_openai(resolved, secret_resolver, timeout)
+    return _build_ollama(resolved, timeout)
 
-    raise ValueError(f"Unsupported protocol: {protocol!r}")  # pragma: no cover
+
+#: What a keyless local runtime is given as an API key: the client libraries
+#: refuse an empty one and a local server ignores it.
+_LOCAL_PLACEHOLDER_KEY = "local"
+
+
+def _api_key(
+    resolved: ResolvedConnection, secret_resolver: Callable[[str], str], label: str
+) -> str:
+    """The connection's key; a placeholder for a local runtime that has none
+    (its secret is optional, spec provider-switching "Make the secret optional
+    for ollama and local runtimes")."""
+    config = resolved.config
+    if config.secret_ref:
+        return secret_resolver(config.secret_ref)
+    if config.local_runtime is not None:
+        return _LOCAL_PLACEHOLDER_KEY
+    raise ValueError(f"{label} connection is missing secret_ref")
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +95,7 @@ def build_chat_model(
 
 def _build_anthropic(
     resolved: ResolvedConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float | None = None,
 ) -> Any:
     try:
@@ -87,23 +107,26 @@ def _build_anthropic(
         ) from exc
 
     config = resolved.config
-    if not config.credential_ref:
-        raise ValueError("anthropic connection is missing credential_ref")
-
-    api_key = credential_resolver(config.credential_ref)
+    api_key = _api_key(resolved, secret_resolver, "anthropic")
     # base_url is the connection's endpoint (honoured for proxies / relays like
     # Kimi or DeepSeek); ``base_url`` is ChatAnthropic's populate-by-alias name.
-    return ChatAnthropic(  # type: ignore[call-arg]
+    model = ChatAnthropic(  # type: ignore[call-arg]
         model=resolved.model,
         api_key=api_key,  # type: ignore[arg-type]
         base_url=config.base_url,
         timeout=timeout,
     )
+    # The SDK's own client follows redirects and sends the key as ``x-api-key``,
+    # which httpx does not strip across origins (spec secret "Send a secret only
+    # to the origin it was approved for").
+    for sdk in (model._client, model._async_client):
+        stop_following_redirects(sdk._client)
+    return model
 
 
 def _build_openai(
     resolved: ResolvedConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float | None = None,
 ) -> Any:
     try:
@@ -114,11 +137,10 @@ def _build_openai(
             "Install it with: pip install langchain-openai"
         ) from exc
 
-    config = resolved.config
-    if not config.credential_ref:
-        raise ValueError("openai connection is missing credential_ref")
+    from openai import DefaultAsyncHttpxClient, DefaultHttpxClient
 
-    api_key = credential_resolver(config.credential_ref)
+    config = resolved.config
+    api_key = _api_key(resolved, secret_resolver, "openai")
     # ``base_url`` lets an OpenAI-COMPATIBLE endpoint (Azure/OpenRouter/aggregators)
     # be used; ``None`` falls back to the official OpenAI API. Without this an
     # openai-compatible provider's calls silently hit api.openai.com and 401.
@@ -127,6 +149,10 @@ def _build_openai(
         api_key=api_key,  # type: ignore[arg-type]
         base_url=config.base_url or None,
         timeout=timeout,
+        # The SDK's default client follows redirects; the key must not (spec
+        # secret "Send a secret only to the origin it was approved for").
+        http_client=DefaultHttpxClient(follow_redirects=False),
+        http_async_client=DefaultAsyncHttpxClient(follow_redirects=False),
     )
 
 
@@ -142,7 +168,9 @@ def _build_ollama(resolved: ResolvedConnection, timeout: float | None = None) ->
     # ``ChatOllama`` takes no ``timeout`` of its own; the bound goes to the
     # underlying httpx client it builds, which is the same place the other two
     # integrations put theirs. ``None`` leaves the client's own default.
-    client_kwargs = {"timeout": timeout} if timeout is not None else {}
+    client_kwargs: dict[str, Any] = {"follow_redirects": False}
+    if timeout is not None:
+        client_kwargs["timeout"] = timeout
     return ChatOllama(
         model=resolved.model,
         base_url=resolved.config.base_url,

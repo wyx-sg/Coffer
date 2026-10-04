@@ -4,7 +4,7 @@ import pytest
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -12,7 +12,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.models import ResourceModel
+from tests.support.vault_stores import derived_sm
 
 #: An opaque uuid4 hex, the shape a real resource uid has.
 _FS_UID = "aa11bb22cc33dd44ee55ff6677889900"
@@ -27,28 +27,14 @@ async def _setup(tmp_path):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
-    async with sm() as s:
-        r = ResourceModel(
-            uid=_FS_UID,
-            kind="mcp_server",
-            name="filesystem",
-            description=None,
-            config_json="{}",
-            enabled=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-        s.add(r)
-        await s.commit()
-        rid = r.id
-    return MCPCapabilityPreferenceRepo(sm), MCPInvocationRepo(sm), rid, engine
+    return MCPCapabilityPreferenceStore(derived_sm()), MCPInvocationRepo(sm), _FS_UID, engine
 
 
 @pytest.mark.asyncio
 async def test_preference_insert_find_set_enabled(tmp_path):
     pref_repo, _, rid, engine = await _setup(tmp_path)
     await pref_repo.insert(
-        resource_id=rid,
+        resource_uid=rid,
         capability_type="tool",
         capability_key="read_file",
         enabled=True,
@@ -69,7 +55,7 @@ async def test_preference_list_for(tmp_path):
     pref_repo, _, rid, engine = await _setup(tmp_path)
     for k in ("read_file", "write_file", "list_directory"):
         await pref_repo.insert(
-            resource_id=rid,
+            resource_uid=rid,
             capability_type="tool",
             capability_key=k,
             enabled=True,
@@ -77,7 +63,7 @@ async def test_preference_list_for(tmp_path):
             last_seen_at=_now(),
         )
     await pref_repo.insert(
-        resource_id=rid,
+        resource_uid=rid,
         capability_type="prompt",
         capability_key="summarise",
         enabled=True,

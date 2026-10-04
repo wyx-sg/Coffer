@@ -1,11 +1,11 @@
-"""SkillService — import/enable/disable/verify/remove for skills.
+"""SkillService — import / remove / files / unmanaged skills for the skill kind.
 
 Stitches together MasterStore (canonical files), SkillBindingRepo (per-agent
 state), SyncEngine (per-OS link helper), and the kind-agnostic ResourceService
 (Resource rows + audit).
 
 Every operation here names a resource by its **uid**
-(ADR resource-identity-is-an-immutable-uid). There is deliberately no by-name
+(ADR identity-is-the-uid-inside-the-file). There is deliberately no by-name
 entry point: a label a human typed is resolved once, at the surface they typed
 it at (``ResourceService.get_by_name``), and what reaches this service is
 already an identity. Names still appear as DATA further in — the master folder
@@ -19,7 +19,7 @@ import contextlib
 import logging
 import pathlib
 import shutil
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
@@ -32,12 +32,10 @@ from coffer.application.skill.ports import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillValidationError
+from coffer.domain.reconcile import PassReport
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.skill.drift import (
-    DriftReport,
-    RepairResult,
-)
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import (
     ValidationFailure,
@@ -45,6 +43,8 @@ from coffer.domain.skill.validator import (
 )
 
 if TYPE_CHECKING:
+    from coffer.application.skill.copy_ops import KeptCopy
+    from coffer.application.skill.delivery_report import AgentDelivery
     from coffer.application.skill.unmanaged_ops import UnmanagedDetail, UnmanagedView
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,9 @@ AgentSkillDirResolver = Callable[[Resource], pathlib.Path]
 # + coffer.domain.agent.scan.scan_locations — same Contract 5 seam as above.
 AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 
+#: One ``skill_link`` reconcile pass, as the composition root hands it in.
+DeliveryPass = Callable[[], Awaitable[PassReport]]
+
 
 class SkillService:
     """Skill-kind lifecycle on top of the kind-agnostic Resource framework."""
@@ -73,10 +76,11 @@ class SkillService:
         master_store: MasterStorePort,
         sync_engine: SyncEnginePort,
         agent_skill_dir_resolver: AgentSkillDirResolver,
+        workspace_scan: WorkspaceScanPort,
+        agent_scan_locations_resolver: AgentScanLocationsResolver,
         size_limit_bytes: int = 50 * 1024 * 1024,
-        workspace_scan: WorkspaceScanPort | None = None,
-        agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
+        reconcile_delivery: DeliveryPass | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
@@ -86,12 +90,18 @@ class SkillService:
         self._resolve_agent_skill_dir = agent_skill_dir_resolver
         self._size_limit = size_limit_bytes
         # Unmanaged-skill discovery deps (see "List unmanaged skills in an agent's skill
-        # locations"). Optional only so existing construction sites keep working until
-        # the composition root wires them; the unmanaged_* methods guard against missing
-        # config.
+        # locations").
         self._workspace_scan = workspace_scan
         self._resolve_agent_scan_locations = agent_scan_locations_resolver
         self._rmtree = rmtree
+        # Closes over the reconciler at the composition root, so this service
+        # never imports a surface (see ``reconcile_delivery``).
+        self._reconcile_delivery = reconcile_delivery
+        #: Deletes in flight that keep an agent's own folder, by skill uid;
+        #: the on_delete hook fills in the folders it left.
+        self._keeping: dict[str, list[KeptCopy]] = {}
+        #: The newest delivery pass a front door of this service asked for.
+        self.last_delivery: PassReport | None = None
 
     # ---------- imports ----------
 
@@ -114,76 +124,47 @@ class SkillService:
             overwrite=overwrite,
         )
 
-    # ---------- per-agent bindings ----------
+    # ---------- delivery ----------
 
-    async def enable_for(
-        self,
-        *,
-        skill_uid: str,
-        agent_uid: str,
-        force: bool = False,
-        actor: str = "api",
-    ) -> BindingState:
-        """Deliver a skill to an agent (link + binding row).
+    async def reconcile_delivery(self) -> PassReport | None:
+        """Ask the reconciler for a ``skill_link`` pass now (``Trigger.CHANGE``).
 
-        INTERNAL primitive driven by ``apply_scope_for_agent``, not a
-        user-facing operation: a delivery the predicate does not grant would be
-        reclaimed by the very next reconciliation. Delegates to ``binding_ops``
-        to keep this module under the size limit."""
-        from coffer.application.skill.binding_ops import enable_skill_for_agent
-
-        return await enable_skill_for_agent(
-            service=self, skill_uid=skill_uid, agent_uid=agent_uid, force=force, actor=actor
-        )
-
-    async def disable_for(
-        self, *, skill_uid: str, agent_uid: str, actor: str = "api"
-    ) -> BindingState:
-        """Reclaim a delivered copy: remove the link and spend the binding row.
-
-        INTERNAL primitive, like ``enable_for``. Delivery is decided by the
-        skill's ``enabled`` flag and ``scope``; no surface calls this directly,
-        because the very next reconciliation would undo a hand-made decision.
+        Every front door that changes what an agent should hold — an import,
+        a skill's ``enabled`` / ``scope``, an agent registered, switched or
+        moved, the builtin seed — calls this after its own write, so the
+        delivery is in place when the call returns. Delivery itself is the
+        ``skill_link`` target's (``link_reconcile``); ``None`` when no
+        reconciler is wired (a service built for one isolated test).
         """
-        from coffer.application.skill.binding_ops import disable_skill_for_agent
+        if self._reconcile_delivery is None:
+            return None
+        self.last_delivery = await self._reconcile_delivery()
+        return self.last_delivery
 
-        return await disable_skill_for_agent(
-            service=self, skill_uid=skill_uid, agent_uid=agent_uid, actor=actor
-        )
+    async def delivery_of(self, skill: Resource) -> list[AgentDelivery]:
+        """Per agent, what the newest delivery pass did for ``skill``."""
+        from coffer.application.skill.delivery_report import delivery_for
 
-    # ---------- delivery reconciliation ----------
+        return delivery_for(skill, await self.list_agents(), self.last_delivery)
 
-    async def apply_scope_for_agent(self, agent_uid: str, *, actor: str = "system") -> list[str]:
-        """Reconcile one agent's delivered set against the delivery predicate.
-
-        Wired as the skill kind's ``on_scope_changed`` / ``on_enabled_changed``
-        hooks (per registered agent), and invoked after an agent registers and
-        by the sync post-import hook. Returns per-skill delivery failures; see
-        ``delivery_ops`` for semantics.
-        """
-        from coffer.application.skill.delivery_ops import apply_scope_for_agent
-
-        return await apply_scope_for_agent(service=self, agent_uid=agent_uid, actor=actor)
-
-    async def verify(self) -> DriftReport:
-        from coffer.application.skill.verify_ops import verify_drift
-
-        return await verify_drift(self)
-
-    async def repair_drift(self, *, actor: str = "api") -> RepairResult:
-        """Opt-in drift repair: re-deliver safely-repairable drift kinds.
-
-        Delegates to ``verify_ops.repair_drift`` to keep this module under the
-        file-size limit.  See that function for full semantics.
-        """
-        from coffer.application.skill.verify_ops import repair_drift
-
-        return await repair_drift(self, actor=actor)
-
-    async def remove(self, *, uid: str, actor: str = "api") -> None:
+    async def remove(
+        self, *, uid: str, actor: str = "api", keep_foreign_copies: bool = False
+    ) -> list[KeptCopy]:
+        """Delete a skill. An agent's copy that is not Coffer's link refuses it
+        (``SkillCopyNotOurs``); with ``keep_foreign_copies`` the delete goes ahead
+        and the folders left alone are returned."""
         # All on-disk teardown happens inside the awaited on_delete hook,
         # so this path and the kind-agnostic DELETE share one cleanup flow.
-        await self._rs.delete(uid, actor=actor)
+        if not keep_foreign_copies:
+            await self._rs.delete(uid, actor=actor)
+            return []
+        kept: list[KeptCopy] = []
+        self._keeping[uid] = kept
+        try:
+            await self._rs.delete(uid, actor=actor)
+        finally:
+            self._keeping.pop(uid, None)
+        return kept
 
     async def cleanup_bindings_for_skill(self, skill: Resource) -> None:
         """on_delete hook: tear down symlinks + binding rows + master folder.
@@ -191,19 +172,31 @@ class SkillService:
         Awaited by ResourceService BEFORE the row is removed, so the
         kind-agnostic delete leaves no on-disk orphans. ``store.delete`` is
         idempotent so re-entry (e.g. from a test that pre-cleans) is safe.
+
+        An agent's copy that is no longer Coffer's link stops the whole delete
+        before anything is torn down (spec skill-manager "Refuse deleting a
+        skill whose copy Coffer did not make").
         """
-        await self._cleanup_bindings_internal(skill_id=skill.id)
+        from coffer.application.skill.copy_ops import refuse_foreign_copies
+
+        keep = self._keeping.get(skill.uid)
+        await refuse_foreign_copies(self, skill, keep=keep)
+        await self._cleanup_bindings_internal(
+            skill_uid=skill.uid, keep_paths=frozenset(k.path for k in keep or ())
+        )
         self._store.delete(skill.name)
 
     async def cleanup_bindings_for_agent(self, agent: Resource) -> None:
         """Hook bound to `agent` Kind's `on_delete` at the composition root."""
-        self._unlink_all(await self._bindings.list_for_agent(agent.id))
-        await self._bindings.delete_for_agent(agent.id)
+        self._unlink_all(await self._bindings.list_for_agent(agent.uid))
+        await self._bindings.delete_for_agent(agent.uid)
 
-    async def _cleanup_bindings_internal(self, *, skill_id: int) -> None:
-        bindings = await self._bindings.list_for_skill(skill_id)
-        self._unlink_all(bindings)
-        await self._bindings.delete_for_skill(skill_id)
+    async def _cleanup_bindings_internal(
+        self, *, skill_uid: str, keep_paths: frozenset[str] = frozenset()
+    ) -> None:
+        bindings = await self._bindings.list_for_skill(skill_uid)
+        self._unlink_all([b for b in bindings if b.last_link_path not in keep_paths])
+        await self._bindings.delete_for_skill(skill_uid)
 
     def _unlink_all(self, bindings: list[BindingState]) -> None:
         """Best-effort symlink teardown for a list of bindings."""
@@ -214,26 +207,7 @@ class SkillService:
                         pathlib.Path(b.last_link_path), link_mode=b.link_mode
                     )
 
-    async def relink_for_agent(self, agent_uid: str, *, actor: str = "api") -> None:
-        """Re-deliver an agent's skills after its config_dir changed.
-
-        Wired as the agent kind's on-config-dir-changed hook (see
-        ``agent_skill_wiring``). Delegates to ``lifecycle_ops`` to keep this
-        module under the size limit.
-        """
-        from coffer.application.skill.lifecycle_ops import relink_agent_skills
-
-        await relink_agent_skills(service=self, agent_uid=agent_uid, actor=actor)
-
     # ---------- unmanaged skills ----------
-
-    def _require_unmanaged_deps(self) -> None:
-        if self._workspace_scan is None or self._resolve_agent_scan_locations is None:
-            raise RuntimeError(
-                "SkillService was constructed without workspace_scan / "
-                "agent_scan_locations_resolver — the composition root must "
-                "provide both for unmanaged-skill operations"
-            )
 
     # ``skill_name`` below is an on-disk DIRECTORY name, not a label Coffer
     # issued: an unmanaged skill has no resource row and so no uid to address
@@ -242,7 +216,6 @@ class SkillService:
     async def list_unmanaged(self, agent_uid: str) -> list[UnmanagedView]:
         from coffer.application.skill.unmanaged_ops import list_unmanaged
 
-        self._require_unmanaged_deps()
         return await list_unmanaged(service=self, agent_uid=agent_uid)
 
     async def get_unmanaged(
@@ -250,23 +223,32 @@ class SkillService:
     ) -> UnmanagedDetail:
         from coffer.application.skill.unmanaged_ops import get_unmanaged
 
-        self._require_unmanaged_deps()
         return await get_unmanaged(
             service=self, agent_uid=agent_uid, skill_name=skill_name, location=location
         )
 
     async def adopt_unmanaged(
-        self, *, agent_uid: str, skill_name: str, location: str, actor: str = "api"
+        self,
+        *,
+        agent_uid: str,
+        skill_name: str,
+        location: str,
+        actor: str = "api",
+        name: str | None = None,
+        enabled: bool = True,
+        scope: Scope | None = None,
     ) -> Resource:
         from coffer.application.skill.unmanaged_ops import adopt_unmanaged
 
-        self._require_unmanaged_deps()
         return await adopt_unmanaged(
             service=self,
             agent_uid=agent_uid,
             skill_name=skill_name,
             location=location,
             actor=actor,
+            name=name,
+            enabled=enabled,
+            scope=scope,
         )
 
     async def delete_unmanaged(
@@ -274,7 +256,6 @@ class SkillService:
     ) -> None:
         from coffer.application.skill.unmanaged_ops import delete_unmanaged
 
-        self._require_unmanaged_deps()
         await delete_unmanaged(
             service=self,
             agent_uid=agent_uid,
@@ -287,13 +268,13 @@ class SkillService:
 
     async def bindings_for(self, skill_uid: str) -> list[BindingState]:
         skill = await self._rs.get(skill_uid)
-        return await self._bindings.list_for_skill(skill.id)
+        return await self._bindings.list_for_skill(skill.uid)
 
-    async def bindings_grouped_by_skill(self) -> dict[int, list[BindingState]]:
-        """``skill_resource_id -> [bindings]`` map; collapses N+1 in list."""
-        grouped: dict[int, list[BindingState]] = {}
+    async def bindings_grouped_by_skill(self) -> dict[str, list[BindingState]]:
+        """``skill_uid -> [bindings]`` map; collapses N+1 in list."""
+        grouped: dict[str, list[BindingState]] = {}
         for b in await self._bindings.list_all():
-            grouped.setdefault(b.skill_resource_id, []).append(b)
+            grouped.setdefault(b.skill_uid, []).append(b)
         return grouped
 
     # ---------- read API for surfaces ----------

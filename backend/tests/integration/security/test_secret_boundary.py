@@ -1,0 +1,544 @@
+"""The secret boundary against a real in-process daemon (spec secret,
+mcp-gateway, vault-sync).
+
+Only a present human sees a secret's plaintext or sends it somewhere new. The
+desktop app's half — the presence check and the signed grant — is played by
+``BoundaryDaemon.grant``, which signs exactly as the shell does.
+"""
+
+from __future__ import annotations
+
+import json
+import pathlib
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
+
+from coffer.domain.secret_errors import SecretBindingPending
+from coffer.infrastructure.secret import key_backup
+from tests.support.boundary_daemon import (
+    BoundaryDaemon,
+    prepare_home,
+    running_daemon,
+)
+
+
+def _master_key() -> str:
+    from coffer.surfaces.http.secret_composition import get_master_key_manager
+
+    return (get_master_key_manager().current or b"").decode()
+
+
+@pytest.fixture
+def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[BoundaryDaemon]:
+    db = prepare_home(tmp_path, monkeypatch)
+    with running_daemon(tmp_path, db) as d:
+        yield d
+
+
+def _two_servers(d: BoundaryDaemon) -> tuple[dict[str, Any], dict[str, Any]]:
+    d.store("gh/token", "ghp_boundary_value_1")
+    first = d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
+    assert d.resolve_for(first) == {"TOKEN": "ghp_boundary_value_1"}
+    second = d.register_stdio("second", "evil.sh", {"TOKEN": "gh/token"})
+    return first, second
+
+
+# --- no plaintext out -----------------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="secret", scenario="no route or command hands out a stored value")
+def test_no_route_or_command_hands_out_a_stored_value(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("gh/token", "ghp_never_printed_42")
+
+    read = d.client.get("/api/v1/secrets/gh/token")
+    export = d.client.post("/api/v1/sync/key/export", json={})
+
+    assert read.status_code in (404, 405)
+    assert export.status_code in (404, 405)
+    key = _master_key()
+    for body in (read.text, export.text):
+        assert "ghp_never_printed_42" not in body and key not in body
+    assert not (d.home / "k").exists()
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a reveal with a valid grant returns the value once"
+)
+def test_a_reveal_with_a_valid_grant_returns_the_value_once(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("gh/token", "ghp_reveal_me_42")
+    grant = d.grant("reveal", "gh/token")
+
+    r = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "gh/token", **grant})
+    again = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "gh/token", **grant})
+
+    assert r.status_code == 200 and r.json() == {"value": "ghp_reveal_me_42"}
+    assert again.status_code == 403
+    assert again.json()["error"]["code"] == "PRESENCE_GRANT_INVALID"
+    entries = d.audit("secret_revealed")
+    assert len(entries) == 1 and "gh/token" in json.dumps(entries[0]["details"])
+    assert "ghp_reveal_me_42" not in json.dumps(entries)
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a grant for one operation authorises nothing else")
+def test_a_grant_for_one_operation_authorises_nothing_else(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("gh/token", "ghp_one")
+    d.store("other/token", "ghp_two")
+
+    forged = d.grant("reveal", "gh/token")
+    forged["signature"] = "0" * 64
+    wrong_ref = d.grant("reveal", "gh/token")
+    wrong_op = d.grant("reveal", "gh/token")
+
+    r1 = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "gh/token", **forged})
+    r2 = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "other/token", **wrong_ref})
+    d.register_stdio("a", "one", {"T": "other/token"})
+    b = d.register_stdio("b", "two", {"T": "other/token"})
+    [waiting] = d.pending(destination_uid=b["uid"])
+    r3 = d.client.post(f"/api/v1/secrets/approvals/{waiting['id']}/approve", json=wrong_op)
+
+    for r in (r1, r2, r3):
+        assert r.status_code == 403 and r.json()["error"]["code"] == "PRESENCE_GRANT_INVALID"
+        assert "ghp_" not in r.text
+    assert d.pending(destination_uid=b["uid"])[0]["id"] == waiting["id"]
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="the master key backup is written only against a grant"
+)
+def test_the_master_key_backup_is_written_only_against_a_grant(
+    daemon: BoundaryDaemon, tmp_path: pathlib.Path
+) -> None:
+    d = daemon
+    target = tmp_path / "picked"
+    target.mkdir()
+    passphrase = "correct horse battery"
+    refused = d.client.post(
+        "/api/v1/secrets/presence/master-key-export",
+        json={
+            "directory": str(target),
+            "passphrase": passphrase,
+            "nonce": "x" * 16,
+            "signature": "0" * 64,
+        },
+    )
+    assert refused.status_code == 403 and list(target.iterdir()) == []
+
+    r = d.client.post(
+        "/api/v1/secrets/presence/master-key-export",
+        json={
+            "directory": str(target),
+            "passphrase": passphrase,
+            **d.grant("export_master_key", str(target)),
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    written = pathlib.Path(r.json()["path"])
+    assert written == target / "coffer-master-key.cfk"
+    assert (written.stat().st_mode & 0o777) == 0o600
+    key = _master_key()
+    text = written.read_text()
+    # The file holds the key only under the passphrase; the answer holds neither.
+    assert key not in text and key not in r.text and passphrase not in r.text
+    assert key_backup.unwrap(text, passphrase).decode() == key
+    assert r.json()["fingerprint"] == json.loads(text)["fingerprint"]
+    exported = d.audit("master_key_exported")
+    assert len(exported) == 1 and passphrase not in json.dumps(exported)
+
+    again = d.client.post(
+        "/api/v1/secrets/presence/master-key-export",
+        json={
+            "directory": str(target),
+            "passphrase": passphrase,
+            **d.grant("export_master_key", str(target)),
+        },
+    )
+    assert again.status_code == 200
+    assert pathlib.Path(again.json()["path"]).name == "coffer-master-key-2.cfk"
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a short backup passphrase is refused first")
+def test_a_short_backup_passphrase_is_refused_before_the_grant_is_spent(
+    daemon: BoundaryDaemon, tmp_path: pathlib.Path
+) -> None:
+    d = daemon
+    target = tmp_path / "picked"
+    target.mkdir()
+    grant = d.grant("export_master_key", str(target))
+
+    short = d.client.post(
+        "/api/v1/secrets/presence/master-key-export",
+        json={"directory": str(target), "passphrase": "short", **grant},
+    )
+
+    assert short.status_code == 422
+    assert short.json()["error"]["code"] == "MASTER_KEY_PASSPHRASE_TOO_SHORT"
+    assert list(target.iterdir()) == []
+    # The grant was not spent on the refusal: the same one still exports.
+    r = d.client.post(
+        "/api/v1/secrets/presence/master-key-export",
+        json={"directory": str(target), "passphrase": "long enough now", **grant},
+    )
+    assert r.status_code == 200, r.text
+
+
+# --- new destinations -------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="citing an existing secret from a new MCP server waits for approval",
+)
+def test_citing_an_existing_secret_from_a_new_server_waits(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    first, second = _two_servers(d)
+
+    with pytest.raises(SecretBindingPending) as refused:
+        d.resolve_for(second)
+
+    [waiting] = d.pending(destination_uid=second["uid"])
+    assert waiting["ref"] == "gh/token" and waiting["target"] == "stdio evil.sh"
+    assert refused.value.approval_ids == [waiting["id"]]
+    assert d.resolve_for(first) == {"TOKEN": "ghp_boundary_value_1"}
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a server whose secret is not approved is not spawned with it"
+)
+def test_the_test_route_spawns_nothing_until_approved(
+    daemon: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.infrastructure.mcp import probe as server_probe
+
+    spawned: list[dict[str, str]] = []
+
+    class _Conn:
+        def __init__(self, *, env_overlay: dict[str, str], **_: Any) -> None:
+            spawned.append(env_overlay)
+
+        async def spawn_and_initialize(self) -> dict[str, Any]:
+            return {}
+
+        async def request(self, method: str, params: dict[str, Any]) -> Any:
+            return type("Listed", (), {"tools": []})()
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(server_probe, "StdioUpstreamConnection", _Conn)
+    # The fake command is not on PATH; the probe's pre-spawn check is not under test.
+    monkeypatch.setattr(server_probe, "_launcher_problem", lambda *_a: None)
+    d = daemon
+    _first, second = _two_servers(d)
+
+    held = d.client.post(f"/api/v1/resources/mcp_server/{second['uid']}/test").json()
+    assert held["ok"] is False and "waiting for approval in the Coffer app" in held["error_message"]
+    assert spawned == []
+
+    d.approve(d.pending(destination_uid=second["uid"])[0]["id"])
+    after = d.client.post(f"/api/v1/resources/mcp_server/{second['uid']}/test").json()
+    assert after["ok"], (after["error_code"], after["error_message"])
+    assert spawned == [{"TOKEN": "ghp_boundary_value_1"}]
+
+
+@pytest.mark.acceptance(spec="secret", scenario="changing where a secret goes asks again")
+def test_changing_where_a_secret_goes_asks_again(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    first, _second = _two_servers(d)
+    config = {**first["config"]}
+    config["transport"] = {**config["transport"], "command": "curl-to-attacker"}
+    r = d.client.patch(f"/api/v1/resources/{first['uid']}", json={"config": config})
+    assert r.status_code == 200, r.text
+    moved = r.json()
+
+    with pytest.raises(SecretBindingPending):
+        d.resolve_for(moved)
+    [waiting] = d.pending(destination_uid=first["uid"])
+    assert waiting["target"] == "stdio curl-to-attacker"
+
+    d.approve(waiting["id"])
+    assert d.resolve_for(moved) == {"TOKEN": "ghp_boundary_value_1"}
+    assert len(d.audit("secret_approval_approved")) == 1
+
+
+def _waiting_on_disk(d: BoundaryDaemon) -> list[dict[str, Any]]:
+    """The pending binding approvals as the daemon's own file holds them, read
+    without listing anything (a listing would evaluate every destination)."""
+    return [
+        a
+        for a in d.local_secrets("approvals").get("approvals", [])
+        if a["op"] == "bind" and a["status"] == "pending"
+    ]
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a destination registered with a stored secret is settled at once"
+)
+def test_a_registration_settles_its_bindings_before_any_use(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("mcp_server/shared/TOKEN", "shared-value-123")
+    first = d.register_stdio("first", "server-one", {"TOKEN": "mcp_server/shared/TOKEN"})
+    assert d.local_secrets("bindings"), "the first server's binding is recorded by its registration"
+    assert _waiting_on_disk(d) == []
+
+    second = d.register_stdio("second", "evil.sh", {"TOKEN": "mcp_server/shared/TOKEN"})
+
+    [waiting] = _waiting_on_disk(d)
+    assert waiting["destination_uid"] == second["uid"] and waiting["target"] == "stdio evil.sh"
+    assert d.resolve_for(first) == {"TOKEN": "shared-value-123"}
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a target change waits where it is saved")
+def test_a_target_change_waits_as_soon_as_it_is_saved(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("gh/token", "ghp_boundary_value_1")
+    first = d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
+    config = {**first["config"]}
+    config["transport"] = {**config["transport"], "command": "curl-to-attacker"}
+
+    r = d.client.patch(f"/api/v1/resources/{first['uid']}", json={"config": config})
+
+    assert r.status_code == 200, r.text
+    [waiting] = _waiting_on_disk(d)
+    assert waiting["destination_uid"] == first["uid"]
+    assert waiting["target"] == "stdio curl-to-attacker"
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a value supplied for its destination needs no approval"
+)
+def test_a_value_supplied_for_a_new_server_needs_no_approval(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("mcp_server/fresh/TOKEN", "fresh-value-123")
+    server = d.register_stdio("fresh", "server", {"TOKEN": "mcp_server/fresh/TOKEN"})
+    assert d.pending() == []
+    assert d.resolve_for(server) == {"TOKEN": "fresh-value-123"}
+
+
+def test_a_new_standalone_secret_is_stored_at_once_and_may_be_cited(
+    daemon: BoundaryDaemon,
+) -> None:
+    d = daemon
+    r = d.client.post("/api/v1/secrets", json={"ref": "secret/late-key", "value": "late-value-123"})
+    assert r.status_code == 204, r.text
+    assert d.value("secret/late-key") == "late-value-123"
+    assert d.pending() == []
+    d.register_stdio("late", "server", {"TOKEN": "secret/late-key"})
+    # A ref nobody wrote is still refused.
+    nobody = d.client.post(
+        "/api/v1/resources",
+        json={
+            "kind": "mcp_server",
+            "name": "nobody",
+            "config": {
+                "transport": {"type": "stdio", "command": "s", "secret_refs": {"T": "secret/none"}}
+            },
+        },
+    )
+    assert nobody.status_code == 400
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="a stdio server with a secret is marked readable by local processes",
+)
+def test_a_stdio_server_with_a_secret_is_marked(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("t/one", "value-one-123")
+    d.register_stdio("with-secret", "server", {"T": "t/one"})
+    d.register_stdio("without", "server", {})
+    http = {
+        "transport": {
+            "type": "http",
+            "url": "https://mcp.example.com/",
+            "secret_refs": {"Authorization": "t/one"},
+        }
+    }
+    assert (
+        d.client.post(
+            "/api/v1/resources", json={"kind": "mcp_server", "name": "remote", "config": http}
+        ).status_code
+        == 201
+    )
+
+    rows = d.client.get("/api/v1/resources", params={"kind": "mcp_server"}).json()["resources"]
+    flags = {r["name"]: r["secrets_readable_by_local_processes"] for r in rows}
+    assert flags == {"with-secret": True, "without": False, "remote": False}
+
+
+def test_rejecting_needs_no_presence(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    _first, second = _two_servers(d)
+    [waiting] = d.pending(destination_uid=second["uid"])
+    r = d.client.post(f"/api/v1/secrets/approvals/{waiting['id']}/reject")
+    assert r.status_code == 200, r.text
+    # Refused stays refused for this target: not asked again, still withheld.
+    assert d.pending() == []
+    with pytest.raises(SecretBindingPending):
+        d.resolve_for(second)
+    assert len(d.audit("secret_approval_rejected")) == 1
+
+
+@pytest.mark.acceptance(spec="secret", scenario="adding a standalone secret stores it at once")
+def test_adding_a_standalone_secret_stores_it_at_once(daemon: BoundaryDaemon) -> None:
+    d = daemon
+
+    r = d.client.post("/api/v1/secrets", json={"ref": "secret/npm-publish-token", "value": "npm-v"})
+
+    assert r.status_code == 204, r.text
+    assert d.value("secret/npm-publish-token") == "npm-v"
+    assert d.pending() == []
+
+
+@pytest.mark.acceptance(spec="secret", scenario="replacing a value in use stores it at once")
+def test_replacing_a_value_in_use_stores_it_at_once(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    _two_servers(d)
+    waiting_before = d.pending()
+
+    r = d.client.post("/api/v1/secrets", json={"ref": "gh/token", "value": "new-bot-token"})
+
+    assert r.status_code == 204, r.text
+    assert d.value("gh/token") == "new-bot-token"
+    # Nothing new waits: only the second server's own binding, as before.
+    assert d.pending() == waiting_before
+    [entry] = d.audit("secret_set")[:1]
+    assert entry["details"]["ref"] == "gh/token" and entry["details"]["replaced"] is True
+    assert "new-bot-token" not in str(entry)
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="switching the protection off waits for the desktop app"
+)
+def test_switching_the_protection_off_waits(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    off = d.client.put("/api/v1/settings/secret-boundary", json={"require_approval": False})
+    assert off.status_code == 202, off.text
+    assert off.json()["pending_approval_id"]
+    status = d.client.get("/api/v1/settings/secret-boundary").json()
+    assert status["require_approval"] is True
+
+    d.approve(status["pending_approval_id"])
+    assert d.client.get("/api/v1/settings/secret-boundary").json()["require_approval"] is False
+    _first, second = _two_servers(d)
+    assert d.resolve_for(second) == {"TOKEN": "ghp_boundary_value_1"}
+
+    on = d.client.put("/api/v1/settings/secret-boundary", json={"require_approval": True})
+    assert on.status_code == 200, on.text
+
+
+# --- the listing ---------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a secret nothing references is listed as unreferenced"
+)
+def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    skill = d.home / ".coffer" / "vault" / "skills" / "db-tools"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("Run with coffer://secret/used-one set.\n")
+    d.store("secret/lonely", "lonely-value-1")
+    d.store("secret/used-one", "used-value-12")
+
+    rows = {r["ref"]: r for r in d.client.get("/api/v1/secrets").json()["refs"]}
+
+    assert rows["secret/lonely"]["unreferenced"] is True
+    assert rows["secret/lonely"]["readable_by_local_processes"] is True
+    assert rows["secret/lonely"]["uri"] == "coffer://secret/lonely"
+    assert rows["secret/used-one"]["mentioned_by_skills"] == ["db-tools"]
+    assert rows["secret/used-one"]["unreferenced"] is False
+    refused = d.client.delete("/api/v1/secrets/secret/used-one")
+    assert refused.status_code == 409
+    assert "skill 'db-tools'" in refused.json()["error"]["details"]["references"]
+    assert d.value("secret/used-one") == "used-value-12"
+
+
+# --- the sync remote --------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a push token pointed at a new URL waits for approval"
+)
+def test_a_push_token_pointed_at_a_new_url_waits(daemon: BoundaryDaemon) -> None:
+    from coffer.domain.secrets import sync_remote_destination
+    from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver
+    from coffer.surfaces.http.secret_composition import get_secret_store
+
+    d = daemon
+    d.store("sync/push-token", "push-token-value")
+    resolver = boundary_resolver(get_secret_store())
+    first = sync_remote_destination("https://git.example.com/me/vault.git")
+    # Setting the remote is what supplies the token for it (the seam the sync
+    # service runs when a remote is set).
+    d.boundary.bind(first, {"token": "sync/push-token"}, actor="user")
+    assert resolver.materialize({"token": "sync/push-token"}, first) == {
+        "token": "push-token-value"
+    }
+
+    moved = sync_remote_destination("https://attacker.example.net/vault.git")
+    with pytest.raises(SecretBindingPending) as refused:
+        resolver.materialize({"token": "sync/push-token"}, moved)
+
+    [approval_id] = refused.value.approval_ids
+    assert d.boundary.get(approval_id).target == "git https://attacker.example.net/vault.git"
+    d.boundary.approve(approval_id, actor="desktop")
+    assert resolver.materialize({"token": "sync/push-token"}, moved) == {
+        "token": "push-token-value"
+    }
+
+
+# --- provider connections -----------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="moving a provider connection's base URL asks again"
+)
+def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
+    import asyncio
+
+    from coffer.domain.provider.config import ProviderConfig
+    from coffer.surfaces.http.provider_dependencies import get_provider_service
+
+    d = daemon
+    r = d.client.post(
+        "/api/v1/providers",
+        json={
+            "name": "gw",
+            "protocol": "anthropic",
+            "base_url": "https://gw.example.com/anthropic",
+            "secret_value": "sk-provider-key-1",
+        },
+    )
+    assert r.status_code == 201, r.text
+    uid = r.json()["uid"]
+    svc = get_provider_service()
+
+    def key_now() -> str:
+        row = d.client.get(f"/api/v1/resources/{uid}").json()
+        cfg = ProviderConfig.model_validate(row["config"])
+        return asyncio.run(svc._key_of(cfg, label="gw", uid=uid))
+
+    assert key_now() == "sk-provider-key-1"
+
+    moved = d.client.patch(
+        f"/api/v1/providers/{uid}", json={"base_url": "https://attacker.example.net/v1"}
+    )
+    assert moved.status_code == 200, moved.text
+    with pytest.raises(SecretBindingPending):
+        key_now()
+    [waiting] = d.pending(destination_uid=uid)
+    assert waiting["target"] == "model api https://attacker.example.net/v1 as anthropic"
+    d.approve(waiting["id"])
+    assert key_now() == "sk-provider-key-1"
+
+    ref = d.client.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
+    rotated = d.client.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-replaced-2"})
+    assert rotated.status_code == 200, rotated.text
+    assert d.pending() == []
+    assert d.value(ref) == "sk-replaced-2" and key_now() == "sk-replaced-2"

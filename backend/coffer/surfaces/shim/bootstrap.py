@@ -36,10 +36,8 @@ _CWD_META_KEY = "coffer/cwd"
 #: MCP-reserved extension key the daemon reads the shim's self-reported agent
 #: identity from (spec mcp-gateway "Take the agent identity from the
 #: handshake"). The value is the agent
-#: resource's **uid**, which is why the key is not the older ``coffer/agent``:
-#: that one carried a name, the gateway no longer reads it, and giving the same
-#: key a new meaning would leave an old shim's stale name being matched against
-#: a scope that now holds uids (ADR resource-identity-is-an-immutable-uid).
+#: resource's **uid**, matched against the uids a scope holds (ADR
+#: identity-is-the-uid-inside-the-file).
 _AGENT_UID_META_KEY = "coffer/agent-uid"
 
 
@@ -51,16 +49,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     because this string outlives the edit that renames the agent — the entry is
     written once into a file Coffer does not otherwise touch — and because the
     gateway matches what we report against the uids a resource's ``scope`` holds
-    (ADR resource-identity-is-an-immutable-uid).
+    (ADR identity-is-the-uid-inside-the-file).
 
-    The name-shaped ``--agent`` that preceded it is NOT accepted, and
-    ``allow_abbrev=False`` is what makes that true rather than merely tidy:
-    argparse takes any unambiguous PREFIX of a long option, and ``--agent`` is a
-    prefix of ``--agent-uid``. Left on, every entry an older Coffer wrote would
-    report the agent's NAME as its uid, and the gateway would compare that label
-    against a list of uids — the silent mismatch this change exists to remove.
-    Discarded instead, such a shim reports nothing and its session is
-    unidentified: strictly less access, never more, and re-installing fixes it.
+    ``allow_abbrev=False`` keeps the flag exact: argparse otherwise takes any
+    unambiguous PREFIX of a long option, so ``--agent <x>`` would be read as
+    ``--agent-uid <x>`` and a label would be compared against a list of uids.
+    Anything else is discarded, and such a shim's session is unidentified:
+    strictly less access, never more.
 
     The shim is spawned by an MCP client's server-launch config, which may
     already pass other flags we don't know about — ``parse_known_args`` and

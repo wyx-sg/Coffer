@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import InboundAttachment
 
 __all__ = ["AlbumBuffer", "FlushCallback"]
@@ -87,9 +88,11 @@ class AlbumBuffer:
         album = self._albums.pop(group_id, None)
         if album is None:
             return
-        task = asyncio.ensure_future(
-            self._on_flush(album.message, tuple(album.attachments), tuple(album.notes))
-        )
+
+        async def flush() -> None:
+            await self._on_flush(album.message, tuple(album.attachments), tuple(album.notes))
+
+        task = spawn(flush(), name=f"telegram-album:{group_id}")
         self._tasks.add(task)
         task.add_done_callback(lambda _t: self._tasks.discard(task))
 

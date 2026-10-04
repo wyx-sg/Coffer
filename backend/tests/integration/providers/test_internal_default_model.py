@@ -35,7 +35,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.facets import agent_catalog
+from tests.support.vault_stores import make_resource_repo
 
 
 class _DictStore:
@@ -100,14 +102,15 @@ async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_engine: bool =
     store = _DictStore()
     resources = ResourceService(
         kinds={"provider": make_provider_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(home=tmp_path),
         audit=audit,
-        credentials=store,
+        secrets=store,
     )
     singleton = _ModelSingleton(model)
     providers = ProviderService(
+        agent_catalog=agent_catalog(),
         resources=resources,
-        credentials=store,
+        secrets=store,
         config_store=ConfigFileStore(),
         agents=_NoAgents(),
         audit=audit,

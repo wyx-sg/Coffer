@@ -2,8 +2,8 @@
 
 Spec channels "Process each inbound event once".
 
-IM ingress redelivers events: SeaTalk's Open Platform retries a callback when
-the listener does not 2xx quickly, and a network hiccup can double-deliver.
+IM ingress redelivers events: SeaTalk redelivers an event it thinks was missed,
+and a reconnect of the websocket can double-deliver.
 Without de-dup a redelivered event would drive the SAME turn twice. This tiny
 in-memory, per-process set drops an id already seen — correct because the
 redelivery window is short (seconds), so surviving a restart is unnecessary.

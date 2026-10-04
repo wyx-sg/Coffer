@@ -1,7 +1,7 @@
 """Where this machine's id comes from (spec vault-sync "Derive machine identity
 from the host" and "Fall back to a stored identifier and say so").
 
-The host is simulated rather than read: ``platform.system`` and the Linux
+The host is simulated rather than read: ``sys.platform`` and the Linux
 identifier paths are pointed at files under ``tmp_path``, and ``HOME`` is
 ``tmp_path`` too, so ``daemon-config.json`` and the fallback file land there
 and never in the developer's real ``~/.coffer``.
@@ -16,6 +16,7 @@ import pytest
 
 from coffer.domain.sync.machine import derive_machine_id
 from coffer.infrastructure.daemon.config import config_path, read_cached_machine_id
+from coffer.infrastructure.platform import identity as platform_identity
 from coffer.infrastructure.sync import machine_id as machine_id_mod
 from coffer.infrastructure.sync.identity import resolve_identity
 
@@ -27,10 +28,13 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Pat
 
 
 def _linux_host(monkeypatch: pytest.MonkeyPatch, *sources: pathlib.Path) -> None:
-    monkeypatch.setattr(machine_id_mod.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(machine_id_mod, "_LINUX_SOURCES", tuple(str(s) for s in sources))
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(platform_identity, "LINUX_SOURCES", tuple(str(s) for s in sources))
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a machine identity survives reinstalling Coffer"
+)
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a machine id is derived from the host and cached"
 )

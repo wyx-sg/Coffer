@@ -18,6 +18,15 @@ class ChannelNotPaired(CofferError):  # noqa: N818
         super().__init__(f"channel {channel!r} has no paired peer")
 
 
+class ChannelPersonNotFound(CofferError):  # noqa: N818
+    """The channel has no paired person with that identity."""
+
+    code = "CHANNEL_PERSON_NOT_FOUND"
+
+    def __init__(self, channel: str, person: str) -> None:
+        super().__init__(f"channel {channel!r} has no paired person {person!r}")
+
+
 class ChannelNotRunning(CofferError):  # noqa: N818
     """The channel's adapter is not running (disabled or starting)."""
 
@@ -54,7 +63,7 @@ class ChannelSendFailed(CofferError):  # noqa: N818
 
 class ParallelThreadUnavailable(Exception):  # noqa: N818
     """The transport cannot open a parallel thread in this chat right now (see
-    "Open parallel conversations in a direct chat").
+    "Open parallel conversations beside a direct chat").
 
     Not a ``CofferError``: it never crosses the HTTP surface. It carries the one
     sentence ``/thread`` answers with, written for the chat's owner — what to

@@ -20,35 +20,18 @@
 // setting ON a model rather than part of its name, and only the agent knows
 // which of its models take one.
 //
-// The wire type stays hand-written: the contract's `AgentModelOut`
-// marks `label`, `description`, `efforts` and `default_effort` optional, while
-// the backend always sends them and the pickers index `efforts` directly.
-// Transport via the shared `call` (.agents/frontend.md §4).
+// The wire types are aliases of the agent-registry contract's schemas.
+// Transport via the typed client (.agents/frontend.md §4).
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
+import type { components as AgentRegistryWire } from "@/lib/api/generated/agent-registry";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface AgentModel {
-  /** The id passed VERBATIM to the agent's CLI — never a display name. */
-  id: string;
-  label: string;
-  description: string;
-  /**
-   * The reasoning-effort levels this model can be run at, in the order the
-   * agent named them; empty when it takes no such setting. Codex's entries
-   * carry levels, Claude Code's carry none.
-   */
-  efforts: string[];
-  /** The level the agent would pick itself, or null when it named none. */
-  default_effort: string | null;
-}
-
-export interface AgentModelsOut {
-  models: AgentModel[];
-}
+export type AgentModel = AgentRegistryWire["schemas"]["AgentModelOut"];
+export type AgentModelsOut = AgentRegistryWire["schemas"]["AgentModelsOut"];
 
 // ---------------------------------------------------------------------------
 // API object
@@ -56,5 +39,10 @@ export interface AgentModelsOut {
 
 export const agentModelsApi = {
   /** The catalogue for one agent type. 404s on an unknown agent key. */
-  list: (agentKey: string) => call<AgentModelsOut>(`/agent-providers/${enc(agentKey)}/models`),
+  list: (agentKey: string) =>
+    unwrap(
+      getApiClient().GET("/agent-providers/{agent_key}/models", {
+        params: { path: { agent_key: agentKey } },
+      }),
+    ),
 };

@@ -4,7 +4,7 @@ Two halves, and the boundary between them is the layer's whole prohibition (spec
 memory "Never write an agent's native memory"). The **readers** only read: they
 list and parse what Claude Code and Codex already keep in their own memory
 directories and write nothing there, ever. Everything else here writes only
-Coffer's own derived tree under ``~/.coffer/memory/``, which may be deleted and
+Coffer's own derived tree under ``~/.coffer/derived/memory/``, which may be deleted and
 rebuilt at any time (see "Keep the memory tree derived and local").
 
 The modules, and which pass owns which:
@@ -29,8 +29,8 @@ The modules, and which pass owns which:
     The per-source digest cache that lets an unchanged source be skipped without
     re-parsing (see "Skip unchanged sources").
 ``files``
-    The read-only file tree behind the partition's own browse-and-preview
-    surface (see "Present partitions as a table and a file tree").
+    The read-only file tree the REST file routes read (see
+    "Manage memory in the web UI").
 ``readers``
     The two native-memory adapters, satisfying ``domain.memory.reader``.
 ``delivery``

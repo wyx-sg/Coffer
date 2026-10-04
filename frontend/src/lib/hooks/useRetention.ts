@@ -1,22 +1,12 @@
 // frontend/src/lib/hooks/useRetention.ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
-import type { components } from "@/lib/api/types";
+import { retentionApi } from "@/lib/api/retention";
 import { retentionKey, retentionPoliciesKey } from "@/lib/api/queryKeys";
-
-type RetentionPolicyListOut = components["schemas"]["RetentionPolicyListOut"];
 
 export function useRetentionPolicies() {
   return useQuery({
     queryKey: retentionPoliciesKey,
-    queryFn: async (): Promise<RetentionPolicyListOut> => {
-      const client = getApiClient();
-      const { data, error } = await client.GET("/retention/policies");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "list policies failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty policies response");
-      return data;
-    },
+    queryFn: retentionApi.policies,
   });
 }
 
@@ -28,31 +18,27 @@ interface UpdatePolicyInput {
 export function useUpdateRetentionPolicy() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tableName, retentionDays }: UpdatePolicyInput) => {
-      const client = getApiClient();
-      const { error } = await client.PATCH("/retention/policies/{table_name}", {
-        params: { path: { table_name: tableName } },
-        body: { retention_days: retentionDays },
-      });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "update policy failed");
-    },
+    mutationFn: ({ tableName, retentionDays }: UpdatePolicyInput) =>
+      retentionApi.update(tableName, retentionDays),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: retentionKey });
     },
   });
 }
 
+/** How many rows a window of `days` would delete from `tableName`; off while `days` is null. */
+export function useRetentionPreview(tableName: string, days: number | null) {
+  return useQuery({
+    queryKey: [...retentionKey, "preview", tableName, days],
+    enabled: days !== null,
+    queryFn: () => retentionApi.preview(tableName, days ?? 1),
+  });
+}
+
 export function usePruneNow() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (tableName?: string) => {
-      const client = getApiClient();
-      const { data, error } = await client.POST("/retention/prune", {
-        body: tableName ? { table_name: tableName } : {},
-      });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "prune failed");
-      return data;
-    },
+    mutationFn: (tableName?: string) => retentionApi.prune(tableName),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: retentionKey });
     },

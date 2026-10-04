@@ -1,37 +1,45 @@
 // frontend/src/pages/MemoryPage.test.tsx
 //
-// The Memory page is a list page and must read as one (spec memory "Present
-// partitions as a table and a file tree"):
-// a table, in the same shape whether the vault holds partitions or none, and
-// nothing else. Two surfaces that used to render above and below that table
-// are asserted ABSENT here, because both were duplicates of somewhere better:
-// per-agent delivery now lives on the agent's own detail page (it writes that
-// agent's settings file), and the audit log is the Activity page's Changes
-// tab, which reads the whole vault's trail rather than one kind's slice.
-import { describe, expect, test, vi } from "vitest";
+// The Memory overview (spec memory "Present a partition as its memories",
+// web-ui "Show memory delivery on the Memory page"): the per-agent deliveries
+// of the last seven days — with no hook detail — above the partitions table,
+// or the first-run state while there are none. Only the api module is mocked;
+// the real hooks run over a real QueryClient.
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { MemoryPage } from "./MemoryPage";
+import { COFFER, DELIVERIES, GLOBAL, GONE } from "@/components/memory/memoryTestData";
+import type { DeliveryOverviewOut, PartitionOut } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
-import type { PartitionOut } from "@/lib/api/memoryTypes";
+import { pathText } from "@/test/truncatedPath";
+import { MemoryPage } from "./MemoryPage";
 
-vi.mock("@/lib/hooks/useMemory", () => ({
-  memoryKey: ["memory"],
-  useMemoryPartitions: vi.fn(),
-  useSyncMemory: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+vi.mock("@/lib/api/memory", () => ({
+  listPartitions: vi.fn(),
+  getDeliveries: vi.fn(),
+  getReading: vi.fn(),
+  sync: vi.fn(),
 }));
-const { useMemoryPartitions } = await import("@/lib/hooks/useMemory");
-const partitionsMock = vi.mocked(useMemoryPartitions);
+vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
+vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
+vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
+vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/agentNativeMemory", () => ({ agentNativeMemoryApi: { list: vi.fn() } }));
+const api = await import("@/lib/api/memory");
+const { listUpkeepRuns } = await import("@/lib/api/upkeep");
+const { internalEngineApi } = await import("@/lib/api/internalEngine");
+const { agentsApi } = await import("@/lib/api/agents");
+const { agentNativeMemoryApi } = await import("@/lib/api/agentNativeMemory");
 
-function stubPartitions(partitions: PartitionOut[]) {
-  partitionsMock.mockReturnValue({
-    data: partitions,
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof useMemoryPartitions>);
+const MINUTE = 60_000;
+const ago = (minutes: number) => new Date(Date.now() - minutes * MINUTE).toISOString();
+
+function stub(partitions: PartitionOut[], deliveries: DeliveryOverviewOut = DELIVERIES) {
+  vi.mocked(api.listPartitions).mockResolvedValue({ partitions });
+  vi.mocked(api.getDeliveries).mockResolvedValue(deliveries);
 }
 
 function renderPage() {
@@ -47,121 +55,276 @@ function renderPage() {
   );
 }
 
-const COFFER: PartitionOut = {
-  uid: "mp-be27",
-  name: "coffer",
-  repository_path: "/Users/dev/coffer",
-  repository_key: "remote:github.com/wyx-sg/coffer",
-  note_count: 34,
-  unresolvable: false,
-};
-
-/** A partition whose repository has been deleted from disk (see "Report
- *  unresolvable partitions"). */
-const GONE: PartitionOut = {
-  uid: "mp-0d5c",
-  name: "old-api",
-  repository_path: "/Users/dev/old-api",
-  repository_key: "path:/Users/dev/old-api",
-  note_count: 3,
-  unresolvable: true,
-};
-
 describe("MemoryPage", () => {
-  test("an empty vault gets the welcome every other first-run surface gives", () => {
-    // Skills, knowledge, agents, channels and providers all greet a developer
-    // who has nothing yet; Memory showing a bare table instead made it the one
-    // page that explained itself least at the moment it mattered most.
-    stubPartitions([]);
-    renderPage();
+  beforeEach(() => {
+    vi.mocked(api.listPartitions).mockReset();
+    vi.mocked(api.getDeliveries).mockReset();
+    vi.mocked(api.getReading).mockResolvedValue({ read_at: ago(14), failures: [] });
+    vi.mocked(listUpkeepRuns).mockResolvedValue({ runs: [] });
+    vi.mocked(internalEngineApi.get).mockResolvedValue({
+      model: "m",
+      upkeep: {
+        aggregate: {
+          enabled: true,
+          interval_s: null,
+          default_interval_s: 3600,
+          last_pass_at: ago(14),
+          next_pass_at: new Date(Date.now() + 46 * MINUTE).toISOString(),
+        },
+        distil: {
+          enabled: true,
+          interval_s: null,
+          default_interval_s: 21600,
+          last_pass_at: null,
+          next_pass_at: null,
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof internalEngineApi.get>>);
+    vi.mocked(agentsApi.list).mockResolvedValue({ items: [] } as unknown as Awaited<
+      ReturnType<typeof agentsApi.list>
+    >);
+  });
 
-    expect(screen.getByText("Nothing distilled yet")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    // The one next step is UPDATE, not Add — nothing here is user-created —
-    // and it is offered once, not twice.
+  test("says what memory is, with one Update memory button", async () => {
+    stub([GLOBAL, COFFER]);
+    renderPage();
+    await screen.findByRole("table");
+    expect(screen.getByText(/distilled into one memory per subject\./i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
-  });
-
-  test("once a partition exists the page is the table", () => {
-    stubPartitions([COFFER]);
-    renderPage();
-
-    const table = screen.getByRole("table");
-    const headers = within(table)
-      .getAllByRole("columnheader")
-      .map((h) => h.textContent);
-    // No Status or Reach column: every partition is served to every agent.
-    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes"]));
-    expect(headers).not.toContain("Status");
-    expect(headers).not.toContain("Reach");
-  });
-
-  test("the update affordance stays reachable from the empty state", () => {
-    // Updating memory is the only way to populate the page, so losing it with
-    // the empty-state card would have been a dead end. It is not called Sync —
-    // that name is the vault-sync page's.
-    stubPartitions([]);
-    renderPage();
-    expect(screen.getByRole("button", { name: /update memory/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
   });
 
-  test("the populated page carries the same one Update memory button", () => {
-    stubPartitions([COFFER]);
+  test("the header carries the Experimental tag and Update memory as the one primary button", async () => {
+    stub([GLOBAL, COFFER]);
     renderPage();
+    await screen.findByRole("table");
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    // The primary kind is the filled accent button; the outline kind is not.
+    expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
+  });
+
+  acceptance("web-ui", "the memory overview lists deliveries per agent", async () => {
+    stub([COFFER]);
+    renderPage();
+    const block = await screen.findByTestId("memory-deliveries");
+    expect(within(block).getByText("Delivered at session start")).toBeInTheDocument();
+    // The window sits beside the title as a quiet 12px line (board 5.2.01).
+    expect(within(block).getByText("Last 7 days")).toBeInTheDocument();
+
+    const claude = await within(block).findByTestId("memory-delivery-claude_code");
+    expect(claude).toHaveTextContent("Claude Code");
+    expect(claude).toHaveTextContent(/Delivered 12 times in the last 7 days/);
+    expect(claude).toHaveTextContent(/5 memories read/);
+    expect(claude).toHaveTextContent(/last /);
+
+    const codex = within(block).getByTestId("memory-delivery-codex");
+    expect(codex).toHaveTextContent("Not delivered in the last 7 days");
+    // Claude Code is listed first, as on the Agents page.
+    const rows = within(block).getAllByRole("listitem");
+    expect(rows[0]).toBe(claude);
+
+    // Hook state and Repair live on the agent's page only.
+    expect(block).not.toHaveTextContent(/hook|repair|stale|installed/i);
+    expect(screen.queryByRole("button", { name: /repair|install/i })).toBeNull();
+  });
+
+  test("a read count the daemon cannot compute reads unavailable, never 0", async () => {
+    stub([COFFER], {
+      window_days: 7,
+      agents: [
+        {
+          ...DELIVERIES.agents[1],
+          agent_uid: "ag-codex",
+          agent_name: "Codex",
+          agent_type: "codex",
+          deliveries: 3,
+          notes_read: null,
+          notes_read_status: "unavailable",
+        },
+      ],
+    });
+    renderPage();
+    const row = await screen.findByTestId("memory-delivery-codex");
+    expect(row).toHaveTextContent(
+      /Delivered 3 times in the last 7 days · memories read unavailable/,
+    );
+    expect(row).not.toHaveTextContent(/0 memories read/);
+  });
+
+  acceptance("web-ui", "hook state appears only on the agent page", async () => {
+    // The Memory page carries no hook state or Repair: the deliveries read has no
+    // hook field. The agent's Memory tab shows the hook's state with Repair under
+    // "Coffer's memory" (asserted in AgentMemoryTab.test.tsx under this scenario).
+    stub([COFFER]);
+    renderPage();
+    const block = await screen.findByTestId("memory-deliveries");
+    await within(block).findByTestId("memory-delivery-claude_code");
+    expect(document.body).not.toHaveTextContent(/hook|repair|stale/i);
+    expect(screen.queryByRole("button", { name: /repair|install/i })).toBeNull();
+  });
+
+  test("the header says when memory was last read, beside Automatic and Update memory", async () => {
+    stub([COFFER]);
+    renderPage();
+    expect(await screen.findByTestId("memory-status")).toHaveTextContent(/^Read 14m ago$/);
+    expect(await screen.findByTestId("memory-automatic")).toHaveTextContent("Automatic · hourly");
+  });
+
+  test("a read that left an agent unread says so in the header and in a banner", async () => {
+    stub([COFFER]);
+    vi.mocked(api.getReading).mockResolvedValue({
+      read_at: ago(2),
+      failures: [
+        {
+          agent: "codex",
+          path: "/Users/dev/.codex/memories",
+          reason: "not readable",
+          last_read_at: "2026-09-27T10:00:00Z",
+        },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByTestId("memory-status")).toHaveTextContent(/· 1 agent failed$/);
+    const banner = await screen.findByTestId("memory-read-failures");
+    expect(banner).toHaveTextContent(/Couldn't read Codex's memory:/);
+    expect(banner).toHaveTextContent("~/.codex/memories");
+    expect(within(banner).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    // Ask an agent hands the fix to an agent; Open Activity is gone.
+    expect(
+      within(banner).getByRole("button", { name: /copy prompt|ask an agent/i }),
+    ).toBeInTheDocument();
+    expect(within(banner).queryByRole("button", { name: "Open Activity" })).toBeNull();
+  });
+
+  test("while update memory runs the header counts the partitions it distils", async () => {
+    stub([GLOBAL, COFFER]);
+    vi.mocked(listUpkeepRuns).mockResolvedValue({
+      runs: [
+        { kind: "memory", name: "update", started_at: ago(1), done: 1, total: 5 },
+        { kind: "memory", name: COFFER.uid, started_at: ago(0), done: null, total: null },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByText("Distilling 2 of 5 partitions")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /updating…/i })).toBeDisabled();
+    expect(await screen.findByText("Distilling…")).toBeInTheDocument();
+  });
+
+  test('a run with no done/total yet reads "Reading agents\' memory…"', async () => {
+    stub([GLOBAL, COFFER]);
+    vi.mocked(listUpkeepRuns).mockResolvedValue({
+      runs: [{ kind: "memory", name: "update", started_at: ago(0), done: null, total: null }],
+    });
+    renderPage();
+    expect(await screen.findByText("Reading agents’ memory…")).toBeInTheDocument();
+  });
+
+  test("partitions are a table with path, sample, sources and distil, and a count above it", async () => {
+    stub([GLOBAL, COFFER, GONE]);
+    renderPage();
+    const section = await screen.findByTestId("memory-partitions");
+    await within(section).findByRole("table");
+    expect(within(section).queryByText("3 partitions · 20 memories")).not.toBeInTheDocument();
+    expect(within(section).getByText("Every project")).toBeInTheDocument();
+    expect(within(section).getByText(pathText("~/work/coffer"))).toBeInTheDocument();
+    for (const header of [
+      "Partition",
+      "Path",
+      "Sample memory",
+      "Memories",
+      "Sources",
+      "Distilled",
+    ]) {
+      expect(within(section).getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+    expect(within(section).getByText("Use Node 20 for frontend vitest")).toBeInTheDocument();
+    expect(within(section).getAllByText("All agents")).toHaveLength(2);
+    expect(within(section).getByText("Repository missing")).toBeInTheDocument();
+    // Healthy states are a grey dot; only the missing repository is coloured.
+    const dotOf = (word: RegExp) =>
+      within(section).getAllByText(word)[0].querySelector("[data-tone]")?.getAttribute("data-tone");
+    expect(dotOf(/^Distilled /)).toBe("off");
+    expect(dotOf(/^Repository missing$/)).toBe("warn");
+    // Only the partition whose repository is gone can be deleted.
+    expect(within(section).getAllByRole("button", { name: /^delete: /i })).toHaveLength(1);
+    expect(
+      within(section).getByRole("button", { name: /delete: old-prototype/i }),
+    ).toBeInTheDocument();
+  });
+
+  acceptance(
+    "memory",
+    "the partitions table names each partition's sample, sources and distil state",
+    async () => {
+      const pending: PartitionOut = {
+        ...COFFER,
+        uid: "mp-new",
+        name: "new-repo",
+        repository_path: "/Users/dev/work/new-repo",
+        repository_key: "path:/Users/dev/work/new-repo",
+        note_count: 0,
+        distilled_at: null,
+        sample: null,
+        sources: [],
+        waiting_entries: 4,
+        waiting_agents: ["codex"],
+      };
+      stub([GLOBAL, pending, GONE]);
+      renderPage();
+      const section = await screen.findByTestId("memory-partitions");
+      const [, first, second, third] = within(
+        await within(section).findByRole("table"),
+      ).getAllByRole("row");
+      expect(first).toHaveTextContent("Prefers Chinese replies; docs and commits in English");
+      expect(first).toHaveTextContent("All agents");
+      expect(first).toHaveTextContent(/Distilled /);
+      expect(second).toHaveTextContent("4 entries read from Codex, waiting to distil");
+      expect(second).toHaveTextContent("Never");
+      expect(third).toHaveTextContent("Repository missing");
+      expect(within(third).getByRole("button", { name: /^delete: /i })).toBeInTheDocument();
+    },
+  );
+
+  test("with no partitions the first run lists what it found and carries one Update memory", async () => {
+    stub([]);
+    vi.mocked(agentsApi.list).mockResolvedValue({
+      items: [
+        {
+          uid: "ag-cc",
+          type: "claude_code",
+          name: "claude-code",
+          display_name: "Claude Code",
+          config_dir: "/Users/dev/.claude",
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof agentsApi.list>>);
+    vi.mocked(agentNativeMemoryApi.list).mockResolvedValue({
+      items: [
+        { project: "a", path: null, memory_dir: "/x/a", item_count: 30 },
+        { project: "b", path: null, memory_dir: "/x/b", item_count: 12 },
+      ],
+    } as unknown as Awaited<ReturnType<typeof agentNativeMemoryApi.list>>);
+    renderPage();
+    expect(await screen.findByText("Nothing distilled yet")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /read from agents/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /distil/i })).toBeNull();
+    const found = await screen.findByTestId("memory-found");
+    expect(await within(found).findByText("42 files in 2 projects")).toBeInTheDocument();
+    expect(found).toHaveTextContent("~/.claude");
   });
 
-  test("partitions render as rows of that same table", () => {
-    stubPartitions([COFFER]);
+  test("with no agent connected the first run offers to connect one", async () => {
+    stub([]);
     renderPage();
-
-    const table = screen.getByRole("table");
-    expect(within(table).getByText("coffer")).toBeInTheDocument();
-    expect(within(table).getByText("/Users/dev/coffer")).toBeInTheDocument();
-    expect(within(table).getByText("34")).toBeInTheDocument();
+    expect(await screen.findByText("No agent memory to read")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Agents →" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /update memory/i })).toBeNull();
   });
 
-  test("a partition whose repository is gone is listed, not hidden", () => {
-    // "Report unresolvable partitions": it is delivered to nobody, and only the developer can
-    // decide whether to delete it — which they cannot do from a list it is missing
-    // from. So it is on the page, marked.
-    stubPartitions([COFFER, GONE]);
+  test("no audit-log section — the Activity page holds the vault's whole trail", async () => {
+    stub([COFFER]);
     renderPage();
-
-    const table = screen.getByRole("table");
-    expect(within(table).getByText("old-api")).toBeInTheDocument();
-    expect(within(table).getByTestId("partition-unresolvable-badge")).toBeInTheDocument();
-  });
-
-  test("no audit-log section — the Activity page holds the vault's whole trail", () => {
-    stubPartitions([COFFER]);
-    renderPage();
-
-    expect(screen.queryByTestId("memory-audit-log")).toBeNull();
+    await screen.findByRole("table");
     expect(screen.queryByText(/audit log/i)).toBeNull();
   });
-
-  test("no delivery section — delivery is per-agent, so it lives on the agent page", () => {
-    stubPartitions([COFFER]);
-    renderPage();
-
-    expect(screen.queryByText(/^delivery$/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
-  });
-});
-
-acceptance("memory", "browse a partition as a file tree with a read-only preview", () => {
-  // The partitions page's half: the first-run welcome with none, the table with one.
-  stubPartitions([]);
-  const { unmount } = renderPage();
-  expect(screen.getByText("Nothing distilled yet")).toBeInTheDocument();
-  expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  unmount();
-
-  stubPartitions([COFFER]);
-  renderPage();
-  expect(screen.getByRole("table")).toBeInTheDocument();
 });

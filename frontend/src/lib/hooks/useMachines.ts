@@ -2,7 +2,7 @@
 //
 // The machine registry (spec vault-sync "Derive the registry from the
 // descriptors"): every installation of Coffer that has converged with this
-// remote, read as a derived view of `machines/*.yaml` in the working tree.
+// remote, read from the descriptors under `machines/` in the vault.
 //
 // The list is not only the Machines tab's data — it is also the pick-list the
 // channel binding control offers (spec channels, "Bind each channel to the one machine that runs it"),
@@ -11,41 +11,30 @@
 // binding does, by DERIVED id rather than display name, so renaming a machine
 // is free and a mistyped id can never be entered by hand.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-
-import { translateApiError } from "@/lib/api/errors";
 import { syncApi } from "@/lib/api/sync";
-import { useToast } from "@/components/ui/toast";
-import { resourcesKey, scopeKey, skillsKey, syncKey, syncMachinesKey } from "@/lib/api/queryKeys";
+import { resourcesKey, scopeKey, skillsKey, syncMachinesKey } from "@/lib/api/queryKeys";
+import { invalidateSync } from "@/lib/syncInvalidate";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
-/**
- * The registry, or an empty one while `vault_sync` is switched off (spec
- * experimental-features "Close every surface of a switched-off feature"): the
- * sync routes answer 404 then, and an empty registry is exactly what a vault
- * that never converged has — `machineOptions` still offers this machine, and
- * `bindingState` never reads an empty registry as a fault.
- *
- * It waits for the daemon status to say whether sync is on, but not forever:
- * once the status read has failed (the daemon is offline) the answer is
- * unknown, and the registry reads as empty rather than leaving every consumer
- * on its loading state.
- */
+/** The registry. A vault that never converged has an empty one —
+ *  `machineOptions` still offers this machine, and `bindingState` never reads
+ *  an empty registry as a fault. It is read only while the Sync feature is on
+ *  (the route answers 404 while it is off); channels and knowledge then see the
+ *  same empty registry, which is the single-machine case. */
 export function useMachines() {
-  const syncOn = useFeatureEnabled("vault_sync");
-  const statusFailed = useDaemonStatus().isError && syncOn === undefined;
+  const syncOn = useFeatureEnabled("sync") === true;
   return useQuery({
-    queryKey: [...syncMachinesKey, syncOn === true],
-    queryFn: () => (syncOn ? syncApi.machines() : Promise.resolve({ machines: [] })),
-    enabled: syncOn !== undefined || statusFailed,
+    queryKey: syncMachinesKey,
+    queryFn: () => syncApi.machines(),
+    enabled: syncOn,
   });
 }
 
 /**
  * This machine's id, from the daemon status rather than the sync status: a
- * channel is bound to a machine whether or not sync is switched on, so the
- * identity cannot live behind the sync gate.
+ * channel is bound to a machine whether or not this vault syncs anywhere, so
+ * the identity is read from the daemon itself.
  */
 export function useThisMachineId() {
   const status = useDaemonStatus();
@@ -54,16 +43,14 @@ export function useThisMachineId() {
 
 /**
  * Rename THIS machine. Free by construction: a channel's binding references
- * the derived id, never the label, so nothing else has to change.
+ * the derived id, never the label, so nothing else has to change. No error
+ * toast: the rename dialog shows the refusal in place and stays open.
  */
 export function useRenameSelf() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
   return useMutation({
     mutationFn: (name: string) => syncApi.renameSelf(name),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
-    onError: (error) => toast.error(translateApiError(t, error)),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 
@@ -81,16 +68,29 @@ export function useRenameSelf() {
  */
 export function useRetireMachine() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
+  // No error toast: this is reached only from a ConfirmDialog, which shows the
+  // refusal in place and stays open.
   return useMutation({
     mutationFn: (machineId: string) => syncApi.retire(machineId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: syncKey });
+      invalidateSync(qc);
       void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: skillsKey });
       void qc.invalidateQueries({ queryKey: scopeKey });
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/** Undo Retire: the machine is registered again. A refusal is the caller's toast. */
+export function useRestoreMachine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (machineId: string) => syncApi.restoreMachine(machineId),
+    onSuccess: () => {
+      invalidateSync(qc);
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+      void qc.invalidateQueries({ queryKey: skillsKey });
+      void qc.invalidateQueries({ queryKey: scopeKey });
+    },
   });
 }

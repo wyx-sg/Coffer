@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coffer.application.provider.secret_gate import require_key
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import ResolvedConnection
 from coffer.domain.resource import Resource
@@ -36,6 +37,10 @@ async def transcribe_connection(service: ProviderService, model: str) -> Resolve
     for r in await service.list():
         rc = service._cfg(r)
         if rc.transcribe_default:
+            # Coffer's own engine sends the key to this base URL too: only an
+            # approved one (spec secret "Hold a secret for a new
+            # destination until a person approves it").
+            await require_key(service, r.uid, r.name, rc)
             return ResolvedConnection(config=rc, model=model)
     return None
 

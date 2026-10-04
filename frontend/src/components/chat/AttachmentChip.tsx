@@ -2,7 +2,8 @@
 // One attached file as an inline chip: in the thread (name + type, read from the
 // persisted reference) and in the composer (name + size, with uploading /
 // failed states and a remove control). The path is never shown — the wire does
-// not carry it (spec chat "Show a message's attachments in the thread").
+// not carry it (spec chat "Show a message's attachments in the thread"). An
+// image with a `src` shows as a thumbnail instead of a chip.
 import { useTranslation } from "react-i18next";
 import { AlertCircle, FileText, Image as ImageIcon, Loader2, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ interface Props {
   state?: "uploading" | "failed";
   /** Why a failed upload failed, already translated. */
   error?: string;
+  /** Where an image's bytes can be fetched; with an image `mime` the chip becomes a thumbnail. */
+  src?: string;
   /** Shown as an × button when given. */
   onRemove?: () => void;
 }
@@ -28,10 +31,22 @@ function FileIcon({ mime }: { mime?: string | null }) {
   return <Paperclip className="size-3.5 shrink-0" aria-hidden />;
 }
 
-export function AttachmentChip({ name, detail, mime, state, error, onRemove }: Props) {
+export function AttachmentChip({ name, detail, mime, src, state, error, onRemove }: Props) {
   const { t } = useTranslation();
-  const label = name || t("chat.attachment");
+  const label = name || t("conversations.attachment");
   const failed = state === "failed";
+  if (src && mime?.startsWith("image/") && !state) {
+    return (
+      <img
+        data-testid="attachment-thumbnail"
+        src={src}
+        alt={label}
+        title={label}
+        loading="lazy"
+        className="size-16 rounded-lg border border-border object-cover"
+      />
+    );
+  }
   return (
     <div
       data-testid="attachment-chip"
@@ -50,7 +65,7 @@ export function AttachmentChip({ name, detail, mime, state, error, onRemove }: P
       <span className="min-w-0 truncate text-foreground">{label}</span>
       {detail && !(failed && error) ? <span className="shrink-0 opacity-70">{detail}</span> : null}
       {state === "uploading" ? (
-        <span className="shrink-0">{t("chat.attachments.uploading")}</span>
+        <span className="shrink-0">{t("conversations.attachments.uploading")}</span>
       ) : failed && error ? (
         <span className="min-w-0 truncate" role="alert">
           {error}
@@ -60,8 +75,8 @@ export function AttachmentChip({ name, detail, mime, state, error, onRemove }: P
         <button
           type="button"
           onClick={onRemove}
-          aria-label={t("chat.attachments.remove", { name: label })}
-          className="-mr-0.5 shrink-0 rounded-sm p-0.5 hover:bg-accent hover:text-accent-foreground"
+          aria-label={t("conversations.attachments.remove", { name: label })}
+          className="-mr-0.5 shrink-0 rounded-sm p-0.5 hover:bg-surface-hover hover:text-text"
         >
           <X className="size-3" aria-hidden />
         </button>

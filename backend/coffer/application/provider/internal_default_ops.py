@@ -3,7 +3,7 @@
 Two things happen when the internal engine's connection changes, and the second
 is why this is its own module rather than three lines inside the service.
 
-The flag ("Keep at most one internal-engine default" and "Set the internal-engine
+The flag ("Keep at most one internal default connection" and "Set the internal-engine
 default", this kind's own): at most one connection globally
 carries ``internal_default``, so the target is set only after the flag is
 cleared everywhere else — sequential clear-then-set, serialised by the
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coffer.application.provider.secret_gate import require_key
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import ResolvedConnection
 from coffer.domain.resource import Resource
@@ -44,6 +45,10 @@ async def internal_default_connection(
     for r in await service.list():
         rc = service._cfg(r)
         if rc.internal_default:
+            # Coffer's own engine sends the key to this base URL too: only an
+            # approved one (spec secret "Hold a secret for a new
+            # destination until a person approves it").
+            await require_key(service, r.uid, r.name, rc)
             return ResolvedConnection(config=rc, model=model)
     return None
 

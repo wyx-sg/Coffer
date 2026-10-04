@@ -3,21 +3,21 @@
 For the lifecycle-managed daemon process, `coffer.infrastructure.daemon.entry`
 acquires the port + token before uvicorn binds. The lifespan here reads
 daemon.json back to set the auth token + port, runs Alembic migrations,
-wires services, and starts the background workers.
+builds the vault's stores, wires services, and starts the background workers.
 
 Every wiring step below RETURNS what it built, and the next step takes it as
 a parameter: the order the lifespan reads in is the dependency order, and a
-step cannot run before what it needs exists. ``app.state`` carries only two
-final results that routes and tests read (``kinds``, ``mcp_session_supervisors``).
-
+step cannot run before what it needs exists. ``app.state`` carries only what
+routes, wiring and tests read: ``kinds``, ``feature_service``,
+``mcp_session_supervisors``, ``background_workers``.
 In-process tests can call `create_app()` directly and override
-`set_active_token(...)` manually if they want authenticated calls.
+`set_active_token(...)` for authenticated calls.
 
 MCP-specific composition (upstream factory, session supervisors,
 prunable registry, reaper env knobs) lives in
-:mod:`coffer.surfaces.http.app_mcp_composition`; credential-store DI
+:mod:`coffer.surfaces.http.app_mcp_composition`; secret-store DI
 singletons and the master-key bootstrap in
-:mod:`coffer.surfaces.http.credential_composition` — both for the 400-line
+:mod:`coffer.surfaces.http.secret_composition` — both for the 400-line
 guideline.
 """
 
@@ -26,7 +26,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import pathlib
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 
@@ -37,70 +36,79 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime import loop_lag
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.setup import configure_logging
+from coffer.infrastructure.persistence.attention_ignore_repo import SqlAlchemyAttentionIgnoreRepo
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.migrations_runner import run_migrations
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.platform import HostPlatform
+from coffer.infrastructure.vault.home import runs_db_path
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
-from coffer.surfaces.http.agent_skill_wiring import (
-    run_claude_mcp_home_migration,
-    run_skill_drift_boot_heal,
-)
+from coffer.surfaces.http.agent_facet_wiring import build_agent_catalog
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
 )
 from coffer.surfaces.http.app_shutdown import Running, shutdown
+from coffer.surfaces.http.attention_wiring import lifespan_attention_sources
 from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat_wiring import wire_chat
-from coffer.surfaces.http.credential_composition import (
-    init_credential_store,
-    make_credential_resolver,
-    run_legacy_keychain_migration,
-)
 from coffer.surfaces.http.curation_wiring import wire_curation
 from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
     set_audit_service,
     set_internal_engine_config_service,
+    set_platform,
     set_resource_service,
     set_retention_service,
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
+from coffer.surfaces.http.event_wiring import build_event_stream, start_attention_watch
 from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
-from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
+from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
+from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
 from coffer.surfaces.http.memory_wiring import (
     follow_memory_switch,
-    memory_context_composer,
-    run_memory_delivery_boot_heal,
+    register_delivery_hook_target,
 )
-from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
-from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
+from coffer.surfaces.http.openapi_route import include_openapi_route
+from coffer.surfaces.http.reconcile_wiring import (
+    build_reconciler,
+    run_boot_pass,
+    start_reconciler,
+    wire_attention,
+)
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.secret_boundary_wiring import (
+    remember_destination_sources,
+)
+from coffer.surfaces.http.secret_composition import (
+    init_secret_store,
+    make_secret_resolver,
+)
+from coffer.surfaces.http.vault_composition import build_vault_stores
+from coffer.surfaces.http.vault_wiring import start_vault_scanning
 
 
 def _db_url() -> str:
-    return os.environ.get(
-        "COFFER_DB_URL",
-        f"sqlite+aiosqlite:///{pathlib.Path.home()}/.coffer/coffer.db",
-    )
+    """The history database (``runs.db``); ``COFFER_DB_URL`` names another."""
+    return os.environ.get("COFFER_DB_URL", f"sqlite+aiosqlite:///{runs_db_path()}")
 
 
 _logger = logging.getLogger(__name__)
@@ -126,12 +134,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
     await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
-    # 0048 dropped the removed-type agent rows; name what they left on disk.
-    try:  # Courtesy notice only: never fatal.
-        report_removed_agent_leftovers()
-    except Exception:
-        _logger.exception("removed_agent_type.leftover_scan_failed")
-
     # Startup process hygiene (ADR daemon-detect-or-spawn), BEFORE new upstreams: reap leaked MCP
     # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
     try:
@@ -143,46 +145,56 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
+    # The vault repository, the resource files, derived.db and the one
+    # validator every vault write passes (ADR storage-is-five-classes-by-nature).
+    vault = await build_vault_stores(app.state.kinds)
 
-    db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-    credentials = await init_credential_store(engine, db_path)
-    credential_store = credentials.store
+    secrets = await init_secret_store()
+    secret_store = secrets.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
-    # ingest, the curation pass, the memory distil pass, the sync conflict
-    # resolver) shares one resolver rather than each re-wrapping the store.
-    credential_resolver = make_credential_resolver(credential_store)
+    # ingest, the curation pass, the memory distil pass) shares one resolver
+    # rather than each re-wrapping the store.
+    secret_resolver = make_secret_resolver(secret_store)
 
-    audit_repo = SqlAlchemyAuditRepo(sm)
-    resource_repo = SqlAlchemyResourceRepo(sm)
-
-    # No resolver is injected any more. ``AuditService.record`` is handed the
-    # ``Resource`` the event is about, and every caller performing a mutation
-    # already has that row — so the id it stores is read off it rather than
-    # looked back up from a label that may since have changed.
-    audit = AuditService(audit_repo)
+    # ``AuditService.record`` is handed the ``Resource`` the event is about, so
+    # the uid it stores is read off it, never looked back up by label.
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    # The unified reconciler (ADR one-level-triggered-reconciler-compares-
+    # parameters) and the event stream: built first, so every resource write
+    # hints both, and so each kind below can register the targets it supplies.
+    reconciler = build_reconciler(audit)
+    events = build_event_stream(reconciler)
+    # A change another writer makes to a resource file (a hand edit settled,
+    # a sync checkout, a restore) is hinted exactly like an API write.
+    vault.resources.set_change_sink(events.hint_sink)
+    # Hand edits: the boot scan, then a watcher and periodic scans, each
+    # settled commit audited (spec vault-storage "Keep the last valid version
+    # when a hand edit is invalid").
+    vault_scanning = await start_vault_scanning(audit)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
-        repo=resource_repo,
+        repo=HintingResourceRepo(vault.resources, events.hint_sink),
         audit=audit,
-        # Wired so register/update_config can probe credential_refs against
-        # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
-        # servers as resources": a missing credential must fail registration
-        # with a named ref, no partial state).
-        credentials=credential_store,
+        # Probed before persisting (spec mcp-gateway "Manage MCP servers as resources").
+        secrets=secret_store,
     )
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    # What each kind contributes to vault convergence (spec vault-sync),
-    # collected as wiring proceeds and handed to ``start_sync`` at the end.
-    sync_contributions = SyncContributions()
-    # Also registers the engine-settings synced state area.
-    internal_engine_config_svc = build_config_services(sm, audit, sync_contributions)
+    internal_engine_config_svc = build_config_services(audit)
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
     set_retention_service(retention_svc)
     set_internal_engine_config_service(internal_engine_config_svc)
+    # The one adapter that knows the host OS (infrastructure/platform); every
+    # application service that needs an OS answer is handed this instance.
+    platform = HostPlatform()
+    set_platform(platform)
+    # The agent descriptors with their mechanism facets bound (ADR
+    # agent-mechanisms-are-optional-facets-on-the-descriptor); every kind that
+    # needs an agent-specific mechanism is handed this catalogue.
+    agent_catalog = build_agent_catalog()
 
     # Build the shared built-in tool registry; each kind contributes its tools.
     # Created before kind wiring so skill + knowledge can register into it.
@@ -197,22 +209,29 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc=resource_svc,
         audit=audit,
         sm=sm,
+        vault=vault,
         builtin_tools=builtin_tools,
-        credential_store=credential_store,
-        credential_resolver=credential_resolver,
-        sync=sync_contributions,
+        secret_store=secret_store,
+        secret_resolver=secret_resolver,
+        platform=platform,
+        agent_catalog=agent_catalog,
+        reconciler=reconciler,
     )
 
     # Wire the chat feature (spec chat) after the kinds: the agent service is
     # the agent kind's result, and a channel turn's memory append closes over
-    # the memory kind's service and the feature switch (spec memory "Deliver to
-    # channel turns through the system prompt").
+    # the memory kind's service (spec memory "Deliver to channel turns through
+    # the system prompt").
     chat = wire_chat(
         sm,
-        credential_store,
+        secret_store,
         kinds.agent_skill.agent_service,
         resource_svc,
-        compose_memory_context=memory_context_composer(kinds.memory.service, features),
+        agent_catalog,
+        compose_memory_context=memory_context_composer(
+            kinds.memory.turn_retrieval, features.is_enabled
+        ),
+        retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
     )
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
@@ -221,26 +240,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # new material into a collection's documents. It carries
     # the skill delivery too, because a document nothing has re-rendered a
     # catalogue for is a document no agent has a path to (spec knowledge).
-    curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)
+    curation_pass = wire_curation(kinds.knowledge.models, secret_resolver, kinds.guide)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
-    # drives turns through the chat platform's handles, and `/save` through the
-    # knowledge kind's.
-    channel_runtime = wire_channel_kind(
-        app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
-    )
+    # drives turns through the chat platform's handles.
+    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, vault, secret_store, chat)
 
-    # One-time move of legacy OS-keychain secrets into the encrypted store
-    # (best-effort; see credential_composition for the mechanics).
-    await run_legacy_keychain_migration(app.state.kinds, sm, credential_store, audit)
+    # Every kind has registered its secret destinations: the approval refresh
+    # reads them from here on.
+    remember_destination_sources(resource_svc, audit)
 
-    # Boot heals — best-effort, never allowed to fail startup (see
-    # provider_wiring / agent_skill_wiring for what each corrects).
-    await run_provider_projection_sweep(kinds.provider.boot_heal)
-    await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
-    await run_claude_mcp_home_migration(kinds.agent_skill.mcp_home_migration)
-    # Both follow their feature's switch from here on, and at boot already
-    # match it (spec experimental-features).
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.
     connection = wire_agent_connection(
@@ -249,15 +258,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.memory.delivery_service,
         features,
     )
-    await run_memory_delivery_boot_heal(kinds.memory.delivery_service, features)
-    follow_memory_switch(kinds.memory.delivery_service, features, connection.connected_agents)
-    follow_guide_features(kinds.guide, features)
-    # Coffer's own skill, re-rendered from this build and whatever the corpus
-    # holds right now, and seeded into the master store as an ordinary skill
-    # resource. Done every boot rather than only on change: it is cheap when
-    # nothing moved (two reads and a comparison), it heals a master someone
-    # edited, and it is what upgrades a vault that still holds the previous
-    # per-agent rendering.
+    register_delivery_hook_target(
+        reconciler, kinds.memory.delivery_service, features, connection.connected_agents
+    )
+    # The boot pass converges every target at once — MCP entries, skill links,
+    # provider projections, delivery hooks — before the daemon reports ready.
+    await run_boot_pass(reconciler)
+    follow_memory_switch(reconciler, kinds.guide, features)
+    # Coffer's own skill, re-rendered from this build and the corpus every boot
+    # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
 
     # Start the batched invocation writer alongside the retention
@@ -267,7 +276,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     publish_daemon_identity()
 
     # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
-    # binaries and back up the vault before migrating", see binary_deploy).
+    # binaries and back up the history database before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
     workers = start_background_workers(
@@ -281,28 +290,40 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,
-        internal_connection=kinds.provider.internal_connection,
-        credential_resolver=credential_resolver,
-        db_path=db_path,
         sm=sm,
-        credential_store=credential_store,
-        master_key=credentials.master_key,
-        sync_contributions=sync_contributions,
+        secret_store=secret_store,
+        master_key=secrets.master_key,
         features=features,
+        platform=platform,
     )
-    # Published for the same reason ``app.state.kinds`` is: a test that asserts
-    # the lifespan actually started a worker needs a seam to reach it through,
-    # and the alternative is asserting the wiring by reading the wiring.
+    # Published like ``app.state.kinds``: a test asserting the lifespan started
+    # a worker needs a seam to reach it through.
     app.state.background_workers = workers
-    # Same seam, for the same reason. An area that forgets to register its
-    # state provider does not fail — it just silently stops converging, which
-    # is how channel pairings went a whole release without syncing. A test that
-    # can read the collected set is what makes that visible.
-    app.state.sync_contributions = sync_contributions
 
     # Channel adapter reconciler (spec channels): Telegram polling and the
     # SeaTalk websocket connections converge from its first tick.
-    channel_runtime_task = asyncio.create_task(channel_runtime.run())
+    channel_runtime_task = spawn_restarting(channel_runtime.run, name="channel-runtime")
+    # The event-loop lag probe behind /daemon/status's ``runtime`` block.
+    spawn_restarting(loop_lag.probe().run, name="loop-lag-probe")
+    # The reconciler's periodic loop; hints bring a pass forward.
+    reconciler_task = start_reconciler(reconciler)
+    # The Overview's "needs you" list: open drift, then each kind's signals.
+    attention = wire_attention(
+        reconciler,
+        features.is_enabled,
+        [
+            *lifespan_attention_sources(
+                resource_svc=resource_svc,
+                secret_store=secret_store,
+                connection_service=connection,
+                sync_service=workers.sync.service,
+            ),
+            vault_scanning.attention,
+        ],
+        ignores=SqlAlchemyAttentionIgnoreRepo(sm),
+        audit=audit,
+    )
+    attention_watch_task = await start_attention_watch(events, attention, kinds.mcp.auth_monitor)
 
     # Reap /mcp sessions that have been idle past the threshold. Without this
     # a downstream client that never closes its SSE stream would leak its
@@ -321,10 +342,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 channel_runtime=channel_runtime,
                 channel_runtime_task=channel_runtime_task,
                 reaper_task=reaper_task,
+                reconciler_task=reconciler_task,
+                attention_watch_task=attention_watch_task,
                 kinds=kinds,
                 engine=engine,
             )
         )
+        await _best_effort("vault_scanner", vault_scanning.stop())
+        await _best_effort("derived_db", vault.derived_engine.dispose())
 
 
 def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
@@ -337,7 +362,11 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app = FastAPI(
         title="Coffer",
         version="0.1.0",
-        openapi_url="/api/v1/openapi.json",
+        # FastAPI's schema route and its /docs and /redoc pages answer without
+        # the token; the schema is served behind it instead (openapi_route).
+        openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
         lifespan=_lifespan,
     )
     app.state.kinds = kinds or {}
@@ -359,6 +388,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     middleware.install(app)
     err_handlers.register(app)
     include_all_routers(app)
+    include_openapi_route(app)
     # LAST: the SPA mount claims "/", so every API route must already be
     # registered or it would swallow them.
     webui.install(app)

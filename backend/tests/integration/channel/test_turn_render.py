@@ -5,7 +5,7 @@ Telegram's is a message it edits (deleted when the turn ends, the final reply
 sent after it); SeaTalk's is a stream that finishes as the reply itself. A
 transport with neither sends no interim traffic at all. Every turn that ends
 abnormally closes with a compact completion summary, capability-agnostic
-("Summarise only a turn that did not end normally").
+("Summarise a turn that did not end normally").
 """
 
 from __future__ import annotations
@@ -17,9 +17,21 @@ from typing import Any
 import pytest
 
 from coffer.application.channel.turn_render import TurnRenderer
+from coffer.application.channel.turn_status import LIVE_SEPARATOR
 from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
 
 from .conftest import FakeChannelAdapter, wait_until
+
+_RULE = f"\n{LIVE_SEPARATOR}\n"
+
+
+def _answer(snapshot: str) -> str:
+    """The answer a live snapshot shows under its status block ("" when none)."""
+    return snapshot.split(_RULE, 1)[1] if _RULE in snapshot else ""
+
+
+def _is_status(snapshot: str) -> bool:
+    return snapshot.lstrip().startswith("⏳ Working")
 
 
 def _ticking(step: float = 2.0, start: float = 0.0) -> Callable[[], float]:
@@ -90,9 +102,10 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
 
     await _render(adapter, _TOOL_TURN)
 
-    # The first send is the progress message created on ToolCall, labelled with
-    # a descriptor drawn from the call's input…
-    assert adapter.sent[0] == ("owner", "⏳ search")
+    # The first send is the progress message created on ToolCall: the status
+    # header, then a step line naming the tool (a tool with no descriptor rule
+    # shows none of its arguments)…
+    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step\n⏳ search")
     progress_id = "m1"  # ids are issued in send order
     # …which is deleted when the turn finishes, before the final reply.
     assert adapter.deleted == [("owner", progress_id)]
@@ -117,9 +130,8 @@ async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
     assert adapter.deleted == []
 
 
-async def test_summary_reports_duration_and_tokens() -> None:
-    # An abnormal ending (here an interrupt) still sends a summary — and it
-    # reports tool count, duration, and token usage.
+async def test_an_interrupt_ends_with_the_stopped_line() -> None:
+    # The turn's real duration, in the short form — and no separate fact summary.
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
         TextDelta(text="partial"),
@@ -128,7 +140,7 @@ async def test_summary_reports_duration_and_tokens() -> None:
 
     await _render(adapter, events, now=_clock(100.0, 101.5))
 
-    assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 1.5s · 80 tok")
+    assert adapter.sent == [("owner", "partial\n\n⏹ Stopped after 1s.")]
 
 
 @pytest.mark.acceptance(
@@ -141,8 +153,7 @@ async def test_error_turn_ends_with_a_failed_summary() -> None:
 
     await _render(adapter, events)
 
-    assert adapter.sent[0] == ("owner", "⚠️ upstream timed out [PROVIDER_TIMEOUT]")
-    assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
+    assert adapter.sent == [("owner", "⚠️ upstream timed out. Send it again to retry.")]
 
 
 @pytest.mark.acceptance(spec="chat", scenario="an errored turn still delivers what it streamed")
@@ -161,21 +172,10 @@ async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
 
     assert adapter.sent[0] == (
         "owner",
-        "The answer is forty-two, because\n\n⚠️ the agent stopped responding [stream_ended]",
+        "The answer is forty-two, because\n\n⚠️ the agent stopped responding. "
+        "Send it again to retry.",
     )
-    assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
-
-
-async def test_interrupted_turn_ends_with_a_stopped_summary() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
-    events = [
-        TextDelta(text="partial"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"),
-    ]
-
-    await _render(adapter, events)
-
-    assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 0.0s")
+    assert len(adapter.sent) == 1
 
 
 @pytest.mark.acceptance(
@@ -197,7 +197,7 @@ async def test_progress_line_describes_a_bash_call_from_its_input() -> None:
     await _render(adapter, events)
 
     # The progress message created on the ToolCall names the tool AND what it does.
-    assert adapter.sent[0] == ("owner", "⏳ Bash · list the desktop")
+    assert adapter.sent[0][1].splitlines()[-1] == "⏳ Bash · list the desktop"
 
 
 async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
@@ -214,7 +214,7 @@ async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
 
     await _render(adapter, events)
 
-    assert adapter.sent[0] == ("owner", "⏳ Read · wedding.json")
+    assert adapter.sent[0][1].splitlines()[-1] == "⏳ Read · wedding.json"
 
 
 @pytest.mark.acceptance(
@@ -235,7 +235,7 @@ async def test_group_progress_line_names_only_the_tool() -> None:
 
     await _render(adapter, events, chat_kind="group")
 
-    assert adapter.sent[0] == ("owner", "⏳ Bash")
+    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step\n⏳ Bash")
 
 
 async def test_direct_progress_line_never_shows_a_raw_command_or_guessed_argument() -> None:
@@ -250,6 +250,7 @@ async def test_direct_progress_line_never_shows_a_raw_command_or_guessed_argumen
     await _render(adapter, events)
 
     shown = " ".join(text for _, text in adapter.sent)
+    shown += " ".join(text for _chat, _mid, text in adapter.edits)
     assert "rm -rf" not in shown and "select 1" not in shown
 
 
@@ -387,7 +388,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     originating thread, not the group main chat."""
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG")
-    adapter = FakeChannelAdapter(supports_edit=False, supports_media=True, supports_groups=True)
+    adapter = FakeChannelAdapter(supports_edit=False, supports_media=True)
 
     async def send(text: str) -> None:
         await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
@@ -438,11 +439,13 @@ async def test_reply_text_streams_into_the_status_message() -> None:
     await _render(adapter, events, now=_ticking())
 
     # Before any text, the status message shows the tool-progress line…
-    assert adapter.sent[0] == ("owner", "⏳ search")
+    assert _is_status(adapter.sent[0][1])
+    assert adapter.sent[0][1].endswith("⏳ search")
     # …then the SAME single message is edited with the growing reply text (plain,
-    # not HTML), so the user watches the answer materialize.
-    assert ("owner", "m1", "I found") in adapter.edits
-    assert adapter.edits[-1] == ("owner", "m1", "I found three cats.")
+    # not HTML) under the status block, so the user watches the answer materialize.
+    answers = [_answer(text) for _chat, mid, text in adapter.edits if mid == "m1"]
+    assert "I found" in answers
+    assert answers[-1] == "I found three cats."
     # Finish still deletes the status message and sends the final reply once.
     assert adapter.deleted == [("owner", "m1")]
     assert adapter.sent[-1] == ("owner", "I found three cats.")
@@ -496,9 +499,10 @@ async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None
     await _render(adapter, events, now=_ticking())
 
     # The status message is opened with the streaming reply text (no tool line)…
-    assert adapter.sent[0] == ("owner", "First,")
+    assert _is_status(adapter.sent[0][1])
+    assert _answer(adapter.sent[0][1]) == "First,"
     # …then edited in place as the answer grows…
-    assert adapter.edits[-1] == ("owner", "m1", "First, second, third.")
+    assert _answer(adapter.edits[-1][2]) == "First, second, third."
     # …and on finish it is deleted and the final reply is sent once.
     assert adapter.deleted == [("owner", "m1")]
     assert adapter.sent[-1] == ("owner", "First, second, third.")
@@ -580,7 +584,6 @@ async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_
         supports_edit=False,
         supports_live_text=False,
         supports_typing=True,
-        supports_groups=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -621,7 +624,6 @@ async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
     adapter = FakeChannelAdapter(
         supports_typing=True,
         supports_reactions=True,
-        supports_groups=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -662,7 +664,6 @@ async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> Non
         supports_edit=False,
         supports_live_text=False,
         supports_typing=True,
-        supports_groups=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -717,7 +718,7 @@ def _streaming_adapter(**kwargs: Any) -> FakeChannelAdapter:
     scenario="a reply grows in place on a transport that streams but cannot edit",
 )
 async def test_streaming_transport_grows_one_message_instead_of_sending_fragments() -> None:
-    adapter = _streaming_adapter(supports_groups=True)
+    adapter = _streaming_adapter()
 
     async def send(text: str) -> None:
         await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
@@ -749,22 +750,26 @@ async def test_streaming_transport_grows_one_message_instead_of_sending_fragment
     # accumulated reply — the platform re-renders the latest text, never a delta.
     # The surface opens the moment the turn starts, with the acknowledgement —
     # the reply grows out of that same message.
-    assert live.snapshots[0] == "⏳ Got it — working on this…"
-    assert live.snapshots[1] == "⏳ search"
-    assert live.snapshots[2:] == ["I found", "I found three", "I found three cats."]
+    assert _is_status(live.snapshots[0]) and _RULE not in live.snapshots[0]
+    assert live.snapshots[1].endswith("⏳ search")
+    assert [_answer(s) for s in live.snapshots[2:]] == [
+        "I found",
+        "I found three",
+        "I found three cats.",
+    ]
     assert live.closed and live.final == "I found three cats."
     # Exactly ONE message reached the chat (the stream's own), routed into the
     # originating group thread — no fragments, and no duplicate final send.
     # The ONE message the turn ever posts is the stream's opening one — the
     # acknowledgement — which every later snapshot rewrites in place.
-    assert adapter.sent == [("gid-1", "⏳ Got it — working on this…")]
-    assert adapter.sent_routed == [("gid-1", "⏳ Got it — working on this…", "t1", "group")]
+    assert adapter.sent == [("gid-1", live.snapshots[0])]
+    assert adapter.sent_routed == [("gid-1", live.snapshots[0], "t1", "group")]
     assert adapter.edits == [] and adapter.deleted == []  # it can do neither
 
 
 async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> None:
     # The stream is the message: an abnormal ending still closes it with the
-    # final body, and only the fact summary follows as its own message.
+    # final body, and no separate summary follows.
     adapter = _streaming_adapter()
 
     await _render(
@@ -777,10 +782,10 @@ async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> N
     )
 
     [live] = adapter.live_handles
-    assert live.final == "partial\n\n⏹ Stopped."
+    assert live.final.startswith("partial\n\n⏹ Stopped after ")
     texts = adapter.texts()
-    assert texts[0] == "⏳ Got it — working on this…"  # opened at once, then grown
-    assert texts[1].startswith("⏹ stopped · 0 tools ·")  # the summary follows it
+    assert _is_status(texts[0])  # opened at once, then grown
+    assert len(texts) == 1  # no separate summary follows it
 
 
 async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrades() -> None:
@@ -807,11 +812,11 @@ async def test_a_persisting_surface_acknowledges_before_the_turn_produces_anythi
     await _render(adapter, [TextDelta(text="the answer")], now=_ticking())
 
     [live] = adapter.live_handles
-    assert live.snapshots[0] == "⏳ Got it — working on this…"
+    assert _is_status(live.snapshots[0])  # opened straight into the status header
     assert live.final == "the answer"  # replaced in place by the reply
     # The stream's opening message is the ONLY message: the reply is that same
     # one, grown — never an acknowledgement followed by a second answer.
-    assert adapter.texts() == ["⏳ Got it — working on this…"]
+    assert adapter.texts() == [live.snapshots[0]]
 
 
 async def test_a_scaffolding_surface_is_not_opened_before_there_is_something_to_show() -> None:
@@ -917,7 +922,6 @@ async def test_a_group_reply_opens_with_a_mention_of_the_asker() -> None:
     adapter = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
     )
 
@@ -950,16 +954,13 @@ async def test_a_sender_with_no_mention_id_gets_a_clean_reply() -> None:
     mentionable = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
     )
     await _group_reply(mentionable, mention_user_id="")
     assert mentionable.texts() == ["the answer"]
 
     # And the mirror case: an id, but a transport with no mention spelling.
-    speechless = FakeChannelAdapter(
-        supports_edit=False, supports_live_text=False, supports_groups=True
-    )
+    speechless = FakeChannelAdapter(supports_edit=False, supports_live_text=False)
     await _group_reply(speechless, mention_user_id="st-77")
     assert speechless.texts() == ["the answer"]
 
@@ -975,7 +976,7 @@ async def test_the_mention_is_in_the_message_the_stream_is_created_as() -> None:
     observed live. So the very first snapshot, the one that posts the message,
     carries it; and every snapshot after it does too, or the mention would appear
     at creation, vanish for the whole stream, and come back at the end."""
-    adapter = _streaming_adapter(supports_groups=True, mention_template=_MENTION)
+    adapter = _streaming_adapter(mention_template=_MENTION)
 
     await _group_reply(
         adapter,
@@ -991,25 +992,23 @@ async def test_the_mention_is_in_the_message_the_stream_is_created_as() -> None:
     tag = '<mention-tag target="seatalk://user?id=st-77"/>'
     [live] = adapter.live_handles
     # The snapshot that CREATES the message — the acknowledgement — is mentioned.
-    assert live.snapshots[0] == f"{tag} ⏳ Got it — working on this…"
+    assert live.snapshots[0].startswith(f"{tag} ⏳ Working")
     # …as is every interim one after it, and the body that closes the stream.
     assert live.snapshots and all(s.startswith(tag) for s in live.snapshots)
     assert live.final == f"{tag} I found three cats."
     # Exactly once each: no path prefixes a snapshot that is already prefixed.
     assert all(s.count("mention-tag") == 1 for s in [*live.snapshots, live.final])
     # The stream IS the reply, so nothing is sent a second time.
-    assert adapter.texts() == [f"{tag} ⏳ Got it — working on this…"]
+    assert adapter.texts() == [live.snapshots[0]]
 
 
-async def test_no_path_mentions_twice_when_tool_progress_opens_the_surface() -> None:
-    """``_open_live`` is reached from the acknowledgement AND lazily from the
-    status renderer. Both hand it raw text, and the mention is applied in one
-    place — the one way to get two tags in a snapshot is for a caller to prefix
-    before handing over. This drives the lazy path (no acknowledgement, because
-    the surface does not persist) through tool lines and then reply text."""
-    adapter = _streaming_adapter(
-        supports_groups=True, mention_template=_MENTION, live_text_persists=False
-    )
+async def test_a_scaffolding_surface_carries_no_mention_and_the_reply_one() -> None:
+    """The mention rides on every snapshot only where the surface PERSISTS as the
+    reply (the platform decides @ notifications at creation). A scaffolding
+    surface is deleted before the answer is sent, so its snapshots stay plain —
+    a mention there would render as raw markup — and the reply that closes it
+    carries the mention exactly once."""
+    adapter = _streaming_adapter(mention_template=_MENTION, live_text_persists=False)
 
     await _group_reply(
         adapter,
@@ -1024,7 +1023,8 @@ async def test_no_path_mentions_twice_when_tool_progress_opens_the_surface() -> 
 
     [live] = adapter.live_handles
     assert live.snapshots  # the lazy open really happened
-    assert all(s.count("mention-tag") == 1 for s in [*live.snapshots, live.final])
+    assert all(s.count("mention-tag") == 0 for s in live.snapshots)
+    assert live.final.count("mention-tag") == 1
 
 
 @pytest.mark.acceptance(
@@ -1038,7 +1038,6 @@ async def test_a_sender_with_no_id_is_mentioned_by_email_where_the_platform_allo
     adapter = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
         mention_email_template=_MENTION_BY_EMAIL,
     )
@@ -1054,7 +1053,6 @@ async def test_the_id_wins_when_both_an_id_and_an_address_are_known() -> None:
     adapter = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
         mention_email_template=_MENTION_BY_EMAIL,
     )

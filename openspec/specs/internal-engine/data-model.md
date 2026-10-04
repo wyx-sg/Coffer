@@ -1,18 +1,18 @@
 # Data Model — Internal Engine
 
-The one global row that says what Coffer thinks with and what it does
-unattended, plus the ports its consumers reach it through. Depends on the
+The one global settings document that says what Coffer thinks with and what it
+does unattended, plus the ports its consumers reach it through. Depends on the
 connection kind from spec [provider-switching](../provider-switching/spec.md)
-for the endpoint half, and on spec [vault-sync](../vault-sync/spec.md) for the
-state area it travels in.
+for the endpoint half, and on spec vault-storage for the state document it is
+stored as.
 
 ## Domain entities (`backend/coffer/domain/internal_engine_config.py`)
 
 ### `GlobalInternalEngineConfig`
 
-Coffer's own operating settings. One row, fixed primary key `SINGLETON_ID = 1`,
-with a `CheckConstraint("id = 1")` that makes a second row unrepresentable
-whatever writes it (see "Keep the engine's settings in one global row").
+Coffer's own operating settings: one document per vault,
+`state/settings/internal-engine.json`, so a second copy has nowhere to be
+(see "Keep the engine's settings in one vault document").
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
@@ -25,8 +25,8 @@ whatever writes it (see "Keep the engine's settings in one global row").
 | `curate_interval_s` | `int \| None` | As above. |
 | `model_timeout_s` | `int \| None` | How long ONE call to Coffer's own model may take (see "Carry the bound on one model call"). `None` = the built-in default, meaning exactly what an unchosen interval's `None` means and for the same reason — the default stays in one place, so raising it later reaches every vault that never chose. Between `MIN_MODEL_TIMEOUT_S` and `MAX_MODEL_TIMEOUT_S`: refused outside that range by the surfaces, clamped into it by the passes (see "Refuse an out-of-range bound at a surface and clamp it in a pass"). |
 | `transcribe_model` | `str \| None` | The speech-to-text model, run on the connection flagged `transcribe_default` rather than on the engine's own (see "Transcribe speech on its own connection and model"). `None` until chosen, and while it is `None` Coffer transcribes nothing and the agent receives the audio file. Normalised from blank to `None` like `model`. |
-| `curate_owner_machine_id` | `str \| None` | The one machine allowed to run the `curate` pass on a vault that spans several, because two machines folding the same sources into two different documents is a duplicate that git merges cleanly and no conflict can catch. `None` = no owner named, and the pass runs wherever the setting is read — the right answer for a single-machine vault. Read by `curate_runs_on(machine_id)` where the curation worker is wired, and resolved into one of four `CurationOwner` states by `curation_owner(machine_id, known)` (see "Report and change the curation owner from every surface"). Not validated against the machine registry on write. Blank normalises to `None` on the curation-owner route (`set_curation_owner`, behind `PUT /api/v1/internal-engine-config/curation-owner` and `coffer engine curate-owner`); the settings-wide `update` stores the value it is given. |
-| `updated_at` | `datetime` | Last write, reported so a surface can say when the settings last moved. |
+| `curate_owner_machine_id` | `str \| None` | The one machine allowed to run the `curate` pass on a vault that spans several, because two machines folding the same sources into two different documents is a duplicate that git merges cleanly and no conflict can catch. `None` = no owner named, and the pass runs wherever the setting is read — the right answer for a single-machine vault. Read by `curate_runs_on(machine_id)` where the curation worker is wired, and resolved into one of four `CurationOwner` states by `curation_owner(machine_id, known)` (see "Report and change the curation owner over REST and in the Knowledge popover"). Not validated against the machine registry on write. Blank normalises to `None` on the curation-owner route (`set_curation_owner`, behind `PUT /api/v1/internal-engine-config/curation-owner` and `coffer config set engine.curate_owner`); the settings-wide `update` stores the value it is given. |
+| `updated_at` | `datetime` | When this machine last changed the settings (`local/engine.json`), reported so a surface can say when they last moved. Not in the vault document. |
 
 `upkeep(pass_name)` is the single read seam: a surface asks for a pass by name
 and gets an `UpkeepSetting`, so adding a pass adds one entry here instead of a
@@ -44,7 +44,7 @@ class UpkeepSetting:
 ```
 
 `interval_s = None` means "whatever this pass's own default is". The default is
-NOT copied into the row — it lives with the pass, so raising it later reaches
+NOT copied into the document — it lives with the pass, so raising it later reaches
 every vault that never chose one (see "Report an unchosen interval beside its
 default").
 
@@ -53,7 +53,7 @@ default").
 `AGGREGATE = "aggregate"`, `DISTIL = "distil"`, `CURATE = "curate"` — named in
 the domain rather than in the workers, so a surface can offer exactly these
 three without importing three application modules. These are the words every
-surface uses: the route enum, the CLI's `<pass>` argument, the synced document's
+surface uses: the route enum, the CLI's `<pass>` argument, the document's
 `upkeep` block and the Settings page's rows.
 
 ### `CurationOwner`
@@ -63,7 +63,7 @@ this machine's point of view, derived from the field and the machine registry
 and never stored (spec [vault-sync](../vault-sync/spec.md) "Report and change
 the rewriter's owner"). `UNKNOWN` — an owner a non-empty registry does not
 hold — is the only fault; an empty registry can never yield it. The CLI prints
-these values as `state` in `coffer engine curate-owner show --json`.
+these values as `state` in `coffer config get engine.curate_owner --json`.
 
 ## Ports (`backend/coffer/application/engine_ports.py`)
 
@@ -74,7 +74,7 @@ satisfies both.
 | Port | Method | Answer |
 |---|---|---|
 | `ModelSelectorPort` | `get_default()` | the engine's `ResolvedConnection`, or `None` |
-| `LlmCompletionPort` | `complete(system, user, model, credential_resolver)` | one shot of a model, for the small jobs that are not an agentic loop |
+| `LlmCompletionPort` | `complete(system, user, model, secret_resolver)` | one shot of a model, for the small jobs that are not an agentic loop |
 
 `ResolvedConnection` is spec provider-switching's value object — a
 `ProviderConfig` paired with the `model` to run on it. The ports name it in
@@ -86,12 +86,12 @@ annotations only, so no consumer executes the provider kind's code to use them.
 
 | Method | Purpose |
 |---|---|
-| `get()` | The row, or an unset default (`model=None`, ship-on switches, `model_timeout_s=None`, `transcribe_model=None`). |
-| `update(model, curate_owner_machine_id, upkeep, actor)` | Normalise, persist, audit the model, the owner and every pass's switch and interval together. Sync's import and delete write through it for those fields, and through `set_model_timeout` and `set_transcribe_model` for the other two, so every converged change goes through the service and is audited exactly like a local one (see "Audit every write to the engine settings" and "Reset to the defaults when the document is deleted"). An owner of `None` leaves it alone and `""` clears it. |
+| `get()` | The settings, or an unset default (`model=None`, ship-on switches, `model_timeout_s=None`, `transcribe_model=None`). |
+| `update(model, curate_owner_machine_id, upkeep, actor)` | Normalise, persist, audit the model, the owner and every pass's switch and interval together (see "Audit every write to the engine settings"). An owner of `None` leaves it alone and `""` clears it. |
 | `set_upkeep(pass_name, setting, actor)` | Change ONE pass, leaving the others as they stand (see "Change one unattended pass per write"). |
-| `set_model_timeout(seconds, actor)` | Change the call bound, leaving the rest of the row alone. Outside `MIN_MODEL_TIMEOUT_S … MAX_MODEL_TIMEOUT_S` raises `ConfigValidationError` — this is an operator asking for a number, and a request silently turned into a different number is worse than a rejection they can read (see "Refuse an out-of-range bound at a surface and clamp it in a pass"). `None` returns to the built-in default. |
+| `set_model_timeout(seconds, actor)` | Change the call bound, leaving the rest of the document alone. Outside `MIN_MODEL_TIMEOUT_S … MAX_MODEL_TIMEOUT_S` raises `ConfigValidationError` — this is an operator asking for a number, and a request silently turned into a different number is worse than a rejection they can read (see "Refuse an out-of-range bound at a surface and clamp it in a pass"). `None` returns to the built-in default. |
 | `set_transcribe_model(model, actor)` | Change the speech-to-text model the same way; blank normalises to `None`, which stops transcription rather than failing it (see "Transcribe speech on its own connection and model"). |
-| `set_curation_owner(machine_id, actor)` | Change the curation owner alone, leaving the rest of the row as it stands; `None` or blank clears it. The id is not checked against the machine registry (see "Report and change the curation owner from every surface"). |
+| `set_curation_owner(machine_id, actor)` | Change the curation owner alone, leaving the rest of the document as it stands; `None` or blank clears it. The id is not checked against the machine registry (see "Report and change the curation owner over REST and in the Knowledge popover"). |
 
 ### Resolution and the drop rule
 
@@ -106,12 +106,12 @@ annotations only, so no consumer executes the provider kind's code to use them.
   engine's: when the internal-default connection moves, the engine model is
   cleared unless the newly chosen connection's curated `models` already lists
   that id. Spec provider-switching's internal-default operation triggers it
-  through a port rather than an import — the flag is a column on a provider row,
-  the model is a column on this row, and neither package reaches into the other.
+  through a port rather than an import — the flag is in a provider's resource
+  file, the model is in this document, and neither package reaches into the other.
 - `resolve_transcribe_connection()` is the same question asked of the connection
   flagged `transcribe_default`, through a port of its own
   (`TranscribeConnectionPort`) rather than an argument on the first: the two
-  answers come from two different rows, and a caller that could pass the wrong
+  answers come from two different connections, and a caller that could pass the wrong
   one eventually will. There is no fallback between them (see "Transcribe speech
   on its own connection and model") — a missing half answers `None`, which is
   the state spec chat already handles by handing the agent the audio file.
@@ -128,8 +128,8 @@ existed, so making the number configurable changed no vault's behaviour on its
 own; `MIN_MODEL_TIMEOUT_S` keeps a bound from expiring before a healthy endpoint
 can answer, and `MAX_MODEL_TIMEOUT_S` bounds what a typo can cost. The reader is
 a `TimeoutReader` consulted per call rather than a value captured at wiring
-time, for the same reason the schedule re-reads its interval: the row is a
-singleton the operator may change here or on another machine (see "Run every
+time, for the same reason the schedule re-reads its interval: the document is
+one the operator may change here or on another machine (see "Run every
 internal model call under the bound"). A reader of `None` — a unit test, or a
 pass constructed before the singleton exists — gets the default. Out-of-range
 values are CLAMPED here rather than raised on (see "Refuse an out-of-range bound
@@ -148,7 +148,7 @@ operator has chosen none, and is what `default_interval_s` reports over the wire
 
 | Value | When emitted |
 |---|---|
-| `internal_engine_model_set` | every write to the settings row — the model, a pass's switch, a pass's interval, the call bound, the speech-to-text model, the curation owner, and sync's import or reset |
+| `internal_engine_model_set` | every write to the settings through the service — the model, a pass's switch, a pass's interval, the call bound, the speech-to-text model, the curation owner |
 
 The connection half of each pair is audited by spec provider-switching:
 `provider_internal_default_set` and `provider_transcribe_default_set`.
@@ -161,64 +161,66 @@ switch. That is a known defect, recorded rather than fixed here: correcting it
 needs either a second event type or a rename, and a rename is a migration over
 the audit enum.
 
-## On-disk / sync layout
+## Storage
 
-The settings are not a resource, so they travel as a state area rather than as a
-document under `resources/`:
+The settings are not a resource, so they are a vault **state document** of
+their own rather than a file under `resources/` (spec vault-storage), plus one
+machine-local timestamp:
 
 ```
-~/.coffer/sync/
-  state/
-    settings/
-      internal-engine.yaml    # model + the upkeep block; absent while every
-                              # machine holds the defaults
+~/.coffer/
+  vault/state/settings/internal-engine.json   # the settings; absent while they are the defaults
+  local/engine.json                           # {"updated_at": "<iso>"} — when THIS machine last changed them
 ```
 
-The document carries `model`, `model_timeout_s`, `transcribe_model`,
-`curate_owner_machine_id` and an `upkeep` map of `{enabled, interval_s}` per
-pass. A machine still holding the defaults publishes nothing (see "Publish no
-document while the defaults hold") — and "the defaults" now includes both newer
-fields being unset, so a vault that has only raised its call bound publishes a
-document where it previously published none. A document with no `upkeep` block
-leaves this machine's passes alone, and a document missing either newer key
-leaves that value alone key by key, an explicit `null` being a decision where an
-absent key is an older machine (see "Leave settings alone for keys an incoming
-document omits"). The document's deletion resets this machine to the defaults,
-written through the service and audited with actor `sync` (see "Reset to the
-defaults when the document is deleted").
+```json
+{
+  "format_version": 1,
+  "model": "<model id>",
+  "curate_owner_machine_id": "a3f21c9e4b7d2610",
+  "model_timeout_s": 180,
+  "transcribe_model": "<model id>",
+  "upkeep": {
+    "aggregate": { "enabled": true, "interval_s": null },
+    "distil": { "enabled": true, "interval_s": null },
+    "curate": { "enabled": true, "interval_s": null }
+  }
+}
+```
 
-## SQLite schema
-
-One table, `internal_engine_config`, created by the migration that introduced
-the engine's settings and extended once per pass switch/interval pair added
-since. No other table is this spec's.
-
-| Column | Notes |
+| Key | Notes |
 |---|---|
-| `id` | primary key, `CheckConstraint("id = 1")` |
-| `model` | nullable |
-| `auto_curate_enabled` | not null, default true |
-| `auto_aggregate_enabled` | not null, default true |
-| `auto_distil_enabled` | not null, default true |
-| `aggregate_interval_s` / `distil_interval_s` / `curate_interval_s` | nullable |
-| `curate_owner_machine_id` | nullable — `NULL` means no owner named |
-| `model_timeout_s` | nullable, added by migration `0087` — NULL is the built-in default |
-| `transcribe_model` | nullable, added by migration `0087` — NULL means Coffer transcribes nothing |
-| `updated_at` | not null |
+| `format_version` | the state document's format (1) |
+| `model`, `transcribe_model` | `null` until chosen |
+| `curate_owner_machine_id` | `null` = no owner named |
+| `model_timeout_s` | `null` = the built-in default |
+| `upkeep.<pass>.enabled` | a missing entry reads as on |
+| `upkeep.<pass>.interval_s` | `null` = the pass's own default |
 
-Migration `0087` adds the last two columns, both nullable and both meaning the
-built-in behaviour while unset, so it changes no vault's behaviour on its own.
-There is nothing to migrate INTO `transcribe_model`: the value it replaces was
-the environment variable `COFFER_TRANSCRIBE_MODEL`, which leaves no row, and a
-vault that had exported one gets the same "transcribe nothing" default as any
-other until a model is chosen.
+`VaultInternalEngineConfigRepo` (`infrastructure/persistence/internal_engine_repo.py`)
+reads the document at `HEAD`. A vault that never chose anything has no document
+and reads as the defaults (`get()` answers `None`); a change back to every
+default removes the document, so "the defaults" is always the absence of one
+(see "Publish no document while the defaults hold"). Each setter writes only
+its own fields, read-modify-write against `HEAD` in one commit, so a change
+restating fields the caller never looked at cannot undo an edit another machine
+made meanwhile; keys the document holds that this build does not write are
+kept in place. `updated_at` is not in the document — two machines stamping it
+would conflict on every edit — so it is `local/engine.json`.
+
+A change made on another machine arrives as a `sync` commit of the document and
+takes effect on the next read; the vault's history is its record. Deleting the
+document — here, by hand, or on another machine — resets this machine to the
+defaults (see "Reset to the defaults when the document is deleted"). In the
+one-time upgrade to the vault layout the `internal_engine_config` row became
+this document and revision 0136 dropped the table.
 
 ## Constraints summary
 
-- A second settings row MUST be impossible at the database level, not only in
-  the service.
-- A write MUST be audited, whoever made it — a local operator, a CLI, or a
-  converge round.
+- There MUST be one settings document per vault, at one path.
+- A write through the service MUST be audited, whoever made it — a local
+  operator or a CLI; every change, a sync round's included, is a vault commit
+  naming its writer.
 - A read of the engine's connection MUST NOT touch the network, and MUST answer
   `None` rather than raise when either half is missing. The same holds for the
   speech-to-text connection, and neither read MUST fall back to the other.

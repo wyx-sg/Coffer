@@ -1,7 +1,7 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./types";
 import { getCofferToken, getCofferBaseUrl } from "../auth";
-import { daemonNotReadyResponse } from "./errors";
+import { ApiError, daemonNotReadyResponse, throwApiError } from "./errors";
 
 let _client: ReturnType<typeof createClient<paths>> | null = null;
 
@@ -48,4 +48,52 @@ export function getApiClient(): ReturnType<typeof createClient<paths>> {
 /** Drop the memoised client (e.g. if the base URL changes). */
 export function resetApiClient(): void {
   _client = null;
+}
+
+/** What every openapi-fetch method settles to (success carries `data`, a non-2xx carries `error`). */
+interface Settled<D> {
+  data?: D;
+  error?: unknown;
+  response: Response;
+}
+
+type Envelope = Parameters<typeof throwApiError>[0];
+
+function raise(result: Settled<unknown>): never {
+  return throwApiError(
+    result.error as Envelope,
+    "INTERNAL_ERROR",
+    `request failed: ${result.response?.status}`,
+    result.response,
+  );
+}
+
+/**
+ * Settle a typed-client call to its 2xx body. openapi-fetch returns a non-2xx
+ * as `{ error }` instead of throwing, so every request function goes through
+ * one of the three `unwrap*` helpers: a non-2xx throws an {@link ApiError}
+ * carrying the envelope's `code`, `message` and `details`, and a network
+ * failure rejects as `fetch` does. A route that answers 200 always has a body;
+ * an empty one is a contract break, not a value.
+ */
+export async function unwrap<D>(call: Promise<Settled<D>>): Promise<D> {
+  const result = await call;
+  if (result.error !== undefined) raise(result);
+  if (result.data === undefined) {
+    throw new ApiError("INTERNAL_ERROR", `empty response: ${result.response?.status}`);
+  }
+  return result.data;
+}
+
+/** Settle a call whose route answers with no body (204), or whose body is not read. */
+export async function unwrapVoid(call: Promise<Settled<unknown>>): Promise<void> {
+  const result = await call;
+  if (result.error !== undefined) raise(result);
+}
+
+/** Settle a call whose route answers 200 with a body or 204 with none. */
+export async function unwrapOptional<D>(call: Promise<Settled<D>>): Promise<D | undefined> {
+  const result = await call;
+  if (result.error !== undefined) raise(result);
+  return result.data;
 }

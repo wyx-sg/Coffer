@@ -25,10 +25,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.platform import HostPlatform
+from tests.support.facets import agent_catalog
+from tests.support.vault_stores import make_resource_repo
 
 
 @dataclass
@@ -58,10 +58,12 @@ async def agent_bundle(tmp_path: pathlib.Path):
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     kinds = {"agent": make_agent_kind(on_delete=None)}
-    rs = ResourceService(kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
+    rs = ResourceService(kinds=kinds, repo=make_resource_repo(), audit=audit)
     store = ConfigFileStore()
-    svc = AgentService(resource_service=rs, audit=audit, config_file_store=store)
-    detect = AutoDetectService(agent_service=svc)
+    svc = AgentService(
+        platform=HostPlatform(), resource_service=rs, audit=audit, config_file_store=store
+    )
+    detect = AutoDetectService(agent_service=svc, catalog=agent_catalog())
     config_files = AgentConfigFileService(agent_service=svc, audit=audit, store=store)
     mcp = AgentMcpService(
         agent_service=svc,

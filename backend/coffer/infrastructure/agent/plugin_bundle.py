@@ -24,8 +24,8 @@ import json
 import pathlib
 import re
 
-from coffer.domain.agent.plugin_bundle import PluginContents, PluginDetail
-from coffer.infrastructure.agent.plugin_contents import read_plugin_contents
+from coffer.domain.agent.plugin_bundle import PluginContents, PluginDetail, PluginPart
+from coffer.infrastructure.agent.plugin_contents import find_part, read_plugin_contents
 
 # Manifest locations, in priority order — a plugin carries exactly one.
 _MANIFEST_RELPATHS = (
@@ -78,6 +78,11 @@ class FsPluginDetailReader:
         if root is None:
             return None
         return read_plugin_contents(root)
+
+    def find_part(self, root: str, kind: str, name: str) -> PluginPart | None:
+        """One skill / command / subagent / MCP server of the package at
+        ``root`` (the directory ``read_contents`` reported)."""
+        return find_part(pathlib.Path(root), kind, name)
 
     @classmethod
     def _resolve_root(cls, path: pathlib.Path) -> pathlib.Path | None:

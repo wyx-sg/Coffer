@@ -1,50 +1,31 @@
 // frontend/src/components/knowledge/KnowledgeWelcomePanel.tsx
-// First-run card shown on /knowledge before any scope holds anything. The
-// global and per-project scopes auto-provision, so the panel explains the
-// surface and offers the one deliberate next step: a named collection.
+// First run on /knowledge (board 5.1.09): no collection yet. Nothing
+// auto-provisions one (spec knowledge "Create collections only deliberately"),
+// so the page is the standard empty state — what a collection is, and the one
+// deliberate first step, New collection.
+import { Book, FolderPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 
-export function KnowledgeWelcomePanel({ onAdd }: { onAdd: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <Card className="paper-card border-primary/20 bg-gradient-to-br from-card to-accent/40">
-      <CardContent className="space-y-6 py-10">
-        <div className="space-y-2">
-          <h2 className="text-2xl">{t("knowledge.welcome.title")}</h2>
-          <p className="max-w-prose text-sm leading-relaxed text-foreground/80">
-            {t("knowledge.welcome.body")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={onAdd}>{t("knowledge.add")}</Button>
-        </div>
-        <ul className="grid gap-3 pt-2 text-sm text-foreground/70 sm:grid-cols-3">
-          <WelcomeFeature
-            title={t("knowledge.welcome.featureEntries.title")}
-            body={t("knowledge.welcome.featureEntries.body")}
-          />
-          <WelcomeFeature
-            title={t("knowledge.welcome.featureDocuments.title")}
-            body={t("knowledge.welcome.featureDocuments.body")}
-          />
-          <WelcomeFeature
-            title={t("knowledge.welcome.featureLocal.title")}
-            body={t("knowledge.welcome.featureLocal.body")}
-          />
-        </ul>
-      </CardContent>
-    </Card>
-  );
+interface Props {
+  onCreate: () => void;
 }
 
-function WelcomeFeature({ title, body }: { title: string; body: string }) {
+export function KnowledgeWelcomePanel({ onCreate }: Props) {
+  const { t } = useTranslation();
   return (
-    <li className="rounded-lg border border-border/60 bg-card/70 p-3 leading-relaxed">
-      <div className="mb-1 font-medium text-foreground">{title}</div>
-      <div className="text-xs text-muted-foreground">{body}</div>
-    </li>
+    <EmptyState
+      icon={Book}
+      title={t("knowledge.welcome.title")}
+      description={t("knowledge.welcome.body")}
+      action={
+        <Button onClick={onCreate}>
+          <FolderPlus aria-hidden /> {t("knowledge.create.title")}
+        </Button>
+      }
+      className="min-h-full"
+    />
   );
 }

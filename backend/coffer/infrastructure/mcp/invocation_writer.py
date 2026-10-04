@@ -1,12 +1,8 @@
 """MCP invocation log: model + buffered writer repo.
 
-Extracted from ``persistence.py`` to keep that module under the 400-line
-guideline. ``persistence.py`` re-exports the public names so existing
-imports continue to work.
-
-The original implementation committed once per ``insert`` call.
-On a tool-call-heavy session that hot-path can dominate request latency
-against SQLite (each commit triggers an fsync). The repo here buffers rows
+Extracted from ``persistence.py`` (which re-exports the public names) for the
+400-line guideline. Committing once per ``insert`` let a tool-call-heavy
+session's fsyncs dominate request latency, so the repo here buffers rows
 in an in-memory queue drained by a small writer task that flushes either
 every ``flush_interval_seconds`` or once ``flush_batch_size`` rows
 accumulate — whichever fires first. The writer is owned by the composition
@@ -17,73 +13,27 @@ shutdown to drain the queue cleanly.
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Callable, Sequence
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import TIMESTAMP, Index, Integer, String, Text, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.mcp.capability import MCPInvocation
-from coffer.infrastructure.persistence.base import Base
-from coffer.infrastructure.persistence.models import ResourceModel
+from coffer.infrastructure.mcp.invocation_rows import (
+    MCPInvocationModel,
+    filtered,
+    inv_to_domain,
+    inv_to_model,
+)
+from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
+from coffer.infrastructure.persistence.keyset import newest_first_after
 
-
-class MCPInvocationModel(Base):
-    __tablename__ = "mcp_invocations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    #: WHICH server, by identity (migration 0097). The log is history, so it has
-    #: to survive the rename that a name-keyed column would have split it across.
-    #: Not a foreign key: a deleted server's invocations stay readable, and two
-    #: reserved non-uid values live here — see ``domain.mcp.capability``.
-    resource_uid: Mapped[str] = mapped_column(String, nullable=False)
-    capability_type: Mapped[str] = mapped_column(String, nullable=False)
-    capability_key: Mapped[str] = mapped_column(String, nullable=False)
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (
-        Index("idx_invocations_resource", "resource_uid", "timestamp"),
-        Index("idx_invocations_time", "timestamp"),
-        Index("idx_invocations_session", "session_id", "timestamp"),
-    )
-
-
-def _tz(dt: datetime) -> datetime:
-    """Re-attach UTC if SQLite stripped the tzinfo on read-back."""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-
-
-def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
-    return MCPInvocation(
-        id=row.id,
-        timestamp=_tz(row.timestamp),
-        resource_uid=row.resource_uid,
-        capability_type=row.capability_type,  # type: ignore[arg-type]
-        capability_key=row.capability_key,
-        duration_ms=row.duration_ms,
-        status=row.status,  # type: ignore[arg-type]
-        error_message=row.error_message,
-        session_id=row.session_id,
-    )
-
-
-def _inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
-    return MCPInvocationModel(
-        timestamp=inv.timestamp,
-        resource_uid=inv.resource_uid,
-        capability_type=inv.capability_type,
-        capability_key=inv.capability_key,
-        duration_ms=inv.duration_ms,
-        status=inv.status,
-        error_message=inv.error_message,
-        session_id=inv.session_id,
-    )
+_logger = logging.getLogger(__name__)
 
 
 class MCPInvocationRepo:
@@ -104,8 +54,12 @@ class MCPInvocationRepo:
         queue_max: int = DEFAULT_QUEUE_MAX,
         flush_batch_size: int = DEFAULT_BATCH_SIZE,
         flush_interval_seconds: float = DEFAULT_FLUSH_INTERVAL_S,
+        name_of: Callable[[str], str | None] = lambda _uid: None,
     ) -> None:
         self._sm = sm
+        # uid -> the server's current name (the resource store's), for
+        # ``usage_counts``: resources are files now, so the join is here.
+        self._name_of = name_of
         self._queue_max = queue_max
         self._flush_batch_size = flush_batch_size
         self._flush_interval = flush_interval_seconds
@@ -120,7 +74,7 @@ class MCPInvocationRepo:
             return
         self._queue = asyncio.Queue(maxsize=self._queue_max)
         self._stopping = False
-        self._writer_task = asyncio.create_task(self._run(), name="mcp-invocation-writer")
+        self._writer_task = spawn(self._run(), name="mcp-invocation-writer")
 
     async def stop(self) -> None:
         """Drain remaining rows and stop the writer task."""
@@ -160,21 +114,63 @@ class MCPInvocationRepo:
         self,
         *,
         resource_uid: str | None = None,
-        status: Literal["ok", "error", "timeout", "denied"] | None = None,
+        status: Literal["ok", "error", "timeout", "denied", "failed"] | None = None,
         since: datetime | None = None,
+        agent_uid: str | None = None,
         limit: int = 50,
+        after: tuple[datetime, int] | None = None,
+        trace_id: str | None = None,
+        q: str | None = None,
+        q_resource_uids: Sequence[str] = (),
     ) -> list[MCPInvocation]:
         async with self._sm() as session:
-            stmt = select(MCPInvocationModel).order_by(MCPInvocationModel.timestamp.desc())
-            if resource_uid is not None:
-                stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
-            if status is not None:
-                stmt = stmt.where(MCPInvocationModel.status == status)
-            if since is not None:
-                stmt = stmt.where(MCPInvocationModel.timestamp >= since)
+            # Newest first, the id breaking ties, so ``after`` (the previous
+            # page's last row) names one place in the order.
+            stmt = select(MCPInvocationModel).order_by(
+                MCPInvocationModel.timestamp.desc(), MCPInvocationModel.id.desc()
+            )
+            if after is not None:
+                stmt = stmt.where(
+                    newest_first_after(MCPInvocationModel.timestamp, MCPInvocationModel.id, after)
+                )
+            stmt = filtered(
+                stmt,
+                resource_uid=resource_uid,
+                status=status,
+                since=since,
+                agent_uid=agent_uid,
+                trace_id=trace_id,
+                q=q,
+                q_resource_uids=q_resource_uids,
+            )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
-            return [_inv_to_domain(r) for r in rows]
+            return [inv_to_domain(r) for r in rows]
+
+    async def count(
+        self,
+        *,
+        resource_uid: str | None = None,
+        status: Literal["ok", "error", "timeout", "denied", "failed"] | None = None,
+        since: datetime | None = None,
+        agent_uid: str | None = None,
+        trace_id: str | None = None,
+        q: str | None = None,
+        q_resource_uids: Sequence[str] = (),
+    ) -> int:
+        """How many rows match these filters across every page (no cursor)."""
+        async with self._sm() as session:
+            stmt = filtered(
+                select(func.count()).select_from(MCPInvocationModel),
+                resource_uid=resource_uid,
+                status=status,
+                since=since,
+                agent_uid=agent_uid,
+                trace_id=trace_id,
+                q=q,
+                q_resource_uids=q_resource_uids,
+            )
+            return int((await session.execute(stmt)).scalar_one())
 
     async def usage_counts(
         self,
@@ -192,12 +188,12 @@ class MCPInvocationRepo:
         turns one into the other belongs here rather than in the caller: the
         only consumer is the tiering policy, which ranks the namespaced wire
         names (``<server>__<tool>``) of an aggregated ``tools/list``, and that
-        namespace is the label. Doing it in SQL also means the counts already
+        namespace is the label. Resolving through the uid also means the counts
         answer to the server's CURRENT name — the history a rename used to split
         in two now ranks as one server, which is the behaviour a user would
         expect and never got.
 
-        An inner join, so rows that resolve to no resource simply do not appear:
+        Rows whose uid resolves to no resource simply do not appear:
         Coffer's own built-ins (which never enter tiering — they are listed
         unconditionally and outside the budget) and servers deleted before the
         window closed (whose tools are not in the catalogue being ranked). No
@@ -207,33 +203,86 @@ class MCPInvocationRepo:
         async with self._sm() as session:
             stmt = (
                 select(
-                    ResourceModel.name,
+                    MCPInvocationModel.resource_uid,
                     MCPInvocationModel.capability_key,
                     func.count().label("n"),
                 )
-                .join(ResourceModel, ResourceModel.uid == MCPInvocationModel.resource_uid)
                 .where(MCPInvocationModel.capability_type == "tool")
                 .where(MCPInvocationModel.timestamp >= since)
-                .group_by(
-                    ResourceModel.name,
-                    MCPInvocationModel.capability_key,
-                )
+                .group_by(MCPInvocationModel.resource_uid, MCPInvocationModel.capability_key)
             )
             rows = (await session.execute(stmt)).all()
-        return {(r.name, r.capability_key): int(r.n) for r in rows}
+        out: dict[tuple[str, str], int] = {}
+        for r in rows:
+            name = self._name_of(r.resource_uid)
+            if name is not None:
+                key = (name, r.capability_key)
+                out[key] = out.get(key, 0) + int(r.n)
+        return out
+
+    async def summary(self, *, resource_uid: str, since: datetime) -> InvocationSummary:
+        """One server's call counts since ``since`` (``invocation_summary``)."""
+        return await summarize(self._sm, MCPInvocationModel, resource_uid=resource_uid, since=since)
 
     # --- internals ------------------------------------------------------- #
 
+    async def tool_outcomes(
+        self, *, resource_uids: list[str], since: datetime
+    ) -> dict[str, dict[str, tuple[int, int]]]:
+        """``{server uid: {tool: (calls, failures)}}`` at or after ``since``.
+
+        The custom tools page's 24-hour summary (spec mcp-gateway "Manage custom tools
+        through REST and the Custom tools page"). A failure is an ``error``
+        or a ``timeout``; a ``denied`` call is counted as a call only.
+        """
+        if not resource_uids:
+            return {}
+        failed = case((MCPInvocationModel.status.in_(("error", "timeout")), 1), else_=0)
+        async with self._sm() as session:
+            stmt = (
+                select(
+                    MCPInvocationModel.resource_uid,
+                    MCPInvocationModel.capability_key,
+                    func.count().label("n"),
+                    func.sum(failed).label("f"),
+                )
+                .where(MCPInvocationModel.capability_type == "tool")
+                .where(MCPInvocationModel.resource_uid.in_(resource_uids))
+                .where(MCPInvocationModel.timestamp >= since)
+                .group_by(MCPInvocationModel.resource_uid, MCPInvocationModel.capability_key)
+            )
+            rows = (await session.execute(stmt)).all()
+        out: dict[str, dict[str, tuple[int, int]]] = {}
+        for r in rows:
+            out.setdefault(r.resource_uid, {})[r.capability_key] = (int(r.n), int(r.f or 0))
+        return out
+
+    async def last_tool_call(self, resource_uid: str, *, since: datetime) -> MCPInvocation | None:
+        """The newest tool call on one server at or after ``since`` that
+        reached it (a ``denied`` call never did)."""
+        async with self._sm() as session:
+            stmt = (
+                select(MCPInvocationModel)
+                .where(MCPInvocationModel.resource_uid == resource_uid)
+                .where(MCPInvocationModel.capability_type == "tool")
+                .where(MCPInvocationModel.status != "denied")
+                .where(MCPInvocationModel.timestamp >= since)
+                .order_by(MCPInvocationModel.timestamp.desc(), MCPInvocationModel.id.desc())
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+        return inv_to_domain(row) if row is not None else None
+
     async def _commit_one(self, inv: MCPInvocation) -> None:
         async with self._sm() as session:
-            session.add(_inv_to_model(inv))
+            session.add(inv_to_model(inv))
             await session.commit()
 
     async def _commit_batch(self, batch: list[MCPInvocation]) -> None:
         if not batch:
             return
         async with self._sm() as session:
-            session.add_all([_inv_to_model(inv) for inv in batch])
+            session.add_all([inv_to_model(inv) for inv in batch])
             await session.commit()
 
     async def _run(self) -> None:
@@ -264,11 +313,8 @@ class MCPInvocationRepo:
                 # Persistent DB failure shouldn't crash the writer; log and
                 # carry on. We do NOT requeue: better to drop one batch than
                 # to pin memory growing forever.
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "mcp.invocation_writer.commit_failed",
-                    extra={"batch_size": len(batch)},
+                _logger.exception(
+                    "mcp.invocation_writer.commit_failed", extra={"batch_size": len(batch)}
                 )
             if self._stopping and queue.empty():
                 return

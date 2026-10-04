@@ -46,39 +46,41 @@ class SeaTalkWebSocketController:
         self._factory = connector_factory or SeaTalkWebSocketConnector
         self._entries: dict[str, _Entry] = {}
 
-    def running(self, name: str) -> bool:
-        entry = self._entries.get(name)
+    def running(self, channel_uid: str) -> bool:
+        entry = self._entries.get(channel_uid)
         return entry is not None and entry.connector.supervising
 
     def active(self) -> set[str]:
         return set(self._entries)
 
-    def state(self, name: str) -> tuple[str, str | None] | None:
-        entry = self._entries.get(name)
+    def state(self, channel_uid: str) -> tuple[str, str | None] | None:
+        entry = self._entries.get(channel_uid)
         return entry.connector.state() if entry is not None else None
 
-    async def ensure_running(self, name: str, app_id: str, app_secret: str) -> None:
-        existing = self._entries.get(name)
+    async def ensure_running(self, channel_uid: str, app_id: str, app_secret: str) -> None:
+        existing = self._entries.get(channel_uid)
         if (
             existing is not None
             and existing.connector.supervising
             and (existing.app_id, existing.app_secret) == (app_id, app_secret)
         ):
             return
-        await self.ensure_stopped(name)
-        connector = self._factory(name, app_id, app_secret, ingest=self._ingest)
+        await self.ensure_stopped(channel_uid)
+        connector = self._factory(channel_uid, app_id, app_secret, ingest=self._ingest)
         await connector.start()
-        self._entries[name] = _Entry(connector=connector, app_id=app_id, app_secret=app_secret)
-        _logger.info("channel.websocket.started", extra={"channel": name})
+        self._entries[channel_uid] = _Entry(
+            connector=connector, app_id=app_id, app_secret=app_secret
+        )
+        _logger.info("channel.websocket.started", extra={"channel": channel_uid})
 
-    async def ensure_stopped(self, name: str) -> None:
-        entry = self._entries.pop(name, None)
+    async def ensure_stopped(self, channel_uid: str) -> None:
+        entry = self._entries.pop(channel_uid, None)
         if entry is None:
             return
         with contextlib.suppress(Exception):
             await entry.connector.stop()
-        _logger.info("channel.websocket.stopped", extra={"channel": name})
+        _logger.info("channel.websocket.stopped", extra={"channel": channel_uid})
 
     async def dispose(self) -> None:
-        for name in list(self._entries):
-            await self.ensure_stopped(name)
+        for channel_uid in list(self._entries):
+            await self.ensure_stopped(channel_uid)

@@ -1,43 +1,32 @@
-// frontend/src/components/agents/AgentAdoptMcpDialog.test.tsx
+// src/components/agents/AgentAdoptMcpDialog.test.tsx — adopting one direct MCP entry into Coffer (boards 2.1.27, 2.1.28).
 //
-// The adopt dialog turns a direct MCP entry into a Coffer-managed resource:
-//   - one keychain-reference input per detected secret key, prefilled
-//     mcp/{agent}/{entry}/{KEY}; the submit body carries the mapping
-//   - a rename field that stays hidden until the daemon answers 409 with a
-//     `suggested_name`; the resubmit then carries `new_name`
-//   - 422 ADOPT_SECRET_UNRESOLVED (no suggested_name) shows the message
-//
-// The dialog is given both halves of the agent's identity and uses each for a
-// different thing, which is what the fixtures below pin down: the request is
-// addressed to the UID (`u-cc`), while the keychain references it mints spell
-// the NAME (`cc`), because a ref is an address a person reads in the vault and
-// nothing ever looks one up again.
+// Covered: what the dialog says will happen (file, agent), the name field
+// prefilled with the entry's name, every env key with how it is stored, the
+// secret reference of a secret key (prefilled from the agent's NAME,
+// while the request is addressed by its UID), the pending label, a name
+// conflict said under the name field and retried with `new_name`, and any
+// other failure shown inline.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AgentAdoptMcpDialog } from "./AgentAdoptMcpDialog";
-import type { McpEntryOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import { ApiError } from "@/lib/api/errors";
 
-vi.mock("@/lib/api/agents", () => ({
-  agentsApi: {
-    adoptMcpEntry: vi.fn(),
-  },
-}));
-
+vi.mock("@/lib/api/agents", () => ({ agentsApi: { adoptMcpEntry: vi.fn() } }));
 const { agentsApi } = await import("@/lib/api/agents");
 const adoptMock = vi.mocked(agentsApi.adoptMcpEntry);
 
 const ENTRY: McpEntryOut = {
-  name: "github",
+  name: "postgres-local",
   source: "global",
   transport: "stdio",
-  command: "npx",
-  args: ["-y", "gh-mcp"],
-  env_keys: ["GITHUB_TOKEN"],
-  secret_keys: ["GITHUB_TOKEN"],
+  command: "uvx",
+  args: ["mcp-server-postgres"],
+  env_keys: ["DATABASE_URL", "PGSSLMODE"],
+  secret_keys: ["DATABASE_URL"],
   url: null,
   header_keys: [],
   enabled: null,
@@ -45,7 +34,7 @@ const ENTRY: McpEntryOut = {
   matches_resource: null,
 };
 
-function renderDialog(entry: McpEntryOut = ENTRY) {
+function renderDialog(entry: McpEntryOut = ENTRY, onAdopted = vi.fn()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
@@ -54,91 +43,112 @@ function renderDialog(entry: McpEntryOut = ENTRY) {
     <AgentAdoptMcpDialog
       agentUid="u-cc"
       agentName="cc"
+      agentLabel="Claude Code"
+      fileLabel="~/.claude.json"
       entry={entry}
       open
       onOpenChange={() => {}}
+      onAdopted={onAdopted}
     />,
     { wrapper: Wrapper },
   );
 }
 
+const adoptButton = () => screen.getByRole("button", { name: "Adopt" });
+
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentAdoptMcpDialog", () => {
-  test("renders a prefilled keychain-reference input per secret key and submits the mapping", async () => {
-    adoptMock.mockResolvedValue({ uid: "u-github", kind: "mcp_server", name: "github" });
+  test("says what adopting does and how each env key is stored", () => {
     renderDialog();
+    expect(screen.getByText("Adopt postgres-local")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Coffer serves it through its gateway and takes the entry out of ~/.claude.json, so Claude Code never gets it twice. A .bak is kept.",
+    );
+    expect(screen.getByRole("dialog").className).toContain("max-w-[640px]");
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Name in Coffer/)).toHaveValue("postgres-local");
+    expect(screen.getByText("uvx mcp-server-postgres")).toBeInTheDocument();
+    expect(screen.getByText("Secret")).toBeInTheDocument();
+    expect(screen.getByText("Plain value")).toBeInTheDocument();
+    expect(screen.getByText(/DATABASE_URL looks like a secret/)).toBeInTheDocument();
+  });
 
-    const input = screen.getByLabelText("GITHUB_TOKEN");
-    // The prefilled ref spells the agent's NAME, not its uid.
-    expect(input).toHaveValue("mcp/cc/github/GITHUB_TOKEN");
-    expect(screen.getByText(/likely secrets detected/i)).toBeInTheDocument();
+  test("submits the secret's secret reference, spelled with the agent's name", async () => {
+    const onAdopted = vi.fn();
+    adoptMock.mockResolvedValue({ uid: "r-pg", kind: "mcp_server", name: "postgres-local" });
+    renderDialog(ENTRY, onAdopted);
 
-    fireEvent.change(input, { target: { value: "mcp/custom/ref" } });
-    fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
+    const ref = screen.getByLabelText("Value in Coffer: DATABASE_URL");
+    expect(ref).toHaveValue("mcp/cc/postgres-local/DATABASE_URL");
+    fireEvent.change(ref, { target: { value: "cred/pg/url" } });
+    fireEvent.click(adoptButton());
 
     await waitFor(() =>
-      expect(adoptMock).toHaveBeenCalledWith("u-cc", "github", {
+      expect(adoptMock).toHaveBeenCalledWith("u-cc", "postgres-local", {
         source: "global",
-        secrets: { GITHUB_TOKEN: "mcp/custom/ref" },
+        secrets: { DATABASE_URL: "cred/pg/url" },
       }),
+    );
+    await waitFor(() =>
+      expect(onAdopted).toHaveBeenCalledWith(expect.objectContaining({ name: "postgres-local" })),
     );
   });
 
-  test("no secret keys → no secret inputs and no secrets in the body", async () => {
-    adoptMock.mockResolvedValue({ uid: "u-plain", kind: "mcp_server", name: "plain" });
+  test("an entry with no secrets sends none", async () => {
+    adoptMock.mockResolvedValue({ uid: "r-plain", kind: "mcp_server", name: "plain" });
     renderDialog({ ...ENTRY, name: "plain", env_keys: [], secret_keys: [] });
-
-    expect(screen.queryByText(/likely secrets detected/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
+    expect(screen.queryByText(/looks like a secret/)).not.toBeInTheDocument();
+    fireEvent.click(adoptButton());
     await waitFor(() =>
       expect(adoptMock).toHaveBeenCalledWith("u-cc", "plain", { source: "global" }),
     );
   });
 
-  test("409 with suggested_name reveals the prefilled rename field; resubmit sends new_name", async () => {
+  test("reads Adopting… while the request runs", async () => {
+    adoptMock.mockReturnValue(new Promise(() => {}));
+    renderDialog();
+    fireEvent.click(adoptButton());
+    expect(await screen.findByRole("button", { name: "Adopting…" })).toBeDisabled();
+  });
+
+  test("a name conflict is said under the name; the retry sends the new name", async () => {
     adoptMock
       .mockRejectedValueOnce(
         new ApiError("ALREADY_EXISTS", "resource already exists", {
-          suggested_name: "github-claude_code",
+          suggested_name: "postgres-local-2",
         }),
       )
-      .mockResolvedValueOnce({
-        uid: "u-github-claude_code",
-        kind: "mcp_server",
-        name: "github-claude_code",
-      });
+      .mockResolvedValueOnce({ uid: "r-pg2", kind: "mcp_server", name: "pg-dev" });
     renderDialog();
 
-    // Rename field hidden until the daemon reports the conflict.
-    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    fireEvent.click(adoptButton());
+    expect(
+      await screen.findByText(
+        "A server named postgres-local is already in Coffer. Choose another name.",
+      ),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
-    const rename = await screen.findByLabelText("Name");
-    expect(rename).toHaveValue("github-claude_code");
-    expect(screen.getByText(/name conflict — rename and retry/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
+    fireEvent.change(screen.getByLabelText(/Name in Coffer/), { target: { value: "pg-dev" } });
+    fireEvent.click(adoptButton());
     await waitFor(() =>
-      expect(adoptMock).toHaveBeenLastCalledWith("u-cc", "github", {
+      expect(adoptMock).toHaveBeenLastCalledWith("u-cc", "postgres-local", {
         source: "global",
-        secrets: { GITHUB_TOKEN: "mcp/cc/github/GITHUB_TOKEN" },
-        new_name: "github-claude_code",
+        secrets: { DATABASE_URL: "mcp/cc/postgres-local/DATABASE_URL" },
+        new_name: "pg-dev",
       }),
     );
   });
 
-  test("422 ADOPT_SECRET_UNRESOLVED shows the daemon's message", async () => {
+  test("any other failure is shown inline", async () => {
     adoptMock.mockRejectedValue(
-      new ApiError("ADOPT_SECRET_UNRESOLVED", "secret GITHUB_TOKEN is not in the keychain"),
+      new ApiError("ADOPT_SECRET_UNRESOLVED", "secret DATABASE_URL is not in the keychain"),
     );
     renderDialog();
-
-    fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
+    fireEvent.click(adoptButton());
     expect(
-      await screen.findByText(/secret GITHUB_TOKEN is not in the keychain/),
+      await screen.findByText(/secret DATABASE_URL is not in the keychain/),
     ).toBeInTheDocument();
-    // No rename field for a non-conflict error.
-    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(screen.queryByText(/already in Coffer/)).not.toBeInTheDocument();
   });
 });

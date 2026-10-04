@@ -25,7 +25,6 @@ That matters to the user — a machine on the fallback does not survive deleting
 
 from __future__ import annotations
 
-import os
 import pathlib
 
 from coffer.domain.sync.machine import derive_machine_id
@@ -35,12 +34,7 @@ from coffer.infrastructure.daemon.config import (
     write_cached_machine_id,
 )
 from coffer.infrastructure.sync.machine_id import MachineIdentity, resolve
-
-_FALLBACK_FILE = "machine-id"
-
-
-def coffer_dir() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
+from coffer.infrastructure.vault.home import MACHINE_ID_FILENAME, coffer_home
 
 
 def resolve_identity(root: pathlib.Path | None = None) -> MachineIdentity:
@@ -50,7 +44,7 @@ def resolve_identity(root: pathlib.Path | None = None) -> MachineIdentity:
     with a value the host produced, and deleting it costs one ``ioreg`` call
     rather than this machine's identity.
     """
-    directory = root if root is not None else coffer_dir()
+    directory = root if root is not None else coffer_home()
     cached = read_cached_machine_id()
     if cached:
         return MachineIdentity(cached, derived=not _is_fallback(directory, cached))
@@ -67,7 +61,7 @@ def machine_name() -> str:
 def _is_fallback(directory: pathlib.Path, machine_id: str) -> bool:
     """Whether ``machine_id`` came from the locally-stored fallback identifier."""
     try:
-        raw = (directory / _FALLBACK_FILE).read_text(encoding="utf-8").strip()
+        raw = (directory / MACHINE_ID_FILENAME).read_text(encoding="utf-8").strip()
     except OSError:
         return False
     if not raw:

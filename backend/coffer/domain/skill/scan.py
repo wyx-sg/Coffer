@@ -1,7 +1,7 @@
 """Classify unmanaged skills found in an agent's skill location(s).
 
 A skill directory entry is *Coffer-managed* when it is a symlink whose
-resolved target lives inside the master store root (``~/.coffer/skills/``).
+resolved target lives inside the master store root (``~/.coffer/vault/skills/``).
 Everything else is *unmanaged*:
 
 - **Dot-entries** (``name.startswith(".")``) — internal entries such as
@@ -53,13 +53,20 @@ class UnmanagedSkill:
     foreign_link: bool  # symlink pointing outside the master store — listed, never adoptable
 
 
-def classify(entries: list[ScanEntry], *, master_root: pathlib.Path) -> list[UnmanagedSkill]:
+def classify(
+    entries: list[ScanEntry],
+    *,
+    master_root: pathlib.Path,
+    also_managed: tuple[pathlib.Path, ...] = (),
+) -> list[UnmanagedSkill]:
     """Filter *entries* down to unmanaged, skill-shaped items.
 
     Rules (applied in order):
     1. Dot-entries are excluded (internal / hidden).
-    2. Entries whose ``link_target`` is inside ``master_root`` (including any
-       subpath thereof) are Coffer-managed — excluded.
+    2. Entries whose ``link_target`` is inside ``master_root`` or one of
+       ``also_managed`` (including any subpath thereof) are Coffer-managed —
+       excluded. ``also_managed`` names the store's other roots: Coffer's own
+       builtin skill is derived output and lives outside the master store.
     3. Plain files (``is_dir=False``, no ``link_target``) are not
        skill-shaped — excluded.
     4. Everything else is unmanaged: links pointing outside the master store
@@ -70,15 +77,17 @@ def classify(entries: list[ScanEntry], *, master_root: pathlib.Path) -> list[Unm
     ``link_target`` must be absolute (resolved) paths — relative paths would
     make rule 2 silently never match.
     """
-    if not master_root.is_absolute():
-        raise ValueError(f"master_root must be absolute, got {master_root}")
+    roots = (master_root, *also_managed)
+    for root in roots:
+        if not root.is_absolute():
+            raise ValueError(f"master_root must be absolute, got {root}")
     out: list[UnmanagedSkill] = []
     for e in entries:
         if e.link_target is not None and not e.link_target.is_absolute():
             raise ValueError(f"link_target must be resolved/absolute, got {e.link_target}")
         if e.name.startswith("."):
             continue  # .system & hidden entries
-        if e.link_target is not None and e.link_target.is_relative_to(master_root):
+        if e.link_target is not None and any(e.link_target.is_relative_to(r) for r in roots):
             continue  # Coffer-managed delivery link
         if e.link_target is None and not e.is_dir:
             continue  # plain file — not skill-shaped

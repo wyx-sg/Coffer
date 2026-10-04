@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
@@ -53,31 +52,24 @@ def test_merge_keeps_one_origin_every_body_and_every_attachment() -> None:
     assert merged.title_hint == "look into this"
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="a forwarded record and its follow-up become one turn"
-)
 async def test_a_message_inside_the_window_joins_the_burst() -> None:
     released, on_flush = _collector()
     burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("record", msg_id="m1", window=0.08))
-    await asyncio.sleep(0.04)  # inside the long window
-    assert released == []
+    assert released == []  # still held: the long window has not run out
     burst.add(KEY, None, _part("look into this", msg_id="m2"))
-    await asyncio.sleep(0.06)
+    await burst.settled()
     assert len(released) == 1
     assert released[0].text.endswith("record\n\nlook into this")
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="messages further apart than the window are separate turns"
-)
 async def test_messages_further_apart_than_the_window_are_separate() -> None:
     released, on_flush = _collector()
     burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("one", msg_id="m1"))
-    await asyncio.sleep(0.05)
+    await burst.settled()  # the window ran out before the next message
     burst.add(KEY, None, _part("two", msg_id="m2"))
-    await asyncio.sleep(0.05)
+    await burst.settled()
     assert [r.text for r in released] == ["[origin m1]\n\none", "[origin m2]\n\ntwo"]
 
 
@@ -86,7 +78,7 @@ async def test_other_keys_do_not_merge() -> None:
     burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("dm"))
     burst.add(("chan", "chat", "t1"), None, _part("thread"))
-    await asyncio.sleep(0.05)
+    await burst.settled()
     assert sorted(r.text.split("\n\n")[1] for r in released) == ["dm", "thread"]
 
 
@@ -99,11 +91,11 @@ async def test_flush_releases_now_and_awaits_the_submission() -> None:
     assert not burst.holding(KEY)
 
 
-@pytest.mark.acceptance(spec="channels", scenario="/stop drops messages still being held")
 async def test_drop_discards_the_burst() -> None:
     released, on_flush = _collector()
     burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("never"))
     await burst.drop(KEY)
-    await asyncio.sleep(0.05)
+    await burst.settled()
     assert released == []
+    assert not burst.holding(KEY)

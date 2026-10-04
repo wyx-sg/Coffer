@@ -143,8 +143,6 @@ class ChannelAdapter(Protocol):
         streaming) is the adapter's business."""
         ...
 
-    async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
-
     async def update_card(
         self,
         chat_id: str,
@@ -166,6 +164,17 @@ class ChannelAdapter(Protocol):
 
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        """Take one of the bot's own messages back (spec channels "Withdraw a bot
+        reply on the owner's command"): Telegram deletes it, SeaTalk — which has no
+        delete — rewrites the card into a neutral "Withdrawn" card without buttons.
+        Only called inside ``capabilities.withdraw_window_hours``; a transport with
+        a window of 0 raises. Raises when the platform refuses, so the caller can
+        tell the owner."""
+        ...
+
     async def send_typing(
         self,
         chat_id: str,
@@ -180,7 +189,7 @@ class ChannelAdapter(Protocol):
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         """Set an emoji reaction on ``message_id`` ("Acknowledge receipt and completion
-        by capability": 👀 on receipt, ✅ on completion). Only called when the transport
+        by capability": one of ``capabilities.reactions``). Only called when the transport
         declares ``capabilities.supports_reactions`` — others may raise; the core never
         reaches them (SeaTalk uses its typing signal for the same receipt cue).
         Best-effort at the call site: a failed reaction never breaks the turn."""
@@ -238,6 +247,13 @@ class ChannelBinding:
     # Quiet windows of "Take a burst of messages as one turn", from the channel config.
     wait_after_text_seconds: float = 1.5
     wait_after_forward_seconds: float = 5.0
+    # "Show a turn's working state as one status line": list the step lines.
+    show_steps: bool = True
+    # "Ping the asker when a long turn ends": the threshold in seconds, 0 = off.
+    notify_after_seconds: float = 90.0
+    # "Open a new conversation after an idle period": a chat idle longer than this
+    # many hours opens a new conversation on its next message; 0 never does.
+    new_conversation_after_idle_hours: float = 24.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here
@@ -246,6 +262,9 @@ class ChannelBinding:
     # channel whose scope is empty is never bound at all: the runtime treats it
     # as dormant. So a binding that exists has already passed that gate.
     agent_scope: Scope | None = None
+    # The directories `/dir` may switch into (spec channels "Choose the working
+    # directory from chat"), from the channel config; empty admits none.
+    directories: tuple[str, ...] = ()
 
 
 class AgentCatalogPort(Protocol):
@@ -260,14 +279,14 @@ class AgentCatalogPort(Protocol):
 
 
 class ModelSuggestionPort(Protocol):
-    """Best-effort quick-picks for a managed agent's ``/model`` and ``/effort``
+    """Best-effort quick-picks for a managed agent's ``/model`` (model and effort steps)
     selection cards, mirroring the web pickers the two sit beside.
 
     Two questions, because the choice has two halves and only the first is
     always asked: WHICH model the agent runs, and — for an agent whose models
     take one — how hard that model thinks. Empty answers are ordinary: no
     catalogue to offer means the card falls back to the free-text path, and no
-    levels means the agent has no such setting and `/effort` says so rather than
+    levels means the agent has no such setting and `/model` says so rather than
     rendering an empty card."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...

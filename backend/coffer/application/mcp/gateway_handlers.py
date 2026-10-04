@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING, Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
+from coffer.application.mcp.gateway_coerce import (
+    coerce_call_result,
+    coerce_prompt_result,
+    coerce_read_result,
+)
+from coffer.application.mcp.gateway_tool_gate import custom_tool_denial
 from coffer.application.mcp.invocation_outcome import (
     INBAND_TOOL_ERROR,
     answered_rpc_error,
@@ -25,12 +32,14 @@ from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
+from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
+from coffer.application.runtime import correlation
 from coffer.domain.errors import (
     CofferError,
     InvalidPrefix,
     ToolDisabled,
+    UpstreamAuthRejected,
     UpstreamTimeout,
-    UpstreamUnavailable,
 )
 from coffer.domain.mcp.capability import CapabilityType, MCPInvocation
 from coffer.domain.mcp.namespace import (
@@ -57,7 +66,7 @@ def _safe_error_summary(e: BaseException) -> str:
     inside their error messages (e.g., an auth failure that echoes the API
     key back). Persisting ``str(e)`` for arbitrary exceptions would leak
     those into the invocation log, defeating the rule that no secret value
-    appears in any invocation record (spec credentials "Hold plaintext only in
+    appears in any invocation record (spec secret "Hold plaintext only in
     memory at the moment of use").
 
     Rule: for Coffer-internal exceptions (CofferError subclasses) the message
@@ -91,12 +100,12 @@ def _is_transport_failure(e: BaseException) -> bool:
 
 async def check_capability_enabled(
     prefs: MCPCapabilityPreferenceRepoPort,
-    resource_id: int,
+    resource_uid: str,
     capability_type: CapabilityType,
     capability_key: str,
 ) -> None:
-    """Raise ToolDisabled if the preference row exists and is disabled."""
-    pref = await prefs.find(resource_id, capability_type, capability_key)
+    """Raise ToolDisabled if the capability is switched off."""
+    pref = await prefs.find(resource_uid, capability_type, capability_key)
     # Missing row → default to enabled (matches CapabilityDiscovery's behaviour).
     if pref is not None and not pref.enabled:
         raise ToolDisabled(f"{capability_type}:{capability_key!r} is disabled on this server")
@@ -107,6 +116,7 @@ async def record_invocation(
     *,
     session_id: str,
     clock: Callable[[], datetime],
+    agent_uid: str | None = None,
     resource_uid: str,
     capability_type: CapabilityType,
     capability_key: str,
@@ -125,6 +135,8 @@ async def record_invocation(
             status=status,
             error_message=error_message,
             session_id=session_id,
+            agent_uid=agent_uid,
+            trace_id=correlation.current().trace_id,
         )
     )
 
@@ -170,6 +182,8 @@ async def _invoke(
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
     session_agent_uid: str | None = None,
+    tool_reach: ToolReachRepoPort | None = None,
+    auth_monitor: UpstreamAuthMonitor | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
@@ -182,8 +196,8 @@ async def _invoke(
     # from the server's name (``<server>__<tool>``), which is the one vocabulary
     # that side of the wire has. From the resolved row onward everything
     # PERSISTED or COMPARED uses the identity — ``resource.uid`` for the
-    # invocation log, ``resource.scope`` for the reach gate, ``resource.id`` for
-    # the preference rows. The name survives only as the key of this session's
+    # invocation log and the capability switches, ``resource.scope`` for the
+    # reach gate. The name survives only as the key of this session's
     # live connection (``supervisor``/``ensure_subscribed``), which is
     # in-process, rebuilt per session, and deliberately the same key the client
     # addressed.
@@ -198,6 +212,7 @@ async def _invoke(
             invocations,
             session_id=session_id,
             clock=clock,
+            agent_uid=session_agent_uid,
             resource_uid=resource.uid,
             capability_type=spec.capability_type,
             capability_key=original,
@@ -237,10 +252,18 @@ async def _invoke(
         raise ToolDisabled(f"{server_name!r} is not in scope here")
 
     try:
-        await check_capability_enabled(prefs, resource.id, spec.capability_type, original)
+        await check_capability_enabled(prefs, resource.uid, spec.capability_type, original)
     except ToolDisabled:
         await _record("denied")
         raise
+
+    # A custom tool switched off, or outside its reach override, is refused like
+    # a disabled capability (spec mcp-gateway "Switch off or narrow one custom tool").
+    if spec.capability_type == "tool":
+        denial = await custom_tool_denial(resource, original, session_agent_uid, tool_reach)
+        if denial is not None:
+            await _record("denied")
+            raise ToolDisabled(denial)
 
     # The clock starts BEFORE the upstream is obtained, and obtaining it sits
     # inside the recorded block: a call that fails because the upstream would
@@ -258,6 +281,11 @@ async def _invoke(
         requested = True
         result = await conn.request(spec.method, spec.build_request(original, params))
         coerced = spec.coerce(result)
+        # The upstream answered, so whatever key rejection was recorded is over
+        # (an ``isError`` result below is still an answer).
+        if auth_monitor is not None:
+            with contextlib.suppress(Exception):
+                await auth_monitor.answered(resource.uid)
         # An in-band tool error (CallToolResult.isError) does not raise — the
         # connection is healthy, but the tool failed. Record an honest `error`
         # status so the invocation log distinguishes success from failure. The
@@ -276,6 +304,11 @@ async def _invoke(
         raise
     except Exception as e:
         status = "error"
+        if auth_monitor is not None and isinstance(e, UpstreamAuthRejected):
+            # A 401/403 from the upstream endpoint, not a tool-level error:
+            # the key is refused, which the Overview offers to replace.
+            with contextlib.suppress(Exception):
+                await auth_monitor.rejected(resource.uid)
         # Only self-heal on a transport/process failure. A well-formed MCPError
         # means the tool ran and returned an error result over a healthy
         # connection — evicting it would needlessly kill+respawn a good server.
@@ -309,44 +342,6 @@ async def handle_resources_read(params: dict[str, Any], **kw: Any) -> Any:
 
 async def handle_prompts_get(params: dict[str, Any], **kw: Any) -> Any:
     return await _invoke(params, _PROMPT_SPEC, **kw)
-
-
-# --------------------------------------------------------------------------- #
-# SDK result coercion                                                           #
-# --------------------------------------------------------------------------- #
-
-
-def _coerce_result(sdk_result: Any, method: str) -> dict[str, Any]:
-    """Convert an mcp SDK result object to a JSON-friendly dict.
-
-    Raises UpstreamUnavailable when the result is neither a Pydantic model
-    nor a dict — previously the tools/call path returned ``{"content": []}``
-    which silently masked SDK contract drift. ``method`` only
-    flavours the error message.
-
-    A single implementation behind the three thin wrappers below,
-    which used to be byte-identical except for that message.
-    """
-    if hasattr(sdk_result, "model_dump"):
-        dumped: dict[str, Any] = sdk_result.model_dump(
-            exclude_none=True, mode="json", by_alias=True
-        )
-        return dumped
-    if isinstance(sdk_result, dict):
-        return sdk_result
-    raise UpstreamUnavailable(f"upstream returned unparseable {method} result")
-
-
-def coerce_call_result(sdk_result: Any) -> dict[str, Any]:
-    return _coerce_result(sdk_result, "tools/call")
-
-
-def coerce_read_result(sdk_result: Any) -> dict[str, Any]:
-    return _coerce_result(sdk_result, "resources/read")
-
-
-def coerce_prompt_result(sdk_result: Any) -> dict[str, Any]:
-    return _coerce_result(sdk_result, "prompts/get")
 
 
 # --------------------------------------------------------------------------- #

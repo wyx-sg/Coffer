@@ -45,7 +45,7 @@ once loaded: its description named the layer, not the subjects.
 
 The manual and the knowledge catalogue are one `SKILL.md`, regenerated from the
 running build at every daemon boot and whenever the catalogue changes, written
-into one master folder under `~/.coffer/skills/coffer-guide/` and registered as
+into one master folder under `~/.coffer/derived/skills/coffer-guide/` and registered as
 a `skill` Resource whose source is `builtin`. It is delivered by the same
 predicate and links as every imported skill.
 
@@ -131,13 +131,10 @@ and the knowledge catalogue is one section of it.**
   — the tools and when to reach for each, the tiering contract, that knowledge
   is files read with the agent's own tools, that Coffer never writes an agent's
   memory, that nothing waits on an approval — followed by the catalogue.
-- **The tool count is conditional.** `coffer__search_tools` is always
-  present; `coffer__write` exists only while the `knowledge` experimental
-  feature is on. The rendered manual drops the span belonging to a switched-off
-  feature and states the tool count that remains
-  (`backend/coffer/application/knowledge/guide_render.py`); the handshake names
-  only the tools actually listed. Neither ever documents a tool the gateway
-  would answer as unknown.
+- **The tool count is what the session lists.** `coffer__search_tools` is
+  the only built-in tool and is always present, and the handshake and the skill
+  body name only the tools actually listed, never one the gateway would answer
+  as unknown.
 - **The handshake narrows to what only it can say.** What Coffer is, the listed
   built-in tool names, the per-session hidden-tool count when tools are hidden,
   and a pointer to the skill.

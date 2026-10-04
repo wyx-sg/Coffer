@@ -8,18 +8,12 @@ what it will not.
 
 ## Coffer's own tools
 
-Coffer adds <TOOL_COUNT> of its own, prefixed `coffer__`. Everything else you can
+Coffer adds one tool of its own, `coffer__search_tools`. Everything else you can
 see through Coffer belongs to an upstream server and is named `<server>__<tool>`.
-
-| Tool | Reach for it when |
-| --- | --- |
-| `coffer__search_tools` | You need a capability and nothing in your tool list offers it. |
-<!-- when:knowledge -->
-| `coffer__write` | You learned something durable about this environment. |
-<!-- end:knowledge -->
+Reach for it when you need a capability and nothing in your tool list offers it.
 
 If you cannot see Coffer's tools at all, the agent you are running as is not
-connected to Coffer; the developer connects it with `coffer agent connect <agent>`.
+connected to Coffer; the developer connects it with the Connect button on the agent's page in Coffer.
 
 ## The tools you were listed are not all the tools there are
 
@@ -57,17 +51,25 @@ down.
 
 ### Writing something down
 
-Use `coffer__write` when you learn something durable: a fact about a service, a
-convention this developer follows, a decision and the reason behind it, a trap
-and how to avoid it. What you write is **new material**: Coffer's model merges
-it into the collection's documents, integrating it with what is already there.
+When you learn something durable — a fact about a service, a convention this
+developer follows, a decision and the reason behind it, a trap and how to avoid
+it — write a Markdown file into `<KNOWLEDGE_ROOT>/<collection>/.inbox/`, under
+any name ending in `.md`. Frontmatter is optional: `title`, `description` and
+`actor` (who you are, for example `claude-code`). Coffer fills in whatever is
+missing, then its model merges the file into the collection's documents,
+integrating it with what is already there. Write the fact plainly; you do not
+have to work out where it belongs or check whether it repeats something. The
+collection must already exist: only the developer creates one, so a file under
+any other directory is ignored.
 
-So write the fact plainly. You do not have to work out where it belongs, and
-you do not have to check whether it repeats something already filed.
+To correct or extend a document you have read, edit the file itself with your
+own tools, as the developer does in their editor. Coffer's model notices the
+edit and carries it into the rest of the collection as a newer statement. Where
+two statements disagree the newer wins unless the older is shown right by a
+source, a date, a command's output or the code, whoever wrote either.
 
-To correct or extend a document you have read, you may also edit the file
-itself with your own tools, as the developer does in their editor. Coffer's
-model notices the edit and carries it into the rest of the collection.
+Never run git inside the vault: Coffer records every change itself, and a
+commit of your own would be attributed to nobody.
 
 <!-- end:knowledge -->
 <!-- when:memory -->
@@ -80,9 +82,8 @@ under `<MEMORY_ROOT>`, which are derived and are Coffer's to own.
 
 <!-- when:knowledge -->
 The practical consequence: **you cannot ask Coffer to write a memory for you.**
-`coffer__write` files knowledge, which is a different store with a different
-purpose. If you want something in your own memory, write it there yourself, the
-way you normally would.
+Knowledge is a different store with a different purpose. If you want something
+in your own memory, write it there yourself, the way you normally would.
 
 <!-- end:knowledge -->
 ### Finding a note
@@ -101,10 +102,41 @@ suspended call, no pending state to wait on: the developer driving this session
 is the trust boundary, and Coffer does not re-ask them per call.
 
 When a call cannot proceed — a capability they disabled, a server not in scope
-for you — it comes back in the same turn as an ordinary error result with the
-reason in it. Read the reason and adjust. Do not retry the identical call hoping
-it clears, and do not tell the developer you are waiting on an approval: there
-is nothing to approve.
+for you, a server whose secret is still waiting for the developer's approval —
+it comes back in the same turn as an ordinary error result with the reason in
+it. Read the reason and adjust. Do not retry the identical call hoping
+it clears. A tool call itself never waits on an approval; the one thing in
+Coffer that does is a secret going somewhere new, below.
+
+## Secrets: you use them; Coffer never prints them
+
+Coffer holds the developer's secrets and never prints one — not through a tool,
+not through the `coffer` CLI, not through its API. There is no command or
+option that shows a value, and nothing to work around. Only the developer sees
+a value, in the Coffer desktop app.
+
+When a command needs a secret, run it through `coffer run`, which sets the value
+only in that command's environment and prints it as `***` in its output. The
+masking guards against a value leaking into a transcript by accident; it is not
+a wall between you and the value, since you are the command's parent:
+
+```sh
+coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
+coffer run --env-file connection.env -- ./query.sh
+```
+
+A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
+cited in files as `coffer://secret/<name>`. Write that reference into skills,
+scripts and env files — never the value. `coffer secret list` shows what
+exists; `coffer secret set <name>` stores a value read from stdin. If you find a
+plaintext secret left in `~/.coffer/secrets/` or in a skill, tell the developer:
+the Secrets page scans for them and offers to move each into a secret.
+
+A secret that would go somewhere it has not gone before — a new MCP server
+citing an existing token, a changed command line or URL —
+waits for the developer's approval in the Coffer app (a command that hits this
+prints `waiting for approval in the Coffer app` and exits `9`). That is not an
+error to retry or to route around: tell the developer what is waiting.
 
 ## When Coffer itself misbehaves
 
@@ -114,15 +146,17 @@ happened, including what broke). Read them with `coffer log audit`,
 `coffer log mcp` and `coffer log daemon`. Each takes `--since` (an age such as
 `1h`, or an ISO 8601 instant) and `--limit`; `coffer log daemon --errors` and
 `coffer log mcp --status error` narrow to failures, and `coffer log audit`
-narrows with `--kind`, `--name` and `--event-type`. `coffer path logs` finds the
-daemon's log files. Reach for them when a Coffer tool fails in a way its error
+narrows with `--kind`, `--name` and `--event-type`. All three take `--trace <id>`:
+the trace id of one request or turn (an `X-Coffer-Trace` header, or the id a
+record already shows), which returns that request's audit rows, tool calls and
+log lines and nothing else. `coffer path logs` finds the daemon's log files. Reach for them when a Coffer tool fails in a way its error
 text does not explain, not as a debugger for the developer's own program.
 
 <!-- when:knowledge -->
 ## What not to put in
 
-- **No secrets.** No keys, tokens, passwords or credentials — not in knowledge,
-  not anywhere you write through Coffer. The developer's credentials live in an
+- **No secrets.** No keys, tokens, passwords or secrets — not in knowledge,
+  not anywhere you write through Coffer. The developer's secrets live in an
   encrypted store Coffer keeps separately, and nothing you write reaches it.
 - **Not the repository in front of you.** If the answer is in code you can
   already read, read the code. Knowledge is for what the repository cannot say.

@@ -40,6 +40,7 @@ from coffer.application.memory.context import (
 from coffer.application.memory.index import recency
 from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER, Note, Origin
 from coffer.infrastructure.memory import paths as memory_paths
+from coffer.infrastructure.memory.repository import resolve_repository
 
 _REPOSITORY = "/home/dev/coffer"
 
@@ -48,6 +49,7 @@ _REPOSITORY = "/home/dev/coffer"
 class _Partition:
     name: str
     repository_path: str
+    repository_key: str = ""
 
 
 class _FakeMemory:
@@ -70,7 +72,7 @@ class _FakeMemory:
     async def list_notes(self, partition: str) -> list[Note]:
         return list(self._notes.get(partition, []))
 
-    async def list_partitions(self) -> list[_Partition]:
+    async def placements(self) -> list[_Partition]:
         return list(self._partitions)
 
 
@@ -178,6 +180,33 @@ async def test_a_nested_repository_resolves_to_the_inner_one() -> None:
     )
     composed = await compose_context(memory, cwd="/home/dev/outer/vendor/inner/src")
     assert composed.partition == "inner"
+
+
+def _clone(root, remote: str):  # type: ignore[no-untyped-def]
+    git_dir = root / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "config").write_text(
+        f'[core]\n\tbare = false\n[remote "origin"]\n\turl = {remote}\n', encoding="utf-8"
+    )
+    return root
+
+
+@pytest.mark.asyncio
+async def test_a_second_clone_elsewhere_resolves_by_repository_identity(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The partition records one checkout's path; a session in another clone of
+    the same remote — a path no partition records — is still about that repository."""
+    remote = "git@example.com:team/coffer.git"
+    first = _clone(tmp_path / "first", remote)
+    second = _clone(tmp_path / "elsewhere" / "second", remote)
+    key = resolve_repository(first).key  # type: ignore[union-attr]
+    memory = _FakeMemory(
+        {"coffer": [_note("c", "coffer")], "global": []},
+        partitions=[_Partition("coffer", str(first), key), _Partition("global", "")],
+    )
+
+    composed = await compose_context(memory, cwd=str(second / "src"))
+
+    assert composed.partition == "coffer"
 
 
 @pytest.mark.asyncio
@@ -345,3 +374,66 @@ async def test_an_ordinary_index_is_nowhere_near_the_default_ceiling() -> None:
     composed = await compose_context(memory, cwd=_REPOSITORY)
     assert composed.notes_omitted == 0
     assert DEFAULT_CEILING_TOKENS >= 9000
+
+
+# --- the hook ceiling ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="a hook delivery fits both agents' hook output limits"
+)
+@pytest.mark.parametrize(
+    "description",
+    ["the conclusion, on one line, with enough words to be a real line", "结论写在这一行里面"],
+)
+async def test_a_hook_payload_fits_claude_codes_and_codexs_hook_output_limits(
+    description: str,
+) -> None:
+    """Claude Code cuts a hook's output past ~10,000 characters to a 2 KB
+    preview; Codex cuts additionalContext past 2,500 tokens, counted as UTF-8
+    bytes / 4. A vault's real index is 30-45 KB, so it is trimmed here — the
+    repository's lines first, the newest first, and the notice names what was
+    left out and where it is."""
+    from coffer.domain.memory.delivery import DELIVERY_CEILING_BYTES
+
+    memory = _FakeMemory(
+        {
+            "coffer": [
+                _note(
+                    f"project-{i:03}",
+                    "coffer",
+                    description=description,
+                    updated_at=f"2026-02-{i % 28 + 1:02}",
+                )
+                for i in range(300)
+            ],
+            "global": [
+                _note(f"personal-{i:03}", "global", type=TYPE_USER, description=description)
+                for i in range(300)
+            ],
+        },
+        partitions=[_Partition("coffer", _REPOSITORY), _Partition("global", "")],
+    )
+    composed = await compose_context(memory, cwd=_REPOSITORY, ceiling_bytes=DELIVERY_CEILING_BYTES)
+
+    size = len(composed.text.encode("utf-8"))
+    assert size <= DELIVERY_CEILING_BYTES
+    assert len(composed.text) < 10_000  # Claude Code's inline limit
+    assert (size + 3) // 4 <= 2_500  # Codex's approx_token_count limit
+    assert composed.notes_included > 0 and composed.notes_omitted > 0
+    lines = composed.text.splitlines()
+    assert not any("personal-" in line for line in lines), "the repository wins the ceiling"
+    project_dir = str(memory_paths.notes_dir("coffer"))
+    global_dir = str(memory_paths.notes_dir("global"))
+    assert f"(300 older line(s) not shown — those notes are files in {global_dir})" in lines
+    dropped = 300 - composed.notes_included
+    assert f"({dropped} older line(s) not shown — those notes are files in {project_dir})" in lines
+
+
+@pytest.mark.asyncio
+async def test_a_byte_ceiling_that_does_not_bind_changes_nothing() -> None:
+    memory = _memory(project_notes=3, global_notes=3)
+    unbounded = await compose_context(memory, cwd=_REPOSITORY)
+    bounded = await compose_context(memory, cwd=_REPOSITORY, ceiling_bytes=9500)
+    assert bounded == unbounded

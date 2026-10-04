@@ -24,14 +24,9 @@ A channel message rides the same queue with two extras: the attachments and
 title hint it persists into the user message, and an ``on_start`` sink that is
 handed a dedicated event queue (ending in ``None``) the moment its turn begins,
 which is what the channel renderer drains. The web observes the same turn on
-the bus.
-
-``start_turn`` is the immediate-or-refuse seam (start now or raise
-``TurnInProgress``); it is what tests that need a turn *right now* use.
-
-Per-conversation state (bus, in-flight turn, pending queue) is process-global
-and single-daemon by design; it lives in :mod:`turn_state` and is released
-once a conversation is idle with nobody watching.
+the bus. Per-conversation
+state (bus, in-flight turn, pending queue) is process-global and lives in
+:mod:`turn_state`, released once a conversation is idle with nobody watching.
 """
 
 from __future__ import annotations
@@ -39,7 +34,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Sequence
+from datetime import datetime
 
+from coffer.application.chat import questions
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
 from coffer.application.chat.turn_persistence import DEFAULT_PARTIAL_FLUSH_SECONDS
@@ -63,8 +60,9 @@ from coffer.application.chat.turn_state import (
 from coffer.application.chat.turn_state import active_turns as active_turns
 from coffer.application.chat.turn_state import clear_active_turns as clear_active_turns
 from coffer.application.chat.turn_state import held_conversations as held_conversations
+from coffer.application.runtime import correlation
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.attachment import Attachment
-from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TurnError
 from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
 
@@ -155,6 +153,11 @@ class TurnOrchestrator:
                 await self._begin_turn(conversation_id, message)
             except TurnsStopping:
                 pass  # the daemon began stopping mid-start: hold it in the queue
+            except BaseException:
+                # The start was refused (a missing agent, a rejected config): the
+                # state built for it must not linger, unwatched, for the process's life.
+                evict_if_idle(conversation_id)
+                raise
             else:
                 self._broadcast_queue_changed(conversation_id)
                 return False
@@ -181,34 +184,6 @@ class TurnOrchestrator:
         self._broadcast_queue_changed(conversation_id)
         await self._maybe_advance(conversation_id)
         return self.pending(conversation_id)
-
-    # ------------------------------------------------------------------
-    # Immediate-or-refuse seam
-    # ------------------------------------------------------------------
-
-    async def start_turn(
-        self,
-        conversation_id: str,
-        user_text: str,
-        *,
-        attachments: Sequence[Attachment] = (),
-        title_hint: str | None = None,
-    ) -> asyncio.Queue[AgentEvent | None]:
-        """Start a turn NOW and return a dedicated event queue ending in ``None``.
-
-        Raises ``TurnInProgress`` if a turn is already active — the caller wanted
-        this turn and no other, not a place in the queue. The turn also publishes
-        to the conversation bus, so a web observer sees it live.
-        """
-        state = state_for(conversation_id)
-        if state.active is not None:
-            raise TurnInProgress(conversation_id)
-        primary: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
-        message = PendingMessage(
-            text=user_text, attachments=tuple(attachments), title_hint=title_hint
-        )
-        await self._begin_turn(conversation_id, message, primary_queue=primary)
-        return primary
 
     # ------------------------------------------------------------------
     # Turn control
@@ -250,13 +225,17 @@ class TurnOrchestrator:
         state.bus.close()
 
     @staticmethod
-    async def sweep_streaming_messages(message_repo: MessageRepo) -> int:
+    async def sweep_streaming_messages(
+        message_repo: MessageRepo, *, before: datetime | None = None
+    ) -> int:
         """Flip any lingering ``status='streaming'`` rows to ``'failed'``.
 
-        Called once at daemon startup to recover from a prior crash. Returns the
-        number of rows flipped.
+        Called once at daemon startup to recover from a prior crash; ``before`` is
+        the instant this daemon started, so the sweep never touches a turn that is
+        live in it (it runs as a background task and a turn may begin first).
+        Returns the number of rows flipped.
         """
-        return await message_repo.sweep_streaming()
+        return await message_repo.sweep_streaming(before=before)
 
     # ------------------------------------------------------------------
     # Internals
@@ -296,7 +275,9 @@ class TurnOrchestrator:
             state.paused = True
             self._broadcast_queue_changed(conversation_id)
             error = TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")
-            state.bus.publish(error)
+            # Live only: the failure belongs to no turn, so it must not sit in the
+            # replay buffer and greet every later subscriber.
+            state.bus.publish_transient(error)
             if message.on_start is not None:
                 # A channel has no queue chips to look at: hand its renderer a
                 # stream that carries the failure and ends, so the chat hears it.
@@ -309,8 +290,6 @@ class TurnOrchestrator:
         self,
         conversation_id: str,
         message: PendingMessage,
-        *,
-        primary_queue: asyncio.Queue[AgentEvent | None] | None = None,
     ) -> None:
         """Reserve the slot, build the adapter, persist the user message, spawn the
         turn task. Callers guarantee no turn is currently active.
@@ -330,12 +309,17 @@ class TurnOrchestrator:
         if is_stopping():
             raise TurnsStopping(conversation_id)
         state = state_for(conversation_id)
-        if message.on_start is not None and primary_queue is None:
-            primary_queue = asyncio.Queue()
+        primary_queue: asyncio.Queue[AgentEvent | None] | None = (
+            asyncio.Queue() if message.on_start is not None else None
+        )
         active = ActiveTurn(bus=state.bus, primary_queue=primary_queue)
         # Reserve synchronously — no ``await`` before this assignment.
         state.active = active
         state.bus.begin_turn()
+        # The turn's token, minted before the adapter is built: the provider puts
+        # it into the agent process's environment (``COFFER_TURN_TOKEN``) so the
+        # agent's ``coffer__ask`` calls resolve to this turn.
+        turn = questions.register_turn(conversation_id)
         try:
             conv = await self._chat.get_conversation(conversation_id)
             provider = self._registry.get(conv.agent_key)
@@ -348,7 +332,9 @@ class TurnOrchestrator:
                 content=[
                     TextBlock(text=message.text),
                     *(
-                        AttachmentBlock(path=a.path, mime=a.mime, filename=a.filename)
+                        AttachmentBlock(
+                            path=a.path, mime=a.mime, filename=a.filename, id=a.id, size=a.size
+                        )
                         for a in message.attachments
                     ),
                 ],
@@ -357,32 +343,37 @@ class TurnOrchestrator:
             )
         except BaseException:
             # Anything failed before the task spawned — release the reservation.
+            questions.release_turn(turn)
             if state.active is active:
                 state.active = None
             if primary_queue is not None:
                 primary_queue.put_nowait(None)
             raise
 
-        task = asyncio.create_task(
-            run_turn_task(
-                conversation_id=conversation_id,
-                active=active,
-                adapter=adapter,
-                chat=self._chat,
-                idle_timeout=self._idle_timeout,
-                flush_interval=self._flush_interval,
-            ),
-            name=f"turn:{conversation_id}",
-        )
-        active.task = task
-        task.add_done_callback(self._advance_callback(conversation_id))
-        if message.on_start is not None and primary_queue is not None:
-            # After the task exists, so a renderer that stops the turn finds it.
-            message.on_start(primary_queue)
+        # Bound around the spawn: the turn task and whatever ``on_start`` spawns
+        # to render it copy the turn's correlation ids into every record.
+        with correlation.turn(conversation_id):
+            task = spawn(
+                run_turn_task(
+                    conversation_id=conversation_id,
+                    active=active,
+                    adapter=adapter,
+                    chat=self._chat,
+                    idle_timeout=self._idle_timeout,
+                    flush_interval=self._flush_interval,
+                    turn=turn,
+                ),
+                name=f"turn:{conversation_id}",
+            )
+            active.task = task
+            task.add_done_callback(self._advance_callback(conversation_id))
+            if message.on_start is not None and primary_queue is not None:
+                # After the task exists, so a renderer that stops the turn finds it.
+                message.on_start(primary_queue)
 
     def _advance_callback(self, conversation_id: str) -> Callable[[asyncio.Task[None]], None]:
         def _cb(_task: asyncio.Task[None]) -> None:
-            advance = asyncio.create_task(self._maybe_advance(conversation_id))
+            advance = spawn(self._maybe_advance(conversation_id), name="turn-advance")
             self._bg_tasks.add(advance)
             advance.add_done_callback(self._bg_tasks.discard)
 

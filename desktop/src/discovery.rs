@@ -8,9 +8,10 @@
 //! Split out of `daemon.rs` to keep every file under the project's 400-line
 //! cap (see `.agents/stack.md`).
 
-use std::env;
 use std::fs;
 use std::path::PathBuf;
+
+use crate::coffer_home;
 
 /// Extract the `"port"` value from the daemon discovery JSON. Returns `None`
 /// for malformed JSON, a missing key, a non-numeric value, or a port outside
@@ -29,10 +30,7 @@ fn parse_daemon_token(raw: &str) -> Option<String> {
 
 /// `~/.coffer/daemon.json` — the file every Coffer client reads.
 fn discovery_file() -> Option<PathBuf> {
-    let home = env::var("HOME")
-        .ok()
-        .or_else(|| env::var("USERPROFILE").ok())?;
-    Some(PathBuf::from(home).join(".coffer").join("daemon.json"))
+    Some(coffer_home::daemon_json(coffer_home::home_dir()?))
 }
 
 /// Read both the port and token from `~/.coffer/daemon.json`. Returns `None`
@@ -64,6 +62,15 @@ fn http_status_is_ok(response_head: &str) -> bool {
     first.starts_with("HTTP/1.1 200") || first.starts_with("HTTP/1.0 200")
 }
 
+/// How long the liveness probe waits for the status answer. It must outlast
+/// the slowest status a warming daemon produces (it reads every agent's config
+/// and lists MCP resources; about 9 s has been measured), because a timeout is
+/// indistinguishable from "nobody is live": resolve would then spawn a second
+/// daemon and a restart would skip stopping a slow-but-alive one. It matches
+/// the CLI's probe (`bootstrap._LIVENESS_PROBE_TIMEOUT`, spec daemon "Decide
+/// liveness by the status call"). A dead port still fails at once, on connect.
+const LIVENESS_READ_TIMEOUT_SECS: u64 = 15;
+
 /// Liveness probe: does a *Coffer daemon* answer `GET /api/v1/daemon/status`
 /// with a 200 on `127.0.0.1:<port>`?
 ///
@@ -83,7 +90,9 @@ pub fn daemon_responds_ok(port: u16) -> bool {
     };
     if stream
         .set_write_timeout(Some(Duration::from_millis(500)))
-        .and_then(|_| stream.set_read_timeout(Some(Duration::from_millis(500))))
+        .and_then(|_| {
+            stream.set_read_timeout(Some(Duration::from_secs(LIVENESS_READ_TIMEOUT_SECS)))
+        })
         .is_err()
     {
         return false;
@@ -160,7 +169,7 @@ mod tests {
 
     #[test]
     fn parse_daemon_port_reads_well_formed_value() {
-        assert_eq!(parse_daemon_port(r#"{"port": 8000, "pid": 1}"#), Some(8000));
+        assert_eq!(parse_daemon_port(r#"{"port": 38470, "pid": 1}"#), Some(38470));
     }
 
     #[test]
@@ -189,7 +198,7 @@ mod tests {
     fn parse_daemon_token_reads_urlsafe_value() {
         // Obviously-fake fixture (URL-safe `-`/`_` chars, low entropy) so the
         // secrets scanner doesn't flag it as a real token.
-        let raw = r#"{"port": 8000, "token": "EXAMPLE-url_safe-token_value", "pid": 1}"#;
+        let raw = r#"{"port": 38470, "token": "EXAMPLE-url_safe-token_value", "pid": 1}"#;
         assert_eq!(
             parse_daemon_token(raw).as_deref(),
             Some("EXAMPLE-url_safe-token_value")
@@ -198,7 +207,7 @@ mod tests {
 
     #[test]
     fn parse_daemon_token_missing_key_is_none() {
-        assert_eq!(parse_daemon_token(r#"{"port": 8000}"#), None);
+        assert_eq!(parse_daemon_token(r#"{"port": 38470}"#), None);
     }
 
     #[test]

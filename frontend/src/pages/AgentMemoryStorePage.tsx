@@ -1,71 +1,91 @@
 // frontend/src/pages/AgentMemoryStorePage.tsx — spec agent-registry
 // "Read one native memory store's files read-only".
-// One of the agent's OWN native memory stores, reached by clicking its row on
-// the Memory tab: a file tree of the store directory and a read-only preview of
-// the selected file, with open-in-editor / reveal on the file.
+// One of the agent's OWN native memory stores, reached from its row on the
+// Memory tab (`/agents/<type>/memory/store?dir=&project=`): the standard detail
+// header (the agent's mark, the project, "<agent> memory · N files · read-only",
+// Reveal in Finder) over one surface — the store's file tree beside a read-only
+// viewer of the selected file (boards 2.1.51, 2.1.61).
 //
 // The store is addressed by `?dir=` — the `memory_dir` the listing gave the row
-// — because that directory IS the store's identity. The project label and path
-// beside it are best-effort decodes of a lossy slug, and for Codex several rows
-// legitimately share one global directory; keying the page by either would make
-// two different stores collide or one store unreachable. The label still rides
-// along in `?project=` for the heading, since a heading reading
-// `/Users/u/.claude/projects/-Users-u-work-api/memory` tells the reader nothing
-// they came here to learn.
+// — because that directory IS the store's identity: the project label beside it
+// is a best-effort decode, and for Codex several rows share one directory. The
+// label rides along in `?project=` only for the heading.
 //
-// This surface never writes. Coffer does not own these bytes — the coding agent
-// rewrites them as it learns — so the way to change one is the editor the page
-// opens, not a field on the page.
-import { useParams, useSearchParams } from "react-router-dom";
+// This surface never writes: the coding agent rewrites these bytes as it
+// learns, so the way to change one is the editor the viewer opens.
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { FolderOpen } from "lucide-react";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { AgentMemoryStoreTree } from "@/components/agents/AgentMemoryStoreTree";
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { translateApiError } from "@/lib/api/errors";
+import { useFsActions } from "@/lib/fsActions";
+import { countMemoryFiles, useNativeMemoryFiles } from "@/lib/hooks/useAgentNativeMemory";
+import { useAgentRoute } from "@/lib/hooks/useAgentRoute";
 
 export function AgentMemoryStorePage() {
   const { t } = useTranslation();
-  const { uid = "" } = useParams<{ uid: string }>();
+  const { toast } = useToast();
+  const { reveal } = useFsActions();
+  const route = useAgentRoute();
   const params = useSearchParams()[0];
   const dir = params.get("dir") ?? "";
   const project = params.get("project");
+  const tree = useNativeMemoryFiles(route.uid, dir);
 
-  const back = {
-    to: `/agents/${encodeURIComponent(uid)}?tab=memory`,
-    label: t("common.backTo", { label: t("agents.workspace.memory") }),
-  };
+  const type = route.type ?? "";
+  const agentName = agentTypeLabel(type);
 
-  if (!dir) {
+  if (route.isPending) {
+    return <PageHeader title={t("common.loading")} />;
+  }
+  if (!dir || route.notAdded || route.error) {
+    const reason = !dir
+      ? t("agents.memoryStore.missingDir")
+      : route.error
+        ? translateApiError(t, route.error)
+        : t("agents.memoryStore.notAdded", { agent: agentName });
     return (
       <div className="space-y-6">
-        {/* No store was named, so there is nothing to head the page with — and
-            the agent's uid is not a title. The failure is. */}
-        <PageHeader back={back} title={t("agents.memoryStore.missingDir")} />
-        <Card className="border-destructive/40">
-          <CardContent className="py-6">
-            <p className="text-sm text-destructive" role="alert">
-              {t("agents.memoryStore.missingDir")}
-            </p>
-          </CardContent>
-        </Card>
+        <PageHeader title={t("agents.memoryStore.unavailable")} />
+        <EmptyState tone="error" title={t("agents.memoryStore.unavailable")} description={reason} />
       </div>
     );
   }
 
+  const root = tree.data?.root;
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
-        back={back}
-        title={project || dir}
+        title={
+          <span className="inline-flex min-w-0 items-center gap-2.5">
+            <AgentBadge type={type} size="lg" state="connected" tooltip={false} />
+            <span className="truncate">
+              {project ? abbreviateHomePath(project) : abbreviateHomePath(dir)}
+            </span>
+          </span>
+        }
         subtitle={
-          <>
-            <span className="block break-all font-mono text-xs">{dir}</span>
-            <span className="block">{t("agents.memoryStore.readOnlyHint")}</span>
-          </>
+          root
+            ? t("agents.memoryStore.subtitle", { agent: agentName, count: countMemoryFiles(root) })
+            : t("agents.memoryStore.subtitleNoCount", { agent: agentName })
+        }
+        actions={
+          <Button
+            variant="outline"
+            onClick={() => void reveal(dir).catch(() => toast.error(t("fileActions.revealFailed")))}
+          >
+            <FolderOpen aria-hidden /> {t("fileActions.reveal")}
+          </Button>
         }
       />
-
-      <AgentMemoryStoreTree agentUid={uid} dir={dir} />
+      <AgentMemoryStoreTree agentUid={route.uid} dir={dir} />
     </div>
   );
 }

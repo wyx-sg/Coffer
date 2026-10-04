@@ -7,6 +7,7 @@ singleton shape, typed concretely.
 
 from __future__ import annotations
 
+from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
@@ -74,3 +75,19 @@ def get_agent_transcript_service() -> AgentTranscriptService:
     if _agent_transcript_service is None:
         raise RuntimeError("agent transcript service not initialised")
     return _agent_transcript_service
+
+
+_agent_hooks_service: AgentHooksService | None = None
+
+
+def set_agent_hooks_service(svc: AgentHooksService) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_hooks_service
+    _agent_hooks_service = svc
+
+
+def get_agent_hooks_service() -> AgentHooksService:
+    """FastAPI Depends() target."""
+    if _agent_hooks_service is None:
+        raise RuntimeError("agent hooks service not initialised")
+    return _agent_hooks_service

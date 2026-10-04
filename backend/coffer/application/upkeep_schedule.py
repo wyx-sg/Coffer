@@ -46,11 +46,11 @@ DEFAULT_INTERVALS: dict[str, float] = {
     # Both model passes are slower and rewrite more, so they sweep four times a
     # day rather than hourly.
     DISTIL: 6 * 60 * 60.0,
-    # Short, because a source a person just wrote should be readable by an
-    # agent in the same sitting; a sweep that finds nothing pending costs a
-    # directory walk (spec knowledge "Run curation on a sweep and on
+    # Hourly: new material is curated within the hour. A person who wants it
+    # readable in the same sitting presses Curate on the collection, which runs
+    # a pass on demand (spec knowledge "Run curation on a sweep and on
     # demand").
-    CURATE: 60.0,
+    CURATE: 60 * 60.0,
 }
 
 

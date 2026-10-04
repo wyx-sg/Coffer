@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useChatTurn.test.tsx
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
@@ -8,6 +8,7 @@ import { useChatTurn } from "./useChatTurn";
 import { ApiError } from "@/lib/api/errors";
 import type { AgentEvent } from "@/lib/chat/streamClient";
 import { acceptance } from "@/test/acceptance";
+import { ev } from "@/test/chatEvents";
 
 // Mock the streamClient module — useChatTurn opens a GET /events subscription.
 vi.mock("@/lib/chat/streamClient", () => ({
@@ -42,6 +43,14 @@ function gatedSubscription(gate: Promise<void>, ...events: AgentEvent[]) {
     for (const e of events) yield e;
     await gate;
   };
+}
+
+/** A subscription that holds open (delivers nothing) until it is aborted. */
+function held(_id?: string, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
+  return (async function* () {
+    await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve()));
+    yield* [] as AgentEvent[];
+  })();
 }
 
 function makeWrapper() {
@@ -197,7 +206,7 @@ describe("useChatTurn", () => {
   test("a send issued while this client streams a turn is not echoed", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    subscribeMock.mockImplementation(gatedSubscription(gate, { event: "turn_start", data: {} }));
+    subscribeMock.mockImplementation(gatedSubscription(gate, ev("turn_start")));
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isStreaming).toBe(true));
 
@@ -226,8 +235,8 @@ describe("useChatTurn", () => {
     const gate = new Promise<void>((r) => (release = r));
     subscribeMock.mockImplementation(async function* () {
       await gate;
-      yield { event: "turn_start", data: {} };
-      yield { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } };
+      yield ev("turn_start");
+      yield ev("turn_error", { code: "MODEL_ERROR", message: "provider failed" });
     });
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
@@ -263,7 +272,7 @@ describe("useChatTurn", () => {
     // A turn is in flight via the subscription; sending again must not be gated.
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    subscribeMock.mockImplementation(gatedSubscription(gate, { event: "turn_start", data: {} }));
+    subscribeMock.mockImplementation(gatedSubscription(gate, ev("turn_start")));
 
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
@@ -284,11 +293,11 @@ describe("useChatTurn", () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     subscribeMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "Hello" } };
-      yield { event: "text_delta", data: { text: " world" } };
+      yield ev("turn_start");
+      yield ev("text_delta", { text: "Hello" });
+      yield ev("text_delta", { text: " world" });
       await gate;
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+      yield ev("turn_done", { stop_reason: "end_turn" });
     });
 
     const qc = new QueryClient({
@@ -360,10 +369,10 @@ describe("useChatTurn", () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     subscribeMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "The answer" } };
+      yield ev("turn_start");
+      yield ev("text_delta", { text: "The answer" });
       await gate;
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+      yield ev("turn_done", { stop_reason: "end_turn" });
     });
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -426,9 +435,9 @@ describe("useChatTurn", () => {
   test("does NOT clear the live bubble when the refetch still lacks the assistant reply", async () => {
     subscribeMock.mockImplementation(
       fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "The answer" } },
-        { event: "turn_done", data: { stop_reason: "end_turn" } },
+        ev("turn_start"),
+        ev("text_delta", { text: "The answer" }),
+        ev("turn_done", { stop_reason: "end_turn" }),
       ),
     );
     const qc = new QueryClient({
@@ -467,8 +476,8 @@ describe("useChatTurn", () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     subscribeMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "partial" } };
+      yield ev("turn_start");
+      yield ev("text_delta", { text: "partial" });
       await gate;
       // stream ends here — NO turn_done
     });
@@ -531,15 +540,15 @@ describe("useChatTurn", () => {
       ],
     );
     // First subscription: drops mid-turn with no turn_done.
-    subscribeMock.mockImplementationOnce(
-      fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "partial" } },
-      ),
-    );
     // Reconnection: GET /events replays the in-flight turn and delivers the
     // terminal turn_done. The reply is now committed, so the refetch carries it.
-    subscribeMock.mockImplementation(async function* () {
+    subscribeMock.mockImplementation(held);
+    subscribeMock.mockImplementationOnce(
+      fromEvents(ev("turn_start"), ev("text_delta", { text: "partial" })),
+    );
+    subscribeMock.mockImplementationOnce(async function* () {
+      yield ev("turn_start");
+      yield ev("text_delta", { text: "the full reply" });
       qc.setQueryData(
         ["messages", "conv-1"],
         [
@@ -563,9 +572,7 @@ describe("useChatTurn", () => {
           },
         ],
       );
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "the full reply" } };
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+      yield ev("turn_done", { stop_reason: "end_turn" });
     });
 
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -587,24 +594,12 @@ describe("useChatTurn", () => {
     expect(result.current.error).toBeNull();
   });
 
-  test("an idle stream that closes with no turn in flight does not reconnect", async () => {
-    // A subscription that ends cleanly without ever starting a turn (idle close)
-    // must NOT trigger a reconnect loop — there is nothing to recover.
-    subscribeMock.mockImplementation(fromEvents({ event: "queue_changed", data: { pending: [] } }));
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
-
-    await act(async () => {});
-    await act(async () => {});
-    expect(result.current.isStreaming).toBe(false);
-    expect(subscribeMock).toHaveBeenCalledTimes(1);
-  });
-
   test("turn_error surfaces an error and drops the live bubble", async () => {
     subscribeMock.mockImplementation(
       fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "text_delta", data: { text: "thinking..." } },
-        { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } },
+        ev("turn_start"),
+        ev("text_delta", { text: "thinking..." }),
+        ev("turn_error", { code: "MODEL_ERROR", message: "provider failed" }),
       ),
     );
 
@@ -617,16 +612,145 @@ describe("useChatTurn", () => {
     expect(result.current.liveMessage).toBeNull();
   });
 
-  acceptance("chat", "a dropped event stream reconnects and is bounded", async () => {
-    subscribeMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      throw new Error("network failure");
+  describe("event stream recovery", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    const settle = (ms = 0) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+
+    acceptance("chat", "a dropped event stream reconnects and is bounded", async () => {
+      // A network drop mid-turn THROWS out of the read. It is recovered by
+      // re-subscribing with a backoff (the replay delivers what was missed)...
+      subscribeMock.mockImplementation(held);
+      subscribeMock.mockImplementationOnce(async function* () {
+        yield ev("turn_start");
+        throw new TypeError("network failure");
+      });
+      subscribeMock.mockImplementationOnce(
+        fromEvents(
+          ev("turn_start"),
+          ev("text_delta", { text: "hi" }),
+          ev("turn_done", { stop_reason: "end_turn" }),
+        ),
+      );
+      const first = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await settle(0);
+      expect(subscribeMock).toHaveBeenCalledTimes(1);
+      await settle(1000);
+      expect(subscribeMock).toHaveBeenCalledTimes(3); // dropped, replayed, held open
+      expect(first.result.current.error).toBeNull();
+      expect(first.result.current.streamLost).toBe(false);
+      first.unmount();
+
+      // ...and bounded: a connection that never comes back gives up after a
+      // capped number of attempts and says so, instead of hammering the endpoint.
+      vi.clearAllMocks();
+      subscribeMock.mockImplementation(async function* () {
+        yield* [] as AgentEvent[];
+        throw new TypeError("network failure");
+      });
+      const { result } = renderHook(() => useChatTurn("conv-2"), { wrapper: makeWrapper() });
+      await settle(60_000);
+      expect(subscribeMock).toHaveBeenCalledTimes(6); // the first attempt + 5 retries
+      expect(result.current.streamLost).toBe(true);
+      expect(result.current.isStreaming).toBe(false);
+      await settle(60_000);
+      expect(subscribeMock).toHaveBeenCalledTimes(6);
     });
 
-    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+    acceptance("chat", "an idle event stream is re-subscribed", async () => {
+      subscribeMock.mockImplementation(held);
+      subscribeMock.mockImplementationOnce(fromEvents());
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await settle(0);
+      expect(subscribeMock).toHaveBeenCalledTimes(1);
+      await settle(1000);
+      expect(subscribeMock).toHaveBeenCalledTimes(2);
+      expect(result.current.error).toBeNull();
+      expect(result.current.streamLost).toBe(false);
+    });
 
-    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
-    expect((result.current.error as Error).message).toBe("network failure");
+    test("a segment that delivers events resets the consecutive-failure count", async () => {
+      subscribeMock.mockImplementation(held);
+      for (let i = 0; i < 8; i += 1) {
+        subscribeMock.mockImplementationOnce(async function* () {
+          yield ev("queue_changed", { pending: [] });
+          throw new TypeError("network failure");
+        });
+      }
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await settle(60_000);
+      expect(subscribeMock).toHaveBeenCalledTimes(9);
+      expect(result.current.streamLost).toBe(false);
+    });
+
+    test("an HTTP error response is surfaced and not retried", async () => {
+      subscribeMock.mockImplementation(async function* () {
+        yield* [] as AgentEvent[];
+        throw new ApiError("CONVERSATION_NOT_FOUND", "gone");
+      });
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await settle(60_000);
+      expect((result.current.error as ApiError).code).toBe("CONVERSATION_NOT_FOUND");
+      expect(subscribeMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("a held queue", () => {
+    test("a turn_error with no turn running and a waiting queue is a held queue", async () => {
+      subscribeMock.mockImplementation(
+        fromEvents(
+          ev("queue_changed", { pending: ["next"] }),
+          ev("turn_error", { code: "AGENT_START_FAILED", message: "no cwd" }),
+        ),
+      );
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await waitFor(() => expect(result.current.queueHeld).toBe(true));
+      expect(result.current.retryable).toBe(false);
+
+      // Resume replaces the queue with itself: that is what unpauses it.
+      chatApiMock.setPending.mockResolvedValue({ pending: ["next"] });
+      await act(async () => {
+        await result.current.resumeQueue();
+      });
+      expect(chatApiMock.setPending).toHaveBeenCalledWith("conv-1", ["next"]);
+      expect(result.current.queueHeld).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    test("the order of the error and the queue snapshot does not matter", async () => {
+      subscribeMock.mockImplementation(
+        fromEvents(
+          ev("turn_error", { code: "AGENT_START_FAILED", message: "no cwd" }),
+          ev("queue_changed", { pending: ["next"] }),
+        ),
+      );
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await waitFor(() => expect(result.current.queueHeld).toBe(true));
+    });
+
+    test("a turn that fails while running is a failed turn with a Retry, not a held queue", async () => {
+      subscribeMock.mockImplementation(
+        fromEvents(
+          ev("queue_changed", { pending: ["next"] }),
+          ev("turn_start"),
+          ev("turn_error", { code: "MODEL_ERROR", message: "boom" }),
+        ),
+      );
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await waitFor(() => expect(result.current.error).toBeInstanceOf(ApiError));
+      expect(result.current.queueHeld).toBe(false);
+      expect(result.current.retryable).toBe(true);
+    });
+
+    test("an error outside a turn with an empty queue is not a held queue", async () => {
+      subscribeMock.mockImplementation(
+        fromEvents(ev("turn_error", { code: "STREAM_ENDED", message: "x" })),
+      );
+      const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+      await waitFor(() => expect(result.current.error).toBeInstanceOf(ApiError));
+      expect(result.current.queueHeld).toBe(false);
+    });
   });
 
   test("send() error (POST rejected) surfaces in hook state", async () => {
@@ -653,7 +777,7 @@ describe("useChatTurn", () => {
 
     // A later turn failure is a new error: that one offers a Retry.
     subscribeMock.mockImplementation(
-      fromEvents({ event: "turn_error", data: { code: "MODEL_ERROR", message: "boom" } }),
+      fromEvents(ev("turn_error", { code: "MODEL_ERROR", message: "boom" })),
     );
     const turn = renderHook(() => useChatTurn("conv-2"), { wrapper: makeWrapper() });
     await waitFor(() => expect(turn.result.current.error).toBeInstanceOf(ApiError));
@@ -688,10 +812,9 @@ describe("useChatTurn", () => {
   });
 
   test("clearError resets error state", async () => {
-    subscribeMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
-      throw new Error("network failure");
-    });
+    subscribeMock.mockImplementation(
+      fromEvents(ev("turn_error", { code: "MODEL_ERROR", message: "boom" })),
+    );
 
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
@@ -707,26 +830,20 @@ describe("useChatTurn", () => {
   test("accumulates tool_call and tool_result events without error", async () => {
     subscribeMock.mockImplementation(
       fromEvents(
-        { event: "turn_start", data: {} },
-        {
-          event: "tool_call",
-          data: {
-            tool_use_id: "t1",
-            tool_name: "coffer__search_memory",
-            tool_input: { query: "OAuth" },
-          },
-        },
-        {
-          event: "tool_result",
-          data: {
-            tool_use_id: "t1",
-            tool_name: "coffer__search_memory",
-            output: { result: "found" },
-            error: null,
-          },
-        },
-        { event: "text_delta", data: { text: "Based on" } },
-        { event: "turn_done", data: { stop_reason: "end_turn" } },
+        ev("turn_start"),
+        ev("tool_call", {
+          tool_use_id: "t1",
+          tool_name: "coffer__search_memory",
+          tool_input: { query: "OAuth" },
+        }),
+        ev("tool_result", {
+          tool_use_id: "t1",
+          tool_name: "coffer__search_memory",
+          output: { result: "found" },
+          error: null,
+        }),
+        ev("text_delta", { text: "Based on" }),
+        ev("turn_done", { stop_reason: "end_turn" }),
       ),
     );
 
@@ -760,9 +877,9 @@ describe("useChatTurn", () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     subscribeMock.mockImplementation(async function* () {
-      yield { event: "turn_start", data: {} };
+      yield ev("turn_start");
       await gate;
-      yield { event: "turn_done", data: { stop_reason: "end_turn" } };
+      yield ev("turn_done", { stop_reason: "end_turn" });
     });
 
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
@@ -778,9 +895,7 @@ describe("useChatTurn", () => {
   });
 
   test("queue_changed updates the pending queue", async () => {
-    subscribeMock.mockImplementation(
-      fromEvents({ event: "queue_changed", data: { pending: ["one", "two"] } }),
-    );
+    subscribeMock.mockImplementation(fromEvents(ev("queue_changed", { pending: ["one", "two"] })));
 
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
 
@@ -805,8 +920,8 @@ describe("useChatTurn", () => {
     const gate = new Promise<void>((r) => (release = r));
     subscribeMock.mockImplementation(async function* (_id: string, signal?: AbortSignal) {
       if (signal) signals.push(signal);
-      yield { event: "turn_start", data: {} };
-      yield { event: "text_delta", data: { text: "partial A" } };
+      yield ev("turn_start");
+      yield ev("text_delta", { text: "partial A" });
       await gate;
     });
 
@@ -843,10 +958,7 @@ describe("useChatTurn", () => {
 
   test("turn_start invalidates the messages query so a committed user message appears", async () => {
     subscribeMock.mockImplementation(
-      fromEvents(
-        { event: "turn_start", data: {} },
-        { event: "turn_done", data: { stop_reason: "end_turn" } },
-      ),
+      fromEvents(ev("turn_start"), ev("turn_done", { stop_reason: "end_turn" })),
     );
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -862,7 +974,7 @@ describe("useChatTurn", () => {
     );
   });
 
-  test("invalidates the conversations list on send, so the auto-generated title appears", async () => {
+  test("refreshes the conversations list's head on send, so the auto-generated title appears", async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -876,6 +988,6 @@ describe("useChatTurn", () => {
       await result.current.send("hi");
     });
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["conversations"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["conversations", "lists", "head"] });
   });
 });

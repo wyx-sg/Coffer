@@ -2,7 +2,7 @@
 
 After the first frozen daemon start, ``~/.coffer/bin/<name>`` is a symlink into
 ``~/.coffer/bin/<version>/`` (spec daemon "Deploy frozen sibling binaries and
-back up the vault before migrating"). An installer that ``cp``'d onto that name
+back up the history database before migrating"). An installer that ``cp``'d onto that name
 would follow the link and overwrite the previous version's binary — the one a
 rollback needs. The test runs the script's own ``install_binaries`` function,
 extracted from ``install.sh`` rather than restated, so no download is involved.

@@ -1,124 +1,123 @@
 // frontend/src/components/agents/ConfigFileTree.tsx — spec agent-registry.
-// Left pane of the agent config viewer: the curated config-file allowlist as
-// a "tree". Single files are flat rows; directory-backed keys (kind ===
-// "directory") render as expandable nodes whose children come from the list
-// response. Selection is read-only navigation — config files are edited in the
-// user's own editor, so there is no "new file" affordance. Pure presentation;
-// all state lives in AgentConfigFilesEditor.
+// The tree of the agent's Config files tab (boards 2.1.40–2.1.48): every
+// allowlisted config file in one tree, grouped by the folder it lives in — the
+// config directory as a folder row, a file kept beside it (`~/.claude.json`)
+// at the top level under its own name. A directory entry (`rules`, `agents`)
+// is a folder of its files; picking it opens its listing, picking a file opens
+// it. A file the agent has not written yet is italic with "not created"; the
+// open file carries a dot while it has unsaved edits. Pure presentation; all
+// state lives in useConfigEditorState.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
 
-import { FILE_PANE_SCROLL } from "@/components/filePane";
+import { FileTree, type FileTreeRow } from "@/components/files/FileTree";
+import { baseName } from "@/lib/agents/configFiles";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import type { ConfigFileInfo } from "@/lib/api/agents";
-import { cn } from "@/lib/utils";
 
 export interface ConfigFileTreeProps {
   files: ConfigFileInfo[];
   selectedKey: string | null;
   selectedChild: string | null;
-  expandedDirs: Record<string, boolean>;
+  /** The open file has edits that are not saved. */
+  dirty?: boolean;
+  /** Directory keys the user folded. */
+  collapsed: Record<string, boolean>;
   onSelectFile: (key: string) => void;
   onSelectDirectory: (key: string) => void;
   onSelectChild: (key: string, relpath: string) => void;
 }
 
-export function ConfigFileTree({
-  files,
-  selectedKey,
-  selectedChild,
-  expandedDirs,
-  onSelectFile,
-  onSelectDirectory,
-  onSelectChild,
-}: ConfigFileTreeProps) {
-  const { t } = useTranslation();
+function groupByFolder(files: ConfigFileInfo[]): [string, ConfigFileInfo[]][] {
+  const groups = new Map<string, ConfigFileInfo[]>();
+  for (const f of files) groups.set(f.folder_path, [...(groups.get(f.folder_path) ?? []), f]);
+  return [...groups.entries()];
+}
 
-  return (
-    <ul className={cn("space-y-0.5", FILE_PANE_SCROLL)}>
-      {files.map((f) =>
-        f.kind === "directory" ? (
-          <li key={f.key}>
-            <button
-              type="button"
-              onClick={() => onSelectDirectory(f.key)}
-              aria-expanded={!!expandedDirs[f.key]}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
-                selectedKey === f.key && !selectedChild
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-secondary hover:text-foreground",
-              )}
-            >
-              {expandedDirs[f.key] ? (
-                <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-              ) : (
-                <ChevronRight className="size-3.5 shrink-0 opacity-70" />
-              )}
-              <Folder className="size-4 shrink-0 opacity-70" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{f.display_name}</span>
-                <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {f.path}
-                </span>
-              </span>
-            </button>
-            {expandedDirs[f.key] ? (
-              (f.files ?? []).length === 0 ? (
-                <p className="py-1 pl-9 pr-2 text-xs text-muted-foreground">
-                  {t("agents.config.emptyDir")}
-                </p>
-              ) : (
-                <ul className="space-y-0.5">
-                  {(f.files ?? []).map((c) => (
-                    <li key={c.relpath}>
-                      <button
-                        type="button"
-                        onClick={() => onSelectChild(f.key, c.relpath)}
-                        className={cn(
-                          "flex w-full items-center gap-2 rounded-md py-1 pl-9 pr-2 text-left transition-colors",
-                          selectedKey === f.key && selectedChild === c.relpath
-                            ? "bg-primary/10 text-primary"
-                            : "hover:bg-secondary hover:text-foreground",
-                        )}
-                      >
-                        <FileText className="size-3.5 shrink-0 opacity-70" />
-                        <span className="min-w-0 flex-1 truncate text-sm">{c.relpath}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )
-            ) : null}
-          </li>
-        ) : (
-          <li key={f.key}>
-            <button
-              type="button"
-              onClick={() => onSelectFile(f.key)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
-                selectedKey === f.key && !selectedChild
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-secondary hover:text-foreground",
-                !f.exists && selectedKey !== f.key && "opacity-55",
-              )}
-            >
-              <FileText className="size-4 shrink-0 opacity-70" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{f.display_name}</span>
-                <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {f.path}
-                </span>
-              </span>
-              {!f.exists ? (
-                <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("agents.config.notCreated")}
-                </span>
-              ) : null}
-            </button>
-          </li>
-        ),
-      )}
-    </ul>
-  );
+export function ConfigFileTree(props: ConfigFileTreeProps) {
+  const { t } = useTranslation();
+  // Folders (the config directory) the person folded.
+  const [foldedFolders, setFoldedFolders] = useState<Set<string>>(new Set());
+
+  const rows: FileTreeRow[] = [];
+  for (const [folder, entries] of groupByFolder(props.files)) {
+    const short = abbreviateHomePath(folder);
+    const home = short === "~";
+    const folderOpen = home || !foldedFolders.has(folder);
+    if (!home) {
+      rows.push({
+        key: `folder:${folder}`,
+        name: short,
+        kind: "folder",
+        depth: 0,
+        open: folderOpen,
+        mono: true,
+        title: folder,
+      });
+    }
+    if (!folderOpen) continue;
+    const depth = home ? 0 : 1;
+    for (const f of entries) {
+      const name = baseName(f.path);
+      if (f.kind === "directory") {
+        const open = !props.collapsed[f.key];
+        rows.push({
+          key: `dir:${f.key}`,
+          name,
+          kind: "folder",
+          depth,
+          open,
+          title: f.display_name,
+          selected: props.selectedKey === f.key && !props.selectedChild,
+        });
+        if (open) {
+          for (const c of f.files ?? []) {
+            const selected = props.selectedKey === f.key && props.selectedChild === c.relpath;
+            rows.push({
+              key: `child:${f.key}/${c.relpath}`,
+              name: c.relpath,
+              kind: "file",
+              depth: depth + 1,
+              selected,
+              dirty: selected && props.dirty,
+            });
+          }
+        }
+        continue;
+      }
+      const selected = props.selectedKey === f.key && !props.selectedChild;
+      rows.push({
+        key: `file:${f.key}`,
+        name: home ? `~/${name}` : name,
+        kind: "file",
+        depth,
+        selected,
+        missing: !f.exists,
+        note: t("agents.config.notCreated"),
+        dirty: selected && props.dirty,
+        title: f.display_name,
+      });
+    }
+  }
+
+  const activate = (row: FileTreeRow) => {
+    const sep = row.key.indexOf(":");
+    const kind = row.key.slice(0, sep);
+    const rest = row.key.slice(sep + 1);
+    if (kind === "folder") {
+      setFoldedFolders((prev) => {
+        const next = new Set(prev);
+        if (next.has(rest)) next.delete(rest);
+        else next.add(rest);
+        return next;
+      });
+    } else if (kind === "dir") props.onSelectDirectory(rest);
+    else if (kind === "file") props.onSelectFile(rest);
+    else {
+      const slash = rest.indexOf("/");
+      props.onSelectChild(rest.slice(0, slash), rest.slice(slash + 1));
+    }
+  };
+
+  return <FileTree rows={rows} label={t("agents.configTab.treeLabel")} onActivate={activate} />;
 }

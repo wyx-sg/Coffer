@@ -67,6 +67,11 @@ class ChatAttachmentService:
             resolved.append(found)
         return resolved
 
+    async def stored(self, attachment_id: str) -> Attachment | None:
+        """The stored upload an id names, or ``None`` when there is none (never
+        uploaded, or pruned)."""
+        return await self._store.resolve(attachment_id) if is_upload_id(attachment_id) else None
+
     async def reattach(self, message: Message) -> tuple[str, list[Attachment]]:
         """The text and files a persisted user message carries, to send it again
         (spec chat "Show a failed turn as one inline banner with Retry"). Raises
@@ -74,7 +79,7 @@ class ChatAttachmentService:
         a retry never goes out without a file the original carried."""
         text = "".join(b.text for b in message.content if isinstance(b, TextBlock))
         attachments = [
-            Attachment(path=b.path, mime=b.mime, filename=b.filename)
+            Attachment(path=b.path, mime=b.mime, filename=b.filename, id=b.id, size=b.size)
             for b in message.content
             if isinstance(b, AttachmentBlock)
         ]

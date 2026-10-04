@@ -17,17 +17,25 @@ import pytest_asyncio
 
 from coffer.application.audit_service import AuditService
 from coffer.application.memory.delivery import DeliveryService
-from coffer.application.memory.delivery_switch import reconcile_at_boot, reconcile_on_switch
 from coffer.domain.agent.config_files import FileStat
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.memory.delivery import MARKER, MalformedDeliveryConfig
+from coffer.domain.memory.delivery import (
+    DELIVERY_EVENTS,
+    MARKER,
+    MalformedDeliveryConfig,
+    events_label,
+)
 from coffer.domain.resource import Resource
+from tests.support.facets import agent_catalog
 
 pytestmark = pytest.mark.asyncio
 
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
+
+#: The events every installed hook sits on, as a status spells them.
+_ALL_EVENTS = events_label(DELIVERY_EVENTS)
 
 _CLAUDE_CONFIG_DIR = pathlib.Path("/fake/home/.claude")
 _CODEX_CONFIG_DIR = pathlib.Path("/fake/home/.codex")
@@ -38,7 +46,6 @@ _CC_UID = "9f3c1b0a4d5e4f7b8c1d2e3f40516273"
 _CODEX_UID = "1a2b3c4d5e6f708192a3b4c5d6e7f809"
 
 _CLAUDE_RESOURCE = Resource(
-    id=1,
     uid=_CC_UID,
     kind="agent",
     name="cc",
@@ -50,7 +57,6 @@ _CLAUDE_RESOURCE = Resource(
 )
 
 _CODEX_RESOURCE = Resource(
-    id=2,
     uid=_CODEX_UID,
     kind="agent",
     name="codex",
@@ -98,8 +104,11 @@ class FakeStore:
     def list_dir(self, root: pathlib.Path):  # pragma: no cover - unused
         raise NotImplementedError
 
-    def delete_with_backup(self, path: pathlib.Path) -> bool:  # pragma: no cover - unused
-        raise NotImplementedError
+    deletes: list[pathlib.Path] = field(default_factory=list)
+
+    def delete_with_backup(self, path: pathlib.Path) -> bool:
+        self.deletes.append(path)
+        return self._files.pop(path, None) is not None
 
     def remove_tree(self, path: pathlib.Path) -> bool:  # pragma: no cover - unused
         raise NotImplementedError
@@ -138,7 +147,7 @@ async def audit() -> AuditService:
 @pytest_asyncio.fixture
 async def svc(store: FakeStore, audit: AuditService) -> DeliveryService:
     agents = FakeAgentLookup([_CLAUDE_RESOURCE, _CODEX_RESOURCE])
-    return DeliveryService(agent_service=agents, audit=audit, store=store)
+    return DeliveryService(agent_service=agents, audit=audit, store=store, catalog=agent_catalog())
 
 
 _CC_SETTINGS_PATH = _CLAUDE_CONFIG_DIR / "settings.json"
@@ -157,13 +166,15 @@ async def test_install_adds_one_marker_scoped_entry_to_an_empty_config(
     status = await svc.install(_CC_UID, actor="tester")
 
     assert status.installed is True
-    assert status.event == "SessionStart"
+    assert status.event == _ALL_EVENTS
     assert MARKER in status.command
 
     written = json.loads(store._files[_CC_SETTINGS_PATH])
-    entries = written["hooks"]["SessionStart"]
-    assert len(entries) == 1
-    assert entries[0]["hooks"][0]["command"] == status.command
+    assert set(written["hooks"]) == set(DELIVERY_EVENTS)
+    for event in DELIVERY_EVENTS:
+        entries = written["hooks"][event]
+        assert len(entries) == 1
+        assert entries[0]["hooks"][0]["command"] == status.command
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -172,7 +183,8 @@ async def test_install_is_idempotent(svc: DeliveryService, store: FakeStore) -> 
     await svc.install(_CC_UID, actor="tester")
 
     written = json.loads(store._files[_CC_SETTINGS_PATH])
-    assert len(written["hooks"]["SessionStart"]) == 1
+    for event in DELIVERY_EVENTS:
+        assert len(written["hooks"][event]) == 1
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -202,10 +214,16 @@ async def test_install_into_a_config_holding_foreign_hooks_leaves_them_untouched
     written = json.loads(store._files[_CC_SETTINGS_PATH])
     assert written["env"] == {}
     assert written["theme"] == "dark"
-    assert written["hooks"]["UserPromptSubmit"] == foreign["hooks"]["UserPromptSubmit"]
+    # Foreign entries stay first and unchanged; Coffer's one is appended after.
+    event = "UserPromptSubmit"
+    assert written["hooks"][event][:-1] == foreign["hooks"][event]
+    assert MARKER in written["hooks"][event][-1]["hooks"][0]["command"]
+    # A foreign hook on an event Coffer does not install on is left alone, and
+    # Coffer adds nothing there.
     assert written["hooks"]["PreToolUse"] == foreign["hooks"]["PreToolUse"]
     assert written["hooks"]["Stop"] == foreign["hooks"]["Stop"]
     assert len(written["hooks"]["SessionStart"]) == 1
+    assert "PostToolUse" not in written["hooks"]
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -243,18 +261,16 @@ async def test_install_records_an_audit_event_with_the_actor(
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
-async def test_install_for_codex_writes_a_guarded_entry_into_hooks_json(
+async def test_install_for_codex_writes_a_session_start_entry_into_hooks_json(
     svc: DeliveryService, store: FakeStore
 ) -> None:
-    """Codex is delivered into its own file, on its own event, with a guard.
+    """Codex is delivered into its own file, on all four events, as JSON.
 
-    Three things are per-agent-type, and all three have to hold at once or the
-    hook is installed somewhere Codex never reads: the file is
-    ``<config_dir>/hooks.json`` (not Claude Code's ``settings.json``), the
-    event is ``UserPromptSubmit`` (Codex has no session-start event at all),
-    and because that event fires on EVERY prompt the installed command carries
-    a once-per-session lock-file guard keyed on the invoking process. Without
-    the guard, Coffer's context would be prepended to every single prompt.
+    The file is ``<config_dir>/hooks.json`` (not Claude Code's
+    ``settings.json``); session start is its own event (once per session, so
+    no guard — the old ``$PPID`` guard let only the first session of a shared
+    app-server fire); and every entry runs ``coffer memory hook``, which reads
+    the event from stdin and prints that event's JSON ``hookSpecificOutput``.
     """
     status = await svc.install(_CODEX_UID, actor="tester")
 
@@ -262,16 +278,17 @@ async def test_install_for_codex_writes_a_guarded_entry_into_hooks_json(
     assert _CC_SETTINGS_PATH not in store._files
 
     written = json.loads(store._files[_CODEX_HOOKS_PATH])
-    assert set(written["hooks"]) == {"UserPromptSubmit"}
-    entries = written["hooks"]["UserPromptSubmit"]
-    assert len(entries) == 1
-    command = entries[0]["hooks"][0]["command"]
-    assert command == status.command
-    assert MARKER in command
-    # The once-per-session guard: a $PPID-keyed lock file, tested before the
-    # invocation runs and created on the first fire.
-    assert "$PPID" in command
-    assert "[ -e " in command
+    assert set(written["hooks"]) == set(DELIVERY_EVENTS)
+    assert written["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
+    for event in DELIVERY_EVENTS:
+        entries = written["hooks"][event]
+        assert len(entries) == 1
+        command = entries[0]["hooks"][0]["command"]
+        assert command == status.command
+    assert MARKER in status.command
+    assert " memory hook " in status.command
+    assert "--hook-event" not in status.command
+    assert "$PPID" not in status.command
 
 
 async def test_status_never_writes(svc: DeliveryService, store: FakeStore) -> None:
@@ -326,7 +343,7 @@ async def test_remove_records_an_audit_event(svc: DeliveryService, audit: AuditS
 
 
 # ---------------------------------------------------------------------------
-# status: installed / not, per agent; remove_everywhere
+# status: installed / not, per agent
 # ---------------------------------------------------------------------------
 
 
@@ -336,29 +353,48 @@ async def test_status_reports_not_installed_for_a_fresh_agent(svc: DeliveryServi
     assert status.agent_uid == _CC_UID
     # The label travels beside the identity so a surface has something to show.
     assert status.agent_name == "cc"
-    assert status.event == "SessionStart"
+    assert status.event == _ALL_EVENTS
 
 
 async def test_status_reports_installed_after_install(svc: DeliveryService) -> None:
     await svc.install(_CODEX_UID, actor="tester")
     status = await svc.status(_CODEX_UID)
     assert status.installed is True
-    assert status.event == "UserPromptSubmit"
+    assert status.event == _ALL_EVENTS
 
 
-async def test_supports_exactly_the_types_with_a_hook_adapter() -> None:
-    assert DeliveryService.supports(AgentType.CLAUDE_CODE) is True
-    assert DeliveryService.supports(AgentType.CODEX) is True
+async def test_supports_exactly_the_types_with_a_hook_adapter(svc: DeliveryService) -> None:
+    assert svc.supports(AgentType.CLAUDE_CODE) is True
+    assert svc.supports(AgentType.CODEX) is True
 
 
-async def test_remove_everywhere_takes_the_hook_out_of_every_agent_carrying_one(
-    svc: DeliveryService,
-) -> None:
-    await svc.install(_CC_UID, actor="tester")
-    notes = await svc.remove_everywhere(actor="tester")
-    assert notes == ("cc: delivery hook removed",)
-    assert (await svc.status(_CC_UID)).installed is False
-    assert (await svc.status(_CODEX_UID)).installed is False
+async def test_an_agent_without_a_delivery_hook_is_unsupported() -> None:
+    """The adapter is the projection facet's; an agent whose projection has no
+    delivery hook is refused rather than guessed at."""
+    import dataclasses
+
+    from coffer.domain.agent.facets import AgentCatalog
+    from coffer.domain.memory.delivery import DeliveryUnsupported
+
+    bound = agent_catalog()
+    bare = AgentCatalog(
+        {
+            d.type: dataclasses.replace(
+                d, projection=dataclasses.replace(d.projection, delivery_hook=None)
+            )
+            for d in bound
+            if d.projection is not None
+        }
+    )
+    svc = DeliveryService(
+        agent_service=FakeAgentLookup([_CLAUDE_RESOURCE]),
+        audit=AuditService(FakeAuditRepo()),
+        store=FakeStore(),
+        catalog=bare,
+    )
+    assert svc.supports(AgentType.CLAUDE_CODE) is False
+    with pytest.raises(DeliveryUnsupported):
+        await svc.status(_CC_UID)
 
 
 # ---------------------------------------------------------------------------
@@ -423,114 +459,28 @@ async def test_unknown_agent_raises_resource_not_found(svc: DeliveryService) -> 
         await svc.install("00000000000000000000000000000000", actor="tester")
 
 
-# ---------------------------------------------------------------------------
-# heal_drift: an installed hook whose command Coffer no longer writes
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.acceptance(
-    spec="memory",
-    scenario="a hook whose command went stale is repaired without being asked",
+    spec="memory", scenario="an install clears marked entries on events it no longer uses"
 )
-async def test_heal_drift_rewrites_a_hook_whose_arguments_went_stale(
+async def test_install_clears_marked_entries_on_events_it_no_longer_uses(
     svc: DeliveryService, store: FakeStore
 ) -> None:
-    """The real one, found in the field. `coffer memory context` dropped
-    `--agent` for `--agent-uid`, and every hook already on disk kept passing
-    the option that no longer existed — so the agent printed a usage error at
-    the start of every session and Coffer's memory reached it never again.
+    first = await svc.install(_CC_UID, actor="tester")
+    command = first.command
+    marked = {"hooks": [{"type": "command", "command": command, "timeout": 5}]}
+    foreign = {"hooks": [{"type": "command", "command": "/skynet/beforeShell.sh"}]}
+    doc = json.loads(store._files[_CC_SETTINGS_PATH])
+    # An earlier build also hung Coffer's entry on the two shell-tool events.
+    doc["hooks"]["PreToolUse"] = [foreign, {"matcher": "Bash", **marked}]
+    doc["hooks"]["PostToolUse"] = [{"matcher": "Bash", **marked}]
+    store._files[_CC_SETTINGS_PATH] = json.dumps(doc)
 
-    Nothing noticed because detection matches the marker and never reads the
-    arguments: the stale entry read as perfectly installed.
-    """
-    await svc.install(_CC_UID, actor="ui")
-    fresh = json.loads(store._files[_CC_SETTINGS_PATH])
-    # Age the installed entry the way the CLI change aged it in the field.
-    entry = fresh["hooks"]["SessionStart"][0]["hooks"][0]
-    entry["command"] = f': {MARKER}; coffer memory context --agent cc --cwd "$PWD"'
-    store._files[_CC_SETTINGS_PATH] = json.dumps(fresh)
-
-    before = await svc.status(_CC_UID)
-    assert before.installed is True  # the entry that cannot work reads as installed
-
-    notes = await svc.heal_drift()
-
-    after = await svc.status(_CC_UID)
-    assert "--agent-uid" in after.command
-    assert "--agent cc" not in after.command
-    assert after.command == f': {MARKER}; coffer memory context --agent-uid {_CC_UID} --cwd "$PWD"'
-    assert any("cc" in note for note in notes)
-
-
-async def test_heal_drift_leaves_a_current_hook_alone(
-    svc: DeliveryService, store: FakeStore
-) -> None:
-    # A no-op must cost no write and no audit entry, or every boot would
-    # rewrite every agent's settings file for nothing.
-    await svc.install(_CC_UID, actor="ui")
-    before = store._files[_CC_SETTINGS_PATH]
-
-    assert await svc.heal_drift() == ()
-
-    assert store._files[_CC_SETTINGS_PATH] == before
-
-
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="a hook whose command went stale is repaired without being asked",
-)
-async def test_heal_drift_installs_nothing_the_user_removed(
-    svc: DeliveryService, store: FakeStore
-) -> None:
-    """Repair, not evangelism. An agent with no hook chose not to have one,
-    and a boot that installed one would be Coffer overriding that silently."""
-    assert await svc.heal_drift() == ()
-    assert _CC_SETTINGS_PATH not in store._files
-
-
-# ---------------------------------------------------------------------------
-# The `memory` switch (spec experimental-features "Withdraw what a switched-off
-# feature put in front of agents")
-# ---------------------------------------------------------------------------
-
-
-async def test_switching_on_installs_into_the_connected_agents_only(svc: DeliveryService) -> None:
-    async def connected() -> list[str]:
-        return [_CC_UID, "ghost"]
-
-    notes = await reconcile_on_switch(svc, connected, enabled=True)
-
-    assert (await svc.status(_CC_UID)).installed is True
-    assert (await svc.status(_CODEX_UID)).installed is False
-    # One agent that cannot be read is a note, not a failure for the rest.
-    assert any(n.startswith("ghost: could not install") for n in notes)
-    assert "cc: delivery hook installed, memory is switched on" in notes
-
-
-async def test_switching_on_leaves_an_installed_hook_alone(svc: DeliveryService) -> None:
     await svc.install(_CC_UID, actor="tester")
 
-    async def connected() -> list[str]:
-        return [_CC_UID]
-
-    assert await reconcile_on_switch(svc, connected, enabled=True) == ()
-
-
-async def test_switching_off_and_a_boot_with_memory_off_withdraw_everywhere(
-    svc: DeliveryService,
-) -> None:
-    async def connected() -> list[str]:
-        raise AssertionError("switching off never asks who is connected")
-
-    await svc.install(_CC_UID, actor="tester")
-    await reconcile_on_switch(svc, connected, enabled=False)
-    assert (await svc.status(_CC_UID)).installed is False
-
-    await svc.install(_CODEX_UID, actor="tester")
-    await reconcile_at_boot(svc, enabled=False)
-    assert (await svc.status(_CODEX_UID)).installed is False
-
-
-async def test_a_boot_with_memory_on_installs_nothing_new(svc: DeliveryService) -> None:
-    assert await reconcile_at_boot(svc, enabled=True) == ()
-    assert (await svc.status(_CC_UID)).installed is False
+    written = json.loads(store._files[_CC_SETTINGS_PATH])
+    assert written["hooks"]["PreToolUse"] == [foreign]
+    assert "PostToolUse" not in written["hooks"]
+    for event in ("SessionStart", "UserPromptSubmit"):
+        entries = written["hooks"][event]
+        assert len(entries) == 1
+        assert entries[0]["hooks"][0]["command"] == command

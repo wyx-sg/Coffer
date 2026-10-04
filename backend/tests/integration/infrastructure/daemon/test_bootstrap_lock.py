@@ -118,12 +118,15 @@ def test_spawn_lock_serialises_probe_and_bind(
 
     _setup_home(tmp_path, monkeypatch)
 
-    with bootstrap._spawn_lock() as _held_fd:
+    held_fd = bootstrap._acquire_spawn_lock()
+    try:
         # A second independent open + non-blocking flock on the same lockfile
         # must fail because the first holder still owns it.
         lock_path = bootstrap._spawn_lock_path()
         with open(lock_path) as f2, pytest.raises(OSError):
             fcntl.flock(f2.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        bootstrap._release_spawn_lock(held_fd)
 
 
 def test_acquire_or_existing_holds_lock_until_release_is_called(

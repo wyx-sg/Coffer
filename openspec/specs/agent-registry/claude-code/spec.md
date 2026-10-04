@@ -8,12 +8,12 @@ This child of [`agent-registry`](../spec.md) says how the `claude_code` agent ty
 ## Requirements
 
 ### Requirement: Locate Claude Code at ~/.claude
-The `claude_code` type's standard config directory MUST be `~/.claude/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". The presence of that directory MUST be the install marker [agent-registry](../spec.md) "Discover installed agents as candidates without registering them"'s discovery scans for, and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it: Claude Code is registrable once unless the user overrides the path. An overridden `config_dir` is the directory Claude Code is run against through its `CLAUDE_CONFIG_DIR` environment variable — the only way Claude Code reads a config directory other than `~/.claude` — and that is why "Allowlist exactly the files Claude Code reads" places `.claude.json` differently for it. Every Claude Code process Coffer itself starts for such an agent — a chat or channel turn, per [chat](../../chat/spec.md) "Ship Claude Code and Codex subprocess providers" — MUST carry `CLAUDE_CONFIG_DIR=<config_dir>`, so the turn reads the skills, MCP entry and settings Coffer put in that directory; for the default `~/.claude` the variable is left unset.
+The `claude_code` type's standard config directory MUST be `~/.claude/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". That directory and the `claude` program on the agent's `PATH` MUST be the two signals of [agent-registry](../spec.md) "Detect an agent by its program and its config directory" — the version is what `claude --version` prints (`2.1.281 (Claude Code)`) — and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it, and [agent-registry](../spec.md) "Keep one agent per type, named by it" makes Claude Code registrable once, at this directory unless the user chooses another. An overridden `config_dir` is the directory Claude Code is run against through its `CLAUDE_CONFIG_DIR` environment variable — the only way Claude Code reads a config directory other than `~/.claude` — and that is why "Allowlist exactly the files Claude Code reads" places `.claude.json` differently for it. Every Claude Code process Coffer itself starts for such an agent — a chat or channel turn, per [chat](../../chat/spec.md) "Ship Claude Code and Codex subprocess providers on the type's one agent" — MUST carry `CLAUDE_CONFIG_DIR=<config_dir>`, so the turn reads the skills, MCP entry and settings Coffer put in that directory; for the default `~/.claude` the variable is left unset.
 
 #### Scenario: discover Claude Code by its config directory
-- **GIVEN** a home directory containing `~/.claude/` and no agent registered
+- **GIVEN** a home directory containing `~/.claude/`, the `claude` program on the agent's `PATH`, and no agent registered
 - **WHEN** the user runs discovery
-- **THEN** a `claude_code` candidate is reported whose `config_dir` is `~/.claude`
+- **THEN** a `claude_code` candidate is reported in state `installed_active` whose `config_dir` is `~/.claude`
 - **AND** a `claude_code` agent registered without a `config_dir` resolves to `~/.claude`
 
 ### Requirement: Allowlist exactly the files Claude Code reads
@@ -41,18 +41,12 @@ The `global` file MUST be the one Claude Code itself reads for the agent's confi
 - **THEN** the entry reports `kind=directory` and both files by their entry-relative paths, the nested one included
 
 ### Requirement: Install Coffer's MCP entry into Claude Code's .claude.json
-The `McpInjectionSpec` [agent-registry](../spec.md) "Install Coffer's MCP server into an agent in one action" installs through MUST write `mcpServers.coffer` in the agent's `global` file — `~/.claude.json` for the default config directory, `<config_dir>/.claude.json` for a custom one, per "Allowlist exactly the files Claude Code reads" — a command-map entry whose `command` is the resolved absolute shim path and whose `args` carry `--agent-uid <uid>`. Because the whole JSON document is reserialized on write, the `.bak` of [agent-registry](../spec.md) "Write config files atomically with a backup and an audit entry" is what makes that diff recoverable. An entry a Coffer that predates the custom-directory rule wrote into `~/.claude.json` for a custom-directory agent — recognisable by that agent's uid in its `--agent-uid` argument — MUST be moved into the agent's own `.claude.json` once, at daemon start: installed there unless that file already carries a `coffer` entry, then removed from `~/.claude.json`, each write backed up and audited as install and uninstall are. Claude Code under that directory never reads the home file, so left in place the entry would report the custom agent as not installed and the default agent as installed under another agent's identity. The move is idempotent, and it never touches an entry carrying any other uid or none, any non-Coffer entry, or a file that does not parse — an unparseable file on either side is logged and both are left as they are.
+The `McpInjectionSpec` [agent-registry](../spec.md) "Install Coffer's MCP server into an agent in one action" installs through MUST write `mcpServers.coffer` in the agent's `global` file — `~/.claude.json` for the default config directory, `<config_dir>/.claude.json` for a custom one, per "Allowlist exactly the files Claude Code reads" — a command-map entry whose `command` is the resolved absolute shim path and whose `args` carry `--agent-uid <uid>`. Because the whole JSON document is reserialized on write, the `.bak` of [agent-registry](../spec.md) "Write config files atomically with a backup and an audit entry" is what makes that diff recoverable. The MCP-entry target of the unified reconciler MUST read and repair an agent's entry only in that agent's own `global` file: a `coffer` entry in a file the agent does not read is not the agent's entry, and the target neither moves it nor installs one on its account.
 
 #### Scenario: install Coffer's MCP into an agent
 - **GIVEN** a registered `claude_code` agent and a resolvable `coffer-mcp-shim` binary
 - **WHEN** the user installs Coffer's MCP
 - **THEN** a `coffer` entry is written into `~/.claude.json` `mcpServers` with `command` set to the absolute shim path, the prior file is backed up to `.bak`, an `agent_mcp_installed` audit entry is recorded, and install status reports `installed=true`
-
-#### Scenario: an entry installed before the config dir was honoured moves to the agent's own file
-- **GIVEN** a `claude_code` agent registered with a custom `config_dir`, and a `coffer` entry in `~/.claude.json` whose `args` carry that agent's uid
-- **WHEN** the daemon starts
-- **THEN** `<config_dir>/.claude.json` holds the `coffer` entry with the agent's uid, the entry is gone from `~/.claude.json` with every other key there intact, both files keep a `.bak`, and install status for the agent reports `installed=true`
-- **AND** an entry in `~/.claude.json` carrying the default agent's uid is left untouched, and a second start changes nothing
 
 ### Requirement: Read MCP entries from both Claude Code config files
 The entries [agent-registry](../spec.md) "List the MCP entries in the agent's own config files" lists MUST be parsed from BOTH the `global` file's `mcpServers` (`.claude.json`, located per "Allowlist exactly the files Claude Code reads") and `settings.json` `mcpServers`, each entry labelled with the file it came from — verified on a real machine, user-scope MCP servers live in the first and may also appear in the second. The format carries no per-entry enabled flag, so `enabled` is not reported for this type and there is nothing for Coffer to toggle.
@@ -166,3 +160,11 @@ The transcript location of [agent-registry](../spec.md) "List an agent's transcr
 - **WHEN** the user lists the agent's transcripts and then opens `<config_dir>/projects/<slug>` as a memory store
 - **THEN** the session is listed
 - **AND** the store read is rejected as `not_found` (404)
+
+### Requirement: Read Claude Code's hooks from its settings files and plugins
+The hooks of [agent-registry](../spec.md) "List every hook in the agent's native config" MUST be read, for `claude_code`, from the config directory's `settings.json` and `settings.local.json` (source `user`) and from the `hooks/hooks.json` of each enabled installed plugin (source `plugin`). Coffer's own memory hook sits in `settings.json` as two entries: on `SessionStart` and `UserPromptSubmit`.
+
+#### Scenario: read Claude Code hooks from both settings files and an enabled plugin
+- **GIVEN** a Claude Code agent with hooks in `settings.json`, in `settings.local.json`, and in an enabled plugin's `hooks/hooks.json`
+- **WHEN** the user lists its hooks
+- **THEN** each hook is listed with the file that declares it, the plugin's ones with source `plugin` and the plugin's id

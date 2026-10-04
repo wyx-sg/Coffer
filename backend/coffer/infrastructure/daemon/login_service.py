@@ -29,17 +29,18 @@ Installing is opt-in and reversible, and the agent execs the deploy's own
 it — see :func:`agent_program` for why pinning the version is a job that
 stops working two upgrades later, without saying so.
 
-**Nothing here boots a loaded job out**, and that is the rule that keeps this
-module from being the most destructive thing in Coffer. Once the agent has
-started the daemon, the running daemon *is* the launchd job — so
+**A loaded job is never booted out from under a running daemon.** Once the
+agent has started the daemon, the running daemon *is* the launchd job — so
 ``launchctl bootout`` terminates it. The install and the uninstall are both
 reached from the Settings page, which is served BY that daemon: booting out
 would kill the process answering the request, so the reply never arrives, the
 switch reverts over a change that did happen, and the replacement mints a
-token the open page does not have. Writing or deleting the plist is enough for
-"does it start at login", which is the whole question; a job already loaded
-stays loaded until the user logs out, and a crash in the meantime is one more
-restart rather than a problem.
+token the open page does not have. So the uninstall removes the plist and boots
+the job out right away only when no process is running under it; when the
+daemon is the job, the daemon boots its own job out as it exits
+(:func:`release_job_if_uninstalled`), which is what keeps "reversible without
+trace" true — launchd would otherwise go on restarting it after a crash, from
+the definition it still holds, long after the user switched Start at login off.
 """
 
 from __future__ import annotations
@@ -47,12 +48,16 @@ from __future__ import annotations
 import logging
 import os
 import plistlib
+import re
 import subprocess
-import sys
 from pathlib import Path
+
+import psutil
 
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.platform.process import has_launchd, login_shell_path
+from coffer.infrastructure.vault.home import bin_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -68,7 +73,7 @@ class ServiceUnsupported(RuntimeError):  # noqa: N818
 
 def is_supported() -> bool:
     """launchd is macOS's, and this agent is written for it alone."""
-    return sys.platform == "darwin"
+    return has_launchd()
 
 
 def plist_path() -> Path:
@@ -100,44 +105,6 @@ def build_plist(*, program: list[str], path_env: str, log_file: Path) -> dict[st
     }
 
 
-#: How long the login-shell probe is allowed to take. A shell profile that
-#: hangs must not hang an install; the inherited PATH is a worse answer, not
-#: no answer.
-_SHELL_PROBE_TIMEOUT = 3.0
-
-
-def login_shell_path() -> str:
-    """The user's real `PATH`, as their login shell reports it.
-
-    Not `os.environ["PATH"]`, and the difference is the whole point of the
-    key. This code usually runs *inside the daemon* — reached from the
-    Settings page — and that daemon was commonly auto-spawned by an MCP shim
-    belonging to a GUI-launched editor, whose `PATH` is the truncated one
-    macOS hands a Dock launch. Baking that into the agent would install
-    exactly the minimal `PATH` this key exists to avoid, and the `npx`/`uvx`
-    upstreams would resolve to nothing at the next login.
-
-    The shell is asked the same way `desktop/src/env_path.rs` asks it, and
-    falls back to the inherited value on any failure: a probe that cannot
-    answer must not stop an install.
-    """
-    shell = os.environ.get("SHELL", "/bin/zsh")
-    inherited = os.environ.get("PATH", "")
-    try:
-        result = subprocess.run(
-            [shell, "-l", "-c", 'printf %s "$PATH"'],
-            capture_output=True,
-            text=True,
-            timeout=_SHELL_PROBE_TIMEOUT,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        _logger.warning("login shell PATH probe failed (%r); using the inherited PATH", exc)
-        return inherited
-    probed = result.stdout.strip()
-    return probed or inherited
-
-
 def agent_program() -> list[str]:
     """What the launchd agent execs.
 
@@ -159,7 +126,7 @@ def agent_program() -> list[str]:
     A source install has no such symlink, and falls back to the resolved
     command (`python -m …`), which does not move either.
     """
-    deployed = Path.home() / ".coffer" / "bin" / "coffer-daemon"
+    deployed = bin_dir() / "coffer-daemon"
     if deployed.is_symlink() or deployed.is_file():
         return [str(deployed)]
     return daemon_spawn_command()
@@ -181,6 +148,20 @@ def _domain() -> str:
 def _is_loaded() -> bool:
     """Whether launchd currently holds this label in the user's GUI domain."""
     return _launchctl("print", f"{_domain()}/{LABEL}").returncode == 0
+
+
+def _job_pid() -> int | None:
+    """The pid launchd reports for this label, or ``None`` when it is not loaded
+    or has no process running."""
+    done = _launchctl("print", f"{_domain()}/{LABEL}")
+    if done.returncode != 0:
+        return None
+    match = re.search(r"^\s*pid = (\d+)\s*$", done.stdout, re.MULTILINE)
+    return int(match.group(1)) if match else None
+
+
+def _bootout() -> None:
+    _launchctl("bootout", f"{_domain()}/{LABEL}")
 
 
 def install() -> Path:
@@ -213,11 +194,11 @@ def install() -> Path:
 def uninstall() -> bool:
     """Remove the agent. False when there was nothing installed.
 
-    Removes the plist and stops there. "Stop starting it at login" is not
-    "stop it now", and the running daemon is very often the loaded job — so
-    unloading here would shut Coffer down on the way to a settings change.
-    launchd forgets the job at the next login, which is exactly when the
-    setting was going to matter.
+    Removes the plist, then boots the job out unless a process is running under
+    it. "Stop starting it at login" is not "stop it now", and the running daemon
+    is very often the loaded job — so unloading here would shut Coffer down on
+    the way to a settings change. That case is finished by the daemon itself as
+    it exits (:func:`release_job_if_uninstalled`).
     """
     if not is_supported():
         raise ServiceUnsupported("a login service is macOS-only; there is no launchd here")
@@ -225,4 +206,33 @@ def uninstall() -> bool:
     if not path.exists():
         return False
     path.unlink(missing_ok=True)
+    if _is_loaded() and _job_pid() is None:
+        _bootout()
+    return True
+
+
+def release_job_if_uninstalled() -> bool:
+    """Boot this process's own launchd job out, when the login service has been
+    uninstalled since it started. Called as the daemon exits.
+
+    True only when a bootout was issued. It is a no-op without launchd, while the
+    plist exists (the setting is still on), and when this process is not the job
+    launchd holds — a daemon started by hand or by the desktop shell. The job's
+    process is this one or, for a frozen build, its bootloader parent, so both
+    count. The bootout terminates this very process, which is already on its way
+    out; it is therefore the last thing the daemon does.
+    """
+    if not is_supported() or plist_path().exists():
+        return False
+    pid = _job_pid()
+    if pid is None:
+        return False
+    try:
+        ours = {os.getpid(), *(p.pid for p in psutil.Process().parents())}
+    except psutil.Error:
+        return False
+    if pid not in ours:
+        return False
+    _logger.info("daemon.login_service_released", extra={"pid": pid})
+    _bootout()
     return True

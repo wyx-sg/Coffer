@@ -1,6 +1,5 @@
-"""The instructions a curation pass hands its model (spec knowledge "Let newer
-statements win and a person's edit stand", "Refuse file-name references in
-documents").
+"""The instructions a curation pass hands its model (spec knowledge "Let the newer
+or better-evidenced statement win", "Refuse file-name references in documents").
 
 They sit in the system turn, identical on every pass, which is what a provider
 caches; the item and its candidates go in the human turn.
@@ -8,28 +7,34 @@ caches; the item and its candidates go in the human turn.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any
+
 from coffer.application.knowledge.curate_tools import MAX_WRITES_PER_PASS
 
 CURATION_SYSTEM = (
     "You maintain ONE collection of Markdown knowledge documents that a person and you write "
     "together. You are given ONE item: either NEW MATERIAL to fold into the documents, or a "
-    "DOCUMENT A PERSON EDITED, whose edit you carry into the rest of the collection.\n\n"
+    "DOCUMENT EDITED OUTSIDE A PASS, whose edit you carry into the rest of the collection.\n\n"
     "RULES, in order of importance:\n"
     "1. LOSE NOTHING. Every fact in new material must end up in a document, and every fact "
     "already in a document you rewrite must survive. Integrate; never regenerate.\n"
-    "2. A PERSON'S EDIT IS DELIBERATE. When the item is an edited document, what the person "
-    "wrote there is the truth: never revert it or reword it. Carry it outward — correct the "
-    "other documents that say otherwise, and move a section that belongs in another document "
-    "there — and leave the edited document alone unless it now duplicates another.\n"
+    "2. AN EDITED DOCUMENT IS A NEWER STATEMENT, NOT AN UNTOUCHABLE ONE. When the item is an "
+    "edited document, carry the edit outward — correct the other documents that say otherwise, "
+    "and move a section that belongs in another document there — and leave the edited "
+    "document alone unless it now duplicates another. It is judged by rule 5 like any other "
+    "statement: a later item may correct it, whoever wrote it.\n"
     "3. READ BEFORE YOU WRITE. Call read_document on any document you intend to change.\n"
     "4. FIND THE RIGHT HOME. The candidate documents you were shown are a literal-match guess, "
     "not an answer. Call list_documents and read the titles and descriptions: if none of them "
     "owns this subject, create a new document rather than forcing the material somewhere it "
     "does not belong.\n"
-    "5. WHEN NEW MATERIAL CONTRADICTS A DOCUMENT, THE NEWER STATEMENT WINS — and say so in the "
-    "prose. Keep the superseded statement legible with the date it changed, e.g. '(previously "
-    "recorded as X; corrected YYYY-MM-DD)'. Knowledge is about a world that changes, and when "
-    "it changed is worth keeping.\n"
+    "5. WHERE TWO STATEMENTS DISAGREE, THE NEWER ONE WINS UNLESS THE OLDER ONE IS SHOWN TO BE "
+    "RIGHT — by a source, a date, a command's output or the code. Say so in the prose, and keep "
+    "the superseded statement legible with the date it changed, e.g. '(previously recorded as "
+    "X; corrected YYYY-MM-DD)'. Knowledge is about a world that changes, and when it changed is "
+    "worth keeping. NO WRITER IS EXEMPT: a person, an agent and a curation pass are judged by "
+    "when a statement was made and the evidence behind it, never by who wrote it.\n"
     "6. NEVER NAME ANOTHER FILE. Document paths move as the collection is reorganised. Name the "
     "subject in prose. A write that names one of this collection's files is refused.\n"
     "7. ORGANISE BY SUBJECT, NEVER BY PROVENANCE. A reader wants the document to be about the "
@@ -43,4 +48,38 @@ CURATION_SYSTEM = (
 )
 
 
-__all__ = ["CURATION_SYSTEM"]
+def brief(
+    collection: str,
+    item: Any,
+    *,
+    edited: bool,
+    candidate_bodies: Sequence[Any],
+    every_document: Sequence[Any],
+) -> str:
+    """The one user turn: the item, the candidates, and every title."""
+    lines = [f"The collection is {collection!r}.", "", "## Every document that exists"]
+    if every_document:
+        lines += [f"- {e.path} — {e.title}: {e.description}" for e in every_document]
+    else:
+        lines.append("(none yet — this collection has no documents)")
+    lines += ["", "## Candidate documents, in full"]
+    if candidate_bodies:
+        for found in candidate_bodies:
+            lines += [
+                "",
+                f"### {found.path} — {found.title}",
+                f"_{found.description}_",
+                "",
+                found.body,
+            ]
+    else:
+        lines.append("(no other document mentions anything in this item)")
+    if edited:
+        lines += ["", f"## The document a person edited: {item.path}"]
+    else:
+        lines += ["", "## The new material to absorb"]
+    lines += ["", f"### {item.title}", f"_{item.description}_", "", item.body]
+    return "\n".join(lines)
+
+
+__all__ = ["CURATION_SYSTEM", "brief"]

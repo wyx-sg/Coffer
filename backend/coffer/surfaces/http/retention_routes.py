@@ -3,17 +3,19 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query
 
 from coffer.application.retention_registry import UnknownPrunableTable
 from coffer.application.retention_service import RetentionService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_retention_service
 from coffer.surfaces.http.schemas import (
+    PruneRequestIn,
     PruneResultOut,
     RetentionPolicyListOut,
     RetentionPolicyOut,
     RetentionPolicyUpdate,
+    RetentionPreviewOut,
 )
 
 router = APIRouter(
@@ -75,12 +77,23 @@ async def update_policy(
     raise UnknownPrunableTable(table_name)
 
 
+@router.get("/policies/{table_name}/preview", response_model=RetentionPreviewOut)
+async def preview_policy(
+    table_name: str,
+    days: int = Query(ge=1, le=3650),
+    svc: RetentionService = Depends(get_retention_service),  # noqa: B008
+) -> RetentionPreviewOut:
+    """How many rows a window of ``days`` would delete, before the user confirms it."""
+    total, older = await svc.preview(table_name, days)
+    return RetentionPreviewOut(
+        table_name=table_name, days=days, total_rows=total, rows_to_delete=older
+    )
+
+
 @router.post("/prune", response_model=PruneResultOut)
 async def prune_now(
-    body: dict[str, object] | None = Body(default=None),  # noqa: B008
+    body: PruneRequestIn | None = Body(default=None),  # noqa: B008
     svc: RetentionService = Depends(get_retention_service),  # noqa: B008
 ) -> PruneResultOut:
-    raw = (body or {}).get("table_name") if body else None
-    table_name: str | None = str(raw) if raw is not None else None
-    result = await svc.prune(table_name=table_name)
+    result = await svc.prune(table_name=body.table_name if body else None)
     return PruneResultOut(tables=result)

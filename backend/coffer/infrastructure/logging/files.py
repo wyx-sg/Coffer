@@ -20,8 +20,11 @@ from __future__ import annotations
 import logging
 import os
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
+
+from coffer.infrastructure.vault.home import logs_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -39,13 +42,43 @@ DEFAULT_MAX_AGE_DAYS = 7
 #: holds an open handle to would break logging until the next restart.
 _PRUNABLE_GLOBS = ("shim-*.log", "upstream/*.log.1")
 
+#: The source word on a line Coffer itself wrote into an upstream's log file.
+COFFER_LINE_SOURCE = "coffer"
+
 
 def log_dir() -> Path:
     """The directory Coffer writes logs to (``COFFER_LOG_DIR`` overrides)."""
     custom = os.environ.get("COFFER_LOG_DIR")
     if custom:
         return Path(custom)
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "logs"
+    return logs_dir()
+
+
+def upstream_log_path(server_name: str) -> Path:
+    """Where one upstream MCP server's stderr file lives.
+
+    Keyed on the server's NAME (the label): the file is for a person reading it,
+    and the one place that computes it is shared by the writer below and the
+    server page's log read, so the two cannot disagree. The rolled-aside backup
+    is the same path with ``.1`` appended.
+    """
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in server_name) or "upstream"
+    return log_dir() / "upstream" / f"{safe}.log"
+
+
+def write_coffer_line(sink: TextIO, text: str) -> None:
+    """Append one Coffer-authored line to an upstream's log file.
+
+    ``<ISO-8601 UTC timestamp> coffer <text>`` — the prefix is what the log read
+    uses to tell Coffer's own lines (how it started and stopped the server) from
+    what the server printed on stderr. Best-effort: never raises.
+    """
+    stamp = datetime.now(tz=UTC).isoformat(timespec="seconds")
+    try:
+        sink.write(f"{stamp} {COFFER_LINE_SOURCE} {text}\n")
+        sink.flush()
+    except (OSError, ValueError):
+        return
 
 
 def open_upstream_errlog(server_name: str) -> TextIO | None:
@@ -59,11 +92,9 @@ def open_upstream_errlog(server_name: str) -> TextIO | None:
     so nothing can rotate it underneath. One backup is kept; the previous one
     is replaced, and the pruner ages it out.
     """
-    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in server_name) or "upstream"
-    directory = log_dir() / "upstream"
+    path = upstream_log_path(server_name)
     try:
-        directory.mkdir(parents=True, exist_ok=True)
-        path = directory / f"{safe}.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and path.stat().st_size >= _UPSTREAM_MAX_BYTES:
             path.replace(path.with_suffix(".log.1"))
         return path.open("a", encoding="utf-8", errors="replace")

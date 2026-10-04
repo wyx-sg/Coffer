@@ -1,6 +1,6 @@
 // frontend/src/lib/api/agents-workspace.ts — wire types for the agent workspace
 // surfaces (MCP entries, plugins, unmanaged skills). Split out of agents.ts for
-// the file-size budget; re-exported there so existing import paths keep working.
+// the file-size budget; importers take these types from here.
 //
 // Every shape here is an alias of a generated schema under the name the hooks
 // already import: MCP entries and plugins come from the agent-registry
@@ -13,12 +13,12 @@ import type { components as SkillManager } from "@/lib/api/generated/skill-manag
 
 type Schemas = components["schemas"];
 
-export type McpEntryOut = Schemas["McpEntry"];
+export type McpEntryOut = Schemas["McpEntryOut"];
 
 /** One entry in full — the listing's fields plus the config file's `path`,
  *  `cwd` and every other key (`extra`, secret-looking values masked by the
  *  daemon: `value: null, masked: true`). */
-export type McpEntryDetailOut = Schemas["McpEntryDetail"];
+export type McpEntryDetailOut = Schemas["McpEntryDetailOut"];
 
 export type McpEntriesResponse = Schemas["McpEntriesOut"];
 
@@ -28,15 +28,11 @@ export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];
  *  the caller navigates, the name is what it tells the user the thing ended up
  *  being called — after a `new_name` override those are not the same answer,
  *  which is why both travel. */
-export type AdoptedResource = Schemas["AdoptedResource"];
-
-/** What adopting an unmanaged skill folder created: the new skill's uid and the
- *  label it was adopted under. Same two answers, same reason. */
-export type SkillRefOut = SkillManager["schemas"]["SkillRefOut"];
+export type AdoptedResource = Schemas["AdoptedOut"];
 
 /** `version` … `mcp_servers`: best-effort detail read from the plugin's
  * install dir (Claude only today; null / empty otherwise). */
-export type PluginOut = Schemas["Plugin"];
+export type PluginOut = Schemas["PluginOut"];
 
 /** `can_uninstall`: whether in-app uninstall is available for this agent now
  * (capability +, for CLI-strategy agents like Claude, the agent's CLI being on
@@ -47,19 +43,22 @@ export type PluginsResponse = Schemas["PluginsOut"];
  * the directory its package was read from, `can_uninstall`, and the skills /
  * commands / subagents (with descriptions), hook events and MCP servers it
  * contributes. */
-export type PluginDetailOut = Schemas["PluginDetail"];
-
-export type PluginComponentOut = Schemas["PluginComponent"];
+export type PluginDetailOut = Schemas["PluginDetailOut"];
 
 /** `location` is the scan location the entry was found in — `skills` is
  * `<config_dir>/skills`, `agents_dir` the agent product's secondary standard
  * location. Taken from the contract, so it is the two names and not `string`. */
 export type UnmanagedSkillOut = SkillManager["schemas"]["UnmanagedSkillOut"];
 
+/** Who gets an adopted skill: everywhere, only `agents` (uids), or nobody. */
+export type AdoptSkillReach = SkillManager["schemas"]["AdoptReach"];
+
+/** The adopt request body, from the contract. */
+type AdoptSkillBody = SkillManager["schemas"]["AdoptBody"];
+
+/** @ui-only What adopting an unmanaged folder takes: the folder (a path parameter, not part of the body) plus the body. */
+export type AdoptSkillVars = AdoptSkillBody & { skill: string };
+
 /** One unmanaged skill for its read-only detail page: the list entry plus the
  *  SKILL.md `description` (null when the folder does not validate). */
 export type UnmanagedSkillDetailOut = SkillManager["schemas"]["UnmanagedSkillDetailOut"];
-
-export interface UnmanagedSkillsResponse {
-  items: UnmanagedSkillOut[];
-}

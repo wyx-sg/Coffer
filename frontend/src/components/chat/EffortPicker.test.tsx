@@ -102,7 +102,7 @@ describe("EffortPicker", () => {
     // The trigger must never misreport what the conversation actually runs at.
     render(<EffortPicker agentKey="codex" model="gpt-5" value="xhigh" onCommit={vi.fn()} />);
     const trigger = screen.getByRole("combobox", { name: /reasoning effort/i });
-    expect(trigger).toHaveTextContent("xhigh");
+    expect(trigger).toHaveTextContent("Xhigh effort");
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toContain("xhigh");
   });

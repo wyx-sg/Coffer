@@ -8,7 +8,7 @@ only supplies it with usage counts and enforces the fail-open rule.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -26,12 +26,14 @@ async def apply_tiering(
     invocations: MCPInvocationRepoPort,
     config: TieringConfig,
     clock: Callable[[], datetime],
+    exposure: Mapping[str, str] | None = None,
 ) -> TieringResult:
     """Return the slice of ``tools`` to list, per the tool-tiering ADR.
 
     Fails open: when tiering is off, or the usage query raises, every tool is
     listed. A broken statistics layer must never be able to hide tools — that
-    would turn a monitoring problem into a capability outage.
+    would turn a monitoring problem into a capability outage. ``exposure`` is
+    the person's per-tool override (namespaced name -> ``listed`` | ``search``).
     """
     if not config.enabled:
         return TieringResult(listed=list(tools), hidden_count=0)
@@ -51,6 +53,7 @@ async def apply_tiering(
         usage,
         builtin_prefix=COFFER_TOOL_PREFIX,
         budget=config.budget,
+        exposure=exposure,
     )
 
 

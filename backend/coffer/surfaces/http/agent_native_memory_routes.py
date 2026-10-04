@@ -25,11 +25,12 @@ these audits.
 from __future__ import annotations
 
 import pathlib
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.workspace_dependencies import get_agent_native_memory_service
@@ -37,7 +38,7 @@ from coffer.surfaces.http.workspace_dependencies import get_agent_native_memory_
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 
@@ -57,7 +58,7 @@ class MemoryFileNodeOut(BaseModel):
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     #: A directory whose descendants were clipped at the walk-depth bound.
     truncated: bool = False

@@ -159,4 +159,4 @@ async def test_every_provider_is_wired_with_the_memory_composer(app) -> None:  #
             composer = entry.provider._compose_memory_context  # type: ignore[attr-defined]
             assert composer is not None, entry.provider.agent_key
             # An isolated, empty tree delivers nothing: no header, not an empty one.
-            assert await composer(entry.provider.agent_key, "/nowhere") is None
+            assert await composer(entry.provider.agent_key, "/nowhere", "c1") is None

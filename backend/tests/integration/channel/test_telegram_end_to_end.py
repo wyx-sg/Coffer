@@ -15,7 +15,8 @@ import pytest
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.application.chat.turn_orchestrator import active_turns
-from coffer.domain.errors import CredentialMissing
+from coffer.domain.channel.commands import DM_ONLY_NOTICE
+from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from tests.integration.infrastructure.channel.conftest import (
     FakeTelegram,
@@ -116,8 +117,16 @@ async def test_the_drafts_stop_button_interrupts_the_running_turn(env: ChannelEn
         # The same outcome a typed /stop produces: the turn is cancelled and the
         # chat hears the same acknowledgement.
         await wait_until(lambda: conversation_id not in active_turns())
-        await wait_until(lambda: any("Stopped." in t for t in _sent_texts(fake)))
+        # Telegram can edit a message, so "Stopping…" becomes the result in place.
+        await wait_until(
+            lambda: any(
+                "Stopped after" in str(p.get("text", ""))
+                for m, p in fake.calls
+                if m == "editMessageText"
+            )
+        )
         assert any("Stopping" in t for t in _sent_texts(fake))
+        assert not any("Stopped after" in t for t in _sent_texts(fake))
         assert not any("echo:" in t for t in _sent_texts(fake))
     finally:
         gated.release.set()
@@ -134,35 +143,29 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
     _resource, adapter = await _telegram_channel(env, fake, owner_chat=str(_OWNER_ID))
     mention = [{"type": "mention", "offset": 0, "length": len("@mybot")}]
     try:
-        # The owner sent /status as an ephemeral command, which is what gives
-        # the bot an ephemeral_message_id to answer privately against.
+        # The owner sent /help as an ephemeral command, which is what gives the
+        # bot an ephemeral_message_id to answer privately against.
         await fake.update_batches.put(
-            [_group_message(1, "@mybot /status", entities=mention, ephemeral_message_id=77)]
+            [_group_message(1, "@mybot /help", entities=mention, ephemeral_message_id=77)]
         )
         await wait_until(lambda: len(fake.calls_for("sendMessage")) >= 1)
-        status = fake.calls_for("sendMessage")[0]
-        assert status["chat_id"] == str(_GROUP_ID)
-        assert status["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
-        assert status["reply_parameters"]["ephemeral_message_id"] == 77
-        assert "Conversation" in status["text"] or "conversation" in status["text"]
+        answer = fake.calls_for("sendMessage")[0]
+        assert answer["chat_id"] == str(_GROUP_ID)
+        assert answer["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
+        assert answer["reply_parameters"]["ephemeral_message_id"] == 77
+        assert answer["text"].startswith("/new")
 
-        # /agent with no argument renders a selection card in the same group.
+        # A direct-chat command's decline line is the asker's own business too:
+        # it goes privately, as text — a card with buttons would be an ordinary
+        # message the room sees.
         await fake.update_batches.put(
-            [_group_message(2, "@mybot /agent", entities=mention, ephemeral_message_id=78)]
+            [_group_message(2, "@mybot /status", entities=mention, ephemeral_message_id=78)]
         )
-
-        def _card() -> dict[str, Any] | None:
-            for method, params in fake.calls:
-                if method in ("sendMessage", "sendRichMessage") and "reply_markup" in params:
-                    return params
-            return None
-
-        await wait_until(lambda: _card() is not None)
-        card = _card()
-        assert card is not None
-        # A card must be rewritable after the tap, so it stays an ordinary
-        # message: no ephemeral addressing at all.
-        assert "ephemeral_message_parameters" not in card
+        await wait_until(lambda: len(fake.calls_for("sendMessage")) >= 2)
+        status = fake.calls_for("sendMessage")[1]
+        assert status["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
+        assert "reply_markup" not in status
+        assert status["text"] == DM_ONLY_NOTICE
     finally:
         await adapter.stop()
 
@@ -214,7 +217,7 @@ async def test_a_forum_topic_mention_is_answered_in_the_topic(env: ChannelEnv) -
     assert history_reads == []
     readers = {"getChatHistory", "getMessages", "forwardMessages", "copyMessages"}
     assert not {m for m, _ in fake.calls} & readers
-    assert resource.id
+    assert resource.uid
 
 
 @pytest.mark.acceptance(
@@ -231,12 +234,12 @@ async def test_a_telegram_channel_stores_the_token_reference_only(env: ChannelEn
         actor="cli",
     )
     [listed] = await env.resources.list(kind="channel")
-    assert listed.id == created.id
+    assert listed.uid == created.uid
     assert listed.config["bot_token_ref"] == "channel/tg/bot-token"
-    # The token itself lives in the credential store, never in the config.
+    # The token itself lives in the secret store, never in the config.
     assert token not in repr(listed.config)
 
-    with pytest.raises(CredentialMissing):
+    with pytest.raises(SecretMissing):
         await env.resources.register(
             kind="channel",
             name="tg2",

@@ -1,336 +1,398 @@
-// frontend/src/components/agents/AgentSkillsTab.test.tsx
+// src/components/agents/AgentSkillsTab.test.tsx — the agent's Skills tab: "From Coffer" in one row, then the agent's own skills.
 //
-// The Skills tab mirrors the MCP servers tab: it manages nothing, because
-// delivery has one control and it lives on the skill (enabled + scope), not on
-// the agent. Covered here:
-//   - the "Managed by Coffer" pointer row renders and navigates to /skills
-//   - the retired delivered-skills table is gone: no list of delivered skills,
-//     no search box — the Skills page the row points at is where they live
-//   - none of the retired controls survive: no follow switch, no Install
-//     button, no per-row toggle, no status filter
-//   - the unmanaged-skills section: hidden when empty, rows with location /
-//     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
-//     invalid or foreign) and delete-with-confirm actions; a row click opens
-//     the folder's detail page, and no row carries an open-folder button
-//   - en/zh key parity for agents.skillsTab
-//
-// The unmanaged-skill routes are addressed by the agent's `uid`, so the fixture
-// agent's uid (`u-cc`) is deliberately not its name (`cc`) and every API
-// assertion below spells the uid.
+// Covered: Coffer's skills as one row (count, first five names, a link to the
+// Skills page filtered to this agent) and never as rows; the agent's own
+// folders ordered worst first with their state, one button and a ⋯ menu that
+// holds Delete… only; a name opening the folder's page; the Adopt dialog (name,
+// conflict, reach, errors inside, closing on success); Delete duplicate behind a
+// confirm; the shared empty box. The hooks run for real against mocked wire
+// modules; the fixture agent's uid (`u-cc`) differs from its type so every
+// assertion shows which one addresses what.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentSkillsTab } from "./AgentSkillsTab";
-import { acceptance } from "@/test/acceptance";
 import { ToastProvider } from "@/components/ui/toast";
-import type { AgentOut, UnmanagedSkillOut } from "@/lib/api/agents";
-import en from "@/i18n/locales/en.json";
-import zh from "@/i18n/locales/zh.json";
+import type { AgentOut } from "@/lib/api/agents";
+import type { UnmanagedSkillOut } from "@/lib/api/agents-workspace";
+import { ApiError } from "@/lib/api/errors";
+import type { SkillOut } from "@/lib/api/skills";
+import { acceptance } from "@/test/acceptance";
 
-const navigateMock = vi.fn();
-
-vi.mock("react-router-dom", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("react-router-dom")>()),
-  useNavigate: () => navigateMock,
-}));
-
-// The open-folder action moved to the detail page; the wire layer stays mocked
-// so a test can prove the table never calls it.
-vi.mock("@/lib/api/fs", () => ({
-  fsApi: { open: vi.fn(), reveal: vi.fn() },
-}));
-
-// useUnmanagedSkills / adopt / delete run as REAL react-query hooks against
-// this mocked wire layer.
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     unmanagedSkills: vi.fn(),
+    unmanagedSkillFiles: vi.fn(),
     adoptUnmanagedSkill: vi.fn(),
     deleteUnmanagedSkill: vi.fn(),
   },
 }));
+vi.mock("@/lib/api/skills", () => ({ skillsApi: { list: vi.fn() } }));
 
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
-
-const { fsApi } = await import("@/lib/api/fs");
-const fs = vi.mocked(fsApi);
+const { skillsApi } = await import("@/lib/api/skills");
+const skillsList = vi.mocked(skillsApi.list);
 
 const AGENT: AgentOut = {
   uid: "u-cc",
-  name: "cc",
+  name: "claude_code",
   type: "claude_code",
-  config_dir: "/x",
-  description: null,
+  config_dir: "/Users/me/.claude",
+  display_name: "Claude Code",
+  model: null,
+  effort: null,
+  tier_models: null,
+  version: null,
+  state: "installed_active",
+  install_handoff: null,
+  connection_uid: null,
   created_at: "",
   updated_at: "",
 };
 
-const UNMANAGED_GOOD: UnmanagedSkillOut = {
-  name: "good",
-  path: "/x/skills/good",
-  location: "skills",
-  valid: true,
-  reason: null,
-  foreign_link: false,
-};
-
-const UNMANAGED_INVALID: UnmanagedSkillOut = {
-  name: "broken",
-  path: "/x/skills/broken",
-  location: "skills",
-  valid: false,
-  reason: "missing SKILL.md frontmatter",
-  foreign_link: false,
-};
-
-const UNMANAGED_FOREIGN: UnmanagedSkillOut = {
-  name: "linked",
-  path: "/home/u/.agents/skills/linked",
-  location: "agents_dir",
-  valid: true,
-  reason: null,
-  foreign_link: true,
-};
-
-function stub(unmanaged: UnmanagedSkillOut[] = []) {
-  api.unmanagedSkills.mockResolvedValue({ items: unmanaged });
-  api.adoptUnmanagedSkill.mockResolvedValue({ uid: "u-good", name: "good" });
-  api.deleteUnmanagedSkill.mockResolvedValue(undefined);
-  fs.open.mockResolvedValue(undefined);
+function skill(name: string, extra: Partial<SkillOut> = {}): SkillOut {
+  return {
+    uid: `s-${name}`,
+    name,
+    description: `${name} does things`,
+    builtin: false,
+    enabled: true,
+    master_path: `/Users/me/.coffer/skills/${name}`,
+    bindings: [
+      {
+        agent_uid: "u-cc",
+        agent_name: "claude_code",
+        last_link_path: `/Users/me/.claude/skills/${name}`,
+        last_linked_at: null,
+        link_mode: null,
+      },
+    ],
+    ...extra,
+  } as SkillOut;
 }
 
-afterEach(() => vi.clearAllMocks());
+function own(name: string, extra: Partial<UnmanagedSkillOut> = {}): UnmanagedSkillOut {
+  return {
+    name,
+    path: `/Users/me/.claude/skills/${name}`,
+    location: "skills",
+    valid: true,
+    reason: null,
+    foreign_link: false,
+    ...extra,
+  };
+}
 
-function renderTab(agent: AgentOut = AGENT) {
-  // The unmanaged section's bulk actions run via useBulkMutate, which reads the
-  // QueryClient — provide one.
+const GUIDE = skill("coffer-guide", { builtin: true });
+const OTHER_AGENT_SKILL = skill("codex-only", {
+  bindings: [
+    {
+      agent_uid: "u-codex",
+      agent_name: "codex",
+      last_link_path: "/x",
+      last_linked_at: null,
+      link_mode: null,
+    },
+  ],
+});
+const LOOSE = own("release-notes");
+const LINKED = own("lint-fix", {
+  location: "agents_dir",
+  path: "/Users/me/.agents/skills/lint-fix",
+  foreign_link: true,
+});
+const BROKEN = own("migrate-old", { valid: false, reason: "SKILL.md has no name" });
+
+function stub(skills: SkillOut[], unmanaged: UnmanagedSkillOut[]) {
+  skillsList.mockResolvedValue({ items: skills } as Awaited<ReturnType<typeof skillsApi.list>>);
+  api.unmanagedSkills.mockResolvedValue({ items: unmanaged });
+  api.adoptUnmanagedSkill.mockResolvedValue({ uid: "s-new", name: "release-notes" });
+  api.deleteUnmanagedSkill.mockResolvedValue(undefined);
+  api.unmanagedSkillFiles.mockResolvedValue({
+    root: {
+      name: "release-notes",
+      type: "dir",
+      path: "",
+      abs_path: "/x",
+      folder_abs_path: "/x",
+      size: null,
+      truncated: false,
+      children: [
+        { name: "SKILL.md", type: "file", path: "SKILL.md", children: [] },
+        { name: "notes.md", type: "file", path: "templates/notes.md", children: [] },
+      ],
+    },
+  } as never);
+}
+
+function Where() {
+  const loc = useLocation();
+  return <p data-testid="where">{`${loc.pathname}${loc.search}`}</p>;
+}
+
+function renderTab() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  // ToastProvider is mounted so toasts actually render instead of hitting
-  // useToast's no-op fallback.
   return render(
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <MemoryRouter>
-          <AgentSkillsTab agent={agent} />
+        <MemoryRouter initialEntries={["/agents/claude_code/skills"]}>
+          <Routes>
+            <Route
+              path="/agents/:type/skills"
+              element={
+                <>
+                  <AgentSkillsTab agent={AGENT} />
+                  <Where />
+                </>
+              }
+            />
+            <Route path="*" element={<Where />} />
+          </Routes>
         </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
   );
 }
 
+const row = (name: string) => screen.getByRole("link", { name }).closest("li") as HTMLElement;
+
+afterEach(() => vi.clearAllMocks());
+
 describe("AgentSkillsTab", () => {
-  test("does not list the delivered skills — the Skills page holds them", async () => {
-    stub([]);
+  acceptance(
+    "agent-registry",
+    "Coffer's part is one row and the agent's own items follow",
+    async () => {
+      // The owner filter is gone: Coffer's part is one row, the agent's own skills follow in a list.
+      stub([GUIDE, OTHER_AGENT_SKILL], [LOOSE, BROKEN]);
+      renderTab();
+      expect(await screen.findByText("1 skill from Coffer")).toBeInTheDocument();
+      expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "coffer-guide" })).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "release-notes" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "migrate-old" })).toBeInTheDocument();
+      expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    },
+  );
+
+  test("Coffer's skills are one row — count, first five names, a link filtered to this agent", async () => {
+    const many = ["a", "b", "c", "d", "e", "f", "g"].map((n) => skill(`skill-${n}`));
+    stub([...many, OTHER_AGENT_SKILL], []);
     renderTab();
-
-    // The read-only table (and its search box) is retired: it decided nothing
-    // and duplicated the Skills page this tab already links to. With the
-    // unmanaged section empty too, the tab carries no table at all.
-    await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("u-cc"));
-    expect(screen.queryByPlaceholderText(en.skills.searchPlaceholder)).not.toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  });
-
-  test("the managed header points at the Skills page and navigates there", () => {
-    stub();
-    renderTab();
-
-    const header = screen.getByTestId("skills-managed-header");
-    expect(within(header).getByText(en.agents.cofferManaged)).toBeInTheDocument();
-    expect(within(header).getByText(en.agents.skillsTab.managedHint)).toBeInTheDocument();
-
-    fireEvent.click(
-      within(header).getByRole("button", { name: en.agents.skillsTab.openSkillsPage }),
-    );
-    expect(navigateMock).toHaveBeenCalledWith("/skills");
-  });
-
-  test("carries no delivery control: no follow switch, install button or per-row toggle", () => {
-    stub();
-    renderTab();
-
-    // Delivery is decided on the skill (enabled + scope), so the tab holds no
-    // switch at all — not the retired follow switch, not a per-row binding one.
-    expect(screen.queryAllByRole("switch")).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: /install/i })).not.toBeInTheDocument();
-    // No status filter either.
+    expect(await screen.findByText("7 skills from Coffer")).toBeInTheDocument();
     expect(
-      screen.queryByRole("combobox", { name: en.resources.cols.status }),
-    ).not.toBeInTheDocument();
-  });
-
-  describe("unmanaged skills", () => {
-    test("section is hidden when the list is empty", async () => {
-      stub([]);
-      renderTab();
-
-      // Let the unmanaged query settle, then assert absence.
-      await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("u-cc"));
-      expect(screen.queryByTestId("unmanaged-skills")).not.toBeInTheDocument();
-    });
-
-    test("rows render with location badges, invalid reason, and foreign-link badge", async () => {
-      stub([UNMANAGED_GOOD, UNMANAGED_INVALID, UNMANAGED_FOREIGN]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      expect(within(section).getByText("good")).toBeInTheDocument();
-      expect(within(section).getByText("broken")).toBeInTheDocument();
-      expect(within(section).getByText("linked")).toBeInTheDocument();
-
-      // Location badges.
-      expect(within(section).getAllByText(en.agents.skillsTab.locationSkills).length).toBe(2);
-      expect(within(section).getByText(en.agents.skillsTab.locationAgentsDir)).toBeInTheDocument();
-
-      // Invalid reason surfaced as muted text.
-      expect(within(section).getByText("missing SKILL.md frontmatter")).toBeInTheDocument();
-
-      // Foreign symlink badge only on the foreign row.
-      expect(within(section).getAllByTestId("foreign-link-badge")).toHaveLength(1);
-    });
-
-    test("adopt is disabled with a hint for invalid and foreign skills, enabled otherwise", async () => {
-      stub([UNMANAGED_GOOD, UNMANAGED_INVALID, UNMANAGED_FOREIGN]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      const adoptButtons = within(section).getAllByRole("button", {
-        name: en.agents.skillsTab.adopt,
-      });
-      expect(adoptButtons).toHaveLength(3);
-      const [good, invalid, foreign] = adoptButtons;
-      expect(good).toBeEnabled();
-      expect(invalid).toBeDisabled();
-      expect(foreign).toBeDisabled();
-
-      // Disabled-reason tooltips live on the wrapper span.
-      expect(
-        within(section).getByTitle(en.agents.skillsTab.adoptDisabledInvalid),
-      ).toBeInTheDocument();
-      expect(
-        within(section).getByTitle(en.agents.skillsTab.adoptDisabledForeign),
-      ).toBeInTheDocument();
-    });
-
-    test("rows carry no open-folder button — that action lives on the detail page", async () => {
-      stub([UNMANAGED_GOOD, UNMANAGED_INVALID]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      expect(
-        within(section).queryByRole("button", { name: en.agents.skillsTab.openFolder }),
-      ).not.toBeInTheDocument();
-      expect(fs.open).not.toHaveBeenCalled();
-    });
-
-    acceptance(
-      "skill-manager",
-      "open an unmanaged skill's detail page from the agent's Skills tab",
-      async () => {
-        stub([UNMANAGED_GOOD, UNMANAGED_FOREIGN]);
-        renderTab();
-
-        const section = await screen.findByTestId("unmanaged-skills");
-        fireEvent.click(within(section).getByText("linked"));
-        expect(navigateMock).toHaveBeenCalledWith(
-          "/agents/u-cc/skills/unmanaged/agents_dir/linked",
-        );
-      },
+      screen.getByText("skill-a · skill-b · skill-c · skill-d · skill-e · +2 more"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("codex-only")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Skills/ })).toHaveAttribute(
+      "href",
+      "/skills?agent=u-cc",
     );
-
-    test("adopt calls the API with the agent uid, skill name and location", async () => {
-      stub([UNMANAGED_GOOD]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(within(section).getByRole("button", { name: en.agents.skillsTab.adopt }));
-      await waitFor(() =>
-        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
-      );
-      // The row navigates on click; its action buttons must not.
-      expect(navigateMock).not.toHaveBeenCalled();
-    });
-
-    test("delete asks for confirmation, then calls the API with the location", async () => {
-      stub([UNMANAGED_FOREIGN]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(
-        within(section).getByRole("button", { name: new RegExp(`^${en.common.delete}: `) }),
-      );
-
-      const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText(en.agents.skillsTab.deleteConfirm)).toBeInTheDocument();
-      expect(api.deleteUnmanagedSkill).not.toHaveBeenCalled();
-
-      fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));
-      await waitFor(() =>
-        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "linked", "agents_dir"),
-      );
-    });
-
-    test("bulk adopt only adopts eligible rows (skips invalid/foreign)", async () => {
-      stub([UNMANAGED_GOOD, UNMANAGED_FOREIGN]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      // Select all rows, then trigger the bulk Adopt from the bulk bar.
-      fireEvent.click(within(section).getByRole("checkbox", { name: en.common.bulk.selectAll }));
-      const bar = screen.getByText(/2 selected/i).closest("div")!;
-      fireEvent.click(within(bar).getByRole("button", { name: en.agents.skillsTab.adopt }));
-
-      await waitFor(() =>
-        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
-      );
-      // The foreign-link row is never adopted, so exactly one call fires.
-      expect(api.adoptUnmanagedSkill).toHaveBeenCalledTimes(1);
-    });
-
-    test("bulk delete confirms, then deletes every selected row", async () => {
-      stub([UNMANAGED_GOOD, UNMANAGED_FOREIGN]);
-      renderTab();
-
-      const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(within(section).getByRole("checkbox", { name: en.common.bulk.selectAll }));
-      const bar = screen.getByText(/2 selected/i).closest("div")!;
-      fireEvent.click(within(bar).getByRole("button", { name: en.common.bulk.delete }));
-
-      const dialog = await screen.findByRole("dialog");
-      expect(api.deleteUnmanagedSkill).not.toHaveBeenCalled();
-      fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));
-
-      await waitFor(() =>
-        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
-      );
-      expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "linked", "agents_dir");
-      expect(api.deleteUnmanagedSkill).toHaveBeenCalledTimes(2);
-    });
   });
 
-  test("en and zh locales carry the same agents.skillsTab keys", () => {
-    const enKeys = Object.keys(en.agents.skillsTab).sort();
-    const zhKeys = Object.keys(zh.agents.skillsTab).sort();
-    expect(zhKeys).toEqual(enKeys);
-    for (const key of [
-      "managedHint",
-      "unmanagedTitle",
-      "adopt",
-      "adoptDisabledInvalid",
-      "adoptDisabledForeign",
-      "deleteConfirm",
-      "foreignLink",
-      "locationSkills",
-      "locationAgentsDir",
-      "adoptSuccess",
-      "openFolder",
-      "openFolderFailed",
-      "openSkillsPage",
-    ]) {
-      expect(enKeys).toContain(key);
-    }
+  test("the agent's own skills are ordered invalid, foreign, duplicate, unmanaged, each with its state", async () => {
+    stub(
+      [skill("pdf")],
+      [
+        LOOSE,
+        own("pdf", { location: "agents_dir", path: "/Users/me/.agents/skills/pdf" }),
+        { ...LINKED, valid: false, reason: "symlink points outside the master store" },
+        BROKEN,
+      ],
+    );
+    renderTab();
+    await screen.findByRole("link", { name: "migrate-old" });
+    const names = screen.getAllByRole("link", {
+      name: /^(release-notes|pdf|lint-fix|migrate-old)$/,
+    });
+    expect(names.map((n) => n.textContent)).toEqual([
+      "migrate-old",
+      "lint-fix",
+      "pdf",
+      "release-notes",
+    ]);
+    expect(within(row("migrate-old")).getByText("Invalid SKILL.md")).toBeInTheDocument();
+    expect(within(row("migrate-old")).getByText("SKILL.md has no name")).toBeInTheDocument();
+    expect(within(row("lint-fix")).getByText("Foreign link")).toBeInTheDocument();
+    expect(within(row("pdf")).getByText("Duplicate")).toBeInTheDocument();
+    expect(
+      within(row("pdf")).getByText("Same name as Coffer’s pdf, which this agent already gets"),
+    ).toBeInTheDocument();
+    expect(within(row("release-notes")).getByText("Unmanaged")).toBeInTheDocument();
+    expect(within(row("release-notes")).getByText("~/.claude/skills")).toBeInTheDocument();
+  });
+
+  acceptance(
+    "skill-manager",
+    "open an unmanaged skill's detail page from the agent's Skills tab",
+    async () => {
+      stub([GUIDE], [LINKED]);
+      renderTab();
+      fireEvent.click(await screen.findByRole("link", { name: "lint-fix" }));
+      expect(screen.getByTestId("where")).toHaveTextContent(
+        "/agents/claude_code/skills/unmanaged/agents_dir/lint-fix",
+      );
+    },
+  );
+
+  test("Adopt is hidden — not disabled — on an invalid folder and a foreign link", async () => {
+    stub([], [LOOSE, LINKED, BROKEN]);
+    renderTab();
+    await screen.findByRole("link", { name: "lint-fix" });
+    expect(screen.getAllByRole("button", { name: /^Adopt:/ })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Adopt: lint-fix" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Adopt: migrate-old" })).toBeNull();
+  });
+
+  // The Skills tab half of the scenario (the Adopt dialog adopts the folder by
+  // the agent's uid, under the name and reach chosen); the Skills page half is
+  // in SkillsPage.test.tsx.
+  acceptance(
+    "skill-manager",
+    "unmanaged skills are adopted only from the agent's Skills tab",
+    async () => {
+      stub([], [LOOSE]);
+      renderTab();
+      fireEvent.click(await screen.findByRole("button", { name: "Adopt: release-notes" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Adopt release-notes")).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Name in Coffer")).toHaveValue("release-notes");
+      expect(within(dialog).getByText("~/.claude/skills/release-notes")).toBeInTheDocument();
+      expect(
+        await within(dialog).findByText("2 files: SKILL.md, templates/notes.md"),
+      ).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
+      await waitFor(() =>
+        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "release-notes", "skills", {
+          name: undefined,
+          reach: { mode: "everywhere", agents: [] },
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    },
+  );
+
+  acceptance("agent-registry", "adopting a skill asks for its name and reach", async () => {
+    stub([], [LOOSE]);
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "Adopt: release-notes" }));
+    const dialog = await screen.findByRole("dialog");
+    // The name is prefilled with the skill's own; the reach defaults to every agent.
+    expect(within(dialog).getByLabelText("Name in Coffer")).toHaveValue("release-notes");
+    expect(within(dialog).getByTestId("adopt-skill-reach")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Name in Coffer"), {
+      target: { value: "notes" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
+    await waitFor(() =>
+      expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith(
+        "u-cc",
+        "release-notes",
+        "skills",
+        expect.objectContaining({ name: "notes" }),
+      ),
+    );
+  });
+
+  test("a name Coffer already has is refused inline, with a way to the skill, before anything is sent", async () => {
+    stub([skill("release-notes", { bindings: [] })], [LOOSE]);
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "Adopt: release-notes" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "Coffer already has a skill named release-notes. Choose another name.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("link", { name: "Open Coffer’s release-notes" }),
+    ).toHaveAttribute("href", "/skills/release-notes");
+    expect(within(dialog).getByRole("button", { name: "Adopt" })).toBeDisabled();
+    expect(api.adoptUnmanagedSkill).not.toHaveBeenCalled();
+  });
+
+  test("a failed adoption stays in the dialog, which stays open and offers Retry", async () => {
+    stub([], [LOOSE]);
+    api.adoptUnmanagedSkill.mockRejectedValueOnce(
+      new ApiError("INTERNAL_ERROR", "Permission denied writing to the library"),
+    );
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "Adopt: release-notes" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
+
+    expect(await within(dialog).findByText("Couldn’t adopt release-notes")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(api.adoptUnmanagedSkill).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("the ⋯ menu holds Delete… only, and a duplicate has the Delete duplicate button instead", async () => {
+    stub(
+      [skill("pdf")],
+      [
+        own("pdf", { location: "agents_dir", path: "/Users/me/.agents/skills/pdf" }),
+        own("release-notes"),
+      ],
+    );
+    renderTab();
+    await screen.findByRole("link", { name: "pdf" });
+    expect(screen.queryByRole("button", { name: "More for pdf" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More for release-notes" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete…"]);
+  });
+
+  test("Delete… names the folder and its files, and deletes it after the confirm", async () => {
+    stub([], [LOOSE]);
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "More for release-notes" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "This deletes ~/.claude/skills/release-notes and its 2 files. Coffer has no copy, so it can’t be restored.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "release-notes", "skills"),
+    );
+  });
+
+  test("Delete duplicate deletes the agent's copy of a skill Coffer delivers, after a confirm", async () => {
+    stub(
+      [skill("pdf")],
+      [own("pdf", { location: "agents_dir", path: "/Users/me/.agents/skills/pdf" })],
+    );
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "Delete duplicate: pdf" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/~\/\.agents\/skills\/pdf/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "pdf", "agents_dir"),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("search narrows the agent's own list", async () => {
+    stub([], [LOOSE, BROKEN]);
+    renderTab();
+    await screen.findByRole("link", { name: "release-notes" });
+    fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "migrate" } });
+    expect(screen.queryByRole("link", { name: "release-notes" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "migrate-old" })).toBeInTheDocument();
+  });
+
+  test("an agent with no skills of its own shows the shared empty box, search kept", async () => {
+    stub([GUIDE], []);
+    renderTab();
+    expect(await screen.findByText("Claude Code has no skills of its own")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search skills")).toBeInTheDocument();
   });
 });

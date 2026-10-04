@@ -137,13 +137,14 @@ def test_the_body_carries_both_halves() -> None:
     assert len(description) <= MAX_DESCRIPTION_CHARS
     assert "Coffer" in description
     assert "coffer__search_tools" in description
-    assert "coffer__write" in description
+    assert "coffer__write" not in description
     assert "shopee (Shopee's account system)" in description
 
     manual_end = body.index("## What is in this developer's knowledge")
     manual, catalogue = body[:manual_end], body[manual_end:]
     assert "`coffer__search_tools`" in manual
-    assert "`coffer__write`" in manual
+    assert "`coffer__write`" not in manual
+    assert "/.inbox/" in manual  # how an agent adds knowledge
     assert "Everything left out is\nstill callable" in manual  # the tiering contract
     assert "never writes it" in manual
     assert "Nothing here waits on a human" in manual
@@ -152,17 +153,26 @@ def test_the_body_carries_both_halves() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="the manual names two tools, the memory root and the log reader"
+    spec="knowledge", scenario="name one tool, both roots and the log reader in the manual"
 )
-def test_the_manual_names_two_tools_the_memory_root_and_the_log_reader() -> None:
+def test_the_manual_names_one_tool_the_memory_root_and_the_log_reader() -> None:
     import re
 
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
     named = set(re.findall(r"coffer__[a-z_]+", text))
-    assert named == {"coffer__search_tools", "coffer__write"}
+    assert named == {"coffer__search_tools"}
+    assert "coffer__write" not in text
     assert "coffer__recall" not in text
     assert "coffer__diagnose" not in text
-    assert "adds two tools of its own" in text
+    assert "adds one tool of its own" in text
+    # Knowledge is added by writing a file into a collection's inbox, edited in
+    # place, and never through git in the vault.
+    assert "/.inbox/" in text
+    assert "Never run git inside the vault" in text
+    assert "coffer knowledge" not in text
+    assert "coffer path knowledge" not in text
+    assert "coffer path memory" not in text
+    assert "trigger" not in text
     # The memory root, with the instruction to search it with the agent's own tools.
     assert f"`{_MEMORY}/<partition>/notes/`" in text
     assert f"search `{_MEMORY}` with your own tools" in text
@@ -245,10 +255,10 @@ def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
 
 
 def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_root() -> None:
-    """The whole guide, not only its description: ``coffer__write`` and the
-    knowledge root leave with the feature, and the tool count follows."""
+    """The whole guide, not only its description: the inbox instructions and the
+    knowledge root leave with the feature."""
     text = render("~/.coffer/knowledge", None, memory_root=_MEMORY)
-    assert "coffer__write" not in text
+    assert "/.inbox/" not in text
     assert "~/.coffer/knowledge" not in text
     assert _MEMORY in text
     assert "adds one tool of its own" in text
@@ -261,14 +271,14 @@ def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
     assert "<MEMORY_ROOT>" not in text
     assert "~/.coffer/memory" not in text
     assert "## Coffer reads your memory" not in text
-    assert "coffer__write" in text
+    assert "/.inbox/" in text
     assert "### ops" in text
-    assert "adds two tools of its own" in text
+    assert "adds one tool of its own" in text
     assert "memory notes" not in text.split("---")[1]
 
     both_off = render("~/.coffer/knowledge", None)
     assert "~/.coffer/memory" not in both_off
-    assert "coffer__write" not in both_off
+    assert "/.inbox/" not in both_off
     assert "adds one tool of its own" in both_off
     assert "`coffer path logs`" in both_off  # the log readers are always there
     assert "<!--" not in both_off
@@ -277,7 +287,6 @@ def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
 def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
     assert "<!--" not in text
-    assert "<TOOL_COUNT>" not in text
     assert "<MEMORY_ROOT>" not in text
-    assert "adds two tools of its own" in text
+    assert "adds one tool of its own" in text
     assert "memory notes" in text.split("---")[1]

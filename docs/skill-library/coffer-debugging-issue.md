@@ -8,8 +8,9 @@ for internal review. It is an orchestrator domain in the sense of
 it owns the method, and every layer it inspects is handed to an existing
 carrier domain named by the profile.
 
-Status: design approved in conversation on 2026-09-28; this document is the
-written spec awaiting review.
+Status: design for a skill that is not built yet. The skill itself belongs to
+the skill library a person imports into Coffer, not to this repository; this
+document is its written design.
 
 ## Why
 
@@ -191,7 +192,7 @@ environment, region, symptom keywords, root-cause category, status (located or
 partial), related tickets. The body is the detailed report, re-checked for
 secrets before filing. Recall greps these fields.
 
-**To verify first.** `coffer knowledge write` and `upload` both feed
+**To verify first.** An agent's inbox file and an upload both feed
 curation, which merges and rewrites material; neither keeps a document as
 written. A file written directly into the collection is also noticed by
 curation. The first implementation step creates `incidents`, writes one report
@@ -208,8 +209,8 @@ From the review of `coffer-testing-change`, only what the new domain shares:
   `coffer-reporting-evidence` for their reports and declare the dependency;
   the report sections that duplicated it are removed.
 - `coffer-testing-change` adopts the try-first rule in preflight.
-- `coffer-testing-change`'s archive phase stops calling the removed
-  `coffer knowledge ingest` and follows whatever the archive experiment above
+- `coffer-testing-change`'s archive phase writes its archive as
+  files and follows whatever the archive experiment above
   settles.
 
 The rest of that review (a read-only database query path, the test-plan

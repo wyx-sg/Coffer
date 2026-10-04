@@ -1,8 +1,8 @@
 """The age sweep for Coffer's attachment media directories (kind-agnostic).
 
 Two kinds keep attachment bytes on disk: a channel downloads into
-``~/.coffer/channel-media`` (spec channels "Persist inbound attachments as
-references") and the web composer uploads into ``~/.coffer/chat-media`` (spec
+``~/.coffer/content/channel-media`` (spec channels "Persist inbound attachments as
+references") and the web composer uploads into ``~/.coffer/content/chat-media`` (spec
 chat "Prune uploaded chat media on the retention cadence"). Both are pruned by
 one rule, so the I/O lives here once rather than inside either kind: stat every
 file, ask the pure ``coffer.domain.retention.files_to_prune`` which are too

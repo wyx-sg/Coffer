@@ -40,13 +40,12 @@ def test_a_seatalk_config_is_its_app_credentials_and_nothing_inbound():
     assert not fields & set(_WEBHOOK_ERA_KEYS)
 
 
-def test_a_document_still_carrying_webhook_era_keys_is_read_cleanly():
-    """A second machine on an older build may still publish them; they are
-    ignored like any unknown key and never come back out of a dump."""
-    cfg = parse_channel_config({**SEATALK_CONFIG, **_WEBHOOK_ERA_KEYS})
-    assert isinstance(cfg, SeaTalkChannelConfig)
-    dumped = cfg.model_dump(mode="json")
-    assert not set(dumped) & set(_WEBHOOK_ERA_KEYS)
+@pytest.mark.parametrize("key", sorted(_WEBHOOK_ERA_KEYS))
+def test_a_config_carrying_a_webhook_era_key_is_refused(key: str):
+    """A channel config refuses a key no channel type declares, as every
+    kind's config does."""
+    with pytest.raises(ValidationError, match=key):
+        parse_channel_config({**SEATALK_CONFIG, key: _WEBHOOK_ERA_KEYS[key]})
 
 
 @pytest.mark.parametrize("missing", ["app_id", "app_secret_ref"])
@@ -85,7 +84,7 @@ def test_missing_channel_type_rejected():
 
 def test_a_channel_names_no_agent_until_its_owner_picks_one():
     # ``default_agent`` holds the UID of an agent resource (ADR
-    # resource-identity-is-an-immutable-uid), and there is no constant a schema
+    # identity-is-the-uid-inside-the-file), and there is no constant a schema
     # could default it to: a uid is minted per vault. So the absent value is
     # ``None`` — bound to nobody — and not a guess at which agent the owner
     # meant. The runtime refuses to start such a channel rather than routing it
@@ -145,6 +144,40 @@ def test_quiet_windows_default_and_are_configurable():
         parse_channel_config({**TELEGRAM_CONFIG, "wait_after_text_seconds": -1})
     with pytest.raises(ValidationError):
         parse_channel_config({**TELEGRAM_CONFIG, "wait_after_forward_seconds": 61})
+
+
+def test_steps_are_shown_unless_the_channel_hides_them():
+    """spec channels "Show a turn's working state as one status line"."""
+    assert parse_channel_config(SEATALK_CONFIG).show_steps is True
+    assert parse_channel_config({**TELEGRAM_CONFIG, "show_steps": False}).show_steps is False
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the ping threshold comes from the channel's settings"
+)
+def test_the_ping_threshold_defaults_to_ninety_seconds_and_zero_turns_it_off():
+    """spec channels "Ping the asker when a long turn ends"."""
+    assert parse_channel_config(SEATALK_CONFIG).notify_after_seconds == 90.0
+    assert (
+        parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 0}).notify_after_seconds
+        == 0
+    )
+    with pytest.raises(ValidationError):
+        parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 3601})
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the idle period comes from the channel's settings"
+)
+def test_the_idle_period_defaults_to_a_day_and_zero_turns_it_off():
+    """spec channels "Open a new conversation after an idle period"."""
+    assert parse_channel_config(SEATALK_CONFIG).new_conversation_after_idle_hours == 24.0
+    zero = parse_channel_config({**SEATALK_CONFIG, "new_conversation_after_idle_hours": 0})
+    assert zero.new_conversation_after_idle_hours == 0
+    with pytest.raises(ValidationError):
+        parse_channel_config({**SEATALK_CONFIG, "new_conversation_after_idle_hours": -1})
+    with pytest.raises(ValidationError):
+        parse_channel_config({**SEATALK_CONFIG, "new_conversation_after_idle_hours": 9000})
 
 
 def test_raw_telegram_token_in_bot_token_ref_rejected():
@@ -216,6 +249,10 @@ def test_root_model_round_trips_flat_dict():
         "ignore_other_mentions": False,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
+        "show_steps": True,
+        "notify_after_seconds": 90.0,
+        "new_conversation_after_idle_hours": 24.0,
+        "directories": [],
         "runs_on": None,
     }
 
@@ -231,6 +268,10 @@ def test_root_model_round_trips_seatalk_dict():
         "ignore_other_mentions": False,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
+        "show_steps": True,
+        "notify_after_seconds": 90.0,
+        "new_conversation_after_idle_hours": 24.0,
+        "directories": [],
         "runs_on": None,
     }
 
@@ -253,3 +294,30 @@ def test_root_model_applies_raw_secret_rejection():
         ChannelConfigModel.model_validate(
             {**TELEGRAM_CONFIG, "bot_token_ref": "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
         )
+
+
+def test_directories_are_absolute_trimmed_and_deduplicated() -> None:
+    from coffer.domain.channel.config import parse_channel_config
+
+    parsed = parse_channel_config(
+        {
+            "channel_type": "telegram",
+            "bot_token_ref": "tg/token",
+            "directories": ["/a/", "/a", " /b "],
+        }
+    )
+    assert parsed.directories == ["/a", "/b"]
+    with pytest.raises(ValueError, match="absolute"):
+        parse_channel_config(
+            {"channel_type": "telegram", "bot_token_ref": "tg/token", "directories": ["rel/path"]}
+        )
+
+
+def test_the_default_directory_must_be_absolute() -> None:
+    from coffer.domain.channel.config import parse_channel_config
+
+    base = {"channel_type": "telegram", "bot_token_ref": "tg/token"}
+    parsed = parse_channel_config({**base, "default_agent_config": {"cwd": "/src/app"}})
+    assert parsed.default_agent_config == {"cwd": "/src/app"}
+    with pytest.raises(ValidationError, match="absolute"):
+        parse_channel_config({**base, "default_agent_config": {"cwd": "src/app"}})

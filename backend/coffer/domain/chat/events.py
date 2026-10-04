@@ -10,6 +10,8 @@ the SSE event name on the wire:
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
   QueueChanged     → ``queue_changed``
+  QuestionAsked    → ``question_asked``
+  QuestionClosed   → ``question_closed``
 
 ``QueueChanged`` is a conversation-level event (the pending-message queue, spec chat
 "Queue messages sent during a turn")
@@ -21,6 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Literal
+
+from coffer.domain.chat.question import QuestionBlock
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,8 @@ class ToolResult:
     tool_name: str
     output: dict[str, Any] | None
     error: str | None
+    #: How long the tool ran; stamped by the turn runner, null from an adapter.
+    duration_ms: int | None = None
     type: Literal["tool_result"] = "tool_result"
 
 
@@ -64,8 +70,8 @@ class TurnDone:
     """The turn completed.
 
     ``stop_reason`` is a short token describing why the turn ended — e.g.
-    ``"end_turn"`` (normal completion), ``"max_iterations"`` (the tool-step
-    limit was reached), or ``"interrupted"`` (the user stopped the turn).
+    ``"end_turn"`` (normal completion) or ``"interrupted"`` (the user stopped the
+    turn). A turn the agent cuts short (its own turn limit) arrives as a ``TurnError``.
     Token counts may be ``None`` if the agent does not report them.
     """
 
@@ -89,7 +95,7 @@ TURN_TIMEOUT = "turn_timeout"
 
 @dataclass(frozen=True)
 class TurnError:
-    """The turn failed — e.g. credential error, provider timeout, tool limit hit.
+    """The turn failed — e.g. secret error, provider timeout, tool limit hit.
 
     ``code`` is a short machine token; :data:`STREAM_ENDED` and
     :data:`TURN_TIMEOUT` are the two the platform itself raises.
@@ -114,4 +120,34 @@ class QueueChanged:
     type: Literal["queue_changed"] = "queue_changed"
 
 
-AgentEvent = TurnStarted | TextDelta | ToolCall | ToolResult | TurnDone | TurnError | QueueChanged
+@dataclass(frozen=True)
+class QuestionAsked:
+    """The agent asked the owner a question and the turn is waiting (spec chat
+    "Pause a turn on a question for the owner"). Carries the pending block;
+    sent again, with the same ``question_id``, each time one question of a
+    several-question ask is answered and the rest still wait."""
+
+    question: QuestionBlock
+    type: Literal["question_asked"] = "question_asked"
+
+
+@dataclass(frozen=True)
+class QuestionClosed:
+    """A question left the pending state — answered (in full), or cancelled.
+    Carries the block as it now stands."""
+
+    question: QuestionBlock
+    type: Literal["question_closed"] = "question_closed"
+
+
+AgentEvent = (
+    TurnStarted
+    | TextDelta
+    | ToolCall
+    | ToolResult
+    | TurnDone
+    | TurnError
+    | QueueChanged
+    | QuestionAsked
+    | QuestionClosed
+)

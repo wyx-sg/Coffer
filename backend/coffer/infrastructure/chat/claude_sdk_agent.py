@@ -15,24 +15,20 @@ binary. Per Contract 9 this file is the only one that imports the real
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
 import logging
-import pathlib
 from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Protocol
 
 from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    PermissionResult,
+    ToolPermissionContext,
 )
 
-from coffer.domain.chat.attachment import (
-    INLINE_IMAGE_MAX_BYTES,
-    Attachment,
-    base64_size,
-    inline_image_mime,
-)
+from coffer.application.chat.question_agents import AskOwner
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     STREAM_ENDED,
     STREAM_ENDED_MESSAGE,
@@ -42,12 +38,20 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message
+from coffer.domain.chat.reply_file import ReplyFile
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
+from coffer.infrastructure.chat.claude_sdk_attachments import attachment_block
 from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
+from coffer.infrastructure.chat.claude_sdk_questions import permission_for
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
     extract_document_attachments,
     prompt_with_document_text,
+)
+from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
+from coffer.infrastructure.chat.reply_file_diffs import (
+    ReplyFileRecorder,
+    write_hooks,
 )
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
@@ -56,11 +60,6 @@ from coffer.infrastructure.chat.transcribe import (
 )
 
 _logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Session injection seam
-# ---------------------------------------------------------------------------
 
 
 class ClaudeSdkSession(Protocol):
@@ -84,11 +83,8 @@ SdkSessionFactory = Callable[[ClaudeAgentOptions], ClaudeSdkSession]
 
 
 class ClaudeSdkClientSession:
-    """Adapts the real ``ClaudeSDKClient`` to the ``ClaudeSdkSession`` protocol.
-
-    Kept deliberately thin — the only place the concrete SDK client is touched —
-    so the rest of the adapter stays unit-testable behind the protocol.
-    """
+    """Adapts the real ``ClaudeSDKClient`` to the ``ClaudeSdkSession`` protocol —
+    the only place the concrete SDK client is touched."""
 
     def __init__(self, options: ClaudeAgentOptions) -> None:
         self._client = ClaudeSDKClient(options=options)
@@ -119,38 +115,6 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
     """Build a real ``ClaudeSDKClient``-backed session (production seam)."""
     return ClaudeSdkClientSession(options)
 
-
-def _attachment_block(att: Attachment) -> dict[str, Any]:
-    """Materialise one attachment into a stream-json content block: an image the
-    API takes inline (``inline_image_mime``: sniffed type, under the ceiling) as
-    a base64 ``image`` block — the base64 lives only in this request — and
-    anything else as a text pointer to its on-disk path, which the agent opens
-    with its own tools. Documents were text-extracted upstream."""
-    path = pathlib.Path(att.path)
-    try:
-        fits = base64_size(path.stat().st_size) <= INLINE_IMAGE_MAX_BYTES
-        data = path.read_bytes() if att.is_image and fits else b""
-    except OSError:
-        return {"type": "text", "text": f"[Attached file '{att.filename}' could not be read]"}
-    media_type = inline_image_mime(data) if data else None
-    if media_type is not None:
-        encoded = base64.standard_b64encode(data).decode()
-        return {
-            "type": "image",
-            "source": {"type": "base64", "media_type": media_type, "data": encoded},
-        }
-    return {
-        "type": "text",
-        "text": (
-            f"[The user attached a file '{att.filename}', saved at {att.path}. "
-            "Open it with your tools if it is relevant.]"
-        ),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Adapter
-# ---------------------------------------------------------------------------
 
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.
 _SENTINEL = object()
@@ -183,6 +147,8 @@ class ClaudeSdkAgentAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
+        prompt_memory: PromptMemory | None = None,
+        ask_owner: AskOwner | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -193,6 +159,23 @@ class ClaudeSdkAgentAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
+        # A channel turn's retrieval: the notes its prompt names.
+        self._prompt_memory = prompt_memory
+        # Raises a Coffer question for Claude Code's own ``AskUserQuestion`` (spec
+        # chat "Pause a turn on a question for the owner"); ``None`` outside a
+        # turn Coffer registered, leaving the CLI's own handling of the tool.
+        self._ask_owner = ask_owner
+        #: The model the turn ran on, as the CLI reported it; filled in while the
+        #: turn streams. The turn runner reads it when it finalises the reply.
+        self.model_id: str | None = None
+        self._reply_files = ReplyFileRecorder(cwd)
+
+    @property
+    def reply_files(self) -> list[ReplyFile]:
+        """What the reply changed in each file: the content snapshotted before its
+        first write to each path against the content now. The turn runner stores
+        it when it finalises the reply (complete, failed or stopped)."""
+        return self._reply_files.files()
 
     async def run_turn(
         self,
@@ -222,6 +205,11 @@ class ClaudeSdkAgentAdapter:
                 exc_info=True,
             )
 
+    async def _can_use_tool(
+        self, tool_name: str, tool_input: dict[str, Any], _context: ToolPermissionContext
+    ) -> PermissionResult:
+        return await permission_for(self._ask_owner, tool_name, tool_input)
+
     def _build_options(self, *, resume: str | None) -> ClaudeAgentOptions:
         # Run with full permissions — Coffer does not gate individual tool calls;
         # the paired owner driving the conversation is the trust boundary.
@@ -246,6 +234,12 @@ class ClaudeSdkAgentAdapter:
             # bundled CLI over anything on PATH, so that bites only an install
             # whose bundled binary is missing and whose PATH ``claude`` is stale.
             include_partial_messages=True,
+            # Only ever consulted for ``AskUserQuestion`` (see ``_can_use_tool``).
+            can_use_tool=self._can_use_tool if self._ask_owner is not None else None,
+            # The file each write tool is about to touch is read first, so the
+            # reply's own diff per file can be made when it ends (spec chat
+            # "Record what each reply changed in each file").
+            hooks=write_hooks(self._reply_files),
         )
         if self._env is not None:
             opts.env = self._env
@@ -272,7 +266,7 @@ class ClaudeSdkAgentAdapter:
         blocks: list[dict[str, Any]] = []
         if prompt:
             blocks.append({"type": "text", "text": prompt})
-        blocks.extend(_attachment_block(att) for att in attachments)
+        blocks.extend(attachment_block(att) for att in attachments)
         return blocks
 
     async def _connect(
@@ -283,9 +277,12 @@ class ClaudeSdkAgentAdapter:
         session = self._session_factory(self._build_options(resume=resume))
         try:
             await session.connect(prompt)
-        except Exception:
-            with contextlib.suppress(Exception):
-                await session.disconnect()
+        except BaseException:
+            # BaseException, not Exception: a Stop, a delete or a shutdown that lands
+            # while the CLI is spawning raises CancelledError here, and the process
+            # it already started must not outlive the turn.
+            with contextlib.suppress(BaseException):
+                await asyncio.shield(session.disconnect())
             raise
         return session
 
@@ -303,6 +300,7 @@ class ClaudeSdkAgentAdapter:
             attachments, self._document_extractor
         )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         content = self._build_content(prompt, attachments)
         if not content:
@@ -341,7 +339,9 @@ class ClaudeSdkAgentAdapter:
             # terminal event ends the drain.
             try:
                 async for msg in session.receive_messages():
-                    for event in map_sdk_message(msg, state):
+                    events = map_sdk_message(msg, state)
+                    self.model_id = state.model or self.model_id
+                    for event in events:
                         await queue.put(event)
                         if isinstance(event, (TurnDone, TurnError)):
                             await queue.put(_SENTINEL)

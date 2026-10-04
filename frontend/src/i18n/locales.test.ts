@@ -8,15 +8,6 @@ import { expect, test } from "vitest";
 import en from "./locales/en.json";
 import zh from "./locales/zh.json";
 
-test("common.dismiss exists in every locale (turn-error banner button)", () => {
-  expect(en.common.dismiss).toBeTruthy();
-  expect(zh.common.dismiss).toBeTruthy();
-});
-
-test("en and zh expose the same common.* keys", () => {
-  expect(Object.keys(zh.common).sort()).toEqual(Object.keys(en.common).sort());
-});
-
 test("errors.INTERNAL_ERROR reads as a readable message in every locale, never a shrug", () => {
   for (const text of [en.errors.INTERNAL_ERROR, zh.errors.INTERNAL_ERROR]) {
     expect(text).not.toMatch(/unexpected error|INTERNAL_ERROR|意外错误/i);
@@ -110,4 +101,55 @@ test('every literal t("…") key in src/ resolves in the locale bundle', () => {
   }
 
   expect(unresolved).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// The reverse: every key in the bundle is read somewhere.
+//
+// A key nothing references is a string a translator keeps maintaining for a
+// screen that no longer exists (89 of them piled up once, including the copy of
+// a "coming soon" placeholder the spec forbids). A key counts as read when its
+// text appears in a non-test source file, or when it sits under a prefix the
+// source builds at runtime (`t(`${K}.title.${state}`)`, `t("mcp.page.group." + g)`),
+// or is a backend code the fixture lists.
+
+function readSources(): string {
+  const texts = sourceFiles(SRC)
+    .filter((file) => !/\.test\.tsx?$/.test(file) && !file.includes(`${path.sep}test${path.sep}`))
+    // Whole-line and JSDoc comments only: a cruder strip would read the `//` in
+    // a URL or the `/*` in a glob as the start of a comment and blank real code.
+    .map((file) =>
+      fs
+        .readFileSync(file, "utf-8")
+        .replace(/^\s*\/\/.*$/gm, "")
+        .replace(/\/\*\*[\s\S]*?\*\//g, ""),
+    );
+  texts.push(fs.readFileSync(path.join(SRC, "i18n", "backend-keys.fixture.json"), "utf-8"));
+  return texts.join("\n");
+}
+
+/** The key prefixes the source assembles at runtime. */
+function dynamicPrefixes(source: string): Set<string> {
+  const prefixes = new Set<string>();
+  // Several files each declare their own `const K = "…"`, so a name maps to every value it takes.
+  const consts = new Map<string, string[]>();
+  for (const m of source.matchAll(/const\s+(\w+)\s*=\s*"([\w.]+)"/g))
+    consts.set(m[1], [...(consts.get(m[1]) ?? []), m[2]]);
+  for (const m of source.matchAll(/([\w.]+)\.\$\{/g)) prefixes.add(m[1]);
+  for (const m of source.matchAll(/\$\{(\w+)\}\./g)) {
+    for (const value of consts.get(m[1]) ?? []) prefixes.add(value);
+  }
+  for (const m of source.matchAll(/"([\w.]+)\."\s*\+/g)) prefixes.add(m[1]);
+  return prefixes;
+}
+
+test("every key in the en bundle is referenced by the source", () => {
+  const source = readSources();
+  const prefixes = [...dynamicPrefixes(source)];
+  const unreferenced = flatKeys(en).filter((key) => {
+    const bare = key.replace(/_(zero|one|two|few|many|other)$/, "");
+    if (source.includes(bare)) return false;
+    return !prefixes.some((prefix) => bare.startsWith(`${prefix}.`));
+  });
+  expect(unreferenced).toEqual([]);
 });

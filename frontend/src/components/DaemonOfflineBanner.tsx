@@ -1,116 +1,250 @@
-// src/components/DaemonOfflineBanner.tsx — floating banner when the daemon is offline, not ready, or out of date.
-import { useTranslation } from "react-i18next";
-import { AlertCircle, Loader2 } from "lucide-react";
+// src/components/DaemonOfflineBanner.tsx — the daemon's connection states in the workspace: the reconnecting bar, the offline state, the version warning.
+//
+// Boards 1.1.18 (reconnecting), 1.1.19 (offline), 1.1.12 (update) and the
+// behaviour sheet (1.1.04, "Daemon connection"). Both are drawn in line, at the top of the workspace, never
+// floating over the sidebar:
+//
+//   - Reconnecting — for the first seconds after the daemon stops answering,
+//     the page stays, dimmed and inert, under a warning bar that counts the
+//     attempts and offers Retry now. Nothing the user typed is lost.
+//   - Offline — after that, the page makes way for one screen that says the
+//     daemon isn't running and names the recovery the host can offer (spec
+//     web-ui "Show a self-clearing offline banner"): in the desktop shell a
+//     Start daemon control, because the shell can spawn one. Both hosts show
+//     the `coffer daemon start` command with a Copy button ("Or start it from
+//     a terminal"), and a footer line with the next check and the last reply.
+//     The daemon log is read without the daemon: the desktop shell opens the
+//     file in the system viewer (Open daemon log, a shell command), a browser
+//     gets the `coffer log daemon` command to copy. It clears itself as soon as the daemon answers again.
+//   - Version skew (desktop only) — the daemon answers, but an earlier app
+//     version left it running: a warning bar with the shell's Restart.
+//
+// The phase comes from `useDaemonConnectionDriver` (shell/daemonConnection),
+// which Layout mounts once; these components only render it.
+import { useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import { Clock, Play, Power, RotateCw } from "lucide-react";
+
+import { CopyableCommand } from "@/components/settings/CopyableCommand";
+import { Button } from "@/components/ui/button";
+import type { DaemonConnection } from "@/components/shell/daemonConnection";
 import { ApiError } from "@/lib/api/errors";
 import { useDaemonOutOfDate, useDaemonStatus, useRestartDaemon } from "@/lib/hooks/useDaemon";
-import { isTauri } from "@/lib/tauri";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { isTauri, shellInvoke } from "@/lib/tauri";
 
-/**
- * Shown above every page when /api/v1/daemon/status fails. Three flavours:
- *
- *   - UNAUTHENTICATED / DAEMON_NOT_READY (envelope codes from
- *     surfaces/http/errors.py): the daemon is reachable but the token is
- *     missing — surface the "daemon not ready" copy instead of a generic
- *     error, because the user's next action is usually "start the daemon".
- *   - Version skew: the daemon answers fine but reports a version this app
- *     build did not pair with — i.e. the desktop app found one an earlier
- *     version left detached. Desktop-only; see useDaemonOutOfDate.
- *   - Other errors: original "daemon offline" treatment.
- *
- * Recovery affordance, and why it differs by host. In a browser there is no
- * button: the browser cannot restart the daemon, and the status query polls
- * every 30s, so the banner clears itself once the daemon returns; a button that
- * only shortened that wait was one more thing to explain. What the user needs
- * is the command, so that is all this shows. The desktop shell is the exception
- * the design ADR carves out — its page is a local asset that is already
- * rendered with no daemon behind it, and the shell *can* spawn one, so there
- * the button is the recovery rather than a shortcut to waiting for it.
- * Keeping this opinionated avoids the "generic unexpected error on every page"
- * symptom we hit pre-redesign whenever ~/.coffer/daemon.json was absent.
- */
-export function DaemonOfflineBanner() {
+/** A reply time as the clock reads it ("14:02"). */
+function clockTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Seconds until `at`, re-read every second while mounted. */
+function useSecondsUntil(at: number | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (at === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [at]);
+  return at === null ? null : Math.max(0, Math.ceil((at - now) / 1000));
+}
+
+function restartMessage(error: unknown): string | null {
+  if (!error) return null;
+  return error instanceof Error ? error.message : String(error);
+}
+
+interface Props {
+  connection: DaemonConnection;
+  /** Probe again now. */
+  onRetry: () => void;
+}
+
+/** The bar over the page: reconnecting, or (desktop) a daemon from another app version. */
+export function DaemonStatusBar({ connection, onRetry }: Props) {
   const { t } = useTranslation();
-  const { data: status, error, isError } = useDaemonStatus();
-  const { data: isOutOfDate } = useDaemonOutOfDate(status?.version);
-  // The mutation owns the in-flight / error state and dedups double-clicks,
-  // so the banner doesn't hand-roll a restarting/restartError pair.
+  const status = useDaemonStatus();
+  const { data: outOfDate } = useDaemonOutOfDate(status.data?.version);
   const restart = useRestartDaemon();
+  const seconds = useSecondsUntil(
+    connection.phase === "reconnecting" ? connection.nextRetryAt : null,
+  );
 
-  // Skew only matters while the daemon is actually answering; an offline
-  // daemon has a louder problem and the same recovery.
-  const isStale = !isError && isOutOfDate === true;
-  if (!isError && !isStale) return null;
+  if (status.isError && connection.phase === "reconnecting") {
+    return (
+      <div
+        role="status"
+        data-testid="daemon-reconnecting"
+        className="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-warning-soft px-8"
+      >
+        {/* A partial ring, held still: the bar says "trying", the countdown is the motion. */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+          className="size-3.5 shrink-0 text-warning"
+        >
+          <path d="M12 3a9 9 0 1 0 9 9" />
+        </svg>
+        <span className="shrink-0 text-sm font-label text-text">
+          {connection.lastReplyAt === null
+            ? t("daemon.reconnect.connectingTitle")
+            : t("daemon.reconnect.title")}
+        </span>
+        <span className="min-w-0 truncate text-xs text-text-muted">
+          {t("daemon.reconnect.detail", { attempt: connection.attempt, seconds: seconds ?? 0 })}
+        </span>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={onRetry}>
+          {t("daemon.reconnect.retryNow")}
+        </Button>
+      </div>
+    );
+  }
 
-  const code = error instanceof ApiError ? error.code : "DAEMON_OFFLINE";
-  const isAuthGap = code === "UNAUTHENTICATED" || code === "DAEMON_NOT_READY";
-  const restartError = restart.error
-    ? restart.error instanceof Error
-      ? restart.error.message
-      : String(restart.error)
-    : null;
-
-  // Floats over the whole app (above the sidebar too): a fixed, top-centered
-  // card that doesn't take layout space, so page content stays put underneath.
-  // pointer-events-none on the wrapper lets clicks pass through the empty gutter;
-  // the card itself re-enables them.
-  return (
-    <Alert
-      variant="warning"
-      className="pointer-events-auto w-full max-w-xl shadow-lg"
-      data-testid="daemon-banner"
-      data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
-    >
-      <AlertCircle className="size-4" />
-      <AlertTitle className="font-serif text-base">
-        {isStale
-          ? t("daemon.offline.outOfDateTitle")
-          : isAuthGap
-            ? t("daemon.offline.notReadyTitle")
-            : t("daemon.offline.title")}
-      </AlertTitle>
-      <AlertDescription>
-        <p className="mb-3 text-foreground/80">
-          {isStale
-            ? t("daemon.offline.outOfDateBody")
-            : isAuthGap
-              ? t("daemon.offline.notReadyBody")
-              : t("daemon.offline.body")}
-        </p>
+  if (!status.isError && outOfDate === true) {
+    return (
+      <div
+        role="status"
+        data-testid="daemon-banner"
+        data-banner-code="DAEMON_OUT_OF_DATE"
+        className="flex min-h-10 shrink-0 flex-wrap items-center gap-2.5 border-b border-border bg-warning-soft px-8 py-1.5"
+      >
+        <span className="shrink-0 text-sm font-label text-text">
+          {t("daemon.offline.outOfDateTitle")}
+        </span>
+        <span className="min-w-0 flex-1 text-xs text-text-muted">
+          {t("daemon.offline.outOfDateBody")}
+        </span>
         {isTauri() ? (
-          <div className="space-y-2">
+          <Button
+            size="sm"
+            variant="outline"
+            loading={restart.isPending}
+            onClick={() => restart.mutate()}
+            data-testid="daemon-banner-restart"
+          >
+            <RotateCw aria-hidden />
+            {restart.isPending ? t("daemon.offline.restarting") : t("daemon.offline.restart")}
+          </Button>
+        ) : null}
+        {restart.error ? (
+          <span className="w-full text-xs text-danger">{restartMessage(restart.error)}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/** The screen that takes the page's place while the daemon cannot be reached. */
+export function DaemonOfflineState({ connection, onRetry }: Props) {
+  const { t } = useTranslation();
+  const status = useDaemonStatus();
+  const restart = useRestartDaemon();
+  const [logError, setLogError] = useState<string | null>(null);
+  const seconds = useSecondsUntil(connection.nextRetryAt);
+  const inShell = isTauri();
+
+  const code = status.error instanceof ApiError ? status.error.code : "DAEMON_OFFLINE";
+  // The last port the daemon answered on, else the one this page was served from.
+  const port = status.data?.port ?? (Number(window.location.port) || null);
+  const lastReply = connection.lastReplyAt;
+  const restartError = restartMessage(restart.error);
+  const timing = [
+    seconds !== null ? t("daemon.offlineState.checkingIn", { seconds }) : null,
+    lastReply !== null ? t("daemon.offlineState.lastReply", { time: clockTime(lastReply) }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const openLog = () => {
+    setLogError(null);
+    shellInvoke<void>("show_daemon_log").catch((e: unknown) => setLogError(restartMessage(e)));
+  };
+
+  return (
+    <div
+      className="flex min-h-full flex-1 items-center justify-center p-8"
+      data-testid="daemon-banner"
+      data-banner-code={code}
+      role="alert"
+    >
+      <div className="flex w-[460px] max-w-full flex-col items-center gap-5 text-center">
+        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
+          <Power className="size-[22px]" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-lg font-bold tracking-tight text-text">
+            {t("daemon.offlineState.title")}
+          </h1>
+          <p className="text-sm leading-normal text-text-muted">
+            {port ? (
+              <Trans
+                i18nKey="daemon.offlineState.body"
+                values={{ address: `127.0.0.1:${port}` }}
+                components={{ mono: <span className="font-mono text-xs" /> }}
+              />
+            ) : (
+              t("daemon.offlineState.bodyNoAddress")
+            )}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {inShell ? (
             <Button
-              size="sm"
-              variant="outline"
+              size="lg"
+              loading={restart.isPending}
               onClick={() => restart.mutate()}
-              disabled={restart.isPending}
               data-testid="daemon-banner-restart"
             >
-              {restart.isPending ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  {t("daemon.offline.restarting")}
-                </>
-              ) : (
-                t("daemon.offline.restart")
-              )}
+              <Play aria-hidden />
+              {restart.isPending
+                ? t("daemon.offlineState.starting")
+                : t("daemon.offlineState.start")}
             </Button>
-            {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {/* The browser can't kill/respawn the daemon. Tell the user how to
-                actually bring it back; the 30s status poll clears the banner. */}
-            <p className="text-xs text-foreground/60">
-              {t("daemon.offline.webRestartHint")}{" "}
-              <code className="rounded-sm bg-muted px-1 py-0.5 font-mono">
-                coffer daemon start
-              </code>
-            </p>
+          ) : null}
+          <Button size="lg" variant="outline" onClick={onRetry}>
+            <RotateCw aria-hidden />
+            {t("daemon.offlineState.retry")}
+          </Button>
+        </div>
+        {restartError ? <p className="text-xs text-danger">{restartError}</p> : null}
+        {/* The command works in both hosts (a browser cannot start the daemon
+            that serves it); the retries clear this screen once it answers. */}
+        <div className="flex w-full flex-col gap-2 text-left">
+          <span className="text-xs text-text-muted">{t("daemon.offline.webRestartHint")}</span>
+          <CopyableCommand command="coffer daemon start" />
+        </div>
+        {/* The Activity page's Daemon log tab needs the daemon, so the log is
+            read around it: the shell opens the file, a browser reads it from a terminal. */}
+        {inShell ? null : (
+          <div className="flex w-full flex-col gap-2 text-left">
+            <span className="text-xs text-text-muted">{t("daemon.offlineState.logHint")}</span>
+            <CopyableCommand command="coffer log daemon" />
           </div>
         )}
-      </AlertDescription>
-    </Alert>
+        <p className="inline-flex flex-wrap items-center justify-center gap-x-2 text-xs text-text-muted">
+          <Clock className="size-[13px] shrink-0" strokeWidth={1.75} aria-hidden />
+          {timing}
+          {inShell ? (
+            <>
+              {timing ? " ·" : null}
+              <button
+                type="button"
+                onClick={openLog}
+                className="font-label text-accent-text hover:underline"
+              >
+                {t("daemon.offlineState.openLog")}
+              </button>
+            </>
+          ) : null}
+        </p>
+        {logError ? <p className="text-xs text-danger">{logError}</p> : null}
+      </div>
+    </div>
   );
 }

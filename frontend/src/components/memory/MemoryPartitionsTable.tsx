@@ -1,88 +1,140 @@
 // frontend/src/components/memory/MemoryPartitionsTable.tsx
 //
-// The partitions list: one row per repository partition plus `global`, each one
-// a `memory` Resource (spec memory "Partition by
-// repository plus global"). A row carries what a partition
-// has — its name, the repository it is keyed on, how many notes it holds — and
-// nothing else.
+// The partitions list (spec memory "Present a partition as its memories"): one
+// row per repository partition plus `global`, each a `memory` Resource. A row
+// carries its name, the repository path it is keyed on ("Every project" for
+// global) and how many memories it holds.
 //
-// There is NO status or reach column and no bulk bar. The `memory` kind
-// declares itself non-toggleable: every partition is served to every agent
-// (spec memory "Serve every partition to every agent"), because aggregating
-// the agents' memory into one place exists so that each can read what the
-// others learned. A control there would offer a choice with nothing behind it
-// (spec web-ui "Show reach as a labelled button on every list and detail
-// page"). With no bulk action to apply, the table carries no selection either.
+// There is NO status or reach column, no selection and no search. The `memory`
+// kind is not toggleable: every partition is served to every agent (spec
+// memory "Serve every partition to every agent"), so a control there would
+// offer a choice with nothing behind it (spec web-ui "Show reach as one button
+// that names it").
 //
-// A partition is keyed on a REPOSITORY, not on a working directory: a worktree
-// and a second clone resolve to one partition (see "Identify a partition by its
-// repository"), so the column names the
-// repository rather than the folder some session happened to run in. When that
-// repository is no longer on disk the row says so instead of hiding: such a
-// partition is delivered to nobody, and deleting it is the developer's call and
-// nobody else's (see "Report unresolvable partitions").
+// Status is a grey dot plus its words ("Distilled 2 h ago"); a partition whose
+// repository is no longer on disk says so in warning colour instead of hiding,
+// and only that row offers Delete…: any other partition would come back on the
+// next Update memory (spec memory "Report unresolvable partitions"). The
+// confirmation is hoisted to table level so closing it cannot click through
+// to the row.
+import { useState } from "react";
+import { AgentSources, distilState, sampleLine } from "@/components/memory/partitionFacts";
+import { useUpkeepRunsOf } from "@/lib/hooks/useUpkeep";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
+import { DeletePartitionDialog } from "@/components/memory/DeletePartitionDialog";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
+import { StatusWord } from "@/components/status/StatusWord";
+import { TableActionButton } from "@/components/table/TableActionButton";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
-import { searchableName } from "@/lib/resourceTitle";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
-export function MemoryPartitionsTable({
-  rows,
-  isLoading = false,
-}: {
+interface Props {
   rows: PartitionOut[];
   /** Skeleton rows while the list resolves — the page keeps its header up. */
   isLoading?: boolean;
-}) {
-  const { t } = useTranslation();
+}
+
+export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [deleting, setDeleting] = useState<PartitionOut | null>(null);
+  const runs = useUpkeepRunsOf("memory");
+  const running = (uid: string) => runs.some((r) => r.name === uid);
+  // "All agents" means every agent that contributed to any partition.
+  const everyone = [...new Set(rows.flatMap((r) => r.sources))];
 
   const columns: Column<PartitionOut>[] = [
     {
       key: "name",
       header: t("memory.cols.name"),
-      cell: (r) => <ResourceLabel resource={r} />,
+      className: "w-[20%]",
+      cell: (r) => <TruncatedText text={r.name} className="font-medium" />,
     },
     {
-      key: "repository",
-      header: t("memory.cols.repository"),
-      className: "w-full min-w-[16rem]",
+      key: "path",
+      header: t("memory.cols.path"),
+      className: "w-[22%]",
+      cell: (r) =>
+        r.repository_path ? (
+          <TruncatedPath
+            text={abbreviateHomePath(r.repository_path)}
+            className="font-mono text-2xs text-text-muted"
+          />
+        ) : (
+          <span className="text-xs text-text-muted">{t("memory.cols.global")}</span>
+        ),
+    },
+    {
+      key: "sample",
+      header: t("memory.cols.sample"),
       cell: (r) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="line-clamp-1 text-sm text-muted-foreground">
-            {r.repository_path || t("memory.cols.global")}
-          </span>
-          {/* Stated on the row, not filtered out of it: the partition is
-              delivered to nobody, and only the developer can decide whether
-              that is a repository to re-clone or a partition to delete. */}
-          {r.unresolvable ? <UnresolvableBadge /> : null}
-        </span>
+        <TruncatedText
+          text={sampleLine(t, r)}
+          className={r.sample ? "text-sm text-text" : "text-sm text-text-subtle"}
+        />
       ),
     },
     {
-      key: "notes",
-      header: t("memory.cols.notes"),
-      className: "whitespace-nowrap text-right",
+      key: "memories",
+      header: t("memory.cols.memories"),
+      className: "w-[96px] whitespace-nowrap text-right",
       cell: (r) => <span className="tabular-nums">{r.note_count}</span>,
+    },
+    {
+      key: "sources",
+      header: t("memory.cols.sources"),
+      className: "w-[140px] whitespace-nowrap",
+      cell: (r) => <AgentSources agents={r.sources} everyone={everyone} />,
+    },
+    {
+      key: "distil",
+      header: t("memory.cols.distil"),
+      className: "w-[170px] whitespace-nowrap",
+      // Healthy states are grey; only a missing repository is coloured.
+      cell: (r) =>
+        r.unresolvable ? (
+          <UnresolvableBadge />
+        ) : (
+          <StatusWord tone="off">{distilState(t, i18n.language, r, running(r.uid))}</StatusWord>
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "w-[110px] whitespace-nowrap text-right",
+      // Only a partition whose repository is gone can be deleted.
+      cell: (r) =>
+        r.unresolvable ? (
+          <TableActionButton
+            icon={Trash2}
+            label={`${t("common.delete")}…`}
+            destructive
+            aria-label={`${t("common.delete")}: ${r.name}`}
+            onClick={() => setDeleting(r)}
+          />
+        ) : null,
     },
   ];
 
   return (
-    <DataTable
-      rows={rows}
-      isLoading={isLoading}
-      columns={columns}
-      rowKey={(r) => r.uid}
-      onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.uid)}`)}
-      search={{
-        accessor: (r) => `${searchableName(r)} ${r.repository_path}`,
-        placeholder: t("memory.searchPlaceholder"),
-      }}
-      emptyMessage={t("memory.empty")}
-    />
+    <>
+      <DataTable
+        fixed
+        rows={rows}
+        isLoading={isLoading}
+        columns={columns}
+        rowKey={(r) => r.uid}
+        onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.uid)}`)}
+        // Never shown in practice: with no partitions the page shows the
+        // first-run state instead of the table.
+        emptyMessage={t("memory.welcome.title")}
+      />
+      <DeletePartitionDialog partition={deleting} onClose={() => setDeleting(null)} />
+    </>
   );
 }

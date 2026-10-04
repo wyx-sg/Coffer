@@ -762,6 +762,72 @@ async def test_cancel_interrupts_disconnects_and_persists_session():
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
+async def test_adapter_reports_the_model_the_turn_ran_on():
+    # The CLI names the model on its assistant messages; the adapter exposes it so
+    # the turn runner can record it on the reply it finalises.
+    factory = _Factory(
+        [
+            SystemMessage(subtype="init", data={"session_id": "s1"}),
+            AssistantMessage(content=[SdkTextBlock(text="hi")], model="claude-opus-test"),
+            ResultMessage(
+                subtype="success",
+                duration_ms=1,
+                duration_api_ms=1,
+                is_error=False,
+                num_turns=1,
+                session_id="s1",
+                usage={"input_tokens": 1, "output_tokens": 1},
+                total_cost_usd=0.0,
+            ),
+        ]
+    )
+    adapter = _adapter(factory)
+    assert adapter.model_id is None  # nothing is known before the turn runs
+
+    await _collect(adapter, _user_turn("hi"))
+
+    assert adapter.model_id == "claude-opus-test"
+
+
+@pytest.mark.asyncio
+async def test_cancel_while_connecting_disconnects_the_session():
+    # A Stop, a delete or a shutdown can land while the CLI is still spawning. The
+    # process the SDK already started must be torn down, not left without an owner.
+    class _HangingConnect(FakeSdkSession):
+        async def connect(self, prompt: Any) -> None:
+            await asyncio.sleep(3600)
+
+    sessions: list[_HangingConnect] = []
+
+    def factory(options: ClaudeAgentOptions) -> _HangingConnect:
+        sessions.append(_HangingConnect(options, []))
+        return sessions[-1]
+
+    adapter = ClaudeSdkAgentAdapter(
+        cwd="/tmp",
+        resume_session=None,
+        extra={},
+        session_factory=factory,
+        on_session=_dummy_sink,
+    )
+    stream = await adapter.run_turn(history=_user_turn("go"))
+
+    async def consume() -> None:
+        async for _ in stream:
+            pass
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert len(sessions) == 1
+    assert sessions[0].disconnected is True
+
+
+@pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="chat", scenario="an agent stream that ends without a terminal is a turn error"
 )

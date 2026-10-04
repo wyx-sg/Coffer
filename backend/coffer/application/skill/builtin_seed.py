@@ -1,13 +1,13 @@
 """Seeding Coffer's own skill into the master store as a real skill resource.
 
 Coffer ships a manual for itself and keeps it in the same place every other
-skill lives: one master folder under ``~/.coffer/skills/``, one ``skill``
-resource row, delivered by the same predicate and the same links as any
-imported skill. It is not a second delivery mechanism bolted beside the first,
-which is what the rendered knowledge skill used to be — its own writer, its own
-per-agent copies, invisible to the skills surface, unreachable by scope, and
-outside every piece of machinery (drift verification, repair, reclaim) the skill
-kind already had.
+skill lives: one folder of the skill store (derived output, so under
+``~/.coffer/derived/skills/``), one ``skill`` resource, delivered by the same
+predicate and the same links as any imported skill. It is not a second
+delivery mechanism bolted beside the first, which is what the rendered
+knowledge skill used to be — its own writer, its own per-agent copies,
+invisible to the skills surface, unreachable by scope, and outside every piece
+of machinery (drift verification, repair, reclaim) the skill kind already had.
 
 What makes it Coffer's rather than the user's is the ``builtin`` source on its
 config: the folder's bytes are rewritten from the running build at every boot
@@ -37,6 +37,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
+from coffer.domain.reconcile import Disposition, Outcome
 from coffer.domain.skill.builtin import is_builtin
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import BuiltinSource
@@ -49,7 +50,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Audited actor for the seed, matching the other unattended boot work
-#: (``boot_reconcile.BOOT_ACTOR``): this is Coffer acting, not a person.
+#: (the reconciler's boot pass): this is Coffer acting, not a person.
 SEED_ACTOR = "system"
 
 
@@ -65,8 +66,8 @@ class BuiltinSkillSeed:
         Safe to call on a timer and at every boot: when the master folder
         already holds exactly this text and the row agrees with it, nothing is
         written and nothing is audited. Delivery is reconciled either way,
-        because a machine that received the row through a converge round has
-        the master and the row but has never linked it into an agent.
+        because the master and the row can both exist while no agent has been
+        linked to it yet.
         """
         try:
             changed = await self._write(name=name, text=text)
@@ -165,13 +166,29 @@ class BuiltinSkillSeed:
         return await self._skills._rs.find_by_name("skill", name)
 
     async def _deliver(self, name: str) -> None:
-        """Reconcile every agent's delivered set, so the new row lands."""
-        for agent in await self._skills.list_agents():
-            failures = await self._skills.apply_scope_for_agent(agent.name, actor=SEED_ACTOR)
-            for failure in failures:
+        """Ask for a delivery pass, so the row lands in every agent it is for.
+
+        The pass reconciles every skill, and says what it could not do: an
+        item of this skill it failed or would not write is logged here.
+        """
+        report = await self._skills.reconcile_delivery()
+        row = await self._row(name)
+        if report is None or row is None:
+            return
+        for result in report.results:
+            change = result.change
+            if change.difference.subject.uid != row.uid:
+                continue
+            if result.outcome is Outcome.FAILED or (
+                change.decision.disposition is Disposition.BLOCKED
+            ):
                 logger.warning(
                     "skill.builtin_seed.delivery_conflict",
-                    extra={"skill": name, "agent": agent.name, "detail": failure},
+                    extra={
+                        "skill": name,
+                        "change": change.id,
+                        "detail": result.error or change.decision.reason,
+                    },
                 )
 
 

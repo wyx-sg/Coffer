@@ -5,24 +5,74 @@ description: Install Coffer with the one-line installer, the macOS desktop app, 
 
 # Install
 
-This page covers every supported way to install Coffer, what each one puts on disk, and how to verify, upgrade and uninstall it. If you only want to get going, run the one-line installer and continue with the [Quickstart](/start/quickstart).
+This page covers every supported way to install Coffer, what each one puts on disk, and how to verify, upgrade and uninstall it. If you only want to get going, [let your agent install it](#let-your-agent-install-it) or run the one-line installer, then continue with the [Quickstart](/start/quickstart).
 
 ::: warning No tagged release yet
 The one-line installer, the desktop `.dmg` and the release archive all download from a tagged GitHub release. Until the first `v*` tag is published those downloads return 404. For now, [install from source](#from-source).
 :::
 
+## Let your agent install it
+
+If you already work with a coding agent — Claude Code, Codex, or any agent that can run commands on your machine — paste this prompt into it:
+
+```text
+Install Coffer on this machine by following
+https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
+this machine (a release build if one is published for this OS and architecture,
+otherwise from source). Ask me before running anything with sudo or editing my
+shell profile. When it is installed, check it with `coffer daemon status`.
+Then tell me which coding agents it found here (claude-code, codex) and which
+config files each one's Connect button on the web UI's Agents page will change,
+so I can connect them myself. Do not handle any credentials: if a step needs a
+login, tell me what to do instead.
+```
+
+The agent reads this page, chooses the path that fits your machine and checks the result, asking before it touches anything outside Coffer's own directory. Coffer never asks an agent to handle a credential, so any login stays with you. The rest of this page is what the agent follows, and what you follow to install by hand.
+
 ## Choose an install path
 
 | Path | Best for | Gives you |
 | --- | --- | --- |
-| [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim` in `~/.coffer/bin` |
 | [Desktop app](#desktop-app) | Anyone who prefers a window and a menu-bar icon | `Coffer.app`, plus the same three binaries once you first open it |
+| [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim` in `~/.coffer/bin` |
 | [Release archive](#release-archive) | Installing by hand, or on machines with no GUI | The same three binaries, extracted wherever you choose |
 | [From source](#from-source) | Contributors, Linux users, and anyone tracking `main` | A Python install with `coffer` and `coffer-mcp-shim` on your `PATH` |
 
 Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source (Python 3.12 or later).
 
-Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (`coffer open`), and the desktop app also gives you the CLI.
+Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (at `http://127.0.0.1:38470/`), and the desktop app also gives you the CLI.
+
+## Desktop app
+
+::: steps
+
+### Download the .dmg
+
+Download the `.dmg` from [Releases](https://github.com/wyx-sg/Coffer/releases/latest). A signed and notarised release is named `Coffer-aarch64-apple-darwin.dmg`; a build without code signing says so in its name, `Coffer-unsigned-aarch64-apple-darwin.dmg`.
+
+### Drag Coffer to Applications
+
+Open the `.dmg` and drag **Coffer** to **Applications**.
+
+### Open Coffer
+
+Only for an unsigned build: macOS refuses a browser-downloaded copy with "Coffer is damaged and can't be opened". The app is not damaged. Clear the quarantine flag and open it again:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+Open Coffer. The app finds a running daemon, or starts the one bundled inside it, and shows the UI in a native window. A menu-bar icon stays after you close the window.
+
+:::
+
+The app bundles the same three binaries as the release archive. The first time its daemon starts, it copies them into `~/.coffer/bin`. To use the CLI as well, add that directory to your `PATH`:
+
+```sh
+export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
+```
+
+See [Desktop app](/guides/desktop-app) for the menu bar, updates, restarts and the offline banner.
 
 ## One-line installer
 
@@ -37,14 +87,7 @@ The script:
 3. Installs `coffer`, `coffer-daemon` and `coffer-mcp-shim` into the install directory. Each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
 4. If that directory is not already on your `PATH`, appends a line to your shell profile. The profile depends on your shell: `~/.zshrc` for zsh (or `$ZDOTDIR/.zshrc`), `~/.bash_profile` for bash on macOS, `~/.config/fish/config.fish` for fish (as `fish_add_path`), and `~/.profile` for anything else. Running the script again does not add the line twice.
 
-Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by suggesting the two commands that connect Claude Code:
-
-```sh
-coffer agent add claude_code
-coffer agent connect claude-code
-```
-
-See the [Quickstart](/start/quickstart) for what they do.
+Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by pointing you to the web UI's **Agents** page, where **Connect** connects Claude Code. See the [Quickstart](/start/quickstart).
 
 ### Installer options
 
@@ -53,35 +96,15 @@ Set these environment variables for the `sh` process:
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `COFFER_INSTALL_DIR` | `~/.coffer/bin` | Where the three binaries are copied. |
-| `COFFER_VERSION` | latest release | Install a specific tag, such as `v0.1.0`. A version without the leading `v` also works. |
+| `COFFER_VERSION` | latest release | Install a specific tag, such as `v<version>`. A version without the leading `v` also works. |
 | `COFFER_NO_MODIFY_PATH` | unset | Set to `1` to leave your shell profile alone. The script prints the line to add instead. |
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh \
-  | COFFER_VERSION=v0.1.0 COFFER_NO_MODIFY_PATH=1 sh
+  | COFFER_VERSION=v<version> COFFER_NO_MODIFY_PATH=1 sh
 ```
 
 A binary installed by `curl` is not quarantined, so macOS Gatekeeper does not block it.
-
-## Desktop app
-
-1. Download `Coffer-unsigned-aarch64-apple-darwin.dmg` from [Releases](https://github.com/wyx-sg/Coffer/releases/latest).
-2. Open the `.dmg` and drag **Coffer** to **Applications**.
-3. The app is not code-signed or notarised, so macOS refuses a browser-downloaded copy with "Coffer is damaged and can't be opened". The app is not damaged. Clear the quarantine flag and open it again:
-
-   ```sh
-   xattr -dr com.apple.quarantine /Applications/Coffer.app
-   ```
-
-4. Open Coffer. The app finds a running daemon, or starts the one bundled inside it, and shows the UI in a native window. A menu-bar icon stays after you close the window.
-
-The app bundles the same three binaries as the release archive. The first time its daemon starts, it copies them into `~/.coffer/bin`. To use the CLI as well, add that directory to your `PATH`:
-
-```sh
-export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
-```
-
-See [Desktop app](/guides/desktop-app) for the tray menu, restarts and the offline banner.
 
 ## Release archive
 
@@ -109,14 +132,14 @@ pip install -e ./backend
 
 `pip install` puts two console scripts on the venv's `PATH`: `coffer` and `coffer-mcp-shim`. A source install has no separate `coffer-daemon` binary. The CLI and the shim start the daemon from the same Python environment.
 
-Build the web UI once so the daemon has something to serve. Without it, the API and the MCP endpoint still work, but `coffer open` has no page to open.
+Build the web UI once so the daemon has something to serve. Without it, the API and the MCP endpoint still work, but the daemon has no page to serve.
 
 ```sh
 cd frontend && npm install && npm run build && cd ..
 ```
 
 ::: tip Contributor setup
-`make install` creates `.venv`, installs the backend with its development extras, and installs the frontend's npm dependencies. `make dev` then runs the daemon on port 8000 and the Vite dev server on port 5173 with hot reload. See [Development setup](/contributing/development).
+`make install` creates `.venv`, installs the backend with its development extras, and installs the frontend's npm dependencies. `make dev` then runs the daemon on port 38470 and the Vite dev server on port 5173 with hot reload. See [Development setup](/contributing/development).
 :::
 
 ### Frozen binaries and the app from source
@@ -132,12 +155,14 @@ cd frontend && npm install && npm run build && cd ..
 | --- | --- |
 | `~/.coffer/bin/coffer`, `coffer-daemon`, `coffer-mcp-shim` | The public names. For a release build these are symlinks into a versioned directory. |
 | `~/.coffer/bin/<version>/` | One directory per deployed build. The current and previous versions are kept, so you can roll back by pointing the links at the older directory. |
-| `~/.coffer/coffer.db` | The SQLite database: resources, settings, audit log, encrypted credentials. |
-| `~/.coffer/coffer.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
-| `~/.coffer/master.key` | The credential master key (mode `0600`), unless you moved it to the keychain. |
+| `~/.coffer/vault/` | The vault: a git repository of resource files, skills, knowledge and encrypted secrets. |
+| `~/.coffer/local/` | Settings true of this machine only: agents, reach, retention, the sync remote. |
+| `~/.coffer/runs.db` | The history database: audit log, invocations, conversations, sync rounds, usage. |
+| `~/.coffer/runs.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
+| `~/.coffer/master.key` | The secret master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
-| `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, experimental-feature switches. |
-| `~/.coffer/skills/`, `knowledge/`, `memory/` | The file-backed kinds' trees. |
+| `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
+| `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as the memory tree. |
 | `~/.coffer/logs/daemon.log` | The daemon log, shared by the daemon, its child processes and the desktop app. |
 
 A release-built daemon manages `~/.coffer/bin` itself. At every start it checks whether its build is already deployed there. If not, it copies the three binaries into `~/.coffer/bin/<version>/` and switches the public symlinks to them in one atomic step. A source install never does this. The [files and directories](/reference/filesystem) reference lists every path.
@@ -151,19 +176,12 @@ coffer daemon status
 
 ```text
 status:  ready
-version: 0.1.1
-channel: dev
-port:    8000
+version: 0.2.0
+port:    38470
 pid:     48213
 ```
 
-Your version and PID will differ. `channel` is `stable` for a release build and `dev` for anything else. Then open the UI:
-
-```sh
-coffer open
-```
-
-`coffer open` reads `~/.coffer/daemon.json` and opens your browser at `http://127.0.0.1:8000/`. The page it loads already carries the API token, so you are signed in with no further step. Pass `--no-browser` to print the URL instead.
+Your version and PID will differ. Then open `http://127.0.0.1:38470/` in your browser, or open the desktop app. The page the daemon serves already carries the API token, so you are signed in with no further step.
 
 ## Start and keep the daemon running
 
@@ -173,13 +191,9 @@ You rarely need to start the daemon yourself:
 - `coffer-mcp-shim` does the same when an agent starts a session.
 - The desktop app starts it at launch.
 
-Once started, the daemon keeps running until you stop it or another daemon replaces it. To have macOS start it at login and restart it after a crash, install the login service:
+Once started, the daemon keeps running until you stop it or another daemon replaces it. To have macOS start it at login and restart it after a crash, turn on **Start at login** in **Settings › Daemon**.
 
-```sh
-coffer daemon service install    # coffer daemon service status | uninstall
-```
-
-The daemon binds `127.0.0.1:8000`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer config set daemon.port <port>` and go back with `coffer config unset daemon.port`. See [Running the daemon](/guides/daemon).
+The daemon binds `127.0.0.1:38470`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer config set daemon.port <port>` and go back with `coffer config unset daemon.port`. See [Running the daemon](/guides/daemon).
 
 ## Upgrade
 
@@ -199,23 +213,19 @@ coffer daemon restart
 
 :::
 
+In a browser, **Settings › About** offers this upgrade as a prompt for your agent, naming the version running and how this copy was installed.
+
 For the desktop app, quit Coffer, stop the daemon with `coffer daemon stop`, replace `Coffer.app` with the new version and clear its quarantine flag again. The next launch starts the new daemon, which deploys the new binaries.
 
-Restarting matters because a daemon that is already running keeps running the old version. When the CLI or the shim finds that the daemon's version differs from its own, it prints a one-line warning on stderr that names the daemon's executable. Before a new build applies its schema migrations, it saves `coffer.db.pre-<revision>`.
+Restarting matters because a daemon that is already running keeps running the old version. When the CLI or the shim finds that the daemon's version differs from its own, it prints a one-line warning on stderr that names the daemon's executable. Before a new build applies its schema migrations, it saves `runs.db.pre-<revision>`. Upgrading from a Coffer that still keeps its state in `coffer.db` is a one-time step you run yourself: see [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Uninstall
 
-1. Disconnect each agent from Coffer, which removes Coffer's entries from its config, and remove the agent from Coffer. Removing the agent also removes the skill links Coffer delivered into it:
+1. On the **Agents** page, choose **Disconnect…** from each agent's **⋯** menu, which removes Coffer's entries from its config, then **Turn off**, which also removes the skill links Coffer delivered into it.
+
+2. Turn off **Start at login** in **Settings › Daemon** if you turned it on, then stop the daemon:
 
    ```sh
-   coffer agent disconnect claude-code
-   coffer agent rm claude-code
-   ```
-
-2. Stop the daemon and remove the login service if you installed it:
-
-   ```sh
-   coffer daemon service uninstall
    coffer daemon stop
    ```
 
@@ -223,12 +233,12 @@ Restarting matters because a daemon that is already running keeps running the ol
 4. Optionally, delete the vault itself.
 
 ::: danger Deleting ~/.coffer is permanent
-`~/.coffer` holds your database, knowledge collections, skill library and credential master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
+`~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
 :::
 
-## Release channel
+## Experimental features
 
-Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default for the experimental features (Sync, Knowledge and Memory): off on `stable`, on on `dev`. You can switch any of them on each machine under **Settings → General** or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
+Every build carries the same capabilities. Four of them are experimental — Knowledge, Memory, Sync and Model providers — and start switched off, in a stable release and a source build alike. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

@@ -4,15 +4,18 @@
 routes are wired exactly as production wires them — real SQLite, real
 markdown files under a temp HOME, the real converter registry — then drives
 them with a Starlette ``TestClient`` (an ``httpx.Client`` subclass). It pins
-``COFFER_KNOWLEDGE_ROOT`` into ``tmp_path``, so no test here ever touches a
-real ``~/.coffer``.
+``HOME`` to ``tmp_path`` — the knowledge root is ``tmp_path/.coffer/vault/knowledge``
+— so no test here ever touches a real ``~/.coffer``.
 """
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.domain.knowledge.entry import Submission
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -24,7 +27,6 @@ _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
 
     app = create_app()
     set_active_token(_TOKEN)
@@ -39,6 +41,31 @@ def _create_collection(client: TestClient, name: str) -> None:
     assert resp.status_code == 201, resp.text
 
 
+def _submit_material(
+    client: TestClient, *, collection: str, title: str, description: str, body: str
+) -> Submission:
+    """Submit material the way an entrance does, through the running service.
+
+    There is no REST route for it any more (spec knowledge "Manage knowledge in the
+    web UI"): an agent writes a file into the inbox and an upload goes through
+    ``/upload``. The service is what both end up in, driven here on the app's own
+    event loop so a test needs no document converter or file drop.
+    """
+    from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
+
+    return client.portal.call(  # type: ignore[no-any-return,union-attr]
+        functools.partial(
+            get_knowledge_service().submit,
+            collection=collection,
+            title=title,
+            description=description,
+            body=body,
+            actor_kind="user",
+            actor="user",
+        )
+    )
+
+
 def _submit(
     client: TestClient,
     *,
@@ -47,22 +74,18 @@ def _submit(
     description: str,
     body: str,
 ) -> str:
-    """Submit material through the route and return the document it became.
+    """Submit material and return the document it became.
 
     The app booted here has no internal model configured, so material is promoted to
     a document on the spot rather than waiting in the inbox (spec knowledge "Promote
     material directly when no model is configured") — which is what gives the caller
     a path to read back.
     """
-    resp = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": collection, "title": title, "description": description, "body": body},
+    submitted = _submit_material(
+        client, collection=collection, title=title, description=description, body=body
     )
-    assert resp.status_code == 201, resp.text
-    out = resp.json()
-    assert out["status"] == "written", out
-    path: str = out["path"]
-    return path
+    assert submitted.document is not None, submitted
+    return submitted.document.path
 
 
 def _hold_material(monkeypatch: pytest.MonkeyPatch) -> None:

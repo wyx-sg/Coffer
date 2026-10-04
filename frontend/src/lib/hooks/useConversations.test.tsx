@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
 import {
-  useConversations,
   useConversation,
   useCreateConversation,
   useRenameConversation,
@@ -46,8 +45,13 @@ function makeConversation(overrides?: Partial<Conversation>): Conversation {
     id: "conv-1",
     agent_key: "claude_code",
     title: "Test Conversation",
+    archived_at: null,
+    channel_binding: null,
     created_at: "2026-05-22T00:00:00Z",
     updated_at: "2026-05-22T00:00:00Z",
+    preview: null,
+    running: false,
+    needs_you: false,
     ...overrides,
   };
 }
@@ -60,47 +64,6 @@ function makeWrapper() {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 }
-
-describe("useConversations", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  test("returns list of conversations on success", async () => {
-    const conv = makeConversation();
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [conv] });
-
-    const { result } = renderHook(() => useConversations(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].id).toBe("conv-1");
-  });
-
-  test("returns empty array when no conversations", async () => {
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-
-    const { result } = renderHook(() => useConversations(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toHaveLength(0);
-  });
-
-  test("throws on API error", async () => {
-    chatApiMock.listConversations.mockRejectedValue(new Error("network failure"));
-
-    const { result } = renderHook(() => useConversations(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect((result.current.error as Error).message).toContain("network failure");
-  });
-});
 
 describe("useConversation", () => {
   beforeEach(() => {
@@ -158,7 +121,7 @@ describe("useCreateConversation", () => {
     });
 
     await act(async () => {
-      await result.current.mutateAsync(undefined);
+      await result.current.mutateAsync({ agent_key: "claude_code" });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -260,6 +223,8 @@ describe("conversation mutation error toasts", () => {
       await result.current.mutateAsync({ id: "conv-1", title: "x" }).catch(() => {});
     });
 
-    await waitFor(() => expect(errorToast).toHaveBeenCalledWith(expect.stringContaining("rename boom")));
+    await waitFor(() =>
+      expect(errorToast).toHaveBeenCalledWith(expect.stringContaining("rename boom")),
+    );
   });
 });

@@ -10,12 +10,10 @@ SETTINGS = REPO_ROOT / ".claude" / "settings.json"
 
 #: Every hook script `.agents/harness.md` documents, keyed by the event + matcher
 #: it must be wired on. A script that exists on disk but is not wired here is
-#: documentation, not enforcement — which is exactly how `verify_before_commit`
-#: went unwired while the harness doc claimed it ran on every commit.
+#: documentation, not enforcement.
 EXPECTED_WIRING: dict[tuple[str, str | None], set[str]] = {
     ("PostToolUse", "Edit|Write"): {"auto_format.py"},
-    ("PreToolUse", "Bash"): {"block_dangerous_bash.py", "verify_before_commit.py"},
-    ("SessionStart", None): {"session_context.py"},
+    ("PreToolUse", "Bash"): {"block_dangerous_bash.py"},
 }
 
 
@@ -43,11 +41,10 @@ def test_every_event_is_wired() -> None:
     hooks = _load()["hooks"]
     assert "PostToolUse" in hooks
     assert "PreToolUse" in hooks
-    assert "SessionStart" in hooks
 
 
 def test_each_documented_hook_is_wired_on_its_event() -> None:
-    """The four scripts, by name, on the event + matcher harness.md documents."""
+    """The two scripts, by name, on the event + matcher harness.md documents."""
     wired = _wired()
     for key, expected in EXPECTED_WIRING.items():
         assert wired.get(key) == expected, (

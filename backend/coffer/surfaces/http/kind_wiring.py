@@ -20,15 +20,23 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
+from coffer.application.platform_port import PlatformPort
+from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.features import MODELS
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
+from coffer.surfaces.http.builtin_server_wiring import wire_builtin_server
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring, wire_knowledge_kind
 from coffer.surfaces.http.memory_wiring import MemoryWiring, wire_memory_kind
 from coffer.surfaces.http.provider_wiring import ProviderWiring, wire_provider_kind
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.secret_boundary_wiring import register_destination_source
+from coffer.surfaces.http.sync_wiring import sync_remote_secret_source
+from coffer.surfaces.http.usage_wiring import UsageWiring, wire_model_usage
+from coffer.surfaces.http.vault_composition import VaultStores
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,8 @@ class KindWirings:
     knowledge: KnowledgeWiring
     memory: MemoryWiring
     mcp: McpWiring
+    #: Usage metering (spec provider-switching).
+    usage: UsageWiring
     #: Coffer's own skill. Built here rather than by either kind because it is
     #: the knowledge layer's text written through the skill layer's store, and
     #: the two may not import each other.
@@ -52,20 +62,50 @@ async def wire_resource_kinds(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
+    vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
-    credential_store: EncryptedCredentialStore,
-    credential_resolver: Callable[[str], str],
-    sync: SyncContributions,
+    secret_store: EncryptedSecretStore,
+    secret_resolver: Callable[[str], str],
+    platform: PlatformPort,
+    agent_catalog: AgentCatalog,
+    reconciler: Reconciler,
 ) -> KindWirings:
+    # The sync remote's push token is a secret destination too; the secret
+    # boundary reads it from here to adopt and list it (spec vault-sync "Hold a
+    # push token pointed at a new URL until approved").
+    register_destination_source(sync_remote_secret_source())
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     agent_skill = wire_agent_and_skill_kinds(
-        app, resource_svc, audit, sm, builtin_tools, credential_store, sync
+        app,
+        resource_svc,
+        audit,
+        vault,
+        builtin_tools,
+        secret_store,
+        platform,
+        agent_catalog,
+        reconciler,
     )
 
     # Provider switching (spec provider-switching) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
     provider = wire_provider_kind(
-        app, resource_svc, audit, credential_store, agent_skill.agent_service, sync
+        app,
+        resource_svc,
+        audit,
+        secret_store,
+        agent_skill.agent_service,
+        agent_catalog,
+        reconciler,
+    )
+
+    # What the proxy metered.
+    usage = await wire_model_usage(
+        sm,
+        provider.service,
+        prices=provider.prices,
+        audit=audit,
+        is_enabled=lambda: app.state.feature_service.is_enabled(MODELS),
     )
 
     # Coffer's own skill carries the knowledge catalogue, so a collection
@@ -87,7 +127,7 @@ async def wire_resource_kinds(
         audit,
         builtin_tools,
         provider.internal_connection,
-        credential_resolver,
+        secret_resolver,
         _catalogue_changed,
     )
 
@@ -98,13 +138,16 @@ async def wire_resource_kinds(
         audit,
         builtin_tools,
         provider.internal_connection,
-        credential_resolver,
+        secret_resolver,
         agent_skill.agent_service,
+        agent_catalog,
     )
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
-    mcp = wire_mcp_kind(app, resource_svc, audit, sm, credential_store, builtin_tools, sync)
+    mcp = wire_mcp_kind(app, resource_svc, audit, sm, vault, secret_store, builtin_tools)
+    # Coffer's own `coffer` server, described for the MCP servers page.
+    wire_builtin_server(builtin_tools, agent_skill.agent_service, agent_skill.mcp_service)
 
     # Last, because it needs both ends: the knowledge kind's renderer and the
     # skill kind's seed. The lifespan refreshes it once every kind is up.
@@ -119,5 +162,6 @@ async def wire_resource_kinds(
         knowledge=knowledge,
         memory=memory,
         mcp=mcp,
+        usage=usage,
         guide=guide,
     )

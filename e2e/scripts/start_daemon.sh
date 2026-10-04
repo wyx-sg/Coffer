@@ -7,26 +7,45 @@ set -euo pipefail
 COFFER_E2E_HOME="${COFFER_E2E_HOME:-$(mktemp -d -t coffer-e2e-XXXXXX)}"
 export HOME="${COFFER_E2E_HOME}"
 export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/coffer.db"
-export COFFER_PORT_RANGE_START=18000
-export COFFER_PORT_RANGE_END=18009
+# COFFER_E2E_PORT lets a second suite (the visual baseline,
+# playwright.visual.config.ts) run its own daemon beside this one.
+COFFER_E2E_PORT="${COFFER_E2E_PORT:-18000}"
+export COFFER_PORT_RANGE_START="${COFFER_E2E_PORT}"
+export COFFER_PORT_RANGE_END="$((COFFER_E2E_PORT + 9))"
 # The browser-driven `web` suite loads the app from the Vite dev server on
 # localhost:5173 and calls the daemon cross-origin. The daemon serves the built
 # web UI itself, so its CORS allowlist is empty (same-origin) by default and
 # every browser fetch would fail with "Failed to fetch".
 # COFFER_DEV_CORS=1 adds the Vite dev origins localhost/127.0.0.1:5173.
 export COFFER_DEV_CORS=1
+# No outbound price-list refresh from a test daemon: tests price from the
+# snapshot bundled in the tree.
+export COFFER_PRICE_REFRESH=off
+# Every experimental feature starts off; the suite's specs drive the pages of
+# all four, so the daemon pins them on. COFFER_E2E_FEATURES overrides the pin
+# (a spec about a switched-off feature starts its own daemon with it).
+export COFFER_FEATURES="${COFFER_E2E_FEATURES:-knowledge=on,memory=on,sync=on,models=on}"
 
 # Make sure the .coffer dir exists so daemon bootstrap can write daemon.json
 mkdir -p "${COFFER_E2E_HOME}/.coffer"
 
-# Persist the chosen home path so _helpers.ts can locate daemon.json
-echo "${COFFER_E2E_HOME}" > "/tmp/coffer-e2e-home.path"
+# A `bin` directory in the isolated HOME, ahead of everything else on the
+# daemon's PATH. Agent detection looks for `claude` / `codex` on every probe, so
+# a spec that needs an installed agent on a machine without one (CI) drops a
+# stand-in program here and the next detection finds it; nothing is there by
+# default, and a real install on the login shell's PATH still comes first.
+mkdir -p "${COFFER_E2E_HOME}/bin"
+export PATH="${COFFER_E2E_HOME}/bin:${PATH}"
+
+# Persist the chosen home path so _helpers.ts can locate daemon.json.
+# COFFER_E2E_HOME_FILE moves the pointer so a second suite does not repoint it.
+echo "${COFFER_E2E_HOME}" > "${COFFER_E2E_HOME_FILE:-/tmp/coffer-e2e-home.path}"
 
 # Wait up to 45 s for port 18000 to be truly free (handles TCP TIME_WAIT).
 # macOS TIME_WAIT is 2 * net.inet.tcp.msl = 2 * 15 s = 30 s.
 # We intentionally do NOT use SO_REUSEADDR here — the daemon's port allocator
 # does not set SO_REUSEADDR, so we need the port to be clean before we start.
-WAIT_PORT=18000
+WAIT_PORT="${COFFER_E2E_PORT}"
 WAIT_SECS=45
 _waited=0
 until /usr/bin/python3 -c "

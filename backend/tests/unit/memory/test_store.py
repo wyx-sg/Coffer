@@ -1,10 +1,10 @@
 """A partition's four files, and the one-writer-per-directory split (see "Keep
 distil out of the raw directory").
 
-``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
-``_isolated_memory_root`` fixture (``backend/tests/conftest.py``), so every
-test here writes real files under a throwaway directory — never a developer's
-real ``~/.coffer/memory``.
+The memory root resolves from the fresh ``HOME`` the suite-wide
+``_real_home_guard`` fixture gives every test (``backend/tests/conftest.py``),
+so every test here writes real files under a throwaway directory — never a
+developer's real memory tree.
 
 This file covers the three ``store.py`` owns — ``notes/``, ``RETIRED.md`` and
 ``MEMORY.md``. ``.raw/`` is a module of its own (``raw_store.py``) and is

@@ -1,12 +1,11 @@
 """The two tables a channel owns, and how they are read and written.
 
-A channel keeps exactly two rows of its own: ``channel_peers``, which says
-which chats on the platform belong to the owner, and
-``channel_thread_conversations``, which says what each of those chats is in the
-middle of. Both hang off ``resources.id`` — the integer surrogate key, not the
-uid — because they are this machine's rows about this machine's channel, and
-the FK cascade that drops them with the channel is the whole reason that column
-exists (ADR resource-identity-is-an-immutable-uid).
+A channel keeps two kinds of state of its own: its pairings (which chats on the
+platform belong to the owner), a vault document per channel
+(``state/channel-peers/<channel name>.json``) because the pairing is the
+person's and travels; and ``channel_thread_conversations``, what each of those
+chats is in the middle of, history in ``runs.db``. Both name the channel by its
+uid (ADR identity-is-the-uid-inside-the-file).
 
 Split from ``ports``, which describes the TRANSPORT: what an adapter must do,
 what a live binding carries, what the core may ask of the chat platform. This
@@ -20,51 +19,50 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
 class ChannelPeer:
-    """The paired owner of a channel (one row in channel_peers)."""
+    """One paired chat of a channel (one row in channel_peers): a person's direct
+    chat, or a group one of the channel's people addressed the bot in."""
 
-    resource_id: int
+    resource_uid: str
     chat_id: str
     display_name: str
     paired_at: datetime
     # The paired sender's stable identity (Telegram from.id, SeaTalk
-    # employee_code); the owner gate checks it when present. ``None`` on rows
-    # paired before the gate gained sender awareness → chat-id-only fallback.
-    sender_id: str | None = None
+    # employee_code); every gate compares it. Pairing refuses a message that
+    # carries none, and a group row inherits its addresser's.
+    sender_id: str = ""
 
 
 class ChannelPeerRepoPort(Protocol):
     """Persistence for peer bindings."""
 
-    async def owner_peer(self, resource_id: int) -> ChannelPeer | None:
+    async def owner_peer(self, resource_uid: str) -> ChannelPeer | None:
         """The channel's OWNER chat — the one a notification addressed to the
         channel rather than to a conversation belongs in.
 
-        A channel may hold several peer rows: its DM plus every group it has
-        been paired to (``UniqueConstraint("resource_id", "chat_id")``). This
-        returns the earliest-paired one, which under the single-owner premise is
-        the owner's DM: pairing the DM is how a channel starts working at all,
+        A channel may hold several peers: its DM plus every group it has
+        been paired to (one per chat). This
+        returns the earliest-paired one, which is the first
+        paired person's DM: pairing a DM is how a channel starts working at all,
         and a group can only be added to a channel that already does.
 
-        The order matters, not just the determinism. The predecessor of this
-        method selected on ``resource_id`` with no ``ORDER BY``, so ``notify``
-        could put a private message into a group chat depending on what SQLite
-        happened to return first.
+        The order matters, not just the determinism: an answer that depended on
+        storage order could put a private message into a group chat.
         """
         ...
 
-    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None: ...
+    async def get_by_chat(self, resource_uid: str, chat_id: str) -> ChannelPeer | None: ...
 
-    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]: ...
+    async def list_by_resource(self, resource_uid: str) -> list[ChannelPeer]: ...
 
-    async def owner_sender_id(self, resource_id: int) -> str | None:
-        """The first non-null ``sender_id`` paired for this channel, across
-        all its peer rows (DM + any groups/threads). ``None`` when the
-        channel has no peer with a known sender identity."""
+    async def sender_ids(self, resource_uid: str) -> frozenset[str]:
+        """Every paired person's ``sender_id`` across the channel's peer rows
+        (DMs, groups and threads). Empty when nobody is paired — the only state
+        in which a group @mention cannot be a turn for anyone."""
         ...
 
     async def upsert(self, peer: ChannelPeer) -> None: ...
@@ -77,13 +75,17 @@ class ChannelPeerRepoPort(Protocol):
         so a failure between them cannot leave the channel with no owner."""
         ...
 
-    async def delete_by_chat(self, resource_id: int, chat_id: str) -> None:
+    async def delete_by_sender(self, resource_uid: str, sender_id: str) -> list[str]:
+        """Un-pair a person: every row carrying ``sender_id`` (their DM and the
+        groups they brought the bot into), as ONE write. Returns the chats dropped
+        — empty when the person was not paired."""
+        ...
+
+    async def delete_by_chat(self, resource_uid: str, chat_id: str) -> None:
         """Drop one chat's pairing, leaving the channel's other chats alone.
 
         Un-pairing one chat, not deleting the channel — the channel's own
-        deletion takes every peer with it through the FK cascade. Exists for
-        the synced pairing area, where another machine's un-pair arrives as the
-        deletion of one document."""
+        deletion takes its pairing document with it in the same commit."""
         ...
 
 
@@ -91,7 +93,7 @@ class ChannelPeerRepoPort(Protocol):
 class ChannelThreadConversation:
     """The per-thread conversation binding (one row in
     ``channel_thread_conversations``): conversation identity is keyed by
-    ``(resource_id, chat_id, thread_id)`` (see "Key conversation identity by channel,
+    ``(resource_uid, chat_id, thread_id)`` (see "Key conversation identity by channel,
     chat and thread"), not by the peer alone.
 
     ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
@@ -101,7 +103,7 @@ class ChannelThreadConversation:
     recorded (``channel_peers`` carried a second, never-written copy of both
     until 0084 dropped them)."""
 
-    resource_id: int
+    resource_uid: str
     chat_id: str
     thread_id: str
     active_conversation_id: str | None
@@ -114,6 +116,17 @@ class ChannelThreadConversation:
     # its mark ``🧵#N title`` is built from. ``None`` on every other row.
     parallel_ordinal: int | None = None
     parallel_title: str | None = None
+    #: "direct" or "group" — which of the platform's send paths reaches this
+    #: thread. ``None`` on a row written before it was recorded; set again by
+    #: the next message that arrives there.
+    chat_kind: str | None = None
+    #: The thread's other sticky settings (spec channels "Keep a chat's settings
+    #: across its conversations"): the model, the reasoning effort and the
+    #: working directory a fresh conversation here opens with. ``None`` means
+    #: the agent's own default (model, effort) or the channel's (directory).
+    preferred_model: str | None = None
+    preferred_effort: str | None = None
+    preferred_cwd: str | None = None
 
     @property
     def parallel_mark(self) -> str | None:
@@ -121,6 +134,30 @@ class ChannelThreadConversation:
         if self.parallel_ordinal is None:
             return None
         return parallel_mark(self.parallel_ordinal, self.parallel_title or "")
+
+
+class _Keep:
+    """The "leave this setting as it is" marker for ``set_preferences``."""
+
+    def __repr__(self) -> str:
+        return "KEEP"
+
+
+#: Passed for a setting ``set_preferences`` must not touch (``None`` clears it).
+KEEP: Any = _Keep()
+
+
+@dataclass(frozen=True)
+class ChannelThreadLocation:
+    """Where a conversation a channel opened lives: the chat and thread that
+    opened it, and which send path reaches them (one ``channel_thread_history``
+    row)."""
+
+    resource_uid: str
+    chat_id: str
+    thread_id: str
+    chat_kind: str | None
+    opened_at: datetime
 
 
 def parallel_mark(ordinal: int, title: str) -> str:
@@ -133,44 +170,190 @@ class ChannelThreadConversationRepoPort(Protocol):
     by channel, chat and thread").
 
     The source of truth for driving a turn: which conversation a
-    ``(resource_id, chat_id, thread_id)`` resolves to, and the sticky agent it
+    ``(resource_uid, chat_id, thread_id)`` resolves to, and the sticky agent it
     opens with. Two threads of one group therefore never collide on a single
     conversation (the "a turn is already running" error)."""
 
     async def get(
-        self, resource_id: int, chat_id: str, thread_id: str
+        self, resource_uid: str, chat_id: str, thread_id: str
     ) -> ChannelThreadConversation | None: ...
 
     async def set_active_conversation(
-        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
+        self, resource_uid: str, chat_id: str, thread_id: str, conversation_id: str | None
     ) -> None:
         """Upsert the thread's active conversation, leaving ``preferred_agent``
         untouched (creating the row if this thread has none yet)."""
         ...
 
     async def set_preferred_agent(
-        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
+        self, resource_uid: str, chat_id: str, thread_id: str, preferred_agent: str | None
     ) -> None:
         """Upsert the thread's sticky agent, leaving ``active_conversation_id``
         untouched (creating the row if this thread has none yet)."""
         ...
 
-    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
+    async def set_preferences(
+        self,
+        resource_uid: str,
+        chat_id: str,
+        thread_id: str,
+        *,
+        agent: str | None = KEEP,
+        model: str | None = KEEP,
+        effort: str | None = KEEP,
+        cwd: str | None = KEEP,
+    ) -> None:
+        """Upsert the thread's sticky settings: each one passed is written
+        (``None`` clears it), each left at ``KEEP`` is untouched."""
+        ...
+
+    async def note_chat_kind(
+        self, resource_uid: str, chat_id: str, thread_id: str, chat_kind: str
+    ) -> None:
+        """Record which send path reaches this thread (upserting the row), so a
+        reply typed on the web can be mirrored into it."""
+        ...
+
+    async def record_history(
+        self,
+        resource_uid: str,
+        chat_id: str,
+        thread_id: str,
+        conversation_id: str,
+        chat_kind: str | None,
+    ) -> None:
+        """Remember that ``conversation_id`` was opened for this thread (spec
+        channels "Resume an earlier conversation from chat"). Idempotent."""
+        ...
+
+    async def history(
+        self, resource_uid: str, chat_id: str, thread_id: str, *, limit: int = 20
+    ) -> list[str]:
+        """The conversations this thread opened, newest first."""
+        ...
+
+    async def locate(self, conversation_id: str) -> ChannelThreadLocation | None:
+        """Which chat and thread opened ``conversation_id``, or ``None`` when no
+        channel did (spec chat "Mirror a web reply into the channel it came
+        from")."""
+        ...
+
+    async def locate_many(
+        self, conversation_ids: Sequence[str]
+    ) -> dict[str, tuple[ChannelThreadLocation, ChannelThreadConversation | None]]:
+        """``locate`` for many conversations in ONE read, each paired with its
+        thread's row (``None`` when the thread keeps none) — what the
+        Conversations list's source badges are built from. A conversation no
+        channel opened is absent."""
+        ...
+
+    async def next_parallel_ordinal(self, resource_uid: str, chat_id: str) -> int:
         """The number the chat's next parallel thread gets: ``max + 1`` over the
         chat's rows, so a number is never reused after a conversation is replaced
-        (see "Open parallel conversations in a direct chat"). Read before the
+        (see "Open parallel conversations beside a direct chat"). Read before the
         thread exists, because the thread's root message carries its mark."""
         ...
 
     async def open_parallel(
-        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
+        self, resource_uid: str, chat_id: str, thread_id: str, ordinal: int, title: str
     ) -> None:
         """Record ``thread_id`` as parallel thread ``ordinal`` of this chat
         (upserting the row, leaving its conversation and agent untouched)."""
         ...
 
     async def list_parallel(
-        self, resource_id: int, chat_id: str
+        self, resource_uid: str, chat_id: str
     ) -> list[ChannelThreadConversation]:
         """The chat's parallel threads, newest (highest ordinal) first."""
         ...
+
+
+@dataclass(frozen=True)
+class OutboxEntry:
+    """One message waiting to reach a chat (one ``channel_outbox`` row): a reply
+    typed on the web (``kind="reply"``) or the agent's answer to it, collected
+    while the channel could not send (``kind="answer"``)."""
+
+    id: int
+    resource_uid: str
+    chat_id: str
+    thread_id: str
+    chat_kind: str
+    conversation_id: str
+    kind: str
+    text: str
+    created_at: datetime
+
+
+class ChannelOutboxRepoPort(Protocol):
+    """Messages Coffer still owes a chat (spec chat "Mirror a web reply into the
+    channel it came from"): kept until the channel can send them, then marked
+    delivered — never dropped because a send failed."""
+
+    async def add(
+        self,
+        *,
+        resource_uid: str,
+        chat_id: str,
+        thread_id: str,
+        chat_kind: str,
+        conversation_id: str,
+        kind: str,
+        text: str,
+    ) -> int: ...
+
+    async def pending(self, resource_uid: str) -> list[OutboxEntry]:
+        """The channel's undelivered messages, oldest first."""
+        ...
+
+    async def pending_for_conversation(self, conversation_id: str) -> list[OutboxEntry]: ...
+
+    async def mark_delivered(self, entry_id: int) -> None: ...
+
+
+@dataclass(frozen=True)
+class ReplyRecord:
+    """One bot reply and every platform message it was delivered as (one
+    ``channel_replies`` row): a long answer is cut into parts, the files it
+    carried and a details card are messages of their own, and withdrawing the
+    reply takes all of them (spec channels "Withdraw a bot reply on the owner's
+    command")."""
+
+    reply_id: str
+    resource_uid: str
+    chat_id: str
+    thread_id: str
+    chat_kind: str
+    message_ids: tuple[str, ...]
+    sent_at: datetime
+
+
+class ReplyLedgerPort(Protocol):
+    """What the channel remembers about its replies, for as long as a platform
+    lets one be taken back. Names no content: ids and times only."""
+
+    async def add(self, record: ReplyRecord) -> None: ...
+
+    async def get(self, reply_id: str) -> ReplyRecord | None: ...
+
+    async def find_by_message(
+        self, resource_uid: str, chat_id: str, message_id: str
+    ) -> ReplyRecord | None:
+        """The reply one of whose messages is ``message_id`` (any part)."""
+        ...
+
+    async def latest(
+        self, resource_uid: str, chat_id: str, thread_id: str | None
+    ) -> ReplyRecord | None:
+        """The most recently sent reply in the chat; ``thread_id`` narrows it to
+        one thread, ``None`` takes the whole chat."""
+        ...
+
+    async def remove(self, reply_id: str) -> None: ...
+
+    async def prune(self, before: datetime) -> int:
+        """Forget replies sent before ``before`` (past every platform's window);
+        returns how many."""
+        ...
+
+    async def delete_for_channel(self, resource_uid: str) -> None: ...

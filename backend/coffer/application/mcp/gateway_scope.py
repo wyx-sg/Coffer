@@ -9,6 +9,7 @@ SQL so we don't materialise rows we'll throw away.
 from __future__ import annotations
 
 from coffer.application.resource_service import ResourceService
+from coffer.domain.resource import Resource
 from coffer.domain.scope import is_active
 
 
@@ -21,9 +22,8 @@ async def enabled_mcp_servers(
     A server with no scope is visible to everyone; a scoped one only to the
     agents whose **uid** it names — a scope is a reference to another resource,
     so it holds the identity, not the label (ADR
-    resource-identity-is-an-immutable-uid). A session that reported no identity
-    (``session_agent_uid is None`` — a hand-configured shim, or one installed by
-    a Coffer old enough to have written ``--agent <name>``) sees only unscoped
+    identity-is-the-uid-inside-the-file). A session that reported no identity
+    (``session_agent_uid is None`` — e.g. a hand-configured shim) sees only unscoped
     servers, i.e. strictly less, never more.
 
     Names come back rather than uids because the caller's next move is to build
@@ -32,3 +32,13 @@ async def enabled_mcp_servers(
     """
     resource_list = await resources.list(kind="mcp_server", enabled=True)
     return [r.name for r in resource_list if is_active(r.scope, session_agent_uid)]
+
+
+async def visible_mcp_servers(
+    resources: ResourceService,
+    session_agent_uid: str | None,
+) -> list[Resource]:
+    """:func:`enabled_mcp_servers`, as the rows — the per-tool gate reads their
+    config (``gateway_tool_gate``)."""
+    resource_list = await resources.list(kind="mcp_server", enabled=True)
+    return [r for r in resource_list if is_active(r.scope, session_agent_uid)]

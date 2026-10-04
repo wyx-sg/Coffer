@@ -7,11 +7,14 @@ import type { Dispatch, SetStateAction } from "react";
 import { hashKey, type QueryClient } from "@tanstack/react-query";
 
 import type { AgentEvent } from "@/lib/chat/streamClient";
+import { contentBlock } from "@/lib/chat/contentBlock";
 import type { PendingEcho } from "@/lib/chat/echoes";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { messagesKey } from "@/lib/api/queryKeys";
+import { conversationHeadsKey, messagesKey } from "@/lib/api/queryKeys";
+import { upsertQuestion } from "@/lib/chat/questions";
 
+/** @ui-only live-turn view state; never crosses the wire. */
 export interface LiveMessage {
   /**
    * The turn's text and tool blocks in the order it emitted them — the same
@@ -21,6 +24,12 @@ export interface LiveMessage {
   blocks: ContentBlock[];
   /** Whether the turn is still streaming. */
   streaming: boolean;
+  /** When the turn started (ISO) — the reply header's clock and "Working" timer. */
+  startedAt?: string;
+  /** When it ended (ISO), once `turn_done` arrived. */
+  endedAt?: string;
+  /** The user stopped it (`turn_done` with stop reason `interrupted`). */
+  interrupted?: boolean;
 }
 
 /** `blocks` with `delta` appended to its trailing text block, or a new one. */
@@ -29,7 +38,7 @@ function appendText(blocks: ContentBlock[], delta: string): ContentBlock[] {
   if (last?.type === "text") {
     return [...blocks.slice(0, -1), { ...last, text: (last.text ?? "") + delta }];
   }
-  return [...blocks, { type: "text", text: delta }];
+  return [...blocks, contentBlock({ type: "text", text: delta })];
 }
 
 /** Fold one content block into the live bubble, starting one if none is shown. */
@@ -37,7 +46,7 @@ function withBlocks(
   prev: LiveMessage | null,
   next: (blocks: ContentBlock[]) => ContentBlock[],
 ): LiveMessage {
-  return { blocks: next(prev?.blocks ?? []), streaming: true };
+  return { ...prev, blocks: next(prev?.blocks ?? []), streaming: true };
 }
 
 /**
@@ -68,6 +77,7 @@ function completeReplyCount(messages: Message[]): number {
   return messages.filter((m) => m.role === "assistant" && m.status === "complete").length;
 }
 
+/** @ui-only handler context; never crosses the wire. */
 export interface HandlerCtx {
   conversationId: string;
   qc: QueryClient;
@@ -110,8 +120,17 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       // so this client may hold no echo for it. Begin a fresh live bubble and
       // invalidate messages so the committed user message appears (which is
       // also what retires this client's own echo, via the cache subscription).
-      setLiveMessage({ blocks: [], streaming: true });
+      setLiveMessage({ blocks: [], streaming: true, startedAt: new Date().toISOString() });
       await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
+      // A turn replayed after a reload began earlier: its streaming row says when.
+      {
+        const row = (qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [])
+          .filter((m) => m.role === "assistant" && m.status === "streaming")
+          .at(-1);
+        if (row) {
+          setLiveMessage((prev) => (prev ? { ...prev, startedAt: row.created_at } : prev));
+        }
+      }
       break;
 
     case "text_delta":
@@ -119,31 +138,41 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       break;
 
     case "tool_call": {
-      const block: ContentBlock = {
+      const block = contentBlock({
         type: "tool_use",
         tool_use_id: event.data.tool_use_id,
         tool_name: event.data.tool_name,
         tool_input: event.data.tool_input,
-      };
+      });
       setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, block]));
       break;
     }
 
     case "tool_result": {
-      const resultBlock: ContentBlock = {
+      const resultBlock = contentBlock({
         type: "tool_result",
         tool_use_id: event.data.tool_use_id,
         tool_name: event.data.tool_name,
         output: event.data.output ?? null,
         error: event.data.error ?? null,
-      };
+        duration_ms: event.data.duration_ms ?? null,
+      });
       setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, resultBlock]));
       break;
     }
 
     case "turn_done": {
       setIsStreaming(false);
-      setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : null));
+      setLiveMessage((prev) =>
+        prev
+          ? {
+              ...prev,
+              streaming: false,
+              endedAt: new Date().toISOString(),
+              interrupted: event.data.stop_reason === "interrupted",
+            }
+          : null,
+      );
       // Refetch the persisted messages, then drop the live bubble ONLY once that
       // refetch carries a NEW complete reply (count increased). Clearing before
       // it lands removes the live bubble into a gap (the keyed persisted bubble
@@ -171,6 +200,22 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       if (isCancelled()) return;
       setEchoes([]);
       setLiveMessage(null);
+      break;
+    }
+
+    // A question the agent asked (sent again, same id, as each of several is
+    // answered) and its close: the card follows, and the list's "Needs you" is
+    // re-read.
+    case "question_asked":
+    case "question_closed": {
+      const { question } = event.data;
+      // A close that arrives once the live bubble is gone has nothing to update.
+      setLiveMessage((prev) =>
+        event.event === "question_closed"
+          ? prev && { ...prev, blocks: upsertQuestion(prev.blocks, question) }
+          : withBlocks(prev, (blocks) => upsertQuestion(blocks, question)),
+      );
+      void qc.invalidateQueries({ queryKey: conversationHeadsKey });
       break;
     }
 

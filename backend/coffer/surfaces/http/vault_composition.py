@@ -1,0 +1,116 @@
+"""The vault layout's stores, built for the app lifespan (ADR
+storage-is-five-classes-by-nature).
+
+What the lifespan builds before any kind: the vault repository (created with
+its first commit when it does not exist; a missing ``git`` is a startup error
+naming it), this machine's id on every commit, the resource store over the
+three class directories, ``derived/derived.db``, and the one validator every
+vault write passes — resource documents and the state areas. Each kind's
+wiring is handed the bundle and builds its own state store from it, registering
+the follower that moves a state document with its owner
+(``FileResourceRepo.add_follower``) and the owner listener that hints the
+owner when its document changes (``FileResourceRepo.announce``).
+
+Split out of :mod:`coffer.surfaces.http.app` for the file-size budget.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
+from coffer.application.vault.resource_rules import resource_rule
+from coffer.application.vault.state_rules import state_rule
+from coffer.application.vault.validation import VaultValidator
+from coffer.domain.git_handoff import git_update_handoff
+from coffer.domain.resource import Kind
+from coffer.domain.vault.layout import RESOURCES, STATE
+from coffer.infrastructure.persistence.derived_db import open_derived_db
+from coffer.infrastructure.platform.host import machine_label
+from coffer.infrastructure.sync.identity import resolve_identity
+from coffer.infrastructure.sync.local_state import JsonRemoteStore
+from coffer.infrastructure.vault.git import GitMissing, git_available
+from coffer.infrastructure.vault.instance import set_machine, vault_repository, vault_writer
+from coffer.infrastructure.vault.merge import MIN_GIT, git_version
+from coffer.infrastructure.vault.resource_store import FileResourceRepo
+
+_log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class VaultStores:
+    """The stores every kind's wiring reads from."""
+
+    resources: FileResourceRepo
+    derived_engine: AsyncEngine
+    derived_sm: async_sessionmaker[AsyncSession]
+
+
+def _machine_id() -> str | None:
+    """This machine's id for the ``Coffer-Machine`` trailer, or ``None`` when
+    it cannot be resolved (a commit is still made, naming no machine)."""
+    try:
+        return resolve_identity().machine_id or None
+    except Exception:
+        _log.warning("vault.machine_id_unresolved", exc_info=True)
+        return None
+
+
+def git_too_old_message(found: tuple[int, int]) -> str:
+    """The startup refusal for a git older than :data:`MIN_GIT`: what is wrong,
+    then a prompt the person can hand to their agent."""
+    have, want = f"{found[0]}.{found[1]}", f"{MIN_GIT[0]}.{MIN_GIT[1]}"
+    prompt = git_update_handoff(
+        machine_label(),
+        found=have,
+        needed=want,
+        needed_for="keeping the vault's history and syncing it",
+    )
+    return (
+        f"Coffer needs git {want} or later and found {have}. Update git, then start "
+        f"Coffer again. To have your coding agent do it, give it this:\n\n{prompt}"
+    )
+
+
+async def build_vault_stores(kinds: dict[str, Kind]) -> VaultStores:
+    """Ensure the vault repository and build the stores over it.
+
+    ``kinds`` is the live registry the composition root fills while wiring:
+    the store and the validator read it at every use, never a copy.
+    """
+    repo = vault_repository()
+    try:
+        # Before the vault is opened: ensure() can init the repository and make
+        # its first commit, and a git too old to run sync must not get that far
+        # (spec vault-storage "Refuse to start on a git older than 2.40").
+        if not git_available():
+            raise GitMissing()
+        found = git_version(repo)
+        if found < MIN_GIT:
+            # merge-tree --write-tree with --merge-base, which every sync round
+            # runs, needs git 2.40 (ADR sync-applies-clean-merges-and-stops-on-any-conflict).
+            # How git is updated depends on the machine, so the refusal names no
+            # installer and carries the hand-off for the person's agent instead.
+            raise RuntimeError(git_too_old_message(found))
+        # Whether secret/ is committed is a property of the remote, known before
+        # the first write: set it before ensure() rewrites the exclude file, or a
+        # secret written before the first sync round would be committed late.
+        remote = JsonRemoteStore().get()
+        repo.set_carry_secret(bool(remote and remote.include_secret))
+        repo.ensure()
+    except GitMissing as exc:
+        raise RuntimeError(str(exc)) from exc
+    machine = _machine_id()
+    set_machine(lambda: machine)
+    resources = FileResourceRepo(kinds)
+    validator = VaultValidator()
+    validator.register(f"{RESOURCES}/", resource_rule(kinds, resources.head_owners))
+    validator.register(f"{STATE}/", state_rule())
+    vault_writer().set_validator(validator)
+    derived_engine, derived_sm = await open_derived_db()
+    return VaultStores(resources=resources, derived_engine=derived_engine, derived_sm=derived_sm)
+
+
+__all__ = ["VaultStores", "build_vault_stores"]

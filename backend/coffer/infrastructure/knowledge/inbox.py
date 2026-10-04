@@ -12,6 +12,7 @@ but this module writes or deletes one.
 from __future__ import annotations
 
 import pathlib
+from datetime import UTC, datetime
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
@@ -26,13 +27,21 @@ from coffer.infrastructure.knowledge.fs import (
     timestamp,
     write_file,
 )
-from coffer.infrastructure.knowledge.naming import slugify, unique_name
+from coffer.infrastructure.knowledge.naming import opening_prose, slugify, unique_name
+
+#: The keys every item a Coffer surface writes carries.
+_SUBMITTED_KEYS = ("title", "description", "actor", "created_at", "updated_at")
 
 
 def _inbox_item(collection: str, name: str) -> pathlib.Path:
     """One inbox item by its file name, guarded like any other segment."""
     paths.check_segment(name, f"{collection}/{paths.INBOX_DIR_NAME}/{name}")
     return paths.inbox_dir(collection) / name
+
+
+def inbox_path(collection: str, name: str) -> str:
+    """An inbox item's knowledge-root-relative path — what its history records."""
+    return f"{collection}/{paths.INBOX_DIR_NAME}/{name}"
 
 
 def submit_material(
@@ -70,13 +79,86 @@ def submit_material(
     return target.name
 
 
+def has_complete_frontmatter(collection: str, name: str) -> bool:
+    """Whether an item carries every key a Coffer surface writes. A file that
+    lacks one was written outside Coffer."""
+    fm, _ = split_frontmatter(decode(_inbox_item(collection, name).read_bytes()))
+    return all(fm.get(key) for key in _SUBMITTED_KEYS)
+
+
+def _first_heading(body: str) -> str:
+    for line in body.splitlines():
+        if line.startswith("# ") and line[2:].strip():
+            return line[2:].strip()
+    return ""
+
+
+def adopt_dropped(collection: str, name: str) -> tuple[str, str, bool]:
+    """Fill the frontmatter of an item written outside Coffer, in place (spec
+    knowledge "Submit material by writing a file into the inbox").
+
+    ``title`` is kept, else the first ``# `` heading, else the file name's stem;
+    ``description`` is kept, else the first prose paragraph, else the title;
+    ``actor`` is kept as written (self-reported), else ``agent``; the two
+    timestamps are kept, else now; every other key a writer set is kept, and the
+    body is unchanged. Returns ``(title, actor, actor_reported)``.
+    """
+    path = _inbox_item(collection, name)
+    fm, body = split_frontmatter(decode(path.read_bytes()))
+    title = str(fm.get("title") or "").strip() or _first_heading(body) or path.stem
+    description = str(fm.get("description") or "").strip() or opening_prose(body, fallback=title)
+    reported = str(fm.get("actor") or "").strip()
+    actor = reported or ACTOR_AGENT
+    now = timestamp()
+    atomic_write(
+        path,
+        render(
+            {
+                **fm,
+                "title": title,
+                "description": description,
+                "actor": actor,
+                "created_at": fm.get("created_at") or now,
+                "updated_at": fm.get("updated_at") or now,
+            },
+            body,
+        ),
+    )
+    return title, actor, bool(reported)
+
+
+def non_markdown_items(collection: str) -> tuple[str, ...]:
+    """Files in a collection's inbox that are not Markdown: never curated."""
+    directory = paths.inbox_dir(collection)
+    if not directory.is_dir():
+        return ()
+    return tuple(
+        sorted(e.name for e in directory.iterdir() if e.is_file() and not is_markdown(e.name))
+    )
+
+
+def _submitted_at(entry: pathlib.Path) -> float:
+    """When an item was submitted: its own ``created_at``, else its file time.
+
+    The file time is only a fallback. A checkout, a restore or a sync round
+    rewrites every mtime at once and would scramble "oldest first" ("A modification
+    time never decides"), whereas ``created_at`` travels with the item.
+    """
+    try:
+        fm, _ = split_frontmatter(decode(entry.read_bytes()))
+        stamp = datetime.fromisoformat(str(fm.get("created_at") or ""))
+    except (OSError, ValueError):
+        return entry.stat().st_mtime
+    return (stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)).timestamp()
+
+
 def inbox_items(collection: str) -> tuple[str, ...]:
-    """The names of a collection's unmerged items, oldest first."""
+    """The names of a collection's unmerged items, oldest submitted first."""
     directory = paths.inbox_dir(collection)
     if not directory.is_dir():
         return ()
     found = [
-        (entry.stat().st_mtime, entry.name)
+        (_submitted_at(entry), entry.name)
         for entry in directory.iterdir()
         if entry.is_file() and is_markdown(entry.name)
     ]
@@ -115,9 +197,9 @@ def promote(collection: str, name: str) -> KnowledgeFile:
 
     The path with no model to merge it: the material is knowledge the moment it
     arrives, so it must not wait in a hidden directory for a connection that
-    may never be configured. It lands at the collection root, stamped as
-    curated — nothing is going to curate it, and an unstamped document would
-    only be handed back by every sweep.
+    may never be configured. It lands at the collection root, recorded as
+    settled by curation — nothing is going to curate it, and an unsettled
+    document would only be handed back by every sweep.
     """
     material = read_material(collection, name)
     written = write_file(

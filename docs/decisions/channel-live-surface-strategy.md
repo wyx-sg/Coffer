@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Grow a reply in place on one live surface", "Stream through the platform's own surface where the chat has one", "Acknowledge receipt and completion by capability", "Summarise only a turn that did not end normally", "Stop the turn from the platform's own stop control");
+**Related**: spec channels ("Grow a reply in place on one live surface", "Stream through the platform's own surface where the chat has one", "Acknowledge receipt and completion by capability", "Summarise a turn that did not end normally", "Stop the turn from the platform's own stop control");
 spec channels/telegram ("Stream through a message draft in direct chats only", "Use a deleted status message as the live scaffolding");
 spec channels/seatalk ("Stream the reply under SeaTalk's streaming contract", "Keep a typing heartbeat alive in DMs and group threads");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md);
@@ -160,8 +160,9 @@ Rules a future change must respect:
 
 - A new platform chooses its surface and pace inside its adapter and declares
   `supports_live_text` / `live_text_persists`; the renderer needs no change.
-- `supports_edit` and `supports_live_text` are separate capabilities and must
-  stay separate: SeaTalk streams but cannot edit.
+- The core asks for a live surface (`supports_live_text`), never for "can a
+  delivered text message be rewritten": SeaTalk streams but cannot edit, and no
+  capability flag says otherwise.
 - Clients too old for a platform's streaming (SeaTalk before 3.67) see only
   the final message, which is the same reply.
 - Enforced by: `ChannelCapabilities` in `domain/channel/envelopes.py`;

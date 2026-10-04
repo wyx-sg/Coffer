@@ -1,206 +1,166 @@
 // frontend/src/pages/sync/SyncMachinesTab.test.tsx
 //
-// The registry table. Three of its columns carry a claim that would be wrong
-// if rendered naively, so each has a test: the id's first 8 characters (two
-// machines can share a name), "last converged" as a DAY (an idle machine does
-// not stamp every round), and the key ✓/✗ (✗ means that machine's credentials
-// cannot be decrypted here, which is not the same as "no fingerprint yet").
+// The registry table (6.4.24). Its cells carry claims that would be wrong if
+// rendered naively, so each has a test: two machines of one name are both
+// listed and keyed by id; "last seen" comes from the machine's own last
+// round; the curation owner is tagged read-only; a different master key is
+// flagged (and "no fingerprint yet" is not); Rename is only on this Mac's
+// row, behind its dialog, and Retire only on the others — at once, with an
+// Undo toast.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { acceptance } from "@/test/acceptance";
-
 import type { Machine } from "@/lib/api/sync";
 import { SyncMachinesTab } from "./SyncMachinesTab";
+import { idleMutation, makeMachine } from "./syncTestKit";
 
 vi.mock("@/lib/hooks/useMachines", () => ({
   useMachines: vi.fn(),
   useRenameSelf: vi.fn(),
   useRetireMachine: vi.fn(),
+  useRestoreMachine: vi.fn(),
 }));
-vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
+const toast = { info: vi.fn(), error: vi.fn(), success: vi.fn() };
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast }) }));
+vi.mock("@/lib/hooks/useInternalEngine", () => ({ useInternalEngineConfig: vi.fn() }));
 
-const { useMachines, useRenameSelf, useRetireMachine } = await import("@/lib/hooks/useMachines");
-const { useSyncStatus } = await import("@/lib/hooks/useSync");
+const { useMachines, useRenameSelf, useRetireMachine, useRestoreMachine } =
+  await import("@/lib/hooks/useMachines");
+const { useInternalEngineConfig } = await import("@/lib/hooks/useInternalEngine");
+const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 
 const renameMutate = vi.fn();
-const retireMutate = vi.fn();
+const retireMutate = vi.fn((_: string, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.());
+const restoreMutate = vi.fn();
 
 const LOCAL = "a3f21c9e4b7d2610";
 const OTHER = "bb11cc22dd33ee44";
 
-function machine(overrides: Partial<Machine> = {}): Machine {
-  return {
-    machine_id: LOCAL,
-    name: "laptop",
-    os: "Darwin",
-    hostname: "mba.local",
-    coffer_version: "0.5.0",
-    last_converged_on: "2026-09-12",
-    key_matches: true,
-    agents: ["claude-code", "codex"],
-    is_self: true,
-    ...overrides,
-  };
-}
+const machine = (over: Partial<Machine> = {}) =>
+  makeMachine({ machine_id: LOCAL, name: "MacBook Pro", ...over });
+const other = (over: Partial<Machine> = {}) =>
+  machine({ machine_id: OTHER, name: "Mac mini", is_self: false, ...over });
 
-function seed(machines: Machine[], derived = true) {
-  vi.mocked(useMachines).mockReturnValue({
-    data: { machines },
-    isPending: false,
-  } as unknown as ReturnType<typeof useMachines>);
-  vi.mocked(useSyncStatus).mockReturnValue({
-    data: { machine_id: LOCAL, machine_id_is_derived: derived },
-  } as unknown as ReturnType<typeof useSyncStatus>);
-  vi.mocked(useRenameSelf).mockReturnValue({
-    mutate: renameMutate,
-    isPending: false,
-  } as unknown as ReturnType<typeof useRenameSelf>);
-  vi.mocked(useRetireMachine).mockReturnValue({
-    mutate: retireMutate,
-    isPending: false,
-  } as unknown as ReturnType<typeof useRetireMachine>);
+function seed(machines: Machine[], curator: string | null = null) {
+  mocked(useMachines).mockReturnValue({ data: { machines }, isPending: false });
+  mocked(useInternalEngineConfig).mockReturnValue({ data: { curate_owner_machine_id: curator } });
+  mocked(useRenameSelf).mockReturnValue(idleMutation({ mutate: renameMutate }));
+  mocked(useRetireMachine).mockReturnValue(idleMutation({ mutate: retireMutate }));
+  mocked(useRestoreMachine).mockReturnValue(idleMutation({ mutate: restoreMutate }));
 }
 
 const rowFor = (id: string) => within(screen.getByTestId(`machine-${id}`));
+const openMenu = (id: string, name: string) =>
+  fireEvent.click(rowFor(id).getByRole("button", { name: `More for ${name}` }));
 
 afterEach(() => vi.clearAllMocks());
 
 describe("SyncMachinesTab", () => {
   acceptance("vault-sync", "the machine registry shows every machine and cannot conflict", () => {
-    // Two machines the user called the same thing: the table lists both with
-    // their names, last converged day and key state, marks the local one, and
-    // stays unambiguous because the derived id is shown alongside the name.
+    // Two machines the user called the same thing: both are listed, each
+    // keyed by its derived id, and the local one is marked.
+    const minutesAgo = new Date(Date.now() - 12 * 60_000).toISOString();
     seed([
-      machine({ name: "laptop" }),
-      machine({
-        machine_id: OTHER,
-        name: "laptop",
-        is_self: false,
-        last_converged_on: "2026-09-11",
-      }),
+      machine({ name: "laptop", last_round_at: new Date().toISOString(), last_round: "pulled" }),
+      other({ name: "laptop", last_round_at: minutesAgo, last_round: "pushed" }),
     ]);
     render(<SyncMachinesTab />);
 
-    expect(rowFor(LOCAL).getByText("a3f21c9e")).toBeInTheDocument();
-    expect(rowFor(OTHER).getByText("bb11cc22")).toBeInTheDocument();
-    expect(rowFor(LOCAL).getByText(/this machine/i)).toBeInTheDocument();
-    expect(rowFor(LOCAL).getByText("2026-09-12")).toBeInTheDocument();
-    expect(rowFor(OTHER).getByText("2026-09-11")).toBeInTheDocument();
+    expect(rowFor(LOCAL).getByText("This Mac")).toBeInTheDocument();
+    expect(rowFor(OTHER).queryByText("This Mac")).not.toBeInTheDocument();
+    expect(rowFor(LOCAL).getByText("Now")).toBeInTheDocument();
+    expect(rowFor(OTHER).getByText("12 minutes ago")).toBeInTheDocument();
+    expect(rowFor(LOCAL).getByText(/· Pulled/i)).toBeInTheDocument();
+    expect(rowFor(OTHER).getByText("laptop")).toHaveAttribute("title", OTHER);
   });
 
-  test("the local row is marked and its name is editable", () => {
-    seed([machine()]);
+  test("a Mac not seen for weeks says when, in the warning tone", () => {
+    const old = new Date(Date.now() - 39 * 86_400_000).toISOString();
+    seed([other({ last_round_at: old, last_round: "pulled" })]);
     render(<SyncMachinesTab />);
-
-    expect(rowFor(LOCAL).getByText(/this machine/i)).toBeInTheDocument();
-    const input = rowFor(LOCAL).getByLabelText(/machine name/i);
-    fireEvent.change(input, { target: { value: "workhorse" } });
-    fireEvent.blur(input);
-    expect(renameMutate).toHaveBeenCalledWith("workhorse");
+    const cell = rowFor(OTHER).getByText(/39 days ago/);
+    expect(cell).toHaveClass("text-warning");
   });
 
-  test("another machine's name is not editable — a machine writes only its own descriptor", () => {
-    seed([machine({ machine_id: OTHER, name: "desktop", is_self: false })]);
+  test("a machine that never ran a round says so", () => {
+    seed([machine({ last_round_at: null })]);
     render(<SyncMachinesTab />);
-    expect(rowFor(OTHER).queryByLabelText(/machine name/i)).not.toBeInTheDocument();
-    expect(rowFor(OTHER).getByText("desktop")).toBeInTheDocument();
+    expect(rowFor(LOCAL).getByText("Never")).toBeInTheDocument();
   });
 
-  test("last converged is labelled a day, not an instant", () => {
-    seed([machine({ last_converged_on: "2026-09-12" })]);
+  test("only the curation owner carries the read-only Runs curation tag", () => {
+    seed([machine(), other()], OTHER);
     render(<SyncMachinesTab />);
-    expect(rowFor(LOCAL).getByText("2026-09-12")).toBeInTheDocument();
-    expect(screen.getByText(/running but idle/i)).toBeInTheDocument();
+    expect(rowFor(OTHER).getByText("Runs curation")).toBeInTheDocument();
+    expect(rowFor(LOCAL).queryByText("Runs curation")).not.toBeInTheDocument();
   });
 
-  test("a machine that never converged says so", () => {
-    seed([machine({ last_converged_on: null })]);
+  test("each agent is shown by its mark", () => {
+    const agents = [
+      { type: "claude_code", name: "claude-code", plugins: [] },
+      { type: "codex", name: "codex", plugins: [] },
+    ];
+    seed([machine({ agents })]);
     render(<SyncMachinesTab />);
-    expect(rowFor(LOCAL).getByText(/never/i)).toBeInTheDocument();
-  });
-
-  test("a key mismatch says the credentials cannot be decrypted here", () => {
-    seed([machine({ machine_id: OTHER, is_self: false, key_matches: false })]);
-    render(<SyncMachinesTab />);
-    expect(rowFor(OTHER).getByText(/cannot be decrypted here/i)).toBeInTheDocument();
-  });
-
-  test("an unpublished fingerprint is unknown, not a mismatch", () => {
-    seed([machine({ machine_id: OTHER, is_self: false, key_matches: null })]);
-    render(<SyncMachinesTab />);
-    expect(rowFor(OTHER).queryByText(/cannot be decrypted here/i)).not.toBeInTheDocument();
-    expect(rowFor(OTHER).getByText("—")).toBeInTheDocument();
-  });
-
-  test("retiring is offered for other machines only, and says what it leaves", () => {
-    // Retiring used to rewrite every scope that named the machine, and the
-    // dialog had to warn about it. Reach is set per machine now and no scope
-    // can name one, so removing the descriptor really is the whole of the
-    // WRITE — but it is no longer the whole of the consequence: a channel
-    // bound to this machine keeps naming it and runs nowhere afterwards, and
-    // the dialog is the only place the user is standing when that becomes
-    // true.
-    seed([machine(), machine({ machine_id: OTHER, name: "desktop", is_self: false })]);
-    render(<SyncMachinesTab />);
-
-    expect(rowFor(LOCAL).queryByRole("button", { name: /retire/i })).not.toBeInTheDocument();
-    fireEvent.click(rowFor(OTHER).getByRole("button", { name: /retire/i }));
-
-    const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByText(/nothing else is rewritten/i)).toBeInTheDocument();
-    expect(dialog.getByText(/runs nowhere until you bind it to another/i)).toBeInTheDocument();
-    expect(dialog.queryByText(/scope/i)).not.toBeInTheDocument();
-    fireEvent.click(dialog.getByRole("button", { name: /retire/i }));
-    expect(retireMutate).toHaveBeenCalledWith(OTHER, expect.anything());
-  });
-
-  test("a non-derived machine id warns that deleting ~/.coffer makes a new machine", () => {
-    seed([machine()], false);
-    render(<SyncMachinesTab />);
-    expect(screen.getByTestId("machine-id-not-derived")).toHaveTextContent(/new machine/i);
-  });
-
-  test("a derived machine id raises no such note", () => {
-    seed([machine()], true);
-    render(<SyncMachinesTab />);
-    expect(screen.queryByTestId("machine-id-not-derived")).not.toBeInTheDocument();
-  });
-
-  acceptance("vault-sync", "a machine with no host identifier falls back and says so", () => {
-    // The machine surface's half: an id from the fallback file is marked as
-    // not derived, and the table warns that deleting ~/.coffer makes a new machine.
-    seed([machine()], false);
-    render(<SyncMachinesTab />);
-    const note = screen.getByTestId("machine-id-not-derived");
-    expect(note).toHaveTextContent("~/.coffer");
-    expect(note).toHaveTextContent(/new machine/i);
+    expect(rowFor(LOCAL).getByRole("img", { name: /claude code/i })).toBeInTheDocument();
+    expect(rowFor(LOCAL).getByRole("img", { name: /codex/i })).toBeInTheDocument();
   });
 
   acceptance("vault-sync", "a peer holding another master key is flagged", () => {
-    // `key_matches` is the daemon's comparison of the peer's published
-    // fingerprint with this machine's; a mismatch is stated, not left to the user.
-    seed([
-      machine(),
-      machine({ machine_id: OTHER, name: "desktop", is_self: false, key_matches: false }),
-    ]);
+    seed([machine(), other({ key_matches: false })]);
     render(<SyncMachinesTab />);
-    expect(rowFor(OTHER).getByText(/cannot be decrypted here/i)).toBeInTheDocument();
-    expect(rowFor(LOCAL).queryByText(/cannot be decrypted here/i)).not.toBeInTheDocument();
+    expect(rowFor(OTHER).getByText("Different master key")).toHaveAttribute(
+      "aria-label",
+      expect.stringMatching(/cannot be decrypted here/),
+    );
+    expect(rowFor(LOCAL).queryByText("Different master key")).not.toBeInTheDocument();
   });
 
-  acceptance("vault-sync", "an idle machine restamps its descriptor at most once a day", () => {
-    // The UI's half: the value is labelled as the DAY the machine last converged.
-    seed([machine({ last_converged_on: "2026-09-12" })]);
+  test("an unpublished fingerprint is unknown, not a mismatch", () => {
+    seed([other({ key_matches: null })]);
     render(<SyncMachinesTab />);
-    expect(rowFor(LOCAL).getByText("2026-09-12")).toBeInTheDocument();
-    expect(screen.getByText(/a day, not a moment/i)).toBeInTheDocument();
+    expect(rowFor(OTHER).queryByText("Different master key")).not.toBeInTheDocument();
+  });
+
+  test("this Mac is renamed from its menu; other Macs offer no rename", () => {
+    seed([machine(), other()]);
+    render(<SyncMachinesTab />);
+    openMenu(OTHER, "Mac mini");
+    expect(screen.queryByRole("menuitem", { name: "Rename" })).not.toBeInTheDocument();
+
+    openMenu(LOCAL, "MacBook Pro");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText(/only the name in this list changes/i)).toBeInTheDocument();
+    const rename = dialog.getByRole("button", { name: "Rename" });
+    expect(rename).toBeDisabled();
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "Workhorse" } });
+    fireEvent.click(rename);
+    expect(renameMutate).toHaveBeenCalledWith("Workhorse", expect.anything());
+  });
+
+  test("retiring is offered for other machines only, runs at once and can be undone", () => {
+    seed([machine(), other({ coffer_version: "1.0.0" })]);
+    render(<SyncMachinesTab />);
+    openMenu(LOCAL, "MacBook Pro");
+    expect(screen.queryByRole("menuitem", { name: "Retire" })).not.toBeInTheDocument();
+
+    openMenu(OTHER, "Mac mini");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Retire" }));
+    // No confirmation dialog: the registry entry is all it removes.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(retireMutate).toHaveBeenCalledWith(OTHER, expect.anything());
+    expect(toast.info).toHaveBeenCalledWith("Retired Mac mini", { undo: expect.any(Function) });
+
+    toast.info.mock.calls[0][1].undo();
+    expect(restoreMutate).toHaveBeenCalledWith(OTHER, expect.anything());
   });
 
   test("an empty registry explains itself rather than showing an empty table", () => {
     seed([]);
     render(<SyncMachinesTab />);
-    expect(screen.getByText(/no machines yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no macs yet/i)).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });

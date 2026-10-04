@@ -9,7 +9,7 @@
 // under the names the hooks and pages already import. Transport is the shared
 // `call` (.agents/frontend.md §4).
 
-import { call } from "@/lib/api/call";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/chat";
 
 type Schemas = components["schemas"];
@@ -30,15 +30,26 @@ export type Message = Schemas["MessageOut"];
 
 export type MessageListOut = Schemas["MessageListOut"];
 
-/**
- * The IM channel binding behind a channel-originated conversation (ADR
- * chat-single-owner-live-mirror).
- */
-
 /** `archived_at` is null for an active conversation; `channel_binding` null for a web one. */
 export type Conversation = Schemas["ConversationOut"];
 
+/**
+ * Where a reply typed here also goes, for a channel conversation (spec chat
+ * "Show where a reply will also be sent"). Filled only by the single-conversation
+ * GET; the listing leaves `channel_binding.mirror` null.
+ */
+export type ChannelMirror = Schemas["ChannelMirrorOut"];
+
+/** A send's answer: `queued` behind a running turn, and what became of the
+ *  reply in the conversation's channel (`mirror`, null for a web conversation). */
+export type SendMessageAck = Schemas["SendMessageAck"];
+
+/** The IM platforms a channel conversation can come from. */
+export type ChannelPlatform = NonNullable<Schemas["ChannelBindingOut"]["platform"]>;
+
 export type ConversationListOut = Schemas["ConversationListOut"];
+
+export type ConversationBatchAction = Schemas["ConversationBatchIn"]["action"];
 
 export type ConversationCreate = Schemas["ConversationCreate"];
 
@@ -55,93 +66,198 @@ export type ConversationPatch = Schemas["ConversationPatch"];
  */
 export type AgentConfigOut = Schemas["AgentConfigOut"];
 
-/**
- * A patch that names one field leaves the other alone; see `setAgentModel`.
- * Empty/whitespace or null clears the override (inherit the provider default /
- * let the agent pick its own level).
- */
+/** One file a reply changed, and whether a diff can be opened for it. */
+export type ReplyFile = Schemas["ReplyFileOut"];
+
+/** One changed file's unified diff, or why it is left out. */
+export type ReplyFileDiff = Schemas["ReplyFileDiffOut"];
+
+/** A question the agent asked the owner: the `question` block of a reply
+ *  (spec chat "Pause a turn on a question for the owner"). */
+export type Question = Schemas["QuestionOut"];
+
+/** The owner's answer to one question: option labels and/or free text. */
+export type QuestionAnswerIn = Schemas["QuestionAnswerIn"];
+
+/** The pending-message queue after a replace (spec chat "Queue messages sent during a turn"). */
+export type PendingQueue = Schemas["PendingQueueOut"];
 
 // ---------------------------------------------------------------------------
 // API object
 // ---------------------------------------------------------------------------
 
+const conv = (id: string) => ({ params: { path: { id } } });
+
 export const chatApi = {
   // Conversations
-  listConversations: (archived = false) =>
-    call<ConversationListOut>(`/chat/conversations?archived=${archived}`),
+  // One page of the listing (spec chat "List conversations by latest
+  // activity"): the caller reads as many pages as it shows, 30 and then 50, and
+  // passes the abort signal of its query so a stale request is cancelled. `q`
+  // is a case-insensitive substring of the title; a cursor belongs to the
+  // archived flag and the `q` it was issued for.
+  listConversations: (
+    opts: { archived?: boolean; limit: number; cursor?: string | null; q?: string },
+    signal?: AbortSignal,
+  ): Promise<ConversationListOut> =>
+    unwrap(
+      getApiClient().GET("/chat/conversations", {
+        signal,
+        params: {
+          query: {
+            archived: opts.archived ?? false,
+            limit: opts.limit,
+            ...(opts.cursor ? { cursor: opts.cursor } : {}),
+            ...(opts.q ? { q: opts.q } : {}),
+          },
+        },
+      }),
+    ),
 
-  createConversation: (body?: ConversationCreate) =>
-    call<Conversation>("/chat/conversations", { method: "POST", body: body ?? {} }),
+  createConversation: (body: ConversationCreate) =>
+    unwrap(getApiClient().POST("/chat/conversations", { body })),
 
   archiveConversation: (id: string) =>
-    call<Conversation>(`/chat/conversations/${id}/archive`, { method: "POST" }),
+    unwrap(getApiClient().POST("/chat/conversations/{id}/archive", conv(id))),
 
   unarchiveConversation: (id: string) =>
-    call<Conversation>(`/chat/conversations/${id}/unarchive`, { method: "POST" }),
+    unwrap(getApiClient().POST("/chat/conversations/{id}/unarchive", conv(id))),
 
-  getConversation: (id: string) => call<Conversation>(`/chat/conversations/${id}`),
+  batchConversations: (action: ConversationBatchAction, ids: string[]) =>
+    unwrap(getApiClient().POST("/chat/conversations/batch", { body: { action, ids } })),
+
+  getConversation: (id: string) => unwrap(getApiClient().GET("/chat/conversations/{id}", conv(id))),
 
   updateConversation: (id: string, body: ConversationPatch) =>
-    call<Conversation>(`/chat/conversations/${id}`, { method: "PATCH", body }),
+    unwrap(getApiClient().PATCH("/chat/conversations/{id}", { ...conv(id), body })),
+
+  // What an assistant reply changed (spec chat "Record what each reply changed in each file").
+  listReplyFiles: (id: string, messageId: string): Promise<ReplyFile[]> =>
+    unwrap(
+      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/changes", {
+        params: { path: { id, message_id: messageId } },
+      }),
+    ).then((out) => out.files),
+
+  getReplyFileDiff: (id: string, messageId: string, path: string): Promise<ReplyFileDiff> =>
+    unwrap(
+      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/changes/diff", {
+        params: { path: { id, message_id: messageId }, query: { path } },
+      }),
+    ),
 
   // Per-conversation managed-agent model (agent_config.model), mirrors `/model`.
-  getAgentConfig: (id: string) => call<AgentConfigOut>(`/chat/conversations/${id}/agent-config`),
+  getAgentConfig: (id: string): Promise<AgentConfigOut> =>
+    unwrap(getApiClient().GET("/chat/conversations/{id}/agent-config", conv(id))),
 
   // Each setter sends its own field ALONE. Restating the other one would pin a
   // value the user never touched — and, worse, re-send an inherited null as an
-  // explicit clear — so the two settings stay independently editable.
-  setAgentModel: (id: string, model: string | null) =>
-    call<AgentConfigOut>(`/chat/conversations/${id}/agent-config`, {
-      method: "PATCH",
-      body: { model },
-    }),
+  // explicit clear — so the two settings stay independently editable. A null or
+  // blank value clears the override (inherit the provider default / let the
+  // agent pick its own level).
+  setAgentModel: (id: string, model: string | null): Promise<AgentConfigOut> =>
+    unwrap(
+      getApiClient().PATCH("/chat/conversations/{id}/agent-config", {
+        ...conv(id),
+        body: { model },
+      }),
+    ),
 
-  setAgentEffort: (id: string, effort: string | null) =>
-    call<AgentConfigOut>(`/chat/conversations/${id}/agent-config`, {
-      method: "PATCH",
-      body: { effort },
-    }),
+  setAgentEffort: (id: string, effort: string | null): Promise<AgentConfigOut> =>
+    unwrap(
+      getApiClient().PATCH("/chat/conversations/{id}/agent-config", {
+        ...conv(id),
+        body: { effort },
+      }),
+    ),
 
-  deleteConversation: (id: string) => call<void>(`/chat/conversations/${id}`, { method: "DELETE" }),
+  deleteConversation: (id: string): Promise<void> =>
+    unwrapVoid(getApiClient().DELETE("/chat/conversations/{id}", conv(id))),
+
+  // Answer the question's next unanswered question. `index` names the one being
+  // answered, so a late answer is refused (409 QUESTION_CLOSED) instead of landing
+  // on the next one. Free text goes as `text` with no `selected`.
+  answerQuestion: (
+    conversationId: string,
+    questionId: string,
+    answers: QuestionAnswerIn[],
+    index?: number,
+  ): Promise<Question> =>
+    unwrap(
+      getApiClient().POST("/chat/conversations/{id}/questions/{question_id}/answer", {
+        params: { path: { id: conversationId, question_id: questionId } },
+        body: index === undefined ? { answers } : { answers, index },
+      }),
+    ),
 
   // Messages
-  listMessages: (conversationId: string) =>
-    call<MessageListOut>(`/chat/conversations/${conversationId}/messages`),
+  listMessages: (conversationId: string): Promise<MessageListOut> =>
+    unwrap(getApiClient().GET("/chat/conversations/{id}/messages", conv(conversationId))),
 
   // Enqueue a user message. Fire-and-return (202): the turn runs server-side and
   // its events arrive over the GET /events subscription, not this response.
   // `attachmentIds` are uploads from `uploadAttachment`, in attach order.
-  sendMessage: (conversationId: string, text: string, attachmentIds: string[] = []) =>
-    call<{ queued: boolean }>(`/chat/conversations/${conversationId}/messages`, {
-      method: "POST",
-      body: attachmentIds.length > 0 ? { text, attachment_ids: attachmentIds } : { text },
-    }),
+  sendMessage: (
+    conversationId: string,
+    text: string,
+    attachmentIds: string[] = [],
+  ): Promise<SendMessageAck> =>
+    unwrap(
+      getApiClient().POST("/chat/conversations/{id}/messages", {
+        ...conv(conversationId),
+        body: attachmentIds.length > 0 ? { text, attachment_ids: attachmentIds } : { text },
+      }),
+    ),
 
   // Send a persisted user message again (Retry). The daemon rebuilds it from its
   // row, attachments included; a file swept since is 410 ATTACHMENT_EXPIRED.
-  resendMessage: (conversationId: string, messageId: string) =>
-    call<{ queued: boolean }>(
-      `/chat/conversations/${conversationId}/messages/${messageId}/resend`,
-      { method: "POST" },
+  resendMessage: (conversationId: string, messageId: string): Promise<SendMessageAck> =>
+    unwrap(
+      getApiClient().POST("/chat/conversations/{id}/messages/{message_id}/resend", {
+        params: { path: { id: conversationId, message_id: messageId } },
+      }),
     ),
+
+  // The bytes of a file attached to one of this conversation's messages (the
+  // thread's thumbnail). Fetched here, not through an <img src>, because the
+  // request needs the X-Coffer-Token header; a pruned or foreign file is 404.
+  attachmentBlob: async (conversationId: string, attachmentId: string): Promise<Blob> => {
+    const result = await getApiClient().GET(
+      "/chat/conversations/{id}/attachments/{attachment_id}",
+      {
+        params: { path: { id: conversationId, attachment_id: attachmentId } },
+        parseAs: "blob",
+      },
+    );
+    return unwrap(Promise.resolve(result)) as Promise<Blob>;
+  },
 
   // Upload one file for a later send. Not tied to a conversation, so a draft
   // can attach before its conversation exists. `signal` cancels it (the
   // composer does when the chip is removed).
-  uploadAttachment: (file: File, signal?: AbortSignal) => {
+  uploadAttachment: (file: File, signal?: AbortSignal): Promise<ChatAttachment> => {
     const form = new FormData();
     form.append("file", file, file.name);
-    return call<ChatAttachment>("/chat/attachments", { method: "POST", body: form, signal });
+    // A FormData body goes out with no Content-Type: the browser sets the
+    // multipart boundary itself. `body` only carries the generated type.
+    return unwrap(
+      getApiClient().POST("/chat/attachments", {
+        body: { file: "" },
+        bodySerializer: () => form,
+        signal,
+      }),
+    );
   },
 
   // Replace the pending-message queue (resume / drop / reorder).
-  setPending: (conversationId: string, pending: string[]) =>
-    call<{ pending: string[] }>(`/chat/conversations/${conversationId}/pending`, {
-      method: "PUT",
-      body: { pending },
-    }),
+  setPending: (conversationId: string, pending: string[]): Promise<PendingQueue> =>
+    unwrap(
+      getApiClient().PUT("/chat/conversations/{id}/pending", {
+        ...conv(conversationId),
+        body: { pending },
+      }),
+    ),
 
   // Turn control
-  interruptTurn: (conversationId: string) =>
-    call<void>(`/chat/conversations/${conversationId}/interrupt`, { method: "POST" }),
+  interruptTurn: (conversationId: string): Promise<void> =>
+    unwrapVoid(getApiClient().POST("/chat/conversations/{id}/interrupt", conv(conversationId))),
 };

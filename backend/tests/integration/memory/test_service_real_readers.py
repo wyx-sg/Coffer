@@ -3,7 +3,7 @@
 This is the seam the unit tier does not cover: the readers are the actual
 ``ClaudeCodeMemoryReader`` and ``CodexMemoryReader`` parsing realistic fixture
 trees, the repository is a real ``git init``, and what comes out is real files
-under ``COFFER_MEMORY_ROOT``.
+under the memory root of the per-test ``HOME``.
 
 The test that matters most here is the read-only one. **Coffer never writes an
 agent's native memory** ("Never write an agent's native memory") — that is the

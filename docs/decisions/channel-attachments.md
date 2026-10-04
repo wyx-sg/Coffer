@@ -33,7 +33,7 @@ Interpreter and Goose inline base64; Codex and CLI bridges hand over paths)
 found no single mechanism that fits both agents.
 
 And the bytes have a cost: a 3–5 MB photo is 4–7 MB of base64. Storing that in
-the chat database would bloat it and resend it on every history read, yet an
+the history database (`~/.coffer/runs.db`) would bloat it and resend it on every history read, yet an
 attachment that leaves no trace in the conversation is invisible on the web
 Chat page and lost after a daemon restart.
 
@@ -41,7 +41,7 @@ Chat page and lost after a daemon restart.
 
 ### Option A — Bytes in a Coffer-managed directory; an `AttachmentBlock` reference persisted in the user message; each agent materialises the reference its own way at send time (chosen)
 
-- **Download.** The transport saves each file under `~/.coffer/channel-media`
+- **Download.** The transport saves each file under `~/.coffer/content/channel-media`
   and puts `InboundAttachment(path, mime, filename)` on the envelope
   (`domain/channel/envelopes.py`). Files carried by a fetched thread or a
   quoted message are downloaded the same way and join the turn.
@@ -74,7 +74,7 @@ Chat page and lost after a daemon restart.
 - **The wire shows filename and mime only.** The API's content block exposes
   `filename` and `mime` for a chip on the web page; the local path never
   leaves the daemon (`surfaces/http/chat/conversation_routes.py`).
-- **Retention.** `~/.coffer/channel-media` is swept on the retention cadence:
+- **Retention.** `~/.coffer/content/channel-media` is swept on the retention cadence:
   files whose mtime is more than 30 days old are deleted
   (`files_to_prune` in the kind-agnostic `domain/retention.py` decides,
   `infrastructure/media_retention.py` does the I/O, bound into
@@ -120,7 +120,7 @@ the message.
 
 Pros: the conversation is self-contained; no files to manage or prune.
 
-Cons: megabytes per photo in SQLite, reloaded on every history read; the web
+Cons: megabytes per photo in the history database, reloaded on every history read; the web
 page would pull them over the wire; and the bytes would still need
 per-agent handling, since Codex cannot use them.
 
@@ -166,7 +166,7 @@ Loses because the agents consume files, so the file is the natural store.
 
 ## Decision
 
-Inbound files are saved under `~/.coffer/channel-media`. The user message
+Inbound files are saved under `~/.coffer/content/channel-media`. The user message
 persists an `AttachmentBlock(path, mime, filename)` per file and never the
 bytes. Each turn re-materialises its attachments from the last user message in
 history, and each agent adapter turns them into its native form: voice is
@@ -177,7 +177,7 @@ and mime, never its path. Files older than 30 days by mtime are pruned.
 
 Rules a future change must respect:
 
-- Bytes never enter the chat database.
+- Bytes never enter the history database.
 - The local path never reaches the wire.
 - Materialisation is per agent and lives in the adapter; the block stays
   agent-neutral.
@@ -186,7 +186,7 @@ Rules a future change must respect:
 
 - A new agent decides its own materialisation in its adapter; nothing in the
   message model changes.
-- Old text-only message rows needed no migration; the block is one more case
+- A text-only message row needs no special case; the block is one more type
   in the schemaless JSON content.
 - A reference whose file was pruned degrades to a text note on later reads;
   bytes are re-sendable from the phone.

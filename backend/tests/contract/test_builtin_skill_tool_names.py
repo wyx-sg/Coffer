@@ -26,8 +26,7 @@ assembles it, deliberately by hand rather than through the composition root:
 the root needs a database, a daemon and real services, and a gate that cannot
 run without them is a gate that gets skipped. The cost is that a registrar
 added to the root must be added here too — an omission once let a tool go
-unadvertised, so the assembly is spelled out below rather than hidden behind a
-helper.
+unadvertised.
 """
 
 from __future__ import annotations
@@ -47,13 +46,10 @@ _TOOL_TOKEN = re.compile(r"coffer__[a-z_]+")
 def _registered_tool_names() -> set[str]:
     """The bare names the gateway will actually answer."""
     from coffer.application.builtin_tools import BuiltinToolRegistry
-    from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 
+    # No kind registers a built-in tool any more (spec knowledge "Expose no
+    # knowledge tool"), so the registry assembled by hand is the empty one.
     registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(
-        registry,
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
     # ``search_tools`` is answered by the gateway itself rather than out of the
     # registry, so it is the one name legitimately absent from it.
     return {tool.name for tool in registry.list()} | {"search_tools"}
@@ -137,7 +133,7 @@ def test_static_asset_names_only_tools_that_exist() -> None:
 def test_rendered_skill_names_every_tool_that_exists() -> None:
     """And the other direction: a tool nobody is told about may as well not exist.
 
-    Coffer has exactly two built-ins and the skill is the one manual every
+    Coffer has exactly one built-in and the skill is the one manual every
     agent gets, so "some subset" is not good enough — a tool added to the
     registry and left out of the manual is invisible in practice.
     """

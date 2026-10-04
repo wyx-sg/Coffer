@@ -1,7 +1,7 @@
 """A user-supplied attachment referenced by local path (spec chat, spec channels).
 
-The bytes live on disk — downloaded from a channel into ``~/.coffer/channel-media``
-or uploaded from the web Chat page into ``~/.coffer/chat-media`` — never inline in
+The bytes live on disk — downloaded from a channel into ``~/.coffer/content/channel-media``
+or uploaded from the web Conversations page into ``~/.coffer/content/chat-media`` — never inline in
 the chat DB, so conversation history stays small and the same reference works for
 any modality. Each agent adapter *materialises* the reference in its own native
 shape at send time: a vision agent inlines an image content block (base64 read
@@ -110,6 +110,10 @@ class Attachment:
     path: str  # absolute local path to the bytes
     mime: str  # e.g. "image/jpeg", "application/pdf", "audio/ogg"
     filename: str  # best-effort original name, for display / the agent's benefit
+    #: A web upload's id in the chat media store (what the thread's thumbnail is
+    #: fetched by); ``None`` for channel media, which has no id.
+    id: str | None = None
+    size: int | None = None  # bytes, when the store recorded it
 
     @property
     def is_image(self) -> bool:

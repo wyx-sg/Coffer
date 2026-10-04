@@ -1,20 +1,21 @@
 // e2e/web/specs/shell_activity.spec.ts
 //
-// UI Shell §User Story 3 — the three records Coffer keeps reach a person at
-// /activity, one tab and one table each. This file covers the half that needs a
-// real browser and a real daemon: an old /audit bookmark resolves here instead
-// of dead-ending, the page it lands on renders all three tabs, and the Changes
-// tab picks up a row the daemon actually wrote.
+// The three records Coffer keeps reach a person at /activity: Everything plus
+// one tab per record. This file covers the half that needs a real browser and a
+// real daemon: an old /audit bookmark resolves here instead of dead-ending and
+// the page shows a row the daemon actually wrote; a record written while the
+// reader has one open is held behind "N new"; and the ⋯ menu's export writes
+// exactly the filtered records to a file.
 //
-// Per-tab columns, the row expand and a failing tab's error are exercised in
+// Per-tab columns, the drawer and a failing tab's error are exercised in
 // frontend/src/pages/activity/ActivityPage.test.tsx, where each record's
 // payload can be fixed — a browser cannot make the daemon log a chosen line on
 // cue, nor take one route away mid-run.
 
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { acceptance } from "./_acceptance";
 import {
   beforeEachInjectToken,
   deregisterMcpServer,
@@ -58,30 +59,108 @@ async function registerFakeServer(name: string): Promise<void> {
   if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
 }
 
-acceptance("web-ui", "legacy /audit redirects to activity", async ({ page }) => {
-  const name = generateUniqueName("e2eactivity");
-  try {
-    await registerFakeServer(name);
+test(
+  "activity opens on Everything with one tab per record",
+  async ({ page }) => {
+    const name = generateUniqueName("e2eactivity");
+    try {
+      await registerFakeServer(name);
 
-    // The old bookmark, not /activity — the redirect is what is under test.
-    await page.goto("/audit");
-    await expect(page).toHaveURL(/\/activity$/);
+      await page.goto("/activity");
 
-    await expect(
-      page.getByRole("heading", { name: /^Activity$/ }),
-    ).toBeVisible();
-    // One tab per record — the page's whole shape.
-    for (const tab of [/Changes/i, /MCP calls/i, /Daemon/i]) {
-      await expect(page.getByRole("tab", { name: tab })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: /^Activity$/ }),
+      ).toBeVisible();
+      // Everything, then one tab per record — the page's whole shape.
+      for (const tab of [
+        /Everything/i,
+        /Changes/i,
+        /MCP calls/i,
+        /Daemon log/i,
+      ]) {
+        await expect(page.getByRole("tab", { name: tab })).toBeVisible();
+      }
+
+      // Everything is the landing tab, and it picks the registration up as a
+      // plain-language line naming the server, not a raw `resource_registered`.
+      await expect(page.getByText(new RegExp(name)).first()).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(page.getByText(/resource_registered/)).toHaveCount(0);
+    } finally {
+      await deregisterMcpServer(name);
     }
+  },
+);
 
-    // Changes is the landing tab, and it picks the registration up as a
-    // plain-language line naming the server, not a raw `resource_registered`.
-    await expect(page.getByText(new RegExp(name))).toBeVisible({
+test("a record written while one is open waits behind the new pill", async ({
+  page,
+}) => {
+  const first = generateUniqueName("e2eheldone");
+  const second = generateUniqueName("e2eheldtwo");
+  try {
+    await registerFakeServer(first);
+    await page.goto("/activity?tab=changes");
+    const row = page.locator("tr[data-record]", { hasText: first });
+    await expect(row.first()).toBeVisible({ timeout: 10_000 });
+
+    // Open the row: the list holds still while it is being read.
+    await row.first().click();
+    await expect(
+      page.getByRole("complementary", { name: "Details" }),
+    ).toBeVisible();
+
+    await registerFakeServer(second);
+    const pill = page.getByRole("button", { name: /^\d+ new$/ });
+    await expect(pill).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.locator("tr[data-record]", { hasText: second }),
+    ).toHaveCount(0);
+
+    await pill.click();
+    await expect(
+      page.locator("tr[data-record]", { hasText: second }).first(),
+    ).toBeVisible();
+  } finally {
+    await deregisterMcpServer(first);
+    await deregisterMcpServer(second);
+  }
+});
+
+test("export from the menu writes only the filtered records", async ({
+  page,
+}) => {
+  const kept = generateUniqueName("e2eexportkept");
+  const other = generateUniqueName("e2eexportother");
+  try {
+    await registerFakeServer(kept);
+    await registerFakeServer(other);
+    await page.goto("/activity?tab=changes");
+    await expect(
+      page.locator("tr[data-record]", { hasText: other }).first(),
+    ).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByText(/resource_registered/)).toHaveCount(0);
+
+    await page.getByLabel("Filter changes").fill(kept);
+    await expect(
+      page.locator("tr[data-record]", { hasText: other }),
+    ).toHaveCount(0);
+
+    // Export is a ghost button in the header with a JSON / CSV menu.
+    await page.getByRole("button", { name: "Export" }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("menuitem", { name: "CSV" }).click(),
+    ]);
+    const file = await download.path();
+    const csv = fs.readFileSync(file, "utf-8");
+    const rows = csv.trim().split(/\r?\n/).slice(1);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.includes(kept))).toBe(true);
+    expect(csv).not.toContain(other);
   } finally {
-    await deregisterMcpServer(name);
+    await deregisterMcpServer(kept);
+    await deregisterMcpServer(other);
   }
 });

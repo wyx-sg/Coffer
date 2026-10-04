@@ -1,29 +1,30 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
 Create a collection, list them, walk one level of a collection, read a
-document, save an edited document's body, submit material, upload a document,
-delete a document, trigger curation (spec knowledge "Cover knowledge
-management on REST and the CLI"). Deleting a collection goes through the
-kind-agnostic Resource route, since collection lifecycle is a Resource concern.
+document, save an edited document's body, upload a document, delete a document,
+trigger curation (spec knowledge "Manage knowledge in the web UI"). These routes
+are the web UI's own: one the page does not call does not exist. Deleting a
+collection goes through the kind-agnostic Resource route, since collection
+lifecycle is a Resource concern.
 
 Three properties shape every handler below.
 
 **Nothing here retrieves.** There is no ``search`` and no ``grep``: the layer
 keeps no index and exposes no retrieval anywhere, so the person reads through
 ``tree``/``file`` and an agent reads the files itself at the paths its
-delivered skill carries ("Expose exactly one knowledge tool", invariant 4).
+delivered skill carries ("Expose no knowledge tool", invariant 4).
 ``tree`` and ``file`` also show a collection's ``.inbox`` — read-only — so a
 person can see what waits to be merged ("Hide dot-prefixed entries except the
 inbox").
 
 **New knowledge arrives as material; a person's edit arrives as a body.**
-``POST /material`` and ``/upload`` both submit to the collection's inbox, and a
-pass merges what is new into the documents ("Submit every entrance's input as
-material"). ``PUT /file`` is the one route that writes a document, and only
-the body of one a person already has open: it keeps the frontmatter and
-refuses a stale fingerprint ("Save a document edited in the web UI"). Editing
-in their own editor, from the page's open-in-editor action, remains the other
-way, live on the very next read.
+``/upload`` submits to the collection's inbox, as an agent's inbox file does, and
+a pass merges what is new into the documents ("Submit every entrance's input as
+material"). There is no route that creates a document at a path. ``PUT /file``
+is the one route that writes a document, and only the body of one a person
+already has open: it keeps the frontmatter and refuses a stale fingerprint
+("Save a document edited in the web UI"). Editing in their own editor, from the
+page's open-in-editor action, remains the other way, live on the very next read.
 
 **No handler here takes an agent, and neither does the service.** A collection
 carries no per-agent reach and no enabled switch: every one is served to every
@@ -33,7 +34,7 @@ agent"), so there is nothing for a caller identity to narrow.
 **A collection is addressed by uid; a file is addressed by path.** ``curate``
 names the collection Resource's immutable uid, because a pass takes minutes and
 must keep meaning the same collection across a rename (ADR
-resource-identity-is-an-immutable-uid). The file routes below are the deliberate
+identity-is-the-uid-inside-the-file). The file routes below are the deliberate
 exception: their ``path`` and ``collection`` arguments are *filesystem* paths,
 whose first segment is the collection's directory — and a directory is named by
 the label, not by an identity. Converting them would mean asking a caller for a
@@ -51,18 +52,26 @@ plain-Python layer below the domain, so it is not a ``CofferError``.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
 
+from coffer.application.knowledge.curate_drain import drain
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
-from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER, Pending
+from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
+from coffer.domain.knowledge.errors import KnowledgeCurationHeld
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
-from coffer.surfaces.http.knowledge.curation_state import get_curation_runner, vault_write_lock
+from coffer.surfaces.http.event_dependencies import get_event_broker
+from coffer.surfaces.http.knowledge.curation_state import (
+    curation_held,
+    get_curation_runner,
+    vault_write_lock,
+)
 from coffer.surfaces.http.knowledge.dependencies import (
     get_ingest_service,
     get_knowledge_service,
@@ -73,13 +82,12 @@ from coffer.surfaces.http.knowledge.schemas import (
     CollectionOut,
     CurationOut,
     CurationRequest,
+    CurationRunOut,
     DirectoryOut,
     FileOut,
     FileSave,
     FileSummaryOut,
     IngestedDocumentOut,
-    MaterialIn,
-    SubmissionOut,
     TreeOut,
 )
 
@@ -174,28 +182,6 @@ async def save_file(
     return _file_out(saved)
 
 
-@router.post("/material", response_model=SubmissionOut, status_code=status.HTTP_201_CREATED)
-async def submit_material(
-    body: MaterialIn,
-    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-    actor: str = Depends(_actor_kind),
-) -> SubmissionOut:
-    submitted = await svc.submit(
-        collection=body.collection,
-        title=body.title,
-        description=body.description,
-        body=body.body,
-        actor_kind=actor,
-        actor=actor,
-    )
-    return SubmissionOut(
-        status="written" if submitted.document is not None else "pending",
-        collection=submitted.collection,
-        title=submitted.title,
-        path=submitted.document.path if submitted.document is not None else None,
-    )
-
-
 @router.delete("/file", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_file(
     # A filesystem path, name-led like ``tree``'s above.
@@ -210,57 +196,57 @@ async def delete_file(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/collections/{uid}/curate", response_model=CurationOut)
+@router.post("/collections/{uid}/curate", response_model=CurationRunOut)
 async def curate(
     uid: str,
     body: CurationRequest | None = None,
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
-) -> CurationOut:
-    # The collection is named by its uid, and the pass resolves the row itself
-    # — so this route does no lookup of its own and there is no window in which
-    # the label it read and the label the pass reads disagree. An unknown uid
-    # reaches the client as the same 404 every other route on this family gives,
-    # raised where the row is actually needed.
-    #
-    # Two different guards, in this order on purpose.
-    #
-    # The registry claim is first, and it is about THIS collection: a pass
-    # takes minutes and rewrites the collection's documents, so a second
-    # request while one is in flight is refused (409 ``UPKEEP_ALREADY_RUNNING``)
-    # rather than queued behind it ("Run one pass per collection at a time") —
-    # the caller asked to start a pass,
-    # and no pass is going to start. Claiming before the lock is what makes
-    # that refusal immediate instead of a request that blocks until the first
-    # pass finishes and then runs anyway. The claim is keyed on the **uid**,
-    # which is what the background sweep claims too (``curate_worker``): two
-    # writers over one directory only collide if both name it the same way, and
-    # a label either of them read moments earlier is exactly what can differ.
-    #
-    # The vault-write lock is second, and it is about the whole vault: a pass
-    # and a converge round both rewrite vault content, and an export caught
-    # half-way through a rewrite is a torn snapshot git reads as a deliberate
-    # change ("Never overlap curation with a sync round", spec vault-sync
-    # "Never overlap a curation pass and a round").
+) -> CurationRunOut:
+    """Curate now: a pass per pending item until none is left, or one pass over
+    the document named ("Run curation on a sweep and on demand").
+
+    The collection is named by its uid; the run resolves the row itself, so an
+    unknown uid is the same 404 every route here gives. Two guards, in this
+    order on purpose. The registry claim is about THIS collection and is held
+    for the whole run: a second trigger while it runs is refused (409
+    ``UPKEEP_ALREADY_RUNNING``) rather than queued ("Run one pass per collection
+    at a time"), and it is keyed on the uid the sweep claims too. The
+    vault-write lock is about the whole vault and is taken per pass, so a sync
+    round is not held off for the minutes a run can take ("Never overlap
+    curation with a sync round").
+    """
+    document = body.document if body is not None and body.document else None
+    # Held, never queued: a rewrite is not piled onto files a person is deciding
+    # between ("Never overlap a curation pass and a round"). The owner-machine
+    # gate is the sweep's alone — pressing the button is choosing this machine.
+    if await curation_held():
+        raise KnowledgeCurationHeld
+    await svc.collection(uid)  # an absent collection is refused before the pass starts
+
+    async def progress(done: int, total: int) -> None:
+        # Readable on ``GET /api/v1/upkeep/runs`` and announced on the event
+        # stream, so a page shows n of m while this request is still open.
+        UPKEEP_RUNS.progress(KIND_KNOWLEDGE, uid, done=done, total=total)
+        with contextlib.suppress(Exception):
+            get_event_broker().publish(KIND_KNOWLEDGE, uid)
+
     with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, uid):
-        async with vault_write_lock():
-            result = await get_curation_runner()(
-                svc,
-                uid,
-                # Omitted, the pass picks the oldest pending item itself
-                # ("Run curation on a sweep and on demand"). One item per pass
-                # either way: a trigger is never a corpus-wide rewrite ("Bound a
-                # pass to eight writes").
-                item=Pending(document=body.document)
-                if body is not None and body.document
-                else None,
-                actor=actor,
-            )
-    # ``result`` already carries ``collection`` — as the collection's NAME, put
-    # there by the pass, which resolved the row anyway. It is rendered to a
-    # person, so the label is the right thing to report; the uid the caller
-    # sent back is the one they already hold.
-    return CurationOut(**result)
+        result = await drain(
+            get_curation_runner(),
+            svc,
+            uid,
+            document=document,
+            actor=actor,
+            lock=vault_write_lock,
+            on_progress=progress,
+        )
+    return CurationRunOut(
+        collection=result["collection"],
+        status=result["status"],
+        total=result["total"],
+        passes=[CurationOut(**outcome) for outcome in result["passes"]],
+    )
 
 
 @router.post("/upload", response_model=IngestedDocumentOut, status_code=status.HTTP_201_CREATED)

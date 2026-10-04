@@ -1,3 +1,5 @@
+// src/components/ui/tabs.tsx
+// Underline tabs over @radix-ui/react-tabs: a hairline rail, ink underline on the active tab.
 import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
@@ -11,7 +13,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      "flex h-[38px] items-stretch gap-[22px] border-b border-border text-text-muted",
       className,
     )}
     {...props}
@@ -19,18 +21,26 @@ const TabsList = React.forwardRef<
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
 
+// The underline sits on the rail (-mb-px) so the active tab reads as attached
+// to it; the focus ring hugs the label, not the whole 38px cell.
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+      "group relative -mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent text-sm font-book text-text-muted outline-none transition-colors duration-fast",
+      "hover:text-text disabled:pointer-events-none disabled:opacity-disabled",
+      "data-[state=active]:border-text data-[state=active]:font-label data-[state=active]:text-text",
       className,
     )}
     {...props}
-  />
+  >
+    <span className="inline-flex items-center gap-1.5 rounded-xs px-0.5 group-focus-visible:ring-2 group-focus-visible:ring-focus-ring">
+      {children}
+    </span>
+  </TabsPrimitive.Trigger>
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
@@ -40,10 +50,7 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn(
-      "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      className,
-    )}
+    className={cn("mt-4 focus-visible:outline-none", className)}
     {...props}
   />
 ));

@@ -1,57 +1,92 @@
-"""The command roster is the single source for the help text and the
-platform's command menu (spec channels "Register the bot's command menu and
-profile from one roster")."""
+"""The command roster is the single source for the help text, the dispatch
+switch, the typo guard and the platform's command menus (spec channels
+"Register the bot's command menu and profile from one roster", "Pass
+unreserved slash text to the agent")."""
 
 from __future__ import annotations
 
 import pytest
 
-from coffer.application.channel.commands import HELP_TEXT
+from coffer.application.channel.selection_cards import effort_card, model_card
 from coffer.domain.channel.commands import (
     COMMAND_ROSTER,
+    command_name,
     help_text,
+    is_dm_only,
     is_group_private,
+    menu_entries,
     names,
+    near_miss,
 )
-from coffer.infrastructure.channel.telegram_profile import menu_commands
+
+_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "del", "help"}
 
 
 @pytest.mark.acceptance(
     spec="channels", scenario="the command menu matches the commands that exist"
 )
-def test_registered_menu_lists_every_handled_command() -> None:
-    registered = {entry["command"] for entry in menu_commands()}
-    assert registered == {command.name for command in COMMAND_ROSTER}
-    assert "agent" in registered and "model" in registered
+def test_the_menu_offers_exactly_the_reserved_words() -> None:
+    assert {c.name for c in menu_entries(group=False)} == _ALL
+    assert {c.name for c in COMMAND_ROSTER} == _ALL
+    # Removed with no pointer: they are ordinary words now.
+    for gone in ("agent", "effort", "threads", "save"):
+        assert command_name(f"/{gone}") is None
+
+
+def test_a_group_menu_offers_the_group_set() -> None:
+    group = {c.name for c in menu_entries(group=True)}
+    assert group == {"new", "stop", "del", "help"}
+
+
+def test_a_group_help_lists_only_the_group_commands() -> None:
+    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /del · /help"
+    assert "/model" in help_text() and "/thread" in help_text()
+
+
+def test_the_direct_chat_commands_are_dm_only() -> None:
+    for command in ("/model", "/dir", "/status", "/resume", "/thread", "/Model opus"):
+        assert is_dm_only(command)
+    for command in ("/new", "/stop", "/help", "/start", "/compact"):
+        assert not is_dm_only(command)
 
 
 def test_help_text_lists_every_command_with_its_arguments() -> None:
     rendered = help_text()
     for command in COMMAND_ROSTER:
         assert f"/{command.name}" in rendered
-        assert command.description in rendered
-    assert "/agent [key] — Show or switch the agent (opens a fresh conversation)" in rendered
-
-
-def test_application_help_text_is_the_rendered_roster() -> None:
-    # The command handler's HELP_TEXT must BE the roster's rendering, not a
-    # second hand-maintained copy that can drift from the menu.
-    assert help_text() == HELP_TEXT
+    assert rendered.startswith("/new [agent] · /stop · /model [name] [level] · ")
+    assert rendered.splitlines()[-1] == "Anything else is a message to the agent."
 
 
 def test_names_returns_typed_forms() -> None:
-    assert names() == {
-        "/new",
-        "/agent",
-        "/model",
-        "/effort",
-        "/stop",
-        "/status",
-        "/save",
-        "/thread",
-        "/threads",
-        "/help",
-    }
+    assert names() == {f"/{n}" for n in _ALL}
+
+
+def test_start_is_a_hidden_alias_of_help() -> None:
+    assert command_name("/start") == "help"
+    assert "start" not in {c.name for c in COMMAND_ROSTER}
+
+
+@pytest.mark.parametrize(
+    ("text", "name"),
+    [
+        ("/Model opus", "model"),
+        ("/new codex", "new"),
+        ("/compact", None),
+        ("/Users/me/app crashes", None),
+        ("hello /new", None),
+    ],
+)
+def test_only_a_reserved_first_word_is_a_command(text: str, name: str | None) -> None:
+    assert command_name(text) == name
+
+
+@pytest.mark.parametrize(
+    ("text", "guess"),
+    [("/stpo", "stop"), ("/stat", "status"), ("/threads", "thread"), ("/compact", None)],
+)
+def test_a_near_miss_is_named(text: str, guess: str | None) -> None:
+    assert near_miss(text) == guess
 
 
 @pytest.mark.parametrize(
@@ -59,67 +94,41 @@ def test_names_returns_typed_forms() -> None:
     [
         ("/status", True),
         ("/help", True),
-        ("/agent", True),
-        # The reasoning level is the asker's own business, exactly like the
-        # model it sits beside.
-        ("/effort", True),
+        ("/model", True),
+        ("/Model opus", True),
+        ("/dir", True),
+        ("/resume", True),
         ("/new", False),
         ("/stop", False),
-        # Opening a thread posts into the chat either way; the list is the
-        # asker's own business.
-        ("/thread", False),
-        ("/threads", True),
+        # Direct-chat commands answer a group privately (their notice).
+        ("/thread", True),
     ],
 )
 def test_group_private_marks_the_asker_only_commands(command: str, private: bool) -> None:
     assert is_group_private(command) is private
 
 
-def test_unknown_command_is_group_private() -> None:
-    # An "unknown command" scolding is the least useful thing to broadcast.
-    assert is_group_private("/nope") is True
+def test_a_near_miss_is_group_private() -> None:
+    # A "Did you mean" correction is the least useful thing to broadcast.
+    assert is_group_private("/stpo") is True
 
 
 def test_menu_descriptions_fit_the_platform_limit() -> None:
-    for entry in menu_commands():
-        assert 1 <= len(str(entry["command"])) <= 32
-        assert entry["command"] == str(entry["command"]).lower()
-        assert 1 <= len(str(entry["description"])) <= 256
-
-
-def test_the_current_agent_is_marked_selected_on_its_card() -> None:
-    from coffer.application.channel.selection_cards import agent_card
-
-    card = agent_card(current="codex", choices=[("codex", "Codex"), ("claude_code", "Claude")])
-    selected = [b for b in card.buttons if b.selected]
-    assert [b.value for b in selected] == ["agent:codex"]
+    for entry in COMMAND_ROSTER:
+        assert 1 <= len(entry.name) <= 32
+        assert entry.name == entry.name.lower()
+        assert 1 <= len(entry.description) <= 256
+        assert 1 <= len(entry.description_zh) <= 256
 
 
 def test_the_current_model_is_marked_selected_on_its_card() -> None:
-    from coffer.application.channel.selection_cards import model_card
-
     card = model_card(current="opus", picks=["opus", "sonnet"])
     assert [b.value for b in card.buttons if b.selected] == ["model:opus"]
 
 
 def test_the_current_effort_is_marked_selected_on_its_card() -> None:
-    from coffer.application.channel.selection_cards import effort_card
-
     card = effort_card(current="xhigh", levels=["low", "high", "xhigh"])
     assert [b.value for b in card.buttons if b.selected] == ["effort:xhigh"]
     # With none pinned the agent's own default is in effect, and nothing is
     # ticked — a card must not claim a choice the conversation has not made.
     assert [b.value for b in effort_card(current=None, levels=["low"]).buttons if b.selected] == []
-
-
-# -- private answers in a group ("Keep non-answer chatter private in a group")
-
-
-def test_the_asker_only_commands_are_registered_as_ephemeral() -> None:
-    by_name = {entry["command"]: entry for entry in menu_commands()}
-    # Typing these in a group should not put them in front of everyone.
-    assert by_name["status"]["is_ephemeral"] is True
-    assert by_name["help"]["is_ephemeral"] is True
-    # /new and /stop change shared state and stay visible.
-    assert by_name["new"]["is_ephemeral"] is False
-    assert by_name["stop"]["is_ephemeral"] is False

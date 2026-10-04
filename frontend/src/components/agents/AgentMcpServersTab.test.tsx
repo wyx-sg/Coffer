@@ -1,37 +1,36 @@
-// frontend/src/components/agents/AgentMcpServersTab.test.tsx
+// src/components/agents/AgentMcpServersTab.test.tsx — the agent's MCP servers tab: "From Coffer" in one row, then the agent's own entries.
 //
-// The MCP-servers tab has two sections:
-//   A. "Via Coffer gateway" — install status + a link to the standalone MCP
-//      servers page (the exposed servers are managed there, not re-listed here).
-//   B. "Direct servers" — name, description (the transport badge + the command
-//      line or URL, the only descriptive text an MCP config entry has) and two
-//      actions: adopt into Coffer, and delete (confirm -> DELETE with the
-//      entry's source). The wire type still carries `enabled` and `source` for
-//      the CLI, but neither is a column: `source` shows as a badge only when
-//      two rows share a name, which only `claude_code` can do. The `coffer` entry itself
-//      is hidden here (it IS the gateway hookup), duplicate-of-Coffer entries
-//      get an inline hint (informational only), and unparseable config files
-//      surface as a banner.
-//
-// The tab takes the whole agent rather than one field of it, because it needs
-// both halves of its identity: every request here is addressed to the UID,
-// while the credential refs the adopt path mints spell the NAME. The fixture
-// keeps the two apart (`u-cc` / `cc`).
-import type { PropsWithChildren } from "react";
+// Covered: Coffer's servers that reach the agent as one row (count, first five
+// names, a link to the MCP servers page filtered to this agent) and never as
+// rows, the `coffer` entry never being one, the agent's own entries with their
+// state, one button and a ⋯ menu holding Remove… only, the entry dialog (JSON,
+// Close, Remove, Adopt), Adopt through the dialog, Remove duplicate behind a
+// confirm, a config file that failed to parse (inline warning, read-only rows,
+// a way to the Config files tab), and the shared empty box. Hooks run for real
+// against the mocked wire (agentsApi + the resources client).
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentMcpServersTab } from "./AgentMcpServersTab";
-import type { AgentOut, McpEntriesResponse, McpEntryOut } from "@/lib/api/agents";
-import en from "@/i18n/locales/en.json";
-import zh from "@/i18n/locales/zh.json";
+import { ToastProvider } from "@/components/ui/toast";
+import type { AgentOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
+import { getApiClient } from "@/lib/api/client";
+import { acceptance } from "@/test/acceptance";
+import { mockApiClient } from "@/test/mockApiClient";
 
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
-    connection: vi.fn(),
     mcpEntries: vi.fn(),
+    mcpEntry: vi.fn(),
+    connection: vi.fn(),
+    listConfigFiles: vi.fn(),
     removeMcpEntry: vi.fn(),
     adoptMcpEntry: vi.fn(),
   },
@@ -41,235 +40,258 @@ const api = vi.mocked(agentsApi);
 
 const AGENT: AgentOut = {
   uid: "u-cc",
-  name: "cc",
+  name: "claude_code",
   type: "claude_code",
-  config_dir: "/home/u/.claude",
-  description: null,
-  created_at: "2026-05-22T00:00:00Z",
-  updated_at: "2026-05-22T00:00:00Z",
+  config_dir: "/Users/me/.claude",
+  display_name: "Claude Code",
+  model: null,
+  effort: null,
+  tier_models: null,
+  version: null,
+  install_handoff: null,
+  connection_uid: null,
+  state: "installed_active",
+  created_at: "",
+  updated_at: "",
 };
 
-const ENTRY_BASE = {
-  command: null,
-  args: [] as string[],
-  env_keys: [] as string[],
-  secret_keys: [] as string[],
-  url: null,
-  header_keys: [] as string[],
-  is_coffer: false,
-  matches_resource: null,
-};
+function entry(name: string, extra: Partial<McpEntryOut> = {}): McpEntryOut {
+  return {
+    name,
+    source: "global",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", `@acme/${name}`],
+    env_keys: [],
+    secret_keys: [],
+    url: null,
+    header_keys: [],
+    enabled: null,
+    is_coffer: false,
+    matches_resource: null,
+    ...extra,
+  };
+}
 
-const COFFER_ENTRY: McpEntryOut = {
-  ...ENTRY_BASE,
-  name: "coffer",
-  source: "global",
-  transport: "stdio",
-  command: "/opt/coffer-mcp-shim",
-  enabled: null,
-  is_coffer: true,
-};
+const GATEWAY = entry("coffer", { is_coffer: true, command: "coffer-mcp-shim", args: [] });
+const POSTGRES = entry("postgres-local", {
+  command: "uvx",
+  args: ["mcp-server-postgres"],
+  env_keys: ["DATABASE_URL", "PGSSLMODE"],
+  secret_keys: ["DATABASE_URL"],
+});
+const LINEAR = entry("linear");
+const GITHUB_COPY = entry("github", { matches_resource: "github" });
 
-// claude_code-style entry: no per-entry enable flag → enabled is null.
-const CLAUDE_ENTRY: McpEntryOut = {
-  ...ENTRY_BASE,
-  name: "github",
-  source: "global",
-  transport: "stdio",
-  command: "npx",
-  args: ["-y", "gh-mcp"],
-  enabled: null,
-};
+const SERVERS = [
+  { uid: "r-gh", kind: "mcp_server", name: "github", enabled: true, scope: null },
+  {
+    uid: "r-fs",
+    kind: "mcp_server",
+    name: "filesystem",
+    enabled: true,
+    scope: { agents: ["u-cc"] },
+  },
+  { uid: "r-off", kind: "mcp_server", name: "disabled-one", enabled: false, scope: null },
+  {
+    uid: "r-cx",
+    kind: "mcp_server",
+    name: "codex-only",
+    enabled: true,
+    scope: { agents: ["u-cx"] },
+  },
+];
 
-// codex-style entry: enabled is a real boolean on the wire (the table shows
-// no enabled column either way).
-const CODEX_ENTRY: McpEntryOut = {
-  ...ENTRY_BASE,
-  name: "fetcher",
-  source: "config",
-  transport: "http",
-  url: "https://example.com/mcp",
-  enabled: true,
-};
-
-function stub(entries: Partial<McpEntriesResponse> = {}) {
-  api.connection.mockResolvedValue({
-    state: "connected",
-    parts: [{ key: "mcp", installed: true, detail: "/opt/coffer-mcp-shim" }],
-  });
-  api.mcpEntries.mockResolvedValue({
-    items: [COFFER_ENTRY, CLAUDE_ENTRY, CODEX_ENTRY],
-    parse_errors: [],
-    ...entries,
-  });
+function stub({
+  items = [GATEWAY, POSTGRES, LINEAR, GITHUB_COPY],
+  parse_errors = [] as { source: string; path: string; error: string }[],
+  servers = SERVERS,
+} = {}) {
+  vi.mocked(getApiClient).mockReturnValue(
+    mockApiClient({
+      GET: vi.fn().mockResolvedValue({ data: { resources: servers }, error: undefined }),
+    }) as unknown as ReturnType<typeof getApiClient>,
+  );
+  api.mcpEntries.mockResolvedValue({ items, parse_errors });
+  api.listConfigFiles.mockResolvedValue({
+    items: [{ key: "global", path: "/Users/me/.claude.json" }],
+  } as Awaited<ReturnType<typeof agentsApi.listConfigFiles>>);
   api.removeMcpEntry.mockResolvedValue(undefined);
+  api.adoptMcpEntry.mockResolvedValue({ uid: "r-pg", kind: "mcp_server", name: "postgres-local" });
+}
+
+function Where() {
+  const loc = useLocation();
+  return <p data-testid="where">{`${loc.pathname}${loc.search}`}</p>;
 }
 
 function renderTab() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const Wrapper = ({ children }: PropsWithChildren) => (
+  return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children}</MemoryRouter>
-    </QueryClientProvider>
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/agents/claude_code/mcp-servers"]}>
+          <Routes>
+            <Route
+              path="/agents/:type/mcp-servers"
+              element={<AgentMcpServersTab agent={AGENT} />}
+            />
+            <Route path="*" element={<Where />} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>,
   );
-  return render(<AgentMcpServersTab agent={AGENT} />, { wrapper: Wrapper });
 }
+
+const rowOf = (name: string) => screen.getByRole("button", { name }).closest("li") as HTMLElement;
 
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMcpServersTab", () => {
-  test("gateway section links to the MCP servers page; not-installed shows the note", async () => {
+  test("Coffer's servers are one row — count, names, a link filtered to this agent — and never rows", async () => {
     stub();
     renderTab();
-    expect(screen.getByText("Via Coffer gateway")).toBeInTheDocument();
-    // Installed → a link to the standalone page, not a re-listing of servers.
+    expect(await screen.findByText("2 servers through Coffer")).toBeInTheDocument();
+    expect(screen.getByText("github · filesystem")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open MCP servers/ })).toHaveAttribute(
+      "href",
+      "/mcp-servers?agent=u-cc",
+    );
+    // The `coffer` entry is the gateway itself; out-of-reach servers are absent.
+    expect(screen.queryByText("coffer-mcp-shim")).not.toBeInTheDocument();
+    expect(screen.queryByText(/disabled-one|codex-only/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Manage: filesystem" })).not.toBeInTheDocument();
+  });
+
+  test("the agent's own entries show command, file, secrets and state", async () => {
+    stub();
+    renderTab();
+    await screen.findByRole("button", { name: "postgres-local" });
+
+    const pg = rowOf("postgres-local");
+    expect(within(pg).getByText("uvx mcp-server-postgres")).toBeInTheDocument();
+    expect(within(pg).getByText("~/.claude.json")).toBeInTheDocument();
+    expect(within(pg).getByText("1 secret in env")).toBeInTheDocument();
+    expect(within(pg).getByText("Bypasses Coffer")).toBeInTheDocument();
+    expect(within(pg).getByRole("button", { name: "Adopt: postgres-local" })).toBeInTheDocument();
+
+    const gh = rowOf("github");
+    expect(within(gh).getByText("Duplicate")).toBeInTheDocument();
+    expect(within(gh).getByRole("link", { name: "github" })).toHaveAttribute(
+      "href",
+      "/mcp-servers/github",
+    );
     expect(
-      await screen.findByRole("button", { name: /open the mcp servers page/i }),
+      within(gh).getByRole("button", { name: "Remove duplicate: github" }),
     ).toBeInTheDocument();
-
-    api.connection.mockResolvedValue({
-      state: "disconnected",
-      parts: [{ key: "mcp", installed: false, detail: null }],
-    });
-    renderTab();
-    expect(await screen.findAllByText(/isn't connected to coffer yet/i)).not.toHaveLength(0);
   });
 
-  test("direct entries render name + description; coffer entry hidden; no source or enabled column", async () => {
+  test("the ⋯ menu holds Remove… only; a duplicate has none (its button removes it)", async () => {
     stub();
     renderTab();
-
-    expect(await screen.findByText("github")).toBeInTheDocument();
-    expect(screen.getByText("fetcher")).toBeInTheDocument();
-    // The coffer entry is the gateway hookup — not listed as a direct server.
-    expect(screen.queryByText("coffer")).not.toBeInTheDocument();
-
-    // The description column: transport badge + the command line or the URL.
-    expect(screen.getByText("npx -y gh-mcp")).toBeInTheDocument();
-    expect(screen.getByText("https://example.com/mcp")).toBeInTheDocument();
-
-    // Source stays on the wire (adopt/delete carry it) but has no column, and
-    // no badge either while every row's name is unique.
-    expect(screen.queryByRole("columnheader", { name: /^source$/i })).not.toBeInTheDocument();
-    expect(screen.queryByText("global")).not.toBeInTheDocument();
-    expect(screen.queryByText("config")).not.toBeInTheDocument();
-
-    // The enabled flag stays on the wire for the CLI, but the table drops it:
-    // no header, no per-row badge or dash, no Switch.
-    expect(screen.queryByRole("columnheader", { name: /^enabled$/i })).not.toBeInTheDocument();
-    expect(screen.queryAllByRole("switch")).toHaveLength(0);
-    const codexRow = screen.getByText("fetcher").closest("tr") as HTMLElement;
-    expect(within(codexRow).queryByText("Enabled")).not.toBeInTheDocument();
-    const claudeRow = screen.getByText("github").closest("tr") as HTMLElement;
-    expect(within(claudeRow).queryByText("—")).not.toBeInTheDocument();
-  });
-
-  test("a name carried by two config files badges each row with its source", async () => {
-    // Only claude_code can do this: the same entry name in ~/.claude.json and
-    // in settings.json. Without the badge the two rows are indistinguishable,
-    // and adopt/delete act on different files.
-    stub({
-      items: [
-        { ...CLAUDE_ENTRY, source: "global" },
-        { ...CLAUDE_ENTRY, source: "settings" },
-      ],
-    });
-    renderTab();
-
-    expect(await screen.findAllByText("github")).toHaveLength(2);
-    expect(screen.getByText("global")).toBeInTheDocument();
-    expect(screen.getByText("settings")).toBeInTheDocument();
-  });
-
-  test("the direct-servers search filters rows by name", async () => {
-    stub();
-    renderTab();
-
-    // Both direct entries visible before filtering.
-    expect(await screen.findByText("github")).toBeInTheDocument();
-    expect(screen.getByText("fetcher")).toBeInTheDocument();
-
-    // The direct table carries the only "Search servers" box now (the gateway
-    // section is a link, not a table).
-    const searchBoxes = screen.getAllByPlaceholderText("Search servers");
-    fireEvent.change(searchBoxes[searchBoxes.length - 1], { target: { value: "github" } });
-
-    expect(screen.getByText("github")).toBeInTheDocument();
-    expect(screen.queryByText("fetcher")).not.toBeInTheDocument();
-  });
-
-  test("every direct entry offers both writes: adopt and delete", async () => {
-    stub();
-    renderTab();
-    await screen.findByText("github");
-
-    // Toggling an entry is gone; adopt + delete are the two per-row actions.
-    expect(screen.queryAllByRole("switch")).toHaveLength(0);
-    expect(screen.getAllByRole("button", { name: "Adopt into Coffer" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: /^Delete: / })).toHaveLength(2);
-  });
-
-  test("delete flows through the confirm dialog with the agent uid and the entry's source", async () => {
-    stub();
-    renderTab();
-    await screen.findByText("github");
-
-    // Rows render in items order → the first Delete belongs to "github".
-    fireEvent.click(screen.getAllByRole("button", { name: /^Delete: / })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "More for linear" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Remove…"]);
+    expect(screen.queryByRole("button", { name: "More for github" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove…" }));
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Remove linear from ~/.claude.json?")).toBeInTheDocument();
     expect(
       within(dialog).getByText(
-        /delete this entry from the agent's config file\? a \.bak backup will be written\./i,
+        "Claude Code loses this server in its next session. A .bak is kept, and nothing in Coffer changes.",
       ),
     ).toBeInTheDocument();
-
-    // Nothing is written until the confirm button is pressed.
-    expect(api.removeMcpEntry).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() =>
-      expect(api.removeMcpEntry).toHaveBeenCalledWith("u-cc", "github", "global"),
+      expect(api.removeMcpEntry).toHaveBeenCalledWith("u-cc", "linear", "global"),
     );
   });
 
-  test("cancelling the delete dialog writes nothing", async () => {
+  acceptance("agent-registry", "open a direct MCP entry's JSON from the agent", async () => {
     stub();
+    api.mcpEntry.mockResolvedValue({
+      name: "postgres-local",
+      source: "global",
+      path: "/Users/me/.claude.json",
+      transport: "stdio",
+      config: { command: "uvx", args: ["mcp-server-postgres"], env: { DATABASE_URL: "••••••" } },
+    } as never);
     renderTab();
-    await screen.findByText("github");
-
-    fireEvent.click(screen.getAllByRole("button", { name: /^Delete: / })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "postgres-local" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(api.removeMcpEntry).not.toHaveBeenCalled();
+    expect(dialog.className).toContain("max-w-[640px]");
+    expect(await within(dialog).findByText("From")).toBeInTheDocument();
+    expect(within(dialog).getByText("~/.claude.json")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Copy JSON" })).toBeInTheDocument();
+    // The footer Close (ghost) beside the corner ×.
+    expect(within(dialog).getAllByRole("button", { name: "Close" })).toHaveLength(2);
+    expect(within(dialog).getByRole("button", { name: "Remove" })).toBeInTheDocument();
+    // Adopt goes on to the adopt dialog (the row's own flow).
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
+    expect(await screen.findByText("Adopt postgres-local")).toBeInTheDocument();
   });
 
-  test("parse_errors render the degraded-config banner", async () => {
+  test("Adopt opens the dialog and adopts the entry with its secret references", async () => {
+    stub();
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "Adopt: postgres-local" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Adopt postgres-local")).toBeInTheDocument();
+    expect(within(dialog).getByText("PGSSLMODE")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
+    await waitFor(() =>
+      expect(api.adoptMcpEntry).toHaveBeenCalledWith("u-cc", "postgres-local", {
+        source: "global",
+        secrets: { DATABASE_URL: "mcp/claude_code/postgres-local/DATABASE_URL" },
+      }),
+    );
+  });
+
+  acceptance("agent-registry", "a duplicate direct MCP entry can be removed", async () => {
+    stub();
+    renderTab();
+    await screen.findByRole("button", { name: "Remove duplicate: github" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove duplicate: github" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Remove github from ~/.claude.json?")).toBeInTheDocument();
+    api.mcpEntries.mockResolvedValue({ items: [GATEWAY, POSTGRES, LINEAR], parse_errors: [] });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() =>
+      expect(api.removeMcpEntry).toHaveBeenCalledWith("u-cc", "github", "global"),
+    );
+    // The server is now listed once: in Coffer's row, not among the agent's own entries.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "github" })).toBeNull());
+    expect(screen.getByText("github · filesystem")).toBeInTheDocument();
+  });
+
+  test("a config file that failed to parse is an inline warning; its entries are read-only", async () => {
     stub({
-      parse_errors: [{ source: "settings", path: "/home/u/.claude.json", error: "bad json" }],
+      parse_errors: [
+        { source: "global", path: "/Users/me/.claude.json", error: "Line 214, column 3" },
+      ],
     });
     renderTab();
     expect(
-      await screen.findByText(/failed to parse config — this file is read-only/i),
+      await screen.findByText(
+        "Can’t read ~/.claude.json: Line 214, column 3. Its entries are read-only until the file is valid again.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/settings: bad json/)).toBeInTheDocument();
+    expect(screen.getAllByText("Read-only")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Adopt: postgres-local" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove duplicate: github" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Open in Config files" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/config?file=global");
   });
 
-  test("matches_resource renders the duplicate hint as plain text, with no inline shortcut", async () => {
-    stub({
-      items: [{ ...CODEX_ENTRY, matches_resource: "fetcher" }],
-    });
+  test("an agent with no MCP servers of its own shows the shared empty box", async () => {
+    stub({ items: [GATEWAY], servers: [] });
     renderTab();
-    expect(await screen.findByText(/already in coffer as fetcher/i)).toBeInTheDocument();
-    // The hint is informational — the row's own Delete button is the only way
-    // to drop the duplicate, so there is no extra inline shortcut.
-    expect(screen.getAllByRole("button", { name: /^Delete: / })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /duplicate/i })).not.toBeInTheDocument();
-  });
-
-  test("en and zh locales carry the same agents.workspace.mcp keys", () => {
-    const enKeys = Object.keys(en.agents.workspace.mcp).sort();
-    const zhKeys = Object.keys(zh.agents.workspace.mcp).sort();
-    expect(enKeys.length).toBeGreaterThan(0);
-    expect(zhKeys).toEqual(enKeys);
+    expect(
+      await screen.findByText("Claude Code has no MCP servers of its own"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Search servers")).toBeInTheDocument();
   });
 });

@@ -43,9 +43,10 @@ describe("ConfirmDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  test("confirm button is disabled while pending", () => {
-    renderDialog({ pending: true });
-    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+  test("while pending the confirm button says so and Cancel is disabled", () => {
+    renderDialog({ pending: true, pendingLabel: "Deleting…" });
+    expect(screen.getByRole("button", { name: "Deleting…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });
 
   test("renders the detail a sentence cannot carry", () => {
@@ -90,6 +91,21 @@ describe("ConfirmDialog closes only on success", () => {
   test("a caller-supplied error is shown inline, so the dialog is never mute", () => {
     renderDialog({ error: new ApiError("RESOURCE_IN_USE", "still referenced") });
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  test("a failure is titled with the verb and the object the caller names", () => {
+    renderDialog({
+      error: new ApiError("RESOURCE_IN_USE", "still referenced"),
+      errorTitle: "Couldn’t delete sentry",
+      pendingLabel: "Deleting…",
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn’t delete sentry");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  test("a confirm that waits on the user is disabled without a spinner", () => {
+    renderDialog({ confirmDisabled: true, pendingLabel: "Deleting…" });
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
   });
 
   test("no error, no alert", () => {

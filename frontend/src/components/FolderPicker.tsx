@@ -6,9 +6,10 @@
 // dialog tool. Either way it hands back a real absolute path.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronUp, Folder, Loader2 } from "lucide-react";
+import { ChevronUp, Folder } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -18,24 +19,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 import { useFsBrowse } from "@/lib/hooks/useFsBrowse";
 
 export function FolderPicker({
   value,
   onChange,
+  label,
 }: {
   value: string | null;
   onChange: (path: string) => void;
+  /** The button's text; "Browse…" when not given. */
+  label?: string;
 }) {
   const { t } = useTranslation();
   const [browserOpen, setBrowserOpen] = useState(false);
+  const fs = useFsActions();
 
   const onBrowse = async () => {
     // Ask the daemon to open the OS-native dialog. Fall back to the in-app
     // browser only when this host has no native dialog tool.
     try {
-      const res = await fsApi.pickFolder(value ?? undefined);
+      const res = await fs.pickFolder(value ?? undefined);
       if (res.available) {
         if (res.path) onChange(res.path);
         return; // native dialog handled it (picked or cancelled)
@@ -48,8 +53,8 @@ export function FolderPicker({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={onBrowse}>
-        {t("picker.browse")}
+      <Button type="button" variant="outline" className="shrink-0" onClick={onBrowse}>
+        {label ?? t("picker.browse")}
       </Button>
       <FolderBrowserDialog
         open={browserOpen}
@@ -88,7 +93,7 @@ function FolderBrowserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("folderPicker.title")}</DialogTitle>
           <DialogDescription>{t("folderPicker.subtitle")}</DialogDescription>
@@ -98,29 +103,27 @@ function FolderBrowserDialog({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               disabled={!data?.parent}
               onClick={() => data?.parent && setPath(data.parent)}
               aria-label={t("folderPicker.up")}
             >
-              <ChevronUp className="size-4" />
+              <ChevronUp aria-hidden />
             </Button>
             <span className="truncate font-mono text-xs text-muted-foreground">
               {data?.path ?? t("common.loading")}
             </span>
           </div>
-          <div className="h-64 overflow-y-auto rounded-md border">
+          <div className="h-64 overflow-y-auto rounded-lg border border-border">
             {browse.isPending ? (
-              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
+              <div className="flex items-center gap-2 p-4 text-sm text-text-muted">
+                <Spinner />
                 {t("common.loading")}
               </div>
             ) : browse.isError ? (
               <p className="p-4 text-sm text-destructive">{translateApiError(t, browse.error)}</p>
             ) : (data?.entries.length ?? 0) === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">
-                {t("folderPicker.emptyDir")}
-              </p>
+              <p className="p-4 text-sm text-muted-foreground">{t("folderPicker.emptyDir")}</p>
             ) : (
               <ul>
                 {data!.entries.map((e) => (
@@ -128,9 +131,9 @@ function FolderBrowserDialog({
                     <button
                       type="button"
                       onClick={() => setPath(e.path)}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"
+                      className="flex h-control-md w-full items-center gap-2 px-3 text-left text-sm transition-colors duration-fast hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
                     >
-                      <Folder className="size-4 shrink-0 text-muted-foreground" />
+                      <Folder className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
                       <span className="truncate">{e.name}</span>
                     </button>
                   </li>

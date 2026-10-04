@@ -4,8 +4,8 @@ A knowledge file self-describes with a ``---``-fenced YAML block. This module
 is the only place that reads/writes a knowledge file's block (PyYAML lives here,
 in infrastructure).
 
-**Line endings are normalised, on purpose.** ``fs`` reads a file with
-``Path.read_text``, which opens in universal-newline mode, so a CRLF file comes
+**Line endings are normalised, on purpose.** ``fs`` decodes a file's bytes with
+universal-newline semantics (``fs.decode``), so a CRLF file comes
 back with LF and is written back with LF the next time an agent replaces it.
 That is consistent with what :func:`render_frontmatter` already does — it
 strips the body's surrounding blank lines and re-adds exactly one — because a

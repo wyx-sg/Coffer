@@ -21,9 +21,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable, Iterator
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from coffer.domain.agent.transcripts import (
     TranscriptMessage,
@@ -32,6 +31,7 @@ from coffer.domain.agent.transcripts import (
     UnsupportedAgentTypeError,
     is_session_of,
     is_transcript_file,
+    session_sort_key,
     sessions_dir,
     supports_transcripts,
 )
@@ -43,10 +43,6 @@ from coffer.infrastructure.agent.transcript_messages import (
 from coffer.infrastructure.agent.transcript_parsers import parse_claude_code, parse_codex
 
 log = logging.getLogger(__name__)
-
-# Sort sentinel for sessions with no timestamp — keeps them last on a desc sort
-# (and first on asc), and is tz-aware so it never mixes with naive datetimes.
-_DT_MIN = datetime(1, 1, 1, tzinfo=UTC)
 
 
 class FileTranscriptReader:
@@ -265,7 +261,7 @@ class FileTranscriptReader:
         agent_type_value: str,
         config_dir: str,
         limit: int,
-        offset: int,
+        after: tuple[Any, str] | None = None,
         query: str | None = None,
         project: str | None = None,
         sort: str = "last_activity_at",
@@ -275,8 +271,12 @@ class FileTranscriptReader:
 
         Parses (cached) every session, then applies a case-insensitive search
         over title + project_path, an exact ``project`` filter, and a sort by
-        ``started_at`` / ``last_activity_at`` / ``message_count`` (asc/desc),
-        paged by ``limit``/``offset``.
+        ``started_at`` / ``last_activity_at`` / ``message_count`` (asc/desc)
+        with ``session_id`` breaking ties in the same direction. The page is the
+        ``limit`` sessions strictly after ``after`` — the previous page's last
+        ``(sort value, session_id)`` — so a session written meanwhile does not
+        shift it (spec resource-framework "Page growing lists by an opaque
+        cursor"). ``matched_total`` counts every match, not just what follows.
         """
         sessions = self._all_summaries(agent_type_value, config_dir)
         q = query.strip().lower() if query else None
@@ -292,13 +292,15 @@ class FileTranscriptReader:
 
         filtered = [s for s in sessions if keep(s)]
         reverse = order != "asc"
-        if sort == "message_count":
-            filtered.sort(key=lambda s: s.message_count, reverse=reverse)
-        elif sort == "started_at":
-            filtered.sort(key=lambda s: s.started_at or _DT_MIN, reverse=reverse)
-        else:  # last_activity_at (default)
-            filtered.sort(key=lambda s: s.last_activity_at or _DT_MIN, reverse=reverse)
-        return len(filtered), filtered[offset : offset + limit]
+
+        def key(s: TranscriptSession) -> tuple[Any, str]:
+            return session_sort_key(s, sort), s.session_id
+
+        filtered.sort(key=key, reverse=reverse)
+        total = len(filtered)
+        if after is not None:
+            filtered = [s for s in filtered if (key(s) < after if reverse else key(s) > after)]
+        return total, filtered[:limit]
 
 
 __all__ = [

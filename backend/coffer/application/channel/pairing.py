@@ -1,4 +1,4 @@
-"""Pairing codes — the owner-binding security boundary.
+"""Pairing codes — the person-binding security boundary.
 
 Codes are memory-only by design: a daemon restart drops them and the user
 re-issues. 8 characters from an unambiguous alphabet, single use, 1-hour TTL,
@@ -40,10 +40,16 @@ class _Pending:
     code: str
     expires_at: datetime
     attempts_left: int
+    #: The ``sender_id`` of the person this pairing replaces, or ``None`` when it
+    #: adds a person beside the ones already paired.
+    replaces: str | None = None
 
 
 class PairingManager:
-    """Issue and claim pairing codes, one pending code per channel."""
+    """Issue and claim pairing codes, one pending code per channel.
+
+    Keyed by the channel's uid, so a rename between issuing and claiming does not
+    lose the code (ADR identity-is-the-uid-inside-the-file)."""
 
     def __init__(
         self,
@@ -55,14 +61,20 @@ class PairingManager:
         self._ttl = ttl_seconds
         self._max_attempts = max_attempts
         self._now = now_fn or (lambda: datetime.now(tz=UTC))
-        self._pending: dict[str, _Pending] = {}
+        self._pending: dict[str, _Pending] = {}  # channel uid -> code
 
-    def issue(self, channel: str) -> tuple[str, datetime]:
-        """Generate a fresh code for the channel, replacing any pending one."""
+    def issue(self, channel: str, *, replaces: str | None = None) -> tuple[str, datetime]:
+        """Generate a fresh code for the channel, replacing any pending one.
+
+        ``replaces`` names the paired person whose identity the claimant takes
+        over; without it the claimant is added beside everyone already paired."""
         code = "".join(secrets.choice(_ALPHABET) for _ in range(_CODE_LENGTH))
         expires_at = self._now() + timedelta(seconds=self._ttl)
         self._pending[channel] = _Pending(
-            code=code, expires_at=expires_at, attempts_left=self._max_attempts
+            code=code,
+            expires_at=expires_at,
+            attempts_left=self._max_attempts,
+            replaces=replaces,
         )
         return code, expires_at
 
@@ -75,6 +87,11 @@ class PairingManager:
             del self._pending[channel]
             return False
         return True
+
+    def replaces(self, channel: str) -> str | None:
+        """The person the channel's pending code replaces (``None``: adds one)."""
+        entry = self._pending.get(channel)
+        return entry.replaces if entry is not None else None
 
     def try_claim(self, channel: str, text: str) -> bool:
         """Attempt to claim the channel's pending code with a message text.
@@ -129,9 +146,12 @@ async def claim_pairing(
 ) -> ChannelPeer | None:
     """Claim the channel's pending code with ``text``; return the bound peer.
 
+    The claimant becomes one more paired person; when the code was issued to
+    replace someone, that person's rows are un-paired in the same write.
+
     ``None`` means nothing was claimed — either the message was empty (non-text
     content must never burn a pairing attempt: a stranger's sticker cannot
-    invalidate the owner's code) or the code did not match.
+    invalidate the code) or the code did not match.
 
     Lives beside the manager rather than on the inbound processor so the
     security boundary — what claims a code, and what a claim writes — reads in
@@ -139,18 +159,24 @@ async def claim_pairing(
     """
     if not text.strip():
         return None
-    if not pairing.try_claim(binding.resource.name, text):
+    if not sender_id:
+        # A pairing binds a person, and the owner gate compares sender ids: a
+        # claim from a message whose sender the transport could not name would
+        # bind nobody. Refused before the code is touched, so it burns nothing.
+        return None
+    replaces = pairing.replaces(binding.resource.uid)
+    if not pairing.try_claim(binding.resource.uid, text):
         _logger.debug("channel.inbound.ignored", extra={"channel": binding.resource.name})
         return None
     peer = ChannelPeer(
-        resource_id=binding.resource.id,
+        resource_uid=binding.resource.uid,
         chat_id=chat_id,
         display_name=sender_display,
         paired_at=datetime.now(tz=UTC),
-        sender_id=sender_id or None,
+        sender_id=sender_id,
     )
     await peers.upsert_replacing(
-        peer, await _previous_owner_chats(peers, binding.resource.id, chat_id, peer.sender_id)
+        peer, await _replaced_chats(peers, binding.resource.uid, chat_id, sender_id, replaces)
     )
     await audit.record(
         AuditEventType.CHANNEL_PAIRED.value,
@@ -160,40 +186,35 @@ async def claim_pairing(
         # precisely so a caller that already holds the row cannot mis-file it.
         resource=binding.resource,
         actor="channel",
-        details={"chat_id": chat_id, "display_name": sender_display},
+        details={"chat_id": chat_id, "sender_id": sender_id, "display_name": sender_display},
     )
     return peer
 
 
-async def _previous_owner_chats(
-    peers: ChannelPeerRepoPort, resource_id: int, chat_id: str, sender_id: str | None
+async def _replaced_chats(
+    peers: ChannelPeerRepoPort,
+    resource_uid: str,
+    chat_id: str,
+    sender_id: str,
+    replaces: str | None,
 ) -> list[str]:
-    """The chats to un-pair: every one that belongs to anyone but the claimer.
+    """The chats to un-pair with this claim: every row of the person it replaces
+    (their DM and each group that inherited their ``sender_id``), none when the
+    code only adds a person.
 
-    spec channels "Pair exactly one owner with a single-use code": the code binds
-    its sender as the channel's sole peer, replacing any previous peer. A channel
-    has one owner identity, and every peer row carries it — the owner's DM and each
-    group that inherited the owner's ``sender_id`` ("Treat an addressed group chat
-    as its own peer"). Rows of another sender are the previous owner's authority:
-    left in place, their DM still passes the owner gate, ``owner_peer`` still aims
-    ``notify`` at them and ``owner_sender_id`` still names them at the group gate.
-    The same sender re-pairing keeps its rows, groups included — that is a rebind,
-    not a change of owner.
+    spec channels "Gate inbound traffic on sender identity": a code issued without a target
+    leaves everyone already paired in place; one issued to re-pair a person
+    removes that person's authority — left in place, their DM would still pass
+    the gate. The same sender claiming again keeps its rows (a rebind, not a
+    change of person).
 
-    A row paired before the gate learned sender ids has none. It is kept only when
-    it is provably the claimer's own DM: a DM's chat id IS its person's id
-    (Telegram private chat id = user id, SeaTalk DM chat id = employee_code). Any
-    other identity-less row — another person's DM, a group — proves nothing and
-    goes. The caller writes the un-pairs and the new row as one
-    ``upsert_replacing``, so a failure cannot leave the channel ownerless.
+    The caller writes the un-pairs and the new row as one ``upsert_replacing``,
+    so a failure cannot leave the replaced person gone and the new one unsaved.
     """
-    drop: list[str] = []
-    for existing in await peers.list_by_resource(resource_id):
-        if existing.chat_id == chat_id:
-            continue  # the upsert rebinds this row in place
-        if sender_id is not None and existing.sender_id == sender_id:
-            continue
-        if sender_id is not None and existing.sender_id is None and existing.chat_id == sender_id:
-            continue  # the claimer's own legacy DM
-        drop.append(existing.chat_id)
-    return drop
+    if replaces is None or replaces == sender_id:
+        return []
+    return [
+        existing.chat_id
+        for existing in await peers.list_by_resource(resource_uid)
+        if existing.sender_id == replaces and existing.chat_id != chat_id
+    ]

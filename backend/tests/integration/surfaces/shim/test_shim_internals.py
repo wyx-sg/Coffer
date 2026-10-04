@@ -96,13 +96,11 @@ def test_parse_args_defaults_agent_uid_to_none_when_absent():
     assert ns.agent_uid is None
 
 
-def test_parse_args_ignores_the_retired_name_shaped_flag():
-    """An entry written by an older Coffer still spells it ``--agent <name>``.
-    It is discarded, not honoured: the gateway matches what we report against a
-    scope holding uids, so a name could only match nothing — or, worse, match
-    the wrong resource later. Reporting nothing makes the session unidentified,
-    which is strictly less access, never more (ADR
-    resource-identity-is-an-immutable-uid)."""
+def test_parse_args_does_not_read_a_prefix_as_agent_uid():
+    """``allow_abbrev=False``: ``--agent <x>`` is not taken as an abbreviation
+    of ``--agent-uid``, so a label is never reported where a uid belongs and
+    the session is unidentified — strictly less access, never more (ADR
+    identity-is-the-uid-inside-the-file)."""
     ns = _parse_args(["--agent", "claude_code"])
     assert ns.agent_uid is None
 
@@ -527,9 +525,9 @@ async def test_pump_stdin_stamps_agent_uid_onto_initialize_envelope(
 async def test_pump_stdin_without_agent_uid_omits_agent_meta_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A `_Bridge` that was told no identity — a hand-configured entry, or one an
-    older Coffer wrote with the discarded ``--agent <name>`` — stamps only the
-    launch cwd. The gateway then treats the session as unidentified."""
+    """A `_Bridge` that was told no identity — e.g. a hand-configured entry —
+    stamps only the launch cwd. The gateway then treats the session as
+    unidentified."""
     bridge = _make_bridge()  # agent_uid=None
     posted: list[dict[str, Any]] = []
 
@@ -1307,7 +1305,7 @@ def _rotated_daemon(port: int, token: str) -> Any:
 async def test_handle_envelope_recovers_when_daemon_restarts_on_same_port_with_new_token(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Regression: a daemon restart kept port 8000 but rotated the token, so
+    """Regression: a daemon restart kept port 38470 but rotated the token, so
     every POST got a 401 rather than a connect error and recovery never ran —
     every tool call failed until the editor restarted the shim."""
     port = 18765

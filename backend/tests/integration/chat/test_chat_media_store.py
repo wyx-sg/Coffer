@@ -94,4 +94,4 @@ def test_default_dir_is_beside_channel_media_under_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert default_chat_media_dir() == tmp_path / ".coffer" / "chat-media"
+    assert default_chat_media_dir() == tmp_path / ".coffer" / "content" / "chat-media"

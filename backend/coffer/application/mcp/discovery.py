@@ -69,6 +69,18 @@ class DiscoveredTool:
     description: str | None
     input_schema: dict[str, Any]
     enabled: bool
+    annotations: dict[str, Any] | None = None
+
+
+def _annotations_of(tool: Any) -> dict[str, Any] | None:
+    """An upstream tool's MCP annotations in their wire spelling, or None."""
+    raw = getattr(tool, "annotations", None)
+    if raw is None:
+        return None
+    if hasattr(raw, "model_dump"):
+        dumped: dict[str, Any] = raw.model_dump(exclude_none=True, by_alias=True, mode="json")
+        return dumped or None
+    return dict(raw) if isinstance(raw, dict) and raw else None
 
 
 @dataclass(frozen=True)
@@ -96,10 +108,8 @@ class CapabilityDiscovery:
     Keyed throughout on the server's NAME, because a capability's public
     identity on the MCP wire is the namespaced ``<server>__<tool>`` this class
     builds, and that namespace is the label. The name is resolved to the row
-    once per cold path, and everything persisted from there on — the preference
-    rows this reconciles — is keyed on ``resource.id``, the surrogate key those
-    rows have always held (ADR resource-identity-is-an-immutable-uid leaves the
-    four kind-owned tables exactly as they were).
+    once per cold path, and everything persisted from there on — the switches
+    and seen-times this reconciles — is keyed on the server's uid.
     """
 
     def __init__(
@@ -159,6 +169,7 @@ class CapabilityDiscovery:
                         name=t.name,
                         description=getattr(t, "description", None),
                         input_schema=getattr(t, "input_schema", None) or {},
+                        annotations=_annotations_of(t),
                     )
                     for t in getattr(result, "tools", [])
                 ]
@@ -174,6 +185,7 @@ class CapabilityDiscovery:
                 description=t.description,
                 input_schema=t.input_schema,
                 enabled=prefs.get(t.name, True),
+                annotations=t.annotations,
             )
             for t in cache.tools
             if include_disabled or prefs.get(t.name, True)
@@ -338,7 +350,7 @@ class CapabilityDiscovery:
         # toggles take effect immediately, independent of the list cache TTL.
         if resource is None:
             resource = await self._resources.get_by_name("mcp_server", server_name)
-        prefs = await self._prefs.list_for(resource.id, capability_type)
+        prefs = await self._prefs.list_for(resource.uid, capability_type)
         return {p.capability_key: p.enabled for p in prefs}
 
     async def _reconcile_preferences(
@@ -362,7 +374,7 @@ class CapabilityDiscovery:
         not re-query the same row that the caller just loaded.
         """
         await self._prefs.reconcile(
-            resource.id,
+            resource.uid,
             capability_type,
             current_keys,
             default_enabled=True,

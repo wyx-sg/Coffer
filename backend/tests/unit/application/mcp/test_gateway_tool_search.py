@@ -92,3 +92,17 @@ async def test_ranking_still_finds_the_right_tool_after_the_corpus_change():
     result = await execute_tool_search({"query": "create an issue", "top_k": 1}, _agg())
 
     assert result["tools"][0]["name"] == "github__create_issue"
+
+
+async def test_exposure_search_breaks_a_tie_in_favour_of_the_search_only_tool():
+    twins = [
+        {"name": "alpha__fetch", "description": "fetch the data", "inputSchema": {}},
+        {"name": "beta__fetch", "description": "fetch the data", "inputSchema": {}},
+    ]
+
+    out = await execute_tool_search(
+        {"query": "fetch data"}, twins, {"alpha__fetch": "listed", "beta__fetch": "search"}
+    )
+
+    assert [t["name"] for t in out["tools"]] == ["beta__fetch", "alpha__fetch"]
+    assert out["total_searched"] == 2  # every tool stays searchable

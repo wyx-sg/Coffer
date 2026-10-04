@@ -28,7 +28,7 @@ class InboundAttachment:
 class InboundMessage:
     """A message arriving from an IM chat — text and/or downloaded attachments."""
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # Telegram chat id / SeaTalk employee_code
     sender_display: str  # best-effort human name at the platform
     text: str
@@ -42,9 +42,9 @@ class InboundMessage:
     # ``employee_code`` while a mention
     # must carry ``seatalk_id``, and the docs warn that ``employee_code`` and
     # ``email`` arrive EMPTY for a sender outside the bot's organisation while
-    # ``seatalk_id`` is always present. "" when the transport has no such id, or
-    # spells mentions in a way that needs more than one (Telegram needs a
-    # display name too) — the reply then simply carries no mention.
+    # ``seatalk_id`` is always present. "" when the transport has no such id —
+    # the reply then simply carries no mention. (Telegram's is ``from.id``; its
+    # mention also carries ``sender_display`` as the link text.)
     sender_mention_id: str = ""
     # The same thing by ADDRESS, for a platform that documents a second mention
     # form (SeaTalk: ``?email=``). Only a fallback: it is precisely the field the
@@ -68,6 +68,11 @@ class InboundMessage:
     # body itself when the turn is built (spec channels "Ground a turn in the
     # message it quotes").
     quoted_message_id: str = ""
+    # The message this one REPLIES to, as the platform's reply pointer names it
+    # (Telegram's ``reply_to_message``) — kept apart from ``quoted_message_id``,
+    # which makes the turn fetch the quoted body. ``/del`` reads either to find the
+    # reply it withdraws (spec channels "Withdraw a bot reply on the owner's command").
+    replies_to_message_id: str = ""
     # A forwarded chat record — rarely the whole ask, so the burst buffer waits
     # longer for the words that follow it ("Take a burst of messages as one turn").
     forwarded: bool = False
@@ -76,40 +81,58 @@ class InboundMessage:
     # sender and the bot can see it); it is the handle that lets the bot answer
     # privately in a group without being an administrator ("Keep non-answer
     # chatter private in a group")
+    # True when a group message was sent in the group's MAIN chat on a platform
+    # whose every main-chat @mention roots a fresh thread (SeaTalk): ``thread_id``
+    # is then that new thread, and a command sent there configures the group's
+    # defaults instead of a thread nobody will continue (spec channels "Set a
+    # group's defaults from its main chat"). False everywhere else.
+    group_main: bool = False
+
+
+@dataclass(frozen=True)
+class ReactionSet:
+    """The emoji a transport marks a turn's progress with on the asker's message
+    (see "Acknowledge receipt and completion by capability").
+
+    A transport fact, not a core one: a platform may accept only a fixed list
+    (Telegram's ``setMessageReaction`` does), so the adapter names emoji it knows
+    will land. ``""`` skips that stage. One reaction replaces the last, so the
+    message shows the turn's current state.
+    """
+
+    received: str = ""  # on receipt, before the turn starts (queued messages keep it)
+    working: str = ""  # when the turn starts running
+    done: str = ""  # a clean finish (a turn ending on a question for the owner too)
+    failed: str = ""  # an error
+    stopped: str = ""  # interrupted
 
 
 @dataclass(frozen=True)
 class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
-    ``supports_edit`` and ``supports_live_text`` are easy to confuse, so keep
-    the distinction sharp ("Grow a reply in place on one live surface"):
-
-    * ``supports_edit`` is literal — the transport can rewrite a message it
-      already delivered (Telegram ``editMessageText``). ``edit_text`` raises
-      on a transport without it.
-    * ``supports_live_text`` is the question the core actually asks — *is
-      there a surface I can keep updating while a turn runs?* Telegram
-      answers yes by editing; SeaTalk answers yes through its message
-      **streaming** API (``init_stream`` / ``update_stream``), which grows one
-      message in place while being unable to edit anything. The core asks for
-      a live-text handle (``open_live_text``) and never branches on which
-      mechanism is underneath.
-    * ``supports_card_update`` is narrower than either: can an already-delivered
-      *selection card* be rewritten? SeaTalk answers yes here while answering no
-      to ``supports_edit`` — its update API applies to interactive cards only,
-      never to a text message. Without it a card keeps offering the option the
-      user already took.
+    The question the core asks about a reply surface is ``supports_live_text`` —
+    *is there a surface I can keep updating while a turn runs?* ("Grow a reply in
+    place on one live surface"). Telegram answers yes by editing one message;
+    SeaTalk answers yes through its message **streaming** API (``init_stream`` /
+    ``update_stream``). The core asks for a live-text handle (``open_live_text``)
+    and never branches on which mechanism is underneath, so there is no flag for
+    "can rewrite a delivered text message" — nothing would read it.
+    ``supports_card_update`` is the one narrower question: can an already-delivered
+    *selection card* be rewritten? Without it a card keeps offering the option the
+    user already took.
     """
 
-    supports_edit: bool  # can rewrite an already-delivered message (edit_text)
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR channel-adapter-framework)
     # An already-delivered selection card can be rewritten in place, so a card
-    # stops advertising the option the user just took. Narrower than
-    # supports_edit: SeaTalk can update a card but not a text message.
+    # stops advertising the option the user just took.
     supports_card_update: bool = False
+    # An already-delivered PLAIN text message can be edited (Telegram): a short
+    # system line such as "Stopping…" is then rewritten into its result rather
+    # than followed by a second message.
+    edits_text: bool = False
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the progress/reply strategy of "Grow a
     # reply in place on one live surface".
@@ -122,18 +145,19 @@ class ChannelCapabilities:
     # opening it early would post something only to remove it again.
     live_text_persists: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
-    supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
-    # used for the receipt (👀) + completion (✅) ack of "Acknowledge receipt
-    # and completion by capability"; transports without
-    # it fall back to the typing/working signal for the same receipt cue
+    # used for the progress marks of "Acknowledge receipt and completion by
+    # capability"; transports without it fall back to the typing/working signal
+    # for the same receipt cue
+    reactions: ReactionSet = ReactionSet()  # which emoji, per stage
     # "Mention the asker in a group answer": how this transport spells an
     # @mention, with ``{user_id}`` standing
     # in for the id being addressed — e.g. ``"<x target=\"y?id={user_id}\"/>"``.
-    # The core substitutes and prefixes; it never learns the shape. A transport
-    # that cannot mention, or whose mention needs more than an id (Telegram's
-    # carries a display name), declares none and its replies carry none. The
+    # The core substitutes and prefixes; it never learns the shape. A mention
+    # that also needs a display name (Telegram's inline mention is a link with
+    # text) puts ``{name}`` where the name goes. A transport that cannot mention
+    # declares none and its replies carry none. The
     # markup is the platform's RICH text, so every snapshot that may carry it is
     # sent as such — see ``turn_text.with_mention``.
     mention_template: str = ""
@@ -148,6 +172,29 @@ class ChannelCapabilities:
     # where a direct-chat thread only exists because someone created it
     # (Telegram's private-chat topics), so every one is its own conversation.
     direct_threads_are_replies: bool = False
+    # One or two sentences telling the agent what Markdown renders on this
+    # transport (see "Tell a channel-driven agent it is on a chat channel").
+    render_notes: str = ""
+    # "Shape a reply for what the chat can show": whether a markdown table
+    # renders (False → bullet rows + a CSV), how many lines a code block may
+    # keep inline (0 = any; more → attached as a file), and whether the
+    # transport collapses a ``## Details`` section itself (Telegram) — one that
+    # does not may move it behind a card's button instead.
+    renders_tables: bool = True
+    max_inline_code_lines: int = 0
+    collapses_details: bool = False
+    # "Withdraw a bot reply on the owner's command": how many hours after it was
+    # sent a bot message can still be taken back (Telegram's deleteMessage: 48;
+    # SeaTalk's card rewrite: 168). 0 means the transport cannot withdraw at all.
+    withdraw_window_hours: float = 0.0
+    # Withdrawing REMOVES the message (Telegram) rather than rewriting it into a
+    # "Withdrawn" card (SeaTalk); only a transport that removes messages can also
+    # remove the owner's own ``/del`` message.
+    withdraw_removes: bool = False
+    # Whether the reply surface may stream in a GROUP. SeaTalk's cannot: a stream
+    # cannot be rewritten afterwards, so a group reply must be a card the owner can
+    # withdraw ("Send SeaTalk group replies as withdrawable cards").
+    streams_in_groups: bool = True
 
 
 @dataclass(frozen=True)
@@ -167,6 +214,13 @@ class ChoiceButton:
     # something tapping cannot change; one whose buttons are plain labels
     # ignores it and relies on the tick in the label instead.
     selected: bool = False
+    # Shown but inactive (a page turn that runs off the end). A transport whose
+    # buttons have no disabled state shows it plain; the tap changes nothing.
+    disabled: bool = False
+    # Full-width, one to a line (a question's options, whose labels read as
+    # sentences): a transport that packs short labels side by side leaves this
+    # one alone on its line.
+    own_row: bool = False
 
 
 @dataclass(frozen=True)
@@ -178,7 +232,7 @@ class InboundCallback:
     owner-gates it exactly like a message before honoring the switch.
     """
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # return address (Telegram chat id / SeaTalk group_id or employee_code)
     sender_id: str  # stable per-sender id for the owner gate ("" when none)
     data: str  # the tapped ChoiceButton.value
@@ -188,6 +242,11 @@ class InboundCallback:
     # group card tap owner-gates and replies in the group, not a DM ("Route
     # group selection-card taps back to the group")
     thread_id: str = ""  # non-empty when the card sits inside a thread/topic
+    # The tapper, as a group answer to their tap must name them ("Mention the
+    # asker in a group answer"): the same three values ``InboundMessage`` carries.
+    sender_display: str = ""
+    sender_mention_id: str = ""
+    sender_mention_email: str = ""
 
 
 @dataclass(frozen=True)
@@ -205,7 +264,7 @@ class InboundLifecycle:
     ``chat_kind`` is already modelled in this module.
     """
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # the group the event is about
     kind: str  # "removed_from_group" | "group_became_external"
     actor_display: str = ""  # best-effort human name of who did it (SeaTalk's
@@ -240,7 +299,7 @@ class InboundStop:
     that does not stop anything is worse than none at all.
     """
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # the chat whose reply was stopped
     thread_id: str = ""  # the thread it was being generated in, if any
     chat_kind: str = "direct"  # "direct" | "group" — so the acknowledgement
@@ -252,3 +311,12 @@ class SentMessage:
     """Handle to a delivered platform message (for later edit/delete)."""
 
     message_id: str
+    #: Every platform message the send produced, in order, when it was cut into
+    #: several (``message_id`` is the last one). Empty means "just ``message_id``".
+    message_ids: tuple[str, ...] = ()
+
+    @property
+    def all_ids(self) -> tuple[str, ...]:
+        """Every message id this send delivered ("" ids dropped)."""
+        ids = self.message_ids or (self.message_id,)
+        return tuple(i for i in ids if i)

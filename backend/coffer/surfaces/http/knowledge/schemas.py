@@ -7,7 +7,7 @@ from the wire never means hiding one from the layer itself.
 
 What is *absent* is the point of the current shape. There is no search request,
 no search hit and no grep match, because this surface exposes no retrieval at
-all (spec knowledge "Expose exactly one knowledge tool"): an agent reads the
+all (spec knowledge "Expose no knowledge tool"): an agent reads the
 files with
 its own tools at the paths its delivered skill carries, and the human reads
 them through ``tree``/``file``. A model here would be a second retrieval
@@ -15,6 +15,8 @@ surface no one asked for.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -36,10 +38,12 @@ class CollectionOut(BaseModel):
     #: is exactly what an agent cannot see yet.
     document_count: int = 0
     pending_count: int = 0
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on every resource"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
+    #: The collection directory's absolute path — what Reveal folder opens
+    #: ("Return absolute paths on reads").
+    folder_path: str = ""
+    #: When a document in the collection was last written (ISO 8601, UTC);
+    #: ``null`` when it holds none — the Overview's "edited today 13:30".
+    updated_at: str | None = None
 
 
 class CollectionListOut(BaseModel):
@@ -91,9 +95,9 @@ class FileOut(BaseModel):
     #: absolute paths on reads").
     file_path: str
     folder_path: str
-    #: When curation last had this document in front of it; empty when it never
-    #: has ("Settle an item only after its pass completes"). A document edited
-    #: since is what the sweep comes back for.
+    #: When curation last settled this document as it now reads; empty when it
+    #: never has, or the document changed since ("Settle an item only after its
+    #: pass completes") — which is what the sweep comes back for.
     curated_at: str = ""
     #: sha256 hex of the file's bytes as read; hand it back as
     #: ``expected_fingerprint`` to save an edit ("Save a document edited in the
@@ -117,42 +121,11 @@ class FileSave(BaseModel):
     expected_fingerprint: str = Field(min_length=1)
 
 
-class MaterialIn(BaseModel):
-    """New knowledge for a collection ("Submit every entrance's input as
-    material")."""
-
-    #: The collection's directory NAME: a filesystem value, like every path on
-    #: this family — see the route module's docstring.
-    collection: str = Field(min_length=1)
-    title: str = Field(min_length=1)
-    #: Required: the skill's catalogue is how a document is ever found, and
-    #: material that fails to describe itself is unfindable ("Carry title,
-    #: description and actor in frontmatter").
-    description: str = Field(min_length=1)
-    body: str = ""
-
-
-class SubmissionOut(BaseModel):
-    """What became of submitted material.
-
-    ``status`` is ``pending`` when it waits in the inbox for a pass to merge,
-    and ``written`` when it was promoted to a document on the spot because no
-    internal model is configured ("Promote material directly when no model is
-    configured") — ``path`` is that document.
-    """
-
-    status: str
-    collection: str
-    title: str
-    path: str | None = None
-
-
 class CurationRequest(BaseModel):
-    #: One document to carry through, knowledge-root-relative. Omitted, the
-    #: pass takes the oldest pending item — inbox material first, then a
-    #: document edited since curation last stamped it ("Run curation on a sweep
-    #: and on demand") — which is what
-    #: the page's "curate now" button wants.
+    #: One document to curate, knowledge-root-relative: exactly one pass runs,
+    #: over it. Omitted, Curate now runs a pass per pending item — inbox items
+    #: oldest first, then documents edited since curation last settled them —
+    #: until none is left ("Run curation on a sweep and on demand").
     document: str | None = None
 
 
@@ -165,7 +138,7 @@ class CurationOut(BaseModel):
     #: Every one of them is a 200: a collection with no model configured, or
     #: with nothing pending, is an ordinary state of the feature and not a
     #: fault of the request.
-    status: str
+    status: Literal["ok", "truncated", "no_model", "up_to_date", "too_large", "failed"]
     #: The collection's NAME, not its uid. The caller sent the uid and still
     #: holds it; what a pass report adds is something to render — "curated
     #: shopee" — and that is the label (spec knowledge's contract,
@@ -187,8 +160,8 @@ class CurationOut(BaseModel):
     documents_after: int = 0
     #: The item-size ceiling, present only with ``status`` ``too_large``. Such
     #: an item is never shown to the model and never left pending: material is
-    #: promoted as it stands (``promoted``), an edited document is stamped
-    #: (``stamped``).
+    #: promoted as it stands (``promoted``), an edited document is settled
+    #: as seen (``stamped``).
     limit: int = 0
     #: Documents material was promoted into as it stood: the whole inbox with
     #: ``status`` ``no_model`` ("Promote material directly when no model is
@@ -197,13 +170,31 @@ class CurationOut(BaseModel):
     promoted: list[str] = Field(default_factory=list)
     #: With ``status`` ``truncated``: this was the item's third cut-off in a
     #: row, so the pass settled it instead of leaving it owed — material
-    #: promoted as it stood, an edited document stamped ("Bound a pass to
+    #: promoted as it stood, an edited document settled ("Bound a pass to
     #: eight writes").
     gave_up: bool = False
-    #: The edited document stamped as seen without a pass, present only with
+    #: The edited document settled as seen without a pass, present only with
     #: ``status`` ``too_large`` when the oversized item was a document — there
-    #: is nothing to promote, and the stamp stops the sweep re-offering it.
+    #: is nothing to promote, and settling it stops the sweep re-offering it.
     stamped: str = ""
+
+
+class CurationRunOut(BaseModel):
+    """What Curate now did: every pass it ran, in order (spec knowledge "Report
+    every pass outcome as a status")."""
+
+    #: The collection's NAME, as in each pass's report.
+    collection: str
+    #: ``up_to_date`` — nothing was pending and no pass ran; ``no_model`` — the
+    #: inbox was promoted as it stands; ``failed`` — the run stopped at a pass
+    #: that failed, the rest left pending; ``ok`` — it worked through
+    #: everything that was pending when it started.
+    status: Literal["ok", "failed", "no_model", "up_to_date"]
+    #: How many items were pending when the run started — the *m* of its
+    #: progress, which ``GET /api/v1/upkeep/runs`` reports as it goes.
+    total: int
+    #: Each pass's own outcome, in the order it ran.
+    passes: list[CurationOut]
 
 
 class IngestedDocumentOut(BaseModel):

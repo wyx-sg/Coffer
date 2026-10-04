@@ -1,4 +1,4 @@
-"""make_channel_kind: Kind wiring + credential-ref extraction."""
+"""make_channel_kind: Kind wiring + secret-ref extraction."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_on_delete_defaults_none_and_is_passed_through():
 
 
 def test_extractor_pulls_telegram_bot_token_ref():
-    extractor = make_channel_kind().credential_ref_extractor
+    extractor = make_channel_kind().secret_ref_extractor
     assert extractor is not None
     refs = extractor({"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-token"})
     assert refs == {"bot_token_ref": "channel/tg/bot-token"}
@@ -59,7 +59,7 @@ def test_extractor_pulls_telegram_bot_token_ref():
 def test_extractor_pulls_the_seatalk_app_secret_ref_only():
     """A webhook-era key a document may still carry is not a ref to probe:
     nothing reads it, so nothing must be made to exist for it."""
-    extractor = make_channel_kind().credential_ref_extractor
+    extractor = make_channel_kind().secret_ref_extractor
     assert extractor is not None
     refs = extractor(
         {
@@ -74,7 +74,7 @@ def test_extractor_pulls_the_seatalk_app_secret_ref_only():
 
 
 def test_extractor_skips_missing_empty_and_non_string_values():
-    extractor = make_channel_kind().credential_ref_extractor
+    extractor = make_channel_kind().secret_ref_extractor
     assert extractor is not None
     refs = extractor(
         {
@@ -191,7 +191,7 @@ def test_update_skips_when_default_agent_absent():
 # -- per-agent scope (ADR per-agent-resource-scope) ----------------------------------------------
 # Read the other way round from every other kind: a channel is an inbound
 # surface no agent consumes, so its scope names the agents the channel may
-# DRIVE. ``default_agent`` is held inside it on every write path; the `/agent`
+# DRIVE. ``default_agent`` is held inside it on every write path; the `/new <agent>`
 # narrowing is covered in test_agent_routing.py.
 
 
@@ -248,7 +248,6 @@ def test_update_on_a_dormant_channel_is_allowed():
 
 def _channel(config: dict, *, scope: Scope | None = None) -> Resource:
     return Resource(
-        id=1,
         uid="uid-of-the-channel",
         kind="channel",
         name="tg",

@@ -133,11 +133,11 @@ mod tests {
     #[test]
     fn a_running_source_is_refused_rather_than_spawned_beside() {
         let err = spawn_from_source(DaemonSource::Running {
-            port: 8000,
+            port: 38470,
             token: "tok".to_string(),
         })
         .unwrap_err();
-        assert!(err.contains("8000"), "{err}");
+        assert!(err.contains("38470"), "{err}");
         assert!(err.contains("already listening"), "{err}");
     }
 

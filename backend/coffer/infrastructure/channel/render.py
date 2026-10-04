@@ -21,7 +21,7 @@ _CODE_FENCE = re.compile(r"```[a-zA-Z0-9_+-]*\n?(.*?)```", re.DOTALL)
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 _BOLD = re.compile(r"\*\*([^*\n]+)\*\*")
 _ITALIC = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)|\b_([^_\n]+)_\b")
-_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+|tg://user\?id=\d+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 # A line-leading "- " / "* " (with optional indent) is a markdown bullet. Telegram
 # HTML has no list element, so render a tidy "• " glyph rather than a raw dash. The
@@ -171,11 +171,106 @@ def _seatalk_inline(text: str) -> str:
     return text
 
 
+_FENCE_LINE = re.compile(r"^[ \t]*```")
+
+
+def _blocks(text: str) -> list[str]:
+    """Paragraphs, except that a fenced code block is ONE block however many
+    blank lines it holds — a chunk boundary inside a fence renders as two
+    broken halves on every platform."""
+    blocks: list[str] = []
+    open_fence = False
+    for paragraph in text.split("\n\n"):
+        if open_fence and blocks:
+            blocks[-1] += "\n\n" + paragraph
+        else:
+            blocks.append(paragraph)
+        for line in paragraph.split("\n"):
+            if _FENCE_LINE.match(line):
+                open_fence = not open_fence
+    return blocks
+
+
+def _split_fence(block: str, limit: int) -> list[str]:
+    """Cut an oversized fenced block at line boundaries, closing each piece
+    and reopening the next with the same opening line (language kept)."""
+    lines = block.split("\n")
+    opener = lines[0] if _FENCE_LINE.match(lines[0]) else "```"
+    body = lines[1:-1] if len(lines) > 1 and _FENCE_LINE.match(lines[-1]) else lines[1:]
+    room = max(limit - len(opener) - 5, 1)
+    pieces: list[str] = []
+    current: list[str] = []
+    size = 0
+    for line in body:
+        while len(line) > room:  # one line longer than a whole piece
+            if current:
+                pieces.append("\n".join(current))
+                current, size = [], 0
+            pieces.append(line[:room])
+            line = line[room:]
+        if current and size + len(line) + 1 > room:
+            pieces.append("\n".join(current))
+            current, size = [], 0
+        current.append(line)
+        size += len(line) + 1
+    if current:
+        pieces.append("\n".join(current))
+    return [f"{opener}\n{piece}\n```" for piece in pieces]
+
+
+def _fence_segments(block: str) -> list[tuple[bool, str]]:
+    """``(is_fence, text)`` runs of a block: its prose and its fenced code,
+    wherever in the block a fence starts."""
+    segments: list[tuple[bool, list[str]]] = []
+    open_fence = False
+    for line in block.split("\n"):
+        starts = bool(_FENCE_LINE.match(line))
+        if starts and not open_fence:
+            segments.append((True, [line]))
+            open_fence = True
+            continue
+        if not segments or segments[-1][0] != open_fence:
+            segments.append((open_fence, []))
+        segments[-1][1].append(line)
+        if starts:
+            open_fence = False
+    return [(is_fence, "\n".join(lines)) for is_fence, lines in segments]
+
+
+def _split_prose(text: str, limit: int) -> list[str]:
+    pieces: list[str] = []
+    while len(text) > limit:
+        cut = text.rfind("\n", 0, limit)
+        cut = cut if cut > limit // 2 else limit
+        pieces.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return [*pieces, text]
+
+
+def _hard_split(block: str, limit: int) -> list[str]:
+    """Cut an oversized block, never through the middle of a fenced code block:
+    its prose is cut at newlines, its fences at line boundaries with each piece
+    closed and reopened. A fence that starts partway through the block (``Here
+    is the log:`` followed by a fence) is a fence like any other."""
+    pieces: list[str] = []
+    for is_fence, text in _fence_segments(block):
+        if len(text) <= limit:
+            pieces.append(text)
+        elif is_fence:
+            pieces += _split_fence(text, limit)
+        else:
+            pieces += _split_prose(text, limit)
+    return [piece for piece in pieces if piece.strip()]
+
+
 def chunk_text(text: str, limit: int) -> list[str]:
     """Split on paragraph boundaries into chunks of at most ``limit`` chars.
 
-    A single paragraph longer than ``limit`` is hard-split. Returns at least
-    one chunk for non-empty input; empty input yields no chunks.
+    Never inside a fenced code block: a fence is kept whole, and one longer
+    than ``limit`` is closed and reopened at a line boundary. Any other
+    paragraph longer than ``limit`` is split at a newline where one is near,
+    else hard. Returns at least one chunk for non-empty input; empty input
+    yields no chunks.
     """
     text = text.strip()
     if not text:
@@ -184,19 +279,16 @@ def chunk_text(text: str, limit: int) -> list[str]:
         return [text]
     chunks: list[str] = []
     current = ""
-    for paragraph in text.split("\n\n"):
-        while len(paragraph) > limit:
-            if current:
-                chunks.append(current)
-                current = ""
-            chunks.append(paragraph[:limit])
-            paragraph = paragraph[limit:]
-        candidate = f"{current}\n\n{paragraph}" if current else paragraph
-        if len(candidate) > limit:
-            chunks.append(current)
-            current = paragraph
-        else:
-            current = candidate
+    for block in _blocks(text):
+        pieces = _hard_split(block, limit) if len(block) > limit else [block]
+        for piece in pieces:
+            candidate = f"{current}\n\n{piece}" if current else piece
+            if len(candidate) > limit:
+                if current:
+                    chunks.append(current)
+                current = piece
+            else:
+                current = candidate
     if current:
         chunks.append(current)
     return [c for c in (chunk.strip() for chunk in chunks) if c]

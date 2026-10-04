@@ -1,19 +1,19 @@
 # Agent Registry — Codex
 
 ## Purpose
-This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue and reasoning levels are read back, the one value its `wire_api` binding accepts, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and credential exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
+This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue and reasoning levels are read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and secret exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
 
 "Codex" is the product: its CLI and its IDE form together, because they read one shared config directory. `config.toml` is the single file behind most of this type's facets — MCP entries, plugins, marketplaces, configured models — so one parse failure degrades all of them at once to the parent's parse-error state. Codex keeps its plugin entries and marketplaces in that same file, with each plugin's content in a cache directory; Coffer toggles one documented field and, on uninstall, removes the entry and the cache together.
 
 ## Requirements
 
 ### Requirement: Locate Codex at ~/.codex
-The `codex` type's standard config directory MUST be `~/.codex/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". The presence of that directory MUST be the install marker [agent-registry](../spec.md) "Discover installed agents as candidates without registering them"'s discovery scans for, and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it: Codex is registrable once unless the user overrides the path. An overridden `config_dir` is the directory Codex is run against through its `CODEX_HOME` environment variable — the only way Codex reads a home other than `~/.codex`, and the root of its `config.toml`, `auth.json`, sessions and memories. Every Codex process Coffer itself starts for such an agent — a chat or channel turn, per [chat](../../chat/spec.md) "Ship Claude Code and Codex subprocess providers", and the `model/list` probe of "Read Codex models from model/list and config.toml" — MUST carry `CODEX_HOME=<config_dir>`; for the default `~/.codex` the variable is left unset.
+The `codex` type's standard config directory MUST be `~/.codex/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". That directory and the `codex` program on the agent's `PATH` MUST be the two signals of [agent-registry](../spec.md) "Detect an agent by its program and its config directory" — the version is what `codex --version` prints (`codex-cli 0.155.1`) — and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it, and [agent-registry](../spec.md) "Keep one agent per type, named by it" makes Codex registrable once, at this directory unless the user chooses another. An overridden `config_dir` is the directory Codex is run against through its `CODEX_HOME` environment variable — the only way Codex reads a home other than `~/.codex`, and the root of its `config.toml`, `auth.json`, sessions and memories. Every Codex process Coffer itself starts for such an agent — a chat or channel turn, per [chat](../../chat/spec.md) "Ship Claude Code and Codex subprocess providers on the type's one agent", and the `model/list` probe of "Read Codex models from model/list and config.toml" — MUST carry `CODEX_HOME=<config_dir>`; for the default `~/.codex` the variable is left unset.
 
 #### Scenario: discover Codex by its config directory
-- **GIVEN** a home directory containing `~/.codex/` and no agent registered
+- **GIVEN** a home directory containing `~/.codex/`, the `codex` program on the agent's `PATH`, and no agent registered
 - **WHEN** the user runs discovery
-- **THEN** a `codex` candidate is reported whose `config_dir` is `~/.codex`
+- **THEN** a `codex` candidate is reported in state `installed_active` whose `config_dir` is `~/.codex`
 - **AND** a `codex` agent registered without a `config_dir` resolves to `~/.codex`
 
 ### Requirement: Allowlist exactly Codex's config, instructions and hooks files
@@ -102,15 +102,6 @@ The runtime source of [agent-registry](../spec.md) "Read reasoning-effort levels
 - **THEN** each entry carries its own reported levels
 - **AND** the first keeps `low` as its default while the second reports no default
 
-### Requirement: Accept only responses as Codex's wire_api
-`responses` MUST be the only accepted value of the `wire_api` field [agent-registry](../spec.md) "Carry the model binding on the agent record" puts on the agent record, enforced where the binding is validated so that anything else is a 422 the user sees at the moment they set it, with nothing persisted or projected. Codex does not merely ignore another value — it **refuses to load `config.toml`**, so an agent Coffer projected into would have a CLI that will not start. This MUST NOT be fixed by remapping the value at projection time: rewriting it on the way out would leave the stored value, and every read of the agent reporting it, saying something other than what Coffer projects, and a setting must not lie about itself. With one legal value the per-agent override can only hold its own default, which makes the field vestigial; retiring it is a separate change, since it is on the public API and the contract.
-
-#### Scenario: reject a wire_api other than responses
-- **GIVEN** a registered `codex` agent
-- **WHEN** the user sets its `wire_api` to `chat`
-- **THEN** the request is rejected with `unprocessable_entity` (422)
-- **AND** the agent's stored `wire_api` is unchanged
-
 ### Requirement: Scan Codex's global task-grouped memory
 The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own native memory stores read-only" for this type MUST be a single GLOBAL task-grouped document at `<config_dir>/memories/MEMORY.md`, where each `# Task Group` block carries an `applies_to: cwd=…` line routing it to one or more project working directories. The scan MUST parse it into one row per distinct routed cwd, with `path` and `project` that cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store repeated on every row. An absent document yields an empty list, and a Task Group with no `applies_to: cwd=` line routes to no project and produces no row.
 
@@ -134,3 +125,29 @@ The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]
 - **GIVEN** a registered `codex` agent whose `config.toml` carries `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` tables beside a plugin and a direct MCP entry
 - **WHEN** Coffer installs its MCP, toggles the plugin, uninstalls the plugin and removes the MCP entry
 - **THEN** after each write the text of those three tables is byte-identical to the original
+
+### Requirement: Read Codex's hooks from hooks.json
+The hooks of [agent-registry](../spec.md) "List every hook in the agent's native config" MUST be read, for `codex`, from two places: the config directory's `hooks.json` (source `user`), and the `hooks/hooks.json` of each enabled installed plugin, where one exists. `hooks.json` is the file Codex's hooks feature reads, in the same event-keyed shape as Claude Code's. Coffer's own memory hook sits in `hooks.json` as two entries: on `SessionStart` with the matcher `startup|resume|clear|compact`, and on `UserPromptSubmit`.
+
+#### Scenario: read Codex hooks from hooks.json
+- **GIVEN** a Codex agent whose `hooks.json` carries Coffer's marked hook
+- **WHEN** the user lists its hooks
+- **THEN** each of its entries is listed from `hooks.json` with source `user` and marked as Coffer's
+
+### Requirement: Report whether Codex will run Coffer's hook
+Codex runs a non-managed hook only after the user has approved its exact definition in `/hooks`, and it silently skips one it has no approval for. For `codex`, the trust that "List every hook in the agent's native config" reports MUST therefore be read from Codex's own approval record: `config.toml`'s `[hooks.state."<hooks.json path>:<event>:<group>:<handler>"]` table, one record per entry. Coffer's hook is trusted only when **every** one of its two entries is.
+
+Coffer computes the hash of each entry the way Codex does. The trust is the first entry's, in file order, that is not `trusted`:
+- `trusted` when `trusted_hash` equals that hash;
+- `modified` when it records another hash;
+- `untrusted` when no approval is recorded for that position;
+- `disabled` when `enabled = false`;
+- `unknown` when `config.toml` does not parse.
+
+Reading it MUST NOT write `config.toml`. Coffer MUST NOT record an approval of its own, because approving a hook is the user's review, and "Leave Codex's internal-state tables untouched" keeps `[hooks.state.*]` byte-identical.
+
+#### Scenario: report whether Codex trusts Coffer's hook
+- **GIVEN** a registered Codex agent whose `hooks.json` carries Coffer's current hook, and whose `config.toml` records no approval for its entries
+- **WHEN** the user lists its hooks, then approves every entry in Codex, then a later build changes the command
+- **THEN** Coffer's hook reads `untrusted`, then `trusted`, then `modified`, and the attention item for the unapproved hook tells the user to run `/hooks` in Codex while it is not trusted
+- **AND** `config.toml` is exactly as Codex left it after every read

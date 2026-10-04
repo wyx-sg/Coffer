@@ -35,14 +35,32 @@ function useUpkeepRuns() {
 }
 
 /**
- * Is a pass running over this one partition / collection right now?
+ * The pass running over this one partition / collection right now, or `null`.
  *
- * False while the first read is still in flight, which is the honest answer to
- * give a button: the page's own optimistic pending state covers the moment
- * between a click and the first poll, and a mount that has not heard back yet
- * has no reason to claim a pass is running.
+ * Addressed by the target's **uid**: that is what the daemon claims a pass
+ * under (`UPKEEP_RUNS.guard(kind, uid)`), for the Curate / Update route and
+ * for the sweep alike, because a pass that takes minutes must be aimed at
+ * something that cannot be renamed underneath it (ADR
+ * identity-is-the-uid-inside-the-file). A lookup by name never matched.
+ *
+ * `null` while the first read is still in flight, which is the honest answer
+ * to give a button: the page's own optimistic pending state covers the moment
+ * between a click and the first poll. A run that drains several items (Curate
+ * now) carries `done` and `total`, which is what "Curating · n of m" reads.
  */
-export function useUpkeepRunning(kind: UpkeepKind, name: string): boolean {
+export function useUpkeepRun(kind: UpkeepKind, uid: string): UpkeepRunOut | null {
   const { data } = useUpkeepRuns();
-  return (data ?? []).some((run: UpkeepRunOut) => run.kind === kind && run.name === name);
+  return (data ?? []).find((run: UpkeepRunOut) => run.kind === kind && run.name === uid) ?? null;
+}
+
+/** Every pass of one kind in flight right now — for a list that marks each
+ *  row it covers, where one hook per row is not an option. */
+export function useUpkeepRunsOf(kind: UpkeepKind): UpkeepRunOut[] {
+  const { data } = useUpkeepRuns();
+  return (data ?? []).filter((run: UpkeepRunOut) => run.kind === kind);
+}
+
+/** Is a pass running over this one partition / collection (by uid) right now? */
+export function useUpkeepRunning(kind: UpkeepKind, uid: string): boolean {
+  return useUpkeepRun(kind, uid) !== null;
 }

@@ -27,12 +27,12 @@ async def _register_claude(bundle, home: pathlib.Path) -> Resource:
     addresses it by ``uid``, and the audit queries filter on the resource
     itself rather than on the label it happens to carry."""
     (home / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
-    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, name="cc", actor="cli")
+    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, actor="cli")
 
 
 async def _register_codex(bundle, home: pathlib.Path) -> Resource:
     (home / ".codex" / "skills").mkdir(parents=True, exist_ok=True)
-    return await bundle.svc.register(agent_type=AgentType.CODEX, name="cx", actor="cli")
+    return await bundle.svc.register(agent_type=AgentType.CODEX, actor="cli")
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="report Coffer-MCP install status")
@@ -109,12 +109,9 @@ async def test_install_idempotent(agent_bundle, tmp_path, monkeypatch):
     assert (await agent_bundle.mcp.status(agent.uid)).installed is True
 
 
-async def test_reinstall_upgrades_preexisting_entry_without_args(
-    agent_bundle, tmp_path, monkeypatch
-):
-    """An older Coffer wrote a coffer entry with no identity flag at all.
-    `status` must still report them installed, and re-install (the upgrade path
-    — there is no auto-migration) rewrites the entry with the flag, in place."""
+async def test_reinstall_rewrites_an_entry_without_args(agent_bundle, tmp_path, monkeypatch):
+    """A coffer entry with no identity flag (e.g. hand-written) still reports
+    installed, and re-install rewrites it with the flag, in place."""
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
     claude_json = tmp_path / ".claude.json"

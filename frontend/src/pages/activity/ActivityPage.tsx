@@ -1,75 +1,190 @@
-// frontend/src/pages/activity/ActivityPage.tsx
+// src/pages/activity/ActivityPage.tsx — what just happened, and why did it fail: Coffer's three records on one page.
+//
+// Four tabs (spec web-ui "Gather the three records on one Activity page"):
+// Everything merges the audit log, the MCP calls the gateway proxied and the
+// daemon's warnings and errors into one newest-first stream; Changes, MCP
+// calls and Daemon log narrow to one record each, with the columns and
+// filters that record affords. Tabs carry no counts; one whose log failed to
+// load shows a warning icon. Every filter lives in the URL.
+//
+// Everything opens small: each log the tab reads gives its newest 30 records,
+// and the next 50 load when the list is scrolled to its end (or on "Load 50
+// more"). Search and filters are asked of the logs themselves, never applied
+// over what happens to be loaded.
+//
+// Live without a control (spec web-ui "Stream new Activity records while the
+// list is at the top"): new records stream in at the top while the reader is
+// at the top with nothing open; once they scroll down or open a record,
+// insertion stops and "↑ N new" counts what is waiting. Choosing it — or
+// scrolling back to the top — inserts them. There is no Pause / Resume and no
+// refresh button; Export writes the filtered records.
+//
+// A record opens in the shared Drawer; on the Daemon log it expands in place
+// under its own line instead (design 6.2.08). With no records at all the page
+// is the first run: no filter row, no Export (design 6.2.09).
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
-import { ScrollText } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InvocationsTable } from "@/components/mcp/InvocationsTable";
-import { ChangesTab } from "./ChangesTab";
-import { DaemonTab } from "./DaemonTab";
 
-const TABS = ["changes", "mcp", "daemon"] as const;
-type ActivityTab = (typeof TABS)[number];
+import { ActivityBody, FirstRun } from "@/components/activity/ActivityBody";
+import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
+import { ActivityHeader } from "@/components/activity/ActivityHeader";
+import { NewRecordsStrip, PartialFailure } from "@/components/activity/ActivityNotices";
+import { DaemonLogLine, DaemonRecordOpen } from "@/components/activity/DaemonLogParts";
+import { RecordDrawer } from "@/components/activity/RecordDrawer";
+import { filtersNarrow } from "@/lib/activity/filters";
+import type { ActivityTab } from "@/lib/activity/records";
+import { everyLogFailed } from "@/lib/activity/feedText";
+import { useActivityAnyRecords } from "@/lib/hooks/useActivityAnyRecords";
+import { useActivityFeed } from "@/lib/hooks/useActivityFeed";
+import { useActivityLookups } from "@/lib/hooks/useActivityLookups";
+import { useActivityView } from "@/lib/hooks/useActivityView";
+import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { useSortParam } from "@/lib/hooks/useSortParam";
 
-function isActivityTab(value: string | null): value is ActivityTab {
-  return (TABS as readonly string[]).includes(value ?? "");
-}
+/** The tab each log belongs to, for the warning icon on a tab whose log failed. */
+const SOURCE_TAB = { change: "changes", call: "mcp", daemon: "daemon" } as const;
 
-/**
- * Activity — the three records Coffer keeps: vault changes, the MCP calls it
- * proxied, and the daemon's own log. One tab each, because one merged table
- * could only carry the columns all three share: an invocation's duration and
- * status, and a log record's level, had nowhere to go, and a single "Detail"
- * header meant three different things. Each tab renders the record's own
- * table, with its own filters and its own loading / empty / error states —
- * so a route an older daemon does not serve fails inside its own tab instead
- * of blanking the two that work.
- *
- * Only the tab in front queries: Radix unmounts the others, and each tab is
- * handed `enabled` besides, so nothing is fetched and thrown away. There is
- * no refresh control — a record of what already happened is not a live
- * console. React Query refetches when the query key changes (switching tab,
- * changing a filter) and when a stale query remounts or the window regains
- * focus, which is every occasion this page has to be out of date.
- *
- * The active tab lives in the URL (`?tab=`), so a link can land on the
- * daemon log and a reload comes back where it was.
- */
+/** Within this many pixels of the top counts as "at the top". */
+const TOP_SLACK = 8;
+
 export function ActivityPage() {
   const { t } = useTranslation();
-  const [params, setParams] = useSearchParams();
-  const requested = params.get("tab");
-  const tab: ActivityTab = isActivityTab(requested) ? requested : "changes";
-  const setTab = (next: string) => {
-    const search = new URLSearchParams(params);
-    if (next === "changes") search.delete("tab");
-    else search.set("tab", next);
-    setParams(search, { replace: true });
+  const view = useActivityView();
+  const { tab, filters, setTab } = view;
+  const [atTop, setAtTop] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const lookups = useActivityLookups();
+  // The search box is the reader's immediately; the logs are asked once they
+  // pause typing, and the request for the text before it is abandoned.
+  const search = useDebouncedValue(filters.search);
+  const feedFilters = useMemo(
+    () => (search === filters.search ? filters : { ...filters, search }),
+    [filters, search],
+  );
+  const feed = useActivityFeed({
+    tab,
+    filters: feedFilters,
+    t,
+    agentNames: lookups.agentNames,
+  });
+  const [sort, setSort] = useSortParam();
+
+  // A change the daemon announces also wrote an audit entry: read the audit
+  // log's head now rather than at the next poll.
+  const { refreshChanges } = feed;
+  const { live: streamOpen } = useDaemonEvents({
+    onMessage: (message) => {
+      if (message.type === "change") refreshChanges();
+    },
+  });
+
+  const selected = feed.rows.find((r) => r.key === view.selectedKey) ?? null;
+  const live = atTop && selected === null;
+
+  // Live: whatever arrived is inserted at once. Held: it waits for the pill.
+  const { hasPending, releaseAll } = feed;
+  useEffect(() => {
+    if (live && hasPending) releaseAll();
+  }, [live, hasPending, releaseAll]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) setAtTop(el.scrollTop <= TOP_SLACK);
+  }, []);
+
+  const showNew = () => {
+    releaseAll();
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    setAtTop(true);
   };
 
+  const daemon = tab === "daemon";
+  const narrowed = filtersNarrow(filters, tab);
+  const failedTabs = new Set<ActivityTab>(feed.failed.map((f) => SOURCE_TAB[f.source]));
+  // Nothing under the default view: ask whether Coffer has recorded anything at all.
+  const bare =
+    !feed.isLoading &&
+    !everyLogFailed(feed) &&
+    feed.failed.length === 0 &&
+    feed.rows.length === 0 &&
+    !feed.hasOlder &&
+    !narrowed;
+  const firstRun = useActivityAnyRecords(bare) === false && bare;
+
   return (
-    <div className="space-y-6">
-      <PageHeader icon={ScrollText} title={t("activity.title")} subtitle={t("activity.subtitle")} />
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="changes">{t("activity.tabs.changes")}</TabsTrigger>
-          <TabsTrigger value="mcp">{t("activity.tabs.mcp")}</TabsTrigger>
-          <TabsTrigger value="daemon">{t("activity.tabs.daemon")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="changes" className="pt-6">
-          <ChangesTab enabled={tab === "changes"} />
-        </TabsContent>
-        <TabsContent value="mcp" className="pt-6">
-          {/* The same table the MCP server detail page renders, with no server
-              name: every server's calls, with a leading server column. */}
-          <InvocationsTable enabled={tab === "mcp"} />
-        </TabsContent>
-        <TabsContent value="daemon" className="pt-6">
-          <DaemonTab enabled={tab === "daemon"} />
-        </TabsContent>
-      </Tabs>
+    // Full-bleed, like Conversations: the list owns the scroll region, so
+    // "at the top" is the list's own scroll position.
+    <div className="-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden">
+      <div className="flex flex-col gap-4 px-8 pt-4">
+        <ActivityHeader
+          tab={tab}
+          onTab={(next) => setTab(next)}
+          failedTabs={failedTabs}
+          live={streamOpen}
+          empty={firstRun}
+          specs={feed.specs}
+          keep={feed.keep}
+        />
+        {firstRun ? null : (
+          <ActivityFilterBar
+            tab={tab}
+            filters={filters}
+            onChange={view.changeFilters}
+            onClear={view.clearFilters}
+            agents={lookups.agents}
+            loggers={feed.loggers}
+          />
+        )}
+        {daemon && feed.logPath && !firstRun ? (
+          <DaemonLogLine path={feed.logPath} following={streamOpen && live} />
+        ) : null}
+        <PartialFailure feed={feed} />
+        <NewRecordsStrip held={!live} feed={feed} onShowNew={showNew} />
+      </div>
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        data-activity-list
+        className="mt-3 min-h-0 flex-1 overflow-y-auto px-8 pb-10"
+      >
+        {firstRun ? (
+          <FirstRun />
+        ) : (
+          <ActivityBody
+            tab={tab}
+            feed={feed}
+            narrowed={narrowed}
+            onClearFilters={view.clearFilters}
+            agents={lookups.agentLooks}
+            selectedKey={selected?.key ?? null}
+            onSelect={view.select}
+            sort={sort}
+            onSort={setSort}
+            renderExpanded={
+              daemon
+                ? (r) => (
+                    <DaemonRecordOpen
+                      record={r}
+                      onShowCall={(search) => setTab("mcp", { search })}
+                    />
+                  )
+                : undefined
+            }
+          />
+        )}
+      </div>
+      {selected && !daemon ? (
+        <RecordDrawer
+          record={selected}
+          rows={feed.rows}
+          agents={lookups.agentLooks}
+          transports={lookups.serverTransports}
+          onSelect={view.setSelectedKey}
+          onClose={() => view.setSelectedKey(null)}
+        />
+      ) : null}
     </div>
   );
 }

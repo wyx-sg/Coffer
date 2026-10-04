@@ -1,4 +1,4 @@
-"""Credential-release helper for ``ResourceService.delete``.
+"""Secret-release helper for ``ResourceService.delete``.
 
 Extracted to keep ``resource_service.py`` under the file-size limit. Free
 function that takes the ``ResourceService`` instance and reaches into its
@@ -12,9 +12,10 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from coffer.application.resource_kind_ops import credential_refs
+from coffer.application.resource_kind_ops import secret_refs
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind, Resource
+from coffer.domain.secrets import is_standalone_ref
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -22,55 +23,58 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-async def release_orphaned_credentials(
+async def release_orphaned_secrets(
     service: ResourceService,
     kind_def: Kind,
     config: dict[str, Any],
     actor: str,
 ) -> list[str]:
-    """Drop a just-deleted resource's credentials that nothing cites anymore.
+    """Drop a just-deleted resource's secrets that nothing cites anymore.
 
     Runs after the resource's row is removed, so the deleted resource no
     longer counts as a citation of its own refs. A failure must not turn the
-    already-completed deletion into a caller-facing error — the credential
+    already-completed deletion into a caller-facing error — the secret
     then merely lingers, which was the status quo.
+
+    A standalone secret (``secret/<name>``, the Secrets page's own) is never
+    released: it was stored for itself, is cited from files Coffer cannot see,
+    and a custom-tool group that bound it by name does not own it.
     """
-    if service._credentials is None:
+    if service._secrets is None:
         return []
     released: list[str] = []
-    for cred_ref in dict.fromkeys(credential_refs(kind_def, config).values()):
+    for cred_ref in dict.fromkeys(secret_refs(kind_def, config).values()):
+        if is_standalone_ref(cred_ref):
+            continue
         try:
-            # Off the loop thread: the store is a blocking SQLite writer, and
-            # calling it inline competes with the connection this coroutine is
-            # already holding — the delete then fails with "database is locked",
-            # gets swallowed by the except below, and the credential silently
-            # lingers. Every other credential write in the codebase already
-            # goes through a thread for exactly this reason.
-            if not await asyncio.to_thread(service._credentials.exists, cred_ref):
+            # Off the loop thread: the store does file IO and, for a vault ref,
+            # a git commit under the vault's write lock. The store's removal
+            # hook forgets the ref's approved destinations.
+            if not await asyncio.to_thread(service._secrets.exists, cred_ref):
                 continue
-            if await service.find_credential_citations(cred_ref):
+            if await service.find_secret_citations(cred_ref):
                 continue
-            await asyncio.to_thread(service._credentials.delete, cred_ref)
+            await asyncio.to_thread(service._secrets.delete, cred_ref)
             await service._audit.record(
-                AuditEventType.CREDENTIAL_DELETED.value,
+                AuditEventType.SECRET_DELETED.value,
                 actor=actor,
                 details={"ref": cred_ref},
             )
             released.append(cred_ref)
         except Exception:
-            _logger.exception("resource.credential_release_failed", extra={"ref": cred_ref})
+            _logger.exception("resource.secret_release_failed", extra={"ref": cred_ref})
     return released
 
 
-async def citations_of(service: ResourceService, credential_ref: str) -> list[Resource]:
-    """Return every resource whose config cites ``credential_ref``.
+async def citations_of(service: ResourceService, secret_ref: str) -> list[Resource]:
+    """Return every resource whose config cites ``secret_ref``.
 
-    A credential lives in the encrypted store and is referenced only by its ref
+    A secret lives in the encrypted store and is referenced only by its ref
     from resource config (a channel's bot token, an mcp_server's auth header, a
-    model's API key). Deleting the credential out from under a live resource
-    silently breaks it, so the credential-delete route calls this first and
+    model's API key). Deleting the secret out from under a live resource
+    silently breaks it, so the secret-delete route calls this first and
     refuses (409) when the list is non-empty. Each kind that stores secrets
-    supplies a ``credential_ref_extractor``; kinds without one cite nothing and
+    supplies a ``secret_ref_extractor``; kinds without one cite nothing and
     are skipped.
 
     Whole resources rather than identifiers, because both callers want more
@@ -82,18 +86,18 @@ async def citations_of(service: ResourceService, credential_ref: str) -> list[Re
         kind_def = service._kinds.get(resource.kind)
         if kind_def is None:
             continue
-        if credential_ref in credential_refs(kind_def, resource.config).values():
+        if secret_ref in secret_refs(kind_def, resource.config).values():
             citing.append(resource)
     return citing
 
 
 async def all_citations(service: ResourceService) -> dict[str, list[Resource]]:
-    """Every credential ref any registered resource cites, with its citers.
+    """Every secret ref any registered resource cites, with its citers.
 
     The whole-vault form of ``citations_of``: one scan over every row, each
-    kind asked through its own ``credential_ref_extractor``, so a channel's bot
+    kind asked through its own ``secret_ref_extractor``, so a channel's bot
     token and a provider connection's API key count as much as an MCP server's
-    header. ``coffer credentials list`` reads this to say which cited secrets
+    header. ``coffer secret list`` reads this to say which cited secrets
     the store is missing.
     """
     cited: dict[str, list[Resource]] = {}
@@ -101,6 +105,6 @@ async def all_citations(service: ResourceService) -> dict[str, list[Resource]]:
         kind_def = service._kinds.get(resource.kind)
         if kind_def is None:
             continue
-        for ref in dict.fromkeys(credential_refs(kind_def, resource.config).values()):
+        for ref in dict.fromkeys(secret_refs(kind_def, resource.config).values()):
             cited.setdefault(ref, []).append(resource)
     return cited

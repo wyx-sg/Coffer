@@ -49,7 +49,6 @@ _CLAUDE_CONFIG_DIR = pathlib.Path("/fake/home/.claude")
 _CLAUDE_UID = "7c1f0a9b4e2d4f3a8b6c5d0e1f2a3b4c"
 
 _CLAUDE_RESOURCE = Resource(
-    id=1,
     uid=_CLAUDE_UID,
     kind="agent",
     name="cc",
@@ -159,7 +158,7 @@ class FakeAuditRepo:
         *,
         kind=None,
         name=None,
-        resource_id=None,
+        resource_uid=None,
         event_type=None,
         event_prefix=None,
         since=None,

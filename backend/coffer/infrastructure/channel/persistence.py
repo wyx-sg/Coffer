@@ -1,361 +1,167 @@
-"""Channel-kind ORM model + repo (channel_peers).
+"""Channel pairings as vault documents (spec vault-storage).
 
-Registers against the shared ``Base.metadata``. Per Contract 5 this module
-must not import from any other kind module.
+Which chats on a platform belong to a channel's owner is the person's, and it
+travels: ``state/channel-peers/<channel name>.json``::
+
+    {"channel_uid": "<uid>", "format_version": 1,
+     "peers": [{"chat_id": "...", "sender_id": "...", "display_name": "...",
+                "paired_at": "<iso>"}]}
+
+``peers`` keeps pairing order, so "the first sender this channel knew" is the
+first entry. The document follows its channel: moved when the channel is
+renamed and deleted with it, in the channel's own commit.
+
+The thread tables live in ``thread_persistence`` and the outbox in
+``outbox_persistence`` (this file's size budget); both are re-exported here so
+``persistence`` stays the one import that registers every channel table.
+Per Contract 5 this module must not import from any other kind module.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import (
-    TIMESTAMP,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    delete,
-    func,
-    select,
-)
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
+from coffer.application.channel.store_ports import ChannelPeer
+from coffer.infrastructure.vault.state_documents import StateDocuments
 
-from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversation
-from coffer.infrastructure.persistence.base import Base
+#: ``state/channel-peers/``.
+AREA = "channel-peers"
 
 
-class ChannelPeerModel(Base):
-    __tablename__ = "channel_peers"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    chat_id: Mapped[str] = mapped_column(String, nullable=False)
-    display_name: Mapped[str] = mapped_column(String, nullable=False, default="")
-    paired_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    sender_id: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint("resource_id", "chat_id", name="uq_channel_peers_resource_chat"),
-        Index("idx_channel_peers_resource", "resource_id"),
-    )
+def _time(raw: Any) -> datetime:
+    if isinstance(raw, str):
+        try:
+            value = datetime.fromisoformat(raw)
+        except ValueError:
+            value = None
+        if value is not None:
+            return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return datetime.fromtimestamp(0, tz=UTC)
 
 
-class ChannelThreadConversationModel(Base):
-    __tablename__ = "channel_thread_conversations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    chat_id: Mapped[str] = mapped_column(String, nullable=False)
-    # "" is the DM (or a group's main chat); each group thread is its own row.
-    thread_id: Mapped[str] = mapped_column(String, nullable=False, default="")
-    active_conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    preferred_agent: Mapped[str | None] = mapped_column(String, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    # A parallel thread `/thread` opened carries its number within the chat and
-    # its title (see "Open parallel conversations in a direct chat"); NULL on
-    # every other row.
-    parallel_ordinal: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    parallel_title: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint(
-            "resource_id",
-            "chat_id",
-            "thread_id",
-            name="uq_channel_thread_conv_resource_chat_thread",
-        ),
-        Index("idx_channel_thread_conv_resource", "resource_id"),
-    )
-
-
-def _tz(dt: datetime) -> datetime:
-    """Re-attach UTC if SQLite stripped the tzinfo on read-back."""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-
-
-def _to_domain(row: ChannelPeerModel) -> ChannelPeer:
+def _peer(uid: str, raw: Any) -> ChannelPeer | None:
+    if not isinstance(raw, dict) or not isinstance(raw.get("chat_id"), str):
+        return None
+    sender = raw.get("sender_id")
     return ChannelPeer(
-        resource_id=row.resource_id,
-        chat_id=row.chat_id,
-        display_name=row.display_name,
-        paired_at=_tz(row.paired_at),
-        sender_id=row.sender_id,
+        resource_uid=uid,
+        chat_id=raw["chat_id"],
+        display_name=str(raw.get("display_name") or ""),
+        paired_at=_time(raw.get("paired_at")),
+        sender_id=sender if isinstance(sender, str) else "",
     )
+
+
+def _entry(peer: ChannelPeer) -> dict[str, Any]:
+    return {
+        "chat_id": peer.chat_id,
+        "sender_id": peer.sender_id,
+        "display_name": peer.display_name,
+        "paired_at": peer.paired_at.astimezone(UTC).isoformat(),
+    }
 
 
 class ChannelPeerRepo:
-    """SQLAlchemy implementation of ``ChannelPeerRepoPort``.
+    """``ChannelPeerRepoPort`` over ``state/channel-peers/``.
 
-    A channel may have several peer rows — one per DM/group/thread it has
-    been paired to (``UniqueConstraint("resource_id", "chat_id")``).
-    ``upsert`` re-pairs a single ``(resource_id, chat_id)`` row without
-    disturbing any other chat paired to the same channel. Every read either
-    names its chat (``get_by_chat``) or says which of several it wants
-    (``owner_peer``, ``list_by_resource``): a read that names neither is how a
-    private notification ended up in a group chat.
+    A channel may be paired to several chats — its DM and every group or
+    thread it was added to — one entry per chat. ``upsert`` re-pairs one chat
+    without disturbing any other. Every read either names its chat
+    (``get_by_chat``) or says which of several it wants (``owner_peer``,
+    ``list_by_resource``): a read that names neither is how a private
+    notification ended up in a group chat.
     """
 
-    def __init__(self, session_maker: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = session_maker
+    def __init__(
+        self,
+        *,
+        name_of: Callable[[str], str | None] = lambda _uid: None,
+        home: Path | None = None,
+    ) -> None:
+        self._name_of = name_of
+        self.documents = StateDocuments(AREA, "channel_uid", home=home)
 
-    async def owner_peer(self, resource_id: int) -> ChannelPeer | None:
-        """The earliest-paired chat — see ``ChannelPeerRepoPort.owner_peer``.
+    def _peers(self, uid: str) -> list[ChannelPeer]:
+        raw = (self.documents.get(uid) or {}).get("peers")
+        if not isinstance(raw, list):
+            return []
+        return [p for p in (_peer(uid, r) for r in raw) if p is not None]
 
-        ``chat_id`` breaks a ``paired_at`` tie so the answer is the same on
-        every call and on every machine that converged the same pairings.
-        """
-        async with self._sm() as session:
-            row = (
-                (
-                    await session.execute(
-                        select(ChannelPeerModel)
-                        .where(ChannelPeerModel.resource_id == resource_id)
-                        .order_by(ChannelPeerModel.paired_at, ChannelPeerModel.chat_id)
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            return _to_domain(row) if row is not None else None
+    def _save(self, uid: str, peers: list[ChannelPeer], summary: str) -> None:
+        if not peers:
+            self.documents.remove(uid, summary=summary)
+            return
+        name = self._name_of(uid) or uid
+        self.documents.put(uid, name, {"peers": [_entry(p) for p in peers]}, summary=summary)
 
-    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None:
-        async with self._sm() as session:
-            row = (
-                await session.execute(
-                    select(ChannelPeerModel).where(
-                        ChannelPeerModel.resource_id == resource_id,
-                        ChannelPeerModel.chat_id == chat_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            return _to_domain(row) if row is not None else None
+    async def owner_peer(self, resource_uid: str) -> ChannelPeer | None:
+        """The earliest-paired chat; ``chat_id`` breaks a tie, so the answer is
+        the same on every call and on every machine holding the document."""
+        peers = sorted(self._peers(resource_uid), key=lambda p: (p.paired_at, p.chat_id))
+        return peers[0] if peers else None
 
-    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]:
-        async with self._sm() as session:
-            rows = (
-                (
-                    await session.execute(
-                        select(ChannelPeerModel).where(ChannelPeerModel.resource_id == resource_id)
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            return [_to_domain(row) for row in rows]
+    async def get_by_chat(self, resource_uid: str, chat_id: str) -> ChannelPeer | None:
+        return next((p for p in self._peers(resource_uid) if p.chat_id == chat_id), None)
 
-    async def owner_sender_id(self, resource_id: int) -> str | None:
-        async with self._sm() as session:
-            row = (
-                (
-                    await session.execute(
-                        select(ChannelPeerModel)
-                        .where(
-                            ChannelPeerModel.resource_id == resource_id,
-                            ChannelPeerModel.sender_id.isnot(None),
-                        )
-                        .order_by(ChannelPeerModel.id)
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            return row.sender_id if row is not None else None
+    async def list_by_resource(self, resource_uid: str) -> list[ChannelPeer]:
+        return self._peers(resource_uid)
+
+    async def sender_ids(self, resource_uid: str) -> frozenset[str]:
+        return frozenset(p.sender_id for p in self._peers(resource_uid) if p.sender_id)
+
+    async def delete_by_sender(self, resource_uid: str, sender_id: str) -> list[str]:
+        peers = self._peers(resource_uid)
+        gone = [p.chat_id for p in peers if p.sender_id == sender_id]
+        if gone:
+            kept = [p for p in peers if p.sender_id != sender_id]
+            self._save(resource_uid, kept, f"Un-paired person {sender_id}")
+        return gone
 
     async def upsert(self, peer: ChannelPeer) -> None:
         await self.upsert_replacing(peer, ())
 
     async def upsert_replacing(self, peer: ChannelPeer, unpair: Sequence[str]) -> None:
-        """One session, one commit: the un-pairs and the save land together."""
-        async with self._sm() as session:
-            await session.execute(
-                delete(ChannelPeerModel).where(
-                    ChannelPeerModel.resource_id == peer.resource_id,
-                    ChannelPeerModel.chat_id.in_([peer.chat_id, *unpair]),
-                )
-            )
-            session.add(
-                ChannelPeerModel(
-                    resource_id=peer.resource_id,
-                    chat_id=peer.chat_id,
-                    display_name=peer.display_name,
-                    paired_at=peer.paired_at,
-                    sender_id=peer.sender_id,
-                )
-            )
-            await session.commit()
+        """One commit: the un-pairs and the save land together."""
+        drop = {peer.chat_id, *unpair}
+        peers = [p for p in self._peers(peer.resource_uid) if p.chat_id not in drop]
+        self._save(peer.resource_uid, [*peers, peer], f"Paired chat {peer.chat_id}")
 
-    async def delete_by_chat(self, resource_id: int, chat_id: str) -> None:
+    async def delete_by_chat(self, resource_uid: str, chat_id: str) -> None:
         """Un-pair one chat. A no-op when it is already gone — two machines
         un-pairing the same chat is agreement, not a failure."""
-        async with self._sm() as session:
-            await session.execute(
-                delete(ChannelPeerModel).where(
-                    ChannelPeerModel.resource_id == resource_id,
-                    ChannelPeerModel.chat_id == chat_id,
-                )
-            )
-            await session.commit()
+        peers = self._peers(resource_uid)
+        kept = [p for p in peers if p.chat_id != chat_id]
+        if len(kept) != len(peers):
+            self._save(resource_uid, kept, f"Un-paired chat {chat_id}")
 
 
-def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConversation:
-    return ChannelThreadConversation(
-        resource_id=row.resource_id,
-        chat_id=row.chat_id,
-        thread_id=row.thread_id,
-        active_conversation_id=row.active_conversation_id,
-        preferred_agent=row.preferred_agent,
-        updated_at=_tz(row.updated_at),
-        parallel_ordinal=row.parallel_ordinal,
-        parallel_title=row.parallel_title,
-    )
+# Re-exported at the end so the models above are defined first; importing this
+# module registers every channel table on ``Base.metadata``.
+from coffer.infrastructure.channel.outbox_persistence import (  # noqa: E402
+    ChannelOutboxModel,
+    ChannelOutboxRepo,
+)
+from coffer.infrastructure.channel.reply_persistence import (  # noqa: E402
+    ChannelReplyModel,
+    ChannelReplyRepo,
+)
+from coffer.infrastructure.channel.thread_persistence import (  # noqa: E402
+    ChannelThreadConversationModel,
+    ChannelThreadConversationRepo,
+    ChannelThreadHistoryModel,
+)
 
-
-class ChannelThreadConversationRepo:
-    """SQLAlchemy implementation of ``ChannelThreadConversationRepoPort``.
-
-    See "Key conversation identity by channel, chat and thread".
-
-    Conversation identity is keyed by ``(resource_id, chat_id, thread_id)`` so
-    each group thread (and the DM, ``thread_id=""``) drives its own conversation
-    with its own turn lock. ``set_active_conversation`` and ``set_preferred_agent``
-    each upsert one field of the row, leaving the other untouched — a thread's
-    sticky agent survives opening a fresh conversation and vice versa.
-    """
-
-    def __init__(self, session_maker: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = session_maker
-
-    async def get(
-        self, resource_id: int, chat_id: str, thread_id: str
-    ) -> ChannelThreadConversation | None:
-        async with self._sm() as session:
-            row = (
-                await session.execute(
-                    select(ChannelThreadConversationModel).where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                        ChannelThreadConversationModel.thread_id == thread_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            return _thread_to_domain(row) if row is not None else None
-
-    async def set_active_conversation(
-        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
-    ) -> None:
-        async with self._sm() as session:
-            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
-            if row is None:
-                session.add(
-                    ChannelThreadConversationModel(
-                        resource_id=resource_id,
-                        chat_id=chat_id,
-                        thread_id=thread_id,
-                        active_conversation_id=conversation_id,
-                        preferred_agent=None,
-                        updated_at=datetime.now(tz=UTC),
-                    )
-                )
-            else:
-                row.active_conversation_id = conversation_id
-                row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def set_preferred_agent(
-        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
-    ) -> None:
-        async with self._sm() as session:
-            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
-            if row is None:
-                session.add(
-                    ChannelThreadConversationModel(
-                        resource_id=resource_id,
-                        chat_id=chat_id,
-                        thread_id=thread_id,
-                        active_conversation_id=None,
-                        preferred_agent=preferred_agent,
-                        updated_at=datetime.now(tz=UTC),
-                    )
-                )
-            else:
-                row.preferred_agent = preferred_agent
-                row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
-        # Over every row of the chat, not only live ones: a number stays taken
-        # after its conversation is replaced, so a mark never names two threads.
-        async with self._sm() as session:
-            highest = (
-                await session.execute(
-                    select(func.max(ChannelThreadConversationModel.parallel_ordinal)).where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            return int(highest or 0) + 1
-
-    async def open_parallel(
-        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
-    ) -> None:
-        async with self._sm() as session:
-            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
-            if row is None:
-                row = ChannelThreadConversationModel(
-                    resource_id=resource_id,
-                    chat_id=chat_id,
-                    thread_id=thread_id,
-                    active_conversation_id=None,
-                    preferred_agent=None,
-                )
-                session.add(row)
-            row.parallel_ordinal = ordinal
-            row.parallel_title = title
-            row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def list_parallel(
-        self, resource_id: int, chat_id: str
-    ) -> list[ChannelThreadConversation]:
-        async with self._sm() as session:
-            rows = (
-                await session.execute(
-                    select(ChannelThreadConversationModel)
-                    .where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                        ChannelThreadConversationModel.parallel_ordinal.is_not(None),
-                    )
-                    .order_by(ChannelThreadConversationModel.parallel_ordinal.desc())
-                )
-            ).scalars()
-            return [_thread_to_domain(row) for row in rows]
-
-    @staticmethod
-    async def _row_for_update(
-        session: Any, resource_id: int, chat_id: str, thread_id: str
-    ) -> ChannelThreadConversationModel | None:
-        row: ChannelThreadConversationModel | None = (
-            await session.execute(
-                select(ChannelThreadConversationModel).where(
-                    ChannelThreadConversationModel.resource_id == resource_id,
-                    ChannelThreadConversationModel.chat_id == chat_id,
-                    ChannelThreadConversationModel.thread_id == thread_id,
-                )
-            )
-        ).scalar_one_or_none()
-        return row
+__all__ = [
+    "AREA",
+    "ChannelOutboxModel",
+    "ChannelOutboxRepo",
+    "ChannelPeerRepo",
+    "ChannelReplyModel",
+    "ChannelReplyRepo",
+    "ChannelThreadConversationModel",
+    "ChannelThreadConversationRepo",
+    "ChannelThreadHistoryModel",
+]

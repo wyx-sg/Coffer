@@ -29,7 +29,6 @@ _NOW = datetime(2026, 9, 28, tzinfo=UTC)
 
 def _agent(uid: str, agent_type: AgentType = AgentType.CLAUDE_CODE) -> Resource:
     return Resource(
-        id=0,
         uid=uid,
         kind="agent",
         name=uid,

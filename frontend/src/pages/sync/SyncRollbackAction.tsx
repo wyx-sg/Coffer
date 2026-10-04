@@ -1,91 +1,151 @@
 // frontend/src/pages/sync/SyncRollbackAction.tsx
 //
-// Undo one converge round, from the History row that describes it.
+// "Roll back to before the 14:32 round?" (6.4.12), opened from a round's row
+// or from its detail drawer.
 //
-// Until this existed, a user whose vault had just been damaged by a round
-// could see exactly what the round did — the History row lists every path —
-// and had no way to undo it without opening a terminal. `coffer sync rollback`
-// was the only door.
-//
-// The button belongs to ONE row, never to all of them: `POST /sync/rollback`
-// reverses the round that left the newest pre-apply snapshot and takes no
-// argument, so an Undo on every row would run the same call from each and undo
-// a round the user was not pointing at. Which row that is is decided in
-// `syncRunColumns.rollbackTargetId`.
-//
-// What the dialog has to say is what will come back, not that something will:
-// the round's own applied paths, rendered by the same `SyncRoundPathList` the
-// expanded row uses, so the list in the confirmation and the list in the row
-// are visibly the same list.
-import { useState } from "react";
+// The dialog says what will come back before anything does: the daemon is
+// asked for the plan (`GET /sync/runs/{id}/rollback-plan`) the moment the
+// dialog opens — the snapshot the round took, each file it would put back,
+// and the files edited since, which are kept as they are. Rolling back is a
+// new commit here that the next round pushes, so the other Macs follow and
+// nothing another machine did after is lost. Once it lands, the round's own
+// toast says so and the Status banner reads "Rolled back" (6.4.13).
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Undo2 } from "lucide-react";
+import { Info } from "lucide-react";
 
-import { TableActionButton } from "@/components/table/TableActionButton";
+import { ShowAllRow } from "@/components/LongList";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import type { RunRecord } from "@/lib/api/sync";
-import { useRollbackRound } from "@/lib/hooks/useSync";
-import { formatDateTime } from "@/lib/utils";
-import { SyncRoundPathList } from "./SyncRoundPathList";
+import { useLongList } from "@/components/useLongList";
+import type { SyncChange, SyncRound } from "@/lib/api/sync";
+import { useRollbackPlan, useRollbackRound } from "@/lib/hooks/useSync";
+import { ChangeMark, FILE_LIST, FILE_ROW } from "./SyncChangeMark";
+import { clock, clockSeconds } from "./syncTime";
 
-/** Paths past this are summarised — a dialog that scrolls past the confirm
- *  button is worse at answering "what is about to happen" than a count is.
- *  The same cap the held-round banner uses. */
-const MAX_PATHS = 20;
+/** What each reversed file goes back to, from the round's side of it. */
+function reverseNote(t: TFunction, change: SyncChange, at: string | null) {
+  // The rollback REMOVES a file the round added, and RESTORES one it removed.
+  if (change.status === "removed") return t("sync.rollback.wasAdded");
+  if (change.status === "added") return t("sync.rollback.wasRemoved");
+  return at ? t("sync.rollback.backTo", { time: at }) : t("sync.rollback.backToSnapshot");
+}
 
-export function SyncRollbackAction({ run }: { run: RunRecord }) {
+/** Five rows, then Show all; the expanded list scrolls inside the dialog. */
+function ReversedList({
+  changes,
+  note,
+}: {
+  changes: SyncChange[];
+  note: (change: SyncChange) => string;
+}) {
+  const { visible, shown, total, collapsed, expand, listClassName } = useLongList(changes, {
+    scrollInside: true,
+  });
+  return (
+    <div className={FILE_LIST} data-testid="sync-rollback-paths">
+      <ul className={listClassName}>
+        {visible.map((change) => (
+          <li key={change.path} className={FILE_ROW}>
+            <ChangeMark status={change.status} />
+            <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">
+              {change.path}
+            </span>
+            <span className="shrink-0 text-xs text-text-subtle">{note(change)}</span>
+          </li>
+        ))}
+      </ul>
+      {collapsed ? <ShowAllRow shown={shown} total={total} onShowAll={expand} /> : null}
+    </div>
+  );
+}
+
+function KeptList({ paths }: { paths: string[] }) {
   const { t } = useTranslation();
+  const { visible, shown, total, collapsed, expand, listClassName } = useLongList(paths, {
+    scrollInside: true,
+  });
+  return (
+    <div className="flex flex-col gap-2" data-testid="sync-rollback-kept">
+      <span className="text-sm font-semibold text-text">{t("sync.rollback.kept")}</span>
+      <div className={FILE_LIST}>
+        <ul className={listClassName}>
+          {visible.map((path) => (
+            <li key={path} className={FILE_ROW}>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">{path}</span>
+            </li>
+          ))}
+        </ul>
+        {collapsed ? <ShowAllRow shown={shown} total={total} onShowAll={expand} /> : null}
+      </div>
+    </div>
+  );
+}
+
+interface Props {
+  /** The round to roll back; null while the dialog is closed. */
+  run: (SyncRound & { id: number }) | null;
+  onClose: () => void;
+}
+
+export function SyncRollbackDialog({ run, onClose }: Props) {
+  const { t } = useTranslation();
+  const open = run !== null;
+  const plan = useRollbackPlan(run?.id ?? null, open);
   const rollback = useRollbackRound();
-  const [open, setOpen] = useState(false);
-  const when = formatDateTime(run.finished_at);
-  const applied = run.applied.changes;
-  const shown = applied.slice(0, MAX_PATHS);
-  const hidden = applied.length - shown.length;
+  const reverses = plan.data?.reverses ?? [];
+  const snapAt = plan.data?.snapshot_time ?? null;
+  const when = run ? clock(run.finished_at) : "";
 
   return (
-    // The row opens its own detail on click; without this the click that
-    // raises the dialog would also expand the row behind it.
-    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-      <TableActionButton
-        icon={Undo2}
-        label={t("sync.rollback.action")}
-        onClick={() => setOpen(true)}
-        disabled={rollback.isPending}
-      />
-
-      <ConfirmDialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          // A refusal read once should not greet the next attempt.
-          if (!next) rollback.reset();
-        }}
-        title={t("sync.rollback.title")}
-        description={t("sync.rollback.description", { when })}
-        confirmLabel={rollback.isPending ? t("sync.rollback.undoing") : t("sync.rollback.confirm")}
-        pending={rollback.isPending}
-        error={rollback.error}
-        onConfirm={() =>
-          // Closes only in `onSuccess`, so a daemon that refuses the rollback
-          // leaves the dialog up with its reason (.agents/frontend.md §5).
-          rollback.mutate(undefined, { onSuccess: () => setOpen(false) })
-        }
-      >
-        {applied.length > 0 ? (
-          <div className="space-y-1">
-            <SyncRoundPathList
-              titleKey="sync.rollback.willUndo"
-              items={shown.map((c) => t(`sync.round.change.${c.status}`, { path: c.path }))}
-              testId="sync-rollback-paths"
-            />
-            {hidden > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {t("sync.rollback.morePaths", { count: hidden })}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </ConfirmDialog>
-    </div>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) return;
+        onClose();
+        // A refusal read once should not greet the next attempt.
+        rollback.reset();
+      }}
+      title={t("sync.rollback.title", { time: when })}
+      description={
+        plan.data
+          ? t("sync.rollback.descriptionSnapshot", {
+              snapshot: plan.data.snapshot,
+              time: snapAt ? clockSeconds(snapAt) : "",
+            })
+          : t("sync.rollback.description")
+      }
+      confirmLabel={t("sync.rollback.confirm")}
+      pendingLabel={t("sync.rollback.rollingBack")}
+      variant="default"
+      width="wide"
+      pending={rollback.isPending || plan.isLoading}
+      error={rollback.error ?? plan.error}
+      onConfirm={() => {
+        if (!run) return;
+        // Closes only on success, so a refusal stays up with its reason.
+        rollback.mutate(run.id, { onSuccess: onClose });
+      }}
+    >
+      {plan.isLoading ? (
+        <p className="text-sm text-text-muted">{t("common.loading")}</p>
+      ) : plan.data && run ? (
+        <div className="flex flex-col gap-4" data-testid="sync-rollback-plan">
+          {reverses.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-text">{t("sync.rollback.reverses")}</span>
+              <ReversedList
+                changes={reverses}
+                note={(change) => reverseNote(t, change, snapAt ? clock(snapAt) : null)}
+              />
+            </div>
+          ) : null}
+          {plan.data.kept.length > 0 ? <KeptList paths={plan.data.kept} /> : null}
+          <p className="flex items-start gap-2 text-xs leading-[1.45] text-text-muted">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            {t("sync.rollback.follow", { time: when })}
+          </p>
+        </div>
+      ) : null}
+    </ConfirmDialog>
   );
 }

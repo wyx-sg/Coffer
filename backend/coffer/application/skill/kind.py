@@ -19,8 +19,9 @@ A skill's name is fixed (``name_fixed``). It is the directory an agent loads
 the skill from and the ``name:`` its SKILL.md declares, so agents, other skills
 and the user's own notes quote it; a rename would break every one of them
 (ADR names-visible-to-agents-are-fixed). The framework refuses a changed name
-before anything moves, so this kind supplies no rename hook. Its title — what
-the Skills page shows in place of the name — stays editable.
+before anything moves, so this kind supplies no rename hook. It carries no
+title either (``titled=False``): a skill is its fixed name and its SKILL.md
+description.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from coffer.domain.errors import ResourceProtected
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.frontmatter import validate_frontmatter_name
+from coffer.domain.vault.layout import StorageClass
 
 AsyncOnDelete = Callable[[Resource], Awaitable[None]]
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
@@ -60,28 +62,18 @@ def _refuse_builtin_delete(skill: Resource) -> None:
         )
 
 
-def _row_converges(config: dict[str, object]) -> bool:
-    """Whether one skill row travels to the user's other machines.
+def _row_storage(config: dict[str, object]) -> StorageClass:
+    """Where one skill row is filed (ADR storage-is-five-classes-by-nature).
 
-    Every skill a person imported does. Coffer's own does not: its master
-    folder is rendered locally from the running build, the knowledge files
-    (which converge on their own) and **this machine's own inputs** — its
-    experimental-feature switches, which decide which sections of the manual
-    render, and its own knowledge root path — which deliberately stay home.
-
-    So two machines holding identical knowledge but different feature switches
-    render different bytes, each correct where it is.
-    Publishing either — the folder or the row whose ``version_hash`` is that
-    folder's digest — makes the other overwrite it, and the overwritten machine
-    re-renders on its next boot or curation tick and publishes back. That is a
-    commit and an audit event per tick on both machines, forever, over an
-    artifact neither machine reads from the other. The same is true of any
-    version skew, since the shipped half of the text moves between builds.
-
-    It is derived output, so it is regenerated rather than received: every
-    machine already has everything it takes to produce its own.
+    Every skill a person imported is in the vault. Coffer's own is not: its
+    master folder is rendered locally from the running build, the knowledge
+    files and **this machine's own inputs** — the knowledge and memory roots
+    as they sit under its own home — so two machines holding identical
+    knowledge render different bytes, each correct where it is. It is derived
+    output, so it is filed under ``derived/`` and regenerated rather than
+    received: every machine already has everything it takes to produce its own.
     """
-    return not is_builtin(config)
+    return StorageClass.DERIVED if is_builtin(config) else StorageClass.VAULT
 
 
 def make_skill_kind(
@@ -90,10 +82,9 @@ def make_skill_kind(
     on_enabled_changed: OnEnabledChangedHook | None = None,
 ) -> Kind:
     async def _on_delete(skill: Resource) -> None:
-        # Awaited by ResourceService.delete BEFORE the row is removed, so
-        # ``cleanup_bindings_for_skill`` can still read the binding rows that
-        # ``ON DELETE CASCADE`` is about to take with it, and tear down every
-        # symlink + the master folder first.
+        # Awaited by ResourceService.delete BEFORE the file is removed, so
+        # ``cleanup_bindings_for_skill`` can still resolve the skill, drop its
+        # binding rows and tear down every symlink + the master folder first.
         await cleanup_bindings_for_skill(skill)
 
     return Kind(
@@ -107,36 +98,34 @@ def make_skill_kind(
         # own importer would then reject.
         validate_name=validate_frontmatter_name,
         on_delete=_on_delete,
-        # A skill's name is its master folder under ~/.coffer/skills/, the name
+        # A skill's name is its master folder under ~/.coffer/vault/skills/, the name
         # of every copy delivered into an agent's skills dir and the SKILL.md
         # ``name:`` — all quoted by agents — so it never changes. A new name
         # means removing the skill and importing it again.
         name_fixed=True,
         name_fixed_resets="its enabled flag, its scope and its deliveries to agents",
+        titled=False,
         # A builtin skill's row is Coffer's, not the user's: deleting it is a
         # no-op the next boot undoes, so the framework refuses it up front
         # for every surface at once.
         validate_delete=_refuse_builtin_delete,
-        # ...and for the same reason its row does not travel, while every
-        # other skill's does. ``converges`` stays True for the kind; this
-        # withholds the one row that is derived output (spec vault-sync
-        # "Withhold derived output in both halves").
-        converges_row=_row_converges,
+        # ...and for the same reason its row is derived output, filed under
+        # ``derived/`` while every other skill's is in the vault.
+        storage_row=_row_storage,
         # A skill row must be backed by an imported master folder under
-        # ~/.coffer/skills/. Only SkillService (which creates that folder) may
+        # ~/.coffer/vault/skills/. Only SkillService (which creates that folder) may
         # register it; the generic POST /resources path is rejected (spec
         # resource-framework "Keep creation a per-kind seam").
         generic_create_allowed=False,
         # ADR per-agent-resource-scope: scope is one half of the whole delivery rule —
         # ``enabled AND scope.is_active(scope, agent_uid)``.
         supports_scope=True,
-        # A skill's scope edit re-runs delivery reconciliation for every agent
-        # (the composition root supplies the callback — the same
-        # reconciliation the sync post-import hook uses,
-        # ``apply_scope_for_agent``, per registered agent).
+        # A skill's scope edit asks for a ``skill_link`` reconcile pass (the
+        # composition root supplies the callback), which delivers to and
+        # reclaims from every agent at once.
         on_scope_changed=on_scope_changed,
         # The other half: a skill's ``enabled`` flag is a real delivery switch,
         # so disabling reclaims every delivered copy and re-enabling
-        # redelivers. Same callback, same per-agent reconciliation.
+        # redelivers. Same callback, same pass.
         on_enabled_changed=on_enabled_changed,
     )

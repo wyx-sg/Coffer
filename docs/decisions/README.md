@@ -121,14 +121,21 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | --- | --- |
 | [`resource-framework-upfront`](resource-framework-upfront.md) | The Resource Framework Is Core Domain, Designed Before the Second Kind |
 | [`kind-plugin-contract`](kind-plugin-contract.md) | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After |
-| [`resource-identity-is-an-immutable-uid`](resource-identity-is-an-immutable-uid.md) | Resource Identity Is an Immutable `uid`, Not the Name |
-| [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title |
+| [`identity-is-the-uid-inside-the-file`](identity-is-the-uid-inside-the-file.md) | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label |
+| [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed |
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind |
-| [`resource-reach-is-machine-local`](resource-reach-is-machine-local.md) | Resource Reach Is Machine-Local and Never Converges |
+| [`reach-is-machine-local-stored-by-uid-never-synced`](reach-is-machine-local-stored-by-uid-never-synced.md) | Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced |
 | [`code-layout-layer-first`](code-layout-layer-first.md) | Code Layout Is Layer-First, With One Subdirectory per Kind |
 | [`composition-root-explicit-wiring`](composition-root-explicit-wiring.md) | Kinds Are Wired Explicitly by One Composition Root, With No Global Registry |
-| [`sqlite-alembic-persistence`](sqlite-alembic-persistence.md) | Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage |
+| [`storage-is-five-classes-by-nature`](storage-is-five-classes-by-nature.md) | Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy |
+| [`history-is-one-sqlite-file-written-only-by-the-daemon`](history-is-one-sqlite-file-written-only-by-the-daemon.md) | History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage |
+| [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
+| [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
 | [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table |
+| [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
+| [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
+| [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
+| [`platform-differences-live-behind-one-platform-port`](platform-differences-live-behind-one-platform-port.md) | Platform Differences Live Behind One Platform Port; Only macOS Ships |
 
 ### Daemon, shell & distribution
 
@@ -143,14 +150,14 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | The Loopback Daemon Performs OS File Actions for the UI |
 | [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
 | [`experimental-features-instead-of-a-release-branch`](experimental-features-instead-of-a-release-branch.md) | Experimental Features Instead of a Release Branch |
-| [`sidebar-grouped-by-role`](sidebar-grouped-by-role.md) | The Sidebar Is Grouped by Role: Agents, Resources, System |
+| [`sidebar-grouped-by-what-the-person-comes-to-do`](sidebar-grouped-by-what-the-person-comes-to-do.md) | The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System |
 
 ### MCP gateway
 
 | ADR | Decision |
 | --- | --- |
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session |
-| [`capability-state-model`](capability-state-model.md) | MCP Capability State — Preferences in the Database, Lists Live-Queried From Upstream |
+| [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 
@@ -159,10 +166,12 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`agent-descriptor-manifest`](agent-descriptor-manifest.md) | Per-Agent Behaviour Lives in One Descriptor Record per Agent |
+| [`agent-mechanisms-are-optional-facets-on-the-descriptor`](agent-mechanisms-are-optional-facets-on-the-descriptor.md) | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry |
 | [`writing-agent-native-config-safely`](writing-agent-native-config-safely.md) | Writing Agent-Native Config Safely |
 | [`agent-hook-installation`](agent-hook-installation.md) | Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale |
 | [`provider-connections-projected-into-agent-config`](provider-connections-projected-into-agent-config.md) | LLM Connections Are Projected Into Each Agent's Own Config File |
-| [`provider-keys-never-land-in-native-config`](provider-keys-never-land-in-native-config.md) | Provider Keys Never Land in an Agent's Native Config |
+| [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](api-key-providers-are-reached-through-a-separate-local-model-proxy.md) | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged |
+| [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered |
 | [`model-catalogue-read-from-the-agent`](model-catalogue-read-from-the-agent.md) | The Model Catalogue Is Read Back From the Installed Agent |
 | [`coffer-model-is-an-internal-engine`](coffer-model-is-an-internal-engine.md) | Coffer's Own Model Is an Internal Engine, Not a Persona or a Tool |
 | [`internal-engine-settings`](internal-engine-settings.md) | The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection |
@@ -193,16 +202,19 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`knowledge-curation`](knowledge-curation.md) | Knowledge Curation Merges New Material Into the Documents |
 | [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the Agents' Memory; Never Write It |
+| [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names |
 
-### Sync & credentials
+### Sync & secrets
 
 | ADR | Decision |
 | --- | --- |
-| [`vault-sync`](vault-sync.md) | The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter |
+| [`sync-applies-clean-merges-and-stops-on-any-conflict`](sync-applies-clean-merges-and-stops-on-any-conflict.md) | Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person |
 | [`sync-deletion-breaker`](sync-deletion-breaker.md) | A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves |
 | [`sync-machine-identity`](sync-machine-identity.md) | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree |
 | [`single-owner-machine-for-unattended-rewrites`](single-owner-machine-for-unattended-rewrites.md) | An Unattended Rewriter of Synced Content Runs on One Named Owner Machine |
 | [`sync-withholds-derived-output`](sync-withholds-derived-output.md) | Sync Withholds Derived Output; Each Machine Renders Its Own |
-| [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store |
+| [`master-key-lives-in-the-macos-keychain`](master-key-lives-in-the-macos-keychain.md) | The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault |
 | [`credential-references`](credential-references.md) | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use |
-| [`credentials-across-machines`](credentials-across-machines.md) | Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
+| [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
+| [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
+| [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |

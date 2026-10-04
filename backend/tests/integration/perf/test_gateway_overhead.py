@@ -2,13 +2,15 @@
 
 Spec mcp-gateway "Present Coffer as one MCP server" (the gateway-overhead budget).
 
-Marked ``benchmark`` so it is excluded from default ``make verify`` runs.
-Enable with ``pytest -m benchmark`` or set ``COFFER_RUN_BENCHMARKS=1``.
+Runs in ``make verify`` with the rest of the integration tier: it takes about
+4 s, and the overhead it measures (2-5 ms median on an Apple-silicon laptop
+under a shared load average of 6-18, 2026-10-01) sits an order of magnitude
+under the budget, so load does not reach it. Also marked ``benchmark``, so
+``make verify-benchmark`` runs it beside the benchmarks too slow for verify.
 """
 
 from __future__ import annotations
 
-import os
 import statistics
 import sys
 import time
@@ -17,17 +19,16 @@ from pathlib import Path
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig, StdioTransport
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
@@ -36,29 +37,20 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 _N_RUNS = 30
 _MAX_OVERHEAD_MS = 50
 
 
-def _should_run() -> bool:
-    return os.environ.get("COFFER_RUN_BENCHMARKS") == "1"
-
-
 pytestmark = pytest.mark.benchmark
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="gateway overhead stays under budget")
-@pytest.mark.skipif(
-    not _should_run(),
-    reason="benchmark suite disabled by default; set COFFER_RUN_BENCHMARKS=1",
-)
 @pytest.mark.asyncio
 async def test_gateway_overhead_under_50ms_median(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -73,7 +65,7 @@ async def test_gateway_overhead_under_50ms_median(
 
     # ------------------------------------------------------------------ #
     # Baseline: direct connection — no gateway, no supervisor, no         #
-    # discovery layer, no DB, no credential resolution.                   #
+    # discovery layer, no DB, no secret resolution.                   #
     # ------------------------------------------------------------------ #
     baseline_ms: list[float] = []
     direct = StdioUpstreamConnection(
@@ -110,7 +102,7 @@ async def test_gateway_overhead_under_50ms_median(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     await rsvc.register(
@@ -129,9 +121,9 @@ async def test_gateway_overhead_under_50ms_median(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(
         resource_service=rsvc,

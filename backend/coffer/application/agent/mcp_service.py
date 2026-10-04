@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
+from coffer.application.agent.shim_handoff import shim_handoff
 from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import user_bin_dir
 from coffer.domain.agent.config import AgentConfig
@@ -75,23 +76,34 @@ def default_shim_resolver() -> str:
     then the bundled binary next to the running executable (PyInstaller dist).
     Whichever branch answers, the deployed shim is named by its public
     ``~/.coffer/bin/coffer-mcp-shim`` rather than the version directory behind
-    it (see :func:`_stable_path`). Raises ``ShimNotFound`` if none resolve.
+    it (see :func:`_stable_path`). Raises ``ShimNotFound`` if none resolve,
+    carrying the prompt that hands finding it to an agent, with every place
+    looked in.
     """
+    looked_in: list[str] = []
     override = os.environ.get("COFFER_MCP_SHIM_PATH")
-    if override and pathlib.Path(override).exists():
-        return _stable_path(pathlib.Path(override))
+    if override:
+        if pathlib.Path(override).exists():
+            return _stable_path(pathlib.Path(override))
+        looked_in.append(f"{override} (named by COFFER_MCP_SHIM_PATH)")
     found = shutil.which(_SHIM_BINARY)
     if found:
         return _stable_path(pathlib.Path(found))
+    looked_in.append(f"the daemon's PATH ({os.environ.get('PATH', '')})")
     scripts_dir = sysconfig.get_path("scripts")
     if scripts_dir:
         installed = pathlib.Path(scripts_dir) / _SHIM_BINARY
         if installed.exists():
             return _stable_path(installed)
+        looked_in.append(str(installed.parent))
     bundled = pathlib.Path(sys.executable).resolve().parent / _SHIM_BINARY
     if bundled.exists():
         return _stable_path(bundled)
-    raise ShimNotFound(_SHIM_BINARY)
+    looked_in.append(str(bundled.parent))
+    public = str(user_bin_dir() / _SHIM_BINARY)
+    raise ShimNotFound(
+        _SHIM_BINARY, handoff=shim_handoff(_SHIM_BINARY, public=public, looked_in=looked_in)
+    )
 
 
 @dataclass(frozen=True)
@@ -155,6 +167,7 @@ class AgentMcpService:
             container_key=inj.container_key,
             entry_style=inj.entry_style,
             agent_uid=agent.uid,
+            extras=inj.entry_extras,
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(

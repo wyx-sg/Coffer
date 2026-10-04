@@ -6,7 +6,7 @@ description: The binding project principles, technology constraints, quality gat
 # Principles
 
 ::: tip This page is normative
-This page is the single source of Coffer's project principles. It holds **scaffolding-level** invariants only: tech stack, workflow, licensing posture, and architectural style. Product behavior — the resource model, the gate on who may drive an agent, the surface roster, what gets persisted where — is defined per capability in `openspec/specs/`. The clauses under [The three principles](#the-three-principles), [Technology & architectural constraints](#technology-architectural-constraints), [Quality gates](#quality-gates) and [Governance](#governance) are binding; the surrounding sections explain them. The reasoning behind each design choice is laid out in [Design philosophy](/architecture/design-principles).
+This page is the single source of Coffer's project principles. It holds **scaffolding-level** invariants only: tech stack, workflow, licensing posture, architectural style, and how the product hands work to an agent. Product behavior — the resource model, the gate on who may drive an agent, the surface roster, what gets persisted where — is defined per capability in `openspec/specs/`. The clauses under [The four principles](#the-four-principles), [Technology & architectural constraints](#technology-architectural-constraints), [Quality gates](#quality-gates) and [Governance](#governance) are binding; the surrounding sections explain them. The reasoning behind each design choice is laid out in [Design philosophy](/architecture/design-principles).
 :::
 
 > Coffer is a local-first AI agent vault: a developer's accumulated AI assets
@@ -17,17 +17,17 @@ Coffer exists to solve a specific, concrete problem. Understanding that problem 
 
 ## The problem
 
-Modern AI development involves many MCP servers — file systems, databases, web browsers, code executors, APIs — and multiple MCP clients: Claude Code, Codex, and whatever ships next month. The naive setup requires configuring each client separately for each server: N clients × M servers configurations, each maintained by hand, each holding its own copy of API keys and credentials. When a server's URL changes or a credential rotates, every client config must be updated individually. Worse, the tool names exposed by the same upstream server may differ between clients because each client applies its own filtering or aliasing.
+Modern AI development involves many MCP servers — file systems, databases, web browsers, code executors, APIs — and multiple MCP clients: Claude Code, Codex, and whatever ships next month. The naive setup requires configuring each client separately for each server: N clients × M servers configurations, each maintained by hand, each holding its own copy of API keys and secrets. When a server's URL changes or a secret rotates, every client config must be updated individually. Worse, the tool names exposed by the same upstream server may differ between clients because each client applies its own filtering or aliasing.
 
-The result is credential sprawl, config drift between clients, and an identity problem: the `read_file` tool in Claude Code may or may not be the same as `read_file` in Codex. There is no single point of control.
+The result is secret sprawl, config drift between clients, and an identity problem: the `read_file` tool in Claude Code may or may not be the same as `read_file` in Codex. There is no single point of control.
 
 Coffer's answer to this slice is a long-lived local daemon that registers upstream MCP servers once, exposes all of them through a single namespaced surface (every tool appears as `<server-name>__<tool-name>`), and handles all client connections through that one point. Configure once; every client sees the same tools, the same names, the same policies.
 
 The MCP gateway, though, is only one capability of a broader vault. The same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, the shared knowledge store, aggregated agent memory, model providers, and messaging channels — **seven** resource kinds in all (`mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `provider`, `channel`) — plus the cross-cutting turn platform that drives those agents behind the channels, and bidirectional vault sync against a git remote you own. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
 
-## The three principles
+## The four principles
 
-Everything else — technology choices, layering, process model, persistence strategy — is a consequence of these three.
+Everything else — technology choices, layering, process model, persistence strategy, how the product asks a person for help — is a consequence of these four.
 
 ### I. Local-First (NON-NEGOTIABLE)
 
@@ -35,7 +35,7 @@ Everything else — technology choices, layering, process model, persistence str
 All user data lives on the user's machines — one vault, every machine holding the full state. Cloud services are LLM and tool providers only — they never become the system of record for any vault state. The HTTP API binds to `127.0.0.1`. Replicating user-state to a vendor-controlled cloud requires an amendment.
 :::
 
-Every vault asset — registered server configs, credential references, audit logs, capability preferences — stays on your devices. No backup to a vendor cloud and no telemetry leave the machine without the user's explicit action.
+Every vault asset — registered server configs, secret references, audit logs, capability preferences — stays on your devices. No backup to a vendor cloud and no telemetry leave the machine without the user's explicit action.
 
 "Local-first" does not mean "no network": calling a remote LLM API or invoking a cloud-hosted MCP tool is entirely expected. The constraint is about **where state lives**, not about whether the network is used. The daemon can make outbound HTTP calls to LLM providers; it simply cannot make your vault state visible to a third party without an amendment to the principles.
 
@@ -55,18 +55,40 @@ Specifications under `openspec/specs/`, written with [OpenSpec](https://github.c
 
 This principle exists because distributed teams (and AI agents generating code) tend to drift from design intent over time. By making the spec the source of truth and requiring it to be updated before code changes, Coffer ensures that architectural intent is always recorded and verifiable.
 
+**Contract direction.** The two halves of a spec folder are written in opposite directions:
+
+1. The **behavioural spec** — requirements and their scenarios in `spec.md` — is written first, by hand, and the code is built to satisfy it.
+2. The **wire schema** — `contracts/api.openapi.yaml` in the same folder — is generated from the backend's Pydantic models and checked in, so every change to it is reviewed as a diff in the PR that causes it.
+3. The **frontend's typed client** and its wire types are generated from that schema.
+
+No wire type is hand-written on either side. The Pydantic models are the only hand-written description of the HTTP wire, because they are what the daemon actually serves. A hand-written schema beside them is a second copy that has to be kept in agreement by a gate, and a gate that compares two documents by field name cannot see a type, a nullability or a constraint that differs; generating the schema from the models removes the second copy, and generating the client from the schema lets the TypeScript compiler check every consumer's types, which no name-only gate can. The reasoning is recorded in [The wire contract is generated from the Pydantic models](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md).
+
 ### III. Open-Source-Readiness from Day One
 
 License (MIT), governance, contribution flow, and Conventional Commits are present in the repository from v0.0.1, not retrofitted later. A change that would shorten this list — adding a closed-source dependency without an exception, omitting attribution for AI-authored content — violates this principle and requires an amendment with an explicit migration plan.
 
 This prevents the hidden cost of "we'll open-source it later" — retrofitting licenses, attribution, and governance onto a codebase after the fact is expensive and error-prone.
 
+### IV. AI-Native
+
+Everyone who uses Coffer already works with a coding agent, so Coffer treats an agent as the way environment-dependent work gets done. When a task depends on the person's machine and has no single right procedure — installing a program, setting up a tool or an outside account, diagnosing and fixing the environment — the product hands it to an agent. It builds a prompt that states the facts (what is missing, why it is needed, the constraints) and offers it two ways: copied, for the person's own agent, or opened as a new conversation with an agent Coffer manages, pre-filled and sent only when the person presses Send. The product does not hard-code one package manager's install commands, run installers, or walk the person through long manual step lists. Work the person could do in the UI but may not want to — resolving a sync conflict, merging a skill's upstream update with local edits — also offers the hand-off beside the manual controls, so the person chooses whether to look at it themselves. The prompt is built by the daemon, so the CLI and the UI offer the same words.
+
+Two cases stay outside the hand-off:
+
+1. **Work Coffer owns and can do deterministically and safely** — repairing its own entry in an agent's config, a reconcile pass, rotating its own token — is a plain button.
+2. **Work only the person can do** — a login in a browser, an approval, a setting in a platform's portal — stays with the person; a prompt may still help with the steps around it.
+
+A prompt never asks an agent to handle a credential; where a login is needed, it tells the agent to leave the login to the person.
+
+This holds because a hard-coded procedure is right for one kind of machine and wrong for the rest, and it goes stale as tools change, while an agent reads the machine it is on. A hand-off also keeps the person in control: nothing runs until they send it.
+
 ## Technology & architectural constraints
 
 - **Languages.** Python 3.12+ for backend, CLI, and any MCP shim; TypeScript 5.x for frontend. No other primary languages without an amendment.
-- **Architecture.** Layered: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application` and is wired only at the composition root. `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs. `application/` may not import `surfaces/`. Cross-cutting modules are extracted only after the second feature needs them. (Exception: the Resource framework — see [Resource framework](/architecture/resource-framework#design-decisions).) The layers, their enforcement and the code layout are described in [Layering and code layout](/architecture/layering).
-- **Persistence.** SQLite is the system of record for control-plane state. Bulk user content — knowledge collections, memory partitions — is stored as files on the local file system, and those files are the only copy: nothing indexes, chunks or embeds them. See [Persistence](/architecture/persistence).
-- **Credentials.** Secrets live **only** as Fernet ciphertext in the `credentials` table; plaintext exists in memory solely between decrypt and the spawn/header-injection that consumes it. The Fernet master key is managed exclusively by `coffer.infrastructure.credentials` — a `0600` file beside the DB by default, the OS keychain via `keyring` when opted in. `keyring` import stays confined to that module. All other code uses credential refs. No secret plaintext reaches the database, logs, audit, or any structured event. Credential material leaves the machine only as Fernet ciphertext and only when the user asks for it explicitly; the master key is never written into anything the vault publishes, and reaches another machine only through the explicit out-of-band transfer (`/sync/key/export` and `/sync/key/import`, which move key material and nothing else). See [Security](/architecture/security).
+- **Architecture.** Layered: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application` and is wired only at the composition root. `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs. `application/` may not import `surfaces/`. Cross-cutting modules are extracted only after the second feature needs them. The layers, their enforcement and the code layout are described in [Layering and code layout](/architecture/layering).
+- **Persistence.** The vault's files are the system of record for configuration: `~/.coffer/vault` is a git repository, and every accepted write to it is one validated commit naming its writer. History (audit, invocations, conversations, sync rounds) lives in `runs.db`. Bulk user content — knowledge collections, memory partitions — is stored as files on the local file system, and those files are the only copy: nothing keeps a persistent index, chunks or embeds them (memory retrieval ranks lexically over an in-memory index rebuilt from the files). See [Persistence](/architecture/persistence).
+- **Secrets.** Secrets live **only** as Fernet ciphertext, one file per secret (`vault/secret/<ref>.enc`, or `local/secret/` for machine-local refs); plaintext exists in memory solely between decrypt and the spawn/header-injection that consumes it. The one long-lived holder is the local model proxy, the daemon's only sibling process: a header-injection consumer that keeps the decrypted keys of the connections it serves in memory for its lifetime, receives them from the daemon over its authenticated loopback control route, and never holds the master key or writes a key anywhere. The Fernet master key is managed exclusively by `coffer.infrastructure.secret` — in a signed release, a data-protection Keychain item in an access group limited to Coffer's Team ID; in a development build, a `0600` file in `~/.coffer` by default, or the login keychain via `keyring` when opted in. `keyring` import stays confined to that module. All other code uses secret refs. No secret plaintext reaches the vault, `runs.db`, logs, audit, or any structured event. Secret material leaves the machine only as Fernet ciphertext and only when the user asks for it explicitly; the master key is never written into anything the vault publishes, and reaches another machine only through the explicit out-of-band transfer (a key backup the desktop app writes behind a presence check, and `/sync/key/import`, which move key material and nothing else). See [Security](/architecture/security).
+- **Secret plaintext reaches only a present human; agents get capabilities, never keys.** A secret's plaintext, and the master key, leave Coffer only to a person at the machine: in the desktop app, released by the operating system's presence check (Touch ID or the login password) on each reveal, copy or key backup, with no reuse window — never through REST, the CLI, MCP or the browser UI. (The one other plaintext path is `coffer run`, which resolves a standalone secret into one child's environment and is labelled as readable by local processes.) Coffer sends a secret to a destination it has not sent it to before — an MCP server's environment or header, a channel's credential, a provider's base URL, a tool's authentication, the sync remote — only after that person approves the binding in the desktop app, and only that person can turn the protection off. Agents may use and configure Coffer through every surface; they use a secret through a capability Coffer injects on their behalf (the MCP gateway, the local model proxy), never by holding it. Where a secret must sit in a process an agent can inspect — a third-party stdio server's environment, a `coffer run` child — the product says so rather than claiming protection. A request that carries a secret never follows a redirect to another origin, and where the secret rides in a request is part of what was approved. In a development build, which cannot keep the master key from other processes running as the user, the boundary does not hold, so approvals default off there and on in a signed release (a person's own setting wins). See [Security](/architecture/security).
 - **Network defaults.** Loopback-only. Outbound HTTP to a URL Coffer probes or fetches on the user's behalf from something typed into a form goes through the SSRF guard first (`coffer.infrastructure.net.ssrf_guard`, which rejects loopback, private and link-local destinations). Traffic to the endpoints the user explicitly configures as their own — HTTP MCP upstreams, model and transcription endpoints, the IM platforms, the git sync remote — is exempt once Coffer is using them, because a loopback or LAN endpoint is a legitimate target there (Ollama, a localhost MCP server). Which calls the guard covers is listed in [Security → Outbound requests](/architecture/security#outbound-requests).
 
 ## Quality gates
@@ -99,11 +121,13 @@ These follow from the constraints above and hold unconditionally; they are not c
 
 **Loopback-only.** The daemon's HTTP server binds to `127.0.0.1` and will not accept connections from any other interface.
 
-**Secret plaintext never reaches the database.** The SQLite database holds credential references — opaque identifiers — and ciphertext, never plaintext. No code outside `infrastructure/credentials/` may import `keyring`.
+**Secret plaintext never reaches storage.** The vault's files, `local/` and `runs.db` hold secret references — opaque identifiers — and, in `vault/secret/` and `local/secret/`, ciphertext; never plaintext. No code outside `infrastructure/secret/` may import `keyring`.
+
+**Secret plaintext never reaches an agent through Coffer.** No route, command or tool returns a secret's value or the master key; the only reveal is the desktop app's, behind a presence check on each use.
 
 **Every upstream tool is namespaced.** Tools exposed through the Coffer MCP surface appear as `<server-name>__<tool-name>` (e.g., `filesystem__read_file`). This namespace is stable and deterministic: the same upstream registered under the same name always produces the same tool namespace regardless of which client connects.
 
-**Single SQLite writer.** Only the daemon process writes to `~/.coffer/coffer.db`. The CLI and shim read state through the daemon's HTTP API; they never open the database directly. This invariant makes WAL-mode isolation trivially correct.
+**Single SQLite writer.** Only the daemon process writes to `~/.coffer/runs.db`. The CLI and shim read state through the daemon's HTTP API; they never open the database directly. The local model proxy opens no database either: it spools its usage records to files the daemon ingests. This invariant makes WAL-mode isolation trivially correct.
 
 ## What Coffer is not
 
@@ -115,14 +139,14 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the turn platform behind the channels drives your registered coding agents, which do invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 
-**Not a firewall or security boundary.** Coffer applies capability-level enable/disable policies, but it is a developer tool running as the user's own process — it does not sandbox upstream server code or enforce OS-level access control.
+**Not a firewall or a sandbox.** Coffer applies capability-level enable/disable policies, but it is a developer tool running as the user's own process — it does not sandbox upstream server code, confine what an agent does with its own shell, or enforce OS-level access control. It holds exactly one boundary against the agents it serves: a secret's plaintext, and where a secret is sent, are decided by a present human.
 
 ## Rejected alternatives
 
 These rejections are recorded in the ADRs; the summaries here anchor the principles:
 
-**Why not a cloud-hosted gateway?** A hosted gateway would be the natural answer for teams, but it violates Local-First unconditionally. Credentials would have to leave the machine; vault state would have a network dependency. The single-user local-first model is the design's foundation.
+**Why not a cloud-hosted gateway?** A hosted gateway would be the natural answer for teams, but it violates Local-First unconditionally. Secrets would have to leave the machine; vault state would have a network dependency. The single-user local-first model is the design's foundation.
 
-**Why not per-client configuration?** Per-client config is the status quo — it is the problem Coffer solves. The pain it creates (N × M maintenance burden, credential sprawl, identity inconsistency) is precisely the motivation for a central daemon.
+**Why not per-client configuration?** Per-client config is the status quo — it is the problem Coffer solves. The pain it creates (N × M maintenance burden, secret sprawl, identity inconsistency) is precisely the motivation for a central daemon.
 
-**Why not extract cross-cutting abstractions eagerly?** Cross-cutting modules are extracted only when a second feature needs them, to avoid over-engineering. The sole exception is the Resource framework, which was designed upfront because it spans every layer (domain, persistence, audit, surface routing) — retrofitting it after a second resource kind arrived would require a non-trivial migration, not a modest extraction.
+**Why not extract cross-cutting abstractions eagerly?** Cross-cutting modules are extracted only when a second feature needs them, to avoid over-engineering.

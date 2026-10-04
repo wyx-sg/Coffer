@@ -1,22 +1,9 @@
 // src/components/resource/FixedName.tsx
-// How a kind whose name is fixed (MCP server, skill) shows that name: a badge
-// beside the detail header, and a read-only field in the edit form with a note
-// saying why it cannot change. Neither offers a control that edits it — the
+// How a kind whose name is fixed (MCP server, skill) shows that name in its
+// edit form: a read-only field with a note saying why it cannot change. Neither offers a control that edits it — the
 // daemon refuses a rename of these kinds (409 NAME_IMMUTABLE).
 import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-
-/** Beside the detail header: the name is fixed. */
-export function FixedNameBadge() {
-  const { t } = useTranslation();
-  return (
-    <Badge variant="outline" className="gap-1 font-normal text-muted-foreground">
-      <Lock className="size-3" aria-hidden />
-      {t("resources.fixedName.badge")}
-    </Badge>
-  );
-}
 
 interface FieldProps {
   id: string;

@@ -1,177 +1,80 @@
-// frontend/src/components/agents/AgentOverviewTab.tsx — the agent detail page's
-// Overview tab: type + config-dir summary plus this agent's LLM connection and
-// its per-agent model binding. Picking a connection/model is a DRAFT — the user
-// stages a choice, must «测试连接», then «确认切换» to apply it (spec provider-switching amendment
-// 2026-06-23c). The draft → test → confirm state machine lives in
-// useAgentConnectionDraft; this file is presentation only. Claude Code exposes two
-// model slots (primary + fast); Codex one. Those slots belong to a connection: on
-// the built-in login nothing reads `agent.model`, so the panel offers NO model
-// control there at all — not a picker, not a tick list — rather than writing a
-// field nobody reads. The model is chosen per conversation instead, in chat with
-// /model; all the built-in branch carries is one line saying where the choice
-// actually happens.
-import { useTranslation } from "react-i18next";
+// src/components/agents/AgentOverviewTab.tsx — the agent detail page's Overview tab (boards 2.1.08–2.1.14).
+//
+// One column, 920 wide: Connection (its one fix at the title's right) → What
+// this agent can use (six tiles) → Model (with Change…) → Details. Detection
+// wins: an agent whose program is gone replaces the tab with the config-left-
+// behind or not-found sections. Every write goes through `actions`, which the
+// page wires to its dialogs.
+import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
+import { agentRowState } from "@/lib/agents/rowState";
+import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { useResource } from "@/lib/hooks/useResources";
 
-import { agentTypeLabel } from "@/lib/agents/display";
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { OverviewModelSection } from "./model/OverviewModelSection";
+import { AgentNotFoundCard } from "./overview/AgentNotFoundCard";
+import { ConfigLeftBehindCard } from "./overview/ConfigLeftBehindCard";
+import { OverviewConnection } from "./overview/OverviewConnection";
+import { OverviewDetails } from "./overview/OverviewDetails";
+import { OverviewSummary } from "./overview/OverviewSummary";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { AgentOut } from "@/lib/api/agents";
-import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
-import { displayName } from "@/lib/resourceTitle";
+export interface OverviewActions {
+  /** Open the connection-change preview: connect (also Repair) or disconnect. */
+  onConnection: (kind: "connect" | "disconnect") => void;
+  onEnable: () => void;
+  /** "Use a different config directory…" */
+  onChangeConfigDir: () => void;
+  /** Connect / disconnect / enable is running on the agent: its buttons wait. */
+  busy?: boolean;
+}
 
-export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
-  const { t } = useTranslation();
-  const c = useAgentConnectionDraft(agent);
+interface Props {
+  agent: AgentOut;
+  typeRow: AgentTypeOut;
+  actions: OverviewActions;
+}
+
+export function AgentOverviewTab({ agent, typeRow, actions }: Props) {
+  if (typeRow.state === "config_only") {
+    return <ConfigLeftBehindCard agent={agent} typeRow={typeRow} actions={actions} />;
+  }
+  if (typeRow.state === "missing") return <AgentNotFoundCard agent={agent} actions={actions} />;
+  return <OverviewBody agent={agent} typeRow={typeRow} actions={actions} />;
+}
+
+function OverviewBody({ agent, typeRow, actions }: Props) {
+  const connection = useAgentConnection(agent.uid);
+  const hooks = useAgentHooks(agent.uid);
+  const memoryOn = useFeatureEnabled("memory") === true;
+  const resource = useResource(agent.uid);
+  const enabled = resource.data?.enabled ?? true;
+  const state = agentRowState(
+    { state: typeRow.state, uid: agent.uid },
+    connection.data?.state,
+    enabled,
+  );
 
   return (
-    <Card>
-      <CardContent className="space-y-6 py-6">
-        <dl className="grid grid-cols-[10rem_1fr] gap-y-3 text-sm">
-          <dt className="text-muted-foreground">{t("agents.type")}</dt>
-          <dd>{agentTypeLabel(agent.type)}</dd>
-          <dt className="text-muted-foreground">{t("agents.configDir")}</dt>
-          <dd className="font-mono text-xs">{agent.config_dir}</dd>
-        </dl>
-
-        <div className="space-y-3 border-t border-border pt-4">
-          <h3 className="text-sm font-medium">{t("agents.connection.title")}</h3>
-
-          {/* The connection dropdown always renders — even with no configured
-              connections it defaults to the built-in login, never an empty
-              "no connection" state. Picking is a draft; nothing applies until
-              «确认切换». */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-connection">{t("agents.connection.label")}</Label>
-              <Select value={c.draftConn} onValueChange={c.pickConnection} disabled={c.busy}>
-                <SelectTrigger id="agent-connection" className="text-sm">
-                  <SelectValue placeholder={t("agents.connection.none")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={BUILTIN}>{t("agents.connection.builtin")}</SelectItem>
-                  {/* The VALUE is the connection's uid — what activation
-                      takes — and the LABEL is its name. */}
-                  {c.compatible.map((p) => (
-                    <SelectItem key={p.uid} value={p.uid}>
-                      {displayName(p)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Built-in login: no binding to make here, and nothing to curate
-                either — the model is chosen where the conversation is (the chat
-                picker, `/model`, or a channel's own default model). So the
-                branch offers no control at all, just that sentence. */}
-            {c.draftIsBuiltin ? (
-              <p className="text-xs text-muted-foreground sm:col-span-2">
-                {t("agents.connection.builtinModelsHint")}
-              </p>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="agent-model">{t("agents.connection.model")}</Label>
-                  <Select
-                    value={c.draftModel}
-                    onValueChange={c.pickModel}
-                    onOpenChange={(open) => open && c.introspect()}
-                    disabled={c.busy}
-                  >
-                    <SelectTrigger id="agent-model" className="text-sm">
-                      <SelectValue placeholder={t("agents.connection.none")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {c.models.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {m}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Claude Code's small/fast slot (ANTHROPIC_SMALL_FAST_MODEL); Codex
-                    has no second slot. */}
-                {c.wire === "anthropic" && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="agent-fast-model">{t("agents.connection.fastModel")}</Label>
-                    <Select
-                      value={c.draftFast}
-                      onValueChange={c.pickFast}
-                      onOpenChange={(open) => open && c.introspect()}
-                      disabled={c.busy}
-                    >
-                      <SelectTrigger id="agent-fast-model" className="text-sm">
-                        <SelectValue placeholder={t("agents.connection.none")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {c.models.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Test → confirm: a custom connection must be tested before it can be
-              switched to; built-in confirms straight away. */}
-          <div className="flex flex-wrap items-center gap-3">
-            {!c.draftIsBuiltin && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={c.runTest}
-                disabled={!c.draftModel || c.testPending}
-              >
-                {c.testPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
-                {t("settings.models.testConnection")}
-              </Button>
-            )}
-            <Button type="button" size="sm" onClick={c.confirm} disabled={!c.canConfirm || c.busy}>
-              {c.busy ? t("common.saving") : t("agents.connection.confirm")}
-            </Button>
-            {c.testResult && (
-              <span
-                role="status"
-                className={`flex items-center gap-1 text-xs ${
-                  c.testResult.ok ? "text-status-ok" : "text-destructive"
-                }`}
-              >
-                {c.testResult.ok ? (
-                  <CheckCircle2 className="size-3.5" />
-                ) : (
-                  <XCircle className="size-3.5" />
-                )}
-                {c.testResult.message}
-              </span>
-            )}
-            {c.dirty && !c.draftIsBuiltin && !c.testResult?.ok && (
-              <span className="text-xs text-muted-foreground">
-                {t("agents.connection.testFirst")}
-              </span>
-            )}
-          </div>
-
-          <p className="text-xs text-muted-foreground">{t("agents.connection.manage")}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex max-w-[920px] flex-col gap-8">
+      <OverviewConnection
+        agent={agent}
+        typeRow={typeRow}
+        state={state}
+        connection={connection.data}
+        hook={memoryOn ? hooks.data?.coffer_hook : undefined}
+        failed={connection.isError}
+        actions={actions}
+        onCheckHook={() => void hooks.refetch()}
+        checking={hooks.isFetching}
+      />
+      <OverviewSummary
+        agent={agent}
+        typeRow={typeRow}
+        disabled={!enabled}
+        notConnected={state === "not_connected"}
+      />
+      <OverviewModelSection agent={agent} />
+      <OverviewDetails agent={agent} version={typeRow.version ?? agent.version ?? null} />
+    </div>
   );
 }

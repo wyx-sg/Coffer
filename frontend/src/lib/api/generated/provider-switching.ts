@@ -4,217 +4,155 @@
  */
 
 export interface paths {
-    "/providers": {
+    "/api/v1/models/list-models": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List all provider profiles */
-        get: operations["listProviders"];
+        get?: never;
         put?: never;
         /**
-         * Create a new provider connection
-         * @description Credential source depends on `protocol`:
-         *     - For `anthropic`/`openai`, exactly one credential source must be
-         *       supplied:
-         *       - `secret_value`: the raw API key — stored to the Fernet vault under
-         *         a freshly minted opaque ref `provider/<uuid4>/key` and kept only as
-         *         a `credential_ref`.
-         *       - `credential_ref`: reuse an existing vault ref.
-         *       Supplying both or neither is rejected with 422.
-         *     - For `ollama`, the credential is OPTIONAL — supply NEITHER
-         *       `secret_value` nor `credential_ref` (an ollama connection has no
-         *       key). Supplying either is rejected with 422.
+         * List Provider Models
+         * @description List the models a provider exposes (empty + message → enter manually).
+         *
+         *     Each id comes back with a GUESSED modality so the connection's model table
+         *     pre-fills a sensible kind; the user corrects it and the curated set stores
+         *     the answer (spec provider-switching "Store a modality with each curated
+         *     model").
          */
-        post: operations["createProvider"];
+        post: operations["list_provider_models_api_v1_models_list_models_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/providers/{uid}": {
+    "/api/v1/models/test-connection": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The connection Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /** Get a single provider profile */
-        get: operations["getProvider"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete a provider profile
-         * @description If the profile owns its `credential_ref` (no other profile cites it),
-         *     the Fernet vault entry is also deleted. Guarded by
-         *     `find_credential_citations`.
-         */
-        delete: operations["deleteProvider"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a provider profile
-         * @description All fields are optional. Supplying `secret_value` rotates the stored
-         *     secret (overwrites the vault entry at the existing `credential_ref`).
-         *     `credential_ref` is immutable. `protocol` may be corrected, but not
-         *     while the connection is active: that is refused with 409
-         *     `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` (spec provider-switching
-         *     "Refuse to move the wire of a live connection").
-         */
-        patch: operations["updateProvider"];
-        trace?: never;
-    };
-    "/providers/{uid}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection to activate, by uid. */
-                uid: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
-         * Activate (switch to) a provider profile
-         * @description Makes this connection the active one for every AGENT TYPE its scope
-         *     reaches (at most one active connection per agent type; spec
-         *     provider-switching "Keep at most one active connection per agent
-         *     type", "Activate a connection into the agents its scope reaches").
-         *
-         *     Projects first, into every ENABLED registered agent the scope reaches,
-         *     choosing the writer by agent type rather than by protocol:
-         *     - `claude_code` → `~/.claude/settings.json` (anthropic shape:
-         *       `apiKeyHelper = "coffer provider key --connection-uid <uid>"` + env keys)
-         *     - `codex` → `~/.codex/config.toml` (model + model_providers.coffer)
-         *
-         *     Then clears `is_active` on the connections that held those agent types
-         *     (de-projecting each from the agents this one does not cover) and sets
-         *     it on this one, in sequential updates serialised by the single-process
-         *     daemon. A failed projection aborts the switch with the registry
-         *     unchanged.
-         *
-         *     If no agent the scope reaches is registered, the connection is still
-         *     activated and the response lists those agent types in `skipped` — NOT
-         *     an error.
-         *
-         *     An `ollama` connection is internal-only: it is refused with 409
-         *     `PROVIDER_INTERNAL_ONLY`, never becomes `is_active`, and no native
-         *     config is written.
-         *
-         *     Emits a `PROVIDER_SWITCHED` audit event with details
-         *     `{from, to, protocol, agents: [...projected...]}`.
+         * Test Connection
+         * @description Probe a chat provider with a minimal request; 200 with ok=true/false.
          */
-        post: operations["activateProvider"];
+        post: operations["test_connection_api_v1_models_test_connection_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/providers/{uid}/internal-default": {
+    "/api/v1/providers": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The connection to make the internal-engine default, by uid. */
-                uid: string;
-            };
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Providers
+         * @description List all provider profiles.
+         */
+        get: operations["list_providers_api_v1_providers_get"];
+        put?: never;
+        /**
+         * Create Provider
+         * @description Create a provider profile (422 when the secret source is invalid).
+         */
+        post: operations["create_provider_api_v1_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/detect-local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
-         * Set a connection as Coffer's internal-engine default
-         * @description Marks this connection as the one Coffer's own internal engine borrows
-         *     for its endpoint and key. At most one connection globally is the
-         *     internal default; setting one clears the previous one (sequential
-         *     clear-then-set, serialised by the single-process daemon), and the
-         *     database enforces the same invariant against every other writer.
-         *
-         *     Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
-         *     `{from, to}` and returns the updated `ProviderOut`. It also notifies the
-         *     engine, which applies its own rule about the model it was paired with
-         *     (spec internal-engine "Drop the engine model when its connection
-         *     moves"); the engine's own settings live under
-         *     `/api/v1/internal-engine-config` and are not this document's.
+         * Detect Local
+         * @description Which local model runtime answers where (spec provider-switching
+         *     "Detect a local model runtime without changing it"). Read-only probes of
+         *     loopback addresses only; nothing is pulled or loaded. A non-loopback URL
+         *     is refused as 422.
          */
-        post: operations["setInternalDefaultProvider"];
+        post: operations["detect_local_api_v1_providers_detect_local_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/providers/{uid}/transcribe-default": {
+    "/api/v1/providers/model-switch/apply": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The connection to transcribe speech on, by uid. */
-                uid: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
-         * Set the connection Coffer transcribes speech on
-         * @description The twin of `internal-default`, and a SECOND flag rather than a reuse of
-         *     it: the two are different models, and a gateway that serves chat
-         *     completions commonly serves no `/audio/transcriptions` at all, so
-         *     borrowing the engine's connection would aim every voice message at a
-         *     404. Nothing falls back between them — with no connection marked here,
-         *     Coffer transcribes nothing and hands the agent the audio file
-         *     untouched.
-         *
-         *     At most one connection globally carries the flag; setting one clears the
-         *     previous one (sequential clear-then-set, serialised by the
-         *     single-process daemon).
-         *
-         *     Emits a `PROVIDER_TRANSCRIBE_DEFAULT_SET` audit event with details
-         *     `{from, to}` and returns the updated `ProviderOut`. It also notifies the
-         *     engine, which applies its own rule about the model it was paired with;
-         *     the model itself lives under `/api/v1/internal-engine-config` and is not
-         *     this document's.
+         * Apply Model Switch
+         * @description Write the switch. 409 ``CONFIG_FILE_STALE`` when a file named in ``seen``
+         *     changed on disk after the preview was made: nothing is written then.
          */
-        post: operations["setTranscribeDefaultProvider"];
+        post: operations["apply_model_switch_api_v1_providers_model_switch_apply_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/providers/active-key/{wire}": {
+    "/api/v1/providers/model-switch/preview": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Wire whose agent's active connection key to resolve. `ollama` and `unknown` map to no agent, so they always answer 404. */
-                wire: components["schemas"]["Protocol"];
-            };
+            path?: never;
             cookie?: never;
         };
-        /**
-         * Resolve the active provider's API key for a wire format
-         * @description Returns the decrypted API key of the connection active for the agent
-         *     behind `wire`, over the local token-protected daemon API. The legacy
-         *     form, kept for `settings.json` files written before the projected
-         *     helper named the connection
-         *     (`apiKeyHelper = "coffer provider key --wire anthropic"`); new
-         *     projections write the uid helper served by `GET /providers/{uid}/key`.
-         *     Not audited — `apiKeyHelper` polls it frequently. 404 when nothing is
-         *     active for that wire.
-         */
-        get: operations["activeProviderKey"];
+        get?: never;
         put?: never;
+        /**
+         * Preview Model Switch
+         * @description The files this switch would change, with their diffs; nothing is written.
+         *     409 when the connection or agent is off or the connection does not reach the agent.
+         */
+        post: operations["preview_model_switch_api_v1_providers_model_switch_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Providers
+         * @description Reorder the Model providers list — the order fallbacks are tried in
+         *     (spec provider-switching "Order providers, and fail over in that order").
+         *     422 unless ``uids`` names every provider exactly once.
+         */
+        put: operations["reorder_providers_api_v1_providers_order_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -222,35 +160,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/{uid}/key": {
+    "/api/v1/providers/price-list": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The connection whose key to resolve, by uid. */
-                uid: string;
-            };
+            path?: never;
             cookie?: never;
         };
         /**
-         * Resolve a specific connection's API key
-         * @description Returns the decrypted API key of one connection. This is what Claude
-         *     Code's projected
-         *     `apiKeyHelper = "coffer provider key --connection-uid <uid>"` invokes,
-         *     so the agent always reads exactly the activated connection's key (no
-         *     wire+active mismatch). By uid because that helper line is written once
-         *     into a file Coffer does not own and then read on every turn, for as
-         *     long as the connection lives — a name in it would stop resolving the
-         *     moment the user renamed the connection, and re-projecting on every
-         *     rename is what the provider-specific rename route used to be for. Not
-         *     audited — `apiKeyHelper` polls it frequently. 404 when the connection
-         *     is absent, and 404 `NO_ACTIVE_PROVIDER` (the wire form's answer) when
-         *     it reaches no agent — disabled, scoped to no agent, or keyless
-         *     (ollama) — so a helper line still written into an agent's config stops
-         *     receiving the key the moment the user switches the connection off. The
-         *     secret never appears in an error body.
+         * Get Price List
+         * @description The price list in use and its refresh.
          */
-        get: operations["connectionKey"];
+        get: operations["get_price_list_api_v1_providers_price_list_get"];
+        /**
+         * Put Price List
+         * @description Turn the daily refresh on or off on this machine. Nothing is fetched now;
+         *     the next tick of the refresh reads the setting.
+         */
+        put: operations["put_price_list_api_v1_providers_price_list_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/use-builtin/{agent_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use Builtin Provider
+         * @description Switch the agent of this type back to its OWN built-in login: remove
+         *     Coffer's projection from its native config and clear its connection. Only
+         *     this agent changes. Idempotent — a no-op when it already runs built-in.
+         */
+        post: operations["use_builtin_provider_api_v1_providers_use_builtin__agent_type__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/{uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Provider
+         * @description Get one provider profile (404 if absent).
+         */
+        get: operations["get_provider_api_v1_providers__uid__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Provider
+         * @description Delete a provider profile (404 if absent).
+         */
+        delete: operations["delete_provider_api_v1_providers__uid__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Provider
+         * @description Partially update a provider profile.
+         */
+        patch: operations["update_provider_api_v1_providers__uid__patch"];
+        trace?: never;
+    };
+    "/api/v1/providers/{uid}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Provider
+         * @description Switch one agent onto this connection: project it into that agent's
+         *     native config and record it on the agent. Nothing else changes (409
+         *     ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+         *     scope does not name the agent).
+         */
+        post: operations["activate_provider_api_v1_providers__uid__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/{uid}/delete-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Delete Preview
+         * @description The agent config changes deleting this profile would make (404 if absent);
+         *     nothing is written.
+         */
+        get: operations["delete_preview_api_v1_providers__uid__delete_preview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -259,39 +279,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/use-builtin/{wire}": {
+    "/api/v1/providers/{uid}/internal-default": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Wire whose agent(s) to switch back to built-in. `ollama` and `unknown` map to no agent, so they answer 200 with nothing undone. */
-                wire: components["schemas"]["Protocol"];
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
-         * Switch a wire's agent(s) back to their built-in login
-         * @description Removes Coffer's projected keys from every ENABLED matching agent's
-         *     native config (the inverse of activate) and clears `is_active` on the
-         *     wire's active connection, so the agent runs on its OWN built-in
-         *     model/login. A Coffer LLM connection is an optional override, not a
-         *     prerequisite (spec provider-switching "Revert an agent to its built-in
-         *     login").
+         * Set Internal Default Provider
+         * @description Make this connection Coffer's internal-engine default (≤1 globally).
          *
-         *     Idempotent — a no-op when nothing is active for the wire. Emits a
-         *     `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
-         *     only when something changed.
+         *     Clears the flag on every other connection first, so setting a new default
+         *     moves it off the previous one. 404 if the connection is absent.
          */
-        post: operations["useBuiltinProvider"];
+        post: operations["set_internal_default_provider_api_v1_providers__uid__internal_default_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/models/list-models": {
+    "/api/v1/providers/{uid}/prices": {
         parameters: {
             query?: never;
             header?: never;
@@ -301,17 +312,20 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * List the models a provider exposes
-         * @description An empty list with a `message` means the endpoint does not advertise a catalogue — the editor then asks the user to type a model id.
+         * Model Prices
+         * @description Each model's price on this provider, with its source: You set, From
+         *     <provider>, Bundled or local — or none (spec provider-switching "Resolve
+         *     each model's price from the provider, its API, or the bundled list").
+         *     Read-only; nothing is fetched from the network.
          */
-        post: operations["listProviderModels"];
+        post: operations["model_prices_api_v1_providers__uid__prices_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/models/test-connection": {
+    "/api/v1/providers/{uid}/transcribe-default": {
         parameters: {
             query?: never;
             header?: never;
@@ -321,17 +335,104 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Probe a connection with a minimal request
-         * @description Always 200 — a failed probe is `ok: false` with a message, not an HTTP error, because "this key is wrong" is a normal answer to this question.
+         * Set Transcribe Default Provider
+         * @description Make this connection the one Coffer transcribes speech on (≤1 globally).
+         *
+         *     The twin of the route above, and deliberately a SECOND flag rather than a
+         *     reuse of it: the two are different models, and a chat gateway commonly
+         *     serves no ``/audio/transcriptions`` at all. Nothing falls back between
+         *     them — with no connection marked here, Coffer transcribes nothing and hands
+         *     the agent the audio file untouched. 404 if the connection is absent.
          */
-        post: operations["testProviderConnection"];
+        post: operations["set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/models/detect-protocol": {
+    "/api/v1/proxy/routes/{agent_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Route
+         * @description The agent's provider and its fallbacks, as the proxy would be served now.
+         */
+        get: operations["proxy_route_api_v1_proxy_routes__agent_uid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Status
+         * @description The supervised proxy's state, as the daemon last saw it.
+         */
+        get: operations["proxy_status_api_v1_proxy_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/tokens/{agent_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Token
+         * @description The agent's local proxy token, minted on first ask. 404 for an agent
+         *     this machine does not have, so a stale helper fails closed.
+         */
+        get: operations["proxy_token_api_v1_proxy_tokens__agent_uid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/tokens/{agent_uid}/hint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Token Hint
+         * @description The last four characters of the agent's token, minted on first ask.
+         */
+        get: operations["proxy_token_hint_api_v1_proxy_tokens__agent_uid__hint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/tokens/{agent_uid}/rotate": {
         parameters: {
             query?: never;
             header?: never;
@@ -341,10 +442,62 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Classify an endpoint's wire protocol
-         * @description Classifies an endpoint's wire by asking it what it speaks. The add-connection dialog asks for the protocol (a preset, or a manual selector) rather than calling this; no web surface calls it today.
+         * Rotate Proxy Token
+         * @description Replace the agent's token; the old one is refused from the next push,
+         *     which happens before this answers.
          */
-        post: operations["detectProviderProtocol"];
+        post: operations["rotate_proxy_token_api_v1_proxy_tokens__agent_uid__rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Export Csv */
+        get: operations["usage_export_csv_api_v1_usage_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Requests */
+        get: operations["usage_requests_api_v1_usage_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Summary */
+        get: operations["usage_summary_api_v1_usage_summary_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -355,249 +508,818 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ListModelsIn: {
-            provider: string;
-            base_url?: string | null;
-            credential_ref?: string | null;
-            /** @description Inline secret, to fetch before the connection is saved. */
-            secret_value?: string | null;
-        };
         /**
-         * @description Which KIND of model an id names. A provider endpoint serves more than chat models — embedding, image, video and audio models live on the same endpoint — so a curated entry says which it is and a picker asks for the kind it needs (see "Store a modality with each curated model").
-         * @default text
-         * @enum {string}
+         * ActivateIn
+         * @description Which agent to switch onto the connection. There is one agent per type
+         *     (spec agent-registry "Keep one agent per type, named by it"), so the type
+         *     names it; the switch changes that agent and no other.
          */
-        Modality: "text" | "embedding" | "image" | "video" | "audio";
-        /** @description One curated model on a connection: an opaque vendor id plus the modality Coffer stores for it. The STORED modality is the truth — Coffer infers one only in the one-shot migration over plain-string entries and in endpoint introspection, both correctable from the connection editor, and never in a load-time shim. */
-        ProviderModel: {
-            /** @description Opaque model id, passed verbatim to the vendor and never checked against a list of model names Coffer writes down. */
-            id: string;
-            modality?: components["schemas"]["Modality"];
-        };
-        ProviderModelsOut: {
-            /** @description The ids the endpoint reported, each with an INFERRED modality (see "Offer only text models to chat pickers") so the connection editor can pre-fill a sensible value. The inference is a suggestion the user may correct — what is stored on the connection is the truth, never re-derived. */
-            models: components["schemas"]["ProviderModel"][];
-            /** @default  */
-            message: string;
-        };
-        TestConnectionIn: {
-            provider: string;
-            model: string;
-            base_url?: string | null;
-            credential_ref?: string | null;
-            /** @description Inline secret, to test before the connection is saved. */
-            secret_value?: string | null;
-        };
-        TestResultOut: {
-            ok: boolean;
-            message: string;
-            detail?: {
-                [key: string]: unknown;
-            };
-        };
-        DetectProtocolIn: {
-            base_url?: string | null;
-            credential_ref?: string | null;
-            secret_value?: string | null;
-        };
-        DetectProtocolOut: {
-            /** @description "anthropic" | "openai" | "ollama" | "unknown" */
-            protocol: string;
+        ActivateIn: {
+            agent_type: components["schemas"]["AgentType"];
         };
         /**
-         * @description The connection's upstream wire, chosen when the connection is added (a
-         *     preset fills it, or the user picks it). It does NOT choose the agent a
-         *     connection projects into — that is the framework per-agent `scope`,
-         *     and the writer is chosen by agent type. The wire drives how the
-         *     endpoint is introspected, whether a key is required, the scope a NEW
-         *     connection starts with, and the wire→agent mapping of `use-builtin`
-         *     and the legacy `active-key` route (`anthropic` → Claude Code,
-         *     `openai` → Codex):
-         *     - `ollama` → internal-only; reaches NO agent and cannot be activated.
-         *       Used solely by Coffer's internal engine when this connection is the
-         *       internal default. Has no API key, so its `credential_ref` is absent.
-         *     - `unknown` → the wire could not be classified; the connection starts
-         *       unscoped, open to every agent, and the user decides.
-         * @enum {string}
+         * ActivateOut
+         * @description Result of switching one agent onto a connection.
          */
-        Protocol: "anthropic" | "openai" | "ollama" | "unknown";
-        /** @description A provider connection — a credentialed endpoint `{protocol, base_url, credential_ref}`. Never includes the raw secret. The model lives apart from the connection (spec provider-switching "Take projected model keys from the agent's binding") and is chosen at the point of use. */
-        ProviderOut: {
-            /**
-             * @description The connection Resource's immutable identity, and what every route in this document addressing a connection takes — including the one the projected `apiKeyHelper` calls on every turn.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            /** @description A mutable label, unique within kind `provider`, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. Display only: nothing Coffer writes into another tool's config spells it any more, which is what let the provider-specific rename route go. */
-            name: string;
-            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
-            title?: string | null;
+        ActivateOut: {
+            /** Activated */
+            activated: string;
+            /** Agent */
+            agent: string;
+            agent_type: components["schemas"]["AgentType"];
             protocol: components["schemas"]["Protocol"];
-            /** @description The upstream LLM endpoint URL. */
-            base_url: string;
-            /** @description Fernet vault reference for the API key. Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`. An opaque address — `provider/<random>/key` for a secret Coffer minted. Deliberately not derived from the connection's name: that made the name a key, so a rename had to move the secret too. Ownership is decided by citation count, never by the ref's shape, and refs already minted under the older `provider/<name>/key` spelling keep working as the plain strings they always were. Null for an ollama connection (no API key). */
-            credential_ref: string | null;
-            /** @description READ-ONLY. The CONFIGURED agents this connection covers, derived from the resource's framework-level per-agent `scope` (ADR per-agent-resource-scope) intersected with the agent types Coffer knows. Empty for a keyless (ollama) connection, which covers no agent even in principle. It is deliberately NOT narrowed by `enabled` — that rides the same payload, so a client wanting the effective projection intersects the two itself, while a management surface can still render the agent list of a connection the user switched off. The projection writer is chosen by agent type, not protocol; the Agent Overview picker filters on this AND on `enabled`. To CHANGE it, edit the scope (`PUT /api/v1/resources/{uid}/scope`). */
-            compatible_agents: components["schemas"]["AgentType"][];
-            /** @description The curated set of models this connection OFFERS downstream — which of the endpoint's models the user intends to use, each with the modality saying WHICH KIND of model it is. EMPTY means no restriction (every model the endpoint serves), which is the default. Not a chosen model: the choice still happens at the point of use (spec provider-switching "Curate the models a connection offers"). Ids are opaque and passed verbatim to the vendor. The modality returned here is the STORED one — nothing re-derives it on read. */
-            models: components["schemas"]["ProviderModel"][];
-            /** @description Whether this connection is the active override for its compatible agents. At most one active connection per agent type. Always false for ollama (internal-only, never projected). */
-            is_active: boolean;
-            /** @description Whether this connection is Coffer's internal-engine default. At most one connection globally has internal_default=true. */
-            internal_default: boolean;
-            /** @description Whether Coffer transcribes speech on this connection. At most one connection globally has transcribe_default=true. Separate from internal_default and with no fallback between them: the endpoint that serves chat completions commonly serves no transcription endpoint at all. */
-            transcribe_default: boolean;
-            /** @description The user's switch on the resource itself. A disabled connection projects into nothing and resolves no key — by uid (`GET /providers/{uid}/key`, the form a projected `apiKeyHelper` calls) as well as by wire — while still reporting the reach it is configured for (see `compatible_agents`). Changed through the shared resource enable/disable surface, not here. */
-            enabled: boolean;
-            /** @description The connection's own description, as stored on the resource row. */
-            description: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        ProviderCreateRequest: {
-            /** @description Profile name; must pass `validate_name`. */
-            name: string;
-            protocol: components["schemas"]["Protocol"];
-            /** @description The upstream LLM endpoint URL. */
-            base_url: string;
-            /** @description Reuse an existing vault ref. Mutually exclusive with `secret_value`. For anthropic/openai/unknown exactly one of the two must be supplied; for ollama supply neither. */
-            credential_ref?: string | null;
-            /** @description Raw API key. Stored to the vault under a freshly minted opaque ref `provider/<uuid4>/key`. Mutually exclusive with `credential_ref`. For anthropic/openai/unknown exactly one of the two must be supplied; for ollama supply neither. Never echoed in any response. */
-            secret_value?: string | null;
-            /** @description Curate which of the endpoint's models this connection offers downstream, each entry naming its modality. Null ⇒ empty ⇒ no restriction. Ids are opaque strings (non-blank, deduplicated preserving order, at most 200 of at most 200 characters); they are never checked against a list of model names Coffer writes down. An omitted `modality` stores `text`. */
-            models?: components["schemas"]["ProviderModel"][] | null;
-            /** @description Free text stored on the resource row. */
-            description?: string | null;
-        };
-        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong. Two things key off it: the ollama internal-only rule, and the wire→agent mapping `use-builtin` and the legacy `active-key` route take — which is why it cannot move while the connection is active (409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`). Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/{uid}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching "Take projected model keys from the agent's binding"); `models` only curates which of the endpoint's models it offers. */
-        ProviderPatchRequest: {
-            protocol?: components["schemas"]["Protocol"];
-            base_url?: string | null;
-            /** @description Rotate the stored secret. Overwrites the vault entry at the current `credential_ref`. Never echoed in any response. */
-            secret_value?: string | null;
-            /** @description Replace the curated offered set as a whole (no merging). Null ⇒ leave unchanged; `[]` clears the restriction, so every model the endpoint serves is offered again. Each entry carries its own modality; an omitted `modality` stores `text`. */
-            models?: components["schemas"]["ProviderModel"][] | null;
-            /** @description Free text stored on the resource row. */
-            description?: string | null;
         };
         /**
-         * @description A coding agent a connection can project into.
+         * AgentType
+         * @description Supported agent products.
          * @enum {string}
          */
         AgentType: "claude_code" | "codex";
-        /** @description Result of a successful activate operation. */
-        ActivateOut: {
-            /** @description Name of the profile that is now active. */
-            activated: string;
-            protocol: components["schemas"]["Protocol"];
-            /** @description Agent names whose native config was updated. */
-            projected: string[];
-            /** @description Agent types in the connection's reach that have no enabled registered agent here to project into. Not an error — the profile is still activated. (A genuine native-config write failure aborts the switch with a 5xx and leaves the registry unchanged, rather than skipping.) */
-            skipped: string[];
+        /**
+         * CuratedPrice
+         * @description What the user says this connection charges for a model, in USD per
+         *     million tokens (web search per thousand requests). Relays and resellers
+         *     price differently from the vendor, so a connection's own price wins over
+         *     every other source when usage is costed (spec provider-switching "Resolve
+         *     each model's price from the provider, its API, or the bundled list"). A cache category
+         *     left out is charged at the input rate, so an estimate errs high.
+         */
+        CuratedPrice: {
+            /** Cache Read */
+            cache_read?: number | null;
+            /** Cache Write 1H */
+            cache_write_1h?: number | null;
+            /** Cache Write 5M */
+            cache_write_5m?: number | null;
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+            /** Web Search */
+            web_search?: number | null;
         };
-        /** @description Result of switching a wire back to the agent's built-in login. */
+        /**
+         * DeactivateOut
+         * @description Result of switching an agent type back to its own built-in login.
+         */
         DeactivateOut: {
-            protocol: components["schemas"]["Protocol"];
-            /** @description Agent names whose Coffer projection was removed. */
+            agent_type: components["schemas"]["AgentType"];
+            /** Deprojected */
             deprojected: string[];
-            /** @description The connection that was active before, or null if none. */
-            previous?: string | null;
+            /** Previous */
+            previous: string | null;
         };
+        /** DeletePreviewAgentOut */
+        DeletePreviewAgentOut: {
+            /** Agent Name */
+            agent_name: string;
+            agent_type: components["schemas"]["AgentType"];
+            /** Agent Uid */
+            agent_uid: string;
+            /** Files */
+            files: components["schemas"]["DeletePreviewFileOut"][];
+        };
+        /**
+         * DeletePreviewFileOut
+         * @description One agent file that deleting the connection would change.
+         */
+        DeletePreviewFileOut: {
+            /** Diff */
+            diff: components["schemas"]["DeletePreviewLine"][];
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "modify" | "remove";
+            /** Path */
+            path: string;
+        };
+        /** DeletePreviewLine */
+        DeletePreviewLine: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "context" | "add" | "remove" | "hunk";
+            /** New No */
+            new_no: number | null;
+            /** Old No */
+            old_no: number | null;
+            /** Text */
+            text: string;
+        };
+        /**
+         * DetectLocalIn
+         * @description Probe one loopback URL, or — with none — each runtime's default port.
+         */
+        DetectLocalIn: {
+            /** Base Url */
+            base_url?: string | null;
+        };
+        /** DetectLocalOut */
+        DetectLocalOut: {
+            /** Found */
+            found: components["schemas"]["LocalRuntimeOut"][];
+            handoff: components["schemas"]["HandoffOut"] | null;
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * GroupBy
+         * @enum {string}
+         */
+        GroupBy: "model" | "agent" | "day";
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
+        /** ListModelsIn */
+        ListModelsIn: {
+            /** Base Url */
+            base_url?: string | null;
+            /** Provider */
+            provider: string;
+            /** Secret Ref */
+            secret_ref?: string | null;
+            /** Secret Value */
+            secret_value?: string | null;
+        };
+        /** LocalModelOut */
+        LocalModelOut: {
+            /** Context Window */
+            context_window: number | null;
+            /** Id */
+            id: string;
+            /** Tools */
+            tools: boolean | null;
+        };
+        /**
+         * LocalRuntime
+         * @description What detection found at a local connection's endpoint.
+         */
+        LocalRuntime: {
+            runtime: components["schemas"]["Runtime"];
+            /** Version */
+            version?: string | null;
+            /** Wires */
+            wires?: string[];
+        };
+        /** LocalRuntimeOut */
+        LocalRuntimeOut: {
+            /** Base Url */
+            base_url: string;
+            /** Models */
+            models: components["schemas"]["LocalModelOut"][];
+            runtime: components["schemas"]["LocalRuntime"];
+        };
+        /**
+         * Modality
+         * @description The kind of output a model produces.
+         * @enum {string}
+         */
+        Modality: "text" | "embedding" | "image" | "video" | "audio";
+        /**
+         * ModelPriceOut
+         * @description One model's price on a provider and where it came from (spec
+         *     provider-switching "Resolve each model's price from the provider, its API,
+         *     or the bundled list"). USD per million tokens; ``source`` ``None`` means no
+         *     price is known and every rate is ``None`` — shown as "—", never as zero.
+         *     ``source_name`` names the provider whose API reported it (``provider``) or
+         *     the price list's provider (``bundled``). ``tiered``: the rates shown are
+         *     the base tier; past a threshold of input tokens the request pays more.
+         */
+        ModelPriceOut: {
+            /** Cache Read */
+            cache_read: number | null;
+            /** Cache Write 1H */
+            cache_write_1h: number | null;
+            /** Cache Write 5M */
+            cache_write_5m: number | null;
+            /** Input */
+            input: number | null;
+            /** Model */
+            model: string;
+            /** Output */
+            output: number | null;
+            source: components["schemas"]["PriceSource"] | null;
+            /** Source Name */
+            source_name: string | null;
+            /** Source Updated */
+            source_updated: string | null;
+            /**
+             * Tiered
+             * @default false
+             */
+            tiered: boolean;
+        };
+        /**
+         * ModelPricesIn
+         * @description The models whose price on this provider to resolve.
+         */
+        ModelPricesIn: {
+            /** Models */
+            models: string[];
+        };
+        /** ModelPricesOut */
+        ModelPricesOut: {
+            /** Bundled Version */
+            bundled_version: string;
+            /** Prices */
+            prices: components["schemas"]["ModelPriceOut"][];
+        };
+        /**
+         * ModelSwitchFile
+         * @description One file the switch changes (or would change).
+         */
+        ModelSwitchFile: {
+            /** Added */
+            added: number;
+            /** Diff */
+            diff: components["schemas"]["ModelSwitchLine"][];
+            /** Fingerprint */
+            fingerprint: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "modify" | "remove";
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+        };
+        /**
+         * ModelSwitchIn
+         * @description What the agent page's Change model dialog asks for.
+         *
+         *     ``connection_uid`` ``null`` is the agent's own built-in login: no model,
+         *     effort or tiers are written, and Coffer removes only the keys it wrote.
+         *     ``seen`` is sent only to apply: each previewed file's path with the
+         *     fingerprint the preview read, so a file edited since is refused.
+         */
+        ModelSwitchIn: {
+            agent_type: components["schemas"]["AgentType"];
+            /** Connection Uid */
+            connection_uid?: string | null;
+            /** Effort */
+            effort?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Seen */
+            seen?: {
+                [key: string]: string;
+            } | null;
+            /** Tier Models */
+            tier_models?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** ModelSwitchLine */
+        ModelSwitchLine: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "context" | "add" | "remove" | "hunk";
+            /** New No */
+            new_no: number | null;
+            /** Old No */
+            old_no: number | null;
+            /** Text */
+            text: string;
+        };
+        /** ModelSwitchOut */
+        ModelSwitchOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Files */
+            files: components["schemas"]["ModelSwitchFile"][];
+        };
+        /** PriceListIn */
+        PriceListIn: {
+            /** Refresh */
+            refresh: boolean;
+        };
+        /**
+         * PriceListOut
+         * @description The price list pricing reads now, and its daily refresh (spec
+         *     provider-switching "Refresh the bundled price list in the background").
+         */
+        PriceListOut: {
+            /** Last Attempt At */
+            last_attempt_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "bundled" | "refreshed";
+            /** Pinned Off */
+            pinned_off: boolean;
+            /** Refresh */
+            refresh: boolean;
+            /** Updated */
+            updated: string | null;
+            /** Version */
+            version: string;
+        };
+        /**
+         * PriceSource
+         * @description Where a model's price came from, in the order they are consulted.
+         * @enum {string}
+         */
+        PriceSource: "user" | "provider" | "bundled" | "local";
+        /**
+         * Protocol
+         * @description Upstream wire protocol a connection speaks (detected, not user-typed).
+         *
+         *     ``anthropic`` / ``openai`` / ``unknown`` connections start UNSCOPED — open
+         *     to every agent, including one registered tomorrow — and the user narrows
+         *     from there; ``unknown`` means the probe was inconclusive, and the
+         *     conservative answer to that is "ask", not "guess". ``ollama`` is
+         *     internal-only: it starts scoped to NO agent and is used solely by Coffer's
+         *     internal LLM engine.
+         * @enum {string}
+         */
+        Protocol: "anthropic" | "openai" | "ollama" | "unknown";
+        /**
+         * ProviderCreate
+         * @description Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
+         *     supply EXACTLY one of ``secret_value`` / ``secret_ref``; an ``ollama``
+         *     connection has no key, so supply neither. WHICH agents the connection
+         *     projects into is not set here: the new connection starts on the wire's own
+         *     default scope and is re-targeted through the framework's scope surface
+         *     (``PUT /api/v1/resources/{uid}/scope``), the same one every scoped
+         *     kind uses. ``models`` curates which of the endpoint's models this connection
+         *     offers downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction).
+         */
+        ProviderCreate: {
+            /** Base Url */
+            base_url: string;
+            /** Description */
+            description?: string | null;
+            local_runtime?: components["schemas"]["LocalRuntime"] | null;
+            /** Models */
+            models?: components["schemas"]["ProviderModel"][] | null;
+            /** Name */
+            name: string;
+            protocol: components["schemas"]["Protocol"];
+            /** Secret Ref */
+            secret_ref?: string | null;
+            /** Secret Value */
+            secret_value?: string | null;
+        };
+        /**
+         * ProviderDeletePreviewOut
+         * @description What deleting a connection does to the agents running on it.
+         */
+        ProviderDeletePreviewOut: {
+            /** Agents */
+            agents: components["schemas"]["DeletePreviewAgentOut"][];
+        };
+        /**
+         * ProviderListOut
+         * @description Every connection in Model providers list order — which is also the
+         *     order the model proxy tries fallbacks in.
+         */
         ProviderListOut: {
+            /** Providers */
             providers: components["schemas"]["ProviderOut"][];
         };
-        /** @description A connection's decrypted API key — the one named by uid, or the one active for a wire — served for Claude Code's apiKeyHelper. Never logged or audited. */
-        ActiveKeyOut: {
-            /** @description The decrypted provider API key. */
-            value: string;
-        };
-        /** @description The app-wide error envelope `{error: {code, message, details}}`. */
-        ErrorOut: {
-            error: {
-                /** @description Machine-readable error code. */
-                code: string;
-                /** @description Human-readable description. */
-                message: string;
-                /** @description Optional structured error details. */
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
-        };
-    };
-    responses: {
-        /** @description Missing or invalid X-Coffer-Token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Malformed request body or query parameters */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Provider profile not found */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
+        /**
+         * ProviderModel
+         * @description One model on a connection: an opaque id plus what KIND of model it is.
+         *
+         *     The same shape is used both ways — the curated entries a connection stores
+         *     and the ids endpoint introspection discovers — so the connection editor can
+         *     round-trip a discovered model into the curated set without reshaping it.
+         *     ``modality`` defaults to ``text``, the kind every curated set held before
+         *     modalities existed.
+         */
+        ProviderModel: {
+            /** Context Window */
+            context_window?: number | null;
+            /** Default Effort */
+            default_effort?: string | null;
+            /** Effort Levels */
+            effort_levels?: string[] | null;
+            /** Id */
+            id: string;
+            /** @default text */
+            modality?: components["schemas"]["Modality"];
+            price?: components["schemas"]["CuratedPrice"] | null;
         };
         /**
-         * @description A resource of kind `provider` with this name already exists
-         *     (`RESOURCE_ALREADY_EXISTS`). The kind-agnostic resource routes
-         *     (`POST /api/v1/resources`, `PATCH /api/v1/resources/{uid}`) also answer
-         *     409 `PROVIDER_INTERNAL_DEFAULT_TAKEN` when the write would flag a second
-         *     internal-engine default; `POST /providers/{uid}/internal-default` is the
-         *     route that moves the flag.
+         * ProviderModelsOut
+         * @description What an endpoint reports it serves, each id tagged with the modality
+         *     Coffer INFERRED from its name — a pre-fill for the connection editor's
+         *     model table, which the user corrects. Nothing downstream reads this guess:
+         *     once an entry is curated, the stored modality is the truth.
          */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
+        ProviderModelsOut: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Models */
+            models: components["schemas"]["ProviderModel"][];
+            /**
+             * Reachable
+             * @default true
+             */
+            reachable: boolean;
         };
         /**
-         * @description Validation failure. Common cases:
-         *     - Unknown `protocol`
-         *     - For anthropic/openai: both `secret_value` and `credential_ref`
-         *       supplied, or neither
-         *     - For ollama: a `secret_value` or `credential_ref` supplied (ollama
-         *       has no key)
-         *     - `credential_ref` pattern violation
+         * ProviderOrderIn
+         * @description The new list order: every connection's uid, exactly once.
          */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
+        ProviderOrderIn: {
+            /** Uids */
+            uids: string[];
         };
-        /** @description Server error during projection (e.g. a config file write failed; a concurrent edit is the 409 `CONFIG_FILE_STALE` instead). The profile's `is_active` state reflects the transaction outcome; check the audit log for details. */
-        InternalError: {
-            headers: {
-                [name: string]: unknown;
+        /**
+         * ProviderOut
+         * @description An LLM connection as returned by the API (no secret).
+         *
+         *     ``secret_ref`` is ``None`` for ``ollama`` connections (no key).
+         *     ``compatible_agents`` is the CONFIGURED reach — the agent types this
+         *     connection's per-agent scope (ADR per-agent-resource-scope) covers among the
+         *     agents Coffer knows, not narrowed by ``enabled``, and empty for a keyless
+         *     (ollama) connection — so the UI can filter agents without re-deriving it.
+         *     It is READ-ONLY: it is reported here, and changed through the scope
+         *     surface. ``models`` is the
+         *     curated set of models this connection offers to every downstream picker, each
+         *     carrying its modality; EMPTY means no restriction — the endpoint's whole
+         *     catalogue. A picker takes the entries of the modality it serves, so a chat
+         *     dropdown never offers an embedding or image model. ``internal_default``
+         *     marks the connection Coffer's internal engine uses (at most one globally),
+         *     ``transcribe_default`` the one it transcribes speech on — a separate flag
+         *     because they are separate models and neither falls back to the other. A
+         *     connection may carry either, both or neither. Which agents run on it is not a
+         *     field here: it is each agent's ``connection_uid``.
+         *
+         *     ``uid`` is the connection's identity and what every route here takes; the
+         *     ``name`` beside it is the label, free to change through
+         *     ``PATCH /api/v1/resources/{uid}`` without anything downstream noticing. That
+         *     is the whole reason this kind no longer owns a rename operation of its own:
+         *     nothing Coffer projects into an agent's config names the connection (the
+         *     ``apiKeyHelper`` prints the agent's local proxy token), so a rename rewrites
+         *     nothing (ADR identity-is-the-uid-inside-the-file).
+         */
+        ProviderOut: {
+            /** Base Url */
+            base_url: string;
+            /** Compatible Agents */
+            compatible_agents: components["schemas"]["AgentType"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Fallback
+             * @default true
+             */
+            fallback: boolean;
+            /** Internal Default */
+            internal_default: boolean;
+            local_runtime: components["schemas"]["LocalRuntime"] | null;
+            /** Models */
+            models: components["schemas"]["ProviderModel"][];
+            /** Name */
+            name: string;
+            protocol: components["schemas"]["Protocol"];
+            /** Secret Ref */
+            secret_ref: string | null;
+            /** Title */
+            title: string | null;
+            /** Transcribe Default */
+            transcribe_default: boolean;
+            /** Uid */
+            uid: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ProviderPatch
+         * @description Partial update. ``secret_ref`` is immutable (it is the vault address
+         *     the connection owns); ``protocol`` is not — the probe that guessed the wire
+         *     can be wrong, so it is corrected in place rather than by re-entering the
+         *     connection, key and all.
+         *
+         *     The wire DOES decide one thing, though: an ``ollama`` connection covers no
+         *     agent whatever its scope says. So the correction is refused with 409
+         *     ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while an agent runs on the
+         *     connection — moving the wire under a live projection would leave the native
+         *     config already written with nothing that would ever take it off. Revert those
+         *     agents to their built-in login, patch, then switch them back. A connection no
+         *     agent runs on patches freely.
+         *
+         *     Re-targeting which agents the connection projects into is a scope edit, not
+         *     a patch field (re-target then re-activate to re-project). ``models``
+         *     replaces the curated set as a whole: ``None`` leaves it alone, ``[]`` clears
+         *     the restriction.
+         */
+        ProviderPatch: {
+            /** Base Url */
+            base_url?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Fallback */
+            fallback?: boolean | null;
+            /** Models */
+            models?: components["schemas"]["ProviderModel"][] | null;
+            protocol?: components["schemas"]["Protocol"] | null;
+            /** Secret Value */
+            secret_value?: string | null;
+        };
+        /** ProxyRouteMemberOut */
+        ProxyRouteMemberOut: {
+            /** Connection Uid */
+            connection_uid: string;
+            /** Local */
+            local: boolean;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ProxyRouteOut
+         * @description Where an agent's requests go (spec provider-switching "Order providers,
+         *     and fail over in that order"): its provider, and the providers tried next,
+         *     in order, when it fails before the first byte. ``primary`` is ``None``
+         *     while the agent runs on its own built-in login, which bypasses the proxy.
+         *     With ``model``, ``fallbacks`` holds only the providers that offer it —
+         *     failover never changes the model.
+         */
+        ProxyRouteOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Fallbacks */
+            fallbacks: components["schemas"]["ProxyRouteMemberOut"][];
+            /** Model */
+            model: string | null;
+            primary: components["schemas"]["ProxyRouteMemberOut"] | null;
+        };
+        /** ProxyStatusOut */
+        ProxyStatusOut: {
+            /** Consecutive Failures */
+            consecutive_failures: number;
+            /** Failing */
+            failing: boolean;
+            /** Last Error */
+            last_error: string | null;
+            /** Pid */
+            pid: number | null;
+            /** Port */
+            port: number;
+            /** Restarts */
+            restarts: number;
+            /** Revision */
+            revision: number | null;
+            /** Running */
+            running: boolean;
+            /** Version */
+            version: string | null;
+        };
+        /**
+         * ProxyTokenHintOut
+         * @description What the Model tab shows of an agent's token: its last four characters,
+         *     never the token.
+         */
+        ProxyTokenHintOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Last4 */
+            last4: string;
+        };
+        /** ProxyTokenOut */
+        ProxyTokenOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Token */
+            token: string;
+        };
+        /** ProxyTokenRotatedOut */
+        ProxyTokenRotatedOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Rotated */
+            rotated: boolean;
+        };
+        /**
+         * Runtime
+         * @enum {string}
+         */
+        Runtime: "ollama" | "lmstudio" | "vllm" | "llama_server";
+        /** TestConnectionIn */
+        TestConnectionIn: {
+            /** Base Url */
+            base_url?: string | null;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+            /** Secret Ref */
+            secret_ref?: string | null;
+            /** Secret Value */
+            secret_value?: string | null;
+        };
+        /** TestResultOut */
+        TestResultOut: {
+            /**
+             * Detail
+             * @default {}
+             */
+            detail: {
+                [key: string]: unknown;
             };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
+            /** Message */
+            message: string;
+            /** Ok */
+            ok: boolean;
+        };
+        /** UsageRequestListOut */
+        UsageRequestListOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Requests */
+            requests: components["schemas"]["UsageRequestOut"][];
+        };
+        /** UsageRequestOut */
+        UsageRequestOut: {
+            /** Agent Type */
+            agent_type: string | null;
+            /** Agent Uid */
+            agent_uid: string | null;
+            /** Cache Read Tokens */
+            cache_read_tokens: number | null;
+            /** Cache Write 1H Tokens */
+            cache_write_1h_tokens: number | null;
+            /** Cache Write 5M Tokens */
+            cache_write_5m_tokens: number | null;
+            /** Connection Uid */
+            connection_uid: string | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Endpoint */
+            endpoint: string;
+            /** Estimated Cost Usd */
+            estimated_cost_usd: number | null;
+            /** Failed Over */
+            failed_over: boolean;
+            /** Id */
+            id: number;
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Member */
+            member: string | null;
+            /** Model */
+            model: string | null;
+            /** Outcome */
+            outcome: string;
+            /** Output Tokens */
+            output_tokens: number | null;
+            /** Price Version */
+            price_version: string | null;
+            /** Reasoning Tokens */
+            reasoning_tokens: number | null;
+            /** Request Class */
+            request_class: string | null;
+            /** Session Id */
+            session_id: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Status */
+            status: number | null;
+            /** Stream */
+            stream: boolean;
+            /** Ttft Ms */
+            ttft_ms: number | null;
+            /** Unpriced */
+            unpriced: boolean;
+            /** Usage Known */
+            usage_known: boolean;
+            /** Web Search Requests */
+            web_search_requests: number | null;
+            /** Wire */
+            wire: string;
+        };
+        /** UsageSummaryOut */
+        UsageSummaryOut: {
+            /**
+             * Cost Is Estimate
+             * @default true
+             */
+            cost_is_estimate: boolean;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Group By */
+            group_by: string;
+            /** Price Note */
+            price_note: string;
+            /** Range */
+            range: string;
+            /** Rows */
+            rows: components["schemas"]["UsageSummaryRowOut"][];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            totals: components["schemas"]["UsageTotalsOut"];
+        };
+        /** UsageSummaryRowOut */
+        UsageSummaryRowOut: {
+            /** Agent Type */
+            agent_type: string | null;
+            /** Agent Types */
+            agent_types: string[];
+            /** Agent Uid */
+            agent_uid: string | null;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Connection Uid */
+            connection_uid: string | null;
+            /** Day */
+            day: string | null;
+            /** Key */
+            key: string;
+            /** Model */
+            model: string | null;
+            totals: components["schemas"]["UsageTotalsOut"];
+        };
+        /** UsageTotalsOut */
+        UsageTotalsOut: {
+            /** Cache Read Tokens */
+            cache_read_tokens: number;
+            /** Cache Write 1H Tokens */
+            cache_write_1h_tokens: number;
+            /** Cache Write 5M Tokens */
+            cache_write_5m_tokens: number;
+            /** Estimated Cost Usd */
+            estimated_cost_usd: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Reasoning Tokens */
+            reasoning_tokens: number;
+            /** Requests */
+            requests: number;
+            /** Unknown Usage Requests */
+            unknown_usage_requests: number;
+            /** Unpriced Requests */
+            unpriced_requests: number;
+            /** Web Search Requests */
+            web_search_requests: number;
         };
     };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -605,311 +1327,12 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listProviders: {
+    list_provider_models_api_v1_models_list_models_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderListOut"];
-                };
+            header?: {
+                "x-coffer-token"?: string | null;
             };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    createProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    getProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    deleteProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    updateProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderPatchRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` — the patch changes the wire of a connection that is active; switch its agents back to their built-in login first. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    activateProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection to activate, by uid. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActivateOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `PROVIDER_INTERNAL_ONLY` — the connection is `ollama`, which reaches no agent. `CONFIG_FILE_STALE` — an agent's native config changed on disk under the projection; nothing is written or flipped, and the refusal is audited as `provider_projection_refused`. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            500: components["responses"]["InternalError"];
-        };
-    };
-    setInternalDefaultProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection to make the internal-engine default, by uid. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    setTranscribeDefaultProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection to transcribe speech on, by uid. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    activeProviderKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Wire whose agent's active connection key to resolve. `ollama` and `unknown` map to no agent, so they always answer 404. */
-                wire: components["schemas"]["Protocol"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveKeyOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    connectionKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The connection whose key to resolve, by uid. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActiveKeyOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    useBuiltinProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Wire whose agent(s) to switch back to built-in. `ollama` and `unknown` map to no agent, so they answer 200 with nothing undone. */
-                wire: components["schemas"]["Protocol"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeactivateOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    listProviderModels: {
-        parameters: {
-            query?: never;
-            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -919,7 +1342,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The models the endpoint reported */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -928,12 +1351,32 @@ export interface operations {
                     "application/json": components["schemas"]["ProviderModelsOut"];
                 };
             };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    testProviderConnection: {
+    test_connection_api_v1_models_test_connection_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -943,7 +1386,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Probe result */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -952,28 +1395,1126 @@ export interface operations {
                     "application/json": components["schemas"]["TestResultOut"];
                 };
             };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    detectProviderProtocol: {
+    list_providers_api_v1_providers_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DetectProtocolIn"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description The detected protocol, or "unknown" */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetectProtocolOut"];
+                    "application/json": components["schemas"]["ProviderListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_provider_api_v1_providers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    detect_local_api_v1_providers_detect_local_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetectLocalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectLocalOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_model_switch_api_v1_providers_model_switch_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSwitchOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_model_switch_api_v1_providers_model_switch_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSwitchOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reorder_providers_api_v1_providers_order_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_price_list_api_v1_providers_price_list_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_price_list_api_v1_providers_price_list_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    use_builtin_provider_api_v1_providers_use_builtin__agent_type__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                agent_type: components["schemas"]["AgentType"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeactivateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_provider_api_v1_providers__uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_provider_api_v1_providers__uid__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_provider_api_v1_providers__uid__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    activate_provider_api_v1_providers__uid__activate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_preview_api_v1_providers__uid__delete_preview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDeletePreviewOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_internal_default_provider_api_v1_providers__uid__internal_default_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    model_prices_api_v1_providers__uid__prices_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelPricesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPricesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_route_api_v1_proxy_routes__agent_uid__get: {
+        parameters: {
+            query?: {
+                model?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyRouteOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_status_api_v1_proxy_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_token_api_v1_proxy_tokens__agent_uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyTokenOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_token_hint_api_v1_proxy_tokens__agent_uid__hint_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyTokenHintOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rotate_proxy_token_api_v1_proxy_tokens__agent_uid__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyTokenRotatedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_export_csv_api_v1_usage_export_csv_get: {
+        parameters: {
+            query?: {
+                /** @description today | 24h | 7d | 30d | month | custom */
+                range?: string;
+                /** @description First local day (custom range) */
+                from?: string | null;
+                /** @description Last local day, inclusive (custom range) */
+                to?: string | null;
+                /** @description model | agent | day */
+                group_by?: components["schemas"]["GroupBy"];
+                /** @description Only requests this agent type sent */
+                agent_type?: string | null;
+                /** @description Only requests this connection served */
+                connection_uid?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary as CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_requests_api_v1_usage_requests_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description The previous page's next_cursor; bound to the filters it was issued with. */
+                cursor?: string | null;
+                agent_uid?: string | null;
+                connection_uid?: string | null;
+                model?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageRequestListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_summary_api_v1_usage_summary_get: {
+        parameters: {
+            query?: {
+                /** @description today | 24h | 7d | 30d | month | custom */
+                range?: string;
+                /** @description First local day (custom range) */
+                from?: string | null;
+                /** @description Last local day, inclusive (custom range) */
+                to?: string | null;
+                /** @description model | agent | day */
+                group_by?: components["schemas"]["GroupBy"];
+                /** @description Only requests this agent type sent */
+                agent_type?: string | null;
+                /** @description Only requests this connection served */
+                connection_uid?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummaryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

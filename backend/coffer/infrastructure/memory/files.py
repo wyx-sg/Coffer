@@ -1,41 +1,24 @@
-"""Reading a partition's directory as a file tree (spec memory "Present partitions as a
-table and a file tree").
+"""Listing a partition's directory as a file tree (spec memory "Present a partition as
+its memories").
 
 The partition surface shows Coffer's own writing as it is on disk: ``MEMORY.md``,
 the ``notes/`` folder of one Markdown file per topic, and ``RETIRED.md`` when
 anything has been retired. The hidden ``.raw/`` that aggregation wrote is left
-out of the tree and refused on read (see "Cover memory management on REST and
-the CLI"): it is dozens of hash-named files of verbatim agent input that crowd
-out the notes, and it is not Coffer's answer to anything. An agent never reads
-it either — recall and delivery go through ``notes/`` alone.
+out of the tree: it is dozens of hash-named files of verbatim agent input that
+crowd out the notes, and it is not Coffer's answer to anything. An agent never
+reads it either: recall and delivery go through ``notes/`` alone.
 
-There is nothing to edit here — the whole tree is derived (see "Keep the memory
-tree derived and local") and the next pass would overwrite an edit anyway — so
-this module reads and never writes. That is also why a file's content carries no
-fingerprint: a fingerprint exists to make a later write conditional, and there
-is no write.
+The tree is derived (see "Keep the memory tree derived and local") and the next
+pass would overwrite any edit, so this module reads and never writes. Reading a
+file's text is not done here: the web page shows the tree, and a note's text
+comes from the note itself, or from the file on disk.
 
-The other hidden entries are left out and refused for a second reason: the only
-ones that occur are the ``.<name>.tmp`` files an atomic write leaves for a few
-milliseconds. Listing a half-written file as though it
-were content, or serving its truncated bytes to the preview pane, would make
-the surface lie about the partition at exactly the moment a pass is rewriting
-it.
+Every other hidden entry is left out too: the only ones that occur are the
+``.<name>.tmp`` files an atomic write leaves for a few milliseconds, which would
+show a half-written file as though it were content.
 
-Why memory grows its own reader rather than borrowing the skill kind's
-``application/skill/file_ops.py``, which walks a directory the same way: the
-import-linter contract in ``backend/pyproject.toml`` fences each kind off from
-every other, and file_ops is the skill kind's, not shared substrate. The two
-readers also want different things — skill's serves an editor and must
-fingerprint bytes and follow its own 50 MB folder cap, this one serves a
-preview over a tree of small Markdown files — so what looks like duplication
-is two short readers with different jobs, which this codebase already prefers
-to one coupling.
-
-Containment is enforced the way ``paths.check_segment`` guards a partition name
-(see "Confine reads to registered agents' memory paths"): every candidate is
-resolved and must stay inside the resolved partition directory. A symlink whose
-target escapes is skipped from the tree and refused on read, and symlinked
+Containment: every entry is resolved and must stay inside the resolved
+partition directory. A symlink whose target escapes is skipped, and symlinked
 directories are never descended into, so a cycle cannot send the walk into a
 loop.
 """
@@ -44,30 +27,12 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass, field
-
-from coffer.domain.error_base import CofferError
-from coffer.infrastructure.memory.paths import UnsafeMemoryPath
-
-#: Cap on a single read. A note is a few hundred bytes and a raw entry a few
-#: kilobytes, so this is never reached in practice; it is here so that a file
-#: something else dropped into the tree cannot make the response unbounded.
-MAX_FILE_BYTES = 256 * 1024
+from typing import Literal
 
 #: Ceiling on walk depth. A partition is two levels deep by construction, so
 #: anything near this is a tree Coffer did not build; stopping is cheaper than
 #: letting Python's own recursion limit turn it into a 500.
 MAX_TREE_DEPTH = 16
-
-
-class MemoryFileNotFound(CofferError):  # noqa: N818
-    """No readable file at that path inside the partition."""
-
-    code = "MEMORY_FILE_NOT_FOUND"
-
-    def __init__(self, partition: str, relpath: str) -> None:
-        super().__init__(f"no such file in memory partition {partition!r}: {relpath}")
-        self.partition = partition
-        self.relpath = relpath
 
 
 @dataclass
@@ -81,29 +46,12 @@ class FileNode:
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     children: list[FileNode] = field(default_factory=list)
     #: Set on a directory whose descendants were clipped at ``MAX_TREE_DEPTH``,
     #: so the surface can say the tree was cut rather than show it as empty.
     truncated: bool = False
-
-
-@dataclass(frozen=True)
-class FileContent:
-    """One file's text, or the fact that it is not text.
-
-    A file that is not valid UTF-8, or that holds a NUL byte, comes back with
-    ``binary`` set and ``content`` empty rather than with mojibake: the
-    surface renders a placeholder for it, and ``size`` still says how big the
-    thing on disk is.
-    """
-
-    path: str
-    content: str
-    truncated: bool
-    binary: bool
-    size: int
 
 
 def _is_within(path: pathlib.Path, root: pathlib.Path) -> bool:
@@ -180,65 +128,8 @@ def _is_listable(name: str) -> bool:
     return not name.startswith(".")
 
 
-def read_file(partition: str, partition_dir: pathlib.Path, relpath: str) -> FileContent:
-    """Read one file under ``partition_dir``.
-
-    ``notes/x.md``, ``MEMORY.md`` and ``RETIRED.md`` read; a path with any
-    hidden segment — ``.raw/`` included — is refused as absent, so the tree and
-    the read agree on what exists rather than the preview reaching something
-    the tree never offered.
-
-    Raises:
-        UnsafeMemoryPath: ``relpath`` resolves outside the partition — checked
-            before anything is opened, so an escape never reads a byte.
-        MemoryFileNotFound: nothing readable is there, including the case of
-            ``relpath`` naming the partition directory itself.
-    """
-    root = partition_dir.resolve()
-    candidate = (root / relpath).resolve(strict=False)
-    if not _is_within(candidate, root):
-        raise UnsafeMemoryPath(relpath, "path escapes the partition directory")
-    if candidate == root or not candidate.is_file():
-        raise MemoryFileNotFound(partition, relpath)
-    segments = candidate.relative_to(root).parts
-    if any(not _is_listable(part) for part in segments):
-        raise MemoryFileNotFound(partition, relpath)
-
-    size = candidate.stat().st_size
-    # One byte past the cap, so the read stays bounded whatever the file's true
-    # length is and that extra byte still says whether it overflowed.
-    with candidate.open("rb") as fh:
-        read = fh.read(MAX_FILE_BYTES + 1)
-    truncated = len(read) > MAX_FILE_BYTES
-    chunk = read[:MAX_FILE_BYTES] if truncated else read
-    rel = candidate.relative_to(root).as_posix()
-
-    if b"\x00" in chunk:
-        return FileContent(path=rel, content="", truncated=truncated, binary=True, size=size)
-    try:
-        text = chunk.decode("utf-8")
-    except UnicodeDecodeError:
-        if truncated:
-            # The cut may have split a trailing multi-byte sequence, which does
-            # not make the file binary — decode the valid prefix and drop the
-            # dangling bytes rather than mislabel a large text file.
-            return FileContent(
-                path=rel,
-                content=chunk.decode("utf-8", errors="ignore"),
-                truncated=True,
-                binary=False,
-                size=size,
-            )
-        return FileContent(path=rel, content="", truncated=truncated, binary=True, size=size)
-    return FileContent(path=rel, content=text, truncated=truncated, binary=False, size=size)
-
-
 __all__ = [
-    "MAX_FILE_BYTES",
     "MAX_TREE_DEPTH",
-    "FileContent",
     "FileNode",
-    "MemoryFileNotFound",
     "build_tree",
-    "read_file",
 ]

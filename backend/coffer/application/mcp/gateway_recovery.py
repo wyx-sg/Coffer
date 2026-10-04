@@ -21,6 +21,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.application.runtime.supervisor import spawn
 
 SendDownstream = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -57,7 +58,7 @@ class DegradedTracker:
     def _schedule(self) -> None:
         if self._task is not None and not self._task.done():
             return
-        self._task = asyncio.ensure_future(self._retry_loop())
+        self._task = spawn(self._retry_loop(), name="mcp-gateway-recovery")
 
     async def _retry_loop(self) -> None:
         for delay in RETRY_DELAYS:

@@ -10,14 +10,17 @@ almost all default. The fields that are not:
   skill and agent kinds do.
 - ``on_rename`` moves that folder. The row's name is the directory's name, so
   a label that changes without the directory changing with it leaves the row
-  pointing at nothing (ADR resource-identity-is-an-immutable-uid: "the three
+  pointing at nothing (ADR identity-is-the-uid-inside-the-file: "the three
   file-backed kinds get an ``on_rename`` hook ... that hook is the whole of
   what rename costs anywhere").
+- ``titled`` is False: a collection has no display title. Its heading is
+  its folder name — the one name an agent sees in the guide skill and a
+  person sees in their file manager — and what it is about is the
+  description its README opens with, editable in place.
 - ``toggleable`` is False: every collection is served to every agent, and the
   kind-agnostic enable/disable route refuses one with
   ``RESOURCE_NOT_TOGGLEABLE`` (see "Serve every collection to every agent").
-  Nobody switched one collection off — the layer as a whole is already
-  switched by its experimental feature — and a collection kept out of the
+  Nobody switched one collection off, and a collection kept out of the
   catalogue was still a directory under the root the skill tells an agent to
   grep. A collection leaves every agent's catalogue only by being deleted.
 
@@ -71,7 +74,7 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         The opposite failure policy from ``on_delete`` above, and deliberately
         so. A delete that leaves a directory behind costs disk and is logged;
         a *rename* that leaves the directory behind costs the collection — the
-        row would point at ``~/.coffer/knowledge/<new>/``, the corpus would
+        row would point at ``~/.coffer/vault/knowledge/<new>/``, the corpus would
         still be under ``<old>/``, and the layer reads the directory. So this
         hook lets its failure through, and because ``on_rename`` is pre-write
         the rename is abandoned with the row and the folder both untouched.
@@ -98,4 +101,8 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         # to every agent"), so there is no ``on_enabled_changed`` either.
         toggleable=False,
         generic_create_allowed=False,
+        # No title: a collection is shown by its folder name, with the
+        # description its README opens with (spec resource-framework "Carry an
+        # optional editable title on the kinds that have one").
+        titled=False,
     )

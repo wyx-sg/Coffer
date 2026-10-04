@@ -1,0 +1,61 @@
+""" "Push anyway" for a round that found a plaintext secret
+(spec vault-sync "Refuse to push a plaintext secret").
+
+The detection can be wrong — an example key in a document, a test value —
+and only the person can say so. "Push anyway" allows exactly the blobs the
+last round found, records who allowed which files in the audit log, and runs
+a round. A file changed since is a new blob and is read again.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from coffer.domain.audit import AuditEventType
+from coffer.domain.sync.errors import SyncNoPlaintextFound
+from coffer.domain.sync.handoffs import plaintext_handoff
+from coffer.domain.sync.rounds import RoundRecord, RoundStatus
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from coffer.application.audit_service import AuditService
+    from coffer.application.sync.round_engine import RoundEngine
+    from coffer.application.sync.round_ports import RoundHistoryPort
+
+
+class PlaintextMixin:
+    """Declares what it borrows from ``SyncService``, which assigns each."""
+
+    _engine: RoundEngine
+    _history: RoundHistoryPort
+    _audit: AuditService
+    _vault_path: Callable[[], Path]
+
+    async def run(self, *, trigger: str = "manual") -> RoundRecord:  # pragma: no cover
+        raise NotImplementedError
+
+    def plaintext_handoff(self, last: RoundRecord) -> str | None:
+        return plaintext_handoff(vault=str(self._vault_path()), findings=last.plaintext)
+
+    async def push_anyway(self, *, actor: str) -> RoundRecord:
+        """Allow what the last round found, audit it, and run a round."""
+        found = await self._history.recent(1)
+        last = found[0] if found else None
+        if last is None or last.status is not RoundStatus.PLAINTEXT_FOUND or not last.plaintext:
+            raise SyncNoPlaintextFound()
+        state = self._engine.d.state
+        await asyncio.to_thread(state.allow_plaintext, [f.blob for f in last.plaintext])
+        await self._audit.record(
+            AuditEventType.SYNC_PLAINTEXT_PUSHED.value,
+            actor=actor,
+            details={
+                "round": last.id,
+                "files": sorted({f"{f.path}:{f.line}" for f in last.plaintext}),
+            },
+        )
+        return await self.run(trigger="manual")
+
+
+__all__ = ["PlaintextMixin"]

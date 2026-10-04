@@ -8,9 +8,12 @@ module — and per Contract 5, this module must not import any skill code.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Kind, Resource
+from coffer.domain.vault.layout import StorageClass
 
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
 # Both hooks are handed the agent ROW rather than an identifier to look it up
@@ -18,6 +21,12 @@ from coffer.domain.resource import Kind, Resource
 # needs the identity reads ``resource.uid``.
 OnDeleteHook = Callable[[Resource], Awaitable[None] | None]
 OnEnabledChangedHook = Callable[[Resource], Awaitable[None] | None]
+
+
+def agent_name_for(config: dict[str, Any]) -> str:
+    """The one name an agent row may carry: its type's (spec agent-registry
+    "Keep one agent per type, named by it"). ``claude_code`` → ``claude-code``."""
+    return AgentType(config["type"]).default_name()
 
 
 def make_agent_kind(
@@ -52,4 +61,15 @@ def make_agent_kind(
         # an undetected, folder-less agent (spec resource-framework "Keep
         # creation a per-kind seam").
         generic_create_allowed=False,
+        # One agent per type, named by it: the name is derived from the type,
+        # so it is fixed and nothing else — no title, no description — is a
+        # person's to choose (spec agent-registry "Keep one agent per type,
+        # named by it").
+        name_from_config=agent_name_for,
+        name_fixed=True,
+        titled=False,
+        # An agent names a config directory on THIS disk: it is true of this
+        # machine only, so it is filed under ``local/`` and never travels
+        # (ADR storage-is-five-classes-by-nature).
+        storage=StorageClass.LOCAL,
     )

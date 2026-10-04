@@ -1,13 +1,12 @@
 """Telegram media/attachment helpers and the bot command menu — split out of
 ``telegram.py`` to keep that module under the file-size limit. Mostly pure; the
-outbound ``upload_media`` and the env-reading ``default_media_dir`` are the only
-I/O.
+outbound ``upload_media`` is the only I/O; ``default_media_dir`` is re-exported
+from ``media_root``, the one place every channel's media directory is named.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import pathlib
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
@@ -18,6 +17,7 @@ import httpx
 
 from coffer.domain.channel.envelopes import ChoiceButton, InboundAttachment, SentMessage
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.infrastructure.channel.media_root import default_media_dir
 
 __all__ = [
     "FetchedMedia",
@@ -36,15 +36,6 @@ __all__ = [
 _DOWNLOAD_LIMIT_BYTES = 20 * 1024 * 1024
 
 _logger = logging.getLogger(__name__)
-
-
-def default_media_dir() -> pathlib.Path:
-    """``~/.coffer/channel-media`` — where inbound photos/files/voice are saved.
-
-    ``HOME`` is honored (not ``Path.home()``) so tests redirect it to a tmp dir.
-    """
-    home = pathlib.Path(os.environ.get("HOME") or "~").expanduser()
-    return home / ".coffer" / "channel-media"
 
 
 #: Every non-photo media field a Telegram message can carry, with the mime and
@@ -95,11 +86,6 @@ def media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
     return specs
 
 
-def _oversized(message: dict[str, Any]) -> list[str]:
-    """Human labels for attachments too large for a bot to download."""
-    return list(_oversized_files(message).values())
-
-
 def _oversized_files(message: dict[str, Any]) -> dict[str, str]:
     """``file_id`` → human label for each attachment too large for a bot to download.
 
@@ -136,6 +122,8 @@ def _button(button: ChoiceButton) -> dict[str, Any]:
     entry: dict[str, Any] = {"text": button.label, "callback_data": button.value}
     if button.selected:
         entry["style"] = "success"
+        entry["disabled"] = {}
+    elif button.disabled:
         entry["disabled"] = {}
     return entry
 

@@ -11,7 +11,7 @@ Covers: branch naming, Conventional Commits, AI co-author signatures, pull-reque
 | `feature/<short-name>` | New functionality scoped to a spec | `feature/mcp-gateway-crud` |
 | `fix/<short-name>` | Bug fix scoped to a spec | `fix/mcp-gateway-list-cursor` |
 | `docs/<short-name>` | Documentation only | `docs/contributing-rewrite` |
-| `refactor/<short-name>` | Internal restructuring, no behavior change | `refactor/extract-credential-port` |
+| `refactor/<short-name>` | Internal restructuring, no behavior change | `refactor/extract-secret-port` |
 | `chore/<short-name>` | Deps, tooling, CI, project meta | `chore/upgrade-fastapi-to-0.115` |
 
 Rules:
@@ -136,8 +136,8 @@ If ANY answer is "no", fix BEFORE force-pushing. Combine title + body updates in
 ```bash
 git checkout main && git pull --ff-only
 git checkout -b feature/<short-name>
-git add <files> && git commit -m "feat(<scope>): <subject>"
 make verify
+git add <files> && git commit -m "feat(<scope>): <subject>"
 git reset --soft main && git commit -m "<final-subject>"   # squash
 git push -u origin feature/<short-name>
 gh pr create --fill --base main
@@ -195,10 +195,11 @@ NEVER force-push to `main` to "undo" a merge.
 Coffer runs **Dependabot security updates only**. There is no
 `.github/dependabot.yml`, so no routine version-bump PRs are opened.
 
-Why: the repository requires branches to be up to date before merging and does
-not allow auto-merge, so every bot PR costs a manual branch update, a full CI
-round, and a merge — and merging any one of them invalidates the rest, forcing
-them through strictly serially. For a single-maintainer, local-first tool, that
+Why: every bot PR still costs a full CI round and a review, and each one that
+merges moves `main` under the rest, so they queue through CI one after another.
+(The repository allows auto-merge, has no merge queue, and no longer requires a
+branch to be up to date before it merges, so the cost is CI time and attention,
+not a manual branch update.) For a single-maintainer, local-first tool, that
 recurring cost is not repaid by patch and minor bumps. Major upgrades that
 actually matter (the mcp 2.x SDK, for instance) are done by hand against the
 changelog anyway.

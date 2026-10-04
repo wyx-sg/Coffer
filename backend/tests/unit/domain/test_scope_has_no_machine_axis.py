@@ -13,7 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from coffer.domain.scope import Scope, is_active
-from coffer.surfaces.http.schemas import ResourceScopeUpdate, ScopeOut
+from coffer.surfaces.http.schemas import ResourceScopeUpdate, ScopeIn, ScopeOut
 
 _AGENTS = ("uid-claude", "uid-codex", "uid-cursor")
 
@@ -39,6 +39,6 @@ def test_a_scope_matches_agents_and_carries_no_machine_axis() -> None:
         {"agents": None, "machines": None},
     ):
         with pytest.raises(ValidationError):
-            ScopeOut.model_validate(machine_axis)
+            ScopeIn.model_validate(machine_axis)
         with pytest.raises(ValidationError):
             ResourceScopeUpdate.model_validate({"scope": machine_axis})

@@ -1,9 +1,8 @@
 // frontend/src/lib/hooks/useMachines.test.tsx
 //
-// The machine registry lives behind the sync routes, which answer 404 while
-// `vault_sync` is switched off. A channel is still bound to a machine then, so
-// the registry reads as empty (what a vault that never converged has) and this
-// machine's id comes from the daemon status instead.
+// The machine registry, and this machine's id — which comes from the daemon
+// status rather than the sync routes, so a channel is bound to a machine
+// whether or not this vault syncs anywhere.
 import { describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -15,12 +14,11 @@ const machinesApi = vi.fn();
 vi.mock("@/lib/api/sync", () => ({ syncApi: { machines: () => machinesApi() } }));
 
 let status: { machine_id: string | null; features: Record<string, boolean> } | undefined;
-let statusFailed = false;
 vi.mock("@/lib/hooks/useDaemon", () => ({
   useDaemonStatus: () => ({
     data: status,
-    isPending: status === undefined && !statusFailed,
-    isError: statusFailed,
+    isPending: status === undefined,
+    isError: false,
   }),
 }));
 
@@ -30,39 +28,25 @@ function wrapper({ children }: PropsWithChildren) {
 }
 
 describe("useMachines", () => {
-  test("reads the registry while sync is switched on", async () => {
-    status = { machine_id: "here", features: { vault_sync: true } };
+  test("reads the registry", async () => {
+    status = { machine_id: "here", features: { sync: true } };
     machinesApi.mockResolvedValue({ machines: [{ machine_id: "here" }] });
     const { result } = renderHook(() => useMachines(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.machines).toHaveLength(1);
   });
 
-  test("answers an empty registry without asking while sync is switched off", async () => {
-    machinesApi.mockClear();
-    status = { machine_id: "here", features: { vault_sync: false } };
+  test("is not read while Sync is switched off, so channels and knowledge see a single machine", async () => {
+    machinesApi.mockReset();
+    status = { machine_id: "here", features: { sync: false } };
     const { result } = renderHook(() => useMachines(), { wrapper });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.machines).toEqual([]);
+    await new Promise((r) => setTimeout(r, 10));
     expect(machinesApi).not.toHaveBeenCalled();
-  });
-
-  test("answers an empty registry, not a loading one, once the status read has failed", async () => {
-    machinesApi.mockClear();
-    status = undefined;
-    statusFailed = true;
-    try {
-      const { result } = renderHook(() => useMachines(), { wrapper });
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data?.machines).toEqual([]);
-      expect(machinesApi).not.toHaveBeenCalled();
-    } finally {
-      statusFailed = false;
-    }
+    expect(result.current.data).toBeUndefined();
   });
 
   test("takes this machine's id from the daemon status", () => {
-    status = { machine_id: "here", features: { vault_sync: false } };
+    status = { machine_id: "here", features: {} };
     const { result } = renderHook(() => useThisMachineId(), { wrapper });
     expect(result.current).toEqual({ machineId: "here", isPending: false });
   });

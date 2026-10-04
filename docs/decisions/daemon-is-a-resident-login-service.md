@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), spec daemon "Run as a login service", spec daemon "Change residency from the settings page or the command line", spec daemon "Stand down only when provably superseded", spec desktop-app "Restart by stopping the running daemon first", PR #412, PR #431
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), spec daemon "Run as a login service", spec daemon "Change residency from the settings page", spec daemon "Stand down only when provably superseded", spec desktop-app "Restart by stopping the running daemon first", PR #412, PR #431
 
 ## Context
 
@@ -27,8 +27,8 @@ The daemon serves until it is stopped (`coffer daemon stop`, the desktop shell's
 restart, system shutdown) or superseded by another daemon (spec daemon "Stand
 down only when provably superseded"). It has no idle timer.
 
-On macOS, `coffer daemon service install` — or the Start at login switch in
-Settings, which calls `PUT /api/v1/daemon/residency` — writes a per-user
+On macOS, the Start at login switch in
+Settings, which calls `PUT /api/v1/daemon/residency`, writes a per-user
 launchd agent `dev.coffer.daemon` (`infrastructure/daemon/login_service.py`)
 with:
 
@@ -120,11 +120,8 @@ Rules a future change must respect:
   things: idle MCP sessions are still reaped by the `/mcp` session reaper
   ([Session Subprocess Model](session-subprocess-model.md)), which is not an
   idle exit of the daemon.
-- `daemon-config.json` no longer has an idle setting. An `idle_shutdown_hours`
-  key an earlier build wrote is ignored on read and dropped by the next write
-  (`_RETIRED_KEYS` in `infrastructure/daemon/config.py`); no migration is
-  involved because the file is read before the database opens. A downgrade
-  reads the absent key as that build's own default.
+- `daemon-config.json` has no idle setting, so there is no idle window to
+  configure.
 - `GET`/`PUT /api/v1/daemon/residency` carry only `login_service_supported` and
   `login_service_installed`.
 - The login service is macOS-only (`login_service.is_supported`). Elsewhere the

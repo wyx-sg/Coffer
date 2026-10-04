@@ -16,9 +16,10 @@ from typing import Any
 
 import pytest
 
-from coffer.application.chat.turn_orchestrator import active_turns, clear_active_turns
+from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Role, TextBlock
+from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
 
 
@@ -36,13 +37,6 @@ class _BlockingAdapter:
         return gen()
 
 
-@pytest.fixture(autouse=True)
-def _reset() -> Any:
-    clear_active_turns()
-    yield
-    clear_active_turns()
-
-
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="chat", scenario="stop a running turn")
 async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
@@ -51,7 +45,7 @@ async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     )
     conv = await chat_svc.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(queue.get(), timeout=5.0)  # TurnStarted
     text_event = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(text_event, TextDelta)
@@ -70,9 +64,10 @@ async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in rest)
     assert conv.id not in active_turns()
 
-    # The partial assistant message was persisted (status complete).
+    # The partial assistant message was persisted (status stopped).
     msgs = await chat_svc.list_messages(conv.id)
     assistant = next(m for m in msgs if m.role == Role.ASSISTANT)
-    assert assistant.status == "complete"
+    assert assistant.status == "stopped"
+    assert assistant.finished_at is not None
     text = "".join(b.text for b in assistant.content if isinstance(b, TextBlock))
     assert "partial answer" in text

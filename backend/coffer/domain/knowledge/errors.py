@@ -51,9 +51,20 @@ class KnowledgeFileConflict(KnowledgeError):  # noqa: N818
 
     code = "KNOWLEDGE_FILE_CONFLICT"
 
-    def __init__(self, path: str) -> None:
-        super().__init__(f"knowledge file changed since it was read: {path!r}")
+    def __init__(
+        self, path: str, *, current_body: str | None = None, current_fingerprint: str = ""
+    ) -> None:
+        super().__init__(f"{path!r} changed on disk since it was opened; your text was not saved")
         self.path = path
+        #: What the editor needs to recover without saving over the file (spec
+        #: knowledge "Save a document edited in the web UI"): the document as it
+        #: is on disk now, so the page can Reload, Compare or Copy my text.
+        self.error_details: dict[str, object] = {
+            "path": path,
+            "saved": False,
+            "current_body": current_body,
+            "current_fingerprint": current_fingerprint,
+        }
 
 
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
@@ -92,39 +103,124 @@ class UploadTooLarge(KnowledgeError):  # noqa: N818
         self.limit = limit
 
 
-class TopicReferencesFile(KnowledgeError):  # noqa: N818
-    """A curated document naming another knowledge file.
+class KnowledgeCurationHeld(KnowledgeError):  # noqa: N818
+    """Curate now was refused because a sync round waits for a person.
 
-    Spec knowledge "Refuse file-name references in documents".
-
-    Refused at the write rather than asked for in the prompt. Document paths are
-    chosen by curation and move as the corpus is reorganised, so a file name
-    written into prose is a link that rots — 343 of the corpus's 398 internal
-    references were already dead when this rule was introduced. A document
-    names its subject; the catalogue resolves subjects to paths.
+    Spec knowledge "Curate on one owner machine only" and vault-sync "Never
+    overlap a curation pass and a round": a rewrite is never piled onto the very
+    files a person is deciding between. Surfaces map this to 409.
     """
 
-    code = "KNOWLEDGE_TOPIC_REFERENCES_FILE"
+    code = "KNOWLEDGE_CURATION_HELD"
 
-    def __init__(self, path: str, reference: str) -> None:
+    def __init__(self) -> None:
         super().__init__(
-            f"topic {path!r} references the file {reference!r}; name the subject, not the file"
+            "curation is held while a sync round waits for you — resolve the conflict "
+            "or confirmation in Sync, then run it again"
         )
-        self.path = path
-        self.reference = reference
 
 
-class CurationBoundExceeded(KnowledgeError):  # noqa: N818
-    """A curation pass tried to write more files than one pass may.
+class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818
+    """No history can be read: git is not installed, or the knowledge root has
+    no repository it could create.
 
-    Spec knowledge "Bound a pass to eight writes".
-
-    The bound is what makes a pass *incremental*: one source must never be able
-    to trigger a corpus-wide rewrite, however confident the model is.
+    Spec knowledge "Keep every document's history and undo a pass as a whole".
+    Writes never fail for this — they are simply not recorded — so only the
+    history reads raise it.
     """
 
-    code = "KNOWLEDGE_CURATION_BOUND"
+    code = "KNOWLEDGE_HISTORY_UNAVAILABLE"
 
-    def __init__(self, limit: int) -> None:
-        super().__init__(f"a curation pass may write at most {limit} files")
-        self.limit = limit
+    def __init__(self, reason: str, details: dict[str, object] | None = None) -> None:
+        super().__init__(f"knowledge history is unavailable: {reason}")
+        self.reason = reason
+        #: With git missing, ``domain.git_handoff.git_missing_details``: the
+        #: reason and the install hand-off the page offers beside the error.
+        if details:
+            self.error_details: dict[str, object] = details
+
+
+class KnowledgeVersionNotFound(KnowledgeError):  # noqa: N818
+    """A version the history does not hold, or one in which the document named
+    does not exist."""
+
+    code = "KNOWLEDGE_VERSION_NOT_FOUND"
+
+    def __init__(self, version: str, path: str | None = None) -> None:
+        where = f" of {path!r}" if path else ""
+        super().__init__(f"no version {version!r}{where} in the knowledge history")
+        self.version = version
+        self.path = path
+
+
+class KnowledgeNotAPass(KnowledgeError):  # noqa: N818
+    """An undo aimed at a change that is not a curation pass. Any single
+    version is restored instead (spec knowledge "Keep every document's history
+    and undo a pass as a whole")."""
+
+    code = "KNOWLEDGE_NOT_A_PASS"
+
+    def __init__(self, version: str) -> None:
+        super().__init__(
+            f"{version!r} is not a curation pass; restore a document's version instead"
+        )
+        self.version = version
+
+
+class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
+    """Undoing a pass would overwrite a later change to one of its documents.
+
+    Refused, naming the document, rather than overwriting what came after
+    (spec knowledge "Keep every document's history and undo a pass as a
+    whole"). Nothing is written.
+    """
+
+    code = "KNOWLEDGE_UNDO_CONFLICT"
+
+    def __init__(
+        self, version: str, document: str, later: str, *, handoff: str | None = None
+    ) -> None:
+        super().__init__(
+            f"cannot undo this curation pass: {document!r} has changed since "
+            "(undo would overwrite that change)"
+        )
+        self.version = version
+        self.document = document
+        self.later = later
+        self.error_details: dict[str, object] = {
+            "version": version,
+            "document": document,
+            "later_version": later,
+        }
+        if handoff is not None:
+            # Undoing it by hand while keeping the later edits, as a prompt for
+            # the person's agent (application/knowledge/undo_handoff.py).
+            self.error_details["handoff"] = {"prompt": handoff}
+
+
+class KnowledgeNotADelete(KnowledgeError):  # noqa: N818
+    """A restore-a-delete aimed at a change that deleted nothing — only the
+    deletion of a document or of a collection is put back this way (spec
+    knowledge "Restore a deleted collection or document from Recent changes")."""
+
+    code = "KNOWLEDGE_NOT_A_DELETE"
+
+    def __init__(self, version: str) -> None:
+        super().__init__(
+            f"{version!r} did not delete a document or a collection; "
+            "restore a document's version instead"
+        )
+        self.version = version
+
+
+class KnowledgeRestoreConflict(KnowledgeError):  # noqa: N818
+    """Putting a deleted document back would overwrite the file now at its
+    path. Refused, naming it; nothing is written."""
+
+    code = "KNOWLEDGE_RESTORE_CONFLICT"
+
+    def __init__(self, version: str, document: str) -> None:
+        super().__init__(f"cannot restore {document!r}: a document exists at that path again")
+        self.version = version
+        self.document = document
+        self.error_details: dict[str, object] = {"version": version, "document": document}

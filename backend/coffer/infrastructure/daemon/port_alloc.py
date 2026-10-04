@@ -2,9 +2,9 @@
 
 :func:`bind_fixed_socket` is how the daemon binds — the port the user pinned,
 or :data:`~coffer.infrastructure.daemon.config.DEFAULT_PORT` when they pinned
-none. :func:`bind_free_socket` and :func:`allocate` are the scan, kept for the
+none. :func:`bind_free_socket` is the scan, kept for the
 ``COFFER_PORT_RANGE_*`` override the test suite pins so concurrent test daemons
-cannot collide on 8000. No user-facing start reaches the scan.
+cannot collide on 38470. No user-facing start reaches the scan.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def fixed_port_conflict_message(
     ``coffer config unset daemon.port`` is offered only when the port that failed is
     NOT the default, because that is the only case where clearing changes
     anything: it returns the daemon to :data:`DEFAULT_PORT`. Listing it against
-    a failing 8000 would send the user to a command that does nothing.
+    a failing 38470 would send the user to a command that does nothing.
     """
     if note is not None:
         held_by = note
@@ -162,24 +162,6 @@ def _new_socket(*, reuse_addr: bool) -> socket.socket:
     return sock
 
 
-def allocate(
-    start: int = daemon_config.DEFAULT_PORT, end: int = daemon_config.DEFAULT_PORT + 9
-) -> int:
-    """Return the first available 127.0.0.1 port in [start, end] inclusive.
-
-    Part of the override path only (see the module docstring): a normal start
-    binds one port and refuses to move. Note also that this probe-and-close
-    form has an inherent TOCTOU window — the port can be taken between the
-    close here and a later bind — so even within that path the daemon uses
-    :func:`bind_free_socket`, which keeps ownership of the port.
-    """
-    sock = bind_free_socket(start, end)
-    try:
-        return sock.getsockname()[1]  # type: ignore[no-any-return]
-    finally:
-        sock.close()
-
-
 def bind_free_socket(
     start: int = daemon_config.DEFAULT_PORT, end: int = daemon_config.DEFAULT_PORT + 9
 ) -> socket.socket:
@@ -193,7 +175,7 @@ def bind_free_socket(
 
     This is reached ONLY through the ``COFFER_PORT_RANGE_*`` override — the
     hook the test suite uses to give each of its daemons a disjoint range, well
-    away from the real 8000. A user's daemon never scans: it moves to the next
+    away from the real 38470. A user's daemon never scans: it moves to the next
     port whenever one is taken, and a port that moves is precisely what
     :func:`bind_fixed_socket` exists to stop.
     """

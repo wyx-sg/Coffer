@@ -24,18 +24,7 @@ Both end at the same gateway: each client session gets its own set of upstream s
 
 For a registered [agent](/guides/agents), connect it to Coffer instead of writing the entry by hand:
 
-::: code-group
-
-```sh [CLI]
-coffer agent connect claude-code
-coffer agent connect codex
-```
-
-```text [Web UI]
-Agents → (agent) → Connect to Coffer
-```
-
-:::
+Open **Agents → (agent)** and press **Connect**. Coffer shows the exact lines first, and you confirm them.
 
 Coffer writes the shim's absolute path and the agent's uid:
 
@@ -78,7 +67,7 @@ Any client that launches stdio MCP servers can run the shim. Use the absolute pa
 }
 ```
 
-The shim accepts one flag of its own, `--agent-uid <uid>`, and ignores any other arguments a client passes. Without `--agent-uid` the session is unidentified (see below). To make a hand-configured client count as a registered agent, add `"args": ["--agent-uid", "<uid>"]` with the uid from `coffer agent show <name>`.
+The shim accepts one flag of its own, `--agent-uid <uid>`, and ignores any other arguments a client passes. Without `--agent-uid` the session is unidentified (see below). To make a hand-configured client count as a registered agent, add `"args": ["--agent-uid", "<uid>"]` with the uid from **Copy uid** in the agent's **⋯** menu.
 
 ### What the shim does
 
@@ -105,7 +94,7 @@ sequenceDiagram
 - **Detect or spawn.** The shim reads `~/.coffer/daemon.json` (port and token, mode `0600`) and checks the daemon answers. If none does, it starts one in the background and waits up to 10 seconds. If the daemon still does not come up, the shim writes `daemon did not come up within 10s; check ~/.coffer/logs/daemon.log` to stderr and exits with code 3.
 - **Bridge.** Each JSON-RPC line on stdin becomes a `POST /mcp`; replies go back on stdout. Requests are dispatched concurrently, so one slow tool call does not block pings or other calls. Server notifications arrive over a `GET /mcp` SSE stream and are written to stdout; the stream reconnects with backoff if it drops.
 - **Handshake stamping.** On `initialize`, the shim adds `params._meta["coffer/cwd"]` (its working directory) and, when given, `params._meta["coffer/agent-uid"]`.
-- **Daemon restarts.** If a request fails to connect, the shim re-reads `daemon.json`. When a live daemon is there at a different port or with a new token, it rebinds, replays the original `initialize` to open a fresh session, and retries the request once. The client does not see a second `initialize` reply.
+- **Daemon restarts.** If a request fails, the shim re-reads `daemon.json`. When a live daemon is there at a different port or with a new token, it rebinds, replays the original `initialize` to open a fresh session, and retries the request once. The client does not see a second `initialize` reply. A `tools/call` is the exception: it is resent only when it never reached the old daemon (the connection itself failed). One that failed after it was sent may already have run, so the shim still rebinds but answers that call with an error saying it may or may not have run.
 - **Version check.** When the daemon that answers is a different Coffer version, the shim prints one warning to stderr and carries on:
 
   ```text
@@ -120,7 +109,7 @@ A client that can only speak HTTP MCP connects to the daemon directly:
 
 | | Value |
 | --- | --- |
-| URL | `http://127.0.0.1:<port>/mcp` — port `8000` unless you changed it (`coffer config get daemon.port`) |
+| URL | `http://127.0.0.1:<port>/mcp` — port `38470` unless you changed it (`coffer config get daemon.port`) |
 | Auth header | `X-Coffer-Token: <token>`, the `token` field of `~/.coffer/daemon.json` |
 | Session | the daemon returns `Mcp-Session-Id` on the first response; send it on every later request |
 | Requests | JSON-RPC over `POST /mcp` |
@@ -128,13 +117,13 @@ A client that can only speak HTTP MCP connects to the daemon directly:
 
 ```sh
 TOKEN=$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/.coffer/daemon.json")))["token"])')
-curl -s http://127.0.0.1:8000/mcp \
+curl -s http://127.0.0.1:38470/mcp \
   -H "X-Coffer-Token: $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
 ```
 
 ::: warning The token changes on every daemon start
-The daemon mints a fresh token each time it starts, and `coffer daemon rotate-token` replaces it on demand. A client configured with a literal token stops working after the next restart. Prefer the shim wherever the client can run a command.
+The daemon mints a fresh token each time it starts, and **Rotate…** under **Settings → Security → Daemon access token** replaces it on demand. A client configured with a literal token stops working after the next restart. Prefer the shim wherever the client can run a command.
 :::
 
 The daemon listens on loopback only and refuses requests whose `Host` is not a loopback name. Use `127.0.0.1` or `localhost`. An idle HTTP session is dropped after 30 minutes without traffic (`COFFER_MCP_SESSION_IDLE_S` changes this).
@@ -151,7 +140,7 @@ The gateway decides what a session may see from the identity reported at the han
 
 An unidentified session always sees less, never more. A call to a server outside the session's reach fails with the same error a disabled tool gets (`TOOL_DISABLED`, JSON-RPC `-32000`) and is logged as `denied`. A name-based `_meta` key such as `coffer/agent` is ignored; only the uid counts.
 
-Coffer's own tools that act per agent (such as `coffer__write`) receive the session's identity from the gateway. Any `agent` argument a client puts in a call is overwritten, so a client cannot claim a different agent per call.
+Coffer's own tool receives the session's identity from the gateway. Any `agent` argument a client puts in a call to it is overwritten, so a client cannot claim a different agent per call.
 
 ::: info Trust boundary
 The identity is self-reported, not cryptographically verified. Any local process that can read `~/.coffer/daemon.json` can open a session and claim any uid. This is acceptable for a single-user daemon bound to loopback; it is not an access-control mechanism between users.
@@ -159,14 +148,7 @@ The identity is self-reported, not cryptographically verified. Any local process
 
 ## Verify the connection
 
-1. **Check the entry.**
-
-   ```sh
-   coffer agent show claude-code
-   # ...
-   # coffer_connection: connected
-   #   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
-   ```
+1. **Check the entry.** Open **Agents → (agent)**: the **Connection** section says the agent reaches Coffer through one MCP entry and one hook, and names the shim's path.
 
 2. **Check the daemon.**
 
@@ -176,22 +158,16 @@ The identity is self-reported, not cryptographically verified. Any local process
 
 3. **List the tools in the client.** In Claude Code, the `/mcp` command shows the `coffer` server and its tools. You should see Coffer's own `coffer__…` tools and your upstream tools as `<server>__<tool>`. When you have many upstream tools, only a budgeted slice is listed; the rest stay callable and `coffer__search_tools` finds them (see [MCP servers](/guides/mcp-servers#many-tools-tiering-and-tool-search)).
 
-4. **Make a call and find it in the log.**
-
-   ```sh
-   coffer log mcp --limit 5
-   ```
-
-   The call appears with its server, tool, duration and status. The **Activity** page shows the same log.
+4. **Make a call and find it in the log.** Open **Activity → MCP calls**: the call appears with its server, tool, duration and status. `coffer log mcp --limit 5` prints the same rows.
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| The client says the `coffer` server failed to start, or `command not found` | The entry names a shim that does not exist at that path | Re-run `coffer agent connect <agent>`; for a hand-written entry, use the absolute path `~/.coffer/bin/coffer-mcp-shim`. |
+| The client says the `coffer` server failed to start, or `command not found` | The entry names a shim that does not exist at that path | Press **Connect** again on the agent's page; for a hand-written entry, use the absolute path `~/.coffer/bin/coffer-mcp-shim`. |
 | Shim exits with code 3 | No daemon could be started within 10 seconds | Read `~/.coffer/logs/daemon.log`. A common cause is another process holding the daemon's port; `coffer config get daemon.port` shows which port it wants. |
 | Every call fails with `All connection attempts failed` | The shim lost the daemon and no live daemon is reachable | Start the daemon (`coffer daemon start`), then restart the MCP server in the client so a fresh shim starts. |
-| Tools from one server are missing for one agent only | The server's reach excludes that agent, or the entry has no `--agent-uid` | Check reach with `coffer mcp scope <server>`; rewrite the entry with `coffer agent connect <agent>`. |
+| Tools from one server are missing for one agent only | The server's reach excludes that agent, or the entry has no `--agent-uid` | Check the server's **Reach** on its page; press **Connect** on the agent's page to rewrite the entry. |
 | A tool is missing from the list but works when called by name | Tool tiering left it unlisted | Use `coffer__search_tools`, or raise the budget (see [MCP servers](/guides/mcp-servers#many-tools-tiering-and-tool-search)). |
 | stderr shows a version mismatch warning | An older daemon is still running after an upgrade | `coffer daemon restart`. |
 | HTTP client gets `401 bad token` | The token changed when the daemon restarted | Read the current token from `~/.coffer/daemon.json`, or switch to the shim. |

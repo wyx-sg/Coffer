@@ -33,6 +33,12 @@ Exits non-zero on:
     class or module level) in Python, `#[ignore]` in Rust - which would report
     a scenario covered while nothing ever executes
 
+A marker naming a scenario that only an in-flight change adds (a `#### Scenario:`
+under an `ADDED` or `MODIFIED` section of `openspec/changes/<name>/specs/`) is
+accepted and listed until that change is archived — the same rule
+`check_spec_citations.py` applies to requirement titles. Coverage is required
+from the archive on, when the scenario lands in `openspec/specs/`.
+
 Stdlib-only; no install required.
 """
 
@@ -47,10 +53,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SPECS_DIR = REPO_ROOT / "openspec" / "specs"
+CHANGES_DIR = REPO_ROOT / "openspec" / "changes"
 BACKEND_TESTS = REPO_ROOT / "backend" / "tests"
 # The frontend has no tier-by-directory layout: its tests are co-located
-# `*.test.tsx` under src/. `frontend/tests/` was the first scaffold's shape and
-# has been gone since the real web shell landed, so it is not listed here.
+# `*.test.tsx` under src/.
 FRONTEND_TS_ROOTS = [
     REPO_ROOT / "frontend" / "src",
     REPO_ROOT / "e2e",
@@ -63,6 +69,7 @@ RUST_ROOTS = [REPO_ROOT / "desktop" / "src"]
 
 REQUIREMENTS_HEADER_RE = re.compile(r"^##\s+Requirements\s*$")
 H2_RE = re.compile(r"^##\s")
+DELTA_SECTION_RE = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements\s*$")
 OPENSPEC_SCENARIO_RE = re.compile(r"^####\s+Scenario:\s*(.+?)\s*$")
 FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 # Matches the standalone acceptance helper exported from
@@ -105,7 +112,7 @@ TS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
 # `^\s*//` (not `///`) keeps doc comments out: after `//` a doc comment has a
 # third `/`, which matches neither `\s` nor `acceptance`.
 RUST_ACCEPTANCE_RE = re.compile(
-    r'^\s*//\s*acceptance\s*\(\s*'
+    r"^\s*//\s*acceptance\s*\(\s*"
     r'spec\s*=\s*"(?P<spec>[^"]+)"\s*,\s*'
     r'scenario\s*=\s*"(?P<scenario>[^"]+)"\s*,?\s*\)\s*$'
 )
@@ -199,6 +206,31 @@ def collect_specs() -> tuple[dict[str, set[str]], list[str]]:
     return out, problems
 
 
+def collect_pending_scenarios() -> dict[tuple[str, str], str]:
+    """`{(spec_id, scenario): change}` for scenarios an in-flight change adds.
+
+    A scenario counts when it sits under an `ADDED` or `MODIFIED` section of a
+    delta spec in an unarchived change folder; the spec id is the delta's path
+    relative to that change's `specs/`, as for the live specs.
+    """
+    out: dict[tuple[str, str], str] = {}
+    if not CHANGES_DIR.is_dir():
+        return out
+    for change in sorted(p for p in CHANGES_DIR.iterdir() if p.is_dir()):
+        if change.name == "archive":
+            continue
+        delta_root = change / "specs"
+        for spec_md in sorted(delta_root.rglob("spec.md")):
+            spec_id = spec_md.parent.relative_to(delta_root).as_posix()
+            section = ""
+            for line in _unfenced_lines(spec_md.read_text(encoding="utf-8")):
+                if m := DELTA_SECTION_RE.match(line):
+                    section = m.group(1)
+                elif section in ("ADDED", "MODIFIED") and (m := OPENSPEC_SCENARIO_RE.match(line)):
+                    out.setdefault((spec_id, m.group(1).strip()), change.name)
+    return out
+
+
 def _extract_acceptance_call(node: ast.Call) -> tuple[str, str] | None:
     func = node.func
     if not (
@@ -217,11 +249,7 @@ def _extract_acceptance_call(node: ast.Call) -> tuple[str, str] | None:
             scenario = kw.value.value
     if spec is None and node.args and isinstance(node.args[0], ast.Constant):
         spec = node.args[0].value
-    if (
-        scenario is None
-        and len(node.args) >= 2
-        and isinstance(node.args[1], ast.Constant)
-    ):
+    if scenario is None and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
         scenario = node.args[1].value
     if isinstance(spec, str) and isinstance(scenario, str):
         return (spec, scenario)
@@ -254,15 +282,9 @@ def _module_pytestmark_skips(tree: ast.Module) -> bool:
     for stmt in tree.body:
         if not isinstance(stmt, ast.Assign):
             continue
-        if not any(
-            isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets
-        ):
+        if not any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets):
             continue
-        values = (
-            stmt.value.elts
-            if isinstance(stmt.value, ast.List | ast.Tuple)
-            else [stmt.value]
-        )
+        values = stmt.value.elts if isinstance(stmt.value, ast.List | ast.Tuple) else [stmt.value]
         if any(_is_unconditional_skip(v) for v in values):
             return True
     return False
@@ -420,9 +442,7 @@ def collect_ts_markers(roots: list[Path]) -> set[tuple[str, str]]:
                 stripped = _strip_ts_comments(text)
                 for m in TS_ACCEPTANCE_RE.finditer(stripped):
                     spec = (
-                        m.group("spec_dq")
-                        if m.group("spec_dq") is not None
-                        else m.group("spec_sq")
+                        m.group("spec_dq") if m.group("spec_dq") is not None else m.group("spec_sq")
                     )
                     scenario = (
                         m.group("scenario_dq")
@@ -453,9 +473,7 @@ def main() -> int:
     # (no `#### Scenario:` under `## Requirements`, or every one deleted).
     # Without this guard the audit silently passes as "0 missing coverage",
     # giving false confidence.
-    empty_specs = sorted(
-        spec_id for spec_id, scenarios in specs.items() if not scenarios
-    )
+    empty_specs = sorted(spec_id for spec_id, scenarios in specs.items() if not scenarios)
     if empty_specs:
         print(
             "audit_acceptance: FAIL — spec.md(s) with no acceptance scenarios:",
@@ -482,10 +500,18 @@ def main() -> int:
         for s in sorted(scenarios - markers_by_spec.get(spec_id, set())):
             missing.append((spec_id, s))
 
+    pending = collect_pending_scenarios()
     orphans: set[tuple[str, str]] = set()
-    for spec_id, scenario in all_markers:
-        if spec_id not in specs or scenario not in specs[spec_id]:
-            orphans.add((spec_id, scenario))
+    for spec_id, scenario in sorted(all_markers):
+        if spec_id in specs and scenario in specs[spec_id]:
+            continue
+        if (change := pending.get((spec_id, scenario))) is not None:
+            print(
+                f"note: acceptance {spec_id} :: {scenario!r} exists only in "
+                f"openspec/changes/{change}/ (not yet archived)"
+            )
+            continue
+        orphans.add((spec_id, scenario))
 
     # `dead` (collected above in the same AST sweep): acceptance markers on
     # unconditionally-skipped tests report coverage that never executes —

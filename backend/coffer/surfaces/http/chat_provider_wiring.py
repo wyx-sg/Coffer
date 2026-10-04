@@ -1,10 +1,13 @@
 """Chat agent-provider registry wiring (spec chat), split from ``wiring.py``.
 
-The agent-provider registry is the platform seam: chat lists only Coffer's two
-managed agents — Claude Code and Codex — and a further agent would be one more
-``register()`` call here, with no change to the chat surface, persistence, or
-the wire contract. Providers surface in the picker only when their binary is on
-PATH (``availability()``).
+The agent-provider registry is the platform seam: chat lists the agents whose
+descriptor carries a driver facet (ADR
+agent-mechanisms-are-optional-facets-on-the-descriptor) — Claude Code over the
+Agent SDK, Codex over ``codex app-server`` — and a further agent is one more
+driver bound at the composition root, with no change here, to the chat
+surface, persistence, or the wire contract. Providers surface in the picker
+only when their binary is on PATH and an enabled managed agent of that type is
+registered (``availability()``).
 """
 
 from __future__ import annotations
@@ -15,15 +18,13 @@ from typing import TYPE_CHECKING
 from coffer.application.agent.answering import AgentLister, answering_agent_config
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.engine.resolve import resolve_transcribe_connection
-from coffer.domain.agent.types import AgentType
-from coffer.domain.errors import CredentialMissing
-from coffer.domain.provider.errors import NoActiveProvider
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.infrastructure.chat.adapter_support import (
-    ChannelNameResolver,
+    ChannelNoteResolver,
     MemoryContextComposer,
 )
-from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
-from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
+from coffer.infrastructure.chat.drivers import DriverDeps
+from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
 from coffer.surfaces.http.agent_dependencies import (
     get_agent_model_catalogue,
@@ -40,35 +41,52 @@ if TYPE_CHECKING:
 
 
 def agent_home_env_resolver(
-    agent_type: AgentType, agents: Callable[[], AgentLister] = get_agent_service
+    agent_key: str, agents: Callable[[], AgentLister] = get_agent_service
 ) -> Callable[[], Awaitable[dict[str, str]]]:
-    """The environment a turn on ``agent_type`` runs under, resolved per turn.
+    """The environment a turn on the agent type ``agent_key`` runs under,
+    resolved per turn.
 
     The agent answering for the type (``answering_agent_config`` — the same one
     the model catalogue reads) decides it: a custom ``config_dir`` becomes
     ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME``, the default one (or no registered
     agent) sets nothing (spec chat "Ship Claude Code and Codex subprocess
-    providers"). ``agents`` is a getter so the registry is read at request
+    providers on the type's one agent"). ``agents`` is a getter so the registry is read at request
     time, after the composition root has published it, and so a changed
     ``config_dir`` takes effect on the next turn without a restart.
     """
 
     async def _resolve() -> dict[str, str]:
-        cfg = await answering_agent_config(agents(), agent_type.value)
+        cfg = await answering_agent_config(agents(), agent_key)
         return {} if cfg is None else cfg.runtime_env()
 
     return _resolve
 
 
+def agent_is_managed(
+    agent_key: str, agents: Callable[[], AgentLister] = get_agent_service
+) -> Callable[[], Awaitable[bool]]:
+    """Whether an ENABLED agent of the type ``agent_key`` is registered with Coffer,
+    read per call (spec chat "Offer and run only managed agents"): chat offers a type
+    only once one is, and a turn for a type without one is refused, so a conversation
+    never runs against an agent's default config dir that Coffer was told to leave alone."""
+
+    async def _managed() -> bool:
+        return await answering_agent_config(agents(), agent_key) is not None
+
+    return _managed
+
+
 def build_agent_provider_registry(
     conv_repo: ConversationRepo,
-    credential_resolver: Callable[[str], str] | None = None,
+    agent_catalog: AgentCatalog,
+    secret_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
-    resolve_channel_name: ChannelNameResolver | None = None,
+    resolve_channel: ChannelNoteResolver | None = None,
+    retrieve_memory: MemoryRetriever | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
-    ``credential_resolver`` is what lets voice be transcribed: with it, a turn
+    ``secret_resolver`` is what lets voice be transcribed: with it, a turn
     carrying audio reaches the connection the operator marked
     ``transcribe_default``, on the model they chose for it. Without the
     resolver, without such a connection, or without a model, audio is handed to
@@ -76,12 +94,12 @@ def build_agent_provider_registry(
     and there is no fallback to the engine's own connection (spec
     internal-engine "Transcribe speech on its own connection and model").
 
-    ``resolve_channel_name`` turns the channel UID a conversation stores into
-    the channel's current name, for the one place the name belongs: the
-    system-prompt line telling the model which channel this turn came from. The
-    row holds the identity so a renamed channel keeps its conversations; the
-    label is resolved here, at read time, so the model is told what the channel
-    is called NOW rather than what it was called when the thread started.
+    ``resolve_channel`` turns the channel UID a conversation stores into the
+    facts the channel note is written from — the channel's current name, its
+    platform, whether the conversation is a direct chat or a group thread, and
+    what renders there. The row holds the identity so a renamed channel keeps
+    its conversations; the facts are resolved here, at read time, so the model
+    is told what the channel is called NOW rather than when the thread started.
     ``None`` means the append still happens — the turn really did arrive over a
     channel — without naming it.
 
@@ -90,9 +108,13 @@ def build_agent_provider_registry(
     channel-driven turn — a plain callable so this module, like
     ``claude_sdk_provider``, never imports anything from ``application.memory``
     itself. The composition root builds the real closure over ``MemoryService``
-    (``memory_wiring.memory_context_composer``) and hands it through
+    (``memory_turn_wiring.memory_context_composer``) and hands it through
     ``wire_chat``. ``None`` means no memory append at all, not a header with
     nothing under it.
+
+    ``retrieve_memory`` ranks a channel turn's prompt against the notes (spec
+    memory "Retrieve the notes a prompt names for a channel turn"); the
+    composition root builds it (``memory_turn_wiring``). ``None`` means none.
     """
     registry = AgentProviderRegistry()
 
@@ -105,10 +127,10 @@ def build_agent_provider_registry(
             lambda: resolve_transcribe_connection(
                 read_model=read_transcribe_model, connections=get_provider_service()
             ),
-            credential_resolver,
+            secret_resolver,
             read_internal_engine_timeout,
         )
-        if credential_resolver is not None
+        if secret_resolver is not None
         else None
     )
 
@@ -122,46 +144,17 @@ def build_agent_provider_registry(
         ids: list[str] = await get_agent_model_catalogue().suggest(agent_key)
         return ids
 
-    registry.register(
-        ClaudeSdkProvider(
-            conversations=conv_repo,
-            list_models=_list_models,
-            transcriber_factory=transcriber_factory,
-            compose_memory_context=compose_memory_context,
-            resolve_channel_name=resolve_channel_name,
-            resolve_home_env=agent_home_env_resolver(AgentType.CLAUDE_CODE),
-        ),
-        display_name="Claude Code",
+    deps = DriverDeps(
+        conversations=conv_repo,
+        list_models=_list_models,
+        transcriber_factory=transcriber_factory,
+        compose_memory_context=compose_memory_context,
+        resolve_channel=resolve_channel,
+        resolve_home_env=agent_home_env_resolver,
+        is_managed=agent_is_managed,
+        retrieve_memory=retrieve_memory,
     )
-
-    # Codex reads Coffer's projected key from the COFFER_PROVIDER_KEY env var
-    # (config.toml env_key). Resolve the connection active FOR that agent per turn —
-    # keyed by agent, not wire, so an openai-compatible gateway routed to it
-    # resolves correctly — and inject it into the subprocess env; with no active
-    # connection it stays None so the agent uses its own login (the
-    # provider-switching env_key seam). Lazy per turn by design: it runs at
-    # request time, so the provider kind's getter is the right seam.
-    def _key_resolver(agent_type: AgentType) -> Callable[[], Awaitable[str | None]]:
-        async def _resolve() -> str | None:
-            try:
-                # Assign to a typed local so mypy narrows the service's Any return.
-                key: str = await get_provider_service().resolve_active_key_for_agent(agent_type)
-                return key
-            except (NoActiveProvider, CredentialMissing):
-                return None
-
-        return _resolve
-
-    registry.register(
-        CodexAppServerProvider(
-            conversations=conv_repo,
-            resolve_key=_key_resolver(AgentType.CODEX),
-            transcriber_factory=transcriber_factory,
-            list_models=_list_models,
-            compose_memory_context=compose_memory_context,
-            resolve_channel_name=resolve_channel_name,
-            resolve_home_env=agent_home_env_resolver(AgentType.CODEX),
-        ),
-        display_name="Codex",
-    )
+    # Every agent with a driver facet, in agent-type order.
+    for driver in agent_catalog.drivers():
+        registry.register(driver.build(deps), display_name=driver.display_name)
     return registry

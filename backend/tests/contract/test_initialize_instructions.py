@@ -57,14 +57,14 @@ def test_instructions_are_never_truncated_to_fit():
     assert longest.endswith("callable.")
 
 
-def test_a_memory_root_too_long_to_fit_is_named_by_its_command() -> None:
-    """A moved memory root can be any length; the cap is met by naming the
-    command that prints it rather than by cutting the tail off."""
+def test_a_memory_root_too_long_to_fit_is_left_to_the_guide() -> None:
+    """A moved memory root can be any length; the cap is met by pointing at the
+    skill that names it rather than by cutting the tail off."""
     root = "/" + "very-long-directory/" * 30 + "memory"
     text = build_instructions(hidden_count=999_999, memory_root=root)
     assert len(text) <= MAX_INSTRUCTIONS_CHARS
     assert root not in text
-    assert "coffer path memory" in text
+    assert "coffer-guide" in text
     assert text.endswith("callable.")
 
 
@@ -121,8 +121,18 @@ def test_initialize_result_keeps_the_protocol_contract():
     assert 0 < len(result["instructions"]) <= MAX_INSTRUCTIONS_CHARS
 
 
+def test_initialize_result_reports_the_package_version():
+    """``serverInfo.version`` is the installed package's version, not a copy
+    of it: a literal here said 0.1.0 while the package was 0.1.1."""
+    from importlib.metadata import version
+
+    result = build_initialize_result(hidden_count=0)
+
+    assert result["serverInfo"]["version"] == version("coffer")
+
+
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="the handshake names Coffer's tools and points at the skill"
+    spec="knowledge", scenario="name only the search tool in the handshake and point at the skill"
 )
 def test_instructions_only_name_tools_that_exist() -> None:
     """Every tool the handshake advertises must actually be registered.
@@ -135,19 +145,15 @@ def test_instructions_only_name_tools_that_exist() -> None:
     again when ``recall`` and ``diagnose`` were removed.
     """
     from coffer.application.builtin_tools import BuiltinToolRegistry
-    from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
     from coffer.application.mcp.gateway_instructions import NAMED_TOOLS
 
+    # No kind registers a built-in tool (spec knowledge "Expose no knowledge tool").
     registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(
-        registry,
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
     # ``search_tools`` is answered by the gateway itself rather than the
     # registry, so it is the one name that is legitimately not in there.
     available = {tool.name for tool in registry.list()} | {"search_tools"}
 
-    assert available == NAMED_TOOLS == {"write", "search_tools"}, (
+    assert available == NAMED_TOOLS == {"search_tools"}, (
         f"instructions name unregistered tools: {sorted(NAMED_TOOLS - available)}; "
         f"registered tools the instructions never name: {sorted(available - NAMED_TOOLS)}"
     )
@@ -155,8 +161,8 @@ def test_instructions_only_name_tools_that_exist() -> None:
     for hidden in (0, 70):
         text = build_instructions(hidden_count=hidden, memory_root=_ROOT)
         assert len(text) <= MAX_INSTRUCTIONS_CHARS
-        assert "coffer__write" in text
         assert "coffer__search_tools" in text
+        assert "coffer__write" not in text
         assert "coffer__recall" not in text
         assert "coffer__diagnose" not in text
         assert "coffer-guide" in text
@@ -168,27 +174,27 @@ def test_instructions_only_name_tools_that_exist() -> None:
         assert "coffer path logs" in text
 
 
-def test_instructions_name_only_the_tools_the_list_carries() -> None:
-    """A tool a switched-off feature took out of the list is not advertised,
-    nor the memory root while memory is off (spec experimental-features
-    "Withdraw what a switched-off feature put in front of agents"), and neither
-    is the knowledge layer without its tool."""
-    without_memory = build_instructions(hidden_count=0, tools=["write"])
-    assert "coffer__write" in without_memory
+def test_instructions_name_only_what_the_features_on_provide() -> None:
+    """The memory root is named only while memory is on, and the knowledge line
+    only while knowledge is on (spec experimental-features "Withdraw what a
+    switched-off feature put in front of agents"). No variant names a write
+    tool: there is none."""
+    without_memory = build_instructions(hidden_count=0)
     assert "coffer__search_tools" in without_memory
+    assert "knowledge" in without_memory
     assert "memory" not in without_memory
+    assert "coffer__write" not in without_memory
 
-    neither = build_instructions(hidden_count=0, tools=[])
-    assert "coffer__write" not in neither
+    neither = build_instructions(hidden_count=0, knowledge=False)
     assert "knowledge" not in neither
     assert "memory" not in neither
     assert "coffer__search_tools" in neither
     assert "coffer log" in neither
 
-    memory_only = build_instructions(hidden_count=0, tools=[], memory_root=_ROOT)
+    memory_only = build_instructions(hidden_count=0, memory_root=_ROOT, knowledge=False)
     assert _ROOT in memory_only
-    assert "coffer__write" not in memory_only
-    assert len(build_instructions(hidden_count=999_999, tools=[])) <= MAX_INSTRUCTIONS_CHARS
+    assert "knowledge" not in memory_only
+    assert len(build_instructions(hidden_count=999_999, knowledge=False)) <= MAX_INSTRUCTIONS_CHARS
 
 
 def test_every_tool_listed_reads_as_the_full_text() -> None:

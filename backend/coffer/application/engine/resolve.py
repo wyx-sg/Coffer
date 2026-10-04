@@ -12,9 +12,9 @@ That conjunction is the ENGINE's rule, which is why it is here and not in
 requirement whose code lives in another package is misfiled. What the engine
 cannot know is which provider row carries the flag — and it must not learn.
 Reaching into ``application.provider`` from here would hand every consumer of
-the engine (knowledge's tidy, memory's organise, vault-sync's conflict
-resolver, chat's voice transcription) an indirect import of a kind none of them
-names, and four cross-kind contracts would fail at once. So the provider kind
+the engine (knowledge's tidy, memory's organise, chat's voice transcription)
+an indirect import of a kind none of them names, and the cross-kind contracts
+would fail. So the provider kind
 answers that one question through :class:`InternalDefaultConnectionPort`, which
 the composition root satisfies.
 """
@@ -101,14 +101,8 @@ async def resolve_transcribe_connection(
 class InternalEngineConnection:
     """The resolution above, bound to its two sources at composition time.
 
-    Satisfies two ports structurally, because the consumers each coined their
-    own name for the same question before there was one place to ask it:
-    ``application.engine_ports.ModelSelectorPort`` (``get_default`` — knowledge's
-    ingest and tidy, memory's organise) and
-    ``infrastructure.sync.conflict_resolver.InternalModelPort``
-    (``resolve_internal_connection`` — the converge round's arbiter). Neither
-    port is this package's to rename, so this object answers to both rather
-    than making the composition root wrap it twice.
+    Satisfies ``application.engine_ports.ModelSelectorPort`` (``get_default`` —
+    knowledge's ingest and tidy, memory's organise).
     """
 
     def __init__(
@@ -125,9 +119,6 @@ class InternalEngineConnection:
         return await resolve_internal_connection(
             read_model=self._read_model, connections=self._connections
         )
-
-    async def resolve_internal_connection(self) -> ResolvedConnection | None:
-        return await self.get_default()
 
 
 __all__ = [

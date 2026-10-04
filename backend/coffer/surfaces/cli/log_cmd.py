@@ -1,11 +1,13 @@
-"""``coffer log audit|mcp|daemon|prune`` — the records the Activity page shows.
+"""``coffer log audit|mcp|daemon`` — the records the Activity page shows.
 
 Each reader goes through the same route the page reads (spec web-ui "Keep the
 command-line record readers"): the audit log (``GET /audit``), the MCP
 invocation log (``GET /mcp/invocations``, or one server's), and the daemon log
-tail (``GET /daemon/logs``), so a terminal sees what the page shows. ``prune``
-is the on-demand retention pass (spec resource-framework "Prune each registered
-log table on its own retention period").
+tail (``GET /daemon/logs``), so a terminal sees what the page shows.
+
+The audit and MCP readers page by the route's cursor: a page with more after
+it ends with the ``--cursor`` value that reads the next one, and ``--json``
+prints the route's answer, ``next_cursor`` included.
 
 ``--since`` takes an ISO 8601 instant or an age such as ``90s``, ``30m``,
 ``1h`` or ``2d``, turned into an instant here so every route receives the one
@@ -33,6 +35,11 @@ _AGE = re.compile(r"^(\d+)([smhd])$")
 _UNIT = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 
 _SINCE_HELP = "ISO 8601 instant, or an age such as 30m, 1h, 2d"
+_CURSOR_HELP = "Read the page after this one: the next_cursor a previous read printed"
+_TRACE_HELP = (
+    "Only records of one request or turn: the trace id an audit row, an MCP call, "
+    "a log line or an X-Coffer-Trace header carries"
+)
 
 
 def since_instant(raw: str | None, *, now: datetime | None = None) -> str | None:
@@ -63,9 +70,11 @@ def audit(
     event_type: str | None = typer.Option(None, "--event-type", help="Only this event type"),
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(50, "--limit", min=1, max=500, help="Most entries to print"),
+    cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
+    trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Read the audit log, newest first."""
+    """Read the audit log, newest first, one page at a time."""
     verbose = _verbose(ctx)
     if name is not None and kind is None:
         typer.echo("--name needs --kind: a name is only unique within a kind", err=True)
@@ -77,6 +86,10 @@ def audit(
         params["event_type"] = event_type
     if since is not None:
         params["since"] = since_instant(since)
+    if cursor is not None:
+        params["cursor"] = cursor
+    if trace is not None:
+        params["trace_id"] = trace
     c, _info = _cli_client.client_or_exit()
     with c:
         if name is not None and kind is not None:
@@ -85,19 +98,24 @@ def audit(
             params["resource_uid"] = resolve_uid(c, kind, name, verbose=verbose)
         r = c.get("/audit", params=params)
         _cli_client.check(r, verbose=verbose)
-    entries = r.json()["entries"]
+    body = r.json()
     if output_json:
-        typer.echo(_json.dumps({"audit_events": entries}, indent=2))
+        # The route's answer as it is: its entries and its next_cursor.
+        typer.echo(_json.dumps(body, indent=2))
         return
+    entries = body["entries"]
     table = Table(title="Audit log")
-    for col in ("Time", "Actor", "Event", "Resource"):
+    for col in ("Time", "Actor", "Event", "Resource", "Trace"):
         table.add_column(col)
     for e in entries:
         resource = (
             f"{e['resource_kind']}:{e.get('resource_name') or ''}" if e.get("resource_kind") else ""
         )
-        table.add_row(str(e["timestamp"]), e["actor"], e["event_type"], resource)
+        table.add_row(
+            str(e["timestamp"]), e["actor"], e["event_type"], resource, e.get("trace_id") or ""
+        )
     _console.print(table)
+    _next_page_hint(body.get("next_cursor"))
 
 
 @app.command("mcp")
@@ -107,12 +125,14 @@ def mcp(
     status_filter: str | None = typer.Option(None, "--status", help="ok | error"),
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(20, "--limit", min=1, max=500, help="Most calls to print"),
+    cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
+    trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the MCP invocation log, newest first.
 
     Without --server this is the log the Activity page shows, Coffer's own
-    calls (server ``coffer``) and deleted servers' rows (``deleted:<name>``)
+    calls (server ``coffer``) and the rows of servers since deleted
     included.
     """
     verbose = _verbose(ctx)
@@ -121,6 +141,10 @@ def mcp(
         params["status"] = status_filter
     if since is not None:
         params["since"] = since_instant(since)
+    if cursor is not None:
+        params["cursor"] = cursor
+    if trace is not None:
+        params["trace_id"] = trace
     c, _info = _cli_client.client_or_exit()
     with c:
         if server is None:
@@ -129,15 +153,17 @@ def mcp(
             uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
             r = c.get(f"/resources/mcp_server/{uid}/invocations", params=params)
         _cli_client.check(r, verbose=verbose)
-    rows = r.json()["invocations"]
+    body = r.json()
     if output_json:
-        typer.echo(_json.dumps({"invocations": rows}, indent=2))
+        # The route's answer as it is: its invocations and its next_cursor.
+        typer.echo(_json.dumps(body, indent=2))
         return
+    rows = body["invocations"]
     table = Table(title=f"{server or 'all servers'} invocations (last {limit})")
     table.add_column("Time")
     if server is None:
         table.add_column("Server")
-    for col in ("Type", "Key", "Duration (ms)", "Status"):
+    for col in ("Type", "Key", "Duration (ms)", "Status", "Trace"):
         table.add_column(col)
     for inv in rows:
         named = [inv.get("resource_name") or inv["resource_uid"]] if server is None else []
@@ -148,8 +174,16 @@ def mcp(
             inv["capability_key"],
             str(inv["duration_ms"]),
             inv["status"],
+            inv.get("trace_id") or "",
         )
     _console.print(table)
+    _next_page_hint(body.get("next_cursor"))
+
+
+def _next_page_hint(next_cursor: str | None) -> None:
+    """End a page that has more after it with the flag that reads the next one."""
+    if next_cursor:
+        typer.echo(f"More entries follow: add --cursor {next_cursor}")
 
 
 @app.command("daemon")
@@ -158,12 +192,19 @@ def daemon(
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     errors: bool = typer.Option(False, "--errors", help="Only errors"),
     limit: int = typer.Option(100, "--limit", min=1, max=500, help="Most records to print"),
+    trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Read the tail of the daemon log, newest first, normalised as the Activity page shows it."""
+    """Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
+
+    ``--trace`` keeps the lines of one request or turn, the same id ``coffer log
+    audit --trace`` and ``coffer log mcp --trace`` filter on.
+    """
     params: dict[str, Any] = {"limit": limit, "errors_only": errors}
     if since is not None:
         params["since"] = since_instant(since)
+    if trace is not None:
+        params["trace_id"] = trace
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/daemon/logs", params=params)
@@ -198,21 +239,3 @@ def _continuation(record: dict[str, Any]) -> list[str]:
     if isinstance(extra, str):
         return extra.splitlines()
     return [str(line) for line in extra]
-
-
-@app.command("prune")
-def prune(
-    ctx: typer.Context,
-    table: str | None = typer.Option(None, "--table", help="Prune only this table"),
-) -> None:
-    """Prune every registered log table now (or only --table), by its retention period."""
-    payload: dict[str, object] = {} if table is None else {"table_name": table}
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/retention/prune", json=payload)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    result = r.json()["tables"]
-    for name, rows in result.items():
-        typer.echo(f"pruned {name}: {rows} rows deleted")
-    if not result:
-        typer.echo("nothing to prune")

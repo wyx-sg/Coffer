@@ -1,239 +1,294 @@
-"""Wire shapes for /api/v1/sync (spec vault-sync).
+"""Wire shapes for /api/v1/sync: status, rounds, the remote, machines, the key
+(spec vault-sync; ADR sync-applies-clean-merges-and-stops-on-any-conflict).
 
-Split out of ``sync_routes.py`` for the file-size tier. Remote shapes carry
-``credential_ref`` and never the push credential itself, so a remote can be
-rendered in a browser, logged, or pasted into a bug report with nothing to
-redact.
+The shapes of a stopped round, a hold and a join live in
+``sync_stop_schemas``. Remote shapes carry ``secret_ref`` and never the
+push token, so a remote can be rendered, logged or pasted into a bug report
+with nothing to redact.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from coffer.domain.sync.backup import (
+from coffer.domain.sync.remote import (
     BRANCH_PATTERN,
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
-    DEFAULT_WORKTREE,
+    DEFAULT_USERNAME,
     MIN_INTERVAL_SECONDS,
     URL_PATTERN,
+    SyncRemoteInvalid,
     validate_branch,
     validate_url,
 )
-from coffer.domain.sync.convergence import ConvergeStatus
-from coffer.domain.sync.diff import ChangeStatus
-from coffer.domain.sync.errors import BackupRemoteInvalid
+from coffer.domain.sync.rounds import RoundStatus
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
-class DocChangeOut(BaseModel):
-    """One document's fate in one round: what moved, and which way."""
+class SyncChangeOut(BaseModel):
+    """One file a round (or a commit) changed."""
 
     path: str
-    #: The domain enum rather than ``str``, for the reason ``RoundOut.status``
-    #: is: the contract narrows this field, so the wire model declares the
-    #: three values once instead of restating them in a comment.
-    status: ChangeStatus
+    status: Literal["added", "modified", "removed"]
 
 
-class DiffCountsOut(BaseModel):
-    """What a round moved, as a tally AND as the list behind it.
-
-    The tally alone is what a row can show; the list is what the reader opens
-    the row to find out. A round reporting `+1 ~1` and then "nothing further to
-    report" is the surface refusing to answer the only question the row raises,
-    and the paths were in the payload the whole time.
-    """
-
-    added: int = 0
-    modified: int = 0
-    deleted: int = 0
-    #: Every path this side of the round touched, sorted, with its status.
-    changes: list[DocChangeOut] = []
+class PulledCommitOut(BaseModel):
+    version: str
+    time: str
+    #: The machine that made it, by label (``None`` for a hand commit).
+    machine: str | None
+    files: int
 
 
-class FailureOut(BaseModel):
+class PlaintextFindingOut(BaseModel):
+    """Where a round found a plaintext secret: the file, the line and the name
+    the value was assigned to (``token`` for one recognised by its shape).
+    Never the value."""
+
     path: str
-    reason: str
-
-
-class BreachOut(BaseModel):
-    area: str
-    deleted: int
-    total: int
-
-
-class PendingConfirmationOut(BaseModel):
-    """A round the deletion guard held.
-
-    ``direction`` says which way it tripped: ``apply`` means the remote would
-    delete too much of this vault, ``publish`` means this vault would delete
-    too much of the remote — the case where this machine is the damaged one.
-    """
-
-    direction: str
-    breaches: list[BreachOut]
-    paths: list[str]
-    raised_at: datetime
-
-
-class JoinPreviewOut(BaseModel):
-    """The join a round would make, stated before anything is applied.
-
-    ``joining`` is False for a machine that already converged here: adopting
-    is then an ordinary round with nothing to announce. ``case`` is
-    ``ambiguous`` for a returning machine whose base is gone, which still
-    needs the explicit ``keep-local`` choice (or a rebuild) before it joins.
-    """
-
-    joining: bool
-    case: Literal["new", "returning", "ambiguous"] | None = None
-    #: The commit a returning machine recovered from its own descriptor.
-    base: str | None = None
-    #: ISO date this machine last converged with the remote; None when new.
-    last_converged_on: str | None = None
-    #: Documents the remote changed since this machine's base — everything it
-    #: holds, for a new machine. None when the base is gone.
-    remote_changed: int | None = None
-    #: Documents this vault holds.
-    vault_documents: int | None = None
+    line: int
+    key: str
+    #: Whether the file still holds it; ``False``: only an earlier, unpushed
+    #: commit does.
+    current: bool
 
 
 class RoundOut(BaseModel):
-    """One converge round's outcome."""
+    """One recorded round: what it pulled, applied and pushed, and why it
+    stopped or failed."""
 
-    #: The whole of ``ConvergeStatus``, and the field that discriminates this
-    #: one shape across every round-shaped operation. The domain enum itself
-    #: rather than ``str``, so the vocabulary is declared once and the
-    #: generated contract narrows to it instead of promising any string.
-    status: ConvergeStatus
-    #: ``new`` or ``returning`` when this round joined a remote; null otherwise.
-    join: str | None = None
-    applied: DiffCountsOut
-    published: DiffCountsOut
-    commit: str | None = None
-    conflicts: list[str] = []
-    #: Paths an agent merged. Always reported, successful or not: a silent
-    #: machine merge of the user's own notes is what they would most want told.
-    agent_resolved: list[str] = []
-    failures: list[FailureOut] = []
-    #: Paths this round met that can never apply on this machine. Held and
-    #: not retried; not failures.
-    not_applicable: list[str] = []
-    locked_refs: list[str] = []
-    pending: PendingConfirmationOut | None = None
-    #: On an ``awaiting_join`` round, the join it detected and did not apply.
-    join_report: JoinPreviewOut | None = None
-    error: str | None = None
-
-
-class RunRecordOut(RoundOut):
-    """One round as the history holds it: the same report, plus when.
-
-    A superset of ``RoundOut`` rather than a shape of its own, so the two
-    surfaces that show a round — the status page and the history table — can
-    never drift into describing it differently. The timestamps are what the
-    last-round view never needed and a history cannot do without.
-    """
-
-    #: The history row's id. A row key for a surface, never shown: two rounds
-    #: that changed nothing are otherwise indistinguishable values.
-    id: int
-    started_at: datetime
-    finished_at: datetime
+    id: int | None
+    status: RoundStatus
+    started_at: str
+    finished_at: str
+    trigger: str
+    from_commit: str | None
+    to_commit: str | None
+    snapshot: str | None
+    pulled: list[PulledCommitOut]
+    applied: list[SyncChangeOut]
+    pushed: list[SyncChangeOut]
+    with_machines: list[str]
+    conflicts: int
+    held: int
+    detail: str | None
+    path: str | None
+    join: str | None
+    pulled_files: int
+    pushed_files: int
+    #: What a ``plaintext_found`` round found; empty otherwise.
+    plaintext: list[PlaintextFindingOut] = []
+    #: How many unpushed commits the round folded into one so a value removed
+    #: from a file since was not pushed (0: none).
+    folded: int = 0
 
 
 class SyncRunListOut(BaseModel):
-    #: Newest first, capped by the route. Every round, including the ones that
-    #: changed nothing — those are what make a gap in the record visible.
-    runs: list[RunRecordOut]
+    """A page of the history, newest first, and how many rounds it holds."""
+
+    rounds: list[RoundOut]
+    total: int
+    next_cursor: str | None = None
 
 
-class AdoptIn(BaseModel):
-    #: Only for a returning machine whose recorded base is gone from the
-    #: remote's history: ``keep-local`` joins as new and publishes this vault's
-    #: documents as additions. Absent, that case is refused rather than guessed.
-    choice: str | None = None
+def _url(value: str) -> str:
+    try:
+        return validate_url(value)
+    except SyncRemoteInvalid as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def _branch(value: str) -> str:
+    try:
+        return validate_branch(value)
+    except SyncRemoteInvalid as exc:
+        raise ValueError(str(exc)) from exc
+
+
+#: A username git can send: no blank, colon, at-sign or slash.
+USERNAME_PATTERN = r"^[^\s:@/]+$"
 
 
 class SyncRemoteIn(BaseModel):
-    """The remote as the user configures it.
-
-    Every field but the URL carries the spec's default, so a ``PUT`` with a
-    bare URL is a complete configuration rather than a half-set one.
-
-    The URL and the branch become arguments to ``git``. Neither may begin with
-    ``-`` — git would read it as an option, and ``--receive-pack=<cmd>`` is a
-    command — and the branch is held to ``git check-ref-format --branch``. The
-    ``pattern`` catches the shape at the wire; the validators run the domain's
-    full rule, so a bad name is a 422 here rather than a git error later.
-    """
-
-    url: str = Field(pattern=URL_PATTERN)
+    url: str = Field(min_length=1, pattern=URL_PATTERN)
     branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
-    #: A name in the credential store — never the secret. The daemon resolves
-    #: it at push time and nowhere else.
-    credential_ref: str | None = None
-    include_credentials: bool = False
+    secret_ref: str | None = None
+    #: The username an HTTPS token is sent with (Bitbucket and Azure DevOps
+    #: need a real one; GitHub and GitLab ignore it).
+    username: str = Field(
+        default=DEFAULT_USERNAME, min_length=1, max_length=128, pattern=USERNAME_PATTERN
+    )
+    #: Whether ``secret/`` (ciphertext only) travels with the vault.
+    include_secret: bool = False
     interval_seconds: int = Field(default=DEFAULT_INTERVAL_SECONDS, ge=MIN_INTERVAL_SECONDS)
     enabled: bool = True
-    worktree_path: str = Field(default=DEFAULT_WORKTREE, min_length=1)
 
     @field_validator("url")
     @classmethod
-    def _url(cls, value: str) -> str:
-        try:
-            return validate_url(value)
-        except BackupRemoteInvalid as e:
-            raise ValueError(e.reason) from e
+    def check_url(cls, value: str) -> str:
+        return _url(value)
 
     @field_validator("branch")
     @classmethod
-    def _branch(cls, value: str) -> str:
-        try:
-            return validate_branch(value)
-        except BackupRemoteInvalid as e:
-            raise ValueError(e.reason) from e
+    def check_branch(cls, value: str) -> str:
+        return _branch(value)
 
 
 class SyncRemoteOut(BaseModel):
     url: str
     branch: str
-    credential_ref: str | None
-    include_credentials: bool
+    secret_ref: str | None
+    username: str
+    include_secret: bool
     interval_seconds: int
     enabled: bool
-    worktree_path: str
 
 
 class SyncRemoteStateOut(BaseModel):
-    #: ``False`` on a fresh vault. Sync being off is the ordinary state, not an
-    #: error, so an unconfigured remote is a 200 with ``remote: null``.
     configured: bool
     remote: SyncRemoteOut | None
 
 
 class SyncRemoteClearedOut(BaseModel):
-    #: ``False`` when there was nothing to clear — delete is idempotent.
     cleared: bool
+    #: Whether ``POST /sync/remote/restore`` can put it back (Undo).
+    restorable: bool = False
+
+
+class RemoteCheckIn(BaseModel):
+    url: str = Field(min_length=1, pattern=URL_PATTERN)
+    branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
+    secret_ref: str | None = None
+    username: str = Field(
+        default=DEFAULT_USERNAME, min_length=1, max_length=128, pattern=USERNAME_PATTERN
+    )
+
+    @field_validator("url")
+    @classmethod
+    def check_url(cls, value: str) -> str:
+        return _url(value)
+
+    @field_validator("branch")
+    @classmethod
+    def check_branch(cls, value: str) -> str:
+        return _branch(value)
+
+
+class RemoteCheckOut(BaseModel):
+    """What the remote holds: ``empty`` (the first push fills it), ``vault``
+    (a Coffer vault, with its layout), ``other`` (a repository that is not
+    one), ``unreachable``, ``auth_failed`` or ``failed`` (with git's
+    message)."""
+
+    result: Literal["empty", "vault", "other", "unreachable", "auth_failed", "failed"]
+    tip: str | None
+    layout: int | None
+    detail: str | None
+
+
+class AreaCountsOut(BaseModel):
+    knowledge_documents: int
+    skills: int
+    resources: int
+    secrets: int
+    secrets_synced: bool
+
+
+class WaitingCommitOut(BaseModel):
+    """One commit the remote does not have yet."""
+
+    version: str
+    time: str
+    #: ``user`` (a person through Coffer), ``disk``, ``agent``, ``daemon``,
+    #: ``curation`` or ``sync``.
+    writer: str
+    summary: str
+    changes: list[SyncChangeOut]
+
+
+class ProblemOut(BaseModel):
+    kind: Literal[
+        "unreachable",
+        "auth_failed",
+        "waiting_approval",
+        "push_failed",
+        "plaintext_found",
+        "cloud_folder",
+        "layout",
+        "git_missing",
+        "failed",
+    ]
+    #: Git's message, with any credential in it scrubbed.
+    message: str
+    secret_ref: str | None
+    since: str | None
+    #: The chore for the person's agent when the fix is outside Coffer — a
+    #: rejected push, a refused sign-in, an unreachable remote, git missing.
+    #: Never carries a token or a secret's value.
+    handoff: HandoffOut | None = None
+    #: For ``plaintext_found``: each place the value was found, never the value.
+    plaintext: list[PlaintextFindingOut] = []
 
 
 class SyncStatusOut(BaseModel):
     configured: bool
     remote: SyncRemoteOut | None
-    last_run: RoundOut | None
-    #: This machine's own id, so a surface can mark its row in the registry.
     machine_id: str
-    #: ``False`` when the id came from the local fallback file rather than the
-    #: host, which means it does not survive deleting ``~/.coffer``.
-    machine_id_is_derived: bool
-    #: Whether this machine has joined the remote. Until it has, a round
-    #: reports ``awaiting_join`` and only ``POST /adopt`` joins.
-    joined: bool = False
-    #: Every path recorded as not applicable on this machine, sorted.
-    not_applicable: list[str] = []
+    machine_name: str
+    joined: bool
+    #: When the round now running started; ``None`` when none is.
+    running_since: str | None
+    last_round: RoundOut | None
+    next_round_at: str | None
+    machines: int
+    areas: AreaCountsOut
+    waiting: list[WaitingCommitOut]
+    vault_path: str
+    #: The tool whose synchronised folder holds the vault (sync is paused).
+    synchroniser: str | None
+    problem: ProblemOut | None
+    conflicts: int
+    held: int
+    join_choices: int
+    #: Commits this vault has that the remote (as last fetched) lacks, and the
+    #: other way round — the Overview's "1 behind · 0 ahead".
+    ahead: int = 0
+    behind: int = 0
+    #: Where the vault's files really are (``vault_path`` is the path Coffer
+    #: uses and may be a link to it): the "From" of Move the vault.
+    vault_real_path: str | None = None
+    #: The folder Move the vault offers: ``~/.coffer/vault`` as a real folder.
+    default_vault_path: str | None = None
+
+
+class VaultMoveIn(BaseModel):
+    #: The folder to move the vault to: absolute (``~`` allowed), empty or absent.
+    to: str
+
+
+class VaultMoveOut(BaseModel):
+    #: The folder the vault was in; it is left empty for the person to delete.
+    origin: str = Field(alias="from")
+    to: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SyncPluginOut(BaseModel):
+    id: str
+    name: str
+    marketplace: str | None
+    enabled: bool
+    version: str | None
+
+
+class AgentInventoryOut(BaseModel):
+    type: str
+    name: str
+    plugins: list[SyncPluginOut]
 
 
 class MachineOut(BaseModel):
@@ -242,14 +297,15 @@ class MachineOut(BaseModel):
     os: str
     hostname: str
     coffer_version: str
-    #: The *day* this machine last converged. A day rather than an instant
-    #: because an idle machine must not commit a heartbeat every round.
-    last_converged_on: str | None
-    #: Null when either side has published no fingerprint yet. ``False`` means
-    #: that machine's credentials cannot be decrypted here.
+    #: The last round that moved anything, as that machine recorded it.
+    last_round_at: str | None
+    last_converged_commit: str | None
+    key_fingerprint: str | None
+    #: Whether this machine's key opens that machine's secrets.
     key_matches: bool | None
-    agents: list[str]
     is_self: bool
+    last_round: str | None
+    agents: list[AgentInventoryOut]
 
 
 class MachineListOut(BaseModel):
@@ -257,34 +313,78 @@ class MachineListOut(BaseModel):
 
 
 class MachineRenameIn(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=64)
 
 
 class MachineRemovedOut(BaseModel):
-    #: Retiring a machine removes its descriptor and rewrites nothing else. No
-    #: scope can name a machine (reach is machine-local); a channel's binding
-    #: and the curation owner do name one, and are then reported as naming a
-    #: machine the registry no longer holds.
     removed: bool
-
-
-class RestoreIn(BaseModel):
-    #: A sha, a ref, or a ``YYYY-MM-DD`` date resolving to the last commit at
-    #: or before it — the tip cannot return something deleted last week.
-    at: str | None = None
-
-
-class KeyMaterialIn(BaseModel):
-    material: str
-
-
-class KeyMaterialOut(BaseModel):
-    material: str
-
-
-class KeyImportOut(BaseModel):
-    locked_refs: list[str]
 
 
 class KeyFingerprintOut(BaseModel):
     fingerprint: str | None
+
+
+class KeyMaterialIn(BaseModel):
+    #: The key file's text as the person picked it: a ``.cfk`` backup or a
+    #: bare key.
+    material: str = Field(min_length=1)
+
+
+class KeyPreviewOut(BaseModel):
+    """A key file beside this machine's key, before anything is replaced."""
+
+    #: The key in the file (12 hex characters, never the key).
+    fingerprint: str
+    #: This machine's key, or null when it holds none yet.
+    current_fingerprint: str | None
+    #: True when both are the same key, so importing changes nothing.
+    same: bool
+    #: True for a passphrase-protected ``.cfk`` backup.
+    protected: bool
+
+
+class KeyImportIn(BaseModel):
+    material: str
+    #: Opens a ``.cfk`` backup; not needed for a bare key. Never stored or
+    #: recorded.
+    passphrase: str | None = None
+
+
+class KeyImportOut(BaseModel):
+    #: The key this machine now uses.
+    fingerprint: str
+    #: True when a different key was installed before (it is kept as a backup).
+    replaced: bool
+    #: How many stored secrets the key decrypts.
+    readable: int
+    #: The stored secrets it still cannot decrypt.
+    locked_refs: list[str]
+
+
+__all__ = [
+    "AgentInventoryOut",
+    "AreaCountsOut",
+    "KeyFingerprintOut",
+    "KeyImportIn",
+    "KeyImportOut",
+    "KeyMaterialIn",
+    "KeyPreviewOut",
+    "MachineListOut",
+    "MachineOut",
+    "MachineRemovedOut",
+    "MachineRenameIn",
+    "ProblemOut",
+    "PulledCommitOut",
+    "RemoteCheckIn",
+    "RemoteCheckOut",
+    "RoundOut",
+    "SyncChangeOut",
+    "SyncPluginOut",
+    "SyncRemoteClearedOut",
+    "SyncRemoteIn",
+    "SyncRemoteOut",
+    "SyncRemoteStateOut",
+    "SyncRunListOut",
+    "SyncStatusOut",
+    "WaitingCommitOut",
+]

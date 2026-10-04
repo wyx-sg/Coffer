@@ -64,13 +64,14 @@ async def test_dm_turn_carries_a_direct_origin_block(env: ChannelEnv) -> None:
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert (await _user_texts(env))[0] == (
-        "[Message origin]\nplatform: telegram\nchat: direct (id: owner)\nfrom: Owner\n\nhi"
+        "[Message origin]\nplatform: telegram\nchat: direct (id: owner)\n"
+        "from: Owner (id: owner)\n\nhi"
     )
 
 
 @pytest.mark.acceptance(spec="channels", scenario="every turn carries its origin")
 async def test_origin_is_repeated_on_later_turns_not_just_the_first(env: ChannelEnv) -> None:
-    """An agent can be switched mid-conversation (``/agent``) and a session can
+    """An agent can be switched between conversations (``/new <agent>``) and a session can
     be resumed, so a first-turn-only header would silently go missing."""
     _resource, adapter = await env.paired_channel()
 
@@ -93,6 +94,6 @@ async def test_a_command_is_not_prefixed_with_an_origin_block(env: ChannelEnv) -
 
     await env.processor.on_message(inbound("tg", "owner", "/help"))
 
-    assert any("/agent" in text for _chat, text in adapter.sent)
+    assert any("/model" in text for _chat, text in adapter.sent)
     assert not any("[Message origin]" in text for _chat, text in adapter.sent)
     assert await env.chat.list_conversations() == []

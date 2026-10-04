@@ -15,6 +15,17 @@ export function useInternalEngineConfig() {
   });
 }
 
+/**
+ * Whether Coffer's own model is set — what decides if knowledge curates items
+ * and memory merges entries by meaning, or both take what arrives as it is.
+ * `undefined` while the config is loading or unreadable, so a page shows
+ * neither the curation controls nor the "set a model" line until it knows.
+ */
+export function useCofferModelSet(): boolean | undefined {
+  const { data } = useInternalEngineConfig();
+  return data === undefined ? undefined : Boolean(data.model);
+}
+
 /** Set (or clear, with null) the model the internal engine runs on. */
 export function useSetInternalEngineModel() {
   const qc = useQueryClient();
@@ -82,8 +93,8 @@ export function useSetCurationOwner() {
       void qc.invalidateQueries({ queryKey: internalEngineKey });
       toast.success(
         machineId === null
-          ? t("settings.upkeep.owner.clearedToast")
-          : t("settings.upkeep.owner.claimedToast"),
+          ? t("knowledge.automatic.owner.clearedToast")
+          : t("knowledge.automatic.owner.claimedToast"),
       );
     },
     onError: (error) => toast.error(translateApiError(t, error)),

@@ -30,3 +30,8 @@ export function abbreviateHomePath(path: string): string {
   if (parts.length <= 2) return path;
   return `…/${parts.slice(-2).join("/")}`;
 }
+
+/** The program an agent type runs as, as it appears on PATH. */
+export function agentProgramName(type: AgentType): string {
+  return type === "claude_code" ? "claude" : "codex";
+}

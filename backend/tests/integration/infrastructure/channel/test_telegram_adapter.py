@@ -232,7 +232,7 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     assert fake_telegram.calls[0][0] == "getMe"
     # The command menu is still registered, just off the startup path.
     registered = {c["command"] for c in fake_telegram.calls_for("setMyCommands")[0]["commands"]}
-    assert registered >= {"new", "agent", "model", "stop", "status", "help"}
+    assert registered >= {"new", "model", "dir", "stop", "status", "help"}
 
     msg = recorder.messages[0]
     assert (msg.channel, msg.chat_id, msg.text) == ("tg", "555", "hello")
@@ -289,7 +289,7 @@ async def test_long_reply_is_chunked_on_paragraph_boundary(fake_telegram: FakeTe
     sends = fake_telegram.calls_for("sendMessage")
     assert len(sends) == 2  # > 4000 chars total → two messages
     assert sends[0]["text"] == para1  # split exactly on the paragraph boundary,
-    assert sends[1]["text"] == para2  # delivered in order
+    assert sends[1]["text"] == f"(2/2)\n{para2}"  # delivered in order, numbered
     assert all(len(s["text"]) <= 4000 for s in sends)
     assert sent.message_id == "102"  # handle of the LAST delivered chunk
 
@@ -356,14 +356,11 @@ async def test_non_json_upstream_surfaces_as_channel_send_failed(
 async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:
-        await adapter.edit_text("555", "10", "edited")
         await adapter.delete_message("555", "10")
         await adapter.send_typing("555")
     finally:
         await adapter.stop()
 
-    edits = fake_telegram.calls_for("editMessageText")
-    assert edits[0] == {"chat_id": "555", "message_id": "10", "text": "edited"}
     assert fake_telegram.calls_for("deleteMessage") == [{"chat_id": "555", "message_id": "10"}]
     assert fake_telegram.calls_for("sendChatAction") == [{"chat_id": "555", "action": "typing"}]
 
@@ -439,12 +436,11 @@ async def test_send_text_chat_kind_group_is_ignored(fake_telegram: FakeTelegram)
     assert send["chat_id"] == "555"
 
 
-async def test_capabilities_declare_groups_but_not_history_fetch(
+async def test_capabilities_declare_no_history_fetch(
     fake_telegram: FakeTelegram,
 ) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:
-        assert adapter.capabilities.supports_groups is True
         assert adapter.capabilities.supports_history_fetch is False
     finally:
         await adapter.stop()
@@ -703,7 +699,7 @@ async def test_forwarded_message_text_starts_with_forwarded_marker(
             _group_update(
                 35,
                 text="original text",
-                forward_from={"first_name": "Alice"},
+                forward_origin={"type": "user", "sender_user": {"first_name": "Alice"}},
             )
         ]
     )
@@ -816,34 +812,40 @@ async def test_live_text_stops_writing_once_the_platform_rejects_an_update(
 
 
 async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram) -> None:
-    """The menu the platform shows lists every command that exists.
+    """The menus the platform shows list every command that exists.
 
-    See spec channels "Register the bot's command menu and profile from one roster".
+    See spec channels "Register the bot's command menu and profile from one roster"
+    and spec channels/telegram "Register command menus per chat scope and language".
     """
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
     try:
         # Registration runs off the startup path, so the reconciler is not held
         # up by calls nothing depends on — wait for it rather than racing it.
-        await wait_until(lambda: len(fake_telegram.calls_for("setMyCommands")) == 1)
         await wait_until(lambda: bool(fake_telegram.calls_for("setChatMenuButton")))
         registered = fake_telegram.calls_for("setMyCommands")
-        assert len(registered) == 1
-        names = {entry["command"] for entry in registered[0]["commands"]}
+        # Three scopes (default, private, group) times two languages (English, zh).
+        assert len(registered) == 6
+        private = next(
+            c
+            for c in registered
+            if (c.get("scope") or {}).get("type") == "all_private_chats"
+            and "language_code" not in c
+        )
+        names = {entry["command"] for entry in private["commands"]}
         # Spelled out rather than read from the roster: a test that asserts the
         # menu matches the list the menu is built from would pass however wrong
         # both are. This list is the independent statement of what a user can
         # type, and adding a command means adding it here on purpose.
         assert names == {
             "new",
-            "agent",
-            "model",
-            "effort",
             "stop",
+            "model",
+            "dir",
             "status",
-            "save",
+            "resume",
             "thread",
-            "threads",
+            "del",
             "help",
         }
         assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
@@ -851,6 +853,34 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
         }
     finally:
         await adapter.stop()
+
+
+async def test_a_group_command_naming_this_bot_arrives_as_the_bare_command(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """``/model@cofferbot`` reaches the core as ``/model`` and addressed; another bot's
+    command is not addressed to us (spec channels/telegram "Treat a command addressed
+    to this bot by name as the command")."""
+    fake_telegram.results["getMe"] = {"id": 4242, "username": "CofferBot"}
+    updates = []
+    for update_id, text in ((30, "/model@cofferbot opus"), (31, "/model@otherbot opus")):
+        update = _message_update(update_id, text=text)
+        update["message"]["chat"] = {"id": -100, "type": "supergroup", "title": "Ops"}
+        update["message"]["entities"] = [
+            {"type": "bot_command", "offset": 0, "length": len(text.split()[0])}
+        ]
+        updates.append(update)
+    await fake_telegram.update_batches.put(updates)
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 2)
+    finally:
+        await adapter.stop()
+    ours, theirs = recorder.messages
+    assert (ours.text, ours.addressed) == ("/model opus", True)
+    assert (theirs.text, theirs.addressed) == ("/model@otherbot opus", False)
 
 
 async def test_start_probes_identity_including_privacy_mode(
@@ -1299,3 +1329,109 @@ async def test_a_long_snapshot_keeps_the_draft_alive(fake_telegram: FakeTelegram
     assert len(sent) == 4096
     # The tail is what the reader is watching, not the head they have seen.
     assert sent.startswith("…") and sent.endswith("x")
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram",
+    scenario="a direct chat's draft shows the status in its thinking block",
+)
+async def test_a_rich_draft_puts_the_status_header_in_the_thinking_block(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.supports_drafts = True
+    fake_telegram.supports_rich_drafts = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555")
+    try:
+        await surface.update(
+            "⏳ Working · 2m 14s · 2 steps\n✅ Read · a.ts\n─\nThe **answer** so far"
+        )
+    finally:
+        await adapter.stop()
+    [draft] = fake_telegram.calls_for("sendRichMessageDraft")
+    assert draft["rich_message"]["markdown"] == (
+        "<tg-thinking>Working · 2m 14s · 2 steps</tg-thinking>\n\n- ✅ Read · a.ts\n\n"
+        "The **answer** so far"
+    )
+    assert draft["can_stop"] is True
+    assert not fake_telegram.calls_for("sendMessageDraft")
+
+
+async def test_a_refused_rich_draft_falls_back_to_the_plain_draft(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.supports_drafts = True  # rich drafts stay unsupported
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555")
+    try:
+        await surface.update("⏳ Working · 1s")
+        await surface.update("⏳ Working · 2s")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendRichMessageDraft")) == 1  # latched off after one
+    assert fake_telegram.calls_for("sendMessageDraft")[0]["text"] == "⏳ Working · 1s"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a rate-limited send backs off and retries")
+async def test_a_rate_limited_send_waits_the_platforms_retry_after_then_succeeds(
+    fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits: list[float] = []
+
+    async def _sleep(delay: float) -> None:
+        waits.append(delay)
+
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram_transport.asyncio.sleep", _sleep)
+    fake_telegram.rate_limited_sends = [2, 5]
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        sent = await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    assert sent.message_id
+    assert waits == [2.0, 5.0]  # each wait is the platform's own retry_after
+    assert len(fake_telegram.calls_for("sendMessage")) == 3
+
+
+async def test_a_send_that_stays_rate_limited_fails_after_a_bounded_number_of_retries(
+    fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram_transport.asyncio.sleep", _sleep)
+    fake_telegram.rate_limited_sends = [1] * 10
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        with pytest.raises(ChannelSendFailed):
+            await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendMessage")) == 4  # the send plus three retries
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="every chunk of a reply is reported and deleted"
+)
+async def test_every_chunk_of_a_reply_is_reported_and_withdrawn_with_delete_message(
+    fake_telegram: FakeTelegram,
+) -> None:
+    para1 = ("alpha " * 500).strip()
+    para2 = ("bravo " * 500).strip()
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        sent = await adapter.send_text("555", f"{para1}\n\n{para2}")
+        for message_id in sent.all_ids:
+            await adapter.withdraw_message("555", message_id, chat_kind="group")
+        caps = adapter.capabilities
+    finally:
+        await adapter.stop()
+
+    assert sent.all_ids == ("101", "102")
+    assert fake_telegram.calls_for("deleteMessage") == [
+        {"chat_id": "555", "message_id": "101"},
+        {"chat_id": "555", "message_id": "102"},
+    ]
+    assert caps.withdraw_window_hours == 48 and caps.withdraw_removes is True

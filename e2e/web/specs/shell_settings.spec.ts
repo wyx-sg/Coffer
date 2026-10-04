@@ -1,11 +1,11 @@
 // e2e/web/specs/shell_settings.spec.ts
 //
-// UI Shell §User Story 5 — the redesigned Settings: tabs grouped by what the
-// user manages (General, Coffer's model, Data, Security, About), the daemon
-// never surfaced as a concept, the sidebar language switcher, and the removal
-// of the confusing controls.
+// Settings as a modal over the current page (change revise-web-ui-ia): six
+// tabs grouped by what they manage (General, Security, Data, Daemon, About,
+// Features), each at /settings/<tab>; the version menu's language switch; and no shutdown
+// control anywhere.
 
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { acceptance } from "./_acceptance";
 import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 
@@ -15,54 +15,88 @@ acceptance(
   "web-ui",
   "settings layout uses the redesigned tabbed sidebar",
   async ({ page }) => {
-    await page.goto("/settings");
-    // /settings index redirects to the first tab — General.
-    await expect(page).toHaveURL(/\/settings\/general/);
-
-    // Settings shows five tabs, in the order the layout declares them:
-    // General, Coffer's model, Data, Security, About (frontend/src/router.tsx
-    // + SettingsLayout.tsx). The daemon is never one of them.
-    for (const name of [
-      /^General$/,
-      /^Coffer's model$/,
-      /^Data$/,
-      /^Security$/,
-      /^About$/,
-    ]) {
-      await expect(page.getByRole("link", { name })).toBeVisible();
-    }
-    // The daemon is never surfaced — no Daemon tab, no status panel. Asserted
-    // here only: this is the test that enumerates the tab set.
-    await expect(page.getByRole("link", { name: /^Daemon$/ })).toHaveCount(0);
-
-    // Click About — content swaps without leaving /settings/*
-    await page.getByRole("link", { name: /^About$/ }).click();
-    await expect(page).toHaveURL(/\/settings\/about/);
-    // Assert the About pane's own heading is now rendered — proves the
-    // outlet actually swapped, not just the URL. Without this, a regression
-    // where the link updates the URL but the inner pane fails to mount
-    // would still pass.
+    // Opened from a page, Settings is a modal over it.
+    await page.goto("/mcp-servers");
     await expect(
-      page.getByRole("heading", { name: /about coffer/i }),
+      page.getByRole("heading", { level: 1, name: "MCP servers" }),
     ).toBeVisible();
+    await page.getByTestId("sidebar-settings").click();
+    await expect(page).toHaveURL(/\/settings\/general$/);
+    const modal = page.getByTestId("settings-modal");
+    await expect(modal).toBeVisible();
+
+    // Six tabs, in this order.
+    const tabs = modal
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("link");
+    await expect(tabs).toHaveText([
+      "General",
+      "Security",
+      "Data",
+      "Daemon",
+      "About",
+      "Features",
+    ]);
+
+    // Clicking a tab swaps the pane without closing the modal.
+    await modal.getByRole("link", { name: /^About$/ }).click();
+    await expect(page).toHaveURL(/\/settings\/about$/);
+    await expect(modal.getByTestId("settings-about-head")).toBeVisible();
+
+    // Escape closes it onto the page underneath, at that page's route.
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/mcp-servers$/);
+    await expect(modal).toHaveCount(0);
+
+    // A fresh load of a Settings tab opens it over Overview; closing lands on /.
+    await page.goto("/settings/daemon");
+    await expect(page.getByTestId("settings-modal")).toBeVisible();
+    await expect(page.getByTestId("settings-daemon-status")).toBeVisible();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  },
+);
+
+acceptance(
+  "experimental-features",
+  "a pinned feature's switch is disabled",
+  async ({ page }) => {
+    // The e2e daemon pins every experimental feature on (`COFFER_FEATURES`),
+    // so the tab lists the four in registry order, each with its Experimental
+    // mark, and every switch is disabled with the pin named as the reason.
+    await page.goto("/settings/features");
+    const pane = page.getByTestId("settings-pane-features");
+    for (const [key, name] of [
+      ["knowledge", "Knowledge"],
+      ["memory", "Memory"],
+      ["sync", "Sync"],
+      ["models", "Model providers"],
+    ]) {
+      const row = pane.getByTestId(`feature-${key}`);
+      await expect(row).toContainText("Experimental");
+      await expect(row).toContainText(/Pinned by COFFER_FEATURES/);
+      const toggle = row.getByRole("switch", { name });
+      await expect(toggle).toBeChecked();
+      await expect(toggle).toBeDisabled();
+    }
   },
 );
 
 acceptance(
   "web-ui",
-  "settings drops the confusing controls",
+  "settings offers no shutdown control",
   async ({ page }) => {
-    // No Settings tab exposes a daemon-shutdown or token-rotation control
-    // — both are rare/dangerous actions that belong on the CLI. Every tab is
-    // visited, and each is first pinned to a card heading it renders itself,
-    // so a pane that failed to mount can't satisfy the absence checks
-    // vacuously.
+    // No Settings tab exposes a daemon-shutdown control — stopping the
+    // daemon from the page kills the page. Every tab is visited, and each is
+    // first pinned to a card heading it renders itself, so a pane that failed
+    // to mount can't satisfy the absence checks vacuously.
     const panes: [string, RegExp][] = [
-      ["general", /^Preferences$/], // GeneralSettings
-      ["engine", /^Automatic upkeep$/], // EngineSettings -> UpkeepSettings
-      ["data", /^Data retention$/], // DataSettings
-      ["security", /^Credential encryption$/], // SecuritySettings
-      ["about", /^About Coffer$/], // AboutPage
+      ["general", /^Coffer's model$/], // GeneralSettings -> Coffer's model
+      ["security", /^Encryption$/], // SecuritySettings
+      ["data", /^Vault$/], // DataSettings
+      ["daemon", /^Startup$/], // DaemonSettings
+      ["about", /^Coffer$/], // AboutPage
+      ["features", /^Features$/], // ExperimentalFeaturesSettings
     ];
     for (const [tab, heading] of panes) {
       await page.goto(`/settings/${tab}`);
@@ -71,14 +105,16 @@ acceptance(
         page.getByRole("button", { name: /shut\s*down/i }),
       ).toHaveCount(0);
       await expect(
-        page.getByRole("button", { name: /rotate token/i }),
+        page.getByRole("button", { name: /stop daemon/i }),
       ).toHaveCount(0);
     }
 
-    // The About tab carries no language selector (the sidebar switcher is
-    // the single source) and no developer-only resource-kind list.
+    // The About tab carries no language selector (the version menu and
+    // General carry it) and no developer-only resource-kind list.
     await page.goto("/settings/about");
-    await expect(page.locator("main").getByRole("combobox")).toHaveCount(0);
+    await expect(
+      page.getByTestId("settings-modal").getByRole("combobox"),
+    ).toHaveCount(0);
     await expect(page.getByText(/installed resource kinds/i)).toHaveCount(0);
   },
 );
@@ -126,7 +162,9 @@ acceptance(
       // Settings auto-save: there is no Save button — the days field persists on
       // blur. Fill the value, then blur and wait for the PATCH to land.
       const saved = page.waitForResponse(
-        (r) => r.url().includes("/retention/policies/") && r.request().method() === "PATCH",
+        (r) =>
+          r.url().includes("/retention/policies/") &&
+          r.request().method() === "PATCH",
         { timeout: 10_000 },
       );
       await daysInput.fill("45");
@@ -156,8 +194,10 @@ acceptance(
       page.getByRole("link", { name: /MCP servers/i }).first(),
     ).toBeVisible();
 
-    // The sidebar language switcher is a button group (EN / 中).
-    await page.getByRole("button", { name: "中" }).click();
+    // Language lives in Settings › General (the sidebar footer is one Settings row).
+    await page.getByTestId("sidebar-settings").click();
+    await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "中文" }).click();
+    await page.keyboard.press("Escape");
 
     // Sidebar labels switch to Chinese within the same frame.
     await expect(
@@ -171,3 +211,97 @@ acceptance(
     ).toBeVisible();
   },
 );
+
+// Settings > Data and > Daemon in a real browser; the component tests
+// (DataSettings.test.tsx, DaemonSettings.test.tsx) carry the scenarios'
+// acceptance markers. The e2e daemon runs under its own throwaway HOME, so
+// clearing its cache or pinning its port touches nothing of the user's.
+
+test("the data tab shows four blocks and clears the rebuildable cache after a confirmation", async ({
+  page,
+}) => {
+  await page.goto("/settings/data");
+  const modal = page.getByTestId("settings-modal");
+  for (const block of ["vault", "local", "history", "cache"]) {
+    await expect(modal.getByTestId(`settings-data-${block}`)).toBeVisible();
+  }
+  await expect(modal.getByText(/this mac only/i)).toHaveCount(0);
+  await expect(modal.locator("#forever-mcp_invocations")).toBeVisible();
+
+  await modal
+    .getByTestId("settings-data-cache")
+    .getByRole("button", { name: /^clear$/i })
+    .click();
+  const dialog = page.getByRole("dialog", { name: /clear the cache/i });
+  await expect(dialog).toBeVisible();
+  const cleared = page.waitForResponse(
+    (r) =>
+      r.url().includes("/storage/cache/clear") &&
+      r.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: /clear cache/i }).click();
+  expect((await cleared).ok()).toBe(true);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("the daemon tab refuses a port out of range and leaves a saved one pending until restart", async ({
+  page,
+}) => {
+  const { token, port } = readDaemonToken();
+  const putPort = (p: number) =>
+    fetch(`http://127.0.0.1:${port}/api/v1/daemon/port`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Coffer-Token": token,
+        "X-Coffer-Actor": "e2e",
+      },
+      body: JSON.stringify({ port: p }),
+    });
+  try {
+    await page.goto("/settings/daemon");
+    const modal = page.getByTestId("settings-modal");
+    await expect(modal.getByTestId("settings-daemon-status")).toContainText(
+      `127.0.0.1:${port}`,
+    );
+    // A browser offers a Restart control (the daemon restarts itself), never
+    // a command to copy.
+    await expect(
+      modal
+        .getByTestId("settings-daemon-status")
+        .getByRole("button", { name: /^restart$/i }),
+    ).toBeVisible();
+    await expect(modal.getByText("coffer daemon restart")).toHaveCount(0);
+    await expect(modal.getByText(/token/i)).toHaveCount(0);
+
+    // The field holds the port of the next start (the suite's daemon binds a
+    // port from its test range, so that one may differ from the bound port).
+    const configured = (await (
+      await fetch(`http://127.0.0.1:${port}/api/v1/daemon/port`, {
+        headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
+      })
+    ).json()) as { port: number };
+    const field = modal.getByRole("textbox", { name: /^port$/i });
+    await expect(field).toHaveValue(String(configured.port));
+    await field.fill("80");
+    await modal.getByRole("button", { name: /^save$/i }).click();
+    await expect(
+      modal.getByRole("alert").getByText(/use a port from 1024 to 65535/i),
+    ).toBeVisible();
+
+    const next = port === 65000 ? 65001 : 65000;
+    await field.fill(String(next));
+    await modal.getByRole("button", { name: /^save$/i }).click();
+    await expect(
+      modal.getByTestId("settings-daemon-port-pending"),
+    ).toContainText(`Port ${next} saved`);
+    // Until the restart the status keeps the port it answers on.
+    await expect(modal.getByTestId("settings-daemon-status")).toContainText(
+      `127.0.0.1:${port}`,
+    );
+  } finally {
+    // Best effort: the suite's HOME is throwaway, and its daemon binds from
+    // its test range whatever the file says.
+    await putPort(port).catch(() => undefined);
+  }
+});

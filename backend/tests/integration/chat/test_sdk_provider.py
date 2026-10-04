@@ -26,6 +26,8 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk import TextBlock as SdkTextBlock
 
+from coffer.domain.channel_turn import CHANNEL_TURN_ENV
+from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.chat.message import Message, Role, TextBlock
@@ -107,14 +109,14 @@ async def _repo(tmp_path) -> tuple[ConversationRepo, Any]:  # type: ignore[no-un
 
 
 #: The channel a bridged conversation points at. A uid, because that is what the
-#: row stores (ADR resource-identity-is-an-immutable-uid) — the name reaches the
+#: row stores (ADR identity-is-the-uid-inside-the-file) — the name reaches the
 #: prompt only through the resolver the provider is handed.
 _TELEGRAM_UID = "0b9d2f1a4c7e4b6a8d3f5c1e7a9b2d40"
 
 
-async def _telegram_name(uid: str) -> str | None:
+async def _telegram_name(uid: str, conversation_id: str) -> ChannelNote | None:
     assert uid == _TELEGRAM_UID
-    return "Telegram"
+    return ChannelNote(name="tg", platform="Telegram", chat_kind="direct")
 
 
 def _conv(agent_key: str = "claude_code", *, channel_uid: str | None = None) -> Conversation:
@@ -170,9 +172,9 @@ async def test_init_conversation_defaults_missing_cwd_to_workspace(  # type: ign
 
     await provider.init_conversation(conv.id, {})
     stored = await repo.get_agent_config(conv.id)
-    expected = str(tmp_path / ".coffer" / "workspace")
+    expected = str(tmp_path / ".coffer" / "content" / "workspace")
     assert stored.cwd == expected
-    assert (tmp_path / ".coffer" / "workspace").is_dir()
+    assert (tmp_path / ".coffer" / "content" / "workspace").is_dir()
 
     await engine.dispose()
 
@@ -343,7 +345,7 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
         conversations=repo,
         session_factory=factory,
         list_models=_models,
-        resolve_channel_name=_telegram_name,
+        resolve_channel=_telegram_name,
     )
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
@@ -376,16 +378,16 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
-    async def _gone(uid: str) -> str | None:
+    async def _gone(uid: str, conversation_id: str) -> ChannelNote | None:
         return None
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
         return "## Coffer memory\nKnown about you:\n- **Likes tabs** (`likes-tabs.md`) — x."
 
     provider = ClaudeSdkProvider(
         conversations=repo,
         session_factory=factory,
-        resolve_channel_name=_gone,
+        resolve_channel=_gone,
         compose_memory_context=_memory,
     )
 
@@ -394,7 +396,7 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     await _collect(adapter, _user_turn("hi", conv.id))
 
     append = captured[0].system_prompt["append"]
-    assert "over a chat channel" in append
+    assert "You are replying in a chat channel" in append
     assert "MEDIA:/absolute/path" in append
     assert "## Coffer memory" in append
 
@@ -417,10 +419,10 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, str]] = []
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
-        calls.append((agent_key, cwd))
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
+        calls.append((agent_key, cwd, conversation_id))
         # The real composer's shape (application/memory/index.index_line): a
         # line per note naming the file its body is in, not a budgeted digest.
         # A stub that keeps the old shape teaches a reader the wrong payload.
@@ -442,7 +444,7 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
     assert "- **Likes tabs** (`likes-tabs.md`)" in append
     # Resolved lazily per turn, keyed by this agent and the conversation's cwd —
     # never guessed or hardcoded (mirrors how ``list_models`` is called).
-    assert calls == [("claude_code", str(tmp_path))]
+    assert calls == [("claude_code", str(tmp_path), conv.id)]
 
     await engine.dispose()
 
@@ -456,7 +458,7 @@ async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
         return None
 
     provider = ClaudeSdkProvider(
@@ -483,7 +485,7 @@ async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # 
     conv = await repo.create(_conv())  # no channel binding
     factory, captured = _make_factory(_simple_messages())
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
         raise AssertionError("memory composer must not be called for a non-channel turn")
 
     provider = ClaudeSdkProvider(
@@ -523,6 +525,34 @@ async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # t
     assert "`fable`" in append
     assert "sonnet" in append
     assert "chat channel — " not in append  # no channel guidance for a web turn
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
+)
+async def test_a_channel_turn_marks_the_claude_code_it_spawns(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The Agent SDK loads the user's settings, so Coffer's memory hook fires
+    inside a channel turn too, with the CLI's environment. The mark in that
+    environment is what tells the hook the turn already carries the index and
+    the notes, so they arrive once."""
+    repo, engine = await _repo(tmp_path)
+    channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    web = await repo.create(_conv())
+    envs: dict[str, dict[str, str]] = {}
+    for conv in (channel, web):
+        factory, captured = _make_factory(_simple_messages())
+        provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+        await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+        adapter = await provider.build_adapter(conv.id)
+        await _collect(adapter, _user_turn("hi", conv.id))
+        envs[conv.id] = dict(captured[0].env)
+
+    assert envs[channel.id] == {CHANNEL_TURN_ENV: "1"}
+    # A turn the developer drives is not marked: its hook is its memory.
+    assert CHANNEL_TURN_ENV not in envs[web.id]
 
     await engine.dispose()
 
@@ -587,4 +617,74 @@ async def test_on_conversation_deleted_is_noop(tmp_path) -> None:  # type: ignor
     provider = ClaudeSdkProvider(conversations=repo)
     # Should complete without error.
     await provider.on_conversation_deleted("any-id")
+    await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's prompt brings in the notes it names"
+)
+@pytest.mark.asyncio
+async def test_a_channel_turn_sends_the_notes_its_prompt_names(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A channel turn's prompt reaches the agent with the notes it names after
+    it — where a UserPromptSubmit hook's context would land — keyed on the
+    conversation; a turn the developer drives is never ranked here."""
+    repo, engine = await _repo(tmp_path)
+    channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    web = await repo.create(_conv())
+    sessions: list[_FakeSdkSession] = []
+
+    def factory(options: ClaudeAgentOptions) -> _FakeSdkSession:
+        sessions.append(_FakeSdkSession(options, _simple_messages()))
+        return sessions[-1]
+
+    calls: list[tuple[str, str, str, str]] = []
+    notes = "## Coffer memory — notes this prompt names\n- a fact they recorded: x"
+
+    async def _retrieve(agent_key: str, cwd: str, prompt: str, conversation_id: str) -> str | None:
+        calls.append((agent_key, cwd, prompt, conversation_id))
+        return notes
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, session_factory=factory, retrieve_memory=_retrieve
+    )
+    for conv in (channel, web):
+        await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+        adapter = await provider.build_adapter(conv.id)
+        await _collect(adapter, _user_turn("why does make verify fail", conv.id))
+
+    assert sessions[0].connected_prompt == f"why does make verify fail\n\n{notes}"
+    assert sessions[1].connected_prompt == "why does make verify fail"
+    assert calls == [("claude_code", str(tmp_path), "why does make verify fail", channel.id)]
+
+    await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="an unmanaged agent type is not offered and runs no turn"
+)
+@pytest.mark.asyncio
+async def test_an_unmanaged_type_is_not_available_and_runs_no_turn(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.chat.errors import AgentConfigRejected
+
+    repo, engine = await _repo(tmp_path)
+    managed = False
+
+    async def _is_managed() -> bool:
+        return managed
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, which=lambda _b: "/usr/bin/claude", is_managed=_is_managed
+    )
+    conv = await repo.create(_conv())
+    await provider.init_conversation(conv.id, {})
+
+    # The binary is there, but no enabled agent of the type is registered.
+    assert await provider.availability() is False
+    with pytest.raises(AgentConfigRejected) as refused:
+        await provider.build_adapter(conv.id)
+    assert refused.value.reason == "agent_not_managed"
+
+    managed = True
+    assert await provider.availability() is True
+    await provider.build_adapter(conv.id)
     await engine.dispose()

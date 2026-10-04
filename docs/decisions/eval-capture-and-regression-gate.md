@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Audit and Retention](audit-and-retention.md), spec mcp-gateway "Record invocations without content", spec credentials "Hold plaintext only in memory at the moment of use", research note [agent evaluation](../research/agent-evaluation.md), `evals/README.md`, `.agents/harness.md`, PR #75, PR #78, PR #79, PR #81, PR #83, PR #368
+**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Audit and Retention](audit-and-retention.md), spec mcp-gateway "Record invocations without content", spec secret "Hold plaintext only in memory at the moment of use", research note [agent evaluation](../research/agent-evaluation.md), `evals/README.md`, `.agents/harness.md`, PR #75, PR #78, PR #79, PR #81, PR #83, PR #368
 
 ## Context
 
@@ -63,7 +63,8 @@ relevant, and appends confirmed cases tagged `"source": "captured"` (PR #81).
 
 **Gate.** `.github/workflows/evals.yml` runs `make eval` — the harness's own
 tests and the `tool_search` suite — on pushes and PRs that touch `evals/`, the
-MCP application or domain code, or knowledge and memory application code. It
+MCP domain code (`backend/coffer/domain/mcp/`, where the ranker lives), the
+backend lockfile or the workflow itself. It
 fails on regression against the baseline (PR #83). `make eval-routing` runs the
 routing suite on demand and stays out of CI. A deliberate improvement is
 recorded with `python -m evals.run --update-baseline`.

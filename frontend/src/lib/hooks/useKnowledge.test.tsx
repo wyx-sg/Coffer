@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { resetApiClient } from "@/lib/api/client";
 import type { PropsWithChildren } from "react";
 
 import { useSaveKnowledgeFile } from "./useKnowledge";
@@ -42,9 +43,19 @@ function makeWrapper() {
   };
 }
 
-function stubFetch(payload: unknown, ok = true, status = 200) {
-  const fetchMock = vi.fn().mockResolvedValue({ ok, status, json: async () => payload });
+function stubFetch(payload: unknown, status = 200) {
+  // A fresh Response per call: the typed client reads the body, which a
+  // single shared one allows only once.
+  const fetchMock = vi.fn().mockImplementation(
+    async () =>
+      new Response(JSON.stringify(payload), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+  );
   vi.stubGlobal("fetch", fetchMock);
+  // The client binds `fetch` when it is built, so a stub needs a fresh one.
+  resetApiClient();
   return fetchMock;
 }
 
@@ -64,10 +75,10 @@ describe("useSaveKnowledgeFile", () => {
     });
 
     expect(next).toBe("fp-2");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/knowledge\/file$/);
-    expect(init.method).toBe("PUT");
-    expect(JSON.parse(init.body as string)).toEqual({
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.url).toMatch(/\/knowledge\/file$/);
+    expect(request.method).toBe("PUT");
+    expect(await request.clone().json()).toEqual({
       path: SAVED.path,
       body: "Rewritten.",
       expected_fingerprint: "fp-1",
@@ -79,11 +90,7 @@ describe("useSaveKnowledgeFile", () => {
   });
 
   test("a stale fingerprint rejects with the conflict code and caches nothing", async () => {
-    stubFetch(
-      { error: { code: "KNOWLEDGE_FILE_CONFLICT", message: "changed on disk" } },
-      false,
-      409,
-    );
+    stubFetch({ error: { code: "KNOWLEDGE_FILE_CONFLICT", message: "changed on disk" } }, 409);
     const { qc, wrapper } = makeWrapper();
     const { result } = renderHook(() => useSaveKnowledgeFile(), { wrapper });
 

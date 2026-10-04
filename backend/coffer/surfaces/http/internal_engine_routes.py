@@ -29,15 +29,17 @@ detached from a shell. Each writes on its own route, for the reason
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
+from coffer.application.audit_service import AuditService
 from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
+from coffer.application.upkeep_clock import PASS_CLOCK, last_pass_at
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
-from coffer.domain.errors import ConfigValidationError
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     CURATE,
@@ -46,7 +48,11 @@ from coffer.domain.internal_engine_config import (
     UpkeepSetting,
 )
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor, get_internal_engine_config_service
+from coffer.surfaces.http.dependencies import (
+    get_actor,
+    get_audit_service,
+    get_internal_engine_config_service,
+)
 
 #: The passes a client may name, in the order they run.
 _PASSES = (AGGREGATE, DISTIL, CURATE)
@@ -69,6 +75,14 @@ class UpkeepSettingOut(BaseModel):
     enabled: bool
     interval_s: int | None = None
     default_interval_s: int
+    #: When this pass last finished on this machine, whoever asked for it
+    #: (the timer, a button or the CLI); ``null`` if it never has (spec
+    #: internal-engine "Report when each unattended pass last ran and runs next").
+    last_pass_at: datetime | None = None
+    #: When this machine's timer runs it next, against the interval as it
+    #: stands now. ``null`` while the pass is switched off, while it is
+    #: running, and on a daemon whose timer for it is not waiting.
+    next_pass_at: datetime | None = None
 
 
 class InternalEngineConfigOut(BaseModel):
@@ -153,7 +167,7 @@ class UpkeepUpdate(BaseModel):
     timer can be changed independently.
     """
 
-    pass_name: str = Field(alias="pass")
+    pass_name: Literal["aggregate", "distil", "curate"] = Field(alias="pass")
     enabled: bool | None = None
     interval_s: int | None = Field(default=None, ge=60)
     #: Explicitly return this pass to its own default interval. Needed because
@@ -170,18 +184,28 @@ router = APIRouter(
 )
 
 
-def _to_out(cfg: GlobalInternalEngineConfig) -> InternalEngineConfigOut:
+async def _to_out(cfg: GlobalInternalEngineConfig, audit: AuditService) -> InternalEngineConfigOut:
+    """The settings row, with each pass's last and next run beside its switch.
+
+    Every route answers with the whole shape, so a surface that reads the
+    answer to its own write sees the same facts a fresh read would.
+    """
+    upkeep: dict[str, UpkeepSettingOut] = {}
+    for name in _PASSES:
+        setting = cfg.upkeep(name)
+        default_s = int(DEFAULT_INTERVALS[name])
+        interval = setting.interval_s or default_s
+        upkeep[name] = UpkeepSettingOut(
+            enabled=setting.enabled,
+            interval_s=setting.interval_s,
+            default_interval_s=default_s,
+            last_pass_at=_utc(await last_pass_at(audit, name)),
+            next_pass_at=PASS_CLOCK.next_due(name, interval) if setting.enabled else None,
+        )
     return InternalEngineConfigOut(
         model=cfg.model,
         updated_at=cfg.updated_at,
-        upkeep={
-            name: UpkeepSettingOut(
-                enabled=cfg.upkeep(name).enabled,
-                interval_s=cfg.upkeep(name).interval_s,
-                default_interval_s=int(DEFAULT_INTERVALS[name]),
-            )
-            for name in _PASSES
-        },
+        upkeep=upkeep,
         curate_owner_machine_id=cfg.curate_owner_machine_id,
         model_timeout_s=cfg.model_timeout_s,
         default_model_timeout_s=int(DEFAULT_MODEL_TIMEOUT_S),
@@ -189,26 +213,36 @@ def _to_out(cfg: GlobalInternalEngineConfig) -> InternalEngineConfigOut:
     )
 
 
+def _utc(moment: datetime | None) -> datetime | None:
+    """An audit timestamp as an aware UTC instant (SQLite hands back naive ones)."""
+    if moment is None or moment.tzinfo is not None:
+        return moment
+    return moment.replace(tzinfo=UTC)
+
+
 @router.get("", response_model=InternalEngineConfigOut)
 async def get_config(
     svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
 ) -> InternalEngineConfigOut:
-    return _to_out(await svc.get())
+    return await _to_out(await svc.get(), audit)
 
 
 @router.put("", response_model=InternalEngineConfigOut)
 async def update_config(
     body: InternalEngineConfigUpdate,
     svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> InternalEngineConfigOut:
-    return _to_out(await svc.update(model=body.model, actor=actor))
+    return await _to_out(await svc.update(model=body.model, actor=actor), audit)
 
 
 @router.put("/upkeep", response_model=InternalEngineConfigOut)
 async def update_upkeep(
     body: UpkeepUpdate,
     svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> InternalEngineConfigOut:
     """Change one pass's switch or timer.
@@ -216,10 +250,6 @@ async def update_upkeep(
     Each half is left alone when the client does not send it, so a settings
     page can flip a switch without restating a timer it never looked at.
     """
-    if body.pass_name not in _PASSES:
-        raise ConfigValidationError(
-            f"unknown upkeep pass '{body.pass_name}' (known: {', '.join(_PASSES)})"
-        )
     current = (await svc.get()).upkeep(body.pass_name)
     interval = (
         None
@@ -230,13 +260,14 @@ async def update_upkeep(
         enabled=current.enabled if body.enabled is None else body.enabled,
         interval_s=interval,
     )
-    return _to_out(await svc.set_upkeep(body.pass_name, setting, actor=actor))
+    return await _to_out(await svc.set_upkeep(body.pass_name, setting, actor=actor), audit)
 
 
 @router.put("/curation-owner", response_model=InternalEngineConfigOut)
 async def update_curation_owner(
     body: CurationOwnerUpdate,
     svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> InternalEngineConfigOut:
     """Name the machine that runs the curation pass; ``null`` clears it.
@@ -246,13 +277,14 @@ async def update_curation_owner(
     several — so it is something the user asks for, never a repair anything
     performs on its own.
     """
-    return _to_out(await svc.set_curation_owner(body.machine_id, actor=actor))
+    return await _to_out(await svc.set_curation_owner(body.machine_id, actor=actor), audit)
 
 
 @router.put("/timeout", response_model=InternalEngineConfigOut)
 async def update_model_timeout(
     body: ModelTimeoutUpdate,
     svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> InternalEngineConfigOut:
     """Bound one call to Coffer's own model, or return it to the default.
@@ -261,13 +293,14 @@ async def update_model_timeout(
     default in one place, so raising it later reaches every vault that never
     chose one rather than none of them.
     """
-    return _to_out(await svc.set_model_timeout(body.seconds, actor=actor))
+    return await _to_out(await svc.set_model_timeout(body.seconds, actor=actor), audit)
 
 
 @router.put("/transcribe-model", response_model=InternalEngineConfigOut)
 async def update_transcribe_model(
     body: TranscribeModelUpdate,
     svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> InternalEngineConfigOut:
     """Choose the model Coffer transcribes speech with, or stop transcribing.
@@ -276,4 +309,4 @@ async def update_transcribe_model(
     the recording never leaves the machine — which is why it is expressed here
     rather than by deleting the connection that carries the endpoint.
     """
-    return _to_out(await svc.set_transcribe_model(body.model, actor=actor))
+    return await _to_out(await svc.set_transcribe_model(body.model, actor=actor), audit)

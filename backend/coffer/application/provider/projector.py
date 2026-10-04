@@ -1,42 +1,62 @@
 """Native-config projection orchestration for ``ProviderService`` (spec provider-switching).
 
 Extracted from the service so each file stays within its size budget. A
-``ProviderProjector`` reads an agent's native config file, applies one of the
-pure projection transforms, and writes it back through the atomic store. The
-projection WRITER is chosen by the AGENT type the connection projects into — not
-by the connection's ``protocol`` — so an openai-compatible endpoint routed to
-Claude Code writes Claude's ``settings.json`` (anthropic shape), and vice versa.
+``ProviderProjector`` reads an agent's native config file, asks the agent's
+provider projection facet (ADR agent-mechanisms-are-optional-facets-on-the-
+descriptor) for a plan, and performs its writes through the atomic store. The
+translation is the AGENT's — not the connection's ``protocol`` — so an
+openai-compatible endpoint routed to Claude Code writes Claude's
+``settings.json`` (anthropic shape), and vice versa. An agent whose projection
+has no provider entry receives nothing.
 
-A Codex projection is TWO files, not one: ``config.toml`` plus the Coffer-owned
-model catalogue it points at via ``model_catalog_json``. The catalogue is the only
-thing that makes Codex's own model picker list the endpoint's models instead of
-OpenAI's, and it is written/removed here (the document itself is built by the pure
-``codex_model_catalog_json``).
+A plan may carry files beside the main one (Codex's model catalogue): those it
+writes are written BEFORE the main file points at them, and those it removes
+are removed AFTER the pointer is gone, so the agent never reads a pointer to a
+file that is not there.
 """
 
 from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol as _Protocol
 
 from coffer.application.provider.cli_path import default_coffer_cli_resolver
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
+from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT, WIRE_PATHS
+from coffer.domain.model_proxy.state import proxy_root as proxy_root_at
+from coffer.domain.provider.agent_projection import (
+    ProjectionPlan,
+    ProviderProjection,
+    ProviderProjectionRequest,
+)
+from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
-from coffer.domain.provider.projection import (
-    anthropic_api_key_helper,
-    apply_anthropic_settings,
-    apply_codex_provider,
-    codex_model_catalog_json,
-    codex_model_catalog_path,
-    remove_anthropic_settings,
-    remove_codex_provider,
-    target_for_agent,
-)
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from coffer.domain.resource import Resource
+from coffer.domain.usage.records import Wire
+
+#: The content each file a projection wrote or removed held before it
+#: (``None``: the file did not exist) — what an undo puts back.
+Priors = dict[pathlib.Path, str | None]
+
+
+@dataclass(frozen=True)
+class PlannedFile:
+    """One file a projection WOULD change, before anything is written: what it
+    holds now (``None``: absent), what it would hold (``None``: removed), and
+    the fingerprint of the content read — what a later write is checked against."""
+
+    path: pathlib.Path
+    before: str | None
+    after: str | None
+    fingerprint: str
 
 
 class ProjectionConfigStore(_Protocol):
@@ -60,12 +80,18 @@ class ProviderProjector:
         self,
         config_store: ProjectionConfigStore,
         *,
+        agents: AgentCatalog,
         cli_resolver: Callable[[], str] = default_coffer_cli_resolver,
+        proxy_root: Callable[[], str] = lambda: proxy_root_at(DEFAULT_PROXY_PORT),
     ) -> None:
         self._config_store = config_store
+        self._catalog = agents
         # Where the ``coffer`` CLI is, for the ``apiKeyHelper`` line: asked at
         # each projection, so a CLI installed after the daemon started is found.
         self._resolve_cli = cli_resolver
+        # Where the local model proxy listens — asked at each projection, so a
+        # port the user moved in daemon-config.json is what gets written.
+        self._proxy_root = proxy_root
 
     @staticmethod
     def agents_of_type(agents: list[Resource], agent_type: AgentType) -> list[Resource]:
@@ -76,42 +102,152 @@ class ProviderProjector:
             if a.enabled and AgentConfig.model_validate(a.config).type == agent_type
         ]
 
+    def projection_for(self, agent_type: AgentType) -> ProviderProjection | None:
+        """The agent type's provider projection facet, or ``None`` when it
+        cannot be put on a connection."""
+        return self._catalog.provider_projection(agent_type)
+
     def project_type(
         self,
         connection: Resource,
         cfg: ProviderConfig,
         agents: list[Resource],
         agent_type: AgentType,
+        priors: Priors | None = None,
     ) -> list[str]:
         """Project ``connection`` into every enabled agent of ``agent_type``;
         return the projected agent names (empty if the type is unprojectable or no
-        such agent is registered).
+        such agent is registered). Each file written is recorded into ``priors``
+        as it is written, so a caller whose later step fails can :meth:`restore`
+        what this one already did.
 
         The whole resource rather than its name, because the projection needs
         both halves of it and they are no longer the same thing: its UID is what
         the ``apiKeyHelper`` resolves, its NAME is only what a human reads in
         Codex's provider label.
         """
-        target = target_for_agent(agent_type)
-        if target is None:
+        facet = self.projection_for(agent_type)
+        if facet is None:
             return []
         projected: list[str] = []
         for agent in self.agents_of_type(agents, agent_type):
-            self._project(connection, cfg, agent, target.config_key, agent_type)
+            self._project(connection, cfg, agent, facet, priors)
             projected.append(agent.name)
         return projected
 
-    def deproject_type(self, agents: list[Resource], agent_type: AgentType) -> list[str]:
+    def deproject_type(
+        self, agents: list[Resource], agent_type: AgentType, priors: Priors | None = None
+    ) -> list[str]:
         """Remove Coffer's projection from every enabled agent of ``agent_type``
-        so it falls back to its own built-in login; return the reverted names."""
-        target = target_for_agent(agent_type)
-        if target is None:
+        so it falls back to its own built-in login; return the reverted names.
+        ``priors`` collects what each file held before, as in :meth:`project_type`."""
+        facet = self.projection_for(agent_type)
+        if facet is None:
             return []
         reverted: list[str] = []
         for agent in self.agents_of_type(agents, agent_type):
-            self._deproject(agent, target.config_key, agent_type)
+            self._deproject(agent, facet, priors)
             reverted.append(agent.name)
         return reverted
+
+    def request_for(
+        self, connection: Resource, cfg: ProviderConfig, agent: Resource
+    ) -> ProviderProjectionRequest:
+        """What a projection of ``connection`` into this agent is built from."""
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        facet = self.projection_for(agent_cfg.type)
+        wire = Wire(facet.protocols[0]) if facet is not None and facet.protocols else Wire.ANTHROPIC
+        return projection_request(
+            connection,
+            cfg,
+            agent,
+            agent_cfg,
+            coffer_cli=self._resolve_cli(),
+            proxy_root=self._proxy_root(),
+            wire=wire,
+        )
+
+    def plan_project(
+        self, connection: Resource, cfg: ProviderConfig, agent: Resource
+    ) -> list[PlannedFile]:
+        """The files projecting ``connection`` into ``agent`` would change, in
+        the order they would be written; nothing is written."""
+        facet = self.projection_for(AgentConfig.model_validate(agent.config).type)
+        if facet is None:
+            return []
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
+        current = self._config_store.read_text(spec.path)
+        request = self.request_for(connection, cfg, agent)
+        return self._planned(spec.path, current, facet.apply(current or "", request, spec.path))
+
+    def plan_deproject(self, agent: Resource) -> list[PlannedFile]:
+        """The files taking Coffer's projection out of ``agent`` would change."""
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        facet = self.projection_for(agent_cfg.type)
+        if facet is None:
+            return []
+        spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
+        current = self._config_store.read_text(spec.path)
+        if not (current or "").strip():
+            return []
+        plan = facet.remove(current or "", spec.path, binding_of(agent_cfg))
+        return self._planned(spec.path, current, plan)
+
+    def current_fingerprint(self, path: pathlib.Path) -> str:
+        """The fingerprint of what ``path`` holds now."""
+        return self._config_store.fingerprint(self._config_store.read_text(path))
+
+    def _planned(
+        self, path: pathlib.Path, current: str | None, plan: ProjectionPlan
+    ) -> list[PlannedFile]:
+        planned: list[PlannedFile] = []
+
+        def add(where: pathlib.Path, before: str | None, after: str | None) -> None:
+            if after is None and before is None:
+                return
+            if after is not None and after == (before or ""):
+                return
+            planned.append(
+                PlannedFile(where, before, after, self._config_store.fingerprint(before))
+            )
+
+        for side in plan.before:
+            if side.text is not None:
+                add(side.path, self._config_store.read_text(side.path), side.text)
+        add(path, current, plan.text)
+        for side in plan.after:
+            add(side.path, self._config_store.read_text(side.path), side.text)
+        return planned
+
+    def restore(self, priors: Priors) -> None:
+        """Put every file in ``priors`` back as it was (delete one that did not
+        exist) — the undo of a switch that failed part-way. Best effort per
+        file: one that cannot be restored does not stop the others."""
+        for path, before in priors.items():
+            try:
+                if before is None:
+                    self._config_store.delete_with_backup(path)
+                else:
+                    self._config_store.write_text_atomic(path, before)
+            except Exception:
+                continue
+
+    def project_agent(self, connection: Resource, cfg: ProviderConfig, agent: Resource) -> Priors:
+        """Project ``connection`` into one agent; return the prior content of
+        every file written or removed (``None`` for one that did not exist)."""
+        facet = self.projection_for(AgentConfig.model_validate(agent.config).type)
+        if facet is None:
+            return {}
+        return self._project(connection, cfg, agent, facet)
+
+    def deproject_agent(self, agent: Resource) -> Priors:
+        """Remove Coffer's projection from one agent; return the prior content
+        of every file written or removed."""
+        facet = self.projection_for(AgentConfig.model_validate(agent.config).type)
+        if facet is None:
+            return {}
+        return self._deproject(agent, facet)
 
     # --- internals -----------------------------------------------------------
 
@@ -120,96 +256,62 @@ class ProviderProjector:
         connection: Resource,
         cfg: ProviderConfig,
         agent: Resource,
-        config_key: str,
-        agent_type: AgentType,
-    ) -> None:
+        facet: ProviderProjection,
+        priors: Priors | None = None,
+    ) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
-        spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
+        spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
-        text = current or ""
-        # Model comes solely from the per-agent binding (spec provider-switching
-        # "Take projected model keys from the agent's binding") — the connection
-        # no longer carries one. An unbound agent projects no model so it runs on
-        # its OWN default model.
-        if agent_type is AgentType.CLAUDE_CODE:
-            # apiKeyHelper names THIS connection by uid, so the projected agent
-            # always reads exactly its key regardless of wire (the agnes case)
-            # — and goes on reading it after the connection is renamed, which is
-            # why a rename no longer re-projects anything.
-            new_text = apply_anthropic_settings(
-                text,
-                base_url=cfg.base_url,
-                model=agent_cfg.model,
-                fast_model=agent_cfg.fast_model,
-                api_key_helper=anthropic_api_key_helper(
-                    connection.uid, coffer_cli=self._resolve_cli()
-                ),
-            )
-            self._write_if_changed(spec.path, current, new_text)
-            return
-
-        # Codex additionally gets a model catalogue so its OWN picker lists the
-        # endpoint's models. The catalogue file is written BEFORE config.toml
-        # points at it (and, below, the pointer is dropped before the file is
-        # deleted) so Codex never reads a `model_catalog_json` path that is not
-        # there. `None` ⇒ the connection curates no models; see
-        # `codex_model_catalog_json` for why guessing one is not allowed.
-        # Only the `text` entries: this catalogue IS Codex's model picker, and an
-        # embedding or image model offered there could only be rejected by the
-        # turn that picked it (spec provider-switching "Offer only text models to chat pickers").
-        catalog_path = codex_model_catalog_path(spec.path.parent)
-        catalog = codex_model_catalog_json(cfg.model_ids(Modality.TEXT))
-        if catalog is not None:
-            self._write_if_changed(
-                catalog_path, self._config_store.read_text(catalog_path), catalog
-            )
-        new_text = apply_codex_provider(
-            text,
-            base_url=cfg.base_url,
-            model=agent_cfg.model,
-            wire_api=agent_cfg.wire_api or "responses",
-            # DELIBERATELY the name, not the uid. This is the label Codex shows
-            # in its own provider picker, so it has to be the word the user
-            # chose; "Coffer (a3f1…)" would be unreadable. Nothing resolves it —
-            # Coffer's ownership of the block is the ``coffer`` provider id, and
-            # the key comes from ``env_key`` — so a rename leaves this line
-            # cosmetically stale until the next projection rewrites it, and
-            # nothing breaks in the meantime. That is the whole reason a rename
-            # needs no re-projection: the only OTHER place a connection's name
-            # reached into another tool's file was the ``apiKeyHelper``, and
-            # that now carries the uid.
-            display_name=f"Coffer ({connection.name})",
-            catalog_path=catalog_path if catalog is not None else None,
+        request = self.request_for(connection, cfg, agent)
+        return self._perform(
+            spec.path, current, facet.apply(current or "", request, spec.path), priors
         )
-        self._write_if_changed(spec.path, current, new_text)
-        if catalog is None:
-            # The curated set was cleared since the last projection: the pointer
-            # is already gone from config.toml, so retire the file too rather than
-            # leave a catalogue nothing describes.
-            self._config_store.delete_with_backup(catalog_path)
 
-    def _deproject(self, agent: Resource, config_key: str, agent_type: AgentType) -> None:
+    def _deproject(
+        self, agent: Resource, facet: ProviderProjection, priors: Priors | None = None
+    ) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
-        spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
+        spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
         text = current or ""
         if not text.strip():
-            return  # nothing was ever projected
-        if agent_type is AgentType.CLAUDE_CODE:
-            new_text = remove_anthropic_settings(text)
-            self._write_if_changed(spec.path, current, new_text)
-            return
-        new_text = remove_codex_provider(text)
-        self._write_if_changed(spec.path, current, new_text)
-        # `remove_codex_provider` has dropped the pointer (iff it was ours), so the
-        # file is now unreferenced — delete it so Codex's built-in model list is
-        # what its picker shows again. Absent is a no-op.
-        self._config_store.delete_with_backup(codex_model_catalog_path(spec.path.parent))
+            return {}  # nothing was ever projected
+        plan = facet.remove(text, spec.path, binding_of(agent_cfg))
+        return self._perform(spec.path, current, plan, priors)
 
-    def _write_if_changed(self, path: pathlib.Path, current: str | None, new: str) -> None:
+    def _perform(
+        self,
+        path: pathlib.Path,
+        current: str | None,
+        plan: ProjectionPlan,
+        priors: Priors | None = None,
+    ) -> Priors:
+        """Run the plan's writes in order, recording each file's prior content
+        into ``priors`` (the caller's accumulator when given) as it is written."""
+        priors = {} if priors is None else priors
+        for side in plan.before:
+            if side.text is not None:
+                self._write_if_changed(
+                    side.path, self._config_store.read_text(side.path), side.text, priors
+                )
+        self._write_if_changed(path, current, plan.text, priors)
+        for side in plan.after:
+            if side.text is None:
+                before = self._config_store.read_text(side.path)
+                if self._config_store.delete_with_backup(side.path):
+                    priors.setdefault(side.path, before)
+            else:
+                self._write_if_changed(
+                    side.path, self._config_store.read_text(side.path), side.text, priors
+                )
+        return priors
+
+    def _write_if_changed(
+        self, path: pathlib.Path, current: str | None, new: str, priors: Priors
+    ) -> None:
         """Write only a real change, and only over the content that was read.
 
-        The sync post-import reconcile re-derives the projection, and touching
+        The reconciler re-derives the projection, and touching
         an agent's config file when nothing differs would churn its mtime — and
         hide, in any file audit, the one case that matters: a projection that
         had actually gone missing.
@@ -224,6 +326,75 @@ class ProviderProjector:
             self._config_store.write_text_atomic(
                 path, new, expected_fingerprint=self._config_store.fingerprint(current)
             )
+            priors.setdefault(path, current)
 
 
-__all__ = ["ProjectionConfigStore", "ProviderProjector"]
+def binding_of(agent_cfg: AgentConfig) -> ModelBinding:
+    """The agent's model binding, as the projection reads it."""
+    return ModelBinding(
+        model=agent_cfg.model,
+        effort=agent_cfg.effort,
+        tier_models=dict(agent_cfg.tier_models or {}),
+    )
+
+
+def projected_models(cfg: ProviderConfig) -> tuple[ProjectedModel, ...]:
+    """The connection's curated TEXT models with what it records about each —
+    a model catalogue is the agent's own picker (spec provider-switching
+    "Offer only text models to chat pickers")."""
+    return tuple(
+        ProjectedModel(
+            id=m.id,
+            context_window=m.context_window,
+            effort_levels=tuple(m.effort_levels or ()),
+            default_effort=m.default_effort,
+        )
+        for m in cfg.models
+        if m.modality is Modality.TEXT
+    )
+
+
+def projection_request(
+    connection: Resource,
+    cfg: ProviderConfig,
+    agent: Resource,
+    agent_cfg: AgentConfig,
+    *,
+    coffer_cli: str,
+    proxy_root: str,
+    wire: Wire,
+) -> ProviderProjectionRequest:
+    """The one construction of a projection request — what the switch writes
+    and what the reconciler compares an agent's file against.
+
+    The agent is pointed at the local model proxy's route for its wire, and
+    authenticates with its own local token: the connection's endpoint and key
+    stay with the proxy (ADR api-key-providers-are-reached-through-a-separate-
+    local-model-proxy), so switching between two connections moves the
+    proxy's route, not the agent's file.
+    """
+    return ProviderProjectionRequest(
+        connection_uid=connection.uid,
+        connection_name=connection.name,
+        agent_uid=agent.uid,
+        base_url=proxy_root.rstrip("/") + WIRE_PATHS[wire],
+        key_helper=proxy_token_helper(agent.uid, coffer_cli=coffer_cli),
+        codex_auth=CodexAuthCommand(coffer_cli, proxy_token_args(agent.uid)),
+        # Model comes solely from the per-agent binding (spec
+        # provider-switching "Take projected model keys from the agent's
+        # binding"); an unbound agent projects no model.
+        binding=binding_of(agent_cfg),
+        models=projected_models(cfg),
+        local=cfg.is_local,
+    )
+
+
+__all__ = [
+    "PlannedFile",
+    "Priors",
+    "ProjectionConfigStore",
+    "ProviderProjector",
+    "binding_of",
+    "projected_models",
+    "projection_request",
+]

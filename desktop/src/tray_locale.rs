@@ -71,36 +71,47 @@ fn os_lang() -> Lang {
         .unwrap_or(Lang::En)
 }
 
-/// The tray's fixed words in one language. The Sync entry's attention label is
-/// built per status in `sync_presentation.rs`.
+/// The tray's words in one language. Templates carry `{port}`, `{version}`
+/// and `{n}` placeholders that `tray_state.rs` fills.
 pub struct TrayText {
+    pub status_running: &'static str,
+    pub status_connecting: &'static str,
+    pub status_offline: &'static str,
+    pub needs_you_one: &'static str,
+    pub needs_you_many: &'static str,
     pub open: &'static str,
-    pub sync_idle: &'static str,
     pub restart: &'static str,
+    pub start_daemon: &'static str,
     pub quit: &'static str,
     pub tooltip: &'static str,
-    pub tooltip_attention: &'static str,
 }
 
-/// English. "Sync status" claims nothing about the vault's state, so an
-/// unconfigured machine is not shown a reassurance it has not earned.
+/// English, in the design canvas's words (1.3 Menu bar).
 const EN: TrayText = TrayText {
+    status_running: "Daemon running · port {port} · {version}",
+    status_connecting: "Connecting to the daemon…",
+    status_offline: "Daemon offline",
+    needs_you_one: "1 thing needs you",
+    needs_you_many: "{n} things need you",
     open: "Open Coffer",
-    sync_idle: "Sync status",
     restart: "Restart daemon",
+    start_daemon: "Start daemon",
     quit: "Quit Coffer",
     tooltip: "Coffer",
-    tooltip_attention: "Coffer — sync needs attention",
 };
 
-/// Chinese, in the web UI's own terms (`zh.json`: 同步, 重启守护进程).
+/// Chinese, in the web UI's own terms (`zh.json`: 守护进程).
 const ZH: TrayText = TrayText {
+    status_running: "守护进程运行中 · 端口 {port} · {version}",
+    status_connecting: "正在连接守护进程…",
+    status_offline: "守护进程离线",
+    needs_you_one: "1 件事需要你处理",
+    needs_you_many: "{n} 件事需要你处理",
     open: "打开 Coffer",
-    sync_idle: "同步状态",
     restart: "重启守护进程",
+    start_daemon: "启动守护进程",
     quit: "退出 Coffer",
     tooltip: "Coffer",
-    tooltip_attention: "Coffer — 同步需要处理",
 };
 
 pub fn tray_text(lang: Lang) -> &'static TrayText {
@@ -137,7 +148,6 @@ mod tests {
         assert_eq!(current(), Lang::Zh);
         let zh = tray_text(current());
         assert_eq!(zh.open, "打开 Coffer");
-        assert_eq!(zh.sync_idle, "同步状态");
         assert_eq!(zh.restart, "重启守护进程");
         assert_eq!(zh.quit, "退出 Coffer");
 
@@ -146,7 +156,6 @@ mod tests {
         assert!(!choose(Lang::En));
         let en = tray_text(current());
         assert_eq!(en.open, "Open Coffer");
-        assert_eq!(en.sync_idle, "Sync status");
         assert_eq!(en.restart, "Restart daemon");
         assert_eq!(en.quit, "Quit Coffer");
     }
@@ -156,12 +165,16 @@ mod tests {
         for lang in [Lang::En, Lang::Zh] {
             let t = tray_text(lang);
             for label in [
+                t.status_running,
+                t.status_connecting,
+                t.status_offline,
+                t.needs_you_one,
+                t.needs_you_many,
                 t.open,
-                t.sync_idle,
                 t.restart,
+                t.start_daemon,
                 t.quit,
                 t.tooltip,
-                t.tooltip_attention,
             ] {
                 assert!(!label.trim().is_empty(), "{lang:?}");
             }

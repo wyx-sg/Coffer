@@ -1,12 +1,10 @@
 // frontend/src/lib/hooks/useMcpCapabilityMutations.ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getApiClient } from "@/lib/api/client";
-import { throwApiError, translateApiError } from "@/lib/api/errors";
+import { mcpServersApi, type CapabilityType } from "@/lib/api/mcpServers";
+import { translateApiError } from "@/lib/api/errors";
 import { useToast } from "@/components/ui/toast";
 import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
-
-export type CapabilityType = "tool" | "resource" | "prompt";
 
 interface ToggleInput {
   serverUid: string;
@@ -20,19 +18,13 @@ interface ToggleInput {
  * via useBulkMutate) so both hit one request. Throws an ApiError on a non-2xx.
  */
 export const capabilitiesApi = {
-  setEnabled: async (op: "enable" | "disable", input: ToggleInput): Promise<void> => {
-    const { serverUid, capabilityType, capabilityKey } = input;
-    const { error } = await getApiClient().POST(
-      `/resources/mcp_server/{uid}/capabilities/{capability_type}/${op}` as
-        | "/resources/mcp_server/{uid}/capabilities/{capability_type}/enable"
-        | "/resources/mcp_server/{uid}/capabilities/{capability_type}/disable",
-      {
-        params: { path: { uid: serverUid, capability_type: capabilityType } },
-        body: { capability_key: capabilityKey },
-      },
-    );
-    if (error) throwApiError(error, "INTERNAL_ERROR", `${op} capability failed`);
-  },
+  setEnabled: (op: "enable" | "disable", input: ToggleInput): Promise<void> =>
+    mcpServersApi.setCapabilityEnabled(
+      op,
+      input.serverUid,
+      input.capabilityType,
+      input.capabilityKey,
+    ),
 };
 
 export function useEnableCapability() {

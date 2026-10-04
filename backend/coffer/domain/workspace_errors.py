@@ -53,6 +53,24 @@ class AdoptSecretUnresolved(CofferError):  # noqa: N818
         super().__init__("secret-like env keys need a keychain mapping: " + ", ".join(self.keys))
 
 
+class AdoptSecretRefExists(CofferError):  # noqa: N818
+    """An adopt names a secret ref that already holds a value, or a standalone name. Maps to 409.
+
+    Adopting writes values, so it may only create refs: replacing one would
+    change what every server citing it receives, and a standalone name is a
+    person's to name, not an adopt's.
+    """
+
+    code = "ADOPT_SECRET_REF_EXISTS"
+
+    def __init__(self, refs: list[str]) -> None:
+        self.refs = sorted(refs)
+        super().__init__(
+            "adopting writes new secrets only; these refs already exist or are standalone "
+            "names: " + ", ".join(self.refs)
+        )
+
+
 class AgentConfigParseError(CofferError):
     """An agent config file could not be parsed. Maps to 422."""
 
@@ -69,8 +87,11 @@ class PluginNotFound(CofferError):  # noqa: N818
 
     code = "PLUGIN_NOT_FOUND"
 
-    def __init__(self, plugin_id: str) -> None:
-        super().__init__(f"plugin not found: {plugin_id}")
+    def __init__(self, plugin_id: str, component: str | None = None) -> None:
+        # ``component`` ("skills/foo") names a skill, command, subagent or MCP
+        # server the plugin's package does not contain.
+        what = f"plugin component not found: {component} in {plugin_id}" if component else None
+        super().__init__(what or f"plugin not found: {plugin_id}")
         self.plugin_id = plugin_id
 
 
@@ -163,16 +184,3 @@ class UnmanagedSkillInvalid(CofferError):  # noqa: N818
         super().__init__(f"unmanaged skill {name!r} cannot be adopted: {reason}")
         self.name = name
         self.reason = reason
-
-
-class SkillOutOfScope(CofferError):  # noqa: N818
-    """The agent is outside the skill's activation scope. Scope is a hard grant
-    that overrides manual bindings, so a manual ``enable_for`` attempt is
-    refused outright rather than silently narrowed. Maps to 422."""
-
-    code = "SKILL_OUT_OF_SCOPE"
-
-    def __init__(self, skill_name: str, agent_name: str) -> None:
-        super().__init__(f"skill {skill_name!r} is out of scope for agent {agent_name!r}")
-        self.skill_name = skill_name
-        self.agent_name = agent_name

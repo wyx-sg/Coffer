@@ -2,13 +2,13 @@
 
 ## Purpose
 
-The macOS desktop shell: its window and tray, the handshake that credentials a locally-hosted page, the daemon it finds or starts, and the `.dmg` it ships in. The daemon itself, and the terminal install tier, belong to [daemon](../daemon/spec.md). Coffer's UI is reachable in a browser at a loopback origin, which is enough for someone already in a terminal and almost useless to anyone else — no Dock icon, nothing in Cmd-Tab, and the only route in starts by knowing whether a daemon is running and on which port. The shell is the four things a browser tab cannot do for itself: a window with a Dock icon, a resident tray, detect-or-spawn at launch, and the credential handshake a locally-hosted page has no other way to make. It is also the only place a user who has never opened a terminal can recover a daemon that is down or wedged, because the page that would carry a restart control is served by the very daemon that is not serving.
+The macOS desktop shell: its window and menu bar item, the handshake that credentials a locally-hosted page, the daemon it finds or starts, how it updates itself, and the signed `.dmg` it ships in. The daemon itself, and the terminal install tier, belong to [daemon](../daemon/spec.md). Coffer's UI is reachable in a browser at a loopback origin, which is enough for someone already in a terminal and almost useless to anyone else — no Dock icon, nothing in Cmd-Tab, and the only route in starts by knowing whether a daemon is running and on which port. The shell is the things a browser tab cannot do for itself: a window with a Dock icon, a resident menu bar item, detect-or-spawn at launch, the credential handshake a locally-hosted page has no other way to make, and replacing the application with a newer signed version. It is also the only place a user who has never opened a terminal can recover a daemon that is down or wedged, because the page that would carry a restart control is served by the very daemon that is not serving.
 
-A previous shell was retired over the operating cost of every update (a rebuild plus a reinstall, and built artifacts that drifted from source) and then restored, because that judgement priced the update cost and not the access cost ([The Desktop Shell Returns](../../../docs/decisions/desktop-shell-over-a-shared-frontend.md)). The restored shell is smaller: deploying the sibling binaries stays the daemon's frozen-start job, and native file actions stay daemon HTTP routes. The retirement's failure mode is bounded rather than gone — a stale `.app` can still carry a stale `frontend/dist` — and the daemon half of it is made visible by the version-skew check. It owns no persistent state; the handshake is ephemeral and re-made on every launch.
+A previous shell was retired over the operating cost of every update (a rebuild plus a reinstall, and built artifacts that drifted from source) and then restored, because that judgement priced the update cost and not the access cost ([The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](../../../docs/decisions/desktop-shell-over-a-shared-frontend.md)). The restored shell is smaller: deploying the sibling binaries stays the daemon's frozen-start job, and native file actions stay daemon HTTP routes. The retirement's failure mode is bounded rather than gone — a stale `.app` can still carry a stale `frontend/dist` — and the daemon half of it is made visible by the version-skew check. It owns no persistent state; the handshake is ephemeral and re-made on every launch.
 
-The shell exposes no HTTP surface of its own, so it has no `contracts/`: it is a client of the daemon's `/api/v1/daemon/status` and `/api/v1/daemon/shutdown` routes, of the token-gated `/api/v1/sync/status` it polls to raise the tray and notification of [vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is", and of `~/.coffer/daemon.json`; its only internal interface is four in-process Tauri IPC commands — restart the daemon, hand the page its daemon connection, compare the daemon's version with the app's, and take the interface language the page reports so the tray can be labelled in it. The offline banner is rendered by the web UI; the Restart control and the version-skew warning inside it are this capability's. The shell's `cargo test` suite is gated by `.github/workflows/desktop.yml` (`make desktop-lint`, `make desktop-test`), not by `make verify`; nothing in CI proves the `.app` assembles or the `.dmg` opens — that is the release workflow's job — and hiding the window on close, the tray's own items and the IPC commands' `AppHandle`-bound halves need a live Tauri runtime and are exercised by launching the app. The release version is written in three places, including the shell's bundle configuration; keeping them in step is release procedure, and a mismatch shows up as a version-skew warning.
+The shell exposes no HTTP surface of its own, so it has no `contracts/`: it is a client of the daemon's `/api/v1/daemon/status` and `/api/v1/daemon/shutdown` routes, of the token-gated `/api/v1/attention` it polls for the menu bar's "needs you" entry, of `/api/v1/sync/status` it polls to raise the notification of [vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is", and of `~/.coffer/daemon.json`; outside the machine it reads only the release manifest on GitHub Releases. Its internal interface is in-process Tauri IPC commands — restart the daemon, hand the page its daemon connection, compare the daemon's version with the app's, take the interface language the page reports so the menu bar can be labelled in it, open the daemon log file in the system viewer for the offline screen (it needs no daemon), the presence-gated reveal, key backup and approval, and the update status, check, install and Check automatically switch. The offline banner is rendered by the web UI; the Restart control, the Open daemon log control and the version-skew warning inside it are this capability's. The shell's `cargo test` suite is gated by `.github/workflows/desktop.yml` (`make desktop-lint`, `make desktop-test`), not by `make verify`; nothing in CI proves the `.app` assembles or the `.dmg` opens — that is the release workflow's job — and hiding the window on close, the tray's own items and the IPC commands' `AppHandle`-bound halves need a live Tauri runtime and are exercised by launching the app. The release version is written in six files (`scripts/bump_version.py` lists them), including the shell's bundle configuration; keeping them in step is release procedure, and a mismatch shows up as a version-skew warning. Signing, notarisation and the updater feed run in the release workflow only when their secrets are present; `RELEASING.md` lists what the owner provides.
 
-Out of scope: any platform but macOS arm64 (no Windows or Linux shell, no Intel build — those legs were never validated end to end); supervising anything but the daemon (upstream MCP processes are the daemon's job); and auto-update (a new version is a new `.dmg`).
+Out of scope: any platform but macOS arm64 (no Windows or Linux shell, no Intel build — those legs were never validated end to end) and supervising anything but the daemon (upstream MCP processes are the daemon's job).
 
 ## Requirements
 
@@ -17,9 +17,9 @@ Coffer MUST ship a macOS desktop shell that hosts the built web UI **as a local 
 
 The window MUST NOT be shown before a daemon answers. Every surface the UI can offer before then is an apology — a page whose every query reports "not ready" under a banner explaining why — and an application that opens on that reads as broken rather than as early; with the daemon running as a login service ([daemon](../daemon/spec.md)) the wait is normally imperceptible. It MUST be shown once the attempt to reach a daemon has failed, since an invisible app cannot report why it has nothing to show. Building the page MUST NOT wait on the handshake either — the wait belongs to the shell, and a webview that blocks on a retrying handshake would never paint at all.
 
-The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident tray offering at least open, restart daemon, and quit; closing the window MUST hide to the tray rather than exit, and re-activating from the Dock MUST restore it.
+The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident menu bar item (see "Show the daemon and what needs the user in the menu bar"); closing the window MUST hide to the menu bar rather than exit, and re-activating from the Dock MUST restore it.
 
-The tray's labels, its tooltip and the sync notification MUST be in the interface language the user chose in the web UI, and MUST follow a switch without a restart. The choice lives in the webview's storage, which the shell cannot read, so the page reports it over IPC when it starts and on every switch. Until it has, the tray MUST follow the OS language — the same fallback the page itself uses.
+The menu bar item's labels, its tooltip and the sync notification MUST be in the interface language the user chose in the web UI, and MUST follow a switch without a restart. The choice lives in the webview's storage, which the shell cannot read, so the page reports it over IPC when it starts and on every switch. Until it has, the tray MUST follow the OS language — the same fallback the page itself uses.
 
 #### Scenario: the window waits for a daemon, and opens either way
 - **GIVEN** the app is launched with no daemon running,
@@ -41,13 +41,13 @@ The tray's labels, its tooltip and the sync notification MUST be in the interfac
 - **AND** switching the interface to English relabels the tray in English without a restart.
 
 ### Requirement: Consume the one frontend build the daemon serves
-The shell MUST consume the same `frontend/dist` build the daemon serves. It adds a credential *supplier* (see "Supply the page its daemon connection over IPC") and MUST NOT introduce a second frontend code path, a host-conditional branch, or a separate UI build — one artifact is what keeps the two hosts from drifting. Two host-conditional affordances are sanctioned, both rendered in the offline banner and both reached through the credential supplier's module, because only the shell can offer them: the Restart control, and the version-skew check that warns when the shell has reached a daemon from an earlier app version (see "Find or start a daemon by a fixed resolution order"). Outside the shell the skew check always answers "matches", since a browser is served by whichever daemon is running and has no pairing to be out of step with. One host-conditional report is sanctioned beside them, in the same module and rendering nothing: the page tells the shell its interface language so the tray can be labelled in it (see "Host the UI locally in an application window"); outside the shell it does nothing, since a browser has no tray.
+The shell MUST consume the same `frontend/dist` build the daemon serves. It adds a credential *supplier* (see "Supply the page its daemon connection over IPC") and MUST NOT introduce a second frontend code path, a host-conditional branch, or a separate UI build — one artifact is what keeps the two hosts from drifting. Three host-conditional affordances are sanctioned, all reached through the secret supplier's module, because only the shell can offer them: the Restart control, the version-skew check that warns when the shell has reached a daemon from an earlier app version (see "Find or start a daemon by a fixed resolution order"), and the update check and install (see "Check for updates against a signed release manifest"). The first two are each rendered in exactly two places — the offline banner and the web UI's Settings → Daemon tab; in a browser, the offline banner names the `coffer daemon start` command instead of a Restart control, because no daemon is running that could restart itself, and Settings → Daemon offers the same Restart control, which there asks the running daemon to restart itself (spec daemon "Restart itself on request"). The update check and install are rendered in one place, the web UI's Settings › About tab; in a browser that tab says updates are installed by the desktop app, offers no update control, and hands the upgrade to the person's agent instead (spec daemon "Hand an upgrade of Coffer to an agent"). The presence-gated actions — reveal and copy a secret, write a master key backup, approve a pending approval — are sanctioned the same way, reached through the same module (see "Release plaintext and approvals only after a presence check in the shell"): outside the shell they answer that they are unavailable, and the page offers "Open in Coffer app" in their place. Outside the shell the skew check always answers "matches", since a browser is served by whichever daemon is running and has no pairing to be out of step with. One host-conditional report is sanctioned beside them, in the same module and rendering nothing: the page tells the shell its interface language so the tray can be labelled in it (see "Host the UI locally in an application window"); outside the shell it does nothing, since a browser has no tray.
 
 #### Scenario: the shell hosts the one build the daemon serves
 - **GIVEN** the shell's bundle configuration and the daemon's frozen-build recipe,
 - **WHEN** each names the web UI it ships,
 - **THEN** both name the repository's `frontend/dist`, produced by the frontend's single `npm run build`,
-- **AND** outside the credential supplier and the offline banner — which carries the Restart control and the version-skew warning — no frontend module branches on whether it is running inside the shell.
+- **AND** outside the secret supplier (with its update half) and the offline banner — which carries the Restart control and the version-skew warning — no frontend module reads which host it runs in; the Settings → Daemon tab, the Settings › About tab and the presence-gated actions ask the secret supplier's module.
 
 ### Requirement: Restrict the webview to loopback and IPC
 The webview's content-security policy MUST permit loopback origins on any port and the shell's own IPC scheme, and nothing else; scripts and styles MUST be served from the bundle itself. The port is not known until the handshake, which is why the loopback allowance is port-wildcarded rather than absent.
@@ -68,7 +68,7 @@ When the handshake fails the frontend MUST still render and surface the failure 
 #### Scenario: a handshake that misses is retried until it lands
 - **GIVEN** a daemon that takes longer to start serving than one handshake attempt waits for,
 - **WHEN** that attempt gives up,
-- **THEN** the app asks again on a backoff until a daemon answers, and credentials the page the moment one does,
+- **THEN** the app asks again on a backoff until a daemon answers, and secrets the page the moment one does,
 - **AND** the user does nothing: the offline banner clears itself rather than waiting for the restart control.
 
 #### Scenario: a page nobody served does not guess where the API is
@@ -84,12 +84,12 @@ The shell MUST read the daemon's port and token from `~/.coffer/daemon.json` lik
 - **GIVEN** a running daemon whose token and port are recorded in `~/.coffer/daemon.json`,
 - **WHEN** the webview asks the shell for them over IPC,
 - **THEN** it receives that daemon's base URL and live token, resolved into the same two globals a daemon-served browser page receives,
-- **AND** the shell mints no credential of its own and stores none.
+- **AND** the shell mints no secret of its own and stores none.
 
 ### Requirement: Find or start a daemon by a fixed resolution order
-The shell MUST locate a daemon by a fixed resolution order — a live daemon named by `~/.coffer/daemon.json`, then its own bundle, then `~/.coffer/bin/`, then `PATH` — taking over an already-running daemon rather than spawning a second one. The liveness probe MUST come first: the other three answer which binary to spawn, while it answers whether to spawn at all, and reversing them makes a bundled app race the daemon the user already started for its port. The probe MUST be an HTTP status check rather than a bare TCP connect, so a process squatting the recorded port is not mistaken for a daemon.
+The shell MUST locate a daemon by a fixed resolution order — a live daemon named by `~/.coffer/daemon.json`, then its own bundle, then `~/.coffer/bin/`, then `PATH` — taking over an already-running daemon rather than spawning a second one. The liveness probe MUST come first: the other three answer which binary to spawn, while it answers whether to spawn at all, and reversing them makes a bundled app race the daemon the user already started for its port. The probe MUST be an HTTP status check rather than a bare TCP connect, so a process squatting the recorded port is not mistaken for a daemon. Its read timeout MUST outlast the slowest status a warming daemon produces (the daemon spec's "Decide liveness by the status call"), because a timeout reads as "nobody is live": resolution would then spawn a second daemon, and a restart would skip stopping a slow but running one.
 
-When no daemon can be found or started it MUST say so in terms a user who has never opened a terminal can act on — not a blank window and not a stack trace. It MUST offer a restart, reachable from both the tray and the offline banner — an affordance the browser host cannot have, because a daemon that is down cannot serve the page the control would live on. It MUST detect version skew between itself and the daemon it is talking to, since a previous installation's daemon may still be listening; it attaches to that daemon and reports the skew rather than refusing to work.
+When no daemon can be found or started it MUST say so in terms a user who has never opened a terminal can act on — not a blank window and not a stack trace. It MUST offer a restart, reachable from the tray, the offline banner and the web UI's Settings → Daemon tab — an affordance the browser host cannot have, because a daemon that is down cannot serve the page the control would live on. It MUST detect version skew between itself and the daemon it is talking to, since a previous installation's daemon may still be listening; it attaches to that daemon and reports the skew rather than refusing to work.
 
 A daemon it starts MUST be given a readiness budget that is a ceiling rather than an expectation — clear of the seconds a real vault's daemon spends unpacking, migrating and bringing its upstreams up before it accepts — and the outcome of every handshake, reused or spawned or failed, MUST be recorded (see "Write the shell's records into the daemon log"). Neither waiting nor resolving may run on the thread that draws the window.
 
@@ -100,18 +100,24 @@ A daemon it starts MUST be given a readiness budget that is a ceiling rather tha
 - **AND** no second daemon process is started.
 
 ### Requirement: Restart by stopping the running daemon first
-Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind.
+Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
 
-A restart MUST wait for its replacement to answer and return that daemon's connection with the result, and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
+A restart MUST wait for its replacement to answer and return that daemon's connection with the result — read from the daemon's discovery file while waiting, never carried over from the daemon it stopped, so a restart that moves the daemon to a port saved in Settings → Daemon (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port") reconnects the shell on that port — and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
 
 #### Scenario: a restart stops the running daemon before spawning a replacement
 - **GIVEN** a daemon that is listening but not serving usefully,
-- **WHEN** the user chooses restart from the tray or the offline banner,
+- **WHEN** the user chooses restart from the tray, the offline banner or Settings → Daemon,
 - **THEN** the shell asks the running daemon to shut down over its token-gated route, waits for the port to free, and only then spawns a replacement,
 - **AND** a restart that cannot free the port reports that rather than appearing to succeed.
 
+#### Scenario: a restart onto a changed port reconnects the shell to the new port
+- **GIVEN** a port saved on Settings → Daemon, so the replacement binds a different port from the daemon being stopped,
+- **WHEN** the user presses Restart now in the desktop shell,
+- **THEN** the shell stops the daemon on the old port, then reads `~/.coffer/daemon.json` afresh while it waits and answers only when the daemon the file names responds,
+- **AND** the base URL and token it returns name the new port, which the page installs, so the window is connected to the daemon on the new port without relaunching the app
+
 #### Scenario: a restart hands back the connection it waited for
-- **GIVEN** the user restarts the daemon from the tray or the offline banner,
+- **GIVEN** the user restarts the daemon from the tray, the offline banner or Settings → Daemon,
 - **WHEN** the replacement starts answering,
 - **THEN** the shell returns its base URL and token alongside the new PID,
 - **AND** the page installs those rather than running a second handshake, so the restart starts exactly one daemon.
@@ -143,12 +149,12 @@ Before spawning a daemon, an app launched from Finder or the Dock MUST discover 
 - **AND** a login shell that hangs or fails the probe does not hold up the launch.
 
 ### Requirement: Reimplement no daemon route in the shell
-The shell MUST NOT reimplement any capability the daemon already exposes over HTTP. Native folder selection, opening a file in the user's editor and revealing it in the file manager are daemon routes, and a webview reaches them exactly as a browser tab does; duplicating them in the shell would reintroduce a host-conditional branch in the frontend for no user-visible gain. It MUST declare no native dialog or opener plugin. A native plugin is admissible only where the daemon **cannot** stand in: a system notification is the one such case today, because there is no loopback route that raises one and only the installed bundle can post a notification as Coffer at all ([vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is"). The shell MUST NOT deploy binaries into `~/.coffer/bin/` — that is the daemon's frozen-start job ([daemon](../daemon/spec.md), distribution), and two processes writing that directory race.
+The shell MUST NOT reimplement any capability the daemon already exposes over HTTP. Native folder selection, opening a file in the user's editor and revealing it in the file manager are daemon routes, and a webview reaches them exactly as a browser tab does; duplicating them in the shell would reintroduce a host-conditional branch in the frontend for no user-visible gain. It MUST declare no native dialog or opener plugin. A native plugin is admissible only where the daemon **cannot** stand in, and then only on the Rust side, with no permission granted to the webview: a system notification is one such case, because there is no loopback route that raises one and only the installed bundle can post a notification as Coffer at all ([vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is"); the updater is the other, because a process the app spawned cannot replace the app it runs inside (see "Check for updates against a signed release manifest"). The presence check behind a reveal, a key backup or an approval is not a daemon route and is the shell's alone: a LocalAuthentication prompt can only be raised by the installed app, and the grant it produces is what the daemon's presence-gated routes require (see "Release plaintext and approvals only after a presence check in the shell"); the folder a key backup goes into is still picked through the daemon's folder route. The shell MUST NOT deploy binaries into `~/.coffer/bin/` — that is the daemon's frozen-start job ([daemon](../daemon/spec.md), distribution), and two processes writing that directory race.
 
 #### Scenario: the shell reimplements no daemon route
 - **GIVEN** the shell's source,
 - **WHEN** its capabilities and dependencies are read,
-- **THEN** it declares no dialog or opener plugin and writes nothing into `~/.coffer/bin/`,
+- **THEN** it declares no dialog or opener plugin, grants the webview no updater permission, and writes nothing into `~/.coffer/bin/`,
 - **AND** the webview's content policy allows loopback and IPC and nothing else.
 
 ### Requirement: Write the shell's records into the daemon log
@@ -171,10 +177,124 @@ The release pipeline MUST produce, per `v*` tag, a **macOS arm64** `.dmg` contai
 - **AND** no other platform is built.
 
 ### Requirement: Document clearing the quarantine attribute
-Because the embedded binaries are unsigned, a browser-downloaded `.dmg` carries macOS's quarantine attribute and the app is refused on double-click. The release notes and the README MUST therefore carry the quarantine-clearing step as prominently as they carry it for the terminal tier. Notarisation is a documented non-goal pending a paid developer account.
+A release built without a Developer ID is neither signed nor notarised (see "Sign and notarise a release when its credentials are present"), so a browser-downloaded `.dmg` from it carries macOS's quarantine attribute and the app is refused on double-click. Such a `.dmg` MUST say so in its name (`Coffer-unsigned-…`), and the release notes and the README MUST carry the quarantine-clearing step as prominently as they carry it for the terminal tier, for as long as an unsigned build can be published.
 
 #### Scenario: the install instructions carry the quarantine-clearing step for the app
 - **GIVEN** the release notes the release workflow publishes and the README,
 - **WHEN** a user reads how to install the `.dmg`,
 - **THEN** each carries the exact command that clears the quarantine attribute from `/Applications/Coffer.app`,
 - **AND** the release notes carry it in the same notice as the terminal tier's quarantine step.
+
+### Requirement: Release plaintext and approvals only after a presence check in the shell
+The shell MUST expose, over IPC, revealing a secret, writing a master key
+backup, approving a pending approval, approving several at once (it reads each from the daemon, keeps those still
+waiting and signs one grant over a digest of exactly that list) and reporting whether the daemon is a
+development build, and MUST run a fresh LocalAuthentication check
+(`deviceOwnerAuthentication`: Touch ID or the login password) before each one,
+with no reuse window. The operating system's prompt MUST name what it approves —
+the secret, the backup, or the approval's own description (for several
+approvals at once: the first few descriptions and the count of the rest) — and in a
+development build MUST say so. Only after the check passes does the shell ask
+the daemon for a challenge, sign it with the grant key derived from the master
+key ([secret](../secret/spec.md) "Release plaintext only to a
+present human in the desktop app") and send the request; a cancelled check
+sends nothing. The backup command takes the passphrase the page collected,
+refuses one under eight characters before the presence check, and MUST pass it
+only in the daemon's export request — never into a log, a stored file or the
+signed grant. The shell reads the master key at the moment of signing — from
+the signed release's Keychain access group, or in a development build from the
+key file — and MUST NOT store or cache it or the grant key. In a development
+build without LocalAuthentication the check MUST fall back to a modal
+confirmation in the app window, never to no check. The shell MUST raise one
+native notification per pending approval it has not seen, and tell the page so
+its approval sheet opens.
+
+#### Scenario: a presence grant signs exactly the approved operation
+- **GIVEN** a master key and a challenge for one operation and one target
+- **WHEN** the shell signs it
+- **THEN** the signature is the one the daemon computes for that operation, target and nonce, and differs for any other
+
+#### Scenario: every presence prompt names what it approves
+- **GIVEN** a reveal, a key backup and an approval
+- **WHEN** the shell builds each presence prompt
+- **THEN** each names its operation and target, and in a development build each says it is a development build
+- **AND** a prompt for several approvals names the first few and counts the rest
+
+#### Scenario: a pending approval raises one notification
+- **GIVEN** the daemon lists a pending approval the shell has not seen
+- **WHEN** the shell polls twice
+- **THEN** it raises one notification for it, and none for an approval it already announced
+
+### Requirement: Show the daemon and what needs the user in the menu bar
+The shell MUST keep an item in the macOS menu bar whose icon is the Stroke C mark as a monochrome template image, so macOS tints it for a light or a dark menu bar, dimmed and struck through while no daemon is serving. While anything needs the user, the icon MUST carry that count beside it as a number, "9+" past nine; the count is the length of the Overview's attention list, which leaves out what the user has ignored. Its menu MUST offer, in this order, and nothing more: a status line naming the daemon's port and version while it runs, or that it is offline, which cannot be chosen; an entry "N things need you" ("1 thing needs you" for one) — shown only when something does, directly under the status line, and opening Overview; a separator; Open Coffer; Restart daemon, which reads Start daemon while none is serving and runs the one restart (see "Restart by stopping the running daemon first"); a separator; and Quit Coffer (⌘Q). The icon's tooltip MUST read "Coffer · N things need you" ("Coffer · 1 thing needs you" for one) while something needs the user, and plain "Coffer" otherwise, offline included. While no daemon is serving the attention entry and the count MUST be absent. What the menu bar says MUST follow the daemon without the user opening the window: a daemon that stops answering MUST read as offline within one poll, and a launching app MUST allow a cold daemon a few polls before calling it offline.
+
+#### Scenario: the menu bar says whether the daemon is running
+- **GIVEN** a daemon serving on port 38470 at version 1.0.0 and nothing that needs the user
+- **WHEN** the user opens the menu bar item
+- **THEN** the first line reads "Daemon running · port 38470 · 1.0.0" and cannot be chosen
+- **AND** the icon is the plain mark with no count, and the entries after it are Open Coffer, Restart daemon and Quit Coffer
+
+#### Scenario: the menu bar counts what needs the user
+- **GIVEN** a daemon whose attention list holds nine items
+- **WHEN** the menu bar polls it
+- **THEN** the icon carries the number 9 beside it and the menu shows "9 things need you" under the status line
+- **AND** choosing it opens the window on Overview
+
+#### Scenario: the count on the icon stops at 9+
+- **GIVEN** a daemon whose attention list holds ten items
+- **WHEN** the menu bar polls it
+- **THEN** the icon carries "9+" beside it and the menu line reads "10 things need you"
+
+#### Scenario: the icon tooltip carries the count
+- **GIVEN** a daemon whose attention list holds nine items
+- **WHEN** the user hovers the menu bar icon
+- **THEN** the tooltip reads "Coffer · 9 things need you"
+- **AND** with nothing needing the user, or no daemon serving, it reads "Coffer"
+
+#### Scenario: an offline daemon offers to start
+- **GIVEN** the menu bar item of an app whose daemon has stopped
+- **WHEN** the next poll finds no daemon answering
+- **THEN** the icon is dimmed and struck through with no count, the status line reads "Daemon offline" and the attention entry is gone
+- **AND** the restart entry reads Start daemon
+
+### Requirement: Check for updates against a signed release manifest
+The shell MUST check for a newer version of Coffer at launch and every six hours while it runs, unless the user has switched Check automatically off on the web UI's Settings › About tab, and on demand from that tab (spec [web-ui](../web-ui/spec.md) "Check for and install updates on Settings › About"), through the Tauri updater against a release manifest published on GitHub Releases. A new version otherwise reaches a user only if they think to download a new `.dmg`, and a desktop user is the one least likely to watch a releases page. The check and the download MUST run in the shell's own process, not in the webview, so the webview's content policy stays loopback and IPC only (see "Restrict the webview to loopback and IPC"). A build made without an updater key MUST say it does not check for updates and MUST NOT check.
+
+Every update MUST be signed with the project's updater key and verified against the public key built into the shell — including the version it was signed for — before it is installed; an update whose signature is missing or does not verify MUST be refused and reported, never installed. The release workflow MUST publish, beside each tag's `.dmg`, the updater archive of the same `.app`, its signature, and the manifest naming the version, the archive's URL and the signature. A check at launch or on the timer MUST NOT interrupt the user: it records its time and result for the About tab to show, and only the user's own Download and restart on the About tab downloads and installs anything. Installing MUST download and verify the archive, replace the `.app`, and relaunch the shell; the relaunched shell finds the previous version's daemon and replaces it through the one restart (see "Restart by stopping the running daemon first"), so the new version's daemon answers. A check or download that fails — no network, an unreachable manifest, a refused signature — MUST be reported to the About tab and recorded (see "Write the shell's records into the daemon log"), and MUST leave the running version untouched.
+
+#### Scenario: the shell checks at launch and every six hours
+- **GIVEN** the shell launched with a newer signed release on the manifest
+- **WHEN** it starts, and again after six hours of running
+- **THEN** each time it checks the manifest without showing a dialog, and records the check's time and the newer version for the About tab
+- **AND** nothing is downloaded or installed until the user chooses Download and restart
+
+#### Scenario: an update is installed only with a valid signature
+- **GIVEN** a manifest whose archive's signature does not verify against the shell's built-in public key
+- **WHEN** the user chooses Download and restart
+- **THEN** the shell refuses the update, reports the refused signature to the About tab and the daemon log, and keeps running the current version
+
+#### Scenario: installing an update relaunches onto the new version
+- **GIVEN** a newer signed release and a daemon from the running version
+- **WHEN** the user chooses Download and restart and the archive verifies
+- **THEN** the shell replaces the `.app`, relaunches, and restarts the previous version's daemon through the one restart
+- **AND** the About tab and the daemon status both report the new version
+
+#### Scenario: a release publishes the update manifest
+- **GIVEN** a release tag matching `v*` is pushed with the updater key in the repository's secrets
+- **WHEN** the release workflow finishes
+- **THEN** the release carries, beside the `.dmg`, the updater archive, its signature and a manifest naming that version, the archive's URL and the signature
+
+### Requirement: Sign and notarise a release when its credentials are present
+When the repository holds a Developer ID Application certificate and its Team ID, the release workflow MUST sign the three frozen binaries — and every library they unpack — and the app with that Developer ID under the hardened runtime, without `get-task-allow`, with the `keychain-access-groups` entitlement for `<Team ID>.coffer`, and MUST stamp the same group into the daemon's and the shell's build so the master key is kept where only those binaries can read it ([secret](../secret/spec.md) "Keep the master key behind a storage port chosen by the build"). When it also holds an App Store Connect API key it MUST notarise the CLI binaries, the app and the `.dmg`, and staple the app and the `.dmg`. Each of these steps MUST run only when the credentials it needs are present, and a run without them MUST say which are missing and still build and publish the unsigned release, so the pipeline stays green before the owner has an Apple Developer Program membership.
+
+#### Scenario: a release without signing credentials builds unsigned
+- **GIVEN** a release run with no Developer ID, notary or updater secrets
+- **WHEN** the workflow runs
+- **THEN** every signing, notarisation and updater step is skipped with a line naming the missing secret
+- **AND** the run publishes the unsigned CLI archive and `Coffer-unsigned-<triple>.dmg` as before
+
+#### Scenario: a signed release carries the hardened runtime and its keychain access group
+- **GIVEN** a release run holding the Developer ID certificate, its password and the Team ID
+- **WHEN** the binaries and the app are built
+- **THEN** each is signed by that team under the hardened runtime with `keychain-access-groups` for `<Team ID>.coffer` and without `get-task-allow`
+- **AND** `build_identity.KEYCHAIN_ACCESS_GROUP` in the frozen daemon, and the shell's compiled access group, are that same `<Team ID>.coffer`

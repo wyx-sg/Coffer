@@ -6,12 +6,12 @@ Coffer uses four test tiers running in parallel CI jobs. Acceptance scenarios fr
 
 | Tier            | Tests what                                                                                                                                          | Speed budget (per file) | Tools                                                                                                                                                                                                    | Runs in `make verify`?          |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| **Unit**        | Pure functions, single class, domain logic, value objects. No I/O. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms                | `pytest`                                                                                                                                                                                                 | yes                             |
+| **Unit**        | Pure functions, single class, domain logic, value objects. No network, process or database I/O; a `tmp_path` directory is allowed. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms                | `pytest`                                                                                                                                                                                                 | yes                             |
 | **Integration** | Multiple modules + real local infrastructure: real SQLite, real subprocess, real filesystem, `keyring` test backend. No network.                    | < 2 s                   | `pytest` + `httpx.AsyncClient` / `fastapi.TestClient`                                                                                                                                                    | yes                             |
-| **Contract**    | Wire-format conformance: hand-written `*.openapi.yaml` ↔ Pydantic models. Blocks PR on drift.                                                       | < 1 s                   | Currently: `pytest` + `TestClient` manual assertions on `/openapi.json`. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
+| **Contract**    | What contract freshness cannot see: every served route has an owning capability (`test_contract_coverage.py` over `scripts/gen_contracts.py`'s ownership table), MCP protocol behaviour against the SDK oracle, built-in tool names. The contracts themselves are generated from the Pydantic models and their freshness is a `make lint` step (`scripts/gen_contracts.py --check`), not a test. | < 1 s                   | `pytest` over the app's generated OpenAPI and the MCP SDK. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
 | **E2E**         | Full stack via real surfaces, in **two legs**: a browser (Chromium) against the UI the daemon serves, and a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite. | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. The `web` project drives pages against a Vite server pointed at an isolated daemon; the `mcp` project spawns the real shim + daemon as OS subprocesses and drives JSON-RPC across them. | NO (separate `make verify-e2e`) |
 
-**Suite shape**: integration ≫ unit > contract > e2e (in counts of tests). This is deliberately NOT the classic unit-heavy pyramid: the integration tier runs against real SQLite files and real subprocesses but stays fast (the full backend suite is ~100 s), so most behavior is pinned where the real wiring lives. The unit tier is reserved for pure logic (mechanically enforced by `scripts/check_unit_purity.py`).
+**Suite shape**: integration ≫ unit > contract > e2e (in counts of tests). This is deliberately NOT the classic unit-heavy pyramid: the integration tier runs against real SQLite files and real subprocesses but runs in parallel on xdist workers (and in four shards on CI), so most behavior is pinned where the real wiring lives. The unit tier is reserved for pure logic (mechanically enforced by `scripts/check_unit_purity.py`).
 
 Per-test budgets are guidance, not gates — a single slow test isn't a CI failure. They exist so a test that drifts an order of magnitude past its tier prompts a "wrong tier?" question. No total-suite budget is enforced; the suite grows with the project.
 
@@ -40,11 +40,13 @@ The suite is the safety net: **a green `make verify` (+ `verify-e2e`) must mean 
 
 ```
 backend/tests/
+├── conftest.py                # installs the real-home guard first (see below)
+├── support/                   # shared, not tests: real_home_guard, homes, channel, fixtures
 ├── unit/                      # pure logic, no I/O (purity-checked)
 │   └── <module>/test_*.py
 ├── integration/               # real local I/O
 │   └── <module>/test_*.py
-└── contract/                  # OpenAPI / wire-format conformance
+└── contract/                  # route ownership, MCP protocol conformance
     └── test_*.py
 ```
 
@@ -60,9 +62,7 @@ e2e/
 ├── scripts/start_daemon.sh    # the isolated-HOME daemon both projects share
 ├── web/
 │   └── specs/                 # browser against the daemon-served UI
-│       ├── *.spec.ts          # agent_workspace, shell_activity, shell_agents,
-│       │                      # shell_chat_attachments, shell_cold_start, shell_knowledge,
-│       │                      # shell_mcp_flows, shell_settings, shell_skills
+│       ├── *.spec.ts          # one spec per page or flow
 │       └── _acceptance.ts, _helpers.ts   # support modules, not specs
 └── mcp/
     └── specs/                 # real MCP client → shim → daemon
@@ -162,6 +162,7 @@ local `make verify` proves nothing about the desktop shell.
 
 - a scenario without a covering marker (missing coverage)
 - a marker referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec or scenario was renamed)
+  — a marker naming a scenario that an in-flight change adds (under `ADDED` / `MODIFIED` in `openspec/changes/<name>/specs/`) is accepted and listed until that change is archived
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 
@@ -171,7 +172,7 @@ The audit itself is stdlib-only and runs in milliseconds.
 
 `scripts/check_unit_purity.py` AST-scans `backend/tests/unit/**/*.py` and fails if any test imports a known I/O module (`subprocess`, `sqlite3`, `httpx`, `fastapi.testclient`, `socket`, `requests`, `urllib.request`, `aiohttp`, `keyring`). Runs as the first step of `make verify-unit`.
 
-The unit tier's "no I/O" rule (line 1 of the table above) was previously a culture-only constraint. The script makes it mechanical: a test that sneaks in a `from fastapi.testclient import TestClient` gets flagged with the file:line and a message pointing to integration. To add a new banned module, edit the `BANNED` dict in the script.
+The unit tier's "no network, process or database I/O" rule (line 1 of the table above) was previously a culture-only constraint. Reading and writing files under pytest's `tmp_path` is allowed in the unit tier (a file-format parser or a config editor is still a single unit); the script does not police that, and anything that touches a socket, a subprocess or a database belongs in integration. The script makes it mechanical: a test that sneaks in a `from fastapi.testclient import TestClient` gets flagged with the file:line and a message pointing to integration. To add a new banned module, edit the `BANNED` dict in the script.
 
 ## Mocking Philosophy
 
@@ -188,49 +189,130 @@ Only mock when:
 - The dependency is **non-deterministic** in a way the test cares about (system clock, randomness).
 - The dependency is **slow** (only as last resort — usually means the test is the wrong tier).
 
+## The Real-Home Guard
+
+No test may touch the real user's home. `backend/tests/conftest.py` installs `tests/support/real_home_guard.py` before any `coffer` import; it enforces the rules below mechanically.
+
+- **What it does.** At import: `HOME` → a throwaway dir; every inherited `COFFER_*` stripped (kept: `COFFER_RUN_*`, `COFFER_SMOKE_*`, `COFFER_TEST_*`); `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GIT_CONFIG_GLOBAL`, `XDG_*` removed; `FORCE_COLOR`, `PY_COLORS`, `TTY_COMPATIBLE`, `COLUMNS`, `LINES` removed and `NO_COLOR=1`, `_TYPER_FORCE_DISABLE_TERMINAL=1` set, so CLI output reads the same on a CI runner (which forces colour and a width) as on a laptop. Per test (autouse `_real_home_guard`): a fresh `HOME` from `tmp_path_factory` with a `.gitconfig` identity. Always: an audit hook (`sys.addaudithook`) refuses `open` / dir / rename / remove / `shutil` / `sqlite3.connect` / spawn events under the real home's `.coffer`, `.claude`, `.claude.json`, `.codex`, `.agents` — raising `RealHomeAccessError` before the syscall — and refuses a spawn whose env has no `HOME` or the real one (except `ldconfig`, which library code runs with its own env on Linux and which never reads `HOME`). Every refusal is recorded; the test fails at teardown even if the code swallowed the error. A violation outside any test fails the session.
+- **Rules.**
+  1. Build every path from `tmp_path` or a builder in `tests/support/homes.py`; never from the real home.
+  2. A subprocess inherits `os.environ` (already isolated). If you hand-build `env=`, start from `os.environ` or `IsolatedHome.env()` — never omit `HOME`.
+  3. Do not re-add a `COFFER_*` path from the developer's shell; set it with `monkeypatch.setenv` to a tmp path.
+  4. Do not weaken the guard to make a test pass. `GUARD.expect_violation()` is for the guard's own tests only (`integration/isolation/test_real_home_guard.py`).
+  5. A new Coffer path root (a new `COFFER_*_ROOT` or a new top-level dir under the home) must derive from `$HOME` or be pinned in the root conftest; a new agent config dir goes into `PROTECTED_NAMES`.
+- **Builders** (`tests/support/homes.py`, fixtures in `tests/support/fixtures.py`) — extend these, do not write another `_setup_home`:
+  - `isolated_home` / `make_home(path)` — one machine; `.activate(monkeypatch)`, `.env()` for subprocesses.
+  - `two_homes` / `two_machine_homes(base)` — machines `a`, `b` + one bare remote (`bare_remote()`, also used by `integration/sync_surfaces/harness.py` and `integration/sync_thin/`).
+  - `claude_code_dir`, `codex_dir` / `fake_agent_dir(home, AgentType.X, config_dir=None, files=None)` — agent config tree laid out from the descriptor; `.write(key, text)`, `.add_skill(name)`, `.home_env()`.
+  - `fake_channel_adapter` / `tests.support.channel.FakeChannelAdapter` — recording IM transport (re-exported by `integration/channel/conftest.py`).
+  - `tests.support.facets.agent_catalog(programs=None)` — the composition root's bound agent catalogue with every dependency probe answering "not installed" unless `programs` says otherwise (`installed(version)`); `put_programs_on_path(monkeypatch, bin_dir, {"codex": "codex-cli 1.0"})` for tests that go through the real probe (assert the state, not the version — the login shell's `PATH` may find the real program first). The shared facet contract, `integration/agent/test_facet_contract.py`, runs against `fake_agent_dir` for every shipped agent.
+
+## Running in Parallel
+
+The backend unit and integration tiers run on **pytest-xdist**: `make verify-unit` and `make verify-integration` pass `-n $(PYTEST_WORKERS) --dist loadgroup`, and `PYTEST_WORKERS` defaults to `auto` (one worker per core). The contract and benchmark tiers stay serial — they are small, and a benchmark measured under contention measures the contention.
+
+- **One integration run per machine.** `make verify-integration` runs pytest through `scripts/verify_lock.py`, an `fcntl` lock on `~/.cache/coffer/verify-integration.lock`: a second run, from another worktree or session, waits for the first instead of competing with it (two runs at once slow each other until time-based tests fail). The lock dies with its holder; `COFFER_VERIFY_LOCK=off` skips it.
+- **Per-test cap.** The integration tier passes `--timeout=$(PYTEST_TIMEOUT)` (default 300 s), so a hung test fails by name within minutes. A test that needs longer marks itself `@pytest.mark.timeout(seconds)`.
+- **Fanning out work.** Parallel agents or worktrees run the tests for what they changed (their unit and integration folders) plus `make lint`; the full `make verify` runs once, after their work is merged, on the integration branch.
+- **Serial escape hatch.** `PYTEST_WORKERS=0 make verify-integration` runs the tier in one process — for `pdb`, `-s` output that interleaves sanely, or bisecting an order-dependent failure. `PYTEST_WORKERS=4` pins the count. `PYTEST_ARGS="..."` is appended to the pytest command line (`PYTEST_ARGS="-k sync -x"`). Running pytest by hand without `-n` is serial too.
+- **What each worker gets.** Every worker is its own pytest process, so it imports the root conftest and installs its own real-home guard: its own throwaway `HOME`, its own scratch root (`coffer-test-run-*`, holding the run-wide `COFFER_LOG_DIR` and the per-root defaults), its own `tmp_path_factory` base (`popen-gwN`). The controller's `COFFER_TEST_REAL_HOME` tells each worker what the real home is, so its tripwire still guards it even though the worker starts with the controller's fake `HOME`. Subprocesses a worker spawns inherit that worker's isolated `HOME`, exactly as in a serial run.
+- **Writing a parallel-safe test.** Nothing a test writes may have a name another process could pick: build paths from `tmp_path`, get ports from `tests.fixtures.net.free_port()` (never a literal), and never write into the repo tree (copy the file into `tmp_path`, as `test_stamp_channel.py` does). Module-level state is per worker, so a singleton cannot leak across workers — but it still leaks across the tests one worker runs, so reset it in a fixture as before.
+- **When isolation is impossible.** Mark the tests that share the resource with the same group, and xdist runs the whole group on one worker, in order:
+
+  ```python
+  pytestmark = pytest.mark.xdist_group(name="<the shared resource>")
+  ```
+
+  Use it for a resource the code under test fixes and the test cannot redirect. No test needs it today — every port, directory and log already moves per worker. Reach for it last: a group is a serial island, and the tier is only as fast as its largest one. `--dist loadgroup` is what makes the marker count; a plain `-n auto` ignores it.
+- **Timeouts.** Under `-n auto` a test shares the machine with a worker per core, so a tight `@pytest.mark.timeout` or a wall-clock assertion can fail from load alone. Make the test cheaper (a smaller tree, a fake clock, a condition to wait on instead of a sleep) before widening a budget.
+
+CI shards the integration tier as well — see [CI Jobs](#ci-jobs).
+
+## Property-Based Tests
+
+A rule that must hold for every input — not for three hand-picked ones — is tested as a property with `hypothesis` (a dev dependency in `backend/uv.lock`). Today: the sync deletion breaker (`tests/unit/domain/sync/test_breaker_properties.py`, checked against the threshold in integers), a stop and its answers (`test_stop_properties.py`), and a round's merge decision (`tests/unit/application/sync/test_round_merge_properties.py`, the real `RoundEngine` over the in-memory `fake_git.py`: any conflict stops, a lossy clean merge is held, and neither snapshots, checks out or pushes).
+
+- **Profiles** (`tests/support/hypothesis_profiles.py`, loaded by the root `conftest.py`): `ci` is the default — 100 examples, derandomized (every run draws the same cases), `deadline=None`, no example database. `HYPOTHESIS_PROFILE=thorough` draws 2000 random examples for a local hunt.
+- **No per-example deadline.** A deadline is a wall-clock assertion and fails on a loaded machine; keep it off.
+- **A pinned dependency.** `hypothesis` is a locked dev dependency (`uv sync --frozen`); property modules import it plainly, so a venv without it fails collection instead of silently skipping.
+- **A shrunk failure becomes an example test** beside the property, so the case stays pinned whatever the profile draws.
+- **Check the generator reaches every branch.** `event(...)` plus `--hypothesis-show-statistics` shows each outcome's share; a property whose generator never reaches the branch it claims to cover is a vacuous test.
+
+## Performance Budgets
+
+Each budget is a test with a ceiling a few times above the measured cost, so it catches work that should not be there, not a busy machine. Measured 2026-10-01 on an Apple-silicon laptop under a shared load average of 6–27.
+
+| Budget | Measured | Ceiling | Test (`backend/tests/integration/perf/`) | Runs in |
+| --- | --- | --- | --- | --- |
+| Daemon spawn → first `ready` `/api/v1/daemon/status`, fake `HOME`, empty vault — **CPU time** (daemon + reaped children, via `psutil`), because wall time swung 2.4–22 s with load | 2.4–2.7 s CPU | 8 s CPU (`CPU_CEILING_S`); 60 s wall only as a hang guard (`WALL_CEILING_S`) | `test_startup_time.py` | `make verify` + `verify-benchmark` |
+| Gateway median overhead per tool call vs a direct upstream connection | 2–5 ms | 50 ms | `test_gateway_overhead.py` (spec mcp-gateway) | `make verify` + `verify-benchmark` |
+| Steady-state reconcile pass (2 agents, 20 skills, a provider) | 27–40 ms | 2 s (`PASS_BUDGET_SECONDS`) | `test_reconcile_pass_cost.py` | `verify-benchmark` only (~1 min setup), `skipif` without `COFFER_RUN_BENCHMARKS=1` |
+
+All three carry `pytestmark = pytest.mark.benchmark`, so `-m benchmark` selects every budget; a budget cheap enough for verify simply has no `skipif`. When a budget moves, re-measure (serially and on xdist), update the numbers here, in the test's docstring and in docs-site `contributing/testing.md` (en + zh), and keep the ceiling at 2–3× the loaded measurement.
+
+**Flaky means a wall-clock assumption.** No test retries itself (no `pytest-rerunfailures`, no loop-until-green). A test that fails only under load is fixed at the root: replace a sleep-then-assert with a wait on the condition, bound only the thing that can hang, and never let a per-test `pytest.mark.timeout` sit within a small factor of the test's loaded runtime. A hang that shows up only under load is often a patch that reached too far: `monkeypatch.setattr(module.time, "sleep", …)` replaces `time.sleep` for every thread in the process (`subprocess.Popen.wait` polls with it), so patch the module's own name instead (`monkeypatch.setattr(module, "time", fake)`) — `test_secret_boundary.py`'s `--wait` tests once deadlocked a daemon thread inside the vault writer's lock this way.
+
+**Why the sync tests are slow under load.** A sync integration test makes hundreds of `git` calls (one round-heavy test: ~625), so its wall time is the per-call spawn cost times that count. The thin-sync suite carries no per-test `pytest.mark.timeout` (the old `tests/integration/sync/` suite capped files at 60–180 s, which load routinely exceeded); the only wall-clock bound is `git.run`'s per-call hang guard (`LOCAL_TIMEOUT_S` 60 s, `NETWORK_TIMEOUT_S` 120 s). `git.run` resolves the real binary once (`git --exec-path`), because macOS's `/usr/bin/git` launcher measured 0.5 s median / 1.7 s max per call under load against 0.05 s for the binary. Don't pass a blanket `--timeout` to the integration tier: under load it fails sync tests that are merely slow.
+
 ## Make Targets
 
 ```bash
-make verify              # fast path: lint + unit + integration + contract + acceptance audit
+make verify              # fast path: lint + unit + integration + contract + acceptance audit (timed per stage)
 make verify-all          # verify + e2e (full suite)
 
-make verify-unit         # unit-purity guardrail + unit tier
-make verify-integration  # integration tier only
+make verify-unit         # unit-purity guardrail + unit tier (xdist, PYTEST_WORKERS=auto)
+make verify-integration  # integration tier only (xdist, PYTEST_WORKERS=auto)
+make test-durations      # re-measure backend/.test_durations (CI shard balance)
 make verify-contract     # contract tier only
-make verify-benchmark    # the benchmark-marked tests (excluded from verify)
+make verify-benchmark    # every benchmark-marked test, including those too slow for verify
 make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
+# ports busy? COFFER_E2E_WEB_PORT=5183 COFFER_E2E_PORT=18200 make verify-e2e
 make verify-acceptance   # audit spec.md scenarios vs test markers
+make verify-visual       # screenshot baseline: every route, light + dark (not in verify / verify-e2e)
+make verify-secrets      # gitleaks over the full history (skips without a gitleaks binary)
+make visual-update       # re-record this platform's screenshot baseline
 
 make lint                # every static gate (see below) — NOT just ruff + mypy
-make format              # ruff format + ruff --fix + prettier (frontend)
+make format              # ruff format + ruff --fix (backend, evals); prettier is run per file
 ```
 
 **`make lint` is the whole static gate, not a formatter pass.** In order
-(`Makefile`): `scripts/check_file_sizes.py`, `scripts/check_response_models.py`,
-`scripts/check_doc_numbering.py`, `scripts/check_spec_citations.py`,
+(`Makefile`): `scripts/check_file_sizes.py`, `scripts/gen_contracts.py --check`
+(contract freshness), `scripts/check_response_models.py`,
+`scripts/check_adr_index.py`, `scripts/check_spec_citations.py`,
 `scripts/check_architecture_doc.py`,
 `scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
-`scripts/check_removed_commands.py`, `ruff check`, `ruff format --check`,
-`mypy --strict`, `lint-imports` (the layering + cross-kind fence), and — when
-`frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
+`scripts/check_docs_locales.py`,
+`scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
+`scripts/check_coffer_paths.py`, `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
+`scripts/check_ignored_sources.py`, `scripts/check_error_codes_reference.py`,
+`scripts/check_bare_tasks.py`,
+`ruff check` and `ruff format --check` (over `backend/` and `evals/`), `mypy`
+(configured in `backend/pyproject.toml` with `strict = true`), `lint-imports`
+(the layering + cross-kind fence), and `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
+A missing `frontend/node_modules` fails `make lint` and `make verify-unit` (run
+`make install`); the frontend leg is never skipped silently.
+Each script gate has a one-line description in
+[`harness.md` "Gates"](./harness.md#gates).
 
 Two consequences worth internalising:
 
-- **A docs-only edit can fail `make lint`.** `check_doc_numbering.py` rejects a
-  numbered ADR/spec token and a dead link under `docs/decisions/`;
+- **A docs-only edit can fail `make lint`.** `check_adr_index.py` rejects a
+  dead link under `docs/decisions/` and an ADR the index does not list;
   `check_spec_citations.py` rejects a requirement citation —
   `spec <capability> "<Title>"` or a link to a capability's `spec.md` followed
-  by a quoted title — whose capability or title does not exist, and a retired
-  id form (an amendment letter after a capability, a numbered `CODE-` error id,
-  an uppercase `SPEC-` id), so renaming a requirement fails until every
-  citation of the old title follows;
+  by a quoted title — whose capability or title does not exist, so renaming a
+  requirement fails until every citation of the old title follows;
   `check_architecture_doc.py` holds the code-layout tree in
   `docs-site/architecture/layering.md` and the builtin-tool roster in
   `docs-site/architecture/` to the code; `check_removed_commands.py` rejects any
   `coffer` command or `coffer__` tool the CLI/MCP reshape removed wherever it is
-  quoted under `docs-site/`, the shipped skill bodies (`backend/coffer/**/skill_assets/`)
-  or `e2e/`. Run `make lint` after touching markdown, not just after touching code.
+  quoted under `docs-site/`, `README.md`, `README.zh-CN.md`, `AGENTS.md`, `CONTRIBUTING.md`,
+  `.agents/`, `docs/` (except the ADRs), `openspec/specs/`, `desktop/`, the shipped skill bodies
+  (`backend/coffer/**/skill_assets/`), `frontend/src/` or `e2e/` (a line that
+  names one on purpose is listed in the script's `ALLOWED`). Run `make lint`
+  after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
   load-bearing in a worktree** — a bare invocation resolves `coffer` through
   the editable install (which points at the main checkout) and reports contract
@@ -240,30 +322,62 @@ Two consequences worth internalising:
 
 | Target                    | What it runs                                                                                                                                                                                | When to use                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
+| `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`, printing each stage's wall time at the end (kept in `.coffer-verify.timings`). The "pre-PR" gate. | Before every push and PR. CI runs the same tiers in parallel.               |
 | `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
-| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
-| `make verify-integration` | `pytest backend/tests/integration`.                                                                                                                                                           | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
-| `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                              | After editing `openspec/specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
-| `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
+| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/unit` (`PYTEST_WORKERS` defaults to `auto`), then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
+| `make verify-integration` | `pytest -n $(PYTEST_WORKERS) --dist loadgroup --timeout=$(PYTEST_TIMEOUT) backend/tests/integration`, under the machine-wide lock (`scripts/verify_lock.py`).                                                                                                                                                         | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
+| `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                              | After adding a route or touching the MCP surface. After editing Pydantic API schemas run `make contracts` (models → contracts → frontend types); `make lint` fails on a stale contract. |
+| `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — every perf-budget test (see "Performance Budgets"); the env var releases the ones `make verify` skips as too slow.                     | After touching the gateway hot path or any code a perf budget covers.       |
 | `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
 | `make verify-acceptance`  | `openspec validate --all --strict` (every requirement owns a scenario), then `scripts/audit_acceptance.py` (every scenario has a marker, every marker a scenario).                | Every spec.md edit. Cheap; needs the root `npm install` for the OpenSpec CLI. |
 
+## Visual Baseline
+
+`e2e/playwright.visual.config.ts` (project `visual`, `e2e/visual/specs/`) shoots
+every top-level sidebar route in light and dark — the theme comes from
+`emulateMedia({ colorScheme })` and is checked on `<html data-theme>` — at
+1280×800, DPR 1, locale `en`, timezone UTC. It runs on its own fresh daemon
+(`:18100`, HOME `/tmp/coffer-e2e-visual`, wiped each run) and its own Vite
+(`:5174`), so nothing the functional suite creates shows up in the pixels. It
+is the reference for UI work: a restyle that was not meant to move a page shows
+up here as an image diff.
+
+- `make verify-visual` compares; `make visual-update` re-records.
+- Baselines are per platform — `e2e/visual/specs/__screenshots__/{darwin,linux}/`
+  — because font rasterising differs between them. Locally a missing baseline
+  fails. In CI (`test-visual`) a missing one is written instead and uploaded as the
+  `visual-baseline-linux` artifact; commit its `linux/` folder to start
+  comparing there.
+- Update only for a deliberate visual change, and commit the new images in the
+  same PR so the reviewer sees the image diff. A diff you did not intend is a
+  regression, not a baseline to refresh.
+- Time-dependent text (`<time>`, relative and absolute timestamps, uptime) is
+  masked; animations, transitions and the caret are frozen, and the Vite-only
+  TanStack Query devtools button is hidden. A page that differs between two runs
+  of the same tree needs a mask or a better wait — never a looser threshold
+  (`maxDiffPixelRatio` 0.001: reruns are pixel-identical, the budget only
+  absorbs glyph anti-aliasing jitter).
+
 ## CI Jobs
 
-`.github/workflows/verify.yml` runs **eight** jobs in parallel; all must pass to merge:
+`.github/workflows/verify.yml` runs on every push to `main` and every pull request into `main`, with its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`). Every job but `changes` runs exactly one Makefile target, so a red check names the command that reproduces it locally:
 
-| Job           | What                                                                                                                       |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `lint`        | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`)                                     |
-| `unit`        | `make verify-unit` (purity check + backend pytest + frontend vitest)                                                       |
-| `integration` | `make verify-integration` (installs `ripgrep`, which curation's candidate selection uses)                                  |
-| `benchmark`   | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
-| `acceptance`  | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`                    |
-| `secrets`     | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean       |
-| `contract`    | `make verify-contract`                                                                                                     |
-| `e2e`         | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                    |
+| Job                               | What                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `changes`                         | Classifies the pull request with `scripts/ci_change_scope.py`: `code=false` when every changed file is prose no test reads (Markdown outside `openspec/`, `.agents/`, `.claude/`, `backend/`, `frontend/`, `e2e/`, `evals/`; anything under `docs/` or `docs-site/` except `docs-site/public/`; never the root `README.md`). Pushes are always `code=true`. |
+| `lint`                            | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`). Always runs.                       |
+| `test-unit`                       | `make verify-unit` (purity check + backend pytest on xdist + frontend vitest)                                              |
+| `test-integration (N/4)`          | Four shards of `make verify-integration`, each picking its quarter with pytest-split (`--splits 4 --group N --splitting-algorithm least_duration`) balanced by the committed `backend/.test_durations`, and each running that quarter on xdist across the runner's cores. Installs `ripgrep`. |
+| `test-integration`                | The required check: succeeds only when all four shards succeeded, or when they were skipped because the change is `code=false`. |
+| `test-benchmark`                  | `make verify-benchmark` — every benchmark-marked perf-budget test, and the **only** place the slow ones (gated on `COFFER_RUN_BENCHMARKS=1`) execute, so a budget can't go unchecked while its acceptance marker reports green |
+| `audit-acceptance`                | `make verify-acceptance`: `openspec validate --all --strict` (needs the root `npm ci`), then `scripts/audit_acceptance.py`. Always runs. |
+| `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) through gitleaks-action — the scan `make verify-secrets` runs locally. A committed secret fails the PR even if the final tree is clean. Always runs. |
+| `test-contract`                   | `make verify-contract`                                                                                                     |
+| `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                   |
+| `test-visual`                     | `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact. Report-only (`continue-on-error`): a failure is reported, not blocking, until the baselines are committed |
 
-## When a Tier is Empty
+The test jobs are skipped only on an explicit `code=false`: if `changes` itself fails they run anyway. A job skipped by its condition reports success, which is how a docs-only PR still shows every required check green.
 
-A tier with no tests yet runs trivially green (pytest collects 0 tests). The Makefile checks for tier directories and skips silently if absent — don't gate `make verify` on tiers that don't exist.
+**Shard balance.** A test missing from `backend/.test_durations` is weighed at the average, so a stale file only unbalances the shards — it never drops a test. When one shard runs clearly longer than the others, run `make test-durations` (serial, ~15 min) and commit the file. Changing the shard count means editing both the `shard` matrix and `--splits`.
+
+`.github/workflows/ci.yml` runs one full `make verify` on every push to `main` and `feature/**` and on manual dispatch; it inherits the xdist default from the Makefile. The same workflow runs a weekly latest-dependencies canary (Mondays 06:00 UTC) that re-resolves the `>=` floors instead of the frozen lock, so an upstream release that breaks Coffer shows up on a schedule.

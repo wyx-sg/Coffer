@@ -11,6 +11,6 @@ def test_a_named_choice_also_shows_the_id_the_command_takes():
     labels = {"fable": "Fable 5.1", "claude-fable-5-1[1m]": "Fable 1M", "opus": "opus"}
     text = card_as_text(model_card(current="fable", picks=list(labels), labels=labels))
 
-    assert "• Fable 5.1 ✓ — fable" in text
+    assert "• ✓ Fable 5.1 — fable" in text
     assert "• Fable 1M — claude-fable-5-1[1m]" in text
     assert "• opus\n" in text + "\n"  # a label that IS the id is not repeated

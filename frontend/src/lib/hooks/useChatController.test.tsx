@@ -9,14 +9,21 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 vi.mock("./useConversations", () => ({
-  useConversations: () => ({ data: [], isPending: false }),
-  useArchivedConversations: () => ({ data: [], isPending: false }),
   useConversation: () => ({ data: null, isPending: false }),
   useCreateConversation: () => createConv,
   useRenameConversation: () => ({ mutate: vi.fn() }),
   useDeleteConversation: () => ({ mutate: vi.fn(), isPending: false }),
   useArchiveConversation: () => ({ mutate: vi.fn(), isPending: false }),
   useUnarchiveConversation: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("./useConversationList", () => ({
+  useConversationList: () => ({
+    items: [],
+    isLoading: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+  }),
 }));
 vi.mock("./useAgentProviders", () => ({
   useAgentProviders: () => ({
@@ -31,12 +38,20 @@ vi.mock("./useChatTurn", () => ({
 }));
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigate,
-  useParams: () => ({}),
+  useLocation: () => location,
+  useParams: () => route,
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 import { useChatController } from "./useChatController";
 
 const navigate = vi.fn();
+let route: { id?: string } = {};
+let location: { pathname: string; search: string; state: unknown } = {
+  pathname: "/conversations",
+  search: "",
+  state: null,
+};
 const createConv = {
   mutate: vi.fn(),
   isPending: false,
@@ -53,6 +68,8 @@ function createdWith(): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  route = {};
+  location = { pathname: "/conversations", search: "", state: null };
 });
 
 describe("useChatController draft", () => {
@@ -91,8 +108,10 @@ describe("useChatController draft", () => {
     act(() => result.current.setDraftEffort("xhigh"));
     act(() => result.current.setDraftAgent("claude_code"));
 
+    // The folder stays: it is where the work is, whichever agent does it.
     expect(result.current.effectiveDraft).toEqual({
       agentKey: "claude_code",
+      cwd: null,
       model: null,
       effort: null,
     });
@@ -108,5 +127,43 @@ describe("useChatController draft", () => {
 
     expect(result.current.effectiveDraft.effort).toBe("high");
     expect(result.current.effectiveDraft.model).toBe("sonnet");
+  });
+});
+
+describe("useChatController hand-off", () => {
+  test("seeds the draft once from the location state, then clears it", () => {
+    route = { id: "new" };
+    location = {
+      pathname: "/conversations/new",
+      search: "",
+      state: { handoff: { agentKey: "codex", cwd: "/w", prompt: "Install jq." } },
+    };
+    const { result } = renderHook(() => useChatController());
+
+    expect(result.current.effectiveDraft).toEqual({
+      agentKey: "codex",
+      cwd: "/w",
+      model: null,
+      effort: null,
+    });
+    expect(result.current.draftPrefill).toEqual({ text: "Install jq.", attachments: [] });
+    // The history entry loses the state, so a reload or Back does not type it again.
+    expect(navigate).toHaveBeenCalledWith("/conversations/new", { replace: true, state: null });
+    // Pre-filling creates nothing.
+    expect(createConv.mutate).not.toHaveBeenCalled();
+
+    act(() => result.current.clearDraftPrefill());
+    expect(result.current.draftPrefill).toBeNull();
+  });
+
+  test("a hand-off in the state of any other page is ignored", () => {
+    location = {
+      pathname: "/conversations",
+      search: "",
+      state: { handoff: { agentKey: "codex", cwd: null, prompt: "Install jq." } },
+    };
+    const { result } = renderHook(() => useChatController());
+    expect(result.current.draftPrefill).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

@@ -32,18 +32,15 @@ async def test_matching_sender_passes_the_gate(env: ChannelEnv) -> None:
     await wait_until(lambda: "Hello world" in adapter.texts())
 
 
-async def test_message_with_no_sender_id_falls_back_to_chat_id(env: ChannelEnv) -> None:
-    # Owner paired with a real sender id, but a later message arrives with none
-    # (a transport could not supply one) — the owner must not be locked out.
+@pytest.mark.acceptance(
+    spec="channels", scenario="a direct message that names no sender is ignored"
+)
+async def test_message_with_no_sender_id_is_ignored(env: ChannelEnv) -> None:
+    # Ownership that cannot be proven is not ownership — the same rule the group
+    # gate applies. A transport that cannot name a sender reaches no turn.
     _resource, adapter = await env.paired_channel(sender_id="u-owner")
 
     await env.processor.on_message(inbound("tg", "owner", "hi", sender_id=""))
-    await wait_until(lambda: "Hello world" in adapter.texts())
 
-
-async def test_legacy_peer_without_sender_id_accepts_on_chat_id(env: ChannelEnv) -> None:
-    # Paired before the gate gained sender awareness (sender_id is None).
-    _resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "hi", sender_id="whatever"))
-    await wait_until(lambda: "Hello world" in adapter.texts())
+    assert adapter.texts() == []
+    assert await env.chat.list_conversations() == []

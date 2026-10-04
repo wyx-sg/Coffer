@@ -11,10 +11,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
+from dataclasses import replace
 
 from coffer.application.chat.service import ChatService
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.events import (
     AgentEvent,
+    QuestionAsked,
+    QuestionClosed,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -29,6 +34,8 @@ from coffer.domain.chat.message import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from coffer.domain.chat.question import QuestionBlock
+from coffer.domain.chat.reply_file import ReplyFile
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +63,18 @@ class TurnContent:
     def __init__(self) -> None:
         self._blocks: list[ContentBlock] = []
         self._text: list[str] = []
+        self._tool_started: dict[str, float] = {}
+
+    def stamp(self, event: AgentEvent) -> AgentEvent:
+        """Time the tools: note when a call arrives and return its result with
+        ``duration_ms`` filled in (an adapter's own value, if any, wins)."""
+        if isinstance(event, ToolCall):
+            self._tool_started[event.tool_use_id] = _clock()
+        elif isinstance(event, ToolResult) and event.duration_ms is None:
+            started = self._tool_started.pop(event.tool_use_id, None)
+            if started is not None:
+                return replace(event, duration_ms=round((_clock() - started) * 1000))
+        return event
 
     def add(self, event: AgentEvent) -> None:
         if isinstance(event, TextDelta):
@@ -77,8 +96,20 @@ class TurnContent:
                     tool_name=event.tool_name,
                     output=event.output,
                     error=event.error,
+                    duration_ms=event.duration_ms,
                 )
             )
+
+    def add_question(self, event: QuestionAsked | QuestionClosed) -> None:
+        """Fold a question event: a new question closes the running text and
+        appends its block; a later event of the same question replaces it."""
+        block = event.question
+        for i, existing in enumerate(self._blocks):
+            if isinstance(existing, QuestionBlock) and existing.question_id == block.question_id:
+                self._blocks[i] = block
+                return
+        self._close_text()
+        self._blocks.append(block)
 
     def blocks(self) -> list[ContentBlock]:
         """The content so far, in emission order (the running text included)."""
@@ -136,7 +167,17 @@ class PartialFlusher:
         wait = self._interval - (_clock() - self._last)
         if wait > 0:
             if self._trailing is None or self._trailing.done():
-                self._trailing = asyncio.create_task(self._flush_later(wait, message_id))
+                self._trailing = spawn(
+                    self._flush_later(wait, message_id), name=f"chat-partial-flush:{message_id}"
+                )
+            return
+        self._cancel_trailing()
+        await self._write(message_id)
+
+    async def flush_now(self, message_id: str | None) -> None:
+        """Write the reply so far at once (a question block must be on disk
+        while the turn waits on it)."""
+        if message_id is None:
             return
         self._cancel_trailing()
         await self._write(message_id)
@@ -184,6 +225,15 @@ class PartialFlusher:
             log.warning("Partial flush failed for message %s", message_id, exc_info=True)
 
 
+def _final_status(final_done: TurnDone | None, error_event: TurnError | None) -> str:
+    """``failed`` on an error, ``stopped`` when the user interrupted, else ``complete``."""
+    if error_event is not None:
+        return "failed"
+    if final_done is not None and final_done.stop_reason == "interrupted":
+        return "stopped"
+    return "complete"
+
+
 async def finalize_assistant_message(
     *,
     chat: ChatService,
@@ -193,6 +243,7 @@ async def finalize_assistant_message(
     content: TurnContent,
     final_done: TurnDone | None,
     error_event: TurnError | None,
+    reply_files: Sequence[ReplyFile] = (),
 ) -> None:
     """Finalise the streaming placeholder with its content/status.
 
@@ -203,7 +254,7 @@ async def finalize_assistant_message(
     so the turn still leaves a persisted record.
     """
     blocks = content.blocks()
-    status = "failed" if error_event is not None else "complete"
+    status = _final_status(final_done, error_event)
     prompt_tokens = final_done.prompt_tokens if final_done is not None else None
     completion_tokens = final_done.completion_tokens if final_done is not None else None
 
@@ -214,11 +265,13 @@ async def finalize_assistant_message(
                 message_id,
                 content=blocks,
                 status=status,
+                model_id=model_id,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )
+            await _record_files(chat, message_id, reply_files)
         else:
-            await chat.append_message(
+            appended = await chat.append_message(
                 conversation_id,
                 role=Role.ASSISTANT,
                 content=blocks,
@@ -227,8 +280,18 @@ async def finalize_assistant_message(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )
+            await _record_files(chat, appended.id, reply_files)
     except Exception:
         log.exception("Failed to finalize assistant message for conversation %s", conversation_id)
+
+
+async def _record_files(chat: ChatService, message_id: str, files: Sequence[ReplyFile]) -> None:
+    """Keep what the reply changed in each file. Best effort: the reply itself is
+    already saved, and its list of changed files is the lesser loss."""
+    try:
+        await chat.record_reply_files(message_id, files)
+    except Exception:
+        log.warning("Failed to record the files reply %s changed", message_id, exc_info=True)
 
 
 async def recover_placeholder_id(

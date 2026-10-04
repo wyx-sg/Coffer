@@ -6,7 +6,7 @@ boot, then on an interval; a failing pass is logged and never kills the loop; a
 pending pass never blocks shutdown, because the next boot sweeps every
 partition again regardless. The switch and the interval are read **per tick**,
 not at boot, so an operator who turns the pass off or shortens its interval in
-Settings does not have to restart the daemon to be obeyed (spec
+the Automatic popover does not have to restart the daemon to be obeyed (spec
 internal-engine "Apply a changed switch or interval without a restart").
 
 The delay before the first pass is the one difference from aggregation, and it
@@ -15,11 +15,10 @@ partition before this boot's aggregation has run would spend a model on the
 same entries the pass a minute later would have seen anyway.
 
 **On by default**, like aggregation. Everything this pass writes is under
-``~/.coffer/memory/``, which is derived by construction (see "Keep the memory tree
+``~/.coffer/derived/memory/``, which is derived by construction (see "Keep the memory tree
 derived and local"): delete it, run aggregation and distil, and an equivalent partition
 comes back. The switch exists because each pass spends a model call, and the operator
-may turn it off or re-time it in Settings; the whole pass also stands still while the
-``memory`` experimental feature is off.
+may turn it off or re-time it.
 
 **One pass per partition, whoever started it (see "Run one distil pass per partition at
 a time").** The timer and Update memory are two writers over one directory, so both
@@ -36,8 +35,10 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from coffer.application.memory.service import KIND_MEMORY
+from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+from coffer.domain.internal_engine_config import DISTIL
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +86,10 @@ class DistilWorker:
         interval_s: float = DEFAULT_INTERVAL_S,
         read_interval: IntervalReader = _unset_interval,
         runs: UpkeepRunRegistry = UPKEEP_RUNS,
+        clock: PassClock = PASS_CLOCK,
     ) -> None:
         self._distil = distil
+        self._clock = clock
         self._list_partitions = list_partitions
         self._is_enabled = is_enabled
         self._start_delay_s = start_delay_s
@@ -97,8 +100,10 @@ class DistilWorker:
         self._runs = runs
 
     async def run_forever(self) -> None:
+        self._clock.waiting(DISTIL, due_in_s=self._start_delay_s)
         await asyncio.sleep(self._start_delay_s)
         while True:
+            self._clock.running(DISTIL)
             try:
                 await self.run_once()
             except asyncio.CancelledError:
@@ -110,8 +115,9 @@ class DistilWorker:
                 # index, so repeating one costs nothing.
                 logger.warning("memory.distil_worker.sweep_failed", exc_info=True)
             # Not a plain sleep: the operator's interval is re-read as the wait
-            # runs, so shortening it in Settings takes effect now rather than
+            # runs, so shortening it takes effect now rather than
             # after the six hours this worker had already committed to.
+            self._clock.waiting(DISTIL)
             await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:

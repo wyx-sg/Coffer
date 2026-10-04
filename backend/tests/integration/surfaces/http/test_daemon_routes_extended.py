@@ -30,7 +30,7 @@ def _restore_home():
         os.environ["HOME"] = prior
 
 
-async def _client(tmp_path: Path, *, port: int = 8000):
+async def _client(tmp_path: Path, *, port: int = 38470):
     monkeypatched_home = tmp_path / "home"
     monkeypatched_home.mkdir()
     os.environ["HOME"] = str(monkeypatched_home)
@@ -125,24 +125,8 @@ async def test_rotate_token_requires_auth(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_shutdown_returns_204(tmp_path):
-    """Shutdown schedules graceful exit. We can't actually kill the test
-    process — just verify the endpoint returns 204."""
-    c, _ = await _client(tmp_path)
-    async with c:
-        # Mock os.kill to avoid actually terminating the test process
-        import unittest.mock as mock
-
-        with mock.patch("coffer.surfaces.http.daemon_routes._schedule_shutdown") as mocked:
-            r = await c.post("/api/v1/daemon/shutdown")
-            assert r.status_code == 204
-            mocked.assert_called_once()
-    set_active_token(None)
-
-
-@pytest.mark.asyncio
 async def test_shutdown_signals_termination(tmp_path):
-    """_schedule_shutdown must send SIGTERM to the current process.
+    """The shutdown route answers 204 and sends SIGTERM to the current process.
 
     We patch os.kill at the module level so we can assert it is called
     with the correct arguments (os.getpid(), signal.SIGTERM) without
@@ -166,7 +150,7 @@ async def test_shutdown_signals_termination(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-async def _client_with_audit(tmp_path: Path, *, port: int = 8000):
+async def _client_with_audit(tmp_path: Path, *, port: int = 38470):
     """Build a minimal app that includes the audit dependency override."""
     monkeypatched_home = tmp_path / "home"
     monkeypatched_home.mkdir()
@@ -330,7 +314,7 @@ async def test_the_login_switch_is_required_on_the_put(tmp_path, monkeypatch):
 async def test_the_settings_page_changes_residency_in_one_request(tmp_path, monkeypatch):
     """One PUT against a faked launchd: the login service is installed at
     once, and the response and the audit row carry what became true — with no
-    idle window anywhere, even when an older client still sends one."""
+    idle window anywhere."""
     from coffer.infrastructure.daemon import login_service
 
     installed = {"value": False}
@@ -350,7 +334,6 @@ async def test_the_settings_page_changes_residency_in_one_request(tmp_path, monk
     monkeypatch.setattr(login_service, "uninstall", _uninstall)
 
     c, audit, engine = await _client_with_audit(tmp_path)
-    home = tmp_path / "home"
     try:
         async with c:
             before = await c.get("/api/v1/daemon/residency")
@@ -362,8 +345,7 @@ async def test_the_settings_page_changes_residency_in_one_request(tmp_path, monk
 
             r = await c.put(
                 "/api/v1/daemon/residency",
-                # A stale client's idle window is accepted and ignored.
-                json={"login_service_installed": True, "idle_shutdown_hours": 6},
+                json={"login_service_installed": True},
             )
             assert r.status_code == 200
             assert r.json() == {
@@ -371,10 +353,6 @@ async def test_the_settings_page_changes_residency_in_one_request(tmp_path, monk
                 "login_service_installed": True,
             }
             assert installed["value"] is True
-
-        config_path = home / ".coffer" / "daemon-config.json"
-        written = json.loads(config_path.read_text()) if config_path.exists() else {}
-        assert "idle_shutdown_hours" not in written
 
         entries = await audit.query(event_type="daemon_residency_updated")
         assert len(entries) == 1

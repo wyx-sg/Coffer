@@ -78,7 +78,7 @@ async def _plan(
         retired=retired or [],
         model="a-model",
         completion=completion,  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
         chunk_size=chunk_size,
     )
     return plan, completion
@@ -382,7 +382,7 @@ async def test_the_operators_bound_reaches_the_request(monkeypatch) -> None:  # 
         retired=[],
         model="a-model",
         completion=completion,  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
         timeout=222.0,
         chunk_size=20,
     )

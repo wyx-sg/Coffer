@@ -76,6 +76,8 @@ jobs:
         working-directory: e2e
         run: npm ci
 
+      # The backend unit and integration tiers run on pytest-xdist, one worker
+      # per runner core (the Makefile's PYTEST_WORKERS=auto default).
       - name: make verify
         run: make verify
 

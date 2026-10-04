@@ -9,7 +9,7 @@ from __future__ import annotations
 from coffer.domain.knowledge.converter import Conversion, derive_title
 
 # Formats handled without any conversion engine. Source-code extensions are
-# passed through verbatim (not fenced) so grep/search see the raw content.
+# passed through verbatim (not fenced): what is submitted is the file's own text.
 PASSTHROUGH_FORMATS = frozenset(
     {
         "md",

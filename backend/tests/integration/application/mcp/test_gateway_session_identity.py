@@ -22,18 +22,17 @@ from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -41,11 +40,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -89,10 +87,10 @@ class _Harness:
                 ),
                 "agent": Kind(name="agent", display_name="Agent", config_schema=_AgentStub),
             },
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
         )
-        self.prefs = MCPCapabilityPreferenceRepo(sm)
+        self.prefs = MCPCapabilityPreferenceStore(derived_sm())
         self.invocations = MCPInvocationRepo(sm)
 
         async def echo(args: dict[str, Any]) -> dict[str, Any]:
@@ -113,7 +111,7 @@ class _Harness:
         supervisor = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=self.rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         session = MCPGatewaySession(
             session_id=f"s{len(self.sessions)}",
@@ -214,5 +212,50 @@ async def test_a_built_in_call_gets_the_handshake_identity_or_none(
                 schema = tool.get("inputSchema") or {}
                 assert "agent" not in schema.get("properties", {}), tool["name"]
                 assert "agent" not in schema.get("required", []), tool["name"]
+    finally:
+        await h.close()
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="the invocation log names the calling agent")
+@pytest.mark.asyncio
+async def test_the_invocation_log_records_the_session_agent_uid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every row a session writes — an upstream call and a built-in one alike —
+    carries the uid the session reported on ``initialize``, and a session that
+    reported none writes rows naming no agent. Filtering by ``agent_uid`` then
+    selects the first session's calls alone."""
+    install_in_memory_keyring(monkeypatch)
+    h = _Harness(tmp_path)
+    await h.start()
+    try:
+        agent = await h.rsvc.register(kind="agent", name="claude-code", config={}, actor="t")
+        await h.rsvc.register(kind="mcp_server", name="fs", config=_stdio("read_file"), actor="t")
+
+        identified = await h.session({"coffer/agent-uid": agent.uid})
+        unidentified = await h.session({})
+        await identified.handle_request(
+            "tools/call", {"name": "fs__read_file", "arguments": {"path": "/x"}}
+        )
+        await identified.handle_request(
+            "tools/call", {"name": "coffer__echo", "arguments": {"text": "hi"}}
+        )
+        await unidentified.handle_request(
+            "tools/call", {"name": "fs__read_file", "arguments": {"path": "/y"}}
+        )
+
+        rows = await h.invocations.query()
+        by_session = {(r.session_id, r.capability_key): r.agent_uid for r in rows}
+        assert by_session == {
+            ("s0", "read_file"): agent.uid,
+            ("s0", "echo"): agent.uid,
+            ("s1", "read_file"): None,
+        }
+
+        mine = await h.invocations.query(agent_uid=agent.uid)
+        assert sorted(r.capability_key for r in mine) == ["echo", "read_file"]
+        assert {r.session_id for r in mine} == {"s0"}
+        assert await h.invocations.count(agent_uid=agent.uid) == 2
+        assert await h.invocations.count() == 3
     finally:
         await h.close()

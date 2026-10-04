@@ -7,7 +7,6 @@ Tests the routes through a real FastAPI app wired with:
 Coverage:
 - Conversation CRUD round-trip (create, get, list, rename/model, delete).
 - SSE turn endpoint streaming turn_start … turn_done events.
-- TurnInProgress → 409 JSON (not SSE).
 - A build-adapter domain error → mapped JSON status (not SSE).
 - ConversationNotFound on send_message → 404 JSON.
 - ConversationNotFound on GET / PATCH / DELETE → 404.
@@ -15,14 +14,16 @@ Coverage:
 
 from __future__ import annotations
 
-from collections.abc import Generator
+import asyncio
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from coffer.application.chat.service import ChatService
-from coffer.application.chat.turn_orchestrator import TurnOrchestrator, clear_active_turns
+from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -34,6 +35,7 @@ from coffer.surfaces.http.chat.dependencies import (
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.turn_routes import router as turn_router
+from coffer.surfaces.http.dependencies import get_resource_service
 
 # Reuse the in-memory fakes + wiring helper from the unit conftest.
 from tests.unit.chat.conftest import (
@@ -50,6 +52,18 @@ _TOKEN = "test-token"
 # ---------------------------------------------------------------------------
 
 
+class _NoChannels:
+    """The resource service the conversation routes read channel names from.
+
+    Overridden rather than inherited: the module-level resource service is only
+    set when some earlier test in the same process happened to boot the full
+    app, so relying on it made these tests pass serially and fail alone (or on
+    an xdist worker that ran them first)."""
+
+    async def list(self, **_: object) -> list[Any]:
+        return []
+
+
 def _build_app(
     chat_svc: ChatService,
     orchestrator: TurnOrchestrator,
@@ -62,6 +76,7 @@ def _build_app(
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: orchestrator._registry
     app.dependency_overrides[get_attachment_service] = lambda: make_attachment_service()
+    app.dependency_overrides[get_resource_service] = lambda: _NoChannels()
     return app
 
 
@@ -73,14 +88,6 @@ def _make_services(
     """Create fully-wired in-memory chat services (registry-backed)."""
     chat_svc, orchestrator, _registry = make_chat_services(events, provider=provider)
     return chat_svc, orchestrator
-
-
-@pytest.fixture(autouse=True)
-def _reset_turns() -> Generator[None, None, None]:
-    """Clear any lingering active turns between tests."""
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +137,91 @@ def test_conversation_crud_roundtrip() -> None:
         assert resp.status_code == 404
         body = resp.json()
         assert body["error"]["code"] == "CONVERSATION_NOT_FOUND"
+
+    set_active_token(None)
+
+
+@pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
+def test_the_conversation_list_pages_by_cursor() -> None:
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        made = [
+            client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+            for _ in range(3)
+        ]
+        # Pin distinct activity times so "latest activity" is unambiguous.
+        base = datetime(2026, 9, 1, tzinfo=UTC)
+        for minutes, conv_id in enumerate(made):
+            asyncio.run(chat_svc._conversations.touch(conv_id, base + timedelta(minutes=minutes)))
+
+        first = client.get("/api/v1/chat/conversations", params={"limit": 2}).json()
+        assert [c["id"] for c in first["conversations"]] == [made[2], made[1]]
+        assert first["next_cursor"]
+        rest = client.get(
+            "/api/v1/chat/conversations", params={"limit": 2, "cursor": first["next_cursor"]}
+        ).json()
+        assert first["total"] == rest["total"] == 3
+        assert [c["id"] for c in rest["conversations"]] == [made[0]]
+        assert rest["next_cursor"] is None
+
+        # A cursor from the active listing does not page the archived one.
+        refused = client.get(
+            "/api/v1/chat/conversations",
+            params={"archived": "true", "cursor": first["next_cursor"]},
+        )
+        assert refused.status_code == 400
+        assert refused.json()["error"]["code"] == "CURSOR_INVALID"
+
+    set_active_token(None)
+
+
+@pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
+def test_the_conversation_list_searches_titles_and_pages_the_matches() -> None:
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        titles = ["Deploy plan", "lunch", "deploy notes", "DEPLOY 100%", "other"]
+        made = []
+        for title in titles:
+            conv_id = client.post(
+                "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+            ).json()["id"]
+            client.patch(f"/api/v1/chat/conversations/{conv_id}", json={"title": title})
+            made.append(conv_id)
+        base = datetime(2026, 9, 1, tzinfo=UTC)
+        for minutes, conv_id in enumerate(made):
+            asyncio.run(chat_svc._conversations.touch(conv_id, base + timedelta(minutes=minutes)))
+
+        def get(**params: object) -> dict:
+            return client.get("/api/v1/chat/conversations", params=params).json()
+
+        first = get(q="deploy", limit=2)
+        assert [c["title"] for c in first["conversations"]] == ["DEPLOY 100%", "deploy notes"]
+        assert first["next_cursor"]
+        assert first["total"] == 3  # the matches, not the page
+        assert get(q="lunch")["total"] == 1
+        assert get(archived=True)["total"] == 0
+        rest = get(q="deploy", limit=2, cursor=first["next_cursor"])
+        assert [c["title"] for c in rest["conversations"]] == ["Deploy plan"]
+        assert rest["next_cursor"] is None
+
+        # A wildcard is text, not a pattern; blank q is no filter.
+        assert [c["title"] for c in get(q="100%")["conversations"]] == ["DEPLOY 100%"]
+        assert get(q="%")["conversations"][0]["title"] == "DEPLOY 100%"
+        assert len(get(q="%")["conversations"]) == 1
+        assert len(get(q="  ")["conversations"]) == 5
+
+        # A cursor issued for one q does not page another.
+        refused = client.get(
+            "/api/v1/chat/conversations", params={"q": "lunch", "cursor": first["next_cursor"]}
+        )
+        assert refused.status_code == 400
+        assert refused.json()["error"]["code"] == "CURSOR_INVALID"
 
     set_active_token(None)
 
@@ -257,7 +349,6 @@ def test_unauthenticated_request_returns_401() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 def test_agent_config_set_and_get_model_roundtrip() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)
@@ -332,10 +423,10 @@ async def test_agent_config_set_model_preserves_cwd_and_session() -> None:
     """Setting (and clearing) the model must never clobber cwd/session_id —
     otherwise an existing CLI session would be lost on the next turn."""
     from coffer.domain.chat.agent_config import AgentConfig
-    from coffer.surfaces.http.chat.conversation_routes import (
+    from coffer.surfaces.http.chat.agent_config_routes import (
         get_agent_config as get_agent_config_route,
     )
-    from coffer.surfaces.http.chat.conversation_routes import (
+    from coffer.surfaces.http.chat.agent_config_routes import (
         set_agent_config as set_agent_config_route,
     )
     from coffer.surfaces.http.chat.schemas import AgentConfigPatch
@@ -363,7 +454,7 @@ async def test_agent_config_model_and_effort_do_not_clobber_each_other() -> None
     """The two are set from two controls, one field at a time, so a body that
     mentions one must leave the other exactly where it was — otherwise picking a
     model would silently reset how hard Codex thinks."""
-    from coffer.surfaces.http.chat.conversation_routes import (
+    from coffer.surfaces.http.chat.agent_config_routes import (
         set_agent_config as set_agent_config_route,
     )
     from coffer.surfaces.http.chat.schemas import AgentConfigPatch
@@ -411,7 +502,7 @@ def test_send_message_returns_202_fire_and_return() -> None:
                 "display_name": "Test Model",
                 "provider": "anthropic",
                 "model": "claude-sonnet-4-6",
-                "credential_ref": "ref",
+                "secret_ref": "ref",
             },
         )
         resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
@@ -422,7 +513,7 @@ def test_send_message_returns_202_fire_and_return() -> None:
             json={"text": "Hi"},
         )
         assert resp.status_code == 202
-        assert resp.json() == {"queued": False}
+        assert resp.json() == {"queued": False, "mirror": None}
 
     set_active_token(None)
 
@@ -435,7 +526,7 @@ def test_set_pending_replaces_queue() -> None:
     # orchestrator re-inserts the head and pauses rather than dropping it, so the
     # WHOLE queue is preserved (regression test for the lost-head bug).
     provider = FakeAgentProvider(
-        adapter=None, build_error=AgentConfigRejected("missing_credential", "no credential")
+        adapter=None, build_error=AgentConfigRejected("missing_secret", "no secret")
     )
     chat_svc, orchestrator = _make_services(provider=provider)
     app = _build_app(chat_svc, orchestrator)
@@ -484,7 +575,7 @@ def test_send_message_conversation_not_found_returns_404_json(monkeypatch) -> No
     async def _raise_not_found(*args: object, **kwargs: object) -> None:  # type: ignore[misc]
         raise ConversationNotFound("no-such-conv")
 
-    monkeypatch.setattr(orchestrator, "start_turn", _raise_not_found)
+    monkeypatch.setattr(orchestrator, "enqueue_message", _raise_not_found)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
         resp = client.post(
@@ -509,7 +600,7 @@ def test_send_message_build_adapter_error_real_orchestrator() -> None:
     endpoint returns the mapped status as JSON — the orchestrator propagates it
     before streaming, so the client never gets a half-open SSE stream."""
     provider = FakeAgentProvider(
-        adapter=None, build_error=AgentConfigRejected("missing_credential", "no credential")
+        adapter=None, build_error=AgentConfigRejected("missing_secret", "no secret")
     )
     chat_svc, orchestrator = _make_services(provider=provider)
     app = _build_app(chat_svc, orchestrator)

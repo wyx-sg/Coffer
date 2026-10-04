@@ -17,25 +17,27 @@ status (e.g. ``ConversationNotFound`` → 404).
 
 from __future__ import annotations
 
-import dataclasses
-import json
 import logging
-from collections.abc import AsyncIterator
-from typing import Any
+from collections.abc import AsyncIterator, Sequence
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Response, status
-from sse_starlette.sse import EventSourceResponse
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from coffer.application.chat.attachments import ChatAttachmentService
+from coffer.application.chat.ports import ChannelMirrorPort
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.dependencies import (
     get_attachment_service,
+    get_channel_mirror,
     get_chat_service,
     get_turn_orchestrator,
 )
+from coffer.surfaces.http.chat.event_schemas import TurnEventMessage, turn_event_message
 from coffer.surfaces.http.chat.schemas import (
     PendingQueueIn,
     PendingQueueOut,
@@ -63,6 +65,7 @@ async def send_message(
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
     attachments_svc: ChatAttachmentService = Depends(get_attachment_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> SendMessageAck:
     """Start a turn for the message, or enqueue it behind the in-flight one.
 
@@ -75,17 +78,35 @@ async def send_message(
     persists as references after the text exactly as it does a channel's media
     (spec chat "Send uploaded files with a web message"); an id naming no
     upload is ``AttachmentNotFound`` (422) and nothing is persisted or queued.
+
+    On a conversation a channel drives, the reply also goes to that chat first
+    (spec chat "Mirror a web reply into the channel it came from"), and the
+    turn is queued with the sink that delivers its answer there; ``mirror`` in
+    the ack says whether it was sent, is pending, or stays in Coffer.
     """
-    await svc.get_conversation(id)  # a missing path answers before a bad body
+    conv = await svc.get_conversation(id)  # a missing path answers before a bad body
     attachments = await attachments_svc.resolve(body.attachment_ids)
     text = attachments_svc.message_text(body.text, attachments)
+    outcome = None
+    if conv.channel_uid is not None and mirror is not None:
+        outcome = await mirror.mirror(id, conv.channel_uid, _mirror_text(body.text, attachments))
     queued = await orchestrator.enqueue_message(
         id,
         text,
         attachments=attachments,
         title_hint=attachments_svc.title_hint(body.text, attachments),
+        on_start=outcome.on_start if outcome is not None else None,
     )
-    return SendMessageAck(queued=queued)
+    return SendMessageAck(queued=queued, mirror=outcome.state if outcome is not None else None)
+
+
+def _mirror_text(text: str, attachments: Sequence[Attachment]) -> str:
+    """What the chat is told about a web reply: its text, or for a files-only
+    message a short note (the files themselves stay in Coffer)."""
+    if text.strip() or not attachments:
+        return text
+    count = len(attachments)
+    return f"sent {count} file{'s' if count != 1 else ''}"
 
 
 @router.post(
@@ -119,12 +140,19 @@ async def resend_message(
     return SendMessageAck(queued=queued)
 
 
-@router.get("/conversations/{id}/events", response_class=EventSourceResponse)
+@router.get(
+    "/conversations/{id}/events",
+    response_class=EventSourceResponse,
+    response_description="A Server-Sent Events stream of the nine turn events "
+    "(`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, "
+    "`queue_changed`, `question_asked`, `question_closed`) that stays open across "
+    "turns until the client disconnects.",
+)
 async def subscribe_events(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
-) -> EventSourceResponse:
+) -> AsyncIterator[TurnEventMessage]:
     """Subscribe to the conversation's live turn events (SSE, ADR chat-single-owner-live-mirror).
 
     On attach, the in-flight turn's events so far are replayed (and the current
@@ -136,20 +164,22 @@ async def subscribe_events(
     await svc.get_conversation(id)  # raises ConversationNotFound -> 404
     queue = orchestrator.subscribe(id)
 
-    async def _event_stream() -> AsyncIterator[dict[str, Any]]:
-        try:
-            while True:
-                event: AgentEvent | None = await queue.get()
-                if event is None:
-                    return  # bus closed (conversation deleted)
-                yield {"event": event.type, "data": json.dumps(dataclasses.asdict(event))}
-        finally:
-            # Client disconnect or stream end — detach this subscriber. The turn
-            # task keeps running for other subscribers (ADR chat-single-owner-live-mirror).
-            orchestrator.unsubscribe(id, queue)
-            _logger.debug("events subscriber detached for conversation %s", id)
-
-    return EventSourceResponse(_event_stream())
+    try:
+        while True:
+            event: AgentEvent | None = await queue.get()
+            if event is None:
+                return  # bus closed (conversation deleted)
+            # FastAPI sends a ServerSentEvent as it is; the annotation above
+            # names the data model, which is what the OpenAPI document shows.
+            yield cast(
+                Any,
+                ServerSentEvent(data=turn_event_message(event), event=event.type),
+            )
+    finally:
+        # Client disconnect or stream end — detach this subscriber. The turn
+        # task keeps running for other subscribers (ADR chat-single-owner-live-mirror).
+        orchestrator.unsubscribe(id, queue)
+        _logger.debug("events subscriber detached for conversation %s", id)
 
 
 @router.put("/conversations/{id}/pending", response_model=PendingQueueOut)

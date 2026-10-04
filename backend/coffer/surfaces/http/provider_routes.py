@@ -5,26 +5,52 @@ Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, status
+from functools import cache
 
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+
+from coffer.application.provider.local_runtime_handoff import local_runtime_handoff
+from coffer.application.provider.order_ops import ProviderOrderError
+from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.targets import scoped_targets
 from coffer.application.resource_service import ResourceService
-from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
+from coffer.domain.agent.types import AgentType
+from coffer.domain.provider.config import CuratedModel, ProviderConfig
 from coffer.domain.resource import Resource
+from coffer.domain.usage.pricing import ResolvedPrice
+from coffer.infrastructure.platform.host import machine_label
+from coffer.infrastructure.platform.memory import memory_label
+from coffer.infrastructure.provider import local_runtime
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
-from coffer.surfaces.http.provider_dependencies import get_provider_service
+from coffer.surfaces.http.handoff_schemas import handoff_out
+from coffer.surfaces.http.provider_dependencies import get_price_resolver, get_provider_service
 from coffer.surfaces.http.provider_schemas import (
+    ActivateIn,
     ActivateOut,
-    ActiveKeyOut,
     DeactivateOut,
+    DeletePreviewAgentOut,
+    DeletePreviewFileOut,
+    DeletePreviewLine,
+    DetectLocalIn,
+    DetectLocalOut,
+    LocalModelOut,
+    LocalRuntimeOut,
+    ModelPriceOut,
+    ModelPricesIn,
+    ModelPricesOut,
     ProviderCreate,
+    ProviderDeletePreviewOut,
     ProviderListOut,
     ProviderModel,
+    ProviderOrderIn,
     ProviderOut,
     ProviderPatch,
 )
+
+#: The OS and architecture do not change while the daemon runs.
+_machine = cache(machine_label)
 
 router = APIRouter(
     prefix="/api/v1/providers",
@@ -37,7 +63,36 @@ def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
     """Wire entries → the domain's curated set (``None`` leaves the set alone)."""
     if models is None:
         return None
-    return [CuratedModel(id=m.id, modality=m.modality) for m in models]
+    return [
+        CuratedModel(
+            id=m.id,
+            modality=m.modality,
+            context_window=m.context_window,
+            effort_levels=m.effort_levels,
+            default_effort=m.default_effort,
+            price=m.price,
+        )
+        for m in models
+    ]
+
+
+def price_out(model: str, resolved: ResolvedPrice | None) -> ModelPriceOut:
+    """One model's resolved price on the wire (its base tier)."""
+    if resolved is None:
+        return ModelPriceOut(model=model)
+    p = resolved.price
+    return ModelPriceOut(
+        model=model,
+        source=resolved.source,
+        source_name=resolved.source_name,
+        input=p.input,
+        output=p.output,
+        cache_write_5m=p.cache_write_5m,
+        cache_write_1h=p.cache_write_1h,
+        cache_read=p.cache_read,
+        tiered=bool(p.tiers),
+        source_updated=resolved.source_updated,
+    )
 
 
 def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
@@ -62,7 +117,7 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         title=resource.title,
         protocol=cfg.protocol,
         base_url=cfg.base_url,
-        credential_ref=cfg.credential_ref,
+        secret_ref=cfg.secret_ref,
         # Reported, never accepted: the reach comes from the resource's
         # per-agent scope (ADR per-agent-resource-scope). This is the CONFIGURED
         # reach, not the effective projection — ``enabled`` rides the same
@@ -71,8 +126,19 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         # connection the user has switched off. Folding ``enabled`` in here
         # instead made those chips empty on disable, which reads as erased data.
         compatible_agents=scoped_targets(resource, cfg, agents),
-        models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
-        is_active=cfg.is_active,
+        models=[
+            ProviderModel(
+                id=m.id,
+                modality=m.modality,
+                context_window=m.context_window,
+                effort_levels=m.effort_levels,
+                default_effort=m.default_effort,
+                price=m.price,
+            )
+            for m in cfg.models
+        ],
+        local_runtime=cfg.local_runtime,
+        fallback=cfg.fallback,
         internal_default=cfg.internal_default,
         transcribe_default=cfg.transcribe_default,
         enabled=resource.enabled,
@@ -96,6 +162,37 @@ async def list_providers(
     return ProviderListOut(providers=[_provider_out(r, registry) for r in rows])
 
 
+@router.post("/detect-local", response_model=DetectLocalOut)
+async def detect_local(body: DetectLocalIn) -> DetectLocalOut:
+    """Which local model runtime answers where (spec provider-switching
+    "Detect a local model runtime without changing it"). Read-only probes of
+    loopback addresses only; nothing is pulled or loaded. A non-loopback URL
+    is refused as 422."""
+    try:
+        if body.base_url:
+            hit = await local_runtime.detect(body.base_url)
+            found = [hit] if hit is not None else []
+        else:
+            found = await local_runtime.detect_defaults()
+    except local_runtime.NotLoopbackError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DetectLocalOut(
+        # Nothing answered: setting one up is the person's agent's chore.
+        handoff=handoff_out(None if found else local_runtime_handoff(_machine(), memory_label())),
+        found=[
+            LocalRuntimeOut(
+                base_url=d.base_url,
+                runtime=d.runtime,
+                models=[
+                    LocalModelOut(id=m.id, context_window=m.context_window, tools=m.tools)
+                    for m in d.models
+                ],
+            )
+            for d in found
+        ],
+    )
+
+
 @router.post("", response_model=ProviderOut, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     body: ProviderCreate,
@@ -103,48 +200,19 @@ async def create_provider(
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> ProviderOut:
-    """Create a provider profile (422 when the credential source is invalid)."""
+    """Create a provider profile (422 when the secret source is invalid)."""
     resource = await svc.create(
         body.name,
         protocol=body.protocol,
         base_url=body.base_url,
         secret_value=body.secret_value,
-        credential_ref=body.credential_ref,
+        secret_ref=body.secret_ref,
         models=_curated(body.models),
         description=body.description,
+        local_runtime=body.local_runtime,
         actor=actor,
     )
     return _provider_out(resource, await resources.list(kind="agent"))
-
-
-@router.get("/active-key/{wire}", response_model=ActiveKeyOut)
-async def active_provider_key(
-    wire: Protocol,
-    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
-) -> ActiveKeyOut:
-    """Back-compat: the decrypted key of the connection active for ``wire``'s
-    agent (legacy ``--wire`` helper). 404 when none. New projections use
-    ``GET /{uid}/key`` instead, which names the connection directly."""
-    return ActiveKeyOut(value=await svc.resolve_active_key(wire))
-
-
-@router.get("/{uid}/key", response_model=ActiveKeyOut)
-async def connection_key(
-    uid: str,
-    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
-) -> ActiveKeyOut:
-    """The decrypted key of a SPECIFIC connection — what Claude Code's projected
-    ``apiKeyHelper`` (``coffer provider key --connection-uid <uid>``) fetches, so
-    the agent always reads exactly the activated connection's key (no wire+active
-    mismatch).
-
-    The helper cites the UID rather than the name for the reason this kind has
-    no rename route any more: what Coffer writes into another tool's config file
-    has to survive the user relabelling the connection, and only the uid does
-    (ADR resource-identity-is-an-immutable-uid). 404 when the connection is
-    absent, or reaches no agent — disabled, scoped to no agent, or keyless
-    (ollama): ``NO_ACTIVE_PROVIDER``, as the wire form answers."""
-    return ActiveKeyOut(value=await svc.resolve_connection_key(uid))
 
 
 @router.get("/{uid}", response_model=ProviderOut)
@@ -173,9 +241,80 @@ async def update_provider(
         secret_value=body.secret_value,
         models=_curated(body.models),
         description=body.description,
+        fallback=body.fallback,
         actor=actor,
     )
     return _provider_out(resource, await resources.list(kind="agent"))
+
+
+@router.put("/order", response_model=ProviderListOut)
+async def reorder_providers(
+    body: ProviderOrderIn,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ProviderListOut:
+    """Reorder the Model providers list — the order fallbacks are tried in
+    (spec provider-switching "Order providers, and fail over in that order").
+    422 unless ``uids`` names every provider exactly once."""
+    try:
+        rows = await svc.reorder(body.uids, actor=actor)
+    except ProviderOrderError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    registry = await resources.list(kind="agent")
+    return ProviderListOut(providers=[_provider_out(r, registry) for r in rows])
+
+
+@router.post("/{uid}/prices", response_model=ModelPricesOut)
+async def model_prices(
+    uid: str,
+    body: ModelPricesIn,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    resolver: ProviderPriceResolver = Depends(get_price_resolver),  # noqa: B008
+) -> ModelPricesOut:
+    """Each model's price on this provider, with its source: You set, From
+    <provider>, Bundled or local — or none (spec provider-switching "Resolve
+    each model's price from the provider, its API, or the bundled list").
+    Read-only; nothing is fetched from the network."""
+    await svc.get(uid)
+    resolved = await resolver.resolve_many(uid, body.models)
+    return ModelPricesOut(
+        prices=[price_out(model, r) for model, r in resolved.items()],
+        bundled_version=resolver.bundled_version,
+    )
+
+
+@router.get("/{uid}/delete-preview", response_model=ProviderDeletePreviewOut)
+async def delete_preview(
+    uid: str,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+) -> ProviderDeletePreviewOut:
+    """The agent config changes deleting this profile would make (404 if absent);
+    nothing is written."""
+    result = await svc.delete_preview(uid)
+    return ProviderDeletePreviewOut(
+        agents=[
+            DeletePreviewAgentOut(
+                agent_uid=a.agent_uid,
+                agent_type=AgentType(a.agent_type),
+                agent_name=a.agent_name,
+                files=[
+                    DeletePreviewFileOut(
+                        path=f.path,
+                        op="remove" if f.op == "remove" else "modify",
+                        diff=[
+                            DeletePreviewLine(
+                                kind=r.kind, text=r.text, old_no=r.old_no, new_no=r.new_no
+                            )
+                            for r in f.diff
+                        ],
+                    )
+                    for f in a.files
+                ],
+            )
+            for a in result.agents
+        ]
+    )
 
 
 @router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -192,31 +331,35 @@ async def delete_provider(
 @router.post("/{uid}/activate", response_model=ActivateOut)
 async def activate_provider(
     uid: str,
+    body: ActivateIn,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> ActivateOut:
-    """Switch: make this profile active for its wire format and project it."""
-    result = await svc.activate(uid, actor=actor)
+    """Switch one agent onto this connection: project it into that agent's
+    native config and record it on the agent. Nothing else changes (409
+    ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+    scope does not name the agent)."""
+    result = await svc.activate(uid, body.agent_type, actor=actor)
     return ActivateOut(
         activated=result.activated,
         protocol=result.protocol,  # type: ignore[arg-type]
-        projected=result.projected,
-        skipped=result.skipped,
+        agent_type=AgentType(result.agent_type),
+        agent=result.agent,
     )
 
 
-@router.post("/use-builtin/{wire}", response_model=DeactivateOut)
+@router.post("/use-builtin/{agent_type}", response_model=DeactivateOut)
 async def use_builtin_provider(
-    wire: Protocol,
+    agent_type: AgentType,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> DeactivateOut:
-    """Switch this wire's agent(s) back to their OWN built-in login: remove
-    Coffer's projection from the native config and clear the active connection.
-    Idempotent — a no-op when the agent already runs built-in."""
-    result = await svc.deactivate(wire, actor=actor)
+    """Switch the agent of this type back to its OWN built-in login: remove
+    Coffer's projection from its native config and clear its connection. Only
+    this agent changes. Idempotent — a no-op when it already runs built-in."""
+    result = await svc.deactivate(agent_type, actor=actor)
     return DeactivateOut(
-        protocol=result.protocol,  # type: ignore[arg-type]
+        agent_type=AgentType(result.agent_type),
         deprojected=result.deprojected,
         previous=result.previous,
     )

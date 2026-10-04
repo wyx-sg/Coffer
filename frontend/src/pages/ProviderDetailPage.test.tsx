@@ -1,372 +1,310 @@
-// pages/ProviderDetailPage.test.tsx
+// src/pages/ProviderDetailPage.test.tsx — one provider: header, Overview (Used by, Endpoint, Models), Models tab, dialogs.
 //
-// The connection detail page: two tabs over one header. The header owns Edit
-// (which can RENAME — the kind-agnostic `PATCH /resources/{uid}` every kind
-// renames through, still ahead of the patch so a taken label fails first, and
-// with the page STAYING PUT, because the URL is built from the uid), Delete,
-// and the enable/disable control. Overview holds the
-// read-only Configuration card (which NEVER renders a secret — only whether one
-// is stored); Models holds the table that introspects the endpoint AS IT OPENS —
-// no fetch button — and writes the curated set back with PATCH {models: [...]},
-// one row per model carrying its id, WHAT KIND of model it is, and the offered
-// Switch; searchable, and filterable by offered/not and by kind. An empty set
-// reads as "no restriction"; an endpoint that cannot list its models says so,
-// offers a retry, and leaves the current selection intact.
-//
-// A curated entry is `{id, modality}`, not a bare id: introspection GUESSES the
-// modality from the id and the user corrects it in the row's Type picker — on an
-// already-offered row that correction is a PATCH of its own, on a row that is
-// not offered yet it is held until the Switch carries it into the curated set.
+// The endpoint probe runs when the provider opens and feeds the header's
+// health, the key-rejected banner and the Models tab, which curates the set
+// with PATCH {models} — one row per model with its switch and type, a failed
+// probe saying so with a Retry and leaving the selection alone. Used by is
+// read-only and links where each use is changed. Edit renames through the
+// kind-agnostic route first; Replace key waits for approval when the key is
+// in use; Delete is blocked while anything runs on the provider.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ProviderDetailPage } from "./ProviderDetailPage";
+
+import type { AgentOut } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { acceptance } from "@/test/acceptance";
+import { ModelProvidersPage } from "./ModelProvidersPage";
 
-const navigateMock = vi.fn();
-vi.mock("react-router-dom", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react-router-dom")>();
-  return { ...actual, useNavigate: () => navigateMock };
-});
-
-vi.mock("@/lib/api/providers", async (orig) => {
-  const actual = await orig<typeof import("@/lib/api/providers")>();
-  return {
-    ...actual,
-    providersApi: {
-      list: vi.fn(),
-      get: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      remove: vi.fn(),
-      activate: vi.fn(),
-      // No `rename`: the connection-specific rename route is gone. A rename is
-      // `resourcesApi.rename` now, stubbed below with the rest of the generic
-      // resource writes.
-      setInternalDefault: vi.fn(),
-      setTranscribeDefault: vi.fn(),
-    },
-  };
-});
-
-// Renaming goes through the generic resource PATCH, so THAT is what is stubbed
-// — the hook itself stays real, which is what lets the 409 below arrive as the
-// mutation's own error and render beside the field the user typed in.
+vi.mock("@/lib/api/providers", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/providers")>()),
+  providersApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    deletePreview: vi.fn(),
+    activate: vi.fn(),
+    detectLocal: vi.fn(),
+  },
+}));
+vi.mock("@/components/usage/UsageTab", () => ({ UsageTab: () => <p>usage tab body</p> }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
+vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
+vi.mock("@/lib/api/secret", () => ({
+  secretsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
+}));
 
-// Model introspection is a network probe the Models tab fires on open; drive its
-// result from the test rather than letting it reach a daemon.
-const refetch = vi.fn();
-let endpointState: {
-  data?: { models: ProviderModel[]; message: string };
+type EndpointState = {
+  data?: { models: ProviderModel[]; message: string; reachable: boolean };
   error?: unknown;
   isPending?: boolean;
   isFetching?: boolean;
-} = {};
+};
+const { agentsState, engineState, refetch, probedFor, endpoint, listModels } = vi.hoisted(() => ({
+  agentsState: { data: [] as unknown[] },
+  engineState: { data: { model: null, transcribe_model: null } as Record<string, unknown> },
+  refetch: vi.fn(),
+  probedFor: [] as string[],
+  endpoint: { state: {} as Record<string, unknown> },
+  listModels: vi.fn(),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => agentsState }));
+vi.mock("@/lib/hooks/useInternalEngine", () => ({ useInternalEngineConfig: () => engineState }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useEndpointModels: (uid: string) => {
-    probedFor.push(uid);
+    if (uid) probedFor.push(uid);
     return {
       data: undefined,
       error: null,
       isPending: false,
       isFetching: false,
+      dataUpdatedAt: 0,
       refetch,
-      ...endpointState,
+      ...endpoint.state,
     };
   },
-  useListProviderModels: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
-  useTestConnection: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
-}));
-const { probedFor } = vi.hoisted(() => ({ probedFor: [] as string[] }));
-
-// The header's ScopeControl reaches the daemon through hand-written hooks; stub
-// them. `provider` DOES declare per-agent scope (its reach replaced the old
-// `compatible_agents` config key), so the control's panel offers all three
-// states — Disabled / Every agent / Only selected agents — and it is the only
-// place a connection's reach is edited: the Edit dialog has no control of its
-// own.
-const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
-  enableMutate: vi.fn(),
-  disableMutate: vi.fn(),
-  updateScopeMutate: vi.fn(),
-}));
-vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
-  useUpdateResourceScope: () => ({ mutate: updateScopeMutate, isPending: false }),
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
-// Only the two enable/disable hooks are replaced; `useRenameResource` is left
-// real, over the stubbed `resourcesApi` above.
-vi.mock("@/lib/hooks/useResourceMutations", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/hooks/useResourceMutations")>()),
-  useEnableResource: () => ({ mutate: enableMutate, isPending: false }),
-  useDisableResource: () => ({ mutate: disableMutate, isPending: false }),
+  useListProviderModels: () => ({ mutateAsync: listModels, isPending: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
 const { resourcesApi } = await import("@/lib/api/resources");
-const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-const resourceMock = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const { scopeApi } = await import("@/lib/api/scope");
+const { secretsApi } = await import("@/lib/api/secret");
+const api = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const resources = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const pendingApprovals = secretsApi.pendingApprovals as ReturnType<typeof vi.fn>;
 
-/** The connection's identity — what the route, every request and the header's
- *  reach control are built from. It survives the rename below, which is the
- *  whole point of it: "acme" is a label and "acme-eu" is the same connection. */
 const UID = "cn-31f0";
-
-const makeProvider = (overrides?: Partial<Provider>): Provider => ({
+const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   uid: UID,
   name: "acme",
+  title: null,
   protocol: "openai",
   base_url: "https://gw/v1",
-  credential_ref: "provider/acme/key",
+  secret_ref: "provider/acme",
+  local_runtime: null,
   compatible_agents: ["codex"],
-  is_active: false,
   internal_default: false,
   transcribe_default: false,
+  fallback: true,
   models: [],
   enabled: true,
   description: null,
   created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-02T00:00:00Z",
-  ...overrides,
+  updated_at: "2026-01-01T00:00:00Z",
+  ...over,
 });
+const chat = (...ids: string[]): ProviderModel[] => ids.map((id) => ({ id, modality: "text" }));
+// The agent runs on the provider under test (UID) — its record names it.
+const agent = (type: "claude_code" | "codex", model: string | null): AgentOut =>
+  ({
+    uid: `a-${type}`,
+    type,
+    name: type,
+    display_name: type === "codex" ? "Codex" : "Claude Code",
+    model,
+    connection_uid: UID,
+  }) as AgentOut;
 
-function renderPage() {
+function setEndpoint(state: EndpointState) {
+  endpoint.state = state as Record<string, unknown>;
+}
+const serves = (models: ProviderModel[], message = "") =>
+  setEndpoint({ data: { models, message, reachable: true } });
+
+function serve(provider: Provider) {
+  api.list.mockResolvedValue({ providers: [provider] });
+  api.get.mockResolvedValue(provider);
+}
+
+function Where() {
+  return <output data-testid="where">{useLocation().pathname}</output>;
+}
+
+function renderPage(path = `/model-providers/${UID}`) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <MemoryRouter initialEntries={[`/model-providers/${UID}`]}>
+    <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={qc}>
         <Routes>
-          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
+          <Route path="/model-providers" element={<ModelProvidersPage />} />
+          <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
+          <Route path="*" element={null} />
         </Routes>
+        <Where />
       </QueryClientProvider>
     </MemoryRouter>,
   );
 }
 
-/** Plain chat entries — the common case, spelled once instead of per fixture. */
-const chat = (...ids: string[]): ProviderModel[] =>
-  ids.map((id) => ({ id, modality: "text" }) as ProviderModel);
-
-/** The endpoint answered with these models, as the on-open probe would resolve.
- *  Each entry carries the modality introspection INFERRED from the id. */
-function endpointServes(models: ProviderModel[], message = "") {
-  endpointState = { data: { models, message } };
-}
-
-/** The page opens on Overview, so every model assertion goes through the tab.
- *  Radix's TabsTrigger switches on mousedown, which fireEvent.click never sends. */
-async function openModelsTab() {
-  fireEvent.mouseDown(await screen.findByRole("tab", { name: "Models" }));
-}
-
-/** The row's offered/not-offered Switch, named as the table labels it. */
-const switchFor = (model: string) => screen.getByRole("switch", { name: `Status: ${model}` });
-
-/** The row's modality picker, named as ModalitySelect labels it. Every query
- *  here goes by accessible name: the toolbar's own filters are comboboxes too,
- *  and so is one picker per row. */
-const typePickerFor = (model: string) => screen.getByRole("combobox", { name: `Type: ${model}` });
-
-/** Radix Select has no pointer layout under jsdom, so open it from the keyboard
- *  and then click the option by its label. */
-function chooseOption(trigger: HTMLElement, optionName: string) {
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  fireEvent.click(screen.getByRole("option", { name: optionName }));
-}
-
-/** Correct what kind of model a row is. */
-const setModality = (model: string, kind: string) => chooseOption(typePickerFor(model), kind);
-
-/** The toolbar's two filters, each named by its column header. */
-const selectStatus = (optionName: string) =>
-  chooseOption(screen.getByRole("combobox", { name: "Status" }), optionName);
-const selectType = (optionName: string) =>
-  chooseOption(screen.getByRole("combobox", { name: "Type" }), optionName);
+const where = () => screen.getByTestId("where").textContent;
+const switchFor = (id: string) => screen.getByRole("switch", { name: `Offered: ${id}` });
+const typePickerFor = (id: string) => screen.getByRole("button", { name: `Type: ${id}` });
+const heading = () => screen.findByRole("heading", { name: "acme", level: 2 });
 
 describe("ProviderDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    endpointState = {};
     probedFor.length = 0;
+    setEndpoint({});
+    agentsState.data = [];
+    engineState.data = { model: null, transcribe_model: null };
+    (scopeApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      scope: null,
+      supports_scope: true,
+    });
+    pendingApprovals.mockResolvedValue({ approvals: [] });
   });
 
-  test("renders the connection's configuration, never its secret", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ description: "the gateway" }));
-    renderPage();
-
-    expect(await screen.findByRole("heading", { name: "acme" })).toBeInTheDocument();
-    expect(screen.getByText("https://gw/v1")).toBeInTheDocument();
-    expect(screen.getByText("the gateway")).toBeInTheDocument();
-    // The wire is named for what it is — the header chip and the card row
-    // both say "OpenAI-compatible", never the raw `openai`.
-    expect(screen.getAllByText("OpenAI-compatible")).toHaveLength(2);
-    expect(screen.queryByText(/^openai$/)).not.toBeInTheDocument();
-    // Reach is the header control's; there is no compatible-agents row.
-    expect(screen.queryByText("Compatible agents")).not.toBeInTheDocument();
-    expect(screen.queryByText("Codex")).not.toBeInTheDocument();
-    // A key is stored — we say so, and never render the reference or the value.
-    expect(screen.getByText("Stored")).toBeInTheDocument();
-    expect(screen.queryByText("provider/acme/key")).not.toBeInTheDocument();
-  });
-
-  test("a keyless connection says no key is stored", async () => {
-    apiMock.get.mockResolvedValue(
-      makeProvider({ protocol: "ollama", credential_ref: null, compatible_agents: [] }),
+  acceptance("provider-switching", "a provider's used-by list is read-only", async () => {
+    agentsState.data = [agent("claude_code", "claude-opus-4-1")];
+    engineState.data = { model: "gpt-5-mini", transcribe_model: null };
+    serve(
+      makeProvider({
+        protocol: "anthropic",
+        compatible_agents: ["claude_code"],
+        internal_default: true,
+      }),
     );
     renderPage();
-    expect(await screen.findByText("No key stored")).toBeInTheDocument();
+    await heading();
+
+    const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section")!;
+    // Each row links to where it is changed: the agent's Change model, or Settings.
+    const claude = within(usedBy).getByRole("link", { name: "Claude Code › Change model" });
+    expect(claude).toHaveAttribute("href", "/agents/claude_code?change-model=1");
+    expect(within(usedBy).getByText("claude-opus-4-1")).toBeInTheDocument();
+    expect(within(usedBy).getByText("gpt-5-mini")).toBeInTheDocument();
+    // A healthy row carries no status word.
+    expect(within(usedBy).queryByText(/Runs on this provider|Requests fail/)).toBeNull();
+    const engine = within(usedBy).getByRole("button", { name: "Settings › General" });
+    // No switch, activate or revert control in Used by.
+    expect(within(usedBy).queryByRole("switch")).toBeNull();
+    expect(
+      within(usedBy).queryByRole("button", { name: /switch|activate|revert|built-in|own login/i }),
+    ).toBeNull();
+    fireEvent.click(engine);
+    await waitFor(() => expect(where()).toBe("/settings/general"));
+  });
+
+  test("the Overview names the endpoint, the key's secret and the offered models", async () => {
+    agentsState.data = [agent("codex", "gpt-5-codex")];
+    serves(chat("gpt-5", "gpt-5-codex", "o4-mini"));
+    serve(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
+    renderPage();
+    await heading();
+
+    expect(screen.getByText("Reachable")).toBeInTheDocument();
+    expect(screen.getByText("locked while Codex runs on it")).toBeInTheDocument();
+    expect(screen.getByText("coffer://secret/provider/acme")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
+    expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
+    // One column, no tabs: the Models section sits under Used by and Endpoint.
+    // Only the page header's Providers | Usage tabs: the provider itself has none.
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Providers", "Usage"]);
+    expect(screen.getByRole("switch", { name: /gpt-5-codex/ })).toBeInTheDocument();
+  });
+
+  test("the detail is three plain sections with a one-line header and unwrapped model names", async () => {
+    serves(chat("gpt-5", "gpt-5-codex"));
+    serve(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
+    const { container } = renderPage();
+    await heading();
+
+    // Used by, Endpoint and Models are plain Sections (title + a line + hairline rows), not cards.
+    for (const name of ["Used by", "Endpoint", "Models"]) {
+      const section = screen.getByRole("heading", { name }).closest("section")!;
+      expect(section).not.toHaveClass("border");
+    }
+    // The header holds the actions in the sibling order: reach, test, edit, menu.
+    const header = screen.getByTestId("provider-header");
+    expect(within(header).getByTestId("scope-control")).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Test" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      within(header).getByRole("button", { name: "More actions for acme" }),
+    ).toBeInTheDocument();
+    // The menu holds only Delete: Refresh models is the Models section's button.
+    fireEvent.click(within(header).getByRole("button", { name: "More actions for acme" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete provider"]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    // The page is no longer wrapped in one bordered box.
+    expect(container.querySelector(".rounded-xl.border.overflow-hidden")).toBeNull();
+    // A model name never wraps.
+    expect(await screen.findByText("gpt-5-codex")).toHaveClass("whitespace-nowrap");
+    expect(screen.getAllByTestId("model-row")).toHaveLength(2);
+  });
+
+  test("a keyless provider says no key is needed", async () => {
+    serve(makeProvider({ protocol: "ollama", secret_ref: null, compatible_agents: [] }));
+    renderPage();
+    await heading();
+    expect(screen.getByText("No key needed — this provider takes none.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Replace key" })).toBeNull();
   });
 
   acceptance(
     "provider-switching",
     "the models table lists the endpoint's models when it opens",
     async () => {
-      apiMock.get.mockResolvedValue(makeProvider());
+      serve(makeProvider());
+      serves(chat("gpt-5", "gpt-5-codex"));
       renderPage();
-      await screen.findByRole("heading", { name: "acme" });
+      await heading();
 
-      // Configuration belongs to Overview, so it is what the page opens on; the
-      // models surface stays behind its tab until asked for — and the endpoint is
-      // not probed before the user gets there.
-      expect(screen.getByText("Configuration")).toBeInTheDocument();
-      expect(probedFor).toEqual([]);
-
-      await openModelsTab();
-      expect(await screen.findByText(/pick which of this endpoint's models/i)).toBeInTheDocument();
-      // Opening the tab IS the fetch trigger — there is no button to press.
+      // Opening the provider IS the probe — there is no button to press.
       expect(probedFor).toContain(UID);
-      expect(screen.queryByRole("button", { name: /fetch models/i })).not.toBeInTheDocument();
+      expect(await screen.findByText("gpt-5-codex")).toBeInTheDocument();
+      expect(switchFor("gpt-5")).toBeInTheDocument();
+      expect(switchFor("gpt-5-codex")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /fetch models/i })).toBeNull();
     },
   );
 
-  test("the table says it is loading while the endpoint is being probed", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointState = { isPending: true, isFetching: true };
+  test("an empty selection shows every listed model switched on; narrowing writes the rest", async () => {
+    serve(makeProvider({ models: [] }));
+    api.update.mockResolvedValue(makeProvider());
+    serves(chat("gpt-5", "gpt-5-codex"));
     renderPage();
-    await openModelsTab();
-
-    expect(await screen.findAllByText(/listing this endpoint's models/i)).not.toHaveLength(0);
-  });
-
-  test("an empty model selection shows every offered model switched on", async () => {
-    // An empty curated set means NO RESTRICTION, so the table says that the
-    // only way a table can: every row on. It used to render them all off and
-    // explain the contradiction in a sentence above.
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointServes(chat("gpt-5", "gpt-5-codex"));
-    renderPage();
-    await openModelsTab();
-
-    expect(await screen.findByRole("switch", { name: "Status: gpt-5" })).toBeChecked();
-    expect(switchFor("gpt-5-codex")).toBeChecked();
-    expect(screen.queryByText(/no restriction/i)).not.toBeInTheDocument();
-  });
-
-  test("narrowing away from no-restriction writes the list it stood for, minus that row", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5-codex") }));
-    endpointServes(chat("gpt-5", "gpt-5-codex"));
-    renderPage();
-    await openModelsTab();
-
-    const toggle = await screen.findByRole("switch", { name: "Status: gpt-5" });
-    expect(toggle).toBeChecked();
-    fireEvent.click(toggle);
-
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    // Everything that was implicitly on, explicitly, minus the one turned off —
-    // each carrying the kind its row is showing, not a bare id.
-    expect(apiMock.update).toHaveBeenCalledWith(UID, {
-      models: [{ id: "gpt-5-codex", modality: "text" }],
-    });
-  });
-
-  test("flipping one off removes just that model", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
-    apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5-codex") }));
-    renderPage();
-    await openModelsTab();
-
-    // The curated set renders without a fetch — it is the connection's own state.
-    const toggle = await screen.findByRole("switch", { name: "Status: gpt-5" });
-    expect(toggle).toBeChecked();
-
-    fireEvent.click(toggle);
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith(UID, {
-      models: [{ id: "gpt-5-codex", modality: "text" }],
-    });
-  });
-
-  test("the search box narrows the table to the matching model ids", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointServes(chat("gpt-5", "gpt-5-codex", "claude-opus-4"));
-    renderPage();
-    await openModelsTab();
-    await screen.findByText("claude-opus-4");
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Search models…" }), {
-      target: { value: "codex" },
-    });
-    expect(screen.getByText("gpt-5-codex")).toBeInTheDocument();
-    expect(screen.queryByText("claude-opus-4")).not.toBeInTheDocument();
-
-    // Rows exist; the search is what hid them — so say that, not "no models yet".
-    fireEvent.change(screen.getByRole("textbox", { name: "Search models…" }), {
-      target: { value: "gemini" },
-    });
-    expect(screen.getByText(/no models match/i)).toBeInTheDocument();
-  });
-
-  test("the status filter separates the offered models from the rest", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5") }));
-    endpointServes(chat("gpt-5", "gpt-5-codex"));
-    renderPage();
-    await openModelsTab();
     await screen.findByText("gpt-5-codex");
 
-    selectStatus("Enabled");
-    expect(screen.getByText("gpt-5")).toBeInTheDocument();
-    expect(screen.queryByText("gpt-5-codex")).not.toBeInTheDocument();
-
-    selectStatus("Disabled");
-    expect(screen.getByText("gpt-5-codex")).toBeInTheDocument();
-    expect(screen.queryByText("gpt-5")).not.toBeInTheDocument();
+    expect(switchFor("gpt-5")).toBeChecked();
+    expect(switchFor("gpt-5-codex")).toBeChecked();
+    fireEvent.click(switchFor("gpt-5"));
+    await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
+    expect(api.update).toHaveBeenCalledWith(UID, { models: chat("gpt-5-codex") });
   });
 
   acceptance(
     "provider-switching",
     "curate an embedding model alongside chat models on one connection",
     async () => {
-      // The probe answers with a modality per id — its GUESS, which the row
-      // shows as the pre-filled value of the Type picker.
-      apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-4o") }));
-      apiMock.update.mockResolvedValue(makeProvider());
-      endpointServes([
+      serve(makeProvider({ models: chat("gpt-4o") }));
+      api.update.mockResolvedValue(makeProvider());
+      serves([
         { id: "gpt-4o", modality: "text" },
         { id: "text-embedding-3-large", modality: "embedding" },
       ]);
       renderPage();
-      await openModelsTab();
       await screen.findByText("text-embedding-3-large");
 
+      // The probe's guess pre-fills each row's type.
       expect(typePickerFor("gpt-4o")).toHaveTextContent("Text / chat");
       expect(typePickerFor("text-embedding-3-large")).toHaveTextContent("Embedding");
+      // The type is quiet text with a menu, not a bordered field.
+      expect(typePickerFor("gpt-4o")).not.toHaveClass("border");
 
-      // Offering it stores the inferred kind beside the chat model already
-      // curated — one connection, two kinds of model.
       fireEvent.click(switchFor("text-embedding-3-large"));
-      await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-      expect(apiMock.update).toHaveBeenCalledWith(UID, {
+      await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
+      expect(api.update).toHaveBeenCalledWith(UID, {
         models: [
           { id: "gpt-4o", modality: "text" },
           { id: "text-embedding-3-large", modality: "embedding" },
@@ -375,312 +313,230 @@ describe("ProviderDetailPage", () => {
     },
   );
 
-  test("correcting an offered row's type patches the whole curated set with it", async () => {
-    // Introspection guessed `text` for an embedding model and the user already
-    // offered it — the correction belongs in the stored set straight away.
-    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5", "house-embeddings-v2") }));
-    apiMock.update.mockResolvedValue(makeProvider());
-    renderPage();
-    await openModelsTab();
-    await screen.findByText("house-embeddings-v2");
-
-    setModality("house-embeddings-v2", "Embedding");
-
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    // The whole set is rewritten, so the untouched row keeps its own kind.
-    expect(apiMock.update).toHaveBeenCalledWith(UID, {
-      models: [
-        { id: "gpt-5", modality: "text" },
-        { id: "house-embeddings-v2", modality: "embedding" },
-      ],
-    });
-  });
-
-  test("a type picked before the switch is the one the curated entry is stored with", async () => {
-    // An EXPLICIT list that does not name this row: nothing in the id says
-    // "embedding", so the guess is wrong, and there is no curated entry to
-    // patch the correction into until the row is switched on.
-    apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5") }));
-    apiMock.update.mockResolvedValue(makeProvider());
-    endpointServes(chat("gpt-5", "house-embeddings-v2"));
-    renderPage();
-    await openModelsTab();
-    await screen.findByText("house-embeddings-v2");
-
-    setModality("house-embeddings-v2", "Embedding");
-    expect(typePickerFor("house-embeddings-v2")).toHaveTextContent("Embedding");
-    expect(apiMock.update).not.toHaveBeenCalled();
-
-    fireEvent.click(switchFor("house-embeddings-v2"));
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith(UID, {
-      models: [
-        { id: "gpt-5", modality: "text" },
-        { id: "house-embeddings-v2", modality: "embedding" },
-      ],
-    });
-  });
-
-  test("under no restriction, correcting a type writes the list it stood for", async () => {
-    // Every row is already on, so the correction has somewhere to go at once —
-    // there is no "switch it on later" step to hold it for.
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    apiMock.update.mockResolvedValue(makeProvider());
-    endpointServes(chat("gpt-5", "house-embeddings-v2"));
-    renderPage();
-    await openModelsTab();
-    await screen.findByText("house-embeddings-v2");
-
-    setModality("house-embeddings-v2", "Embedding");
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith(UID, {
-      models: [
-        { id: "gpt-5", modality: "text" },
-        { id: "house-embeddings-v2", modality: "embedding" },
-      ],
-    });
-  });
-
-  test("the type filter separates the models by kind", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointServes([
+  test("the type filter narrows the rows", async () => {
+    serve(makeProvider());
+    serves([
       { id: "gpt-5", modality: "text" },
-      { id: "text-embedding-3-large", modality: "embedding" },
+      { id: "whisper-1", modality: "audio" },
     ]);
     renderPage();
-    await openModelsTab();
-    await screen.findByText("text-embedding-3-large");
-
-    selectType("Embedding");
-    expect(screen.getByText("text-embedding-3-large")).toBeInTheDocument();
-    expect(screen.queryByText("gpt-5")).not.toBeInTheDocument();
-
-    selectType("All types");
+    await screen.findByText("whisper-1");
+    fireEvent.click(screen.getByRole("button", { name: "Type" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Audio" }));
+    expect(screen.queryByText("gpt-5")).toBeNull();
+    expect(screen.getByText("whisper-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Type: Audio" }));
+    fireEvent.click(await screen.findByRole("option", { name: "All" }));
     expect(screen.getByText("gpt-5")).toBeInTheDocument();
   });
 
   acceptance(
     "provider-switching",
-    "a failed model introspection says so and offers a retry",
+    "a failed model introspection says so, with Refresh in the title",
     async () => {
-      apiMock.get.mockResolvedValue(makeProvider({ models: chat("hand-typed-model") }));
-      // The probe failed (the query is left holding the error).
-      endpointState = { error: new ApiError("INTERNAL_ERROR", "endpoint refused") };
+      serve(makeProvider({ models: chat("hand-typed-model") }));
+      setEndpoint({ error: new ApiError("INTERNAL_ERROR", "endpoint refused") });
       renderPage();
-      await openModelsTab();
 
-      expect(await screen.findByText(/could not list this endpoint's models/i)).toBeInTheDocument();
-      // The curated list the user built earlier survives the failed fetch.
+      expect(await screen.findByText("Couldn't list this endpoint's models")).toBeInTheDocument();
+      expect(screen.getByText("Listing failed")).toBeInTheDocument();
+      // The box has no Retry of its own: Refresh is the title's.
+      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+      // The curated list survives the failed probe.
       expect(switchFor("hand-typed-model")).toBeChecked();
-      expect(apiMock.update).not.toHaveBeenCalled();
-
-      // A failure is never a dead end: the retry asks the endpoint again.
-      fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+      expect(api.update).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
       expect(refetch).toHaveBeenCalledTimes(1);
     },
   );
 
-  test("an endpoint that lists nothing surfaces the probe's message", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ models: [] }));
-    endpointServes(chat(), "this endpoint does not expose a model list");
+  test("an endpoint that lists nothing says what that means", async () => {
+    serve(makeProvider({ models: [] }));
+    serves([], "the endpoint listed no models");
     renderPage();
-    await openModelsTab();
+    expect(await screen.findByText("This endpoint listed no models")).toBeInTheDocument();
+  });
+
+  test("a rejected key shows in the header and in the Endpoint box, not row by row", async () => {
+    agentsState.data = [agent("codex", "gpt-5-codex")];
+    serve(makeProvider());
+    setEndpoint({
+      data: {
+        models: [],
+        message: "Client error '401 Unauthorized' for url 'https://gw/v1/models'",
+        reachable: false,
+      },
+    });
+    renderPage();
+    await heading();
+    expect(screen.getAllByText("Key rejected").length).toBeGreaterThan(0);
+    expect(screen.getByText("The endpoint rejects the stored key (401)")).toBeInTheDocument();
+    expect(
+      screen.getByText("Everything that uses it fails until you replace the key."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Requests fail/)).toBeNull();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    // Replace key lives in the box only, not on the key row as well.
+    expect(screen.getAllByRole("button", { name: "Replace key…" })).toHaveLength(1);
+  });
+
+  test("Edit renames first, then patches the endpoint; the protocol is locked while live", async () => {
+    agentsState.data = [agent("codex", "gpt-5-codex")];
+    const provider = makeProvider();
+    serve(provider);
+    resources.rename.mockResolvedValue(undefined);
+    api.update.mockResolvedValue(provider);
+    renderPage();
+    await heading();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByText("Locked while Codex runs on it.")).toBeInTheDocument();
+    expect(dialog.getByRole("combobox", { name: "Protocol" })).toBeDisabled();
+    expect(dialog.getByText("provider/acme")).toBeInTheDocument();
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "acme-eu" } });
+    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
+    expect(resources.rename).toHaveBeenCalledWith(UID, "acme-eu");
+    expect(resources.rename.mock.invocationCallOrder[0]).toBeLessThan(
+      api.update.mock.invocationCallOrder[0],
+    );
+    expect(api.update).toHaveBeenCalledWith(UID, { base_url: "https://gw/v2" });
+    // The page stays where it is: its address is the uid.
+    expect(where()).toBe(`/model-providers/${UID}`);
+  });
+
+  acceptance("web-ui", "a renamable kind keeps its uid in the address", async () => {
+    // Renamed from `work` to `work-proxy`; the saved address carries the uid.
+    serve(makeProvider({ name: "work-proxy" }));
+    renderPage(`/model-providers/${UID}`);
 
     expect(
-      await screen.findByText("this endpoint does not expose a model list"),
+      await screen.findByRole("heading", { name: "work-proxy", level: 2 }),
     ).toBeInTheDocument();
+    expect(where()).toBe(`/model-providers/${UID}`);
+    expect(screen.queryByText(/not found/i)).toBeNull();
   });
 
-  test("Edit opens the connection form with the protocol locked and the name editable", async () => {
-    apiMock.get.mockResolvedValue(makeProvider());
+  test("a taken name fails inline and nothing else is written", async () => {
+    serve(makeProvider());
+    resources.rename.mockRejectedValue(new ApiError("RESOURCE_ALREADY_EXISTS", "taken"));
     renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
+    await heading();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const form = within(screen.getByRole("dialog"));
-    expect((form.getByLabelText("Name") as HTMLInputElement).disabled).toBe(false);
-    // The secret is optional in edit mode (blank keeps the stored key).
-    expect((form.getByLabelText("API key") as HTMLInputElement).required).toBe(false);
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "taken" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+    expect(await dialog.findByRole("alert")).toBeInTheDocument();
+    expect(api.update).not.toHaveBeenCalled();
+  });
 
-    fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({ base_url: "https://gw/v2" }),
+  test("Replace key checks the pasted key, then stores it and closes", async () => {
+    agentsState.data = [agent("codex", "gpt-5-codex")];
+    serve(makeProvider());
+    api.update.mockResolvedValue(makeProvider());
+    listModels.mockResolvedValue({ models: chat("gpt-5"), message: "", reachable: true });
+    renderPage();
+    await heading();
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace key…" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.change(dialog.getByLabelText("New key"), { target: { value: "sk-new" } });
+    // No Test button: the key is checked as it is pasted.
+    expect(dialog.queryByRole("button", { name: "Test" })).toBeNull();
+    await waitFor(() =>
+      expect(listModels).toHaveBeenCalledWith(
+        expect.objectContaining({ secret_value: "sk-new", base_url: "https://gw/v1" }),
+      ),
     );
+    expect(await dialog.findByText(/The new key works — 1 model listed/)).toBeInTheDocument();
+
+    fireEvent.click(dialog.getByRole("button", { name: "Replace key" }));
+    await waitFor(() => expect(api.update).toHaveBeenCalledWith(UID, { secret_value: "sk-new" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  test("the edit dialog patches no compatible_agents, and offers no picker for it", async () => {
-    // The key is gone from ProviderPatch — reach is the resource's scope now —
-    // and Pydantic ignores unknown fields, so sending it would 200 and discard
-    // the user's choice in silence. Assert on the BODY, not on the render.
-    apiMock.get.mockResolvedValue(makeProvider());
-    apiMock.update.mockResolvedValue(makeProvider());
+  test("Deleting a provider Coffer's engine runs on names what changes, then deletes it", async () => {
+    serve(makeProvider({ internal_default: true }));
+    api.deletePreview.mockResolvedValue({ agents: [] });
+    api.remove.mockResolvedValue(undefined);
     renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const form = within(screen.getByRole("dialog"));
-    // No agent checkboxes in the dialog: the header's reach control owns that.
-    expect(form.queryAllByRole("checkbox")).toHaveLength(0);
-    fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update.mock.calls[0][1]).not.toHaveProperty("compatible_agents");
+    await heading();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for acme" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
+    // Not blocked: the consequence is said, and Delete is available. (The review
+    // gives way to a plain confirmation once nothing in an agent's file changes.)
+    expect(await screen.findByText(/Coffer’s engine pauses/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
   });
 
-  test("renaming from the edit dialog goes through the generic resource PATCH", async () => {
-    apiMock.get.mockResolvedValue(makeProvider());
-    resourceMock.rename.mockResolvedValue(makeProvider({ name: "acme-eu" }));
-    apiMock.update.mockResolvedValue(makeProvider({ name: "acme-eu" }));
+  acceptance(
+    "provider-switching",
+    "deleting a provider an agent runs on is a review of its config diff, and Delete applies it",
+    async () => {
+      agentsState.data = [agent("codex", "gpt-5-codex")];
+      serve(makeProvider({ internal_default: true }));
+      api.deletePreview.mockResolvedValue({
+        agents: [
+          {
+            agent_uid: "a-codex",
+            agent_type: "codex",
+            agent_name: "codex",
+            files: [
+              {
+                path: "/Users/me/.codex/config.toml",
+                op: "modify",
+                diff: [
+                  { kind: "hunk", text: "@@ -1,3 +1,1 @@", old_no: null, new_no: null },
+                  { kind: "context", text: 'approval_policy = "on-request"', old_no: 1, new_no: 1 },
+                  { kind: "remove", text: 'model = "gpt-5-codex"', old_no: 2, new_no: null },
+                  { kind: "remove", text: 'model_provider = "coffer"', old_no: 3, new_no: null },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      api.remove.mockResolvedValue(undefined);
+      renderPage();
+      await heading();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for acme" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
+      const dialog = within(await screen.findByRole("dialog"));
+      expect(await dialog.findByText("Review changes · 1 file")).toBeInTheDocument();
+      expect(dialog.getByText("Codex goes back to its own login")).toBeInTheDocument();
+      expect(dialog.getByText("Coffer’s engine pauses")).toBeInTheDocument();
+      expect(dialog.getByText('model_provider = "coffer"')).toBeInTheDocument();
+      expect(api.remove).not.toHaveBeenCalled();
+      fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
+    },
+  );
+
+  test("an unused provider is deleted after a confirmation, and the page returns to the list", async () => {
+    serve(makeProvider());
+    api.remove.mockImplementation(async () => {
+      api.list.mockResolvedValue({ providers: [] });
+    });
     renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const form = within(screen.getByRole("dialog"));
-    fireEvent.change(form.getByLabelText("Name"), { target: { value: "acme-eu" } });
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    // A label edit, addressed to the uid — not `POST /providers/{name}/rename`,
-    // which existed only while the name WAS the identity. It still goes first,
-    // so a label already taken fails before anything else is written.
-    await waitFor(() => expect(resourceMock.rename).toHaveBeenCalledWith(UID, "acme-eu"));
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    // And the patch that follows is addressed to the same uid it always was:
-    // the new label is not an address.
-    expect(apiMock.update.mock.calls[0][0]).toBe(UID);
+    await heading();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for acme" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByText(/provider\/acme is deleted from this Mac too/)).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("button", { name: "Delete provider" }));
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
+    await waitFor(() => expect(where()).toBe("/model-providers"));
+    expect(await screen.findByText("No model providers yet")).toBeInTheDocument();
   });
 
-  test("a rename does not move the page — the URL is built from the uid", async () => {
-    // This is the change made visible. The old route WAS the name, so a rename
-    // left the reader on a URL that 404s and the page had to chase it with a
-    // `navigate(.../${newName})`. The uid does not change, so the page the user
-    // is reading stays the page they are reading, and nothing navigates at all.
-    apiMock.get.mockResolvedValue(makeProvider());
-    resourceMock.rename.mockResolvedValue(makeProvider({ name: "acme-eu" }));
-    apiMock.update.mockResolvedValue(makeProvider({ name: "acme-eu" }));
-    renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const form = within(screen.getByRole("dialog"));
-    fireEvent.change(form.getByLabelText("Name"), { target: { value: "acme-eu" } });
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
-
-  test("saving without touching the name patches in place and never renames", async () => {
-    apiMock.get.mockResolvedValue(makeProvider());
-    apiMock.update.mockResolvedValue(makeProvider());
-    renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const form = within(screen.getByRole("dialog"));
-    fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(resourceMock.rename).not.toHaveBeenCalled();
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
-
-  test("a name another connection already uses fails the rename and stops the patch", async () => {
-    apiMock.get.mockResolvedValue(makeProvider());
-    resourceMock.rename.mockRejectedValue(
-      new ApiError("RESOURCE_ALREADY_EXISTS", "resource already exists: provider:taken"),
-    );
-    renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const form = within(screen.getByRole("dialog"));
-    fireEvent.change(form.getByLabelText("Name"), { target: { value: "taken" } });
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    expect(
-      await screen.findByText(/a resource with that name already exists/i),
-    ).toBeInTheDocument();
-    // Nothing else was written, and the dialog stays open on the failed edit.
-    expect(apiMock.update).not.toHaveBeenCalled();
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
-
-  test("the header can disable the connection, not just show that it is enabled", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ enabled: true }));
-    renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    // An enabled connection with an unscoped reach reads as "Every agent" — and
-    // this control is the ONLY thing stating that state.
-    const control = within(screen.getByTestId("scope-control")).getByRole("button");
-    expect(control).toHaveTextContent("Every agent");
-
-    fireEvent.click(control);
-    fireEvent.click(screen.getByRole("radio", { name: "Disabled" }));
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "provider", uid: UID });
-  });
-
-  test("a disabled connection can be re-enabled from its own page", async () => {
-    apiMock.get.mockResolvedValue(makeProvider({ enabled: false }));
-    renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    const control = within(screen.getByTestId("scope-control")).getByRole("button");
-    expect(control).toHaveTextContent("Disabled");
-    fireEvent.click(control);
-    fireEvent.click(screen.getByRole("radio", { name: "Every agent" }));
-    expect(enableMutate).toHaveBeenCalledWith({ kind: "provider", uid: UID });
-  });
-
-  test("Delete confirms first, then removes and returns to the list", async () => {
-    apiMock.get.mockResolvedValue(makeProvider());
-    apiMock.remove.mockResolvedValue(undefined);
-    renderPage();
-    await screen.findByRole("heading", { name: "acme" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(apiMock.remove).not.toHaveBeenCalled();
-
-    const dialog = within(screen.getByRole("dialog"));
-    fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledWith(UID));
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/model-providers"));
-  });
-
-  test("a missing connection shows a not-found card with a way back", async () => {
-    apiMock.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "no such connection"));
-    renderPage();
-    // There is no name to head the page with, and a uid is not a name — so the
-    // heading IS the failure, rather than the opaque string out of the URL.
-    expect(
-      await screen.findByRole("heading", { name: "Model provider not found" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(UID)).toBeNull();
-    // The header's back link and the empty state's action both lead home.
-    const links = screen.getAllByRole("link", { name: /back to model providers/i });
-    expect(links.length).toBeGreaterThan(0);
-    links.forEach((l) => expect(l).toHaveAttribute("href", "/model-providers"));
-  });
-
-  test("the open tab lives in the URL, so ?tab=models opens on Models", async () => {
-    apiMock.get.mockResolvedValue(makeProvider());
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <MemoryRouter initialEntries={[`/model-providers/${UID}?tab=models`]}>
-        <QueryClientProvider client={qc}>
-          <Routes>
-            <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
-          </Routes>
-        </QueryClientProvider>
-      </MemoryRouter>,
-    );
-    await screen.findByRole("heading", { name: "acme" });
-    expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
-    expect(probedFor).toContain(UID);
+  test("an unknown uid says the provider was not found", async () => {
+    api.list.mockResolvedValue({ providers: [makeProvider({ uid: "cn-other", name: "other" })] });
+    api.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "nope"));
+    renderPage("/model-providers/cn-missing");
+    expect(await screen.findByText("This provider no longer exists")).toBeInTheDocument();
   });
 });

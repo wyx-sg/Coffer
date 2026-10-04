@@ -29,12 +29,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-    SqlAlchemyRetentionRepo,
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
 )
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
@@ -46,9 +45,11 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from tests.support.no_approvals import router as no_approvals_router
+from tests.support.vault_stores import make_resource_repo
 
-# Re-export the MCP daemon fixture so both test_mcp_cmd.py and
-# test_mcp_caps_cmd.py can request it by name (pytest resolves fixtures from
+# Re-export the MCP daemon fixture so test_mcp_cmd.py and
+# the log tests can request it by name (pytest resolves fixtures from
 # conftest), avoiding a cross-module import that would shadow the param (F811).
 from .test_mcp_cmd import mcp_daemon  # noqa: F401
 
@@ -66,7 +67,7 @@ class _FakeScopedConfig(BaseModel):
 
 
 _TOKEN = "test-token"
-_PORT = 8000
+_PORT = 38470
 
 
 def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
@@ -92,7 +93,7 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
             supports_scope=True,
         ),
     }
-    resource_repo = SqlAlchemyResourceRepo(sm)
+    resource_repo = make_resource_repo()
     audit_repo = SqlAlchemyAuditRepo(sm)
     audit_svc = AuditService(audit_repo)
     resource_svc = ResourceService(kinds=kinds, repo=resource_repo, audit=audit_svc)
@@ -107,7 +108,7 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
             description="Resource lifecycle events.",
         )
     )
-    retention_repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
+    retention_repo = FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     retention_svc = RetentionService(registry=registry, repo=retention_repo, audit=audit_svc)
     loop.run_until_complete(retention_svc.initialize_defaults())
     loop.close()
@@ -116,6 +117,7 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
     err_handlers.register(app)
     app.include_router(daemon_router)
     app.include_router(resource_router)
+    app.include_router(no_approvals_router)
     app.include_router(audit_router)
     app.include_router(retention_router)
 

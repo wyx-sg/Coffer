@@ -11,39 +11,34 @@ for the memory hook.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
+import shutil
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from starlette.testclient import TestClient
-from typer.testing import CliRunner
 
-import coffer.surfaces.cli._client as cli_client
 from coffer.domain.memory.delivery import MARKER
 from coffer.infrastructure.daemon import config as daemon_config
-from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.features import enable_all_in_config
 
 _TOKEN = "test-token-agent-connection"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
-
-runner = CliRunner()
 
 
 @pytest.fixture
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pathlib.Path]:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59830")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59839")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
+    enable_all_in_config()
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
@@ -61,7 +56,7 @@ def _client() -> TestClient:
 
 
 def _register(c: TestClient) -> str:
-    r = c.post("/api/v1/agents", json={"type": "claude_code", "name": "cc"})
+    r = c.post("/api/v1/agents", json={"type": "claude_code"})
     assert r.status_code == 201, r.text
     return str(r.json()["uid"])
 
@@ -81,7 +76,7 @@ def _hook_installed(home: pathlib.Path) -> bool:
 
 
 def _audit_types(c: TestClient, uid: str) -> list[str]:
-    r = c.get("/api/v1/audit", params={"resource_id": uid, "limit": 200})
+    r = c.get("/api/v1/audit", params={"resource_uid": uid, "limit": 200})
     assert r.status_code == 200, r.text
     return [e["event_type"] for e in r.json()["entries"]]
 
@@ -123,7 +118,7 @@ def test_connect_installs_the_gateway_entry_and_the_memory_hook(home: pathlib.Pa
         events = _audit_types(c, uid)
         assert events.count("agent_mcp_installed") == 1
         assert events.count("memory_delivery_installed") == 1
-        entries = c.get("/api/v1/audit", params={"resource_id": uid, "limit": 200}).json()
+        entries = c.get("/api/v1/audit", params={"resource_uid": uid, "limit": 200}).json()
         actors = {
             e["actor"]
             for e in entries["entries"]
@@ -133,7 +128,7 @@ def test_connect_installs_the_gateway_entry_and_the_memory_hook(home: pathlib.Pa
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="connect leaves out a part whose feature is off"
+    spec="experimental-features", scenario="memory off withdraws the memory delivery hook"
 )
 def test_connect_with_memory_off_installs_only_the_gateway_entry(home: pathlib.Path) -> None:
     daemon_config.write_feature_setting("memory", False)
@@ -252,7 +247,10 @@ def test_connect_without_a_shim_is_refused_and_writes_nothing(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(home / "absent-shim"))
-    monkeypatch.setenv("PATH", str(home / "empty-bin"))
+    # Nothing on PATH but git, which the daemon needs to open the vault.
+    git = shutil.which("git")
+    assert git is not None
+    monkeypatch.setenv("PATH", os.pathsep.join([str(home / "empty-bin"), os.path.dirname(git)]))
     monkeypatch.setattr(
         "coffer.application.agent.mcp_service.sysconfig.get_path", lambda _name: None
     )
@@ -265,97 +263,3 @@ def test_connect_without_a_shim_is_refused_and_writes_nothing(
         assert "coffer-mcp-shim" in r.text
     assert not (home / ".claude.json").exists()
     assert not _hook_installed(home)
-
-
-# --- CLI ----------------------------------------------------------------------
-
-
-def _patch_cli(monkeypatch: pytest.MonkeyPatch, c: TestClient) -> None:
-    """Point the CLI's daemon connection at the running app."""
-    info = DaemonInfo(
-        version=1,
-        pid=4242,
-        port=59830,
-        token=_TOKEN,
-        started_at=datetime.now(tz=UTC),
-        binary_path="/test",
-    )
-
-    class _Persistent:
-        def __init__(self, inner: TestClient) -> None:
-            self._inner = inner
-            self.base_url = "http://localhost/api/v1"
-
-        def __enter__(self) -> _Persistent:
-            return self
-
-        def __exit__(self, *exc: object) -> None:
-            return None
-
-        def request(self, method: str, url: str, **kw: Any) -> Any:
-            return self._inner.request(method, "/api/v1" + url, **kw)
-
-        def get(self, url: str, **kw: Any) -> Any:
-            return self.request("GET", url, **kw)
-
-    monkeypatch.setattr(cli_client, "client_or_exit", lambda: (_Persistent(c), info))
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="config-file and MCP operations mirror across surfaces"
-)
-def test_cli_connect_show_and_disconnect(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    daemon_config.write_feature_setting("memory", True)
-    with _client() as c:
-        uid = _register(c)
-        _patch_cli(monkeypatch, c)
-
-        res = runner.invoke(cli_app, ["agent", "show", "cc", "--json"])
-        assert res.exit_code == 0, res.output
-        assert json.loads(res.output)["coffer_connection"]["state"] == "disconnected"
-
-        res = runner.invoke(cli_app, ["agent", "connect", "cc"])
-        assert res.exit_code == 0, res.output
-        assert "connected agent cc to Coffer" in res.output
-        assert "gateway MCP entry: installed" in res.output
-        assert "memory delivery hook: installed" in res.output
-        rest = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
-        assert rest["state"] == "connected"
-
-        res = runner.invoke(cli_app, ["agent", "show", "cc", "--json"])
-        assert res.exit_code == 0, res.output
-        assert json.loads(res.output)["coffer_connection"] == rest
-        res = runner.invoke(cli_app, ["agent", "show", "cc"])
-        assert res.exit_code == 0, res.output
-        assert "coffer_connection: connected" in res.output.splitlines()
-
-        res = runner.invoke(cli_app, ["agent", "disconnect", "cc"])
-        assert res.exit_code == 0, res.output
-        assert "disconnected agent cc from Coffer" in res.output
-        assert c.get(f"/api/v1/agents/{uid}/coffer-connection").json()["state"] == "disconnected"
-
-
-def test_cli_show_reads_needs_repair_for_a_partial_connection(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    daemon_config.write_feature_setting("memory", True)
-    with _client() as c:
-        _register(c)
-        _patch_cli(monkeypatch, c)
-        runner.invoke(cli_app, ["agent", "connect", "cc"])
-        (home / ".claude" / "settings.json").write_text("{}\n", encoding="utf-8")
-        res = runner.invoke(cli_app, ["agent", "show", "cc"])
-        assert res.exit_code == 0, res.output
-        assert "needs repair" in res.output
-        assert "memory delivery hook: missing" in res.output
-
-
-def test_cli_connect_unknown_agent_exits_non_zero(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with _client() as c:
-        _patch_cli(monkeypatch, c)
-        res = runner.invoke(cli_app, ["agent", "connect", "ghost"])
-        assert res.exit_code != 0

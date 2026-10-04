@@ -10,8 +10,8 @@ over**, CRLF and trailing whitespace included. The moment a round-trip rewrites
 one character, "re-run the distillation without going back to the agents" stops
 meaning what it says.
 
-``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
-``_isolated_memory_root`` fixture (``backend/tests/conftest.py``).
+The memory root resolves from the fresh ``HOME`` the suite-wide
+``_real_home_guard`` fixture gives every test (``backend/tests/conftest.py``).
 """
 
 from __future__ import annotations

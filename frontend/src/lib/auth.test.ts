@@ -68,17 +68,17 @@ describe("getCofferBaseUrl", () => {
 
 describe("setDaemonConnection", () => {
   it("supplies the same globals the browser hosts get injected", () => {
-    setDaemonConnection("http://127.0.0.1:8000/api/v1", "shell-token");
+    setDaemonConnection("http://127.0.0.1:38470/api/v1", "shell-token");
     // Read back through the ordinary getters: the desktop shell is a second
     // supplier of these two globals, not a second path through them.
-    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:8000/api/v1");
+    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:38470/api/v1");
     expect(getCofferToken()).toBe("shell-token");
   });
 
-  it("overwrites credentials from an earlier daemon", () => {
-    setDaemonConnection("http://127.0.0.1:8000/api/v1", "launch-token");
+  it("overwrites secrets from an earlier daemon", () => {
+    setDaemonConnection("http://127.0.0.1:38470/api/v1", "launch-token");
     // A restarted daemon mints a fresh token and revokes the old one.
-    setDaemonConnection("http://127.0.0.1:8000/api/v1", "fresh-token");
+    setDaemonConnection("http://127.0.0.1:38470/api/v1", "fresh-token");
     expect(getCofferToken()).toBe("fresh-token");
   });
 });

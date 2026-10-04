@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 
 import pytest
@@ -107,10 +108,25 @@ def test_classify_target_copy_fallback_ok(tmp_path):
     master = _master_skill(tmp_path)
     link = tmp_path / "agent" / "x"
     link.parent.mkdir()
-    link.mkdir()
-    (link / "SKILL.md").write_text("---\nname: x\ndescription: y\n---\nbody")
+    shutil.copytree(master, link)
     status = classify_target(link=link, expected_master=master, link_mode=LinkMode.COPY_FALLBACK)
     assert status.drift is None
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a copy that master has moved past is replaced"
+)
+def test_classify_target_copy_fallback_that_master_has_moved_past_is_drift(tmp_path):
+    """A copy is not linked: once master is edited the copy is stale, and the
+    tampered-link repair puts a fresh copy in its place (spec skill-manager
+    "Fall back to copying where links are unavailable")."""
+    master = _master_skill(tmp_path)
+    link = tmp_path / "agent" / "x"
+    link.parent.mkdir()
+    shutil.copytree(master, link)
+    (master / "SKILL.md").write_text("---\nname: x\ndescription: y\n---\nedited")
+    status = classify_target(link=link, expected_master=master, link_mode=LinkMode.COPY_FALLBACK)
+    assert status.drift is DriftKind.TAMPERED_LINK
 
 
 def test_classify_target_copy_fallback_without_skill_md_is_drift(tmp_path):

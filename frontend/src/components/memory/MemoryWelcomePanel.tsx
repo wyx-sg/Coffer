@@ -1,57 +1,106 @@
-// frontend/src/components/memory/MemoryWelcomePanel.tsx
-// First-run card shown on /memory before any partition exists — the same
-// welcome every other list surface gives (skills, knowledge, agents, channels,
-// providers), so arriving at an empty Memory reads like arriving at an empty
-// anything else.
+// frontend/src/components/memory/MemoryWelcomePanel.tsx — the first-run state of /memory.
 //
-// The one next step is UPDATE, not Add: nothing here is user-created. Coffer
-// distils what the agents already learned out of their own native memories and
-// never writes back to them, so the only thing a developer can do on an empty
-// Memory is tell it to go and look — the same Update memory button the
-// populated page carries.
+// Two shapes (designs 5.2.10 and 5.2.11). With agents connected: "Nothing
+// distilled yet", the one next step Update memory, and "Found on this Mac" —
+// each connected agent with where its own memory lives and how much of it
+// there is, so the reader sees what Update memory will read. With no agent
+// connected there is nothing to read at all, so the one step is connecting an
+// agent. Nothing here is user-created: Coffer distils what the agents already
+// learned out of their own memory and never writes back to it.
+import { Bot, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
+import { sortAgents } from "@/components/agent/agentOrder";
+import { EmptyState } from "@/components/EmptyState";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { abbreviateHomePath } from "@/lib/agents/display";
+import { useAgents } from "@/lib/hooks/useAgents";
+import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
+import { Section } from "@/components/Section";
 
-export function MemoryWelcomePanel() {
+type AgentRow = NonNullable<ReturnType<typeof useAgents>["data"]>[number];
+
+function FoundRow({ agent }: { agent: AgentRow }) {
   const { t } = useTranslation();
+  const stores = useAgentNativeMemory(agent.uid);
+  const items = stores.data?.items ?? [];
+  const files = items.reduce((sum, s) => sum + s.item_count, 0);
   return (
-    <Card className="paper-card border-primary/20 bg-gradient-to-br from-card to-accent/40">
-      <CardContent className="space-y-6 py-10">
-        <div className="space-y-2">
-          <h2 className="text-2xl">{t("memory.welcome.title")}</h2>
-          <p className="max-w-prose text-sm leading-relaxed text-foreground/80">
-            {t("memory.welcome.body")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <MemoryUpdateButton />
-        </div>
-        <ul className="grid gap-3 pt-2 text-sm text-foreground/70 sm:grid-cols-3">
-          <WelcomeFeature
-            title={t("memory.welcome.featureRead.title")}
-            body={t("memory.welcome.featureRead.body")}
-          />
-          <WelcomeFeature
-            title={t("memory.welcome.featureShape.title")}
-            body={t("memory.welcome.featureShape.body")}
-          />
-          <WelcomeFeature
-            title={t("memory.welcome.featureOneWay.title")}
-            body={t("memory.welcome.featureOneWay.body")}
-          />
-        </ul>
-      </CardContent>
-    </Card>
+    <li className="flex min-h-[52px] items-center gap-2.5 border-t border-border-subtle px-3.5 first:border-t-0">
+      <AgentBadge type={agent.type} name={agent.name} size="sm" tooltip={false} />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm text-text">{agent.display_name || agent.name}</span>
+        <span className="truncate font-mono text-2xs text-text-muted">
+          {abbreviateHomePath(agent.config_dir)}
+        </span>
+      </div>
+      <span className="ml-auto text-xs text-text">
+        {stores.isPending ? (
+          <Skeleton className="h-4 w-24" />
+        ) : items.length === 0 ? (
+          t("memory.welcome.foundNone")
+        ) : (
+          t("memory.welcome.foundCount", {
+            count: files,
+            projects: t("memory.welcome.projects", { count: items.length }),
+          })
+        )}
+      </span>
+    </li>
   );
 }
 
-function WelcomeFeature({ title, body }: { title: string; body: string }) {
+export function MemoryWelcomePanel() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const agents = useAgents();
+
+  if (agents.isPending) return <Skeleton className="h-60 w-full" />;
+  const connected = sortAgents(agents.data ?? []);
+
+  if (connected.length === 0) {
+    return (
+      <EmptyState
+        icon={Bot}
+        title={t("memory.welcome.noAgentsTitle")}
+        description={t("memory.welcome.noAgentsBody")}
+        action={
+          <Button type="button" onClick={() => navigate("/agents")}>
+            {t("memory.welcome.connect")}
+          </Button>
+        }
+      />
+    );
+  }
+
   return (
-    <li className="rounded-lg border border-border/60 bg-card/70 p-3 leading-relaxed">
-      <div className="mb-1 font-medium text-foreground">{title}</div>
-      <div className="text-xs text-muted-foreground">{body}</div>
-    </li>
+    <div className="mx-auto flex w-full max-w-[560px] flex-col gap-1.5">
+      <EmptyState
+        icon={Brain}
+        title={t("memory.welcome.title")}
+        description={t("memory.welcome.body")}
+        action={<MemoryUpdateButton />}
+      />
+      <Section
+        as="h2"
+        gap="snug"
+        labelled
+        title={t("memory.welcome.found")}
+        aside={<span className="text-xs text-text-muted">{t("memory.welcome.foundMeta")}</span>}
+      >
+        <ul
+          className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised"
+          data-testid="memory-found"
+        >
+          {connected.map((a) => (
+            <FoundRow key={a.uid} agent={a} />
+          ))}
+        </ul>
+      </Section>
+    </div>
   );
 }

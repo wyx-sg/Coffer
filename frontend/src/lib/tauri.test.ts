@@ -20,6 +20,14 @@ import {
   daemonVersionMatches,
   followLanguageInShell,
   setShellLanguage,
+  presenceAvailable,
+  revealSecret,
+  exportMasterKeyBackup,
+  approvePending,
+  approvePendingBatch,
+  onApprovalsEvent,
+  APPROVALS_EVENT,
+  PresenceUnavailableError,
 } from "./tauri";
 import { getCofferBaseUrl, getCofferToken } from "./auth";
 import { getApiClient, resetApiClient } from "./api/client";
@@ -30,6 +38,12 @@ import { acceptance } from "@/test/acceptance";
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
+// `@tauri-apps/api/event` likewise, for the approvals signal.
+const listenMock = vi.fn();
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (...args: unknown[]) => listenMock(...args),
 }));
 
 const TAURI_KEY = "__TAURI_INTERNALS__";
@@ -68,7 +82,7 @@ describe("getDaemonInfo", () => {
 
   test("invokes get_daemon_info and returns its connection info inside Tauri", async () => {
     enterTauri();
-    const info = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "tok" };
+    const info = { baseUrl: "http://127.0.0.1:38470/api/v1", token: "tok" };
     invokeMock.mockResolvedValue(info);
     await expect(getDaemonInfo()).resolves.toEqual(info);
     expect(invokeMock).toHaveBeenCalledWith("get_daemon_info");
@@ -129,13 +143,13 @@ describe("connectToShellDaemon", () => {
 
   acceptance("desktop-app", "the handshake credentials a locally-hosted page", async () => {
     enterTauri();
-    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh-token" });
+    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:38470/api/v1", token: "fresh-token" });
 
     await connectToShellDaemon();
 
     // Read back through the ordinary getters: nothing downstream should be
-    // able to tell which host supplied the credentials.
-    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:8000/api/v1");
+    // able to tell which host supplied the secrets.
+    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:38470/api/v1");
     expect(getCofferToken()).toBe("fresh-token");
   });
 
@@ -145,14 +159,14 @@ describe("connectToShellDaemon", () => {
     // the desktop host an asset origin with no daemon behind it. Forgetting
     // this reset is the bug that makes every request go nowhere.
     const staleClient = getApiClient();
-    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:8000/api/v1", token: "tok" });
+    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:38470/api/v1", token: "tok" });
 
     await connectToShellDaemon();
 
     expect(getApiClient()).not.toBe(staleClient);
   });
 
-  test("propagates the IPC failure and leaves the previous credentials alone", async () => {
+  test("propagates the IPC failure and leaves the previous secrets alone", async () => {
     enterTauri();
     invokeMock.mockRejectedValue(new Error("coffer-daemon did not become ready within 90s"));
 
@@ -286,5 +300,92 @@ describe("followLanguageInShell", () => {
     followLanguageInShell(fakeI18n("en"), report);
     await vi.waitFor(() => expect(err).toHaveBeenCalled());
     err.mockRestore();
+  });
+});
+
+describe("presence-gated actions", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    listenMock.mockReset();
+  });
+  afterEach(() => leaveTauri());
+
+  test("presence is available only inside the shell", () => {
+    leaveTauri();
+    expect(presenceAvailable()).toBe(false);
+    enterTauri();
+    expect(presenceAvailable()).toBe(true);
+  });
+
+  test("outside the shell every action rejects, naming the desktop app, and invokes nothing", async () => {
+    leaveTauri();
+    for (const run of [
+      () => revealSecret("mcp_server/abc/TOKEN"),
+      () => exportMasterKeyBackup("correct horse"),
+      () => approvePending("apr-1"),
+      () => approvePendingBatch(["apr-1", "apr-2"]),
+    ]) {
+      const attempt = run();
+      await expect(attempt).rejects.toBeInstanceOf(PresenceUnavailableError);
+      await expect(attempt).rejects.toThrow(/only available in the Coffer desktop app/i);
+    }
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  test("inside the shell each action invokes its command with camelCase args", async () => {
+    enterTauri();
+    invokeMock.mockResolvedValueOnce("s3cret");
+    await expect(revealSecret("mcp_server/abc/TOKEN")).resolves.toBe("s3cret");
+    expect(invokeMock).toHaveBeenLastCalledWith("reveal_secret", {
+      secretRef: "mcp_server/abc/TOKEN",
+    });
+
+    const backup = { path: "/Users/me/coffer-master-key.cfk", fingerprint: "ab12" };
+    invokeMock.mockResolvedValueOnce(backup);
+    await expect(exportMasterKeyBackup("correct horse")).resolves.toEqual(backup);
+    expect(invokeMock).toHaveBeenLastCalledWith("export_master_key_backup", {
+      passphrase: "correct horse",
+    });
+
+    invokeMock.mockResolvedValueOnce({ id: "apr-1", status: "approved" });
+    await expect(approvePending("apr-1")).resolves.toMatchObject({ status: "approved" });
+    expect(invokeMock).toHaveBeenLastCalledWith("approve_pending", { approvalId: "apr-1" });
+
+    invokeMock.mockResolvedValueOnce({ results: [{ id: "apr-1", outcome: "approved" }] });
+    await expect(approvePendingBatch(["apr-1", "apr-2"])).resolves.toMatchObject({
+      results: [{ outcome: "approved" }],
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("approve_pending_batch", {
+      approvalIds: ["apr-1", "apr-2"],
+    });
+  });
+
+  test("outside the shell the approvals signal is a no-op subscription", () => {
+    leaveTauri();
+    const stop = onApprovalsEvent(vi.fn());
+    expect(() => stop()).not.toThrow();
+    expect(listenMock).not.toHaveBeenCalled();
+  });
+
+  test("inside the shell the approvals signal calls back and unsubscribes", async () => {
+    enterTauri();
+    const unlisten = vi.fn();
+    // Tauri hands every listener an event carrying the payload.
+    let handler: ((event: { payload: unknown }) => void) | undefined;
+    listenMock.mockImplementation((_event: string, cb: (event: { payload: unknown }) => void) => {
+      handler = cb;
+      return Promise.resolve(unlisten);
+    });
+    const callback = vi.fn();
+    const stop = onApprovalsEvent(callback);
+    await vi.waitFor(() =>
+      expect(listenMock).toHaveBeenCalledWith(APPROVALS_EVENT, expect.any(Function)),
+    );
+    await vi.waitFor(() => expect(handler).toBeDefined());
+    handler?.({ payload: null });
+    expect(callback).toHaveBeenCalledTimes(1);
+    // Whether or not listen() has settled yet, stopping unlistens exactly once.
+    stop();
+    await vi.waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
   });
 });

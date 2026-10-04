@@ -1,9 +1,9 @@
-"""`coffer daemon` subcommand group: start / stop / restart / status /
-rotate-token, and the login service that decides whether the system starts it
-at all.
+"""`coffer daemon` subcommand group: start / stop / restart / status.
 
-The port it listens on and the experimental features it serves are settings,
-read and changed with `coffer config` (`daemon.port`, `feature.<key>`)."""
+These work when the daemon is down, which is why they are on the command line
+(spec resource-framework "Keep the command line to what needs it"). The port it
+listens on is the one setting that works the same way: `coffer config set
+daemon.port`."""
 
 from __future__ import annotations
 
@@ -19,21 +19,34 @@ import typer
 from coffer.infrastructure.daemon import bootstrap, port_alloc
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
+from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import daemon_service_cmd
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Daemon lifecycle")
-app.add_typer(daemon_service_cmd.app, name="service")
 
 
-def _wait_for_daemon_json(path: Path, timeout: float = 10.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if path.exists():
-            return True
-        time.sleep(0.1)
-    return False
+START_TIMEOUT_SECONDS = 30.0
+
+
+def _wait_until_serving(proc: Any, timeout: float = START_TIMEOUT_SECONDS) -> str:
+    """Wait for the spawned daemon to answer its status call.
+
+    Returns ``"serving"``, ``"exited"`` (the child ended first — it refused to
+    start, e.g. a vault migration is required or git is too old) or
+    ``"timeout"``. ``daemon.json`` is no evidence of either: the daemon
+    publishes it before uvicorn and the lifespan run, and a file left by a
+    crash is there before the child has done anything.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if bootstrap.live_daemon() is not None:
+            return "serving"
+        if proc.poll() is not None:
+            return "exited"
+        if time.monotonic() >= deadline:
+            return "timeout"
+        time.sleep(0.2)
 
 
 def _wait_for_daemon_json_gone(path: Path, timeout: float = 5.0) -> bool:
@@ -89,9 +102,6 @@ def _refuse_if_the_port_is_taken() -> None:
 
 def _start_daemon() -> None:
     """Body of ``start``, shared with ``restart``."""
-    home = Path(os.environ.get("HOME", "~")).expanduser()
-    daemon_json = home / ".coffer" / "daemon.json"
-
     # Spec daemon "Manage the daemon from the command line": key off
     # live_daemon() (a real status probe), NOT mere file presence. A stale
     # daemon.json left by a crashed daemon must trigger a respawn, not a false
@@ -110,9 +120,16 @@ def _start_daemon() -> None:
         typer.echo(f"failed to spawn daemon: {exc}", err=True)
         raise typer.Exit(1) from None
 
-    if not _wait_for_daemon_json(daemon_json, timeout=10.0):
+    outcome = _wait_until_serving(proc)
+    if outcome == "exited":
+        typer.echo(f"daemon exited at startup (code {proc.returncode}); check daemon.log", err=True)
+        raise typer.Exit(1)
+    if outcome == "timeout":
         proc.kill()
-        typer.echo("daemon failed to start within 10s; check daemon.log", err=True)
+        typer.echo(
+            f"daemon did not answer within {START_TIMEOUT_SECONDS:.0f}s; check daemon.log",
+            err=True,
+        )
         raise typer.Exit(1)
 
     typer.echo(f"daemon started (pid={proc.pid})")
@@ -135,14 +152,12 @@ def _stop_daemon() -> bool:
     if info is None:
         return False
 
-    home = Path(os.environ.get("HOME", "~")).expanduser()
-
     # Verify the recorded pid IS a coffer daemon before signalling it.
     # A crashed daemon's pid can be recycled onto an unrelated process; we must
     # not SIGTERM a stranger. If it isn't ours, the daemon.json is stale —
     # clean it up instead of killing whoever now holds that pid.
     if not pid_is_coffer_daemon(info.pid):
-        (home / ".coffer" / "daemon.json").unlink(missing_ok=True)
+        daemon_json_path().unlink(missing_ok=True)
         typer.echo("daemon pid is not a coffer daemon; cleaned up stale daemon.json")
         return True
 
@@ -150,11 +165,11 @@ def _stop_daemon() -> bool:
         os.kill(info.pid, signal.SIGTERM)
     except ProcessLookupError:
         # already gone; just clean up daemon.json
-        (home / ".coffer" / "daemon.json").unlink(missing_ok=True)
+        daemon_json_path().unlink(missing_ok=True)
         typer.echo("daemon already exited; cleaned up stale daemon.json")
         return True
 
-    if _wait_for_daemon_json_gone(home / ".coffer" / "daemon.json", timeout=5.0):
+    if _wait_for_daemon_json_gone(daemon_json_path(), timeout=5.0):
         typer.echo("daemon stopped")
         return True
     typer.echo("daemon did not clean up daemon.json in 5s", err=True)
@@ -187,8 +202,10 @@ def status(
 ) -> None:
     """Show whether the daemon is running, and the passes it is running right now.
 
-    Reports its version, channel, port and pid, and the long passes in flight
-    (kind, target, start time), oldest first.
+    Reports its version, port and pid, the event loop's lag (p99 and
+    maximum over the last few minutes), how many background tasks are running
+    and how many have crashed, and the long passes in flight (kind, target,
+    start time), oldest first.
 
     Read-only: when no daemon is running it says so and exits 3 instead of
     starting one.
@@ -223,11 +240,10 @@ def status(
         return
     typer.echo(f"status:  {data['status']}")
     typer.echo(f"version: {data['version']}")
-    # A daemon older than this CLI reports no channel; say so rather than fail.
-    channel = data.get("channel") or f"unknown — {_cli_client.OUTDATED_DAEMON}"
-    typer.echo(f"channel: {channel}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
+    for line in _runtime_lines(data.get("runtime")):
+        typer.echo(line)
     typer.echo("")
     typer.echo("passes in flight:")
     if not runs:
@@ -236,12 +252,20 @@ def status(
         typer.echo(f"  {run['kind']:<10} {run['name']}  (started {run['started_at']})")
 
 
-@app.command("rotate-token")
-def rotate_token(ctx: typer.Context) -> None:
-    """Rotate the daemon API token and update daemon.json."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/daemon/rotate-token")
-        _cli_client.check(r, verbose=verbose)
-    typer.echo("token rotated; re-read ~/.coffer/daemon.json for the new value")
+def _runtime_lines(runtime: dict[str, Any] | None) -> list[str]:
+    """The loop-lag and task-crash lines, or none from a daemon that reports neither."""
+    if not runtime:
+        return []
+    p99 = runtime.get("loop_lag_p99_ms")
+    window = int(runtime.get("loop_lag_window_seconds") or 0)
+    lag = (
+        "no sample yet" if p99 is None else f"p99 {p99:g} ms, max {runtime['loop_lag_max_ms']:g} ms"
+    )
+    lines = [
+        f"loop lag: {lag} (last {window}s)",
+        f"tasks:   {runtime['tasks_running']} running, {runtime['task_crashes']} crashed",
+    ]
+    last = runtime.get("last_crash")
+    if last:
+        lines.append(f"         last crash: {last['task']} ({last['error']}) at {last['at']}")
+    return lines

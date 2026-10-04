@@ -8,6 +8,7 @@ Implements the ``ConversationRepo`` and ``MessageRepo`` Protocols defined in
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,26 +27,24 @@ from coffer.domain.chat.message import (
     ContentBlock,
     Message,
     Role,
-    block_from_dict,
-    block_to_dict,
 )
-from coffer.infrastructure.chat.persistence_models import ConversationModel, MessageModel
+from coffer.infrastructure.chat.persistence_codec import (
+    _TEXT_BLOCK_MARK,
+    _decode_content,
+    _encode_content,
+    _listing_filter,
+)
+from coffer.infrastructure.chat.persistence_models import (
+    ConversationModel,
+    MessageModel,
+)
+from coffer.infrastructure.chat.reply_file_store import ReplyFileStore
+from coffer.infrastructure.persistence.keyset import newest_first_after
 
 
 def _tz(dt: datetime) -> datetime:
     """Ensure a datetime is timezone-aware (UTC)."""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-
-
-def _encode_content(blocks: list[ContentBlock]) -> str:
-    """Serialize content blocks to JSON text for DB storage."""
-    return json.dumps([block_to_dict(b) for b in blocks])
-
-
-def _decode_content(raw: str) -> list[ContentBlock]:
-    """Deserialize JSON text from DB into a list of ContentBlock."""
-    data: list[dict[str, Any]] = json.loads(raw)
-    return [block_from_dict(d) for d in data]
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +68,6 @@ class ConversationRepo:
             archived_at=_tz(row.archived_at) if row.archived_at else None,
             channel_uid=row.channel_uid,
             peer_chat_id=row.peer_chat_id,
-            owner=row.owner,
         )
 
     async def create(self, conversation: Conversation) -> Conversation:
@@ -82,7 +80,6 @@ class ConversationRepo:
                 updated_at=conversation.updated_at,
                 channel_uid=conversation.channel_uid,
                 peer_chat_id=conversation.peer_chat_id,
-                owner=conversation.owner,
             )
             session.add(row)
             await session.commit()
@@ -95,22 +92,42 @@ class ConversationRepo:
             row = (await session.execute(stmt)).scalar_one_or_none()
             return self._to_domain(row) if row else None
 
-    async def list(self, *, archived: bool = False) -> list[Conversation]:
-        """The developer's OWN conversations, newest first — an owned one is
-        never listed (see ``ConversationModel.owner``). ``archived=False`` is
-        the active threads, ``archived=True`` the archived ones. Reading one by
-        id is untouched: a task's page opens the conversation it owns.
+    async def list(
+        self,
+        *,
+        archived: bool = False,
+        limit: int | None = None,
+        after: tuple[datetime, str] | None = None,
+        contains: str | None = None,
+    ) -> list[Conversation]:
+        """Conversations newest activity first with the id breaking ties.
+        ``archived=False`` is the active threads,
+        ``archived=True`` the archived ones. ``after`` (the previous page's last
+        ``(updated_at, id)``) and ``limit`` cut one page of that order; without
+        them the whole listing comes back.
         """
         async with self._sm() as session:
-            stmt = select(ConversationModel).order_by(ConversationModel.updated_at.desc())
-            stmt = stmt.where(
-                ConversationModel.archived_at.isnot(None)
-                if archived
-                else ConversationModel.archived_at.is_(None)
+            stmt = select(ConversationModel).order_by(
+                ConversationModel.updated_at.desc(), ConversationModel.id.desc()
             )
-            stmt = stmt.where(ConversationModel.owner.is_(None))
+            stmt = _listing_filter(stmt, archived=archived, contains=contains)
+            if after is not None:
+                stmt = stmt.where(
+                    newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)
+                )
+            if limit is not None:
+                stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
+
+    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
+        async with self._sm() as session:
+            stmt = _listing_filter(
+                select(func.count()).select_from(ConversationModel),
+                archived=archived,
+                contains=contains,
+            )
+            return int((await session.execute(stmt)).scalar_one())
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         async with self._sm() as session:
@@ -190,7 +207,7 @@ class ConversationRepo:
 # ---------------------------------------------------------------------------
 
 
-class MessageRepo:
+class MessageRepo(ReplyFileStore):
     """SQLAlchemy implementation of the ``MessageRepo`` Protocol."""
 
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
@@ -208,6 +225,7 @@ class MessageRepo:
             prompt_tokens=row.prompt_tokens,
             completion_tokens=row.completion_tokens,
             created_at=_tz(row.created_at),
+            finished_at=_tz(row.finished_at) if row.finished_at else None,
         )
 
     async def append(self, message: Message) -> Message:
@@ -223,6 +241,7 @@ class MessageRepo:
                 prompt_tokens=message.prompt_tokens,
                 completion_tokens=message.completion_tokens,
                 created_at=message.created_at,
+                finished_at=message.finished_at,
             )
             session.add(row)
             await session.commit()
@@ -235,25 +254,28 @@ class MessageRepo:
         *,
         content: list[ContentBlock],
         status: str,
+        model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
+        finished_at: datetime | None = None,
     ) -> None:
         """Update an existing (streaming) message with its final content/status.
 
         Used to finalize the streaming placeholder written at turn start, so a
-        completed turn occupies exactly one row.
+        completed turn occupies exactly one row. ``model_id`` is the model the
+        adapter reported while the turn ran; ``None`` leaves the column as it is.
         """
+        values: dict[str, Any] = {
+            "content": _encode_content(content),
+            "status": status,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "finished_at": finished_at,
+        }
+        if model_id is not None:
+            values["model_id"] = model_id
         async with self._sm() as session:
-            stmt = (
-                update(MessageModel)
-                .where(MessageModel.id == message_id)
-                .values(
-                    content=_encode_content(content),
-                    status=status,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                )
-            )
+            stmt = update(MessageModel).where(MessageModel.id == message_id).values(**values)
             await session.execute(stmt)
             await session.commit()
 
@@ -295,6 +317,40 @@ class MessageRepo:
             rows.reverse()
         return [self._to_domain(r) for r in rows]
 
+    async def latest_with_text(
+        self, conversation_ids: Sequence[str], *, depth: int
+    ) -> dict[str, list[Message]]:
+        """One windowed query for the whole page. A row "carries text" when its
+        JSON holds a text block — ``_encode_content``'s own spelling, which a
+        text quoted INSIDE a block cannot forge (its quotes are escaped)."""
+        if not conversation_ids:
+            return {}
+        rank = (
+            func.row_number()
+            .over(partition_by=MessageModel.conversation_id, order_by=MessageModel.seq.desc())
+            .label("rank")
+        )
+        ranked = (
+            select(MessageModel.id.label("id"), rank)
+            .where(
+                MessageModel.conversation_id.in_(list(conversation_ids)),
+                MessageModel.content.like(f"%{_TEXT_BLOCK_MARK}%"),
+            )
+            .subquery()
+        )
+        stmt = (
+            select(MessageModel)
+            .join(ranked, ranked.c.id == MessageModel.id)
+            .where(ranked.c.rank <= depth)
+            .order_by(MessageModel.conversation_id, MessageModel.seq.desc())
+        )
+        async with self._sm() as session:
+            rows = (await session.execute(stmt)).scalars().all()
+        out: dict[str, list[Message]] = {}
+        for row in rows:
+            out.setdefault(row.conversation_id, []).append(self._to_domain(row))
+        return out
+
     async def next_seq(self, conversation_id: str) -> int:
         """Return the next sequence number for the given conversation.
 
@@ -313,11 +369,12 @@ class MessageRepo:
             await session.execute(stmt)
             await session.commit()
 
-    async def sweep_streaming(self) -> int:
-        """Flip all ``status='streaming'`` rows to ``'failed'``.
+    async def sweep_streaming(self, *, before: datetime | None = None) -> int:
+        """Flip ``status='streaming'`` rows to ``'failed'``.
 
-        Called once at startup to recover from a prior crash.
-        Returns the number of rows updated.
+        Called once at startup to recover from a prior crash; ``before`` limits it
+        to rows created earlier than the daemon's own start. Returns the number of
+        rows updated.
         """
         async with self._sm() as session:
             stmt = (
@@ -325,6 +382,8 @@ class MessageRepo:
                 .where(MessageModel.status == "streaming")
                 .values(status="failed")
             )
+            if before is not None:
+                stmt = stmt.where(MessageModel.created_at < before)
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount or 0

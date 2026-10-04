@@ -1,43 +1,41 @@
 // frontend/src/pages/sync/SyncPage.tsx — the top-level Sync surface
-// (spec vault-sync "Present a Sync page with Runs, Setup and Machines tabs").
+// (spec vault-sync "Present a Sync page with Status, Machines and Remote tabs").
 //
-// Sync is cross-cutting rather than a resource kind, and convergence is
-// something a person opens deliberately rather than a setting they tweak once,
-// so it is a page under System, not a Settings tab. `/settings/sync` redirects
-// here.
+// Sync is cross-cutting rather than a resource kind, and syncing is something
+// a person opens deliberately rather than a setting they tweak once, so it is a
+// page under System, not a Settings tab.
 //
-// Three tabs: **Runs** (every round this machine has run, and anything one of
-// them is waiting on), **Setup** (the remote and the master key) and
-// **Machines** (the registry). Runs is the landing tab, because what a person
-// opens Sync to find out is whether it is working.
+// It answers "is this Mac in sync?" in one state (`syncPageState.ts`), which
+// the header's pill and button and the Status tab's banner all read. Three
+// tabs: **Status** (the landing tab — the state, the areas line, anything a
+// stopped round or a join is waiting on, and every round), **Machines** (the
+// registry) and **Remote** (the repository, its secret and the vault). A Mac
+// with no remote, or one that has not joined it yet, has no tabs: the header
+// says "Not set up" and the body is the setup flow.
 //
-// There were three. **Status** is gone, and its two banners with it: a conflict
-// and a held round are not states beside the history, they are the newest row
-// OF it — a held round is a round. Keeping them apart put one situation in two
-// places and made it actionable in only one, so the answers now sit on the row
-// that is waiting (`SyncHeldRoundActions`), gated on the vault actually
-// waiting rather than on a row that merely ended held.
-//
-// **Machines** is a tab of its own: the registry is something you come back to
-// — rename this machine, retire one that is gone — long after the remote and
-// the key were set once, so it is not buried under them.
-//
-// Only the tab in front queries: Radix unmounts the other, and Runs is handed
-// `enabled` besides, so nothing is fetched and thrown away.
-//
-// The active tab lives in the URL (`?tab=`), so a link can land on Setup and a
-// reload comes back where it was.
+// The active tab lives in the URL (`?tab=`), so a link can land on Remote and
+// a reload comes back where it was; Status carries no parameter, and an old
+// `?tab=runs` or `?tab=setup` lands on it.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SyncRunsTab } from "./SyncRunsTab";
+import { translateApiError } from "@/lib/api/errors";
+import { useRunSync, useSyncStatus } from "@/lib/hooks/useSync";
+import { SyncHeader } from "./SyncHeader";
 import { SyncMachinesTab } from "./SyncMachinesTab";
-import { SyncSetupTab } from "./SyncSetupTab";
+import { SyncRemoteTab } from "./SyncRemoteTab";
+import { SyncSetup } from "./SyncSetup";
+import { SyncStatusTab } from "./SyncStatusTab";
+import { syncState } from "./syncPageState";
 
-const TABS = ["runs", "setup", "machines"] as const;
+const TABS = ["status", "machines", "remote"] as const;
 type SyncTab = (typeof TABS)[number];
 
 function isSyncTab(value: string | null): value is SyncTab {
@@ -47,35 +45,86 @@ function isSyncTab(value: string | null): value is SyncTab {
 export function SyncPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
+  const { data: status, error, isPending, isFetching, refetch } = useSyncStatus();
+  const run = useRunSync();
+  // When this page asked for a round, until the status says one is running.
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+
   const requested = params.get("tab");
-  const tab: SyncTab = isSyncTab(requested) ? requested : "runs";
+  const tab: SyncTab = isSyncTab(requested) ? requested : "status";
   const setTab = (next: string) => {
     const search = new URLSearchParams(params);
     // The landing tab carries no parameter, so the page's own URL is the
-    // shortest one and a stale `?tab=status` link lands somewhere real.
-    if (next === "runs") search.delete("tab");
+    // shortest one and a stale `?tab=runs` link lands somewhere real.
+    if (next === "status") search.delete("tab");
     else search.set("tab", next);
+    // A focus hint belongs to the link that carried it, not to the next tab.
+    search.delete("focus");
     setParams(search, { replace: true });
   };
 
-  return (
-    <div className="space-y-8">
-      <PageHeader icon={RefreshCw} title={t("sync.title")} subtitle={t("sync.subtitle")} />
+  if (!status) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("sync.title")} experimental />
+        {isPending ? (
+          <Skeleton className="h-40 w-full" />
+        ) : (
+          <EmptyState
+            tone="error"
+            title={t("sync.loadFailed")}
+            description={translateApiError(t, error)}
+            action={
+              <Button variant="outline" onClick={() => void refetch()}>
+                <RotateCcw aria-hidden /> {t("common.retry")}
+              </Button>
+            }
+          />
+        )}
+      </div>
+    );
+  }
 
+  const state = syncState(status, run.isPending);
+  const runNow = () => {
+    setStartedAt(new Date().toISOString());
+    run.mutate(undefined, { onSettled: () => setStartedAt(null) });
+  };
+
+  if (state.kind === "setup") {
+    return (
+      <div className="space-y-6">
+        <SyncHeader state={state} remote={status.remote} onRun={runNow} />
+        <SyncSetup status={status} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <SyncHeader state={state} remote={status.remote} onRun={runNow} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="runs">{t("sync.tabs.runs")}</TabsTrigger>
-          <TabsTrigger value="setup">{t("sync.tabs.setup")}</TabsTrigger>
-          <TabsTrigger value="machines">{t("sync.tabs.machines")}</TabsTrigger>
+          {TABS.map((name) => (
+            <TabsTrigger key={name} value={name}>
+              {t(`sync.tabs.${name}`)}
+            </TabsTrigger>
+          ))}
         </TabsList>
-        <TabsContent value="runs" className="pt-6">
-          <SyncRunsTab enabled={tab === "runs"} />
+        <TabsContent value="status" className="pt-5">
+          <SyncStatusTab
+            status={status}
+            state={state}
+            startedAt={startedAt}
+            onRecheck={() => void refetch()}
+            rechecking={isFetching}
+          />
         </TabsContent>
-        <TabsContent value="setup" className="pt-6">
-          <SyncSetupTab />
-        </TabsContent>
-        <TabsContent value="machines" className="pt-6">
+        <TabsContent value="machines" className="pt-5">
           <SyncMachinesTab />
+        </TabsContent>
+        <TabsContent value="remote" className="pt-5">
+          <SyncRemoteTab status={status} />
         </TabsContent>
       </Tabs>
     </div>

@@ -33,7 +33,7 @@ from .conftest import (
 def _mark_running(env: ChannelEnv, resource: Resource, adapter: FakeChannelAdapter) -> None:
     """Make the runtime report ``adapter`` as this channel's live adapter, which
     is what notify and status read — without waiting on the reconciler."""
-    env.runtime._running[resource.name] = SimpleNamespace(adapter=adapter)
+    env.runtime._running[resource.uid] = SimpleNamespace(adapter=adapter)
 
 
 @pytest.mark.acceptance(
@@ -45,7 +45,7 @@ async def test_notifications_and_turns_leave_no_channel_audit_entry(env: Channel
     _mark_running(env, resource, adapter)
     code, _expires, _link = await env.service.issue_pairing_code(resource.uid, actor="test")
     await env.processor.on_message(inbound("tg", "owner", code, sender_id="4242"))
-    assert await env.peers.owner_peer(resource.id) is not None
+    assert await env.peers.owner_peer(resource.uid) is not None
 
     before = await env.audit.query(resource=resource, limit=500)
     channel_specific = sorted(e.event_type for e in before if e.event_type.startswith("channel_"))
@@ -141,7 +141,7 @@ async def test_a_media_sentinel_from_a_thread_turn_is_sent_into_that_thread(
     chart.write_bytes(b"\x89PNG fake")
     env.provider.adapter = default_reply_adapter(f"Here it is.\nMEDIA:{chart}")
     resource = await env.register_channel("tg")
-    adapter = env.bind(resource, FakeChannelAdapter(supports_media=True, supports_groups=True))
+    adapter = env.bind(resource, FakeChannelAdapter(supports_media=True))
     await env.pair(resource, "owner", sender_id="owner-1")
 
     await env.processor.on_message(_thread_msg("draw me a chart", pm="p1"))
@@ -206,14 +206,14 @@ async def test_a_defeated_configuration_is_diagnosed_on_status(env: ChannelEnv) 
 @pytest.mark.acceptance(
     spec="channels", scenario="a group command answer is shown only to the asker"
 )
-async def test_a_group_status_is_private_and_a_group_new_is_visible(env: ChannelEnv) -> None:
+async def test_a_group_help_is_private_and_a_group_new_is_visible(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(chat_id="owner", sender_id="4242")
 
     await env.processor.on_message(
         inbound(
             "tg",
             "-100group",
-            "/status",
+            "/help",
             chat_kind="group",
             sender_id="4242",
             ephemeral_id="77",

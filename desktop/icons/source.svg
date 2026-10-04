@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 32 32">
+  <!-- Coffer app icon, Stroke C (design canvas: Foundations · Brand): a white
+       squircle, the mark in ink with the indigo dot. 1024 master; macOS applies
+       its own mask. -->
+  <rect x=".25" y=".25" width="31.5" height="31.5" rx="7.2" fill="#FFFFFF" stroke="#E6E8EC" stroke-width=".5"/>
+  <g transform="translate(4 4)">
+    <path d="M20 8.5V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#16181D" stroke-width="1.75"/>
+    <circle cx="12" cy="12" r="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#4353D8" stroke-width="1.75"/>
+  </g>
+</svg>

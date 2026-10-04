@@ -26,7 +26,7 @@ from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, write
 
 
-def _write_daemon_json(home: Path, *, pid: int, port: int = 8001) -> None:
+def _write_daemon_json(home: Path, *, pid: int, port: int = 38471) -> None:
     write(
         home / ".coffer" / "daemon.json",
         DaemonInfo(

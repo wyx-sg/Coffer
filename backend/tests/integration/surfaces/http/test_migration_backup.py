@@ -15,7 +15,7 @@ import sqlite3
 
 import pytest
 
-from coffer.surfaces.http.migrations_runner import (
+from coffer.infrastructure.persistence.migrations_runner import (
     KEEP_PRE_MIGRATION_COPIES,
     backup_before_migrate,
     run_migrations,
@@ -62,7 +62,9 @@ def test_sqlite_file_identifies_only_existing_on_disk_databases(tmp_path: pathli
     assert sqlite_file("not a url at all ::") is None
 
 
-@pytest.mark.acceptance(spec="daemon", scenario="a schema upgrade keeps a copy of the vault")
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a schema upgrade keeps a copy of the history database"
+)
 def test_upgrade_from_a_fresh_file_leaves_a_pre_migration_copy(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

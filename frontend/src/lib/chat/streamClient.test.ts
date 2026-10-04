@@ -8,7 +8,7 @@ import { ApiError } from "../api/errors";
 
 // Mock auth helpers so they return deterministic values.
 vi.mock("../auth", () => ({
-  getCofferBaseUrl: () => "http://127.0.0.1:8000/api/v1",
+  getCofferBaseUrl: () => "http://127.0.0.1:38470/api/v1",
   getCofferToken: () => "test-token",
 }));
 
@@ -330,7 +330,7 @@ describe("subscribeConversationEvents", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://127.0.0.1:8000/api/v1/chat/conversations/c3/events");
+    expect(url).toBe("http://127.0.0.1:38470/api/v1/chat/conversations/c3/events");
     expect(options.method).toBe("GET");
     expect(options.body).toBeUndefined();
     const headers = options.headers as Record<string, string>;

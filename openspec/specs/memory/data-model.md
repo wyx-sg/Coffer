@@ -1,21 +1,24 @@
 # Data Model — Memory
 
 The memory layer's state is a directory of Markdown files plus the one
-Resource row each partition already has as a Resource. This document describes
-what is on disk, the frontmatter contract, and the handful of rows and values
-the surfaces answer with. Authority is [`spec.md`](spec.md) and
+resource file each partition has as a Resource. This document describes
+what is on disk, the frontmatter contract, and the handful of records and
+values the surfaces answer with. Authority is [`spec.md`](spec.md) and
 [Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md).
 
 ## There is no memory table
 
 **This layer adds no table of its own** ("Add no table of its own"). Notes,
-raw entries, the index and the retirement record are files; the only database
-presence a partition has is the row every Resource has, in the kind-agnostic
-`resources` table, carrying its name, an `enabled` flag that is always true and a two-field
-`config` — the repository it was learned in, and nothing else.
+raw entries, the index and the retirement record are files; besides them a
+partition has only the resource file every Resource has,
+`~/.coffer/derived/resources/memory/<name>.json` (the `memory` kind's storage
+class is `derived`, spec resource-framework), carrying its name and a
+two-field `config` — the repository it was learned in, and nothing else. It is
+always enabled.
 
-Everything under `~/.coffer/memory/` is **derived** ("Keep the memory tree
-derived and local"). Delete it, run aggregation and distil, and an
+Everything under `~/.coffer/derived/memory/` is **derived** ("Keep the memory
+tree derived and local"), and so are the partitions' resource files: nothing of
+it is in the vault repository, and deleting `derived/` is safe. Delete it, run aggregation and distil, and an
 **equivalent** set comes back: the same subjects from the same sources, not
 necessarily the same wording, because the product is a distillation rather
 than a copy. That is a weaker guarantee than this layer used to make, and it
@@ -25,7 +28,7 @@ is the price of the notes being Coffer's own writing. `.raw/` is the part that
 ## On-disk layout
 
 ```text
-~/.coffer/memory/
+~/.coffer/derived/memory/
 ├── .source_state.json            # {native_path: last-seen digest} — the skip cache
 ├── global/                       # notes about the person, delivered wherever they work
 │   ├── MEMORY.md                 # the index
@@ -50,12 +53,12 @@ trusting a comment:
 | Path | Written by | Read by |
 |---|---|---|
 | `.raw/` | aggregation, and only aggregation | the distil pass only — the file tree leaves it out and its read route refuses it |
-| `notes/` | the distil pass | delivery, recall, the file tree, and any agent holding the path |
+| `notes/` | the distil pass | delivery, prompt-time retrieval, the file tree, and any agent holding the path |
 | `MEMORY.md` | the distil pass | delivery, and a human opening the folder |
 | `RETIRED.md` | the distil pass | **the next distil pass**, and a human |
 
-- `~/.coffer/memory/` is the root; `$COFFER_MEMORY_ROOT` overrides it for
-  tests. Path construction lives in exactly one module,
+- `~/.coffer/derived/memory/` is the root, resolved from `HOME` at every call;
+  there is no override. Path construction lives in exactly one module,
   `infrastructure/memory/paths.py`, which is also where the traversal guard
   "Confine reads to registered agents' memory paths" asks for lives
   (`check_segment` refuses an empty, hidden, all-dots or otherwise unsafe
@@ -80,7 +83,7 @@ global").
 | `name` | the directory name, and the Resource's name | A readable slug from the repository's own name — `/home/dev/coffer` → `coffer`. A collision is resolved by prefixing a parent segment (`work-api` vs `personal-api`), never by an id ("Identify a partition by its repository"). |
 | `repository_key` | `Resource.config` | The identity a directory is resolved to. `remote:<host>/<path>` when the repository has an `origin` remote, so two clones agree; `path:<abs>` when it has none. Empty for `global`. |
 | `repository_path` | `Resource.config`, restated at the top of `MEMORY.md` | Absolute path of the repository's main working tree. Empty for `global`. |
-| `enabled` | the Resource's own column | Always true: the kind declares itself non-toggleable, so every partition is served and enable/disable is refused with `RESOURCE_NOT_TOGGLEABLE` ("Serve every partition to every agent"). |
+| `enabled` | not stored: the kind is not toggleable | Always true: the kind declares itself non-toggleable, so every partition is served and enable/disable is refused with `RESOURCE_NOT_TOGGLEABLE` ("Serve every partition to every agent"). |
 | `note_count` | counted from `notes/` at call time | Never stored. |
 | `unresolvable` | computed at call time | True when `repository_path` no longer exists on disk. Surfaced rather than hidden, because an orphaned partition is delivered to nobody and the developer is the only one who can decide to delete it ("Report unresolvable partitions"). |
 
@@ -104,7 +107,7 @@ global").
    dated scratch folders created this way under the previous design.
 
 Partitions are created by aggregation, never by the user and never by an
-agent's working directory at read time ("Create partitions only by
+agent's working directory at read time (see "Provision partitions only from
 aggregation") — the `memory` Kind sets `generic_create_allowed=False`, and
 `MemoryService.aggregate` opts in explicitly. Deletion goes through the
 kind-agnostic Resource route, which cleans the directory up through the Kind's
@@ -147,7 +150,12 @@ YAML frontmatter block, then Coffer's own prose underneath.
 | `partition` | string | `global` or a repository slug. |
 | `origins` | list of Origin | Every raw entry this note was built from, and through them every contributing agent ("Record provenance and merge by meaning"). |
 | `search_terms` | list of string | Carried up from the entries that supplied them, and restated in the index line so the next agent does not have to guess a word. |
-| `created_at` / `updated_at` | string | A note accumulates; `updated_at` moves when a later pass rewrites it. |
+| `created_at` / `updated_at` | string | A note accumulates; `updated_at` moves when a later pass rewrites it or a person saves an edit. |
+
+A note's read also carries a `fingerprint` (sha256 of the file's bytes). It is
+not stored in the file: it is what a save in the web UI sends back, so a note
+changed since the read (by distil or on disk) is refused instead of overwritten
+(see "Edit a memory in the web UI or on disk").
 
 There is **no** `status`, no `superseded_by` and no `conflicts_with`. A note a
 later one contradicts does not sit in `notes/` marked dead — it leaves, and
@@ -259,20 +267,30 @@ binds, the current repository's lines are kept in preference to `global`'s,
 the oldest are dropped, and the payload says how many were dropped and which
 directory holds them.
 
+### A prompt's delivery
+
+For a substantive prompt ("Retrieve the notes a prompt names"): one header line,
+then up to three notes of the session's repository partition and `global` that
+score at or above the relevance floor and that the session has not been given,
+each as `- (<absolute note path>) the user's standing rule is: <title> — <description>`
+for a `feedback` note and `… a fact they recorded: …` otherwise. At most 1,500
+UTF-8 bytes. The ranking index is held in the daemon's memory and rebuilt when a
+partition's `notes/` changes.
+
 ## Settings this layer reads
 
-Its two unattended passes are switched and timed from the shared
-installation-wide singleton `internal_engine_config` (spec
-[internal-engine](../internal-engine/spec.md) carries that row's own description), read
+Its two unattended passes are switched and timed from the engine's settings
+document, `vault/state/settings/internal-engine.json` (spec
+[internal-engine](../internal-engine/spec.md) carries its own description), read
 **per pass** rather than at boot so a change takes effect without a daemon
 restart:
 
-| Column | Default | Meaning |
+| Setting | Default | Meaning |
 |---|---|---|
-| `auto_aggregate_enabled` | `true` | Whether the aggregate worker may run. On by default, because a pass only reads the agents' files and only writes derived ones ("Aggregate on an interval and on demand"). |
-| `aggregate_interval_s` | `NULL` | `NULL` means the worker's own default, so raising it later reaches every vault that never chose one. |
-| `auto_distil_enabled` | `true` | Whether the distil worker may run. Renamed from `auto_organise_enabled` with the pass itself. |
-| `distil_interval_s` | `NULL` | As above. |
+| `auto_aggregate_enabled` (`upkeep.aggregate.enabled`) | `true` | Whether the aggregate worker may run. On by default, because a pass only reads the agents' files and only writes derived ones ("Aggregate on an interval and on demand"). |
+| `aggregate_interval_s` (`upkeep.aggregate.interval_s`) | `null` | `null` means the worker's own default, so raising it later reaches every vault that never chose one. |
+| `auto_distil_enabled` (`upkeep.distil.enabled`) | `true` | Whether the distil worker may run. |
+| `distil_interval_s` (`upkeep.distil.interval_s`) | `null` | As above. |
 
 The one in-flight fact this layer keeps is per-daemon and deliberately does
 not outlive it: which partitions are being distilled right now, held in the
@@ -283,14 +301,22 @@ back empty, which is the truth rather than a lost record.
 
 ## Delivery state
 
-Per-agent delivery is **one entry in that agent's own settings file** — not a
-row here. Coffer's entry is identified by a marker embedded as the argument of
-a leading no-op shell command, so detection never depends on `argv[0]`:
+Per-agent delivery is **two entries in that agent's own settings file** — not a
+record here. Each of Coffer's entries is identified by a marker embedded as the
+argument of a leading no-op shell command, so detection never depends on
+`argv[0]`, and every entry runs the same command,
+`<abs coffer> memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event
+from stdin:
 
-| Agent type | File | Event | Guard |
+| Event | Matcher | Timeout | Answers with |
 |---|---|---|---|
-| Claude Code | `settings.json` | `SessionStart`, matcher `startup\|resume\|clear\|compact` — Claude Code's own matcher vocabulary for that event | none needed |
-| Codex | `hooks.json` | `UserPromptSubmit` | once-per-session, keyed on the agent process, since Codex publishes no session id |
+| `SessionStart` | `startup\|resume\|clear\|compact` | 10 s | the bounded index, as `additionalContext` |
+| `UserPromptSubmit` | — | 5 s | the prompt's retrieved notes, as `additionalContext` |
+
+| Agent type | File | Approval |
+|---|---|---|
+| Claude Code | `settings.json` | none; Claude Code runs every hook in its settings |
+| Codex | `hooks.json` | Codex runs each entry only once the user has approved it in `/hooks`; Coffer reads every entry's approval from `config.toml`'s `[hooks.state]` without writing it |
 
 The hook is one part — `memory_hook` — of the agent's Coffer connection
 (spec agent-registry "Connect an agent to Coffer in one action"), and its state
@@ -298,6 +324,13 @@ is reported there as installed or not, with the installed command. It has **no
 last-fired timestamp**, on purpose: a fire is an event, not a property, so every
 fire is one `memory_delivery_fired` audit row and "has it ever run" is read on
 the vault-wide audit surface ("Audit every delivery fire").
+
+### The session ledger
+
+What each session was already given — the notes retrieved for it — is kept per `session_id` in the daemon's
+memory, bounded to the 2,048 most recent sessions. It is not written to a file
+of its own: at boot it is rebuilt from the last 7 days of `memory_delivery_fired`
+audit events ("Remember what a session was given across daemon restarts").
 
 ## Audit events
 
@@ -309,9 +342,11 @@ every kind shares.
 |---|---|
 | `memory_aggregated` | an aggregation pass completes, with the actor distinguishing a scheduled pass from a requested one |
 | `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
-| `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by switching `memory` on while it is connected |
-| `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it, or by switching `memory` off |
-| `memory_delivery_fired` | an installed hook fires ("Audit every delivery fire") |
+| `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by applying its drift item |
+| `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it |
+| `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start` or `prompt`), the `session_id` and the `notes` it carried; never their text ("Audit every delivery fire") |
+| `memory_note_edited` | a person saves an edit to a note in the web UI, naming the partition, the note and the actor |
 
-A recall records the usual `mcp_invocations` row and nothing about its query
-or its results ("Audit every lifecycle act").
+Prompt-time retrieval (`POST /api/v1/memory/hook`) records one
+`memory_delivery_fired` event naming the notes it delivered, and nothing about
+the prompt it matched ("Audit every delivery fire").

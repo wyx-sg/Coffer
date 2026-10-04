@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.delivery_reports import delivery_of
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
 from coffer.surfaces.http.feature_dependencies import kind_enabled, require_kind_enabled
 from coffer.surfaces.http.schemas import (
@@ -46,9 +47,26 @@ def _to_out(r: Resource, svc: ResourceService) -> ResourceOut:
         scope=ScopeOut.of(r.scope),
         enabled=r.enabled,
         toggleable=svc.toggleable(r.kind),
+        secrets_readable_by_local_processes=_env_carries_secrets(r),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
+
+
+def _env_carries_secrets(r: Resource) -> bool:
+    """A process Coffer spawns with a secret in its initial environment.
+
+    Any process of the same user reads that environment (``ps eww``), from
+    inside an agent's sandbox too, so the UI labels such a resource "readable
+    by other processes on this Mac" (spec mcp-gateway "Mark a stdio server
+    whose environment carries a secret"). Read off the stored shape rather than
+    through the MCP kind's model, which this kind-agnostic route does not
+    import: a ``stdio`` transport citing any secret ref.
+    """
+    transport = r.config.get("transport") if isinstance(r.config, dict) else None
+    if not isinstance(transport, dict) or transport.get("type") != "stdio":
+        return False
+    return bool(transport.get("secret_refs"))
 
 
 _actor = get_actor
@@ -144,9 +162,9 @@ async def update_resource(
 
     # A rename ALONE touches no config, so it runs no config write. Rewriting
     # the stored config back over itself is not a no-op: it re-validates, it
-    # re-probes every credential the config cites, it fires the kind's update
+    # re-probes every secret the config cites, it fires the kind's update
     # hook and it records a `resource_updated` with identical before and after.
-    # A rename refused because a credential this resource mentions has since
+    # A rename refused because a secret this resource mentions has since
     # been deleted is a refusal about something the caller did not touch.
     r = await _reachable(svc, uid)
     # A fixed name (``mcp_server``, ``skill``) refuses a change FIRST, so the
@@ -226,4 +244,7 @@ async def update_resource_scope(
     # (ResourceService.update_scope, ADR: per-agent-resource-scope).
     await _reachable(svc, uid)
     scope = body.scope.to_domain() if body.scope is not None else None
-    return _to_out(await svc.update_scope(uid, scope, actor=actor), svc)
+    updated = await svc.update_scope(uid, scope, actor=actor)
+    out = _to_out(updated, svc)
+    out.delivery = await delivery_of(updated)
+    return out

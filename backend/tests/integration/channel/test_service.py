@@ -1,7 +1,7 @@
 """Channel registration + ChannelService (pairing codes, notify) over real SQLite.
 
 Registration goes through the real ResourceService with the channel Kind and
-its credential-ref probing; notify goes through a real ChannelRuntime whose
+its secret-ref probing; notify goes through a real ChannelRuntime whose
 adapter factory produces the recording FakeChannelAdapter.
 """
 
@@ -13,7 +13,8 @@ import pytest
 
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.errors import ChannelNotPaired
-from coffer.domain.errors import CredentialMissing, ResourceNotFound
+from coffer.domain.errors import ResourceNotFound
+from coffer.domain.secret_errors import SecretMissing
 
 from .conftest import ChannelEnv
 
@@ -29,7 +30,7 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
         config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-token"},
         actor="cli",
     )
-    assert created.id != 0
+    assert created.uid
 
     listed = await env.resources.list(kind="channel")
     assert [r.name for r in listed] == ["tg"]
@@ -46,9 +47,9 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
     assert entries[0].details["config"]["bot_token_ref"] == "channel/tg/bot-token"
 
 
-@pytest.mark.acceptance(spec="channels", scenario="reject a channel with a missing credential")
-async def test_register_with_dangling_credential_ref_persists_nothing(env: ChannelEnv) -> None:
-    with pytest.raises(CredentialMissing):
+@pytest.mark.acceptance(spec="channels", scenario="reject a channel with a missing secret")
+async def test_register_with_dangling_secret_ref_persists_nothing(env: ChannelEnv) -> None:
+    with pytest.raises(SecretMissing):
         await env.resources.register(
             kind="channel",
             name="tg",
@@ -71,7 +72,7 @@ async def test_issue_pairing_code_returns_code_with_expiry_and_audits(env: Chann
     # The documented unambiguous alphabet (no 0/O/1/I).
     assert set(code) <= set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
     assert expires_at > datetime.now(tz=UTC)
-    assert env.pairing.pending("tg") is True
+    assert env.pairing.pending(resource.uid) is True
 
     entries = await env.audit_entries("channel_pairing_issued", resource)
     assert len(entries) == 1
@@ -113,7 +114,7 @@ async def test_notify_goes_to_the_owner_dm_not_to_a_group(env: ChannelEnv) -> No
     # Paired group-first, so insertion order disagrees with pairing order.
     await env.peers.upsert(
         ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id="team-group",
             display_name="Team",
             paired_at=datetime.now(tz=UTC),
@@ -121,7 +122,7 @@ async def test_notify_goes_to_the_owner_dm_not_to_a_group(env: ChannelEnv) -> No
     )
     await env.peers.upsert(
         ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id="owner-dm",
             display_name="Owner",
             paired_at=datetime.now(tz=UTC) - timedelta(days=2),
@@ -140,7 +141,7 @@ async def test_notify_can_name_a_paired_chat_explicitly(env: ChannelEnv) -> None
     await env.pair(resource, chat_id="owner-dm")
     await env.peers.upsert(
         ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id="team-group",
             display_name="Team",
             paired_at=datetime.now(tz=UTC),

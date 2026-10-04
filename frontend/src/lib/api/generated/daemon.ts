@@ -4,15 +4,15 @@
  */
 
 export interface paths {
-    "/daemon/status": {
+    "/api/v1/daemon/features": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Readiness, port, start time, version and executable */
-        get: operations["getDaemonStatus"];
+        /** List Features */
+        get: operations["list_features_api_v1_daemon_features_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,32 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/daemon/features": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Every experimental feature, its state, and what decided it
-         * @description The registry of experimental features (spec experimental-features
-         *     "Declare the experimental features in one registry") and, for each,
-         *     whether it is on and which layer decided it: a `COFFER_FEATURES` pin,
-         *     this machine's setting in `~/.coffer/daemon-config.json`, or the
-         *     build channel's default (spec experimental-features "Decide a
-         *     feature's state per machine").
-         */
-        get: operations["listDaemonFeatures"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/daemon/features/{key}": {
+    "/api/v1/daemon/features/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -55,63 +30,29 @@ export interface paths {
         };
         get?: never;
         /**
-         * Switch one experimental feature on or off on this machine
-         * @description Takes effect at once, with no restart, and is written to
-         *     `~/.coffer/daemon-config.json` before the response (spec
-         *     experimental-features "Switch a feature from the settings page or the
-         *     command line"). A key the registry does not declare answers 404
-         *     `FEATURE_UNKNOWN`; a feature pinned by `COFFER_FEATURES` answers 409
-         *     `FEATURE_PINNED` and keeps its state.
-         */
-        put: operations["setDaemonFeature"];
-        post?: never;
-        /**
-         * Remove this machine's setting so the feature follows the channel default
-         * @description Removes the key from the `features` object of
-         *     `~/.coffer/daemon-config.json` before the response, and the feature
-         *     takes the build channel's default at once, with no restart (spec
-         *     experimental-features "Switch a feature from the settings page or the
-         *     command line"). Answers with the state after the removal; a feature
-         *     with no setting is answered unchanged. A key the registry does not
-         *     declare answers 404 `FEATURE_UNKNOWN`; a feature pinned by
-         *     `COFFER_FEATURES` answers 409 `FEATURE_PINNED`.
-         */
-        delete: operations["unsetDaemonFeature"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/daemon/residency": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Whether the daemon starts at login */
-        get: operations["getDaemonResidency"];
-        /**
-         * Install or remove the login service
-         * @description What starts the daemon (spec daemon "Run as a login service"). Nothing
-         *     ends it on its own: the daemon never stands down for being idle, so
-         *     there is no idle window to set. The change takes effect immediately —
-         *     launchd is a different process.
+         * Set Feature
+         * @description Switch one feature on this machine, at once and without a restart.
          *
-         *     This setting has a REST surface where the port deliberately does not ("Bind
-         *     a fixed, settable port"): a port is changed when the daemon cannot
-         *     start, so a route it would have to serve is useless exactly then, while
-         *     residency is a settings question asked of a daemon that is working.
+         *     An unknown key answers 404 ``FEATURE_UNKNOWN``, a pinned one 409
+         *     ``FEATURE_PINNED``; the setting is in ``daemon-config.json`` before this
+         *     answers.
          */
-        put: operations["setDaemonResidency"];
+        put: operations["set_feature_api_v1_daemon_features__key__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Unset Feature
+         * @description Remove this machine's setting, so the feature is off again.
+         *
+         *     Answers with the feature's state after the removal. The same refusals as
+         *     the switch: 404 ``FEATURE_UNKNOWN``, 409 ``FEATURE_PINNED``.
+         */
+        delete: operations["unset_feature_api_v1_daemon_features__key__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/daemon/logs": {
+    "/api/v1/daemon/logs": {
         parameters: {
             query?: never;
             header?: never;
@@ -119,75 +60,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The tail of daemon.log, newest-first
-         * @description `daemon.log` interleaves several writers' formats, normalised onto one
-         *     set of fields before they reach a caller (spec daemon "Write one bounded
-         *     daemon log in one format", "Serve the daemon log tail normalised").
-         *     Read from the tail, so a large file is never pulled into memory whole.
+         * List Daemon Logs
+         * @description One page of ``daemon.log``, newest-first — the same record ``coffer log daemon``
+         *     reads, for the human looking at the Activity page.
+         *
+         *     The file interleaves several writers' formats (see ``log_reader``); they
+         *     are normalised there onto the same fields, so every row here carries the
+         *     time, level and logger its line actually stated. A page reads a small
+         *     window of bytes from the end of the file (or from the cursor's offset) and
+         *     parses only that (see ``log_page``); the work follows the page, not the
+         *     file.
          */
-        get: operations["listDaemonLogs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/daemon/shutdown": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stop this daemon
-         * @description Answers `204` and then signals this same process, so an API stop and a `SIGTERM` stop take the identical exit path (spec daemon "Shut down through one graceful exit path").
-         */
-        post: operations["shutdownDaemon"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/daemon/rotate-token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mint a new API token and republish it
-         * @description Rewrites `~/.coffer/daemon.json` atomically at mode 0600, publishes the new value to the in-process check, and records a `token_rotated` audit entry (spec daemon "Rotate the token from REST or the command line"). Clients holding the previous token are rejected from the next call onward.
-         */
-        post: operations["rotateDaemonToken"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fs/browse": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the subdirectories of a local directory
-         * @description Read-only filesystem browse (spec daemon "Browse folders without reading
-         *     files"). Returns a directory's path, its parent, and its immediate
-         *     subdirectories only — never file contents.
-         */
-        get: operations["browseFilesystem"];
+        get: operations["list_daemon_logs_api_v1_daemon_logs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -196,7 +80,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/fs/open": {
+    "/api/v1/daemon/port": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Daemon Port */
+        get: operations["get_daemon_port_api_v1_daemon_port_get"];
+        /**
+         * Put Daemon Port
+         * @description Save the port of the next start; refused in place when it cannot be bound.
+         */
+        put: operations["put_daemon_port_api_v1_daemon_port_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daemon/residency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Residency */
+        get: operations["get_residency_api_v1_daemon_residency_get"];
+        /**
+         * Put Residency
+         * @description Install or remove the login service, and say what is true afterwards.
+         *
+         *     The change takes effect immediately, because launchd is a different
+         *     process and does not care what this one is doing.
+         */
+        put: operations["put_residency_api_v1_daemon_residency_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daemon/restart": {
         parameters: {
             query?: never;
             header?: never;
@@ -206,21 +135,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Open a local path in an application
-         * @description Open an existing absolute path in an application — the preferred editor
-         *     (`with`) or the OS default (spec daemon "Open and reveal existing
-         *     absolute paths"). Validated absolute-and-existing before any launch;
-         *     the launcher is invoked with a fixed argument vector and creates
-         *     nothing.
+         * Restart Daemon
+         * @description Start a successor, then exit once this answer is sent.
+         *
+         *     The successor binds the configured port (``port``), or this one when a
+         *     test port range is in force. 500 when the successor cannot be started;
+         *     this daemon then keeps serving.
          */
-        post: operations["openFilesystemPath"];
+        post: operations["restart_daemon_api_v1_daemon_restart_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/fs/reveal": {
+    "/api/v1/daemon/rotate-token": {
         parameters: {
             query?: never;
             header?: never;
@@ -229,40 +158,40 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Reveal a local path in the OS file manager
-         * @description Select / reveal an existing absolute path in the OS file manager; on a
-         *     platform with no portable "select" primitive the containing folder is
-         *     opened instead (spec daemon "Open and reveal existing absolute paths").
-         *     Validated absolute-and-existing; creates nothing.
-         */
-        post: operations["revealFilesystemPath"];
+        /** Rotate Token */
+        post: operations["rotate_token_api_v1_daemon_rotate_token_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/fs/editors": {
+    "/api/v1/daemon/shutdown": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List GUI editors installed on this machine
-         * @description Enumerate common GUI code editors detected as installed (spec daemon
-         *     "Open and reveal existing absolute paths"). Detection is per-OS: macOS
-         *     returns app-bundle names for `open -a`, Linux and Windows return
-         *     commands found on PATH. The
-         *     returned `value` is exactly what `/fs/open`'s `with` field accepts.
-         *     Reads nothing but app presence. Its consumers are spec agent-registry
-         *     "Open config files in an external editor or reveal them" and spec
-         *     web-ui's preferred-editor setting, which stores the chosen preference on
-         *     its own side.
-         */
-        get: operations["listEditors"];
+        get?: never;
+        put?: never;
+        /** Shutdown Daemon */
+        post: operations["shutdown_daemon_api_v1_daemon_shutdown_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daemon/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_v1_daemon_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -271,7 +200,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/fs/pick-folder": {
+    "/api/v1/daemon/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Upgrade */
+        get: operations["get_upgrade_api_v1_daemon_upgrade_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fs/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse
+         * @description List the immediate subdirectories of `path` (defaults to the home dir).
+         */
+        get: operations["browse_api_v1_fs_browse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fs/editors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Editors
+         * @description List GUI editors detected on this machine for the preferred-editor picker.
+         */
+        get: operations["list_editors_api_v1_fs_editors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fs/open": {
         parameters: {
             query?: never;
             header?: never;
@@ -281,16 +267,91 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Open the host's native folder dialog
-         * @description The one native dialog the daemon opens (spec daemon "Open the host's
-         *     native folder picker"): macOS `osascript`, Linux `zenity`/`kdialog`,
-         *     invoked with a fixed argument vector. `available: false` means this
-         *     host has no native dialog tool; `available: true` with `path: null`
-         *     means the user cancelled. Creates nothing. The open-file and save-file
-         *     dialogs are deliberately absent — the browser's own
-         *     `<input type="file">` and `<a download>` cover those better.
+         * Open Path
+         * @description Open `path` in the preferred editor (`with`) or the OS default app.
          */
-        post: operations["pickFolder"];
+        post: operations["open_path_api_v1_fs_open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fs/pick-folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pick Folder
+         * @description Open the host's native folder dialog and return the chosen directory.
+         */
+        post: operations["pick_folder_api_v1_fs_pick_folder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fs/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal Path
+         * @description Select / reveal `path` in the OS file manager.
+         */
+        post: operations["reveal_path_api_v1_fs_reveal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Storage Summary */
+        get: operations["storage_summary_api_v1_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Cache
+         * @description Delete the memory tree's files and the transcript summary cache.
+         *
+         *     Partitions keep their rows; the next memory update rebuilds their folders
+         *     from the agents' own memory. Refused (409) while a memory pass is running,
+         *     because that pass is writing into the tree being cleared.
+         */
+        post: operations["clear_cache_api_v1_storage_cache_clear_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -301,186 +362,361 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ErrorResponse: {
-            error: {
-                /** @description Stable machine-readable code. `HOST_NOT_LOOPBACK` (421) and `FS_PATH_NOT_OPENABLE` (400) are this spec's own, and so are the experimental-feature codes: `FEATURE_UNKNOWN` (404), `FEATURE_PINNED` (409), and `FEATURE_DISABLED` (404) — the answer of every route of a switched-off feature, with `details.feature` naming its key. */
-                code: string;
-                message: string;
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
+        /** CacheClearOut */
+        CacheClearOut: {
+            /** Cleared Bytes */
+            cleared_bytes: number;
         };
-        DaemonResidencyOut: {
-            /** @description False where there is no launchd to install into. The control renders as unavailable rather than as off, which is a different claim. */
-            login_service_supported: boolean;
-            login_service_installed: boolean;
+        /** CacheUsageOut */
+        CacheUsageOut: {
+            /** Bytes */
+            bytes: number;
         };
-        DaemonResidencyIn: {
-            login_service_installed: boolean;
-        };
-        DaemonStatusOut: {
+        /** DaemonLogListOut */
+        DaemonLogListOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Path */
+            path: string;
+            /** Records */
+            records: components["schemas"]["DaemonLogRecordOut"][];
+            /** Total */
+            total: number | null;
             /**
-             * @description The daemon's lifecycle phase.
-             * @enum {string}
+             * Total Is Floor
+             * @default false
              */
-            status: "ready" | "draining";
-            /** @description The build's version, read from package metadata rather than a literal, so an old daemon reused by a new install is detectable. */
-            version: string;
-            /** @description Which build is answering — the frozen binary's path, or the interpreter of a run-from-source daemon. A CLI or shim whose version differs from `version` names it in its skew warning (spec daemon "Warn on a version mismatch and carry on"). */
-            executable: string;
-            /** Format: date-time */
-            started_at: string;
-            port: number;
-            upstream_summary?: components["schemas"]["UpstreamSummary"];
-            /**
-             * @description The build's release channel — `stable` for a tagged release, `dev` for every other build (spec experimental-features "Stamp every build with a release channel").
-             * @enum {string}
-             */
-            channel: "stable" | "dev";
-            /** @description Every experimental feature, keyed by its key, and whether it is on. The web sidebar and the desktop shell read their switches here. */
-            features: {
-                [key: string]: boolean;
-            };
-            /** @description This machine's id, as `daemon-config.json` caches it once the daemon has derived it from the host at start; null only before that. Published here because machine identity is not sync's — a channel is bound to a machine whether or not `vault_sync` is on, and `/api/v1/sync` is closed while it is off. */
-            machine_id: string | null;
-            /** @description This machine's display label — the hostname unless the user set one. */
-            machine_name: string;
+            total_is_floor: boolean;
         };
-        FeatureOut: {
-            key: string;
-            enabled: boolean;
-            /**
-             * @description Which layer decided the state: a `COFFER_FEATURES` pin, this machine's setting, or the channel default.
-             * @enum {string}
-             */
-            source: "pin" | "setting" | "channel";
-        };
-        FeatureListOut: {
-            /** @enum {string} */
-            channel: "stable" | "dev";
-            features: components["schemas"]["FeatureOut"][];
-        };
-        FeatureSetIn: {
-            enabled: boolean;
-        };
-        /** @description A count of registered MCP upstreams, when the daemon has finished wiring them up. Null while it is still starting — the probe must answer either way. */
-        UpstreamSummary: {
-            registered: number;
-            enabled: number;
-            healthy: number;
-            unhealthy: number;
-        } | null;
-        TokenRotationOut: {
-            /** @description New token; clients must re-read `~/.coffer/daemon.json`. */
-            token: string;
-        };
+        /**
+         * DaemonLogRecordOut
+         * @description One record of ``daemon.log``, parsed where possible.
+         *
+         *     ``daemon.log`` interleaves several writers — Coffer's own JSON (one object
+         *     per line, every field on it), uvicorn and rich — so ``record`` carries
+         *     whatever that line stated, normalised onto ``timestamp`` / ``level`` /
+         *     ``logger`` / ``event``, plus ``continuation`` for the lines (a traceback, a
+         *     wrapped message) that belong to this record rather than to one of their
+         *     own. A line no writer's format fits is kept whole as
+         *     ``{"raw": <line>}``. The three lifted fields are what a timeline renders
+         *     without knowing any of that; they are absent on a raw line, which is why
+         *     they are nullable.
+         */
         DaemonLogRecordOut: {
-            timestamp?: string | null;
-            level?: string | null;
-            /** @description The message — the structured writer's `event` field, or the text another writer put after its level. */
-            event?: string | null;
-            /** @description The whole parsed record, normalised onto `timestamp` / `level` / `logger` / `event`, plus `continuation` for the lines (a traceback, a wrapped message) that belong to this record. A line no writer's format fits is kept whole as `{"raw": "<line>"}`. */
+            /** Event */
+            event: string | null;
+            handoff: components["schemas"]["HandoffOut"] | null;
+            /** Level */
+            level: string | null;
+            /** Offset */
+            offset: number;
+            /** Record */
             record: {
                 [key: string]: unknown;
             };
+            /** Timestamp */
+            timestamp: string | null;
         };
-        DaemonLogListOut: {
-            /** @description Newest-first, at most `limit` entries. */
-            records: components["schemas"]["DaemonLogRecordOut"][];
+        /** DaemonPortIn */
+        DaemonPortIn: {
+            /** Port */
+            port: number;
         };
-        FsEntry: {
-            /** @description Directory name. */
-            name: string;
-            /** @description Resolved absolute path. */
-            path: string;
+        /**
+         * DaemonPortOut
+         * @description The port of the next start beside the port this daemon answers on.
+         *
+         *     ``pending`` is a saved port this daemon is not on: it takes effect at the
+         *     next start (spec daemon "Bind a fixed, settable port"), so until then the page
+         *     says so and the status keeps showing ``bound_port``.
+         */
+        DaemonPortOut: {
+            /** Bound Port */
+            bound_port: number;
+            /** Pending */
+            pending: boolean;
+            /** Port */
+            port: number;
         };
-        FsBrowseOut: {
-            /** @description The resolved directory that was listed. */
-            path: string;
-            /** @description Parent directory, or null at the filesystem root. */
-            parent: string | null;
-            /** @description Immediate subdirectories (no files). */
-            entries: components["schemas"]["FsEntry"][];
+        /** DaemonResidencyIn */
+        DaemonResidencyIn: {
+            /** Login Service Installed */
+            login_service_installed: boolean;
         };
-        FsOpenRequest: {
-            /** @description Absolute path of an existing file or folder to open. */
-            path: string;
-            /** @description Application to open with (the preferred-editor preference, one of the `value`s from `/fs/editors`). Omitted or null opens with the OS default application. */
-            with?: string | null;
+        /**
+         * DaemonResidencyOut
+         * @description Whether the system starts the daemon at login.
+         *
+         *     Residency is the login service alone: the daemon never stands down on its
+         *     own, so there is no idle window to report (spec daemon "Change residency
+         *     from the settings page").
+         */
+        DaemonResidencyOut: {
+            /** Login Service Installed */
+            login_service_installed: boolean;
+            /** Login Service Supported */
+            login_service_supported: boolean;
         };
-        FsRevealRequest: {
-            /** @description Absolute path of an existing file or folder to reveal. */
-            path: string;
+        /**
+         * DaemonRestartOut
+         * @description A restart under way (spec daemon "Restart itself on request").
+         */
+        DaemonRestartOut: {
+            /** Port */
+            port: number;
         };
-        EditorOption: {
-            /** @description Human-readable editor name, e.g. "Visual Studio Code". */
+        /** DaemonStatusOut */
+        DaemonStatusOut: {
+            /** Commit */
+            commit: string | null;
+            /** Connected Agents */
+            connected_agents: number | null;
+            /** Data Dir */
+            data_dir: string;
+            /** Executable */
+            executable: string;
+            /** Features */
+            features: {
+                [key: string]: boolean;
+            };
+            /** Machine Id */
+            machine_id: string | null;
+            /** Machine Name */
+            machine_name: string;
+            /** Pid */
+            pid: number;
+            /** Port */
+            port: number;
+            runtime: components["schemas"]["RuntimeHealthOut"] | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "draining";
+            upstream_summary: components["schemas"]["UpstreamSummary"] | null;
+            /** Version */
+            version: string;
+        };
+        /**
+         * DaemonUpgradeOut
+         * @description How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent").
+         */
+        DaemonUpgradeOut: {
+            handoff: components["schemas"]["HandoffOut"];
+            /**
+             * Install Method
+             * @enum {string}
+             */
+            install_method: "binaries" | "app" | "source";
+        };
+        /** EditorOptionOut */
+        EditorOptionOut: {
+            /** Label */
             label: string;
-            /** @description Launcher value for the preferred-editor preference — a macOS app name (`open -a`) or a Linux/Windows command on PATH. */
+            /** Value */
             value: string;
         };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /** FeatureListOut */
+        FeatureListOut: {
+            /** Features */
+            features: components["schemas"]["FeatureOut"][];
+        };
+        /**
+         * FeatureOut
+         * @description One experimental feature and the layer that decided its state.
+         */
+        FeatureOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Key */
+            key: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "pin" | "setting" | "default";
+        };
+        /** FeatureSetIn */
+        FeatureSetIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** FsBrowseOut */
+        FsBrowseOut: {
+            /** Entries */
+            entries: components["schemas"]["FsEntryOut"][];
+            /** Parent */
+            parent: string | null;
+            /** Path */
+            path: string;
+        };
+        /** FsEditorsOut */
         FsEditorsOut: {
-            /** @description GUI editors detected as installed on this machine. */
-            editors: components["schemas"]["EditorOption"][];
+            /** Editors */
+            editors: components["schemas"]["EditorOptionOut"][];
         };
-        FsPickFolderRequest: {
-            /** @description Path to seed the dialog's starting directory (`~` expanded). A start that is not an existing directory is ignored and the dialog opens at its own default. */
-            start?: string | null;
+        /** FsEntryOut */
+        FsEntryOut: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
         };
+        /** FsOpenRequest */
+        FsOpenRequest: {
+            /** Path */
+            path: string;
+            /** With */
+            with?: string | null;
+        };
+        /** FsPickFolderOut */
         FsPickFolderOut: {
-            /** @description Whether this host has a native folder-dialog tool. When false the caller falls back to the in-app folder browser (`/fs/browse`). */
+            /** Available */
             available: boolean;
-            /** @description The chosen absolute directory, or null if cancelled or unavailable. */
+            /** Path */
             path: string | null;
         };
+        /** FsPickFolderRequest */
+        FsPickFolderRequest: {
+            /** Start */
+            start?: string | null;
+        };
+        /** FsRevealRequest */
+        FsRevealRequest: {
+            /** Path */
+            path: string;
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
+        /** HistoryUsageOut */
+        HistoryUsageOut: {
+            /** Bytes */
+            bytes: number;
+            /** Path */
+            path: string;
+        };
+        /** LocalContentUsageOut */
+        LocalContentUsageOut: {
+            /** Bytes */
+            bytes: number;
+            /** Folder */
+            folder: string;
+            /** Locations */
+            locations: string[];
+        };
+        /**
+         * RuntimeHealthOut
+         * @description The event loop's health and the background tasks' crash count.
+         *
+         *     Lag is how late the loop woke a periodic probe, over a rolling window: one
+         *     synchronous call blocking the loop stalls every request, channel and turn
+         *     at once, and this is where that shows. See ``application.runtime``.
+         */
+        RuntimeHealthOut: {
+            last_crash: components["schemas"]["TaskCrashOut"] | null;
+            /** Loop Lag Max Ms */
+            loop_lag_max_ms: number | null;
+            /** Loop Lag P99 Ms */
+            loop_lag_p99_ms: number | null;
+            /** Loop Lag Samples */
+            loop_lag_samples: number;
+            /** Loop Lag Window Seconds */
+            loop_lag_window_seconds: number;
+            /** Task Crashes */
+            task_crashes: number;
+            /** Tasks Running */
+            tasks_running: number;
+        };
+        /**
+         * StorageSummaryOut
+         * @description What Coffer keeps on this machine, by kind (Settings > Data).
+         */
+        StorageSummaryOut: {
+            cache: components["schemas"]["CacheUsageOut"];
+            history: components["schemas"]["HistoryUsageOut"];
+            local_content: components["schemas"]["LocalContentUsageOut"];
+            vault: components["schemas"]["VaultUsageOut"];
+        };
+        /**
+         * TaskCrashOut
+         * @description The most recent background task that ended by raising.
+         */
+        TaskCrashOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Error */
+            error: string;
+            /** Restarting */
+            restarting: boolean;
+            /** Task */
+            task: string;
+        };
+        /** TokenRotationOut */
+        TokenRotationOut: {
+            /**
+             * Token
+             * @description New token; clients must re-read daemon.json
+             */
+            token: string;
+        };
+        /** UpstreamSummary */
+        UpstreamSummary: {
+            /** Enabled */
+            enabled: number;
+            /** Healthy */
+            healthy: number;
+            /** Registered */
+            registered: number;
+            /** Unhealthy */
+            unhealthy: number;
+        };
+        /** VaultUsageOut */
+        VaultUsageOut: {
+            /** Bytes */
+            bytes: number;
+            /** Path */
+            path: string;
+            /** Versions */
+            versions: number | null;
+        };
     };
-    responses: {
-        /** @description Malformed request */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Missing or invalid token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description The request was understood and refused */
-        ValidationError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description No such thing — `FEATURE_UNKNOWN` for a key the registry does not declare */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Refused by the current state — `FEATURE_PINNED` for a pinned feature */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-    };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -488,36 +724,18 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getDaemonStatus: {
+    list_features_api_v1_daemon_features_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DaemonStatusOut"];
-                };
+            header?: {
+                "x-coffer-token"?: string | null;
             };
-        };
-    };
-    listDaemonFeatures: {
-        parameters: {
-            query?: never;
-            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -526,13 +744,32 @@ export interface operations {
                     "application/json": components["schemas"]["FeatureListOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    setDaemonFeature: {
+    set_feature_api_v1_daemon_features__key__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
                 key: string;
             };
@@ -544,7 +781,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The feature after the switch */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -553,153 +790,17 @@ export interface operations {
                     "application/json": components["schemas"]["FeatureOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["ValidationError"];
-        };
-    };
-    unsetDaemonFeature: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The feature after its setting was removed */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FeatureOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    getDaemonResidency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DaemonResidencyOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    setDaemonResidency: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DaemonResidencyIn"];
-            };
-        };
-        responses: {
-            /** @description What is true after the change */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DaemonResidencyOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            422: components["responses"]["ValidationError"];
-        };
-    };
-    listDaemonLogs: {
-        parameters: {
-            query?: {
-                /** @description Only records at or after this instant. A naive value is read as UTC, which is the only clock the log keeps. */
-                since?: string;
-                /** @description Severity floor — `debug`, `info`, `warning`, `error`. Everything at or above it survives. Empty means no floor. */
-                level?: string;
-                /** @description The older, coarser form of `level`. Kept for callers that already send it. */
-                errors_only?: boolean;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DaemonLogListOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    shutdownDaemon: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    rotateDaemonToken: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenRotationOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description The discovery file is missing, so there is nothing to rewrite. */
-            503: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -709,19 +810,473 @@ export interface operations {
             };
         };
     };
-    browseFilesystem: {
+    unset_feature_api_v1_daemon_features__key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_daemon_logs_api_v1_daemon_logs_get: {
         parameters: {
             query?: {
-                /** @description Directory to list. Defaults to the user's home directory. */
-                path?: string;
+                since?: string | null;
+                errors_only?: boolean;
+                level?: string;
+                limit?: number;
+                /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
+                /** @description Only the records whose message, logger, level or folded lines hold this text. */
+                q?: string | null;
+                /** @description Also count the matching records in the file's recent tail (a bounded read). */
+                with_total?: boolean;
+                /** @description Only the lines written under this correlation id (a request's or a turn's). */
+                trace_id?: string | null;
             };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonLogListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_daemon_port_api_v1_daemon_port_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonPortOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_daemon_port_api_v1_daemon_port_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DaemonPortIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonPortOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_residency_api_v1_daemon_residency_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonResidencyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_residency_api_v1_daemon_residency_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DaemonResidencyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonResidencyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restart_daemon_api_v1_daemon_restart_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonRestartOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rotate_token_api_v1_daemon_rotate_token_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenRotationOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    shutdown_daemon_api_v1_daemon_shutdown_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_daemon_status_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonStatusOut"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_upgrade_api_v1_daemon_upgrade_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonUpgradeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    browse_api_v1_fs_browse_get: {
+        parameters: {
+            query?: {
+                path?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -730,14 +1285,72 @@ export interface operations {
                     "application/json": components["schemas"]["FsBrowseOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    openFilesystemPath: {
+    list_editors_api_v1_fs_editors_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FsEditorsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    open_path_api_v1_fs_open_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -747,66 +1360,39 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The launcher was spawned. */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    revealFilesystemPath: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FsRevealRequest"];
-            };
-        };
-        responses: {
-            /** @description The file manager was opened. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    listEditors: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FsEditorsOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    pickFolder: {
+    pick_folder_api_v1_fs_pick_folder_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -816,7 +1402,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -825,7 +1411,147 @@ export interface operations {
                     "application/json": components["schemas"]["FsPickFolderOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reveal_path_api_v1_fs_reveal_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FsRevealRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    storage_summary_api_v1_storage_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageSummaryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clear_cache_api_v1_storage_cache_clear_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheClearOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
 }

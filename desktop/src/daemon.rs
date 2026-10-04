@@ -1,4 +1,4 @@
-//! The three IPC commands the webview calls, and the detect-or-spawn policy
+//! The three daemon IPC commands the webview calls, and the detect-or-spawn policy
 //! behind them.
 //!
 //! Where a daemon comes from lives in `resolve.rs` (the five-step chain);
@@ -14,7 +14,9 @@ use tauri::{AppHandle, Manager};
 use crate::discovery::{
     daemon_responds_ok, read_daemon_info, request_daemon_shutdown, wait_for_port_free,
 };
-use crate::ready::{base_url_for, ready_deadline, wait_for_daemon_ready, DAEMON_READY_TIMEOUT_SECS};
+use crate::ready::{
+    base_url_for, ready_deadline, wait_for_daemon_ready, DAEMON_READY_TIMEOUT_SECS,
+};
 use crate::resolve::{daemon_source, DaemonSource};
 use crate::restart::{record_restart_outcome, restart_rate_limit_refusal, stop_running_daemon};
 use crate::spawn::spawn_resolved_daemon;
@@ -239,6 +241,28 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
     // Step 1 of the chain short-circuits the whole cold start.
     match daemon_source(&app) {
         Ok(DaemonSource::Running { port, token }) => {
+            // Right after an update the daemon found is the previous
+            // version's; replace it through the one restart
+            // (`update_relaunch.rs`). A restart that fails leaves the old one
+            // to attach to, with the skew warning, as on any other launch.
+            if crate::update_relaunch::take() {
+                let version = crate::daemon_http::fetch_ok(port, &token, "/api/v1/daemon/status")
+                    .map(|body| crate::tray_watch::parse_version(&body))
+                    .unwrap_or_default();
+                if crate::update_relaunch::should_replace(true, &version) {
+                    log::info!("handshake: replacing the {version} daemon after the update");
+                    match restart_daemon(app.clone()) {
+                        Ok(r) => {
+                            reveal_main_window(&app);
+                            return Ok(DaemonInfo {
+                                base_url: r.base_url,
+                                token: r.token,
+                            });
+                        }
+                        Err(e) => log::warn!("handshake: post-update restart failed: {e}"),
+                    }
+                }
+            }
             log::info!("handshake: attached to the daemon serving on port {port}");
             reveal_main_window(&app);
             return Ok(ready(port, token));
@@ -337,7 +361,7 @@ mod tests {
     fn the_base_url_is_the_loopback_api_root() {
         // The one address the webview is given, and the only one the CSP
         // admits (`connect-src http://127.0.0.1:*`).
-        assert_eq!(base_url_for(8000), "http://127.0.0.1:8000/api/v1");
+        assert_eq!(base_url_for(38470), "http://127.0.0.1:38470/api/v1");
     }
 
     /// The ready-wait is what a restart hands its caller a connection from,

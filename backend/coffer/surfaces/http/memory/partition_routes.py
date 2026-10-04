@@ -47,11 +47,16 @@ async def list_partitions(
                 # up by label to act on it.
                 uid=p.uid,
                 name=p.name,
-                title=p.title,
                 repository_key=p.repository_key,
                 repository_path=p.repository_path,
                 note_count=p.note_count,
                 unresolvable=p.unresolvable,
+                distilled_at=p.distilled_at,
+                sample=p.sample,
+                sources=list(p.sources),
+                waiting_entries=p.waiting_entries,
+                waiting_agents=list(p.waiting_agents),
+                updated_at=p.updated_at,
             )
             for p in found
         ]

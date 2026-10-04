@@ -35,7 +35,9 @@ export interface DaemonInfo {
  * to /tmp/coffer-e2e-home.path so we can find it from any spec file.
  */
 export function readDaemonToken(): DaemonInfo {
-  const homePath = fs.readFileSync("/tmp/coffer-e2e-home.path", "utf-8").trim();
+  const homePath = fs
+    .readFileSync(process.env.COFFER_E2E_HOME_FILE ?? "/tmp/coffer-e2e-home.path", "utf-8")
+    .trim();
   const json = fs.readFileSync(`${homePath}/.coffer/daemon.json`, "utf-8");
   const parsed = JSON.parse(json) as { token: string; port: number };
   return { token: parsed.token, port: parsed.port };
@@ -119,7 +121,9 @@ export interface ShimHandle {
  * stdout lines are buffered in `handle.pendingLines`.
  */
 export function spawnShim(): ShimHandle {
-  const homePath = fs.readFileSync("/tmp/coffer-e2e-home.path", "utf-8").trim();
+  const homePath = fs
+    .readFileSync(process.env.COFFER_E2E_HOME_FILE ?? "/tmp/coffer-e2e-home.path", "utf-8")
+    .trim();
   const proc = child_process.spawn(
     PYTHON,
     ["-m", "coffer.surfaces.shim.main"],
@@ -308,7 +312,7 @@ export async function waitForCapabilities(
  * Resolve a resource NAME to the uid every route now addresses it by.
  *
  * A resource's identity is an opaque uid (ADR
- * resource-identity-is-an-immutable-uid); a test knows the name it registered,
+ * identity-is-the-uid-inside-the-file); a test knows the name it registered,
  * so it looks the uid up the same way the CLI does — through the one route
  * allowed to find a resource by its label. Returns null when nothing matches,
  * so a cleanup path can stay best-effort.

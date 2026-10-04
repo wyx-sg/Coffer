@@ -92,16 +92,6 @@ async def test_registry_dispatches_by_extension_across_converters() -> None:
 
 
 @pytest.mark.asyncio
-async def test_registry_supports_reports_known_extensions() -> None:
-    registry = default_registry()
-
-    assert registry.supports(".md") is True
-    assert registry.supports("CSV") is True
-    assert registry.supports(".pdf") is True
-    assert registry.supports(".doc") is False
-
-
-@pytest.mark.asyncio
 async def test_unsupported_extension_raises_unsupported_document_naming_the_type() -> None:
     registry = default_registry()
 

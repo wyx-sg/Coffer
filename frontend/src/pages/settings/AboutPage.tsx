@@ -1,88 +1,124 @@
 // frontend/src/pages/settings/AboutPage.tsx
 //
-// Settings → About: what this Coffer is — version, license and source, and
-// nothing else. The version comes from /daemon/status so it names the build
-// that is actually running, not a constant baked into the page; the daemon's
-// port and start time stay off it, because a user never needs to know Coffer
-// runs a background daemon. "Copy diagnostics" puts the same rows on the
-// clipboard as plain text, for pasting into a bug report.
-import type { ReactNode } from "react";
+// Settings → About (canvas 1.4.23–1.4.26): what this Coffer is. A head line with the
+// logo, the running version and, beside it, "Copy diagnostics for a bug
+// report" (spec web-ui "Keep daemon shutdown on the command line": version,
+// channel, host, daemon state and port and the enabled features, never a token
+// or a secret); the desktop shell's update check (`UpdatesSection`, its own
+// requirement); and the details — version (with the commit a release was built
+// from), license, documentation, source and the data folder. The version comes from
+// /daemon/status so it names the build that is actually running. No release
+// channel is shown; it stays in the diagnostics.
 import { useTranslation } from "react-i18next";
-import { Copy } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CofferMark } from "@/components/brand/CofferMark";
+import {
+  SETTINGS_STACK,
+  SettingRow,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
+import { useDaemonState } from "@/components/settings/daemon/useDaemonState";
 import { useToast } from "@/components/ui/toast";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
+import { inDesktopShell } from "@/lib/tauri";
+import { diagnosticsText } from "./aboutDiagnostics";
+import { UpdatesSection } from "./UpdatesSection";
 
+/** The published docs site (docs-site/), per interface language: Chinese lives under /zh/. */
+const DOCS_URL = {
+  en: "https://wyx-sg.github.io/Coffer/",
+  zh: "https://wyx-sg.github.io/Coffer/zh/",
+} as const;
 const SOURCE_URL = "https://github.com/wyx-sg/Coffer";
 const EMPTY = "—";
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-all">{value}</span>
-    </div>
-  );
-}
-
 export function AboutPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { data: status } = useDaemonStatus();
-
-  // Label + text value per row: the table renders these, and the clipboard
-  // gets the same lines joined — one source, so the two can't drift.
-  const rows: { key: string; label: string; text: string }[] = [
-    { key: "version", label: t("settings.about.fields.version"), text: status?.version ?? EMPTY },
-    { key: "license", label: t("settings.about.fields.license"), text: "MIT" },
-    { key: "source", label: t("settings.about.fields.source"), text: SOURCE_URL },
-  ];
+  const state = useDaemonState();
 
   const copyDiagnostics = async () => {
-    const text = rows.map((r) => `${r.label}: ${r.text}`).join("\n");
+    const text = diagnosticsText({
+      status,
+      state,
+      host: inDesktopShell() ? "desktop app" : "browser",
+      platform: typeof navigator !== "undefined" ? navigator.platform : "",
+    });
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(t("common.copied"));
+      toast.success(t("settings.about.diagnosticsCopied"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
+  const version = status?.version ?? EMPTY;
+  const build = status?.commit
+    ? t("settings.about.versionWithCommit", { version, commit: status.commit })
+    : version;
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <CardTitle>{t("settings.about.title")}</CardTitle>
-          <Button variant="secondary" size="sm" onClick={() => void copyDiagnostics()}>
-            <Copy className="mr-1.5 size-3.5" aria-hidden />
-            {t("settings.about.copyDiagnostics")}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {rows.map((r) => (
-            <Row
-              key={r.key}
-              label={r.label}
-              value={
-                r.key === "source" ? (
-                  <a
-                    href={SOURCE_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    github.com/wyx-sg/Coffer
-                  </a>
-                ) : (
-                  r.text
-                )
-              }
-            />
-          ))}
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-5">
+      <SettingsTabHeader title={t("settings.tabs.about")} intro={t("settings.about.intro")} />
+      <div className={SETTINGS_STACK}>
+        <div className="flex items-center gap-3.5" data-testid="settings-about-head">
+          <CofferMark size={44} />
+          <div className="flex flex-col gap-0.5">
+            <p className="m-0 text-xl font-bold text-text">Coffer</p>
+            <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted">
+              <span>
+                {status
+                  ? t("settings.about.versionLine", { version })
+                  : t("settings.about.versionLineLoading")}
+              </span>
+              <button
+                type="button"
+                onClick={() => void copyDiagnostics()}
+                className="text-xs font-label text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                {t("settings.about.copyDiagnostics")}
+              </button>
+            </p>
+          </div>
+        </div>
+
+        <UpdatesSection />
+
+        <SettingsSection title={t("settings.about.details")}>
+          <SettingRow label={t("settings.about.fields.version")}>
+            <span className="font-mono text-xs">{build}</span>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.license")}>
+            <span className="text-sm">MIT</span>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.documentation")}>
+            <a
+              href={DOCS_URL[i18n.language?.startsWith("zh") ? "zh" : "en"]}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-accent hover:underline"
+            >
+              {t("settings.about.documentationLink")}
+            </a>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.source")}>
+            <a
+              href={SOURCE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-accent hover:underline"
+            >
+              github.com/wyx-sg/Coffer
+            </a>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.dataFolder")}>
+            <span className="font-mono text-xs" data-visual-volatile>
+              {status?.data_dir ?? EMPTY}
+            </span>
+          </SettingRow>
+        </SettingsSection>
+      </div>
     </div>
   );
 }

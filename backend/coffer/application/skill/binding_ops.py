@@ -1,153 +1,215 @@
-"""Per-agent enable/disable binding operations for SkillService.
+"""The writers behind one skill delivery: link + binding row, and their undo.
 
-Extracted to keep ``service.py`` under the file-size limit. Like
-``lifecycle_ops.py`` these are free functions that take
-the SkillService instance and reach into its (private) attributes — they are
-conceptually private to the skill subpackage.
+Each writer performs the on-disk link change and the ``skill_agent_bindings``
+row that records it, and records **no** audit event: the caller decides what
+the write means. The reconcile target (``link_reconcile``) hands the event back
+to the reconciler, which records it and runs :func:`undo` if recording fails
+(ADR one-level-triggered-reconciler-compares-parameters, "audit follows the
+write"); adoption, the one explicit write outside the reconciler, records its
+own.
+
+Every writer returns a :class:`LinkWrite` describing what it replaced, so
+:func:`undo` can put it back: the link it created is removed, a link it moved
+aside is renamed back, a link it removed is recreated, and the binding row is
+restored to its prior state.
+
+Conceptually private to the skill subpackage, like ``lifecycle_ops``: these
+take the ``SkillService`` and reach into its attributes.
 """
 
 from __future__ import annotations
 
 import contextlib
 import pathlib
+import shutil
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from coffer.application.skill.lifecycle_ops import infer_link_mode
-from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import TargetConflict
-from coffer.domain.scope import is_active
-from coffer.domain.skill.binding import BindingState
-from coffer.domain.workspace_errors import SkillOutOfScope
+from coffer.domain.resource import Resource
+from coffer.domain.skill.binding import BindingState, LinkMode
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
 
 
-async def enable_skill_for_agent(
-    *,
+@dataclass(frozen=True)
+class LinkWrite:
+    """What one writer did, in enough detail to undo it."""
+
+    skill: Resource
+    agent: Resource
+    #: The binding row before the write (``None``: there was none).
+    prior: BindingState | None
+    #: The link path the write created, if it created one.
+    created: pathlib.Path | None = None
+    #: How the created (or adopted) link is realised.
+    mode: LinkMode | None = None
+    #: Where a tampered link was renamed aside to, and where it came from.
+    backup: pathlib.Path | None = None
+    backed_up_from: pathlib.Path | None = None
+    #: A correct link the write removed (reclaim, or the old path of a move).
+    removed: pathlib.Path | None = None
+
+
+def _backup_path(service: SkillService, agent: Resource, link: pathlib.Path) -> pathlib.Path:
+    """``<backup root>/<agent>/<link name>.coffer-backup-<µs>`` — outside the
+    agent's skills directory, where a set-aside folder would be loaded as a
+    second skill of the same name. A counter keeps two backups in the same
+    microsecond (or a pre-existing one) from clobbering each other."""
+    stamp = int(datetime.now(tz=UTC).timestamp() * 1_000_000)
+    root = pathlib.Path(service._store.backup_root) / agent.name
+    root.mkdir(parents=True, exist_ok=True)
+    backup = root / f"{link.name}.coffer-backup-{stamp}"
+    counter = 0
+    while backup.exists() or backup.is_symlink():
+        counter += 1
+        backup = root / f"{link.name}.coffer-backup-{stamp}-{counter}"
+    return backup
+
+
+def _is_correct_link(
     service: SkillService,
-    skill_uid: str,
-    agent_uid: str,
-    force: bool,
-    actor: str,
-) -> BindingState:
-    skill = await service._rs.get(skill_uid)
-    agent = await service._rs.get(agent_uid)
-    # Hard grant: scope overrides manual bindings — an agent outside
-    # the skill's scope can never be bound, even with force=True. Both sides
-    # of the comparison are uids: the scope stores the agent's uid, so an
-    # agent the user renames does not silently fall out of every scope that
-    # named it (ADR resource-identity-is-an-immutable-uid). The error still
-    # reports NAMES, because that is what the user typed and reads.
-    if not is_active(skill.scope, agent.uid):
-        raise SkillOutOfScope(skill.name, agent.name)
-    target_dir = service._resolve_agent_skill_dir(agent)
-    # The delivered copy is named after the skill's NAME, not its uid: the
-    # agent product discovers a skill by its directory name. That is why the
-    # skill kind declares its name fixed (``Kind.name_fixed``).
-    link_path = target_dir / skill.name
-    master = service._store.paths_for(skill.name).folder
+    link: pathlib.Path,
+    master: pathlib.Path,
+    mode: LinkMode | None = None,
+) -> bool:
+    if not (link.exists() or link.is_symlink()):
+        return False
+    status = service._sync.classify_target(link=link, expected_master=master, link_mode=mode)
+    return status.drift is None
 
-    # The mode recorded on any prior binding — needed so a copy-fallback
-    # target (a real directory by design) isn't misread as drift.
-    prior = await service._bindings.find(skill_id=skill.id, agent_id=agent.id)
-    prior_mode = prior.link_mode if prior else None
 
-    # Resolve target conflicts.
-    if link_path.exists() or link_path.is_symlink():
-        status = service._sync.classify_target(
-            link=link_path, expected_master=master, link_mode=prior_mode
-        )
-        if status.drift is None:
-            # Already linked correctly — idempotent. Record the mode that
-            # actually exists on disk (not a SYMLINK assumption) so a
-            # junction/copy-fallback isn't mislabelled when no prior row
-            # existed.
-            binding = await service._bindings.upsert(
-                skill_id=skill.id,
-                agent_id=agent.id,
-                enabled=True,
-                last_linked_at=datetime.now(tz=UTC),
-                last_link_path=str(link_path),
-                link_mode=prior_mode or infer_link_mode(link_path),
-            )
-            return binding
-        if not force:
-            raise TargetConflict(str(link_path), status.drift.value)
-        # Backup + remove. Microseconds in the suffix, plus a uniquifying
-        # counter, so colliding force=True enables (same microsecond, a
-        # retry, or a pre-existing backup) never clobber an earlier backup.
-        stamp = int(datetime.now(tz=UTC).timestamp() * 1_000_000)
-        backup = link_path.with_name(f"{link_path.name}.coffer-backup-{stamp}")
-        counter = 0
-        while backup.exists() or backup.is_symlink():
-            counter += 1
-            backup = link_path.with_name(f"{link_path.name}.coffer-backup-{stamp}-{counter}")
-        link_path.rename(backup)
-
-    # Ensure the agent's skill_dir parent is in place.
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    mode = service._sync.make_directory_link(target=master, link=link_path)
-    binding = await service._bindings.upsert(
-        skill_id=skill.id,
-        agent_id=agent.id,
+async def _record(
+    service: SkillService,
+    skill: Resource,
+    agent: Resource,
+    link: pathlib.Path,
+    mode: LinkMode | None,
+) -> None:
+    await service._bindings.upsert(
+        skill_uid=skill.uid,
+        agent_uid=agent.uid,
         enabled=True,
         last_linked_at=datetime.now(tz=UTC),
-        last_link_path=str(link_path),
+        last_link_path=str(link),
         link_mode=mode,
     )
-    await service._audit.record(
-        AuditEventType.SKILL_BOUND.value,
-        resource=skill,
-        actor=actor,
-        details={
-            # The agent's LABEL, deliberately: ``details`` is a historical
-            # record, and every audit row already says what its resources were
-            # called at the moment the event happened (see AuditService).
-            "agent": agent.name,
-            "link": str(link_path),
-            "mode": mode.value,
-        },
-    )
-    return binding
 
 
-async def disable_skill_for_agent(
-    *,
+async def deliver(
     service: SkillService,
-    skill_uid: str,
-    agent_uid: str,
-    actor: str,
-) -> BindingState:
-    skill = await service._rs.get(skill_uid)
-    agent = await service._rs.get(agent_uid)
-    existing = await service._bindings.find(skill_id=skill.id, agent_id=agent.id)
-    if existing is None:
-        # Nothing was ever bound — disabling is a no-op. Don't write a
-        # phantom disabled row or a spurious SKILL_UNBOUND audit event.
-        return BindingState(
-            skill_resource_id=skill.id,
-            agent_resource_id=agent.id,
-            enabled=False,
-        )
-    if existing.last_link_path:
+    *,
+    skill: Resource,
+    agent: Resource,
+    link: pathlib.Path,
+    back_up_existing: bool = False,
+) -> LinkWrite:
+    """Link ``link`` to the skill's master folder and record the binding.
+
+    A correct link already at ``link`` is adopted as it is (only the row is
+    written). ``back_up_existing`` renames whatever else sits there aside to
+    ``<backup root>/<agent>/<name>.coffer-backup-<ts>`` first — the
+    tampered-link repair; without it
+    an occupied path raises ``FileExistsError`` and nothing is written.
+    """
+    master = service._store.paths_for(skill.name).folder
+    prior = await service._bindings.find(skill_uid=skill.uid, agent_uid=agent.uid)
+    if _is_correct_link(service, link, master):
+        mode = (prior.link_mode if prior else None) or service._sync.infer_link_mode(link)
+        await _record(service, skill, agent, link, mode)
+        return LinkWrite(skill, agent, prior, mode=mode)
+    backup: pathlib.Path | None = None
+    if (link.exists() or link.is_symlink()) and back_up_existing:
+        backup = _backup_path(service, agent, link)
+        shutil.move(str(link), str(backup))
+    link.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        mode = service._sync.make_directory_link(target=master, link=link)
+    except Exception:
+        if backup is not None:
+            shutil.move(str(backup), str(link))
+        raise
+    written = LinkWrite(
+        skill, agent, prior, created=link, mode=mode, backup=backup, backed_up_from=link
+    )
+    try:
+        await _record(service, skill, agent, link, mode)
+    except Exception:
+        await undo(service, written)
+        raise
+    return written
+
+
+async def relink(
+    service: SkillService,
+    *,
+    skill: Resource,
+    agent: Resource,
+    old_link: pathlib.Path,
+    new_link: pathlib.Path,
+) -> LinkWrite:
+    """Move a delivery to the agent's new skills directory: the new link is
+    made first (or a correct one adopted), the old one removed second."""
+    master = service._store.paths_for(skill.name).folder
+    old_was_correct = _is_correct_link(service, old_link, master)
+    written = await deliver(service, skill=skill, agent=agent, link=new_link)
+    prior = written.prior
+    with contextlib.suppress(OSError):
+        service._sync.remove_directory_link(old_link, link_mode=prior.link_mode if prior else None)
+    removed = old_link if old_was_correct and not old_link.exists() else None
+    return LinkWrite(
+        skill, agent, prior, created=written.created, mode=written.mode, removed=removed
+    )
+
+
+async def reclaim(service: SkillService, *, skill: Resource, agent: Resource) -> LinkWrite:
+    """Remove the delivered link (never foreign content: see
+    ``SyncEngine.remove_directory_link``) and mark the binding row spent."""
+    prior = await service._bindings.find(skill_uid=skill.uid, agent_uid=agent.uid)
+    removed: pathlib.Path | None = None
+    if prior is not None and prior.last_link_path:
+        path = pathlib.Path(prior.last_link_path)
+        master = service._store.paths_for(skill.name).folder
+        was_correct = _is_correct_link(service, path, master, prior.link_mode)
         with contextlib.suppress(OSError):
-            service._sync.remove_directory_link(
-                pathlib.Path(existing.last_link_path), link_mode=existing.link_mode
-            )
-    binding = await service._bindings.upsert(
-        skill_id=skill.id,
-        agent_id=agent.id,
+            service._sync.remove_directory_link(path, link_mode=prior.link_mode)
+        if was_correct and not path.exists():
+            removed = path
+    await service._bindings.upsert(
+        skill_uid=skill.uid,
+        agent_uid=agent.uid,
         enabled=False,
         last_link_path=None,
         link_mode=None,
     )
-    await service._audit.record(
-        AuditEventType.SKILL_UNBOUND.value,
-        resource=skill,
-        actor=actor,
-        details={"agent": agent.name},
+    return LinkWrite(skill, agent, prior, removed=removed)
+
+
+async def undo(service: SkillService, write: LinkWrite) -> None:
+    """Put back what ``write`` replaced: remove the link it created, move a
+    backup back, recreate a correct link it removed, restore the row."""
+    if write.created is not None:
+        with contextlib.suppress(OSError):
+            service._sync.remove_directory_link(write.created, link_mode=write.mode)
+    if write.backup is not None and write.backed_up_from is not None:
+        shutil.move(str(write.backup), str(write.backed_up_from))
+    if write.removed is not None and not (write.removed.exists() or write.removed.is_symlink()):
+        master = service._store.paths_for(write.skill.name).folder
+        with contextlib.suppress(OSError):
+            service._sync.make_directory_link(target=master, link=write.removed)
+    prior = write.prior
+    if prior is None:
+        await service._bindings.delete(write.skill.uid, write.agent.uid)
+        return
+    await service._bindings.upsert(
+        skill_uid=write.skill.uid,
+        agent_uid=write.agent.uid,
+        enabled=prior.enabled,
+        last_linked_at=prior.last_linked_at,
+        last_link_path=prior.last_link_path,
+        link_mode=prior.link_mode,
     )
-    return binding
+
+
+__all__ = ["LinkWrite", "deliver", "reclaim", "relink", "undo"]

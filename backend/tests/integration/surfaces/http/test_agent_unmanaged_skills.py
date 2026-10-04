@@ -1,10 +1,10 @@
 """HTTP coverage for /api/v1/agents/{uid}/unmanaged-skills.
 
-See spec skill-manager "List unmanaged skills in an agent's skill locations" and "Offer
-every skill operation on REST, CLI and web".
+See spec skill-manager "List unmanaged skills in an agent's skill locations" and "Expose
+unmanaged-skill operations on REST and the web".
 
 The agent is addressed by its immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid); ``{skill}`` beside it is a
+(ADR identity-is-the-uid-inside-the-file); ``{skill}`` beside it is a
 DIRECTORY name on disk, not a Coffer resource, so it stays a name here — the
 folder has no resource row to have a uid. Adoption is the moment one is
 minted, which is why the adopt assertions below check the uid it returns.
@@ -15,6 +15,7 @@ from __future__ import annotations
 import pathlib
 import textwrap
 
+import pytest
 from starlette.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app
@@ -167,6 +168,89 @@ def test_adopt_unmanaged_skill_201(tmp_path, monkeypatch):
         r = c.get("/api/v1/skills")
         assert r.status_code == 200, r.text
         assert adopted["uid"] in [s["uid"] for s in r.json()["items"]]
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="adopt an unmanaged skill under another name and a narrower reach",
+)
+def test_adopt_with_name_and_reach(tmp_path, monkeypatch):
+    """Adopt registers the skill under the chosen name and with the chosen reach."""
+    app = _app(tmp_path, monkeypatch, 60020)
+    with _client(app) as c:
+        uid = _register_agent(c, tmp_path)
+        codex_dir = tmp_path / "codex-cfg"
+        codex_dir.mkdir()
+        codex = c.post("/api/v1/agents", json={"type": "codex", "config_dir": str(codex_dir)})
+        assert codex.status_code == 201, codex.text
+        codex_uid = codex.json()["uid"]
+        skills_dir = tmp_path / "agent-cfg" / "skills"
+        _write_skill_folder(skills_dir / "draft", name="draft")
+        original = (skills_dir / "draft" / "SKILL.md").read_text().splitlines()
+
+        r = c.post(
+            f"/api/v1/agents/{uid}/unmanaged-skills/draft/adopt",
+            json={
+                "location": "skills",
+                "name": "release-notes",
+                "reach": {"mode": "restricted", "agents": [codex_uid]},
+            },
+        )
+        assert r.status_code == 201, r.text
+        adopted = r.json()
+        assert adopted["name"] == "release-notes"
+
+        skill = c.get(f"/api/v1/skills/{adopted['uid']}").json()
+        assert skill["name"] == "release-notes"
+        assert skill["enabled"] is True
+        assert skill["scope"] == {"agents": [codex_uid]}
+        # The master copy carries the new name, every other line unchanged.
+        body = c.get(f"/api/v1/skills/{adopted['uid']}/files/content", params={"path": "SKILL.md"})
+        assert body.status_code == 200, body.text
+        assert body.json()["content"].splitlines() == [
+            "name: release-notes" if line == "name: draft" else line for line in original
+        ]
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="adopt an unmanaged skill under another name and a narrower reach",
+)
+def test_adopt_disabled_reach(tmp_path, monkeypatch):
+    """reach.mode "disabled" adopts the skill switched off."""
+    app = _app(tmp_path, monkeypatch, 60030)
+    with _client(app) as c:
+        uid = _register_agent(c, tmp_path)
+        _write_skill_folder(tmp_path / "agent-cfg" / "skills" / "quiet", name="quiet")
+        r = c.post(
+            f"/api/v1/agents/{uid}/unmanaged-skills/quiet/adopt",
+            json={"location": "skills", "reach": {"mode": "disabled"}},
+        )
+        assert r.status_code == 201, r.text
+        skill = c.get(f"/api/v1/skills/{r.json()['uid']}").json()
+        assert skill["enabled"] is False
+
+
+def test_adopt_name_conflict_409(tmp_path, monkeypatch):
+    """A chosen name another skill already holds is refused and nothing is removed."""
+    app = _app(tmp_path, monkeypatch, 60040)
+    with _client(app) as c:
+        uid = _register_agent(c, tmp_path)
+        skills_dir = tmp_path / "agent-cfg" / "skills"
+        _write_skill_folder(skills_dir / "first", name="first")
+        _write_skill_folder(skills_dir / "second", name="second")
+        assert (
+            c.post(
+                f"/api/v1/agents/{uid}/unmanaged-skills/first/adopt", json={"location": "skills"}
+            ).status_code
+            == 201
+        )
+        r = c.post(
+            f"/api/v1/agents/{uid}/unmanaged-skills/second/adopt",
+            json={"location": "skills", "name": "first"},
+        )
+        assert r.status_code == 409, r.text
+        assert (skills_dir / "second").is_dir() and not (skills_dir / "second").is_symlink()
 
 
 def test_adopt_invalid_skill_422(tmp_path, monkeypatch):

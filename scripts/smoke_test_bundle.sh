@@ -9,15 +9,17 @@
 # released coffer-cli-<triple>.tar.gz.
 #
 # What it does:
-#   1. Locate coffer-mcp-shim AND coffer-daemon inside the bundle.
-#   2. Start the bundled coffer-daemon under an isolated HOME and wait until it
-#      has published ~/.coffer/daemon.json and is answering /daemon/status.
+#   1. Locate coffer, coffer-mcp-shim AND coffer-daemon inside the bundle.
+#   2. Start the bundled coffer-daemon under an isolated HOME, on a free port
+#      of its own, and wait until it has published ~/.coffer/daemon.json and is
+#      answering /daemon/status.
 #   3. Ask that daemon for its root and assert it serves the bundled web UI.
-#   4. Spawn the shim with the SAME isolated HOME, send one JSON-RPC 2.0
+#   4. Run the bundled CLI's `coffer daemon status` against it.
+#   5. Spawn the shim with the SAME isolated HOME, send one JSON-RPC 2.0
 #      "initialize" request over stdin, and assert a well-formed reply comes
 #      back within 15 s — exercising the real shim -> daemon /mcp round-trip.
-#   5. Tear the daemon down and exit 0 on success; non-zero with diagnostics
-#      on failure.
+#   6. Tear the daemon and its model proxy down and exit 0 on success;
+#      non-zero with diagnostics on failure.
 #
 # The shim only replies once it reaches a live coffer-daemon, and its
 # auto-spawn fallback (sys.executable -m ...) does NOT work inside a frozen
@@ -86,10 +88,17 @@ fi
 # bundle, but re-applying chmod is harmless and avoids confusing "permission
 # denied" failures when running against an extracted archive on some CI
 # systems).
-chmod +x "$SHIM" "$DAEMON" 2>/dev/null || true
+CLI="$(locate_binary coffer || true)"
+if [ -z "$CLI" ]; then
+    echo "error: could not locate coffer (the CLI) in $BUNDLE" >&2
+    exit 2
+fi
+
+chmod +x "$SHIM" "$DAEMON" "$CLI" 2>/dev/null || true
 
 echo "==> smoke-testing shim:   $SHIM"
 echo "==> smoke-testing daemon: $DAEMON"
+echo "==> smoke-testing cli:    $CLI"
 
 # ---------------------------------------------------------------------------
 # Isolated sandbox — use a temp dir as HOME so we don't read/write the
@@ -111,6 +120,23 @@ DAEMON_STDERR="$(mktemp -t coffer-smoke-daemon-XXXXXX)"
 SHIM_OUT="$(mktemp -t coffer-smoke-out-XXXXXX)"
 DAEMON_PID=""
 SHIM_PID=""
+SMOKE_PROXY_PORT=""
+
+# The daemon starts the local model proxy as a separate process that outlives
+# it by design (it serves the agents' configured base URL across daemon
+# restarts), so stopping the daemon leaves it running. It records its pid in
+# the isolated home; stop it only if that pid is still a proxy on the port
+# this run chose for it (the daemon spawns it by its resolved absolute path, so
+# the port, not the path, is what identifies it).
+stop_proxy() {
+    local proxy_json="$SMOKE_HOME/.coffer/proxy.json" pid
+    [ -f "$proxy_json" ] || return 0
+    pid="$(python3 -c "import json;print(json.load(open(r'$proxy_json')).get('pid',''))" 2>/dev/null || true)"
+    [ -n "$pid" ] || return 0
+    case "$(ps -o command= -p "$pid" 2>/dev/null || true)" in
+        *"coffer-daemon proxy --port $SMOKE_PROXY_PORT") kill "$pid" 2>/dev/null || true ;;
+    esac
+}
 
 cleanup() {
     if [ -n "$SHIM_PID" ] && kill -0 "$SHIM_PID" 2>/dev/null; then
@@ -125,6 +151,7 @@ cleanup() {
         done
         kill -9 "$DAEMON_PID" 2>/dev/null || true
     fi
+    stop_proxy
     rm -rf "$SMOKE_HOME" "$SMOKE_STDERR" "$DAEMON_STDERR" "$SHIM_OUT"
 }
 trap cleanup EXIT
@@ -136,6 +163,38 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 
 DAEMON_JSON="$SMOKE_HOME/.coffer/daemon.json"
+
+# Pin free ports for the daemon and its model proxy. Without a setting the
+# daemon insists on 38470 and the proxy on 38471, so on a machine that already
+# runs Coffer — any developer's, where this script is also meant to run — the
+# bundled daemon cannot bind and the test fails for a reason that has nothing
+# to do with the bundle. The ports go in daemon-config.json, the one place the
+# daemon reads them from before it binds.
+read -r SMOKE_PORT SMOKE_PROXY_PORT < <(python3 -c '
+import socket
+socks = [socket.socket() for _ in range(2)]
+for s in socks:
+    s.bind(("127.0.0.1", 0))
+print(*(s.getsockname()[1] for s in socks))
+for s in socks:
+    s.close()
+')
+mkdir -p "$SMOKE_HOME/.coffer"
+chmod 700 "$SMOKE_HOME/.coffer"
+printf '{"port": %s, "proxy_port": %s}\n' "$SMOKE_PORT" "$SMOKE_PROXY_PORT" \
+    >"$SMOKE_HOME/.coffer/daemon-config.json"
+
+# Give the isolated home its own development master key. The daemon looks for
+# the key file first and, finding none, asks the login keychain — which is not
+# scoped to HOME, so on a developer's machine the smoke daemon would read (and
+# may prompt for) that person's real Coffer key.
+python3 -c '
+import base64, os, sys
+path = sys.argv[1]
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+os.write(fd, base64.urlsafe_b64encode(os.urandom(32)))
+os.close(fd)
+' "$SMOKE_HOME/.coffer/master.key"
 
 echo "==> starting daemon under HOME=$SMOKE_HOME"
 HOME="$SMOKE_HOME" "$DAEMON" >"$DAEMON_STDERR" 2>&1 &
@@ -180,6 +239,10 @@ if [ "$DAEMON_READY" -ne 1 ]; then
 fi
 
 echo "==> daemon ready on port $PORT"
+if [ "$PORT" != "$SMOKE_PORT" ]; then
+    echo "FAIL: daemon bound $PORT, not the configured $SMOKE_PORT" >&2
+    exit 6
+fi
 
 # ---------------------------------------------------------------------------
 # Step 1b: the bundled web UI
@@ -217,6 +280,31 @@ case "$INDEX_HTML" in
         echo "      missing or stale. Got:" >&2
         printf '%s\n' "$INDEX_HTML" | head -20 >&2
         exit 7
+        ;;
+esac
+
+# ---------------------------------------------------------------------------
+# Step 1c: the bundled CLI
+#
+# The CLI is frozen from its own spec with its own excludes, and none of the
+# steps above run it — a CLI that cannot import at all (as happened when
+# coffer.spec excluded a package `coffer migrate` imports at start) shipped
+# with every other check green. `coffer daemon status` imports the whole
+# command tree and talks to the daemon started above.
+# ---------------------------------------------------------------------------
+
+echo "==> checking the bundled CLI reaches the daemon"
+CLI_OUT="$(HOME="$SMOKE_HOME" "$CLI" daemon status 2>&1)" || {
+    echo "FAIL: \`coffer daemon status\` failed:" >&2
+    printf '%s\n' "$CLI_OUT" >&2
+    exit 8
+}
+case "$CLI_OUT" in
+    *ready*) echo "==> cli: daemon status ready" ;;
+    *)
+        echo "FAIL: \`coffer daemon status\` did not report a ready daemon:" >&2
+        printf '%s\n' "$CLI_OUT" >&2
+        exit 8
         ;;
 esac
 

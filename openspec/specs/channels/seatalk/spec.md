@@ -55,18 +55,18 @@ Deliberately out of scope:
 A SeaTalk channel's configuration MUST carry **`app_id` and `app_secret_ref`**
 and no inbound-transport field: SeaTalk inbound has one transport (see "Receive
 every event over one outbound websocket connection"), and the register handshake
-authenticates it from those two values alone. The secret lives in the credential
-store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a credential-referencing resource kind").
+authenticates it from those two values alone. The secret lives in the secret
+store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a secret-referencing resource kind").
 
 A channel stored while webhook delivery existed MUST be rewritten once, by a
 migration, so that it carries none of `delivery`, `signing_secret_ref`,
 `public_base_url` or `tunnel_token_ref`: a stored key that configures nothing
-misdescribes the running system. The credential values those refs cited MUST be
-left in the credential store rather than deleted, because a migration that
+misdescribes the running system. The secret values those refs cited MUST be
+left in the secret store rather than deleted, because a migration that
 destroys secrets cannot be undone by its downgrade.
 
 #### Scenario: a seatalk channel without an app id or secret reference is refused
-- **GIVEN** a stored SeaTalk app secret under a credential reference
+- **GIVEN** a stored SeaTalk app secret under a secret reference
 - **WHEN** a seatalk channel is registered missing `app_id`, or missing `app_secret_ref`
 - **THEN** the registration is rejected and nothing is persisted
 - **AND** the same registration carrying both is accepted with the secret held only as a reference
@@ -75,7 +75,7 @@ destroys secrets cannot be undone by its downgrade.
 - **GIVEN** a stored seatalk channel carrying `delivery: webhook`, a signing secret ref, a public base URL and a tunnel token ref
 - **WHEN** the daemon's startup migrations run
 - **THEN** the channel's configuration carries its `app_id`, its `app_secret_ref` and its common fields, and none of the four webhook-era keys
-- **AND** the credential values the removed refs cited are still in the credential store
+- **AND** the secret values the removed refs cited are still in the secret store
 
 ### Requirement: Load the websocket client library from an operator-supplied directory
 The WebSocket client library MUST be an **operator-supplied optional
@@ -96,13 +96,31 @@ alternative either: none is published. See
   does today.
 - When it cannot be imported, the websocket channel's connection MUST NOT come
   up and the channel MUST say precisely why: its websocket state is
-  `sdk_missing`, with a detail naming the directory that was searched and the
-  platform documentation that says what to put there. The connection keeps
-  retrying on its back-off ladder, so dropping the SDK in needs no daemon
-  restart. Nothing crashes, the daemon stays up, every other channel keeps
-  running, the channel's outbound sends — replies and notifications, which
-  never touch the SDK — are unaffected, and the reason is reported as that
-  channel's own state rather than left in a log for someone to find.
+  `sdk_missing`, with a detail naming the missing library, the directory that
+  was searched and the platform documentation for it — a statement of fact, not
+  a procedure. The connection keeps retrying on its back-off ladder, so dropping
+  the SDK in needs no daemon restart. Nothing crashes, the daemon stays up,
+  every other channel keeps running, the channel's outbound sends — replies and
+  notifications, which never touch the SDK — are unaffected, and the reason is
+  reported as that channel's own state rather than left in a log for someone to
+  find.
+- Putting the SDK in place is handed to the person's agent (see
+  [principles](../../../../docs-site/architecture/principles.md) "AI-Native").
+  The download stays with the person, because the portal needs their login;
+  everything after it is the agent's. While a channel reports `sdk_missing`,
+  its status (`GET /api/v1/channels/{uid}/status`) MUST carry a `handoff`
+  prompt naming the directory the daemon imports from (and whether
+  `$COFFER_SEATALK_SDK_DIR` chose it), the platform documentation where the
+  person downloads the archive, and the steps: find the downloaded archive
+  (usually in `~/Downloads`), unpack it so that `<directory>/seatalk_oapi_sdk/`
+  exists without pip-installing it, check the package landed, and confirm from the
+  channel's status that the websocket reads connected; `handoff` is
+  null in every other state. The channel page MUST show one sentence linking
+  the platform's download page, the hand-off (Copy prompt, and Ask an agent
+  when a managed agent is available) and the header's Retry — and no manual
+  procedure. The Overview's attention item for the channel MUST carry the same
+  prompt as its `handoff`, with the reason code `channel_sdk_missing` and a
+  reason sentence that names no command.
 - An installation without the SDK has **no SeaTalk inbound**. The websocket
   connection is the only inbound transport, so an outside user of this project
   who cannot obtain the SDK can register a SeaTalk channel and send to its
@@ -118,6 +136,18 @@ alternative either: none is published. See
 - **AND** the connection keeps retrying, so the library can be dropped in without
   a daemon restart
 - **AND** the daemon stays up and every other channel keeps working
+
+#### Scenario: a missing sdk is handed to an agent from the channel page
+- **GIVEN** a SeaTalk channel whose websocket reports `sdk_missing`, with `$COFFER_SEATALK_SDK_DIR` set
+- **WHEN** its status is read and its page is opened
+- **THEN** the status carries a `handoff` prompt naming `<dir>/seatalk_oapi_sdk/`, the variable that chose the directory, the platform's download page, `~/Downloads` and the channel's status, and leaving the login to the person
+- **AND** the page's banner links the platform's download page and offers Copy prompt beside the header's Retry, without the error text
+- **AND** once the websocket connects, `handoff` is null
+
+#### Scenario: a missing sdk is handed to an agent on the Overview
+- **GIVEN** an enabled SeaTalk channel bound to this machine whose websocket reports `sdk_missing`
+- **WHEN** the attention list is read
+- **THEN** the channel's item has reason code `channel_sdk_missing`, a reason that names no command, and the same hand-off prompt as its status
 
 ### Requirement: Carry both of a member's ids
 A SeaTalk member has **two ids, and they are not interchangeable**, so the
@@ -176,11 +206,13 @@ name.
 
 ### Requirement: Stream the reply under SeaTalk's streaming contract
 **The SeaTalk streaming constraints are contract, not implementation detail.**
-SeaTalk cannot edit a delivered message at all, yet streams one, which is why
-`supports_live_text` and `supports_edit` are separate flags
+SeaTalk cannot edit a delivered text message at all, yet streams one, which is why
+the core asks for a live surface (`supports_live_text`) and not for edits
 ([channels](../spec.md) "Grow a reply in place on one live surface"); the streamed message IS the reply, so
 `live_text_persists` MUST be true and the surface opens the moment the turn
-starts, acknowledging the owner immediately.
+starts, acknowledging the owner immediately. This is the direct-chat reply: a
+group reply is a withdrawable card instead (see "Send group replies as
+withdrawable cards").
 
 - Every update carries the **FULL accumulated text**, never a delta: the client
   renders the latest snapshot it received.
@@ -251,7 +283,7 @@ it. The published per-element limits are a card of at most **3 titles, 5
 descriptions, 5 buttons, 3 button groups and 3 images**, with a title of at most
 120 characters and a description of at most 1000. Buttons are therefore laid out
 in **button groups** (an element holding up to three buttons on one line) rather
-than one element each: the parent's six-button bound ([channels](../spec.md) "Offer command choices as owner-gated selection cards")
+than one element each: the parent's six-button bound ([channels](../spec.md) "Offer choices and actions as owner-gated cards")
 always fits in the three group slots and reads as rows rather than a six-high
 stack. A row splits the card's width evenly, so how many buttons share a row
 depends on their labels: a row takes the next button only while every label in
@@ -271,8 +303,46 @@ so a long body degrades to a truncated card instead of a refused one.
 - **WHEN** it is built as a SeaTalk interactive card
 - **THEN** that button sits alone in its button group, while short labels still share one
 
+### Requirement: Send group replies as withdrawable cards
+SeaTalk has no delete API, but a card its bot sent can be rewritten by that bot for 7
+days ([channels](../spec.md) "Withdraw a bot reply on the owner's command"). So a
+reply in a **group** MUST be sent as interactive cards and never streamed — a
+stream cannot be rewritten — and the adapter declares that it does not stream in a
+group, so the core shows the typing indication and delivers the finished reply
+(`streams_in_groups` false). Direct chats are unchanged: they stream. The reply is
+markdown rendered as SeaTalk's own, in description blocks of at most 1000 characters
+(a card holds up to four such blocks here), cut on paragraph and never inside a code
+fence; a reply that does not fit one card runs on into further cards, numbered
+`(2/3)` after the first, and the 🗑 button rides on the last. Every card id is
+reported so the whole reply can be withdrawn.
+
+Withdrawing rewrites each card through Update Message into a neutral "🗑 Withdrawn"
+card with no buttons and no title; the adapter declares a window of 7 days and that
+withdrawing does not remove the message. Past 7 days the platform refuses and the
+core tells the owner privately.
+
+#### Scenario: a group reply is cards with the trash button on the last
+- **GIVEN** a SeaTalk group reply longer than one card holds
+- **WHEN** it is sent
+- **THEN** it goes out as interactive cards, never as text or a stream, each card id is reported, and only the last carries the 🗑 button
+
+#### Scenario: a short group reply is one card with markdown rendered
+- **GIVEN** a SeaTalk group reply of a few lines with bold text and a code fence
+- **WHEN** it is sent
+- **THEN** one card carries it rendered as SeaTalk markdown
+
+#### Scenario: withdrawing rewrites each card blank
+- **GIVEN** a SeaTalk reply sent as several cards
+- **WHEN** it is withdrawn
+- **THEN** each card is rewritten through Update Message into a "🗑 Withdrawn" card with no buttons
+
+#### Scenario: a seatalk group turn does not stream
+- **GIVEN** a SeaTalk channel and a group turn
+- **WHEN** the capabilities are read
+- **THEN** streaming in a group is not offered, withdrawing takes up to 168 hours, and withdrawing does not remove the message
+
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
-A card rewrite ([channels](../spec.md) "Switch the conversation's agent from chat", [channels](../spec.md) "Offer command choices as owner-gated selection cards") reaches only
+A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
 **interactive cards, only within 7 days, only for the sending bot**. Outside that
 window the platform refuses the update, and the card MUST degrade exactly as the
 parent requires: a cosmetic rewrite after a choice is dropped, while a page turn
@@ -464,7 +534,7 @@ answer.
 #### Scenario: status names the websocket connection state
 - **GIVEN** an enabled seatalk channel whose websocket connection is up, and one
   whose last connection attempt failed
-- **WHEN** the user queries status via REST and the CLI
+- **WHEN** the user queries status via REST and on the Channels page
 - **THEN** each reports the connection state as the channel's inbound state, and
   the failed one carries its last error verbatim
 - **AND** neither surface reports a listener, port, path, public URL or tunnel
@@ -497,3 +567,55 @@ conversation ([channels](../spec.md) "Key conversation identity by channel, chat
 - **WHEN** the owner sends `/thread`
 - **THEN** the bot posts a direct-chat message opening with `🧵#1 Task`
 - **AND** a reply under that message is keyed to the new parallel conversation
+
+### Requirement: Mark a main-chat mention as the group's main chat
+A SeaTalk @mention sent in a group's main chat carries no thread id, and the
+reply roots a new thread at the message itself. The transport MUST mark such a
+message as coming from the group's main chat, so the core can treat a command
+sent there as setting the group's defaults (spec channels "Set a group's
+defaults from its main chat"); a mention inside a thread is not marked.
+
+#### Scenario: a main-chat @mention is marked as group main
+- **GIVEN** a SeaTalk channel receiving group @mention events
+- **WHEN** one arrives with no thread id and another arrives inside a thread
+- **THEN** the first is marked as the group's main chat with its own message id as
+  the thread, and the second is not marked
+
+### Requirement: Ping a long turn's end into its thread
+SeaTalk's answer is the stream opened when the turn began, so finishing it
+notifies nobody. A turn past the channel's ping threshold ([channels](../spec.md)
+"Ping the asker when a long turn ends") MUST therefore end with the one short
+ping as a new text message in the same chat and thread, and in a group it MUST
+open with the asker's `<mention-tag>` — a mention decides its notification when
+the message is created, and this message is created now.
+
+#### Scenario: a group ping mentions the asker
+- **GIVEN** a long SeaTalk group-thread turn from a member with a SeaTalk id
+- **WHEN** it ends
+- **THEN** a new message in that thread opens with the member's mention tag and
+  reads `✅ Done · <elapsed> — <first line>`
+
+### Requirement: Number the messages after the stream
+A SeaTalk reply longer than one stream finishes the stream at its budget and
+MUST send the rest itself, as ordinary text messages into the same chat and
+thread, each opening with its place counting the stream as part one — `(2/3)`,
+`(3/3)`. An ordinary send cut into several messages is numbered the same way.
+
+#### Scenario: continuations after the stream are numbered
+- **GIVEN** a SeaTalk stream whose final reply is past the stream budget
+- **WHEN** the stream closes
+- **THEN** the remainder goes out as messages headed `(2/N)` … `(N/N)` and nothing
+  is handed back for the ordinary send
+
+### Requirement: Post a reply's details into the card's thread
+A SeaTalk thread's id is its root message's id and any message can root one, so
+the Details button of a summary card ([channels](../spec.md) "Offer a reply's
+details behind a summary card") MUST post the details as a reply in the thread
+the card sits in — or, in a direct chat, the thread the card itself roots — and
+rewrite the card (inside SeaTalk's update window) to say they were posted.
+
+#### Scenario: the details button posts them as a thread reply
+- **GIVEN** a SeaTalk summary card `m7` in a direct chat
+- **WHEN** the owner taps Details
+- **THEN** the details are sent into thread `m7` and the card reads `Details posted
+  in the thread.`

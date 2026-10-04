@@ -16,13 +16,17 @@ resource back so the user never loses a working entry.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
+from coffer.application.agent.mcp_adopt_secrets import (
+    SecretStorePort,
+    drop_new_refs,
+    write_new_refs,
+)
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
@@ -40,7 +44,7 @@ from coffer.domain.agent.mcp_entries import (
 )
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ConfigFileNotAllowed
+from coffer.domain.errors import ConfigFileNotAllowed, ResourceAlreadyExists
 from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
@@ -56,7 +60,7 @@ def _source_keys(agent_type: AgentType) -> tuple[str, ...]:
     return descriptor_for(agent_type).resolved_mcp_source_keys()
 
 
-def _container_key(agent_type: AgentType) -> str | None:
+def container_key(agent_type: AgentType) -> str | None:
     """Top-level MCP container key for the agent (None → format default)."""
     inj = descriptor_for(agent_type).mcp
     return inj.container_key if inj else None
@@ -116,14 +120,6 @@ class _ResourcePort(Protocol):
     async def delete(self, uid: str, actor: str) -> None: ...
 
 
-class _CredentialStorePort(Protocol):
-    """Write-only slice of the credential store (secrets flow IN, never out)."""
-
-    def set(self, ref: str, value: str) -> None: ...
-
-    def delete(self, ref: str) -> None: ...
-
-
 class AgentMcpEntryService:
     def __init__(
         self,
@@ -132,15 +128,15 @@ class AgentMcpEntryService:
         audit: AuditService,
         store: ConfigFileStorePort,
         resource_service: _ResourcePort,
-        credentials: _CredentialStorePort,
+        secrets: SecretStorePort,
     ) -> None:
         self._agents = agent_service
         self._audit = audit
         self._store = store
         self._rs = resource_service
-        self._credentials = credentials
+        self._secrets = secrets
 
-    async def _agent(self, uid: str) -> tuple[Resource, AgentConfig]:
+    async def agent(self, uid: str) -> tuple[Resource, AgentConfig]:
         """The agent row and its parsed config.
 
         Both halves, because the write paths audit against the resource itself
@@ -153,9 +149,9 @@ class AgentMcpEntryService:
         return resource, AgentConfig.model_validate(resource.config)
 
     async def _config_for(self, uid: str) -> AgentConfig:
-        return (await self._agent(uid))[1]
+        return (await self.agent(uid))[1]
 
-    def _source_specs(self, cfg: AgentConfig) -> list[ConfigFileSpec]:
+    def source_specs(self, cfg: AgentConfig) -> list[ConfigFileSpec]:
         cfg_dir = cfg.resolved_config_dir()
         return [spec_for(cfg.type, key, cfg_dir) for key in _source_keys(cfg.type)]
 
@@ -171,16 +167,13 @@ class AgentMcpEntryService:
         cfg = await self._config_for(uid)
         items: list[McpEntry] = []
         parse_errors: list[ParseErrorInfo] = []
-        for spec in self._source_specs(cfg):
+        for spec in self.source_specs(cfg):
             text = self._store.read_text(spec.path)
             if text is None:
                 continue
             try:
-                items.extend(
-                    parse_entries(
-                        spec.format, text, source=spec.key, container_key=_container_key(cfg.type)
-                    )
-                )
+                ck = container_key(cfg.type)
+                items.extend(parse_entries(spec.format, text, source=spec.key, container_key=ck))
             except AgentConfigParseError as e:
                 parse_errors.append(
                     ParseErrorInfo(source=spec.key, path=str(spec.path), error=str(e))
@@ -210,11 +203,11 @@ class AgentMcpEntryService:
         name two files share). Values are still the raw ones here — masking is
         the surface's job, and nothing below it logs them (``repr=False``).
         """
-        spec, _text, parsed = await self._locate(uid, entry, source)
+        spec, _text, parsed = await self.locate(uid, entry, source)
         (annotated,) = await self._annotate([parsed])
         return McpEntryDetail(entry=annotated, path=str(spec.path))
 
-    async def _locate(
+    async def locate(
         self, uid: str, entry: str, source: str | None
     ) -> tuple[ConfigFileSpec, str, McpEntry]:
         """Find the single source file containing ``entry``.
@@ -228,7 +221,7 @@ class AgentMcpEntryService:
         if entry == COFFER_SERVER_KEY:
             raise McpEntryProtected(entry)
         cfg = await self._config_for(uid)
-        specs = self._source_specs(cfg)
+        specs = self.source_specs(cfg)
         if source is not None:
             if source not in _source_keys(cfg.type):
                 raise ConfigFileNotAllowed(cfg.type.value, source)
@@ -242,7 +235,7 @@ class AgentMcpEntryService:
                 continue
             try:
                 parsed = parse_entries(
-                    spec.format, text, source=spec.key, container_key=_container_key(cfg.type)
+                    spec.format, text, source=spec.key, container_key=container_key(cfg.type)
                 )
             except AgentConfigParseError as e:
                 if first_parse_error is None:
@@ -264,9 +257,9 @@ class AgentMcpEntryService:
         self, uid: str, entry: str, *, source: str | None = None, actor: str = "api"
     ) -> None:
         """Remove ``entry`` from the agent config file that contains it."""
-        agent, cfg = await self._agent(uid)
-        spec, _text, _parsed = await self._locate(uid, entry, source)
-        # Re-read immediately before the write, as ``adopt`` does: ``_locate``
+        agent, cfg = await self.agent(uid)
+        spec, _text, _parsed = await self.locate(uid, entry, source)
+        # Re-read immediately before the write, as ``adopt`` does: ``locate``
         # awaits, so the text it returned can be stale by the time we get here.
         # The web UI deletes a whole selection at once and fans the requests out
         # concurrently, which puts several removals against ONE file in flight
@@ -275,7 +268,7 @@ class AgentMcpEntryService:
         # just removed.
         current = self._store.read_text(spec.path) or ""
         new_text = remove_entry_text(
-            spec.format, current, entry, container_key=_container_key(cfg.type)
+            spec.format, current, entry, container_key=container_key(cfg.type)
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
@@ -284,22 +277,6 @@ class AgentMcpEntryService:
             actor=actor,
             details={"entry": entry, "source": spec.key},
         )
-
-    async def _cleanup_refs(self, refs: dict[str, str]) -> None:
-        """Best-effort removal of keychain entries written by a failed adopt."""
-        import contextlib
-
-        def _delete_all() -> None:
-            for ref in refs.values():
-                with contextlib.suppress(Exception):
-                    self._credentials.delete(ref)
-
-        # One to_thread for the whole rollback: the store write blocks on
-        # SQLite's busy_timeout, which on the loop would freeze the very
-        # coroutine holding the write lock (guaranteed deadlock) — and a
-        # single thread, once started, runs to completion even if the
-        # awaiting task is cancelled, so the rollback stays atomic.
-        await asyncio.to_thread(_delete_all)
 
     async def adopt(
         self,
@@ -313,16 +290,16 @@ class AgentMcpEntryService:
     ) -> Resource:
         """Promote a config-file entry into a registered ``mcp_server`` resource.
 
-        ``secrets`` maps secret-looking env/header KEY names to credential refs;
+        ``secrets`` maps secret-looking env/header KEY names to secret refs;
         every flagged key must be mapped (``AdoptSecretUnresolved`` otherwise).
-        Secret VALUES go straight into the credential store and into
-        ``credential_refs`` — never into the resource config, audit log, or
+        Secret VALUES go straight into the secret store and into
+        ``secret_refs`` — never into the resource config, audit log, or
         any log line. Register + verify happen BEFORE the source entry is
         removed; a failure after registration deletes the new resource so the
         agent's file is never left without a working entry.
         """
-        agent, cfg = await self._agent(uid)
-        spec, _text, parsed_entry = await self._locate(uid, entry, source)
+        agent, cfg = await self.agent(uid)
+        spec, _text, parsed_entry = await self.locate(uid, entry, source)
 
         flagged = secret_env_keys({**parsed_entry.env, **parsed_entry.headers})
         unresolved = [k for k in flagged if k not in (secrets or {})]
@@ -331,54 +308,41 @@ class AgentMcpEntryService:
 
         # Narrow the caller-supplied mapping to keys that actually appear in the
         # entry's env or headers.  A key absent from both would still end up in
-        # credential_refs (via to_transport_config) while the stored secret it
+        # secret_refs (via to_transport_config) while the stored secret it
         # references was never written — dangling reference.
         provided = secrets or {}
         applicable = {
             k: r for k, r in provided.items() if k in parsed_entry.env or k in parsed_entry.headers
         }
 
-        def _write_secrets() -> None:
-            import contextlib
+        # A conflicting name is answered before anything is written, so the
+        # caller can rename and retry without secrets having been touched.
+        name = new_name or entry
+        for existing in await self._rs.list(kind="mcp_server"):
+            if existing.name == name:
+                raise ResourceAlreadyExists("mcp_server", name)
 
-            written: list[str] = []
-            try:
-                for key, ref in applicable.items():
-                    env, headers = parsed_entry.env, parsed_entry.headers
-                    value = env[key] if key in env else headers[key]
-                    self._credentials.set(ref, value)
-                    written.append(ref)
-            except Exception:
-                # Don't orphan the refs already written before the failure.
-                for ref in written:
-                    with contextlib.suppress(Exception):
-                        self._credentials.delete(ref)
-                raise
-
-        # One to_thread for all writes: off the loop (SQLite busy-wait would
-        # deadlock against the loop's own writer) and atomic under task
-        # cancellation — the thread runs to completion once started.
-        await asyncio.to_thread(_write_secrets)
+        await write_new_refs(self._secrets, applicable, parsed_entry)
 
         config = {"transport": to_transport_config(parsed_entry, applicable)}
         try:
             # ResourceAlreadyExists bubbles — the route adds a rename suggestion.
             resource = await self._rs.register(
-                kind="mcp_server", name=new_name or entry, config=config, actor=actor
+                kind="mcp_server", name=name, config=config, actor=actor
             )
         except Exception:
-            await self._cleanup_refs(applicable)  # don't orphan just-written secrets
+            await drop_new_refs(self._secrets, applicable)  # don't orphan just-written secrets
             raise
         try:
             # Verify the resource is really readable before touching the file.
             await self._rs.get(resource.uid)
             # Re-read the file immediately before the write to avoid a TOCTOU
-            # window: another writer may have modified the file between _locate
+            # window: another writer may have modified the file between locate
             # and here (two awaits above).
             current = self._store.read_text(spec.path) or ""
             try:
                 new_text = remove_entry_text(
-                    spec.format, current, entry, container_key=_container_key(cfg.type)
+                    spec.format, current, entry, container_key=container_key(cfg.type)
                 )
             except McpEntryNotFound:
                 new_text = None  # entry vanished concurrently — nothing to remove
@@ -388,7 +352,7 @@ class AgentMcpEntryService:
             # Roll back: never leave both a half-adopted resource AND a
             # still-present (or half-removed) config entry inconsistent.
             await self._rs.delete(resource.uid, actor=actor)
-            await self._cleanup_refs(applicable)
+            await drop_new_refs(self._secrets, applicable)
             raise
         await self._audit.record(
             AuditEventType.AGENT_MCP_ENTRY_ADOPTED.value,

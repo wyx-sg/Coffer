@@ -27,8 +27,10 @@ from collections.abc import Callable, MutableMapping
 
 import uvicorn
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
-from coffer.infrastructure.daemon import bootstrap
+from coffer.infrastructure.daemon import bootstrap, login_service, self_restart
+from coffer.infrastructure.daemon.phase import set_daemon_phase
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 from coffer.infrastructure.daemon.unpack_keepalive import keep_unpack_dir_alive
 
@@ -160,6 +162,28 @@ async def _evict_when_superseded(
         return
 
 
+# How long the daemon keeps answering ``/daemon/status`` as ``draining`` once
+# shutdown has begun, before uvicorn closes its listener. Long enough for a
+# poller (the app's footer, a restart's successor) to see the phase; short
+# against the graceful-shutdown bound above.
+_DRAIN_VISIBLE_SECONDS = 1.0
+
+
+class _DaemonServer(uvicorn.Server):
+    """uvicorn that reports ``draining`` while it can still answer.
+
+    uvicorn closes its listener first in ``shutdown`` and runs the lifespan's
+    teardown only afterwards, so a phase flipped from the lifespan is never
+    visible to any client. Flipping it here, then holding the listener open for
+    a moment, is what makes "draining once shutdown has begun" observable.
+    """
+
+    async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+        set_daemon_phase("draining")
+        await asyncio.sleep(_DRAIN_VISIBLE_SECONDS)
+        await super().shutdown(sockets)
+
+
 def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
     """Serve the app on the pre-bound loopback fd; call ``on_started`` once the
     server is actually serving HTTP (uvicorn ``Server.started``).
@@ -182,8 +206,12 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
         log_level="warning",
         access_log=False,
         timeout_graceful_shutdown=_SHUTDOWN_GRACE_SECONDS,
+        # Every record goes through the one root JSON handler (spec daemon
+        # "Write one bounded daemon log in one format"); uvicorn's own config
+        # would put a second, differently-shaped handler on stderr.
+        log_config=None,
     )
-    server = uvicorn.Server(config)
+    server = _DaemonServer(config)
 
     async def _runner() -> None:
         serve_task = asyncio.ensure_future(server.serve())
@@ -192,10 +220,14 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
                 await asyncio.sleep(_STARTED_POLL_INTERVAL)
         finally:
             on_started()
+        if server.started:
+            # uvicorn took its own dup of the fd; ours would keep the port in
+            # LISTEN, with nobody accepting, through the whole shutdown.
+            sock.close()
         # Only now that the spawn lock is freed can another daemon take
         # daemon.json from us, so the watcher starts here rather than at boot.
-        evictor = asyncio.create_task(_evict_when_superseded(server), name="daemon-orphan-evictor")
-        keepalive = asyncio.create_task(keep_unpack_dir_alive(), name="daemon-unpack-keepalive")
+        evictor = spawn(_evict_when_superseded(server), name="daemon-orphan-evictor")
+        keepalive = spawn(keep_unpack_dir_alive(), name="daemon-unpack-keepalive")
         try:
             await serve_task
         finally:
@@ -209,10 +241,32 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
 
 
 def main() -> None:
+    # `coffer-daemon --version` prints the package version — the same line
+    # `coffer --version` prints — and exits. Checked first: an argument this
+    # entry did not recognise used to be ignored, so asking for the version
+    # started a daemon.
+    if sys.argv[1:2] == ["--version"]:
+        from coffer import __version__
+
+        print(__version__)
+        return
+    # The frozen binary's second mode: coffer-daemon proxy [--port N] runs the
+    # local model proxy instead of the daemon (ADR api-key-providers-are-reached-
+    # through-a-separate-local-model-proxy, "Distribution" — no fourth binary).
+    # Checked before anything else: the proxy takes no spawn lock, writes no
+    # daemon.json and must not scrub or rewrite anything the daemon owns.
+    if sys.argv[1:2] == ["proxy"]:
+        from coffer.infrastructure.model_proxy.entry import main as proxy_main
+
+        proxy_main(sys.argv[2:])
+        return
     # First, before anything can spawn an agent process that inherits them.
     scrub_agent_home_env(os.environ)
     _raise_fd_soft_limit()
     _install_signal_handlers()
+    # A restart the daemon asked for itself: the predecessor that spawned us
+    # must be gone before we take the lock and bind its port (self_restart).
+    self_restart.await_predecessor(os.environ)
     # Detect-or-spawn: probe + bind happen under one flock (acquire_or_existing). If a
     # daemon is already reachable, sock is None and we exit cleanly so the
     # auto-spawn caller (CLI/shim) discovers it; otherwise we hold the bound
@@ -250,6 +304,9 @@ def main() -> None:
         release_lock()
         bootstrap.release()
         sock.close()
+        # Last, because it ends this process: a login service uninstalled while
+        # this daemon was the launchd job is booted out now that it is leaving.
+        login_service.release_job_if_uninstalled()
 
 
 if __name__ == "__main__":

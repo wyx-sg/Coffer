@@ -8,6 +8,7 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { useToast } from "@/components/ui/toast";
 import { ApiError, translateApiError } from "@/lib/api/errors";
@@ -20,21 +21,21 @@ import {
   listCollections,
   saveFile,
   uploadFile,
+  type CurationRunOut,
   type FileSave,
 } from "@/lib/api/knowledge";
 import {
+  knowledgeChangesRootKey,
   knowledgeCollectionsKey,
   knowledgeFileKey,
+  knowledgeHistoryKey,
   knowledgeKey,
   knowledgeTreeKey,
   knowledgeTreeRootKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
-import { curateToastKey } from "@/lib/hooks/curateToast";
-
-// re-exported for tests that still import the root key from here; import
-// from queryKeys directly in new code
-export { knowledgeKey } from "@/lib/api/queryKeys";
+import { resourcesApi } from "@/lib/api/resources";
+import { curateOutcome } from "@/lib/hooks/curateToast";
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -51,6 +52,21 @@ export function useCreateCollection() {
     mutationFn: (input: { name: string; description?: string | null }) => createCollection(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey }),
     onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Rename a collection: the kind-agnostic `PATCH /resources/{uid}` with the new
+ * name, which moves the collection's folder with it. The whole `["knowledge"]`
+ * subtree is refreshed, since tree levels, files and changes are keyed by the
+ * folder path. No `onError` toast: the rename dialog shows the refusal (a name
+ * taken or invalid) under its field and stays open.
+ */
+export function useRenameCollection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ uid, name }: { uid: string; name: string }) => resourcesApi.rename(uid, name),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }
 
@@ -93,45 +109,102 @@ export function useSaveKnowledgeFile() {
       const saved = await saveFile(input);
       qc.setQueryData(knowledgeFileKey(saved.path), saved);
       void qc.invalidateQueries({ queryKey: knowledgeTreeRootKey });
+      // An accepted save is a commit naming the user: the document's History
+      // and the timeline both gain it.
+      void qc.invalidateQueries({ queryKey: knowledgeHistoryKey(saved.path) });
+      void qc.invalidateQueries({ queryKey: knowledgeChangesRootKey });
       return saved.fingerprint;
     },
     [qc],
   );
 }
 
+/** Announce a finished Curate now: one summary toast, or one error toast with
+ *  an Activity action to look into it. */
+function useAnnounceCurated() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const toActivity = {
+    label: t("nav.activity"),
+    onClick: () => navigate("/activity"),
+  };
+  return {
+    done: (passes: CurationRunOut["passes"]) => {
+      const out = curateOutcome(passes);
+      if (out.kind === "error") {
+        toast.error(t(out.key), { action: toActivity });
+        return;
+      }
+      toast.success(
+        out.key === "knowledge.curate.summary"
+          ? t(out.key, {
+              items: t("knowledge.curate.items", { count: out.vars.count }),
+              documents: t("knowledge.curate.documents", { count: out.vars.documents }),
+            })
+          : t(out.key, out.vars),
+      );
+    },
+    failed: (error: unknown) => toast.error(translateApiError(t, error), { action: toActivity }),
+  };
+}
+
 /**
- * Run ONE curation pass over one collection. It rewrites the collection's
- * documents — writing new ones, retiring ones whose content moved — and drains
- * the inbox item it merged (or, with no model, promotes the whole inbox), so
- * every cached level, body and count under `["knowledge"]` is invalidated
- * afterwards.
+ * Curate one collection now: passes one at a time until nothing is pending,
+ * stopping at the first that fails (see "Run curation on a sweep and on
+ * demand"). It rewrites the collection's documents and drains its inbox, so
+ * every cached level, body, count and change under `["knowledge"]` is
+ * invalidated afterwards. Progress (n of m) is the daemon's, on the in-flight
+ * list (`useUpkeepRun`), so a page that remounts mid-run still shows it.
  *
- * Every status the pass reports is a 200, so the toast says which one it was
- * rather than treating `no_model` or `up_to_date` as a success that did
- * something.
- *
- * The pass is long and the daemon refuses a second one over the same
- * collection, so this keeps the shared run list honest at both ends — same
- * treatment as memory's organise. A 409 gets NO toast on purpose: the button
- * reads it off `mutation.error` and says a pass is already running in place,
- * where the click was, instead of the page saying it twice.
+ * A 409 gets NO toast on purpose: the control reads it off `mutation.error`
+ * and says a pass is already running in place, where the click was.
  */
 export function useCurateCollection(collectionUid: string) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
+  const announce = useAnnounceCurated();
   return useMutation({
     mutationFn: (document?: string | null) => curateCollection(collectionUid, document),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      // `count` only means something to `no_model`, which reports how much of
-      // the inbox it promoted to documents as it stood.
-      toast.success(t(curateToastKey(result), { count: result.promoted.length }));
+      announce.done(result.passes);
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
-      toast.error(translateApiError(t, error));
+      announce.failed(error);
     },
+    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
+  });
+}
+
+/**
+ * Curate several collections now, one after another — Recent changes' Curate
+ * now over every collection with items waiting. A collection already being
+ * curated is skipped rather than failing the rest; any other refusal stops
+ * the run and is toasted.
+ */
+export function useCurateCollections() {
+  const qc = useQueryClient();
+  const announce = useAnnounceCurated();
+  return useMutation({
+    mutationFn: async (uids: string[]) => {
+      const results: CurationRunOut[] = [];
+      for (const uid of uids) {
+        try {
+          results.push(await curateCollection(uid, null));
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") continue;
+          throw error;
+        }
+        void qc.invalidateQueries({ queryKey: upkeepRunsKey });
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      void qc.invalidateQueries({ queryKey: knowledgeKey });
+      if (results.length > 0) announce.done(results.flatMap((r) => r.passes));
+    },
+    onError: (error) => announce.failed(error),
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
   });
 }
@@ -166,17 +239,17 @@ export function useDeleteKnowledgeFile() {
  * waits in the inbox (the collection's `pending_count` goes up) or becomes a
  * document on the spot (a tree level and `document_count` change), so success
  * invalidates the whole `["knowledge"]` subtree rather than guessing which of
- * the two happened. Which one it was is the caller's toast to report.
+ * the two happened. Which one it was is the caller's toast to report, and a
+ * refusal (an unsupported type, a file too large) is rendered in the upload
+ * dialog, where the file still is — so no `onError` toast here.
  */
 export function useUploadKnowledgeFile() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
   return useMutation({
     // `collection` is the collection's NAME here, not its uid: an upload lands
     // material in a directory, and the directory is named after the collection.
-    mutationFn: (vars: { collection: string; file: File }) => uploadFile(vars),
+    mutationFn: (vars: { collection: string; file: File; signal?: AbortSignal }) =>
+      uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
-    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

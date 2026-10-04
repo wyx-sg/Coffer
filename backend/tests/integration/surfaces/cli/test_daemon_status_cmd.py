@@ -81,22 +81,21 @@ def live_daemon(tmp_path, monkeypatch):
     from fastapi import FastAPI
     from starlette.testclient import TestClient
 
-    from coffer.infrastructure.daemon import config as daemon_config
+    from coffer.infrastructure.daemon import phase
     from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-    from coffer.surfaces.http import daemon_routes, feature_dependencies
     from coffer.surfaces.http import errors as err_handlers
+    from coffer.surfaces.http import feature_dependencies
     from coffer.surfaces.http.auth import set_active_token
     from coffer.surfaces.http.daemon_routes import router as daemon_router
     from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
     prior = feature_dependencies._feature_service
     feature_dependencies.set_feature_service(feature_dependencies.build_feature_service())
     set_active_token(_TOKEN)
     # The phase is process-wide; an earlier test's shutdown may have left it
     # draining.
-    monkeypatch.setattr(daemon_routes, "_DAEMON_PHASE", "ready")
+    monkeypatch.setattr(phase, "_PHASE", "ready")
 
     def _connect():
         app = FastAPI()
@@ -112,7 +111,7 @@ def live_daemon(tmp_path, monkeypatch):
         info = DaemonInfo(
             version=1,
             pid=4242,
-            port=8000,
+            port=38470,
             token=_TOKEN,
             started_at=datetime.now(tz=UTC),
             binary_path="/test",
@@ -126,10 +125,10 @@ def live_daemon(tmp_path, monkeypatch):
     feature_dependencies._feature_service = prior
 
 
-def test_status_prints_the_channel(live_daemon):
+def test_status_prints_no_channel(live_daemon):
     res = CliRunner().invoke(app, ["daemon", "status"])
     assert res.exit_code == 0, res.output
-    assert "channel: dev" in res.stdout.splitlines()
+    assert not [line for line in res.stdout.splitlines() if line.startswith("channel")]
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="status names the passes in flight")
@@ -178,3 +177,54 @@ def test_status_names_the_passes_in_flight(live_daemon):
 
     as_json = CliRunner().invoke(app, ["daemon", "status", "--json"])
     assert json.loads(as_json.stdout)["passes_in_flight"] == []
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the status probe carries what the shell shows")
+def test_the_status_probe_carries_what_the_shell_shows(live_daemon, monkeypatch):
+    """Every fact the footer, Settings > Daemon and About show comes from the one
+    tokenless probe, and ``coffer daemon status --json`` agrees with it."""
+    import os
+
+    from coffer.surfaces.http import daemon_port
+
+    monkeypatch.setattr(daemon_port, "_PORT", 38470)
+    client, _info = cli_client.client_or_exit()
+    with client:
+        r = client.get("/daemon/status", headers={"X-Coffer-Token": ""})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ready"
+    assert body["port"] == 38470
+    assert body["started_at"]
+    assert body["version"]
+    assert body["executable"]
+    assert "channel" not in body
+    assert body["pid"] == os.getpid()
+    # A build from source carries no commit; the key is still answered.
+    assert "commit" in body
+    assert body["data_dir"] == "~/.coffer"
+    assert "connected_agents" in body
+
+    res = CliRunner().invoke(app, ["daemon", "status", "--json"])
+    assert res.exit_code == 0, res.output
+    cli = json.loads(res.stdout)
+    assert (cli["version"], cli["port"]) == (body["version"], body["port"])
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the command line prints loop lag and task crashes")
+def test_status_prints_loop_lag_and_task_crashes(live_daemon):
+    from coffer.application.runtime import loop_lag
+    from coffer.application.runtime.supervisor import tasks
+
+    loop_lag.probe().record(0.0021)
+    res = CliRunner().invoke(app, ["daemon", "status"], env={"COLUMNS": "200"})
+    assert res.exit_code == 0, res.output
+    lines = res.stdout.splitlines()
+    [lag] = [line for line in lines if line.startswith("loop lag:")]
+    assert "p99" in lag and "ms" in lag and "(last 300s)" in lag
+    [count] = [line for line in lines if line.startswith("tasks:")]
+    assert f"{tasks().stats().crashes} crashed" in count
+
+    as_json = json.loads(CliRunner().invoke(app, ["daemon", "status", "--json"]).stdout)
+    assert as_json["runtime"]["loop_lag_samples"] >= 1
+    assert as_json["runtime"]["task_crashes"] == tasks().stats().crashes

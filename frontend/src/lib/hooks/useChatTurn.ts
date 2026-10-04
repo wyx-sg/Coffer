@@ -19,53 +19,23 @@ import { subscribeConversationEvents } from "@/lib/chat/streamClient";
 import { chatApi, type Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 import { messagesKey } from "@/lib/api/queryKeys";
-import { type EchoAttachment, type PendingEcho, reconcileEchoes } from "@/lib/chat/echoes";
+import { type PendingEcho, reconcileEchoes } from "@/lib/chat/echoes";
 import { type LiveMessage, handleEvent, subscribeMessagesCache } from "./chatTurnEvents";
 import { useChatSend } from "./useChatSend";
+import type { UseChatTurnResult } from "./useChatTurnResult";
 
 export type { LiveMessage } from "./chatTurnEvents";
 export type { PendingEcho } from "@/lib/chat/echoes";
+export type { UseChatTurnResult } from "./useChatTurnResult";
 
-// A mid-turn stream drop is recovered by re-subscribing (GET /events replays the
-// in-flight turn), bounded so a hard failure can't hammer the endpoint.
-const MAX_STREAM_RECONNECTS = 5;
+// A dropped stream is recovered by re-subscribing (GET /events replays the
+// in-flight turn), bounded so a hard failure can't hammer the endpoint: a few
+// consecutive attempts that deliver nothing, and a generous lifetime cap per
+// subscription (a long-lived page legitimately outlives some drops).
+const MAX_CONSECUTIVE_FAILURES = 5;
+const MAX_STREAM_RECONNECTS = 100;
 const RECONNECT_BACKOFF_MS = 300;
-
-export interface UseChatTurnResult {
-  /**
-   * Send a message to the conversation (fire-and-return; never blocks), with the
-   * composer's finished uploads. Resolves whether the daemon accepted it; a
-   * refusal is also surfaced as `error`.
-   */
-  send: (text: string, attachments?: EchoAttachment[]) => Promise<boolean>;
-  /** Send a persisted user message again, attachments included (Retry). */
-  resend: (messageId: string) => Promise<boolean>;
-  /** True while a turn is in flight on the subscription. */
-  isStreaming: boolean;
-  /** Live partial message — non-null while streaming (and briefly after). */
-  liveMessage: LiveMessage | null;
-  /**
-   * Prompts this client sent whose persisted user rows have not been fetched
-   * yet, in send order. The thread renders them after the fetched messages;
-   * the hook retires each one when its row lands (see chatTurnEvents).
-   */
-  pendingEchoes: PendingEcho[];
-  /** Latest error from a failed send/stream. */
-  error: Error | null;
-  /**
-   * False when `error` is a refused send: that message never ran and stays in
-   * the composer, so a Retry would re-send an older one.
-   */
-  retryable: boolean;
-  /** Clear any error to allow a retry. */
-  clearError: () => void;
-  /** Stop the in-flight turn; its partial output is kept server-side. */
-  interrupt: () => Promise<void>;
-  /** Queued messages waiting to run after the in-flight turn. */
-  pending: string[];
-  /** Replace the pending queue (resume / drop / reorder). */
-  setPending: (texts: string[]) => Promise<void>;
-}
+const MAX_BACKOFF_MS = 5000;
 
 export function useChatTurn(conversationId: string): UseChatTurnResult {
   const qc = useQueryClient();
@@ -76,6 +46,13 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   const [echoes, setEchoes] = useState<PendingEcho[]>([]);
   // The last error that was a refused POST rather than a failed turn.
   const [refused, setRefused] = useState<Error | null>(null);
+  const [streamLost, setStreamLost] = useState(false);
+  // A turn_error arrived while no turn was running: the shape of a failed queued
+  // start. Only with a non-empty queue is the queue "held" (derived below), so
+  // the order of this event and the queue snapshot on the wire does not matter.
+  const [errorOutsideTurn, setErrorOutsideTurn] = useState(false);
+  // Bumped by `reload` to open a fresh subscription on the same conversation.
+  const [subscription, setSubscription] = useState(0);
 
   // Mirror of isStreaming for send(): a message sent while a turn is in flight
   // is queued server-side and shown by the queue chip, so it gets no echo.
@@ -112,6 +89,8 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     setError(null);
     setPendingState([]);
     setEchoes([]);
+    setStreamLost(false);
+    setErrorOutsideTurn(false);
     priorReplyCountRef.current = 0;
 
     // Reconcile against the persisted messages once the stream ends. Returns
@@ -140,29 +119,39 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       });
 
     // The SSE subscription is meant to be long-lived (it stays open across turns
-    // and the server holds it open when idle). If it ENDS mid-turn — a dropped
-    // connection, a proxy timeout, or the server closing it — the terminal
-    // `turn_done` may never reach us and the live bubble would spin on
-    // "thinking…" forever (the reply only surfaces when the next send refetches
-    // messages). Recover by RE-SUBSCRIBING: GET /events replays the in-flight
-    // turn on reattach, so the missed events (including `turn_done`) arrive on
-    // the new connection. If the reply already landed we just drop the stale
-    // bubble; if the stream closed while idle (no turn in flight) we stop.
+    // and the server holds it open when idle), so ANY end of it that we did not
+    // cause — a clean close, a network drop mid-read, a failed re-connect — is
+    // recovered by RE-SUBSCRIBING (spec chat "Recover a dropped event stream with
+    // bounded retries"): GET /events replays the in-flight turn on reattach, so
+    // events missed mid-turn (including `turn_done`) arrive on the new
+    // connection, and an idle subscription simply holds open again. Retries back
+    // off and are bounded; a segment that delivers an event proves the endpoint
+    // is alive and resets the consecutive count, while the lifetime cap still
+    // stops a turn that keeps dropping right after its replayed `turn_start`.
+    // An HTTP error response (e.g. 404, the conversation is gone) is not
+    // retried: hammering a refusing endpoint helps nobody.
     void (async () => {
-      // `reconnects` is a per-subscription lifetime cap (not consecutive): a
-      // turn that keeps dropping right after its replayed `turn_start` must not
-      // reconnect forever, so the counter is intentionally never reset.
-      for (let reconnects = 0; !cancelled; ) {
-        let turnInFlight = false;
+      let failures = 0; // consecutive segments that ended without delivering an event
+      let reconnects = 0; // lifetime
+      let turnInFlight = false;
+      while (!cancelled) {
+        let delivered = false;
         try {
           for await (const event of subscribeConversationEvents(
             conversationId,
             controller.signal,
           )) {
             if (cancelled) return;
-            if (event.event === "turn_start") turnInFlight = true;
-            else if (event.event === "turn_done" || event.event === "turn_error")
+            delivered = true;
+            if (event.event === "turn_start") {
+              turnInFlight = true;
+              setErrorOutsideTurn(false);
+            } else if (event.event === "turn_done") {
               turnInFlight = false;
+            } else if (event.event === "turn_error") {
+              setErrorOutsideTurn(!turnInFlight);
+              turnInFlight = false;
+            }
             await handleEvent(event, {
               conversationId,
               qc,
@@ -178,41 +167,52 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
         } catch (err) {
           if (cancelled) return;
           if (err instanceof Error && err.name === "AbortError") return;
-          // A network/HTTP failure (e.g. the conversation is gone) — surface it
-          // and reconcile, but do not reconnect into a failing endpoint.
-          const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
-          setError(wrapped);
-          setIsStreaming(false);
-          // Drop the bubble (and the echoes its refetch settled) once the reply
-          // is committed; otherwise keep what streamed but stop it "thinking" —
-          // the error banner owns the state.
-          if (await replyHasLanded()) {
-            setLiveMessage(null);
-            setEchoes([]);
-          } else {
-            setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : prev));
+          if (err instanceof ApiError) {
+            // The endpoint answered with a refusal — surface it and reconcile,
+            // but do not reconnect into it.
+            setError(err);
+            setIsStreaming(false);
+            // Drop the bubble (and the echoes its refetch settled) once the
+            // reply is committed; otherwise keep what streamed but stop it
+            // "thinking" — the error banner owns the state.
+            if (await replyHasLanded()) {
+              setLiveMessage(null);
+              setEchoes([]);
+            } else {
+              setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : prev));
+            }
+            return;
           }
-          return;
+          // Anything else is a network drop (fetch or read threw): recover below.
         }
-
-        // Stream closed cleanly (not aborted by us).
         if (cancelled) return;
-        if (await replyHasLanded()) {
+
+        if (turnInFlight && (await replyHasLanded())) {
           // The turn finished and its reply is committed — drop the stale bubble.
+          turnInFlight = false;
           setIsStreaming(false);
           setLiveMessage(null);
           setEchoes([]);
-          return;
         }
-        if (!turnInFlight || reconnects >= MAX_STREAM_RECONNECTS) {
-          // Idle close with no turn to recover, or too many drops — stop, leaving
-          // the bubble so the next send's refetch still surfaces any late reply.
+
+        failures = delivered ? 0 : failures + 1;
+        if (failures > MAX_CONSECUTIVE_FAILURES || reconnects >= MAX_STREAM_RECONNECTS) {
+          // Out of attempts. Say so out loud — the turn may still be running —
+          // and leave the bubble so a later refetch still surfaces a late reply.
           setIsStreaming(false);
+          setStreamLost(true);
           return;
         }
-        // A turn was mid-flight when the stream dropped — reconnect to replay it.
         reconnects += 1;
-        await sleep(RECONNECT_BACKOFF_MS * reconnects);
+        await sleep(Math.min(RECONNECT_BACKOFF_MS * Math.max(failures, 1), MAX_BACKOFF_MS));
+        // The turn may have finished while we were away: its replay is then
+        // empty, and a subscription that holds open would never end the bubble.
+        if (turnInFlight && !cancelled && (await replyHasLanded())) {
+          turnInFlight = false;
+          setIsStreaming(false);
+          setLiveMessage(null);
+          setEchoes([]);
+        }
       }
     })();
 
@@ -220,6 +220,12 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       cancelled = true;
       controller.abort();
     };
+  }, [conversationId, qc, subscription]);
+
+  const reload = useCallback(() => {
+    if (!conversationId) return;
+    void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
+    setSubscription((n) => n + 1);
   }, [conversationId, qc]);
 
   const { send, resend } = useChatSend({
@@ -254,7 +260,18 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     [conversationId],
   );
 
-  const clearError = useCallback(() => setError(null), []);
+  const clearError = useCallback(() => {
+    setError(null);
+    setErrorOutsideTurn(false);
+  }, []);
+
+  const queueHeld = error !== null && errorOutsideTurn && pending.length > 0;
+
+  const resumeQueue = useCallback(async () => {
+    setError(null);
+    setErrorOutsideTurn(false);
+    await setPending(pending);
+  }, [pending, setPending]);
 
   return {
     send,
@@ -263,10 +280,14 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     liveMessage,
     pendingEchoes: echoes,
     error,
-    retryable: error !== null && error !== refused,
+    retryable: error !== null && error !== refused && !queueHeld,
     clearError,
     interrupt,
+    queueHeld,
+    resumeQueue,
     pending,
     setPending,
+    streamLost,
+    reload,
   };
 }

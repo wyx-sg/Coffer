@@ -25,8 +25,7 @@ import os
 import secrets
 import socket
 import sys
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -41,6 +40,7 @@ from coffer.infrastructure.daemon.pid_lock import (
     write,
 )
 from coffer.infrastructure.daemon.port_alloc import bind_fixed_socket, bind_free_socket
+from coffer.infrastructure.vault.home import daemon_json_path, daemon_lock_path
 
 _DAEMON_JSON_VERSION = 1
 
@@ -69,16 +69,12 @@ def _noop_release() -> None:
 _LIVENESS_PROBE_TIMEOUT: float = 15.0
 
 
-def _coffer_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
-
-
 def _daemon_json_path() -> Path:
-    return _coffer_dir() / "daemon.json"
+    return daemon_json_path()
 
 
 def _spawn_lock_path() -> Path:
-    return _coffer_dir() / "daemon.lock"
+    return daemon_lock_path()
 
 
 def _acquire_spawn_lock() -> int:
@@ -120,22 +116,6 @@ def _release_spawn_lock(fd: int) -> None:
             fcntl.flock(fd, fcntl.LOCK_UN)
     with contextlib.suppress(OSError):
         os.close(fd)
-
-
-@contextmanager
-def _spawn_lock() -> Iterator[int]:
-    """Scoped form of the spawn lock: hold it for the body, release on exit.
-
-    Used where the critical section is fully contained in a ``with`` block.
-    :func:`acquire_or_existing` instead holds the lock past its own return (it
-    must stay held until the daemon is serving), so it uses the acquire/release
-    primitives directly rather than this context manager.
-    """
-    fd = _acquire_spawn_lock()
-    try:
-        yield fd
-    finally:
-        _release_spawn_lock(fd)
 
 
 def live_daemon() -> DaemonInfo | None:
@@ -261,7 +241,7 @@ def _bind_port() -> socket.socket:
     Precedence: the environment's explicit range (the test harness's override,
     the only path that still scans), otherwise the port
     :func:`~coffer.infrastructure.daemon.config.effective_port` names — the one
-    the user pinned, or 8000 when they pinned none.
+    the user pinned, or 38470 when they pinned none.
 
     The second path raises
     :class:`~coffer.infrastructure.daemon.port_alloc.PortInUse` rather than

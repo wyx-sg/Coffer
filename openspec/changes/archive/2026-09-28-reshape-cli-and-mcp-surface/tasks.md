@@ -77,5 +77,5 @@
 
 ## 8. Verify and archive
 
-- [ ] 8.1 Run `make verify` (with the frozen venv) and fix every failure
-- [ ] 8.2 Run `npx openspec validate reshape-cli-and-mcp-surface --strict`, then `npx openspec archive reshape-cli-and-mcp-surface --yes` in the same PR and confirm `npx openspec validate --all --strict` passes
+- [x] 8.1 Run `make verify` (with the frozen venv) and fix every failure
+- [x] 8.2 Run `npx openspec validate reshape-cli-and-mcp-surface --strict`, then `npx openspec archive reshape-cli-and-mcp-surface --yes` in the same PR and confirm `npx openspec validate --all --strict` passes

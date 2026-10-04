@@ -31,10 +31,10 @@ def test_by_default_the_shell_origin_is_allowed_and_nothing_else(
     """
     monkeypatch.delenv("COFFER_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("COFFER_DEV_CORS", raising=False)
-    from coffer.surfaces.http.cors import SHELL_ORIGINS, _resolve_origins
+    from coffer.surfaces.http.cors import SHELL_ORIGINS, cross_origin_allowlist
 
-    assert _resolve_origins() == list(SHELL_ORIGINS)
-    assert "http://localhost:5173" not in _resolve_origins()
+    assert cross_origin_allowlist() == list(SHELL_ORIGINS)
+    assert "http://localhost:5173" not in cross_origin_allowlist()
 
 
 def test_the_vite_dev_origin_is_allowed_only_behind_an_explicit_opt_in(
@@ -48,9 +48,9 @@ def test_the_vite_dev_origin_is_allowed_only_behind_an_explicit_opt_in(
     """
     monkeypatch.delenv("COFFER_CORS_ORIGINS", raising=False)
     monkeypatch.setenv("COFFER_DEV_CORS", "1")
-    from coffer.surfaces.http.cors import _resolve_origins
+    from coffer.surfaces.http.cors import cross_origin_allowlist
 
-    origins = _resolve_origins()
+    origins = cross_origin_allowlist()
     assert "http://localhost:5173" in origins
     # The opt-in adds to the shell's entry rather than replacing it, so a
     # developer running the app and Vite at once keeps both hosts working.
@@ -68,6 +68,24 @@ def test_an_explicit_list_replaces_everything_including_the_shell(
     """
     monkeypatch.delenv("COFFER_DEV_CORS", raising=False)
     monkeypatch.setenv("COFFER_CORS_ORIGINS", "https://example.test")
-    from coffer.surfaces.http.cors import _resolve_origins
+    from coffer.surfaces.http.cors import cross_origin_allowlist
 
-    assert _resolve_origins() == ["https://example.test"]
+    assert cross_origin_allowlist() == ["https://example.test"]
+
+
+def test_a_tagged_release_reads_neither_environment_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The CLI starts the daemon from the caller's process, so a caller's shell
+    must not be able to widen the Origin or Host rule of a release build."""
+    from coffer import build_channel
+    from coffer.surfaces.http import host_guard
+    from coffer.surfaces.http.cors import SHELL_ORIGINS, cross_origin_allowlist
+
+    monkeypatch.setattr(build_channel, "CHANNEL", "stable")
+    monkeypatch.setenv("COFFER_CORS_ORIGINS", "https://evil.example")
+    monkeypatch.setenv("COFFER_DEV_CORS", "1")
+    monkeypatch.setenv("COFFER_ALLOWED_HOSTS", "*")
+
+    assert cross_origin_allowlist() == list(SHELL_ORIGINS)
+    assert not host_guard.is_allowed_host("evil.example:38470", 38470)

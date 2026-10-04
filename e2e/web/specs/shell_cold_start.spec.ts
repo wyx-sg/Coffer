@@ -35,55 +35,66 @@ acceptance(
 
     await page.goto("/");
 
-    // The sidebar lists Coffer's operational surfaces — and ONLY those. No
-    // dead "soon" entries for unbuilt features, and no entry outliving its
-    // feature. RESOURCES carries one entry per resource kind with a list UI,
-    // which is why Model providers and Channels are in this list rather than
-    // under Settings and AGENTS.
+    // The index renders Overview in place — no redirect.
+    await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Overview" }),
+    ).toBeVisible();
+
+    // The sidebar lists Coffer's operational surfaces — and ONLY those:
+    // Overview under no heading, then five groups by what the user comes to
+    // do (ADR sidebar-grouped-by-what-the-person-comes-to-do).
     //
     // This list is the whole inventory, and the count assertion below is what
-    // makes "and only those" true: the loop alone let the sidebar grow — Chat,
-    // Memory and Sync were all absent from it while shipping — so a fence with
-    // no upper bound is not a fence. Adding a sidebar entry means adding it
-    // here. See `frontend/src/components/SidebarNav.tsx`'s NAV_GROUPS. An
-    // experimental feature's entry carries its marker in its name.
-    const SIDEBAR_LABELS = [
-      // Agents
-      /^Agents$/i,
-      /^Chat$/i,
-      // Resources — one per resource kind with a list UI
-      /^MCP servers$/i,
-      /^Skills$/i,
-      /^Knowledge Experimental$/i,
-      /^Memory Experimental$/i,
-      /^Model providers$/i,
-      /^Channels$/i,
-      // System
-      /^Activity$/i,
-      /^Sync Experimental$/i,
-      /^Settings$/i,
+    // makes "and only those" true: a fence with no upper bound is not a fence.
+    // Adding a sidebar entry means adding it here. See
+    // `frontend/src/lib/navigation.ts`. The e2e daemon pins all four
+    // experimental features on (`scripts/start_daemon.sh`), so the five
+    // entries they own are listed and each carries the Experimental marker
+    // beside its label.
+    const EXP = String.raw`\s*Experimental`;
+    const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [
+      [null, [/^Overview$/i]],
+      ["Agents", [/^Agents$/i, new RegExp(`^Model providers${EXP}$`, "i")]],
+      ["Run", [/^Conversations$/i, /^Channels$/i]],
+      [
+        "Capabilities",
+        [/^MCP servers$/i, /^Custom tools$/i, /^Skills$/i, /^CLIs$/i],
+      ],
+      [
+        "Context",
+        [
+          new RegExp(`^Knowledge${EXP}$`, "i"),
+          new RegExp(`^Memory${EXP}$`, "i"),
+        ],
+      ],
+      [
+        "System",
+        [
+          /^Secrets$/i,
+          /^Activity$/i,
+          new RegExp(`^Sync${EXP}$`, "i"),
+        ],
+      ],
     ];
-    // Scoped to the sidebar's own <nav>, reached through the labelled <aside>
-    // around it: the count assertion below has to see the NAV_GROUPS rows and
-    // nothing else — not the logo link, which sits in the aside but outside
-    // the nav.
-    const nav = page
-      .getByRole("complementary", { name: /Primary navigation/i })
-      .getByRole("navigation");
-    for (const label of SIDEBAR_LABELS) {
-      await expect(
-        nav.getByRole("link", { name: label }).first(),
-      ).toBeVisible();
+    const nav = page.getByRole("navigation", { name: /Primary navigation/i });
+    for (const [heading, labels] of SIDEBAR_GROUPS) {
+      const scope = heading ? nav.getByRole("group", { name: heading }) : nav;
+      for (const label of labels) {
+        await expect(scope.getByRole("link", { name: label })).toBeVisible();
+      }
     }
     // The upper bound: nothing in the sidebar this list does not name.
-    await expect(nav.getByRole("link")).toHaveCount(SIDEBAR_LABELS.length);
+    await expect(nav.getByRole("link")).toHaveCount(14);
 
-    // Grouped under Agents / Resources / System headings.
-    await expect(page.getByText(/^Agents$/i).first()).toBeVisible();
-    await expect(page.getByText(/^Resources$/i).first()).toBeVisible();
-    await expect(page.getByText(/^System$/i).first()).toBeVisible();
+    // Settings is not an entry: a labelled row sits at the bottom of the
+    // sidebar, carrying the daemon status.
+    await expect(nav.getByRole("link", { name: /^Settings$/i })).toHaveCount(0);
+    await expect(page.getByTestId("sidebar-settings")).toHaveText("Settings");
+    await expect(page.getByTestId("sidebar-settings")).toHaveAccessibleName(
+      /Daemon running on port \d+/,
+    );
 
-    // The first-content surface is the resources page (redirected from /).
     // No generic "unexpected error" card.
     await expect(page.getByText(/unexpected error/i)).toHaveCount(0);
     // The INTERNAL_ERROR copy reads "Coffer hit an internal error…".
@@ -108,11 +119,19 @@ acceptance(
 
     await page.goto("/");
 
+    // For the first 10s of failures the page stays under the reconnecting
+    // bar (board 1.2.17); then the offline state takes its place in the
+    // workspace (board 1.2.18).
+    await expect(page.getByTestId("daemon-reconnecting")).toBeVisible();
     const banner = page.getByTestId("daemon-banner");
-    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toBeVisible({ timeout: 25_000 });
     // The recovery affordance is the restart command — the browser cannot
-    // restart the daemon, and the status poll clears the banner on its own.
+    // restart the daemon, and the retries clear the state on their own.
     await expect(banner.getByText("coffer daemon start")).toBeVisible();
+    // The footer agrees with the banner: it reads offline, never running.
+    await expect(page.getByTestId("sidebar-settings")).toHaveAccessibleName(
+      /Daemon offline/,
+    );
   },
 );
 
@@ -134,7 +153,7 @@ acceptance(
     await page.goto("/");
 
     const banner = page.getByTestId("daemon-banner");
-    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toBeVisible({ timeout: 25_000 });
     // A concrete recovery affordance appears (not a generic "error").
     await expect(banner.getByText("coffer daemon start")).toBeVisible();
     // Sidebar must still be reachable so the user can orient.
@@ -170,27 +189,25 @@ acceptance(
         resources: Array<{ uid: string }>;
       };
       for (const r of body.resources) {
-        await fetch(
-          `http://127.0.0.1:${port}/api/v1/resources/${r.uid}`,
-          {
-            method: "DELETE",
-            headers: {
-              "X-Coffer-Token": token,
-              "X-Coffer-Actor": "e2e-cleanup",
-            },
+        await fetch(`http://127.0.0.1:${port}/api/v1/resources/${r.uid}`, {
+          method: "DELETE",
+          headers: {
+            "X-Coffer-Token": token,
+            "X-Coffer-Actor": "e2e-cleanup",
           },
-        );
+        });
       }
     }
 
     await page.goto("/mcp-servers");
 
     // Welcome card content
+    const welcome = page.getByTestId("mcp-welcome");
     await expect(
-      page.getByRole("heading", { name: /local-first vault/i }),
+      welcome.getByRole("heading", { name: /no mcp servers yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Add MCP server/i }).first(),
+      welcome.getByRole("button", { name: /^add server$/i }),
     ).toBeVisible();
 
     // No ghost-table / "No resources yet" cell (we render the welcome

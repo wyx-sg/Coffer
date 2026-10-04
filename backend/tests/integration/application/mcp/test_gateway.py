@@ -11,19 +11,19 @@ from unittest.mock import AsyncMock
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
+from coffer.application.mcp import gateway_aggregate_lists
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -31,11 +31,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -52,8 +51,18 @@ async def _safe_dispose(engine: object) -> None:
         await engine.dispose()  # type: ignore[union-attr]
 
 
+#: The per-server list budget these tests run under. The product's 5 s is
+#: sized for one cold spawn of a real server on an idle machine; the fake
+#: server here is a Python process, and on a loaded machine its cold spawn
+#: took longer than 5 s, so a list left it out and the test failed although
+#: nothing was wrong. What a test here asserts is which servers a list holds,
+#: not how long a cold spawn takes.
+_LIST_BUDGET_S = 60.0
+
+
 def _with_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
     install_in_memory_keyring(monkeypatch)
+    monkeypatch.setattr(gateway_aggregate_lists, "PER_SERVER_LIST_TIMEOUT", _LIST_BUDGET_S)
 
 
 def _stdio_config(
@@ -80,7 +89,7 @@ async def _setup(
 ) -> tuple[
     MCPGatewaySession,
     ResourceService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     object,  # engine
 ]:
@@ -100,7 +109,7 @@ async def _setup(
                 supports_scope=True,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(home=tmp_path),
         audit=audit,
     )
     for name, cfg in server_configs.items():
@@ -108,12 +117,12 @@ async def _setup(
 
     sup_kwargs: dict = {
         "resource_service": resource_svc,
-        "credential_resolver": CredentialResolver(KeyringAdapter()),
+        "secret_resolver": SecretResolver(KeyringAdapter()),
     }
     if supervisor_retry_delays is not None:
         sup_kwargs["retry_delays"] = supervisor_retry_delays
     supervisor = SubprocessSupervisor(upstream_factory=build_upstream, **sup_kwargs)
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(
         resource_service=resource_svc,
@@ -135,7 +144,7 @@ async def _setup(
 #: names. Written out rather than derived from a registered agent because these
 #: tests never register one: a scope is a list of strings and ``is_active``
 #: compares strings, so using name-shaped values here would let a test pass for
-#: the wrong reason (ADR resource-identity-is-an-immutable-uid).
+#: the wrong reason (ADR identity-is-the-uid-inside-the-file).
 CLAUDE_CODE_UID = "9f2c41a0b7d94e6a8c1f35b2d07ae914"
 CODEX_UID = "3b7e08d1c4f2456ab90d61ea5c2f7d38"
 
@@ -204,46 +213,6 @@ async def test_initialize_returns_capabilities(
         assert "tools" in caps
         assert "resources" in caps
         assert "prompts" in caps
-    finally:
-        await session.dispose()
-        await _safe_dispose(engine)
-
-
-@pytest.mark.asyncio
-async def test_initialize_captures_agent_uid_from_meta(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Per "Take the agent identity from the handshake", the shim self-reports
-    its bound agent's name at the handshake via
-    ``params._meta["coffer/agent-uid"]``, alongside the existing ``coffer/cwd``
-    key; the gateway captures it onto the session. It is
-    the agent's UID, so the value survives a rename of the agent and matches the
-    uids a resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid)."""
-    _with_in_memory(monkeypatch)
-    session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
-    try:
-        await session.handle_initialize(
-            {
-                "protocolVersion": "2025-06-18",
-                "_meta": {"coffer/cwd": "/work/repo", "coffer/agent-uid": CLAUDE_CODE_UID},
-            }
-        )
-        assert session._session_agent_uid == CLAUDE_CODE_UID
-        assert session._session_cwd == "/work/repo"
-    finally:
-        await session.dispose()
-        await _safe_dispose(engine)
-
-
-@pytest.mark.asyncio
-async def test_initialize_without_agent_meta_leaves_session_agent_uid_none(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _with_in_memory(monkeypatch)
-    session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
-    try:
-        await session.handle_initialize({"protocolVersion": "2025-06-18"})
-        assert session._session_agent_uid is None
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -518,7 +487,7 @@ async def test_tools_call_disabled_rejected_with_denied_invocation(
         await session.handle_request("tools/list")
         # Disable write_file
         resource = await rsvc.get_by_name("mcp_server", "fs")
-        await prefs_repo.set_enabled(resource.id, "tool", "write_file", False)
+        await prefs_repo.set_enabled(resource.uid, "tool", "write_file", False)
         # Attempted call should raise + record denied
         with pytest.raises(ToolDisabled):
             await session.handle_request(
@@ -738,11 +707,9 @@ async def test_aggregate_list_drops_dead_server_keeps_live(
         dead_tools = {n for n in names if n.startswith("dead__")}
         assert not dead_tools, f"Dead server tools appeared: {dead_tools}"
 
-        # The whole list must complete within PER_SERVER_LIST_TIMEOUT + 2 s headroom.
-        # The 2.0 s buffer covers asyncio scheduling jitter + subprocess teardown time.
-        from coffer.application.mcp.gateway_aggregate_lists import PER_SERVER_LIST_TIMEOUT
-
-        assert elapsed < PER_SERVER_LIST_TIMEOUT + 2.0, (
+        # The dead server never holds the list up to the budget: its spawn
+        # fails at once. Asserted against the budget these tests run under.
+        assert elapsed < _LIST_BUDGET_S, (
             f"tools/list took {elapsed:.1f}s — exceeded per-server budget"
         )
     finally:
@@ -762,6 +729,7 @@ async def test_concurrent_sessions_are_isolated(
     import asyncio as _asyncio
 
     _with_in_memory(monkeypatch)
+    monkeypatch.setenv("HOME", str(tmp_path))
 
     configs = {
         "fs": _stdio_config(tools=["read_file", "write_file"]),
@@ -790,6 +758,12 @@ async def test_concurrent_sessions_are_isolated(
 
         assert names_a == expected, f"Session A got wrong tools: {names_a}"
         assert names_b == expected, f"Session B got wrong tools: {names_b}"
+
+        # Each session spawned its own child for each server: two sessions x two
+        # servers are four distinct pid files, which is how the spec counts them.
+        pid_files = list((tmp_path / ".coffer" / "upstream-pids").glob("*"))
+        assert len(pid_files) == 4, [f.name for f in pid_files]
+        assert len({f.read_text() for f in pid_files}) == 4
 
         # Run both tool-call requests concurrently — each session routes to its own
         # upstream; results must be correct and must not bleed across sessions.
@@ -1011,7 +985,7 @@ async def _build_crash_harness(
     server_config: dict,  # type: ignore[type-arg]
 ) -> tuple[
     ResourceService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     _SpySupervisor,
     object,  # engine — caller must dispose
@@ -1032,7 +1006,7 @@ async def _build_crash_harness(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     await rsvc.register(
@@ -1041,7 +1015,7 @@ async def _build_crash_harness(
         config=server_config,
         actor="test",
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv = MCPInvocationRepo(sm)
 
     boom_conn = AsyncMock()
@@ -1068,7 +1042,7 @@ async def _build_simple_harness_with_supervisor(
     supervisor: object,
 ) -> tuple[
     ResourceService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     object,  # engine
 ]:
@@ -1094,7 +1068,7 @@ async def _build_simple_harness_with_supervisor(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     await rsvc.register(
@@ -1103,7 +1077,7 @@ async def _build_simple_harness_with_supervisor(
         config={"transport": transport},
         actor="test",
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv = MCPInvocationRepo(sm)
     return rsvc, prefs, inv, engine
 
@@ -1164,7 +1138,7 @@ async def test_handler_disabled_records_denied_invocation(
         resource = await rsvc.get_by_name("mcp_server", "fs")
         now = datetime.now(tz=UTC)
         await prefs.insert(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             capability_type=capability_type,  # type: ignore[arg-type]
             capability_key=capability_key,
             enabled=False,

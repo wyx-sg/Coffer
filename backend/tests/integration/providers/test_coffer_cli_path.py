@@ -21,6 +21,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from tests.support.facets import agent_catalog
 
 _NOW = datetime(2026, 9, 24, tzinfo=UTC)
 
@@ -91,7 +92,6 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
     agent_uid = "8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f"
     connection_uid = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
     agent = Resource(
-        id=1,
         uid=agent_uid,
         kind="agent",
         name="claude-code",
@@ -104,10 +104,9 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
     config = {
         "protocol": "anthropic",
         "base_url": "https://gw.example/anthropic",
-        "credential_ref": "gw-key",
+        "secret_ref": "gw-key",
     }
     connection = Resource(
-        id=2,
         uid=connection_uid,
         kind="provider",
         name="gw",
@@ -118,7 +117,7 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
         updated_at=_NOW,
     )
     projector = ProviderProjector(
-        ConfigFileStore(), cli_resolver=lambda: "/Users/me/My Apps/coffer"
+        ConfigFileStore(), agents=agent_catalog(), cli_resolver=lambda: "/Users/me/My Apps/coffer"
     )
 
     projector.project_type(
@@ -127,5 +126,5 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
 
     settings = json.loads((tmp_path / "settings.json").read_text())
     assert settings["apiKeyHelper"] == (
-        f"'/Users/me/My Apps/coffer' provider key --connection-uid {connection_uid}"
+        f"'/Users/me/My Apps/coffer' proxy token --agent-uid {agent_uid}"
     )

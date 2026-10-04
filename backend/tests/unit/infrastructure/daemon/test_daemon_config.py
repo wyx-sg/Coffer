@@ -27,7 +27,7 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_no_file_means_the_default_port() -> None:
-    """Nothing configured is not "choose for me" — it is 8000.
+    """Nothing configured is not "choose for me" — it is 38470.
 
     ``read_fixed_port`` still answers None, because "the user pinned nothing"
     is a distinction the CLI's ``show`` needs to make; it is ``effective_port``
@@ -41,7 +41,7 @@ def test_no_file_means_the_default_port() -> None:
 def test_the_default_port_is_8000() -> None:
     """A bookmark and the browser state keyed to this origin both name it, so
     the number is part of the contract rather than a detail of the bind."""
-    assert daemon_config.DEFAULT_PORT == 8000
+    assert daemon_config.DEFAULT_PORT == 38470
 
 
 def test_write_then_read_round_trips() -> None:
@@ -53,13 +53,13 @@ def test_write_then_read_round_trips() -> None:
 
 
 def test_written_config_is_user_only() -> None:
-    daemon_config.write_fixed_port(8000)
+    daemon_config.write_fixed_port(38470)
     mode = stat.S_IMODE(daemon_config.config_path().stat().st_mode)
     assert mode == 0o600, f"expected 0o600, got {oct(mode)}"
 
 
 def test_clearing_returns_to_the_default_port() -> None:
-    """Clearing is a return to 8000, not a return to the daemon choosing."""
+    """Clearing is a return to 38470, not a return to the daemon choosing."""
     daemon_config.write_fixed_port(9123)
     daemon_config.write_fixed_port(None)
     assert daemon_config.read_fixed_port() is None
@@ -87,7 +87,7 @@ def test_malformed_file_falls_back_to_the_default_and_is_reported() -> None:
     assert not daemon_config.config_is_readable()
 
 
-@pytest.mark.parametrize("value", ["8000", 8000.5, True, [8000], {"port": 8000}])
+@pytest.mark.parametrize("value", ["38470", 38470.5, True, [38470], {"port": 38470}])
 def test_non_integer_port_is_ignored(value: object) -> None:
     path = daemon_config.config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,22 +130,3 @@ def test_a_file_from_an_older_build_keeps_its_keys_and_still_reads() -> None:
         "machine_name": "laptop",
     }
     assert daemon_config.read_machine_name() == "laptop"
-
-
-# --- a retired idle window (spec daemon "Change residency from the settings
-# page or the command line") -------------------------------------------------
-
-
-def test_a_stale_idle_window_is_ignored_on_read_and_dropped_on_write() -> None:
-    path = daemon_config.config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"port": 9123, "idle_shutdown_hours": 6, "from_the_future": 7}))
-
-    assert daemon_config.read_fixed_port() == 9123
-
-    daemon_config.write_machine_name("laptop")
-    assert json.loads(path.read_text()) == {
-        "port": 9123,
-        "from_the_future": 7,
-        "machine_name": "laptop",
-    }

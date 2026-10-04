@@ -1,3 +1,5 @@
+// src/components/ui/password-input.tsx
+// A masked text field with a reveal toggle (Foundations · Inputs · Secret).
 import * as React from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -26,7 +28,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
           ref={ref}
           type={visible ? "text" : "password"}
           // Room for the toggle so a long value never slides under the icon.
-          className={cn("pr-10", className)}
+          className={cn("pr-8", className)}
           {...props}
         />
         {/* A local provider so the toggle's tooltip also works in dialogs and
@@ -41,9 +43,9 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
                 aria-label={toggleLabel}
                 aria-pressed={visible}
                 tabIndex={-1}
-                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="absolute inset-y-0 right-0 flex w-8 items-center justify-center rounded-r-md text-text-subtle transition-colors duration-fast hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
               >
-                {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
               </button>
             </TooltipTrigger>
             <TooltipContent>{toggleLabel}</TooltipContent>

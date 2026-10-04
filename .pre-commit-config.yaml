@@ -29,9 +29,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^backend/
+        files: ^(backend|evals)/
       - id: ruff-format
-        files: ^backend/
+        files: ^(backend|evals)/
 
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.3.3

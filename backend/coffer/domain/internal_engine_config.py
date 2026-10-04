@@ -16,9 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-#: The fixed primary key of the singleton ``internal_engine_config`` row.
-SINGLETON_ID = 1
-
 
 class CurationOwner(StrEnum):
     """What ``curate_owner_machine_id`` IS, from this machine's point of view.
@@ -31,8 +28,8 @@ class CurationOwner(StrEnum):
     The state NAMES are not shared, and that is deliberate rather than drift.
     A channel with no machine named is ``unbound``; a pass with none is
     ``UNOWNED``, because what is missing is an owner and not a binding. Both
-    words reach a user — this one through ``coffer config get
-    engine.curate_owner --json`` — so neither may be "corrected" into the other. What must stay
+    words reach a user — this one through the settings API's
+    ``engine.curate_owner`` — so neither may be "corrected" into the other. What must stay
     identical is the rule that picks between them, not the spelling.
 
     ``UNKNOWN`` is the only one that is a **fault**. The owner names a machine
@@ -89,7 +86,7 @@ class GlobalInternalEngineConfig:
     (spec knowledge "Curate through a fenced four-tool pass").
 
     It ships **on**: curation is what turns the material an upload or an
-    agent's ``coffer__write`` leaves in a collection's inbox into documents an
+    agent's inbox file leaves in a collection's inbox into documents an
     agent reads. Shipping it off would leave every new vault's material
     waiting unread. (With no internal model configured, material becomes a
     document as it stands, so nothing depends on this switch for that.)

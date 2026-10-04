@@ -18,6 +18,7 @@ from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
 from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.surfaces.http.chat.conversation_routes import _block_out
+from tests.support.chat_turns import start_turn
 
 from .conftest import FakeAgentAdapter
 from .test_turn_orchestrator_with_fake_adapter import drain_queue, make_orchestrator
@@ -35,7 +36,7 @@ async def test_channel_turn_persists_attachment_block() -> None:
     orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "look", attachments=[_IMG])
+    queue = await start_turn(orchestrator, conv.id, "look", attachments=[_IMG])
     await drain_queue(queue)
 
     history = await orchestrator._chat.list_messages(conv.id)
@@ -62,7 +63,7 @@ async def test_turn_re_materialises_attachment_from_history() -> None:
     orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "look", attachments=[_IMG])
+    queue = await start_turn(orchestrator, conv.id, "look", attachments=[_IMG])
     await drain_queue(queue)
 
     # The adapter received the attachment derived from history's last user

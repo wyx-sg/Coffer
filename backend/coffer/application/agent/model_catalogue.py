@@ -19,10 +19,8 @@ shaped to prevent:
   it directly: ``offered()`` is the only way out to a surface.
 * ``offered()`` / ``suggest()`` — what a PICKER should show. Usually the same
   list: the agent's catalogue is what the agent itself can run, and nothing
-  narrows it — not the agent, and not the surface doing the asking. Curation
-  lived on the agent once and on the channel after that; migration 0068 took the
-  last of it away, so the web picker and a channel's ``/model`` card both offer
-  the whole list.
+  narrows it — not the agent, and not the surface doing the asking, so the
+  web picker and a channel's ``/model`` card both offer the whole list.
 
   With an LLM connection ACTIVE for the agent, the IDS come from somewhere else
   entirely. The agent's turns then go to that endpoint, not to the account its
@@ -33,7 +31,7 @@ shaped to prevent:
   endpoint it points at.
 
 * ``efforts()`` — the levels for ONE chosen model, the second half of the same
-  choice, asked by the web effort picker and the channel `/effort` card.
+  choice, asked by the web effort picker and the channel `/model` card's effort step.
 
 Neither is a validator. A model NAME typed anywhere is passed to the CLI
 verbatim: it accepts aliases the catalogue never carries and models newer than
@@ -124,6 +122,12 @@ def _button_label(model: AgentModel) -> str:
     return label
 
 
+class NativeDefaultModelPort(Protocol):
+    """Reads the model an agent's own config names as its default, or ``None``."""
+
+    async def read(self, *, agent_key: str, config_dir: pathlib.Path | None) -> str | None: ...
+
+
 class AgentModelCatalogueService:
     """The deduped view of whatever discovery reports for one agent type."""
 
@@ -133,7 +137,9 @@ class AgentModelCatalogueService:
         agents: AgentLister,
         discovery: ModelDiscoveryPort,
         provider_models: ActiveProviderModelsPort | None = None,
+        native_default: NativeDefaultModelPort | None = None,
     ) -> None:
+        self._native_default = native_default
         self._agents = agents
         self._discovery = discovery
         # ``None`` means no provider layer is wired into this composition (a CLI
@@ -153,13 +159,28 @@ class AgentModelCatalogueService:
         config_dir = await self._config_dir(agent_key)
         return _deduped(await self._discover(agent_key, config_dir))
 
+    async def native_default_model(self, agent_key: str) -> str | None:
+        """The model the agent's OWN config names as its default — never the
+        first catalogue entry, which is only the first one the CLI listed. ``None``
+        when the config names none: the agent then picks for itself and Coffer
+        cannot say which."""
+        if self._native_default is None:
+            return None
+        try:
+            return await self._native_default.read(
+                agent_key=agent_key, config_dir=await self._config_dir(agent_key)
+            )
+        except Exception:
+            _log.debug("agent.native_default.failed", exc_info=True)
+            return None
+
     async def offered(self, agent_key: str) -> list[AgentModel]:
         """What a PICKER should show — every one of them, wherever it renders.
 
         Served to the web pickers over ``GET
         /api/v1/agent-providers/{agent_key}/models`` (the chat kind takes this
         method as its ``ModelCatalogPort``) and read in-process by a channel's
-        ``/model`` and ``/effort`` cards, so the two cannot answer differently.
+        ``/model`` card's model and effort steps, so the two cannot answer differently.
 
         An ACTIVE connection answers outright: its curated ids ARE the list, in
         the user's order, and the agent's catalogue is not consulted. The
@@ -201,7 +222,7 @@ class AgentModelCatalogueService:
     async def efforts(self, agent_key: str, model: str | None) -> list[str]:
         """The reasoning levels the conversation's CURRENT model can be run at.
 
-        Satisfies the channel ``ModelSuggestionPort``, so an `/effort` card
+        Satisfies the channel ``ModelSuggestionPort``, so the `/model` card's effort step
         offers exactly what the web picker beside the model does — including the
         rule for "no model pinned": the agent then runs a default it never names
         to us, so the FIRST offered entry stands in for it. That stand-in could

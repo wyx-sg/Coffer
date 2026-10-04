@@ -1,29 +1,63 @@
 // frontend/src/pages/settings/EngineSettings.tsx
 //
-// Settings → Coffer's model: how Coffer itself thinks, and what it does when nobody
-// asked. Three cards, configuring Coffer's own machinery rather than anything
-// served to an agent — the LLM connection and model its own passes run on plus
-// the bound on one call to it, the connection and model it transcribes speech
-// with, and the switch and interval of each unattended pass, curation included.
+// The Coffer's model section of Settings › General (spec web-ui "Choose
+// Coffer's model in Settings › General", spec internal-engine "Show and change
+// Coffer's model in Settings › General"): the models Coffer runs for its own
+// work, not anything served to an agent.
 //
-// Speech-to-text is a card of its own rather than a row in the engine's,
-// because it runs on a SECOND connection flag with no fallback to the engine's:
-// a gateway serving chat completions commonly serves no transcription endpoint
-// at all (spec internal-engine "Transcribe speech on its own connection and model").
+// Two pickers — Coffer's engine and Speech to text — each a provider then a
+// model from that provider's list, with a Test and a state line; the bound on
+// one call to the engine sits under the engine picker. The passes Coffer runs
+// unattended on that model are switched on the pages they upkeep — Knowledge's
+// and Memory's Automatic popovers — not here.
 //
-// The embedding card that used to sit beside it is gone with vector retrieval:
-// knowledge is a directory of files an agent reads with its own tools, so there
-// is no index for an embedding model to feed (ADR knowledge-is-plain-files).
-import { InternalEngineSettings } from "./InternalEngineSettings";
-import { SpeechToTextSettings } from "./SpeechToTextSettings";
-import { UpkeepSettings } from "./UpkeepSettings";
+// Speech to text is a picker of its own rather than a row borrowed from the
+// engine's, because it runs on a SECOND connection flag with no fallback to the
+// engine's (spec internal-engine "Transcribe speech on its own connection and
+// model"). There is no embedding picker: knowledge is a directory of files an
+// agent reads with its own tools, so there is no index for one to feed.
+import { useTranslation } from "react-i18next";
 
+import { SettingsSection } from "@/components/settings/SettingsLayout";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { useProviders } from "@/lib/hooks/useProviders";
+
+import { InternalEngineSettings } from "./InternalEngineSettings";
+import { PriceRefreshSetting } from "./PriceRefreshSetting";
+import { SpeechToTextSettings } from "./SpeechToTextSettings";
+
+/** The section exists only while the Models feature is on: the engine is a
+ *  connection of a model provider, so with it off there is nothing to choose
+ *  and the section is absent. */
 export function EngineSettings() {
+  const models = useFeatureEnabled("models");
+  return models === true ? <EngineSection /> : null;
+}
+
+function EngineSection() {
+  const { t } = useTranslation();
+  // Both pickers list the same connections; until they arrive, keep the
+  // section's shape rather than render pickers that read as unset.
+  const { isPending } = useProviders();
   return (
-    <div className="space-y-6">
-      <InternalEngineSettings />
-      <SpeechToTextSettings />
-      <UpkeepSettings />
-    </div>
+    <SettingsSection
+      title={t("settings.cofferModel.title")}
+      description={t("settings.cofferModel.subtitle")}
+      testId="coffer-model-section"
+    >
+      {isPending ? (
+        <div className="flex flex-col gap-2 py-2.5" data-testid="coffer-model-loading">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : (
+        <>
+          <InternalEngineSettings />
+          <SpeechToTextSettings />
+          <PriceRefreshSetting />
+        </>
+      )}
+    </SettingsSection>
   );
 }

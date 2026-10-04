@@ -60,10 +60,15 @@ WRITE_SYSTEM = (
     "You are given the note as it currently stands (empty when it is new) and "
     "new entries about the same subject, read out of the developer's coding "
     "agents' own memories. Rewrite the note so that it says everything still "
-    "true from both. Keep what the current note already says unless an entry "
-    "contradicts it, in which case the entry is newer and wins. Do not pad, do "
-    "not hedge, and do not repeat the same point in title, description and "
-    "body.\n"
+    "true from both. The current note is the note as it stands now, whoever "
+    "wrote or edited it: nothing in it is exempt because a person or an agent "
+    "wrote it. Keep what it says unless an entry contradicts it. When they "
+    "disagree, the newer statement wins unless the older one is shown to be "
+    "right by a source, a date, a command's output or the code; an older entry "
+    "with no evidence does not overwrite a newer statement in the note. Keep "
+    "a superseded statement legible: say in the body when it changed. Do not "
+    "pad, do not hedge, and do not repeat the same point in title, description "
+    "and body.\n"
     "The description is the most important line you write. It is the INDEX "
     "entry, and the index — one line per note — is the whole of what a session "
     "is given before it reads anything. Write ONE line that carries the "
@@ -170,7 +175,7 @@ async def rewrite_note(
     partition: str,
     model: Any,
     completion: LlmCompletionPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = _TIMEOUT_SECONDS,
 ) -> WrittenNote | None:
     """Rewrite one note from its current text plus the entries routed to it."""
@@ -180,7 +185,7 @@ async def rewrite_note(
                 system=WRITE_SYSTEM,
                 user=write_payload(entries, existing=existing, partition=partition),
                 model=model,
-                credential_resolver=credential_resolver,
+                secret_resolver=secret_resolver,
                 timeout=timeout,
             ),
             timeout=timeout,

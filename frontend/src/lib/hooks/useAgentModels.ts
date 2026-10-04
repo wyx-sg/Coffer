@@ -11,15 +11,25 @@
 // picker and a channel's `/model` card giving the same answer.
 import { useQuery } from "@tanstack/react-query";
 
-import { agentModelsApi, type AgentModel } from "@/lib/api/agentModels";
+import { agentModelsApi, type AgentModel, type AgentModelsOut } from "@/lib/api/agentModels";
 import { agentProviderModelsKey } from "@/lib/api/queryKeys";
 
-export function useAgentModels(agentKey: string) {
-  return useQuery<AgentModel[]>({
+function useAgentModelsResponse<T>(agentKey: string, select: (r: AgentModelsOut) => T) {
+  return useQuery<AgentModelsOut, Error, T>({
     queryKey: agentProviderModelsKey(agentKey),
-    queryFn: async () => (await agentModelsApi.list(agentKey)).models,
+    queryFn: () => agentModelsApi.list(agentKey),
+    select,
     // The draft agent selector can render before an agent is chosen; an empty
     // key would 404 the endpoint.
     enabled: agentKey !== "",
   });
+}
+
+export function useAgentModels(agentKey: string) {
+  return useAgentModelsResponse<AgentModel[]>(agentKey, (r) => r.models);
+}
+
+/** The model the agent's own config names as its default; null when it names none. */
+export function useAgentDefaultModel(agentKey: string) {
+  return useAgentModelsResponse<string | null>(agentKey, (r) => r.default_model ?? null);
 }

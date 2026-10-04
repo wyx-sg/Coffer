@@ -18,11 +18,11 @@ vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
   AddMcpServerDialog: () => <button>add mcp server</button>,
 }));
 
-vi.mock("@/lib/hooks/useSkills", () => ({
+vi.mock("@/lib/hooks/useSkills", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useSkills")>()),
   useSkills: vi.fn(() => ({ data: [], isPending: false, error: null, refetch: vi.fn() })),
-  useImportSkill: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false, error: null })),
-  useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 
 const { useResources } = await import("@/lib/hooks/useResources");
 
@@ -51,7 +51,7 @@ acceptance("web-ui", "a list surface shows first-class loading and error states"
   expect(screen.getByRole("heading", { level: 1, name: "MCP servers" })).toBeInTheDocument();
   // Skeleton rows in the real table, not a blank page or a bare "Loading…".
   expect(
-    document.querySelectorAll('[data-slot="skeleton"], .animate-pulse').length,
+    document.querySelectorAll('[data-slot="skeleton"], .animate-shimmer').length,
   ).toBeGreaterThan(0);
   expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   pending.unmount();
@@ -59,21 +59,21 @@ acceptance("web-ui", "a list surface shows first-class loading and error states"
   stub({ error: new ApiError("RESOURCE_NOT_FOUND", "no such thing") });
   renderPage();
   expect(screen.getByRole("heading", { level: 1, name: "MCP servers" })).toBeInTheDocument();
-  expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
-  expect(screen.getByText("Resource not found")).toBeInTheDocument();
+  expect(screen.getByText(/couldn.t load mcp servers/i)).toBeInTheDocument();
+  expect(screen.getByText(/Resource not found\. Nothing was changed/)).toBeInTheDocument();
 });
 
 acceptance("web-ui", "page headers share one typographic scale", () => {
-  /** The page's one h1 and its subtitle, read off a rendered page. */
+  /** The page's one h1 and its subtitle (none: the compact header keeps it in a "?" tip). */
   const header = (page: React.ReactNode) => {
     const view = renderPage(page);
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
-    const subtitle = h1s[0].closest("header")!.querySelector("p")!;
+    const subtitle = h1s[0].closest("header")!.querySelector("p");
     const out = {
       title: h1s[0].textContent,
       titleClass: h1s[0].className,
-      subtitleClass: subtitle.className,
+      subtitleClass: subtitle?.className ?? null,
     };
     view.unmount();
     return out;
@@ -90,5 +90,4 @@ acceptance("web-ui", "page headers share one typographic scale", () => {
   expect([mcp.title, skills.title]).toEqual(["MCP servers", "Skills"]);
   expect(skills.titleClass).toBe(mcp.titleClass);
   expect(skills.subtitleClass).toBe(mcp.subtitleClass);
-  expect(mcp.subtitleClass).not.toBe(mcp.titleClass);
 });

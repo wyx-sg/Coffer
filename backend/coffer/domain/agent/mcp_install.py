@@ -23,7 +23,7 @@ Both wire Coffer via the stdio shim: ``command = <abs path to coffer-mcp-shim>``
 from __future__ import annotations
 
 import json
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Sequence
 from itertools import pairwise
 from typing import Any
 
@@ -35,6 +35,7 @@ from coffer.domain.agent.mcp_entries import (
     _json_container,
     _parse_json,
     _parse_toml,
+    _parse_toml_readonly,
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
 
@@ -56,7 +57,10 @@ def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, A
 
 
 def _entry_fields(
-    shim_path: str, entry_style: McpEntryStyle, agent_uid: str | None = None
+    shim_path: str,
+    entry_style: McpEntryStyle,
+    agent_uid: str | None = None,
+    extras: Sequence[tuple[str, Any]] = (),
 ) -> dict[str, Any]:
     """The key/value pairs of a single stdio ``coffer`` entry for the style.
 
@@ -67,7 +71,7 @@ def _entry_fields(
     and not the name because this string outlives the edit that renames the
     agent: the entry is written once into a file Coffer does not otherwise
     touch, while the gateway matches what the shim reports against the uids a
-    resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid). A
+    resource's ``scope`` holds (ADR identity-is-the-uid-inside-the-file). A
     name here would go stale on the first rename and quietly stop matching any
     scope — the failure mode "never silently widen" exists to prevent.
 
@@ -78,6 +82,8 @@ def _entry_fields(
     fields: dict[str, Any] = {"command": shim_path}
     if agent_uid:
         fields["args"] = ["--agent-uid", agent_uid]
+    for key, value in extras:
+        fields[key] = list(value) if isinstance(value, (list, tuple)) else value
     return fields
 
 
@@ -104,17 +110,15 @@ def apply_install(
     container_key: str | None = None,
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP,
     agent_uid: str | None = None,
+    extras: Sequence[tuple[str, Any]] = (),
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
-    Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated — including an entry written by an older Coffer, which carries
-    either no identity flag at all or the name-shaped ``--agent`` one that
-    preceded the uid; re-installing rewrites the whole entry in place, so there
-    is no separate auto-migration path and no residue of the old spelling.
+    Idempotent: an existing ``coffer`` entry is replaced whole, in place,
+    never duplicated.
     """
     ck = container_key or default_container_key(fmt)
-    fields = _entry_fields(shim_path, entry_style, agent_uid)
+    fields = _entry_fields(shim_path, entry_style, agent_uid, extras)
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)
@@ -174,7 +178,7 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
         servers = _json_container(_parse_json(text), ck)
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
     if fmt is ConfigFileFormat.TOML:
-        servers = _parse_toml(text).get(ck)
+        servers = _parse_toml_readonly(text).get(ck)
         # isinstance guard so a scalar `mcp_servers` containing the substring
         # "coffer" can't false-positive via `in`.
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
@@ -190,15 +194,73 @@ def installed_command(
         return None
     if fmt is ConfigFileFormat.JSON:
         return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
-    return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])
+    return _coffer_command(_parse_toml_readonly(text)[ck][COFFER_SERVER_KEY])
+
+
+def _plain(value: Any) -> Any:
+    """A config value as plain data (lists of strings, numbers) so it compares
+    with what an install writes."""
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value]
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, int):
+        return int(value)
+    return value if value is None else str(value)
+
+
+def installed_entry(
+    fmt: ConfigFileFormat,
+    text: str,
+    *,
+    container_key: str | None = None,
+    extra_keys: Sequence[str] = (),
+) -> dict[str, Any] | None:
+    """The installed coffer entry's parameters — ``{"command": <shim>, "args":
+    [...]}`` — or ``None`` when there is no entry.
+
+    Every parameter the entry carries, not its presence: the reconciler judges
+    an entry current only when these equal what an install would write now
+    (ADR one-level-triggered-reconciler-compares-parameters), so a shim an
+    upgrade moved or a stale ``--agent-uid`` reads as drift. A missing
+    ``args`` reads as ``[]``. Raises ``ConfigFileFormatInvalid`` for text that
+    does not parse, like the other readers here.
+    """
+    ck = container_key or default_container_key(fmt)
+    if not is_installed(fmt, text, container_key=ck):
+        return None
+    if fmt is ConfigFileFormat.JSON:
+        entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
+    else:
+        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
+    args = entry.get("args") if isinstance(entry, MutableMapping) else None
+    params: dict[str, Any] = {
+        "command": _coffer_command(entry),
+        "args": [str(a) for a in args] if isinstance(args, (list, tuple)) else [],
+    }
+    for key in extra_keys:
+        params[key] = _plain(entry.get(key)) if isinstance(entry, MutableMapping) else None
+    return params
+
+
+def desired_entry(
+    shim_path: str | None, agent_uid: str, extras: Sequence[tuple[str, Any]] = ()
+) -> dict[str, Any]:
+    """What :func:`apply_install` writes for ``agent_uid``, in the shape
+    :func:`installed_entry` reads — so the two compare directly."""
+    fields = _entry_fields(shim_path or "", McpEntryStyle.COMMAND_MAP, agent_uid, extras)
+    params = {"command": shim_path, "args": list(fields.get("args", []))}
+    for key, _ in extras:
+        params[key] = _plain(fields[key])
+    return params
 
 
 def installed_agent_uid(
     fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
 ) -> str | None:
     """The uid the installed coffer entry speaks for (its ``--agent-uid``
-    argument), or ``None`` when there is no entry or it carries no uid (one an
-    older Coffer wrote, or a hand-edit). Raises ``ConfigFileFormatInvalid``
+    argument), or ``None`` when there is no entry or it carries no uid (a
+    hand-edit). Raises ``ConfigFileFormatInvalid``
     for text that does not parse, like the other readers here."""
     ck = container_key or default_container_key(fmt)
     if not is_installed(fmt, text, container_key=ck):
@@ -206,7 +268,7 @@ def installed_agent_uid(
     if fmt is ConfigFileFormat.JSON:
         entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
     else:
-        entry = _parse_toml(text)[ck][COFFER_SERVER_KEY]
+        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
     if not isinstance(entry, MutableMapping):
         return None
     args = entry.get("args")

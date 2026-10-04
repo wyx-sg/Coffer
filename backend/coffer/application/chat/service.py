@@ -7,111 +7,41 @@ Responsibilities:
   truncated version of the first user message text.
 - Cascade delete: messages first, then the conversation row.
 
-The ``ConversationRepo`` and ``MessageRepo`` Protocols are defined inline here
-(same pattern as ``MemoryRecordRepo`` in ``application/memory/service.py``).
+``ConversationRepo`` lives beside the cursor pages of its listings in
+``conversation_repo`` and ``MessageRepo`` in ``message_repo``; both are
+re-exported here.
 Concrete SQLAlchemy implementations live in ``infrastructure/chat/persistence.py``.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any
 
+from coffer.application.chat.conversation_repo import ConversationRepo as ConversationRepo
+from coffer.application.chat.conversation_repo import page_conversations
+from coffer.application.chat.message_repo import MessageRepo as MessageRepo
+from coffer.application.chat.preview import message_preview
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
-from coffer.domain.chat.errors import ConversationNotFound, MessageNotFound, UnknownAgent
+from coffer.domain.chat.errors import (
+    ConversationNotFound,
+    MessageNotFound,
+    ReplyFileNotFound,
+    UnknownAgent,
+)
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
+from coffer.domain.chat.reply_file import ReplyFile, ReplyFileSummary
+from coffer.domain.pagination import Page
 
 _TITLE_MAX_CHARS = 60
 _PLACEHOLDER_TITLE = "New conversation"
-
-
-# ---------------------------------------------------------------------------
-# Repository Protocols
-# ---------------------------------------------------------------------------
-
-
-class ConversationRepo(Protocol):
-    """Persistence port for ``Conversation`` rows."""
-
-    async def create(self, conversation: Conversation) -> Conversation: ...
-
-    async def get(self, conversation_id: str) -> Conversation | None: ...
-
-    async def list(self, *, archived: bool = False) -> list[Conversation]:
-        """Conversations newest first; active when ``archived`` is False."""
-        ...
-
-    async def rename(self, conversation_id: str, new_title: str) -> Conversation: ...
-
-    async def touch(self, conversation_id: str, updated_at: datetime) -> None:
-        """Bump ``updated_at`` for the given conversation."""
-        ...
-
-    async def get_agent_config(self, conversation_id: str) -> AgentConfig:
-        """Typed provider-owned per-conversation state (empty when unset)."""
-        ...
-
-    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
-        """Replace the typed provider-owned per-conversation state."""
-        ...
-
-    async def set_archived(
-        self, conversation_id: str, archived_at: datetime | None
-    ) -> Conversation: ...
-
-    async def delete(self, conversation_id: str) -> None: ...
-
-
-class MessageRepo(Protocol):
-    """Persistence port for ``chat_messages`` rows."""
-
-    async def append(self, message: Message) -> Message: ...
-
-    async def finalize(
-        self,
-        message_id: str,
-        *,
-        content: list[ContentBlock],
-        status: str,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
-    ) -> None:
-        """Update an existing (streaming) message with its final content/status."""
-        ...
-
-    async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:
-        """Overwrite a still-``streaming`` row's content (a mid-turn flush); a row
-        already finalised is left untouched."""
-        ...
-
-    async def delete_message(self, message_id: str) -> None:
-        """Delete a single message by id."""
-        ...
-
-    async def list_by_conversation(
-        self, conversation_id: str, *, limit: int | None = None
-    ) -> list[Message]:
-        """Return messages ordered by ``seq`` ascending; ``limit`` keeps only
-        the most recent N (still oldest-first)."""
-        ...
-
-    async def next_seq(self, conversation_id: str) -> int:
-        """Return the next sequence number for the given conversation."""
-        ...
-
-    async def delete_by_conversation(self, conversation_id: str) -> None: ...
-
-    async def sweep_streaming(self) -> int:
-        """Flip all ``status='streaming'`` rows to ``'failed'``.
-
-        Called once at startup to recover from a prior crash.  Returns the
-        number of rows updated.
-        """
-        ...
+#: How many text-bearing messages back a preview looks: the newest may hold only
+#: blank text, so a couple more are read in the same query.
+_PREVIEW_DEPTH = 3
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +74,6 @@ class ChatService:
         agent_config: dict[str, Any] | None = None,
         channel_uid: str | None = None,
         peer_chat_id: str | None = None,
-        owner: str | None = None,
     ) -> Conversation:
         """Create a conversation for the named agent.
 
@@ -158,14 +87,8 @@ class ChatService:
         return address for relaying output back to an IM channel (spec channels).
         ``channel_uid`` is the channel resource's uid — the binding has to keep
         naming the same channel after the user renames it, and only the uid does
-        (ADR resource-identity-is-an-immutable-uid). Chat itself never reads the
+        (ADR identity-is-the-uid-inside-the-file). Chat itself never reads the
         channel's label; whoever shows it resolves it from the uid.
-
-        ``owner`` names the surface this conversation belongs to, and only a
-        caller that is not the developer passes one. It keeps the conversation
-        out of the chat list without keeping it out of this table: such a
-        transcript is an ordinary transcript, read through this service like
-        any other.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 
@@ -178,7 +101,6 @@ class ChatService:
             updated_at=now,
             channel_uid=channel_uid,
             peer_chat_id=peer_chat_id,
-            owner=owner,
         )
         created = await self._conversations.create(conv)
 
@@ -197,6 +119,25 @@ class ChatService:
     async def list_conversations(self, *, archived: bool = False) -> list[Conversation]:
         """Conversations newest first; active threads only unless ``archived``."""
         return await self._conversations.list(archived=archived)
+
+    async def page_conversations(
+        self,
+        *,
+        archived: bool = False,
+        limit: int = 100,
+        cursor: str | None = None,
+        q: str | None = None,
+    ) -> Page[Conversation]:
+        """One page of :meth:`list_conversations`, continued by ``cursor``."""
+        return await page_conversations(
+            self._conversations, archived=archived, limit=limit, cursor=cursor, q=q
+        )
+
+    async def count_conversations(self, *, archived: bool = False, q: str | None = None) -> int:
+        """How many conversations match the listing (``archived``, ``q``), whatever
+        the paging; ``q`` is trimmed like :meth:`page_conversations` does."""
+        q = (q or "").strip() or None
+        return await self._conversations.count(archived=archived, contains=q)
 
     async def get_conversation(self, conversation_id: str) -> Conversation:
         """Return a conversation by id; raises ``ConversationNotFound`` if absent."""
@@ -316,6 +257,7 @@ class ChatService:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             created_at=now,
+            finished_at=now if role == Role.ASSISTANT and status != "streaming" else None,
         )
         saved = await self._messages.append(msg)
         await self._conversations.touch(conversation_id, now)
@@ -338,22 +280,27 @@ class ChatService:
         *,
         content: list[ContentBlock],
         status: str,
+        model_id: str | None = None,
         prompt_tokens: int | None = None,
         completion_tokens: int | None = None,
     ) -> None:
         """Finalize a streaming placeholder message with its final content.
 
         Also bumps the conversation's ``updated_at`` so the recency-ordered
-        conversation list reflects turn completion, not just turn start.
+        conversation list reflects turn completion, not just turn start, and
+        stamps the reply's ``finished_at``.
         """
+        now = datetime.now(tz=UTC)
         await self._messages.finalize(
             message_id,
             content=content,
             status=status,
+            model_id=model_id,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            finished_at=now,
         )
-        await self._conversations.touch(conversation_id, datetime.now(tz=UTC))
+        await self._conversations.touch(conversation_id, now)
 
     async def save_partial_message(self, message_id: str, content: list[ContentBlock]) -> None:
         """Persist a streaming turn's content so far (spec chat "Keep partial output
@@ -373,6 +320,46 @@ class ChatService:
         ``None`` returns everything (the message API)."""
         await self.get_conversation(conversation_id)  # existence check
         return await self._messages.list_by_conversation(conversation_id, limit=limit)
+
+    async def previews(self, conversation_ids: Sequence[str]) -> dict[str, str]:
+        """The one-line preview of each conversation's newest message that has
+        words in it (``message_preview``), one read for the whole page; a
+        conversation with none is absent."""
+        latest = await self._messages.latest_with_text(conversation_ids, depth=_PREVIEW_DEPTH)
+        out: dict[str, str] = {}
+        for conversation_id, messages in latest.items():
+            line = next((p for p in map(message_preview, messages) if p is not None), None)
+            if line is not None:
+                out[conversation_id] = line
+        return out
+
+    async def record_reply_files(self, message_id: str, files: Sequence[ReplyFile]) -> None:
+        """Keep what a reply changed in each file (spec chat "Record what each reply
+        changed in each file"); a reply that changed nothing keeps no rows."""
+        if files:
+            await self._messages.record_files(message_id, files)
+
+    async def reply_files(self, conversation_id: str, message_id: str) -> list[ReplyFileSummary]:
+        """The files an assistant reply of the conversation changed, with counts
+        and no diffs; empty for a reply that recorded none. ``MessageNotFound``
+        when the conversation holds no assistant message with that id."""
+        await self._reply(conversation_id, message_id)
+        return await self._messages.list_files(message_id)
+
+    async def reply_file(self, conversation_id: str, message_id: str, path: str) -> ReplyFile:
+        """One changed file of a reply with its diff; ``ReplyFileNotFound`` when
+        the reply recorded nothing under ``path``."""
+        await self._reply(conversation_id, message_id)
+        found = await self._messages.get_file(message_id, path)
+        if found is None:
+            raise ReplyFileNotFound(message_id, path)
+        return found
+
+    async def _reply(self, conversation_id: str, message_id: str) -> Message:
+        for message in await self.list_messages(conversation_id):
+            if message.id == message_id and message.role is Role.ASSISTANT:
+                return message
+        raise MessageNotFound(conversation_id, message_id)
 
     async def get_user_message(self, conversation_id: str, message_id: str) -> Message:
         """One of the conversation's user messages, to send again; raises

@@ -60,7 +60,7 @@ class Routing:
     running adapter meet. Above it — the channel's ``default_agent``, its
     ``scope``, every validator in ``kind.py`` — an agent is named by its uid,
     because those are references to an agent resource and a reference has to
-    survive the owner renaming it. Below it — ``/agent``'s listing and card,
+    survive the owner renaming it. Below it — ``/new <agent>``'s listing and validation,
     the sticky ``preferred_agent`` column, ``conversation_spec``, the turn's own
     routing — an agent is named by the key the turn platform dispatches on,
     because that is the vocabulary the platform, and the user typing
@@ -132,9 +132,12 @@ class Gate:
     _machine_id: str | None = None
     #: The binding of each channel already reported as not this machine's.
     _foreign: dict[str, object] = field(default_factory=dict)
+    #: Why each channel that has no route was last reported quiet, so the same
+    #: reason is said once rather than on every two-second tick.
+    _unrouted: dict[str, tuple[str, str | None]] = field(default_factory=dict)
     #: What each channel the last pass found live routes to, keyed by name.
     #: Read back by the runtime, which stamps it onto the binding at start — so
-    #: a scope edit reaches `/agent` within one tick rather than at the next
+    #: a scope edit reaches `/new <agent>` within one tick rather than at the next
     #: daemon restart.
     routing: dict[str, Routing] = field(default_factory=dict)
 
@@ -157,15 +160,15 @@ class Gate:
         live: Desired = {}
         routing: dict[str, Routing] = {}
         for r in await resources.list(kind="channel"):
-            if not r.enabled:
-                continue
-            if not self._bound_here(r, local):
+            if not r.enabled or not self._bound_here(r, local):
+                self._unrouted.pop(r.uid, None)
                 continue
             route = self._routing(r, keys_by_uid)
             if route is None:
                 continue
-            live[r.name] = r
-            routing[r.name] = route
+            self._unrouted.pop(r.uid, None)
+            live[r.uid] = r
+            routing[r.uid] = route
         self.routing = routing
         return live
 
@@ -188,10 +191,10 @@ class Gate:
         if local is None or binding == local:
             # Ours: forget any binding already reported, so a channel handed
             # away and later handed back reports the second departure too.
-            self._foreign.pop(r.name, None)
+            self._foreign.pop(r.uid, None)
             return True
-        if self._foreign.get(r.name) != binding:
-            self._foreign[r.name] = binding
+        if self._foreign.get(r.uid) != binding:
+            self._foreign[r.uid] = binding
             _logger.info(
                 "channel.not_bound_here",
                 extra={"channel": r.name, "runs_on": binding, "machine_id": local},
@@ -239,7 +242,12 @@ class Gate:
         return Routing(default_agent=agent_key, agent_scope=_scope_as_keys(r.scope, keys_by_uid))
 
     def _not_started(self, r: Resource, default_agent: str | None, reason: str) -> None:
-        """Why a bot is quiet, in the record, without reconstructing it by hand."""
+        """Why a bot is quiet, in the record, without reconstructing it by hand —
+        once per reason: a channel left dormant on purpose would otherwise log
+        the same line every tick, all day."""
+        if self._unrouted.get(r.uid) == (reason, default_agent):
+            return
+        self._unrouted[r.uid] = (reason, default_agent)
         _logger.info(
             "channel.not_started",
             extra={

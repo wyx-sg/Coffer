@@ -79,6 +79,12 @@ def get_agent_connection_service() -> AgentConnectionService:
     return _agent_connection_service
 
 
+def get_agent_connection_service_optional() -> AgentConnectionService | None:
+    """The connection service if wired, else ``None`` — for ``/daemon/status``,
+    which must answer during startup before the composition root has run."""
+    return _agent_connection_service
+
+
 _agent_model_catalogue: AgentModelCatalogueService | None = None
 
 

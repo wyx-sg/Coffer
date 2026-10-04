@@ -1,6 +1,6 @@
 """The selection cards' pure rendering rules (spec channels "Switch the model
-and reasoning effort from chat", "Offer command choices as owner-gated
-selection cards").
+and reasoning effort from chat", "Offer choices and actions as owner-gated
+cards").
 
 The model card is built from the agent's whole model catalogue — 29 entries for
 ``claude_code`` — but a card is a window onto that list, not the list: SeaTalk
@@ -10,16 +10,25 @@ nothing at all. So a long list is paged, and a short one is not paged at all.
 
 from __future__ import annotations
 
+import os
+
+from coffer.application.channel.command_cards import (
+    HELP_ACTIONS,
+    STATUS_ACTIONS,
+    command_card,
+)
 from coffer.application.channel.selection_cards import (
     CALLBACK_MAX_BYTES,
     MAX_CARD_BUTTONS,
     PAGE_SIZE,
     SelectionCard,
-    agent_card,
-    collection_card,
+    dir_card,
+    effort_card,
     is_page_turn,
     model_card,
     parse_page_turn,
+    path_label,
+    resume_card,
 )
 
 
@@ -36,11 +45,11 @@ def _nav(card: SelectionCard) -> list[str]:
 
 
 class TestShortListsAreNotPaged:
-    def test_the_agent_card_carries_no_navigation_chrome(self):
-        # /agent has two choices and must look exactly as it always has.
-        card = agent_card(current="builtin", choices=[("builtin", "Builtin"), ("codex", "Codex")])
+    def test_the_dir_card_carries_no_navigation_chrome(self):
+        card = dir_card(current="/src/app", directories=["/src/app", "/src/lib"])
 
-        assert _values(card) == ["agent:builtin", "agent:codex"]
+        assert _values(card) == ["dir:0", "dir:1", "dir:default"]
+        assert [b.label for b in card.buttons] == ["✓ /src/app", "/src/lib", "Default"]
         assert card.pages == 1
         assert "Page" not in card.text
 
@@ -66,7 +75,7 @@ class TestShortListsAreNotPaged:
         labels = {"fable": "Fable 5.1", "claude-fable-5-1[1m]": "Fable 1M"}
         card = model_card(current="fable", picks=list(labels), labels=labels)
 
-        assert [b.label for b in card.buttons] == ["Fable 5.1 ✓", "Fable 1M"]
+        assert [b.label for b in card.buttons] == ["✓ Fable 5.1", "Fable 1M"]
         assert _values(card) == ["model:fable", "model:claude-fable-5-1[1m]"]
 
     def test_the_current_model_is_not_duplicated(self):
@@ -98,7 +107,8 @@ class TestPaging:
     def test_the_first_page_offers_next_but_no_prev(self):
         card = model_card(current=None, picks=[f"m{i}" for i in range(29)], page=0)
 
-        assert _nav(card) == ["page:model:1"]
+        assert _nav(card) == ["page:model:0", "page:model:1"]
+        assert [b.disabled for b in card.buttons[-2:]] == [True, False]
 
     def test_the_last_page_is_not_followed_by_an_empty_one(self):
         picks = [f"m{i}" for i in range(29)]
@@ -106,7 +116,8 @@ class TestPaging:
 
         card = model_card(current=None, picks=picks, page=last)
 
-        assert _nav(card) == [f"page:model:{last - 1}"]
+        assert _nav(card) == [f"page:model:{last - 1}", f"page:model:{last}"]
+        assert [b.disabled for b in card.buttons[-2:]] == [False, True]
         assert _choices(card)  # the last page is never empty either
 
     def test_a_page_past_the_end_is_clamped(self):
@@ -122,44 +133,16 @@ class TestPaging:
         # (Angle brackets are safe on SeaTalk; live-probed.)
         card = model_card(current=None, picks=[f"m{i}" for i in range(29)])
 
-        assert "/model <name>" in card.text
+        assert "/model <name> <level>" in card.text
 
-    def test_the_agent_card_pages_by_the_same_rule(self):
+    def test_the_resume_card_pages_by_the_same_rule(self):
         # Pagination is not a model special case: the rule lives in one place.
-        choices = [(f"a{i}", f"Agent {i}") for i in range(20)]
+        entries = [(f"c{i}", f"Conversation {i}") for i in range(20)]
 
-        card = agent_card(current="a0", choices=choices, page=1)
+        card = resume_card(header="list", entries=entries, active="c0", page=1)
 
-        assert _choices(card) == [f"agent:a{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
-        assert _nav(card) == ["page:agent:0", "page:agent:2"]
-
-    def test_the_collection_card_pages_by_the_same_rule_too(self):
-        # spec channels "Save a sent document into a collection": a `/save`
-        # card is a third instance of the same rule, not a special case —
-        # including its own navigation namespace.
-        choices = [f"c{i}" for i in range(20)]
-
-        card = collection_card(choices=choices, page=1)
-
-        assert _choices(card) == [f"collection:c{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
-        assert _nav(card) == ["page:collection:0", "page:collection:2"]
-
-
-class TestTheCollectionCardHasNoCurrentChoice:
-    def test_a_short_list_carries_no_navigation_and_no_tick(self):
-        # Every save is a fresh decision — nothing is ever pre-ticked.
-        card = collection_card(choices=["research", "recipes"])
-
-        assert _values(card) == ["collection:research", "collection:recipes"]
-        assert not any(b.label.endswith("✓") for b in card.buttons)
-        assert card.pages == 1
-
-    def test_a_single_collection_still_renders_as_a_card_not_a_default(self):
-        # Confirm, never guess — a lone collection is still a tap (spec
-        # channels "Save a sent document into a collection").
-        card = collection_card(choices=["only-one"])
-
-        assert _values(card) == ["collection:only-one"]
+        assert _choices(card) == [f"resume:c{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+        assert _nav(card) == ["page:resume:0", "page:resume:2"]
 
 
 class TestTheTickStaysHonest:
@@ -169,33 +152,33 @@ class TestTheTickStaysHonest:
         card = model_card(current="m20", picks=picks)
 
         assert card.page == 20 // PAGE_SIZE
-        [ticked] = [b.value for b in card.buttons if b.label.endswith("✓")]
+        [ticked] = [b.value for b in card.buttons if b.label.startswith("✓")]
         assert ticked == "model:m20"
 
     def test_a_page_without_the_current_choice_carries_no_tick(self):
         card = model_card(current="m20", picks=[f"m{i}" for i in range(29)], page=0)
 
-        assert [b for b in card.buttons if b.label.endswith("✓")] == []
+        assert [b for b in card.buttons if b.label.startswith("✓")] == []
 
     def test_an_off_page_current_choice_is_still_named_in_the_body(self):
         # The one thing a card must never do is look like nothing is selected.
         card = model_card(current="m20", picks=[f"m{i}" for i in range(29)], page=0)
 
-        assert "Current model: m20" in card.text
+        assert "Current: m20" in card.text
         assert f"page {20 // PAGE_SIZE + 1}" in card.text
 
     def test_an_unpinned_model_says_so_on_every_page(self):
         card = model_card(current=None, picks=[f"m{i}" for i in range(29)], page=3)
 
-        assert "Current model: (CLI default)" in card.text
+        assert "Current: Default model" in card.text
         assert "✓" not in card.text
 
     def test_a_current_model_outside_the_catalogue_is_still_named(self):
         # `/model something-exotic` pins a name the catalogue never listed.
         card = model_card(current="exotic", picks=[f"m{i}" for i in range(29)])
 
-        assert "Current model: exotic" in card.text
-        assert [b for b in card.buttons if b.label.endswith("✓")] == []
+        assert "Current: exotic" in card.text
+        assert [b for b in card.buttons if b.label.startswith("✓")] == []
 
 
 class TestNavigationPayloads:
@@ -210,8 +193,12 @@ class TestNavigationPayloads:
 
     def test_navigation_is_parsed_apart_from_a_choice(self):
         assert parse_page_turn("page:model:3") == ("model", 3)
-        assert parse_page_turn("page:agent:0") == ("agent", 0)
         assert parse_page_turn("page:collection:2") == ("collection", 2)
+        assert parse_page_turn("page:resume:1") == ("resume", 1)
+        assert parse_page_turn("page:dir:0") == ("dir", 0)
+        assert parse_page_turn("page:agent:0") == ("agent", 0)
+        # A kind no card renders has no page namespace.
+        assert parse_page_turn("page:thread:0") is None
 
     def test_a_choice_never_parses_as_navigation(self):
         # Including a model whose own id starts with the navigation word.
@@ -230,5 +217,52 @@ def test_a_model_set_by_name_that_is_not_in_the_catalogue_gets_no_false_locator(
     page that has no tick on it either."""
     card = model_card(current="sonnet", picks=[f"m{i}" for i in range(20)])
     assert card.pages > 1
-    assert "Current model: sonnet" in card.text
+    assert "Current: sonnet" in card.text
     assert "is on page" not in card.text
+
+
+class TestTheEffortStep:
+    def test_the_levels_are_the_whole_card(self):
+        card = effort_card(current="high", levels=["low", "high"], model="Opus")
+
+        assert _values(card) == ["effort:low", "effort:high"]
+        assert "Opus · step 2 of 2 — tap an effort level:" in card.text
+
+    def test_nothing_is_ticked_when_nothing_is_pinned(self):
+        card = effort_card(current=None, levels=["low"])
+
+        assert [b for b in card.buttons if b.selected] == []
+
+
+class TestTheCommandCard:
+    def test_the_help_card_carries_its_five_actions(self):
+        card = command_card(title="Commands", text="/new")
+
+        assert _values(card) == [f"cmd:{name}" for _label, name in HELP_ACTIONS]
+        assert [b.label for b in card.buttons] == ["New", "Stop", "Model", "Status", "Resume"]
+        assert card.title == "Commands"
+
+    def test_the_status_card_carries_its_actions(self):
+        card = command_card(title="Status", text="Idle", actions=STATUS_ACTIONS)
+
+        assert [b.label for b in card.buttons] == ["Stop", "New", "Model", "Resume", "Dir"]
+
+
+def test_a_resume_button_is_cut_to_fit_and_ticks_the_current_one() -> None:
+    card = resume_card(header="h", entries=[("c1", "x" * 80), ("c2", "short")], active="c2")
+
+    assert [b.label for b in card.buttons] == ["1", "✓ 2"]
+
+
+def test_the_dir_card_names_paths_under_home_with_a_tilde_and_folds_in_the_default() -> None:
+    home = os.path.expanduser("~")
+    listed = [f"{home}/src/app", "/srv/lib"]
+
+    card = dir_card(current=f"{home}/src/app", directories=listed, default=f"{home}/src/app")
+
+    # The default is a listed entry, so it needs no Default button of its own.
+    assert [b.label for b in card.buttons] == ["✓ ~/src/app", "/srv/lib"]
+    assert card.title == "Working directory"
+    assert card.text.startswith("Current: ~/src/app\n")
+    assert path_label(None) == "Default directory"
+    assert path_label(home) == "~"

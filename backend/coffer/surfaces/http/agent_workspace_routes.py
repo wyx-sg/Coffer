@@ -11,7 +11,7 @@ builds the envelope explicitly with :func:`coffer.surfaces.http.errors.error_res
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
@@ -20,10 +20,12 @@ from coffer.application.agent.mcp_entry_service import McpEntryDetail, ParseErro
 from coffer.application.agent.plugin_views import PluginDetailView, PluginView
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.mcp_entries import McpEntry, masked_extra, secret_env_keys
+from coffer.domain.agent.mcp_entry_redact import redacted_config
 from coffer.domain.agent.plugin_bundle import PluginComponent
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.surfaces.http.agent_dependencies import get_agent_service
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 from coffer.surfaces.http.errors import error_response
@@ -35,14 +37,14 @@ from coffer.surfaces.http.workspace_dependencies import (
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 
 class McpEntryOut(BaseModel):
     name: str
     source: str
-    transport: str
+    transport: Literal["stdio", "http"]
     command: str | None
     args: list[str]
     # KEY NAMES ONLY — env/header values may carry secrets and never cross HTTP.
@@ -69,6 +71,9 @@ class McpEntryDetailOut(McpEntryOut):
     path: str
     cwd: str | None
     extra: list[McpEntryFieldOut]
+    # The entry exactly as the agent's file holds it (one JSON object), every
+    # env/header value and secret-looking value replaced by a mask.
+    config: dict[str, Any]
 
 
 class ParseErrorOut(BaseModel):
@@ -85,8 +90,8 @@ class McpEntriesOut(BaseModel):
 class McpEntryAdopt(BaseModel):
     source: str | None = None
     new_name: str | None = None
-    # Maps secret-looking env/header KEY names to credential refs; the VALUES
-    # are encrypted into the credential store server-side, never into the
+    # Maps secret-looking env/header KEY names to secret refs; the VALUES
+    # are encrypted into the secret store server-side, never into the
     # resource config.
     secrets: dict[str, str] | None = None
 
@@ -128,7 +133,7 @@ class MarketplaceOut(BaseModel):
     source: str | None
 
 
-class PluginsOut_(BaseModel):  # noqa: N801 — avoids clashing with the service dataclass
+class PluginsOut(BaseModel):
     items: list[PluginOut]
     marketplaces: list[MarketplaceOut]
     parse_errors: list[ParseErrorOut]
@@ -184,6 +189,7 @@ def _entry_detail_out(d: McpEntryDetail) -> McpEntryDetailOut:
         **_entry_out(d.entry).model_dump(),
         path=d.path,
         cwd=d.entry.cwd,
+        config=redacted_config(d.entry.raw),
         extra=[
             McpEntryFieldOut(key=f.key, value=f.value, masked=f.masked)
             for f in masked_extra(d.entry.extra)
@@ -295,13 +301,13 @@ async def adopt_mcp_entry(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{uid}/plugins", response_model=PluginsOut_)
+@router.get("/{uid}/plugins", response_model=PluginsOut)
 async def list_plugins(
     uid: str,
     svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
-) -> PluginsOut_:
+) -> PluginsOut:
     out = await svc.list_plugins(uid)
-    return PluginsOut_(
+    return PluginsOut(
         items=[_plugin_out(p) for p in out.items],
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
         parse_errors=[_parse_error_out(p) for p in out.parse_errors],

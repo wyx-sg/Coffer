@@ -63,11 +63,3 @@ test("audit.activity.* maps carry no key the backend no longer emits", () => {
   expect(stale(en.audit.activity)).toEqual([]);
   expect(stale(zh.audit.activity)).toEqual([]);
 });
-
-test("audit.actor covers every actor the backend writes + every request origin", () => {
-  // Request-origin actors (X-Coffer-Actor header) + the domain actors the
-  // backend records directly on audit rows (audit_service.record(actor=...)).
-  const actors = ["ui", "cli", "api", "system", "user", "agent", "channel"];
-  expect(missing(actors, en.audit.actor)).toEqual([]);
-  expect(missing(actors, zh.audit.actor)).toEqual([]);
-});

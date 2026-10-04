@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
-**Related**: spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
+**Related**: [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
 
 ## Context
 
@@ -28,7 +28,8 @@ the place agent memory lives four times:
 4. **Session-context injection.** A per-agent SessionStart hook replacing
    projection's one real benefit, ambient loading. Removed 2026-09-10 — it had
    never once been installed on the maintainer's machine, so in two months the
-   path never ran.
+   path never ran. Delivery came back later as an explicit, audited install,
+   decided in [Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
 
 Aggregation — reading the agents' own memories — shipped 2026-09-12, installed
 and ran. It was the first attempt whose failure could be measured, and on
@@ -55,13 +56,16 @@ neither built a search engine to do it:
 
 ## Options Considered
 
-### Option A — Read the agents' memory, distil it into Coffer's own notes, deliver the whole index (chosen)
+### Option A — Read the agents' memory, distil it into Coffer's own notes, deliver them through hooks (chosen)
 
 Coffer reads each enabled agent's native memory read-only, keeps what it read
 verbatim in a hidden `.raw/`, and has its internal model distil it into notes of
 its own — one topic per file, partitioned by repository plus `global` — merging
-across agents by meaning. Each session opens with the whole index of its
-repository's partition and the absolute path of the notes directory.
+across agents by meaning. Delivery is by hook, at two moments (decided in
+the delivery ADR above): a session opens with the index of its repository's
+partition and `global`, bounded to what a hook can carry, plus the absolute
+path of the notes directory; each substantive prompt brings in up to three
+notes it names.
 
 - **Pros.** The agents keep the canonical copy, so nothing Coffer does can
   corrupt a tool's memory. Distilling starts from the agents' finished work
@@ -73,7 +77,9 @@ repository's partition and the absolute path of the notes directory.
   undocumented private formats. A session's opening costs an index instead of
   eight lines. A rebuild gives back equivalent notes, not identical wording.
 - **Why it wins.** It is the only option that keeps the prohibition below and
-  still reaches the session with something the session uses.
+  still reaches the session with something the session uses. The principle
+  it narrows is "pull, not push": Coffer never *writes* into an agent's own
+  memory, but it does *deliver* its own notes through hooks the user installed.
 
 ### Option B — Native projection (Coffer owns the store and writes into each agent)
 
@@ -145,8 +151,9 @@ Multi-term, fuzzy or embedding search behind `coffer__recall`.
 
 **Coffer never writes an agent's native memory. It reads each enabled agent's
 memory read-only, distils it into notes of its own — one topic per file, filed
-by repository — and hands each session the whole index of that set plus the
-path to read the bodies as files.**
+by repository — and delivers them through hooks: the index of that set plus
+the path to read the bodies as files at session start, then the notes a prompt
+names.**
 
 1. **Read, never write.** Coffer reads the native memory of each registered,
    enabled agent from a path derived from its own `config_dir`, and modifies
@@ -168,24 +175,28 @@ path to read the bodies as files.**
 4. **A retirement is written down.** `RETIRED.md` records what was retired, why
    and what replaced it, and is input to the next pass. In a store whose sources
    live outside it, an unrecorded deletion is undone by the next pass.
-5. **Delivery is the index, and the bodies are files.** A session opens with
-   `global`'s index, the whole index of the current repository's partition —
-   the conclusion written into each line — and the absolute path of the notes
-   directory. It names no tool for reaching a body. A ceiling exists, sized for
-   an index; when it binds it prefers the open repository over `global` and
-   names the directory holding what it dropped. Partitions are identified by
-   repository, which collapses worktrees and second clones and excludes scratch
-   directories.
-6. **Two delivery paths.** A session the developer drives themselves receives
-   it through a hook in the agent's own settings, installed only on request and
-   repaired when stale — see
+5. **At session start the index, and the bodies are files.** A session
+   opens with `global`'s index, the index of the current repository's
+   partition — the conclusion written into each line — and the absolute path
+   of the notes directory. It names no tool for reaching a body. The delivery
+   is bounded to 9,500 UTF-8 bytes, which both agents' hook output limits
+   require; when the index does not fit, the trim drops the oldest lines,
+   prefers the open repository over `global`, and names the directory holding
+   what it dropped. Partitions are identified by repository, which collapses
+   worktrees and second clones and excludes scratch directories.
+6. **After the start, retrieval.** Each substantive prompt ranks
+   the notes lexically and adds the top three. Decided in [Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
+7. **Two delivery paths.** A session the developer drives themselves receives
+   both moments through hooks in the agent's own settings, installed only
+   on request and repaired when stale — see
    [Agent Hook Installation](agent-hook-installation.md). A channel-driven turn
-   receives the same payload through the system-prompt append the turn platform
-   already composes, with no hook.
-7. **Behind the `memory` experimental feature.** Off by default on the stable
-   channel. While it is off, aggregation and distil skip their rounds, the
-   `coffer-guide` skill does not document the memory layer, and every delivery
-   hook is withdrawn.
+   receives the index and the prompt's notes through the system-prompt append
+   the turn platform already composes, with no hook of its own for those two
+   moments; the guard still runs through the hook the driven agent loads.
+8. **Behind the `memory` experimental feature.** Aggregation, distil and
+   delivery run when `memory` is on (spec experimental-features "Close the
+   memory feature's surfaces"); with it off the routes close and the hook is
+   withdrawn.
 
 ## Consequences
 
@@ -193,8 +204,9 @@ path to read the bodies as files.**
   by a model, instead of a string comparison that never matched.
 - **Coffer stops re-importing raw material** its sources had already distilled.
 - **Nothing is left to fetch.** The delivered payload is an index the agent has
-  been shown; the "8 lines and a tool name" failure is not repeated by a bigger
-  ceiling but by there being nothing to go and fetch.
+  been shown, and the notes a prompt names arrive unasked; the "8 lines and a
+  tool name" failure is not repeated by a bigger ceiling but by there being
+  nothing to go and fetch.
 - **A note is an ordinary Markdown file at a path**, read the way both agents
   read their own memory.
 - **"Delete and rebuild" is equivalent, not identical.** `.raw/` is
@@ -209,8 +221,8 @@ path to read the bodies as files.**
   reach and no enabled switch; handing an agent a path is handing it the file,
   so a switch could only govern what Coffer serves, never what a process can
   open.
-- **A session's opening is more expensive** — an index of a hundred notes
-  rather than eight lines; Claude Code spends ~9k tokens on its own index every
+- **A session's opening is more expensive** — an index up to the 9,500-byte
+  ceiling rather than eight lines; Claude Code spends ~9k tokens on its own index every
   session, so this is the ecosystem's normal price for not searching.
 - **No table, no `remember` tool.** Notes, raw entries, the index and the
   retirement record are files; an agent records something the way it already
@@ -222,4 +234,5 @@ path to read the bodies as files.**
   spec memory "Record retirements so they stick",
   spec memory "Deliver the index and the notes path at session start",
   spec memory "Deliver to channel turns through the system prompt",
+  spec memory "Retrieve the notes a prompt names",
   spec memory "Reintroduce no retired mechanism".

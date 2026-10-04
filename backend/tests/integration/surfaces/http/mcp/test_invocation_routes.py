@@ -15,7 +15,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.capability import (
     BUILTIN_SERVER_UID,
-    DELETED_SERVER_UID_PREFIX,
     MCPInvocation,
 )
 from coffer.domain.mcp.server_config import MCPServerConfig
@@ -26,10 +25,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
@@ -38,7 +34,10 @@ from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as invocation_aggregate_router,
 )
 from coffer.surfaces.http.mcp.invocation_routes import router as invocation_router
+from tests.support.vault_stores import make_resource_repo
 
+#: The uid of a server since deleted: its rows stay in the log, under the uid.
+_GONE_UID = "0123456789abcdef0123456789abcdef"
 _STDIO = {"transport": {"type": "stdio", "command": "/bin/true", "args": []}}
 
 
@@ -49,6 +48,7 @@ def _make_invocation(
     duration_ms: int = 10,
     offset_seconds: int = 0,
     session_id: str | None = None,
+    agent_uid: str | None = None,
 ) -> MCPInvocation:
     return MCPInvocation(
         id=None,
@@ -60,6 +60,7 @@ def _make_invocation(
         status=status,  # type: ignore[arg-type]
         error_message="boom" if status == "error" else None,
         session_id=session_id,
+        agent_uid=agent_uid,
     )
 
 
@@ -88,7 +89,7 @@ async def _build_app(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     uids = {
@@ -134,7 +135,7 @@ async def test_empty_invocations_list(inv_client: tuple) -> None:
     client, _engine, _repo, _rsvc, uids = inv_client
     r = await client.get(f"/api/v1/resources/mcp_server/{uids['fs']}/invocations")
     assert r.status_code == 200, r.text
-    assert r.json() == {"invocations": []}
+    assert r.json() == {"invocations": [], "next_cursor": None, "total": 0}
 
 
 @pytest.mark.asyncio
@@ -308,6 +309,10 @@ async def test_invocation_response_shape(inv_client: tuple) -> None:
     assert inv["status"] == "ok"
     assert inv["session_id"] == "sess-123"
     assert inv["error_message"] is None
+    # The row id is the log's own, and a session that reported no agent names none.
+    [stored] = await repo.query(resource_uid=uids["fs"])
+    assert inv["id"] == stored.id
+    assert inv["agent_uid"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +393,7 @@ async def test_per_server_route_also_carries_resource_name(inv_client: tuple) ->
 
 
 # ---------------------------------------------------------------------------
-# Read-time name resolution (ADR resource-identity-is-an-immutable-uid)
+# Read-time name resolution (ADR identity-is-the-uid-inside-the-file)
 # ---------------------------------------------------------------------------
 
 
@@ -412,20 +417,17 @@ async def test_rename_carries_the_whole_history_under_the_new_name(inv_client: t
 
 @pytest.mark.asyncio
 async def test_builtin_and_deleted_uids_resolve_to_a_null_name(inv_client: tuple) -> None:
-    """Two recorded values are not resource uids and resolve to nothing: the
-    sentinel Coffer's own built-in tools log under, and the marker rows whose
-    server was already gone when the log was re-keyed carry. Both must still
-    appear on the timeline, with a null name the client falls back from."""
+    """Two recorded values resolve to no resource: the sentinel Coffer's own
+    built-in tools log under, and the uid of a server since deleted. Both must
+    still appear on the timeline, with a null name the client falls back from."""
     client, _engine, repo, _rsvc, _uids = inv_client
     await repo.insert(_make_invocation(BUILTIN_SERVER_UID, capability_key="coffer__search"))
-    await repo.insert(
-        _make_invocation(f"{DELETED_SERVER_UID_PREFIX}gone", capability_key="do_thing")
-    )
+    await repo.insert(_make_invocation(_GONE_UID, capability_key="do_thing"))
 
     r = await client.get("/api/v1/mcp/invocations")
     by_uid = {inv["resource_uid"]: inv for inv in r.json()["invocations"]}
     assert by_uid[BUILTIN_SERVER_UID]["resource_name"] is None
-    assert by_uid[f"{DELETED_SERVER_UID_PREFIX}gone"]["resource_name"] is None
+    assert by_uid[_GONE_UID]["resource_name"] is None
 
 
 @pytest.mark.asyncio
@@ -467,3 +469,176 @@ async def test_name_resolution_is_one_lookup_for_the_whole_page(
     r = await client.get("/api/v1/mcp/invocations")
     assert len(r.json()["invocations"]) == 24
     assert len(calls) == 1, f"expected one resource lookup for the page, got {len(calls)}"
+
+
+# ---------------------------------------------------------------------------
+# Calling agent (spec mcp-gateway "Record invocations without content")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_agent_uid_is_carried_and_filters_both_routes(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    await repo.insert(_make_invocation(fs, capability_key="mine", agent_uid="agent-a"))
+    await repo.insert(_make_invocation(fs, capability_key="theirs", agent_uid="agent-b"))
+    await repo.insert(_make_invocation(fs, capability_key="nobody"))
+    await repo.insert(_make_invocation(uids["jira"], capability_key="jira", agent_uid="agent-a"))
+
+    everything = (await client.get("/api/v1/mcp/invocations")).json()
+    by_key = {inv["capability_key"]: inv["agent_uid"] for inv in everything["invocations"]}
+    assert by_key == {"mine": "agent-a", "theirs": "agent-b", "nobody": None, "jira": "agent-a"}
+
+    agg = (await client.get("/api/v1/mcp/invocations?agent_uid=agent-a")).json()
+    assert {inv["capability_key"] for inv in agg["invocations"]} == {"mine", "jira"}
+    assert agg["total"] == 2
+
+    per_server = await client.get(
+        f"/api/v1/resources/mcp_server/{fs}/invocations?agent_uid=agent-a"
+    )
+    assert [inv["capability_key"] for inv in per_server.json()["invocations"]] == ["mine"]
+    assert per_server.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_cursor_is_bound_to_the_agent_filter(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    for i in range(3):
+        await repo.insert(
+            _make_invocation(uids["fs"], capability_key=f"t{i}", offset_seconds=i, agent_uid="a")
+        )
+
+    issued = (await client.get("/api/v1/mcp/invocations?limit=1")).json()["next_cursor"]
+    assert issued is not None
+    refused = await client.get(
+        "/api/v1/mcp/invocations", params={"limit": 1, "agent_uid": "a", "cursor": issued}
+    )
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["error"]["code"] == "CURSOR_INVALID"
+
+    bound = (await client.get("/api/v1/mcp/invocations?limit=1&agent_uid=a")).json()
+    follow = await client.get(
+        "/api/v1/mcp/invocations",
+        params={"limit": 1, "agent_uid": "a", "cursor": bound["next_cursor"]},
+    )
+    assert follow.status_code == 200, follow.text
+    assert [inv["capability_key"] for inv in follow.json()["invocations"]] == ["t1"]
+
+
+# ---------------------------------------------------------------------------
+# Total (spec resource-framework "Count a log's matching rows beside each page")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_total_counts_every_matching_row_on_every_page(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    for i in range(5):
+        await repo.insert(
+            _make_invocation(fs, capability_key=f"err{i}", status="error", offset_seconds=i)
+        )
+    await repo.insert(_make_invocation(fs, capability_key="fine", status="ok"))
+    await repo.insert(_make_invocation(uids["jira"], capability_key="j", status="error"))
+
+    first = (await client.get("/api/v1/mcp/invocations?status=error&limit=2")).json()
+    assert len(first["invocations"]) == 2
+    assert first["total"] == 6
+    second = (
+        await client.get(
+            "/api/v1/mcp/invocations",
+            params={"status": "error", "limit": 2, "cursor": first["next_cursor"]},
+        )
+    ).json()
+    assert len(second["invocations"]) == 2
+    assert second["total"] == 6
+
+    per_server = (
+        await client.get(f"/api/v1/resources/mcp_server/{fs}/invocations?status=error&limit=2")
+    ).json()
+    assert per_server["total"] == 5
+    assert (await client.get("/api/v1/mcp/invocations")).json()["total"] == 7
+
+
+# ---------------------------------------------------------------------------
+# Free-text search is the database's
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_q_matches_the_tool_the_error_and_the_servers_current_name(
+    inv_client: tuple,
+) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    await repo.insert(_make_invocation(uids["fs"], capability_key="read_file", offset_seconds=30))
+    await repo.insert(_make_invocation(uids["fs"], capability_key="write_file", offset_seconds=20))
+    await repo.insert(
+        _make_invocation(uids["jira"], capability_key="search", status="error", offset_seconds=10)
+    )
+
+    by_tool = (await client.get("/api/v1/mcp/invocations", params={"q": "WRITE"})).json()
+    by_error = (await client.get("/api/v1/mcp/invocations", params={"q": "boom"})).json()
+    by_server = (await client.get("/api/v1/mcp/invocations", params={"q": "jira"})).json()
+    paged = (await client.get("/api/v1/mcp/invocations", params={"q": "file", "limit": 1})).json()
+
+    assert [i["capability_key"] for i in by_tool["invocations"]] == ["write_file"]
+    assert [i["capability_key"] for i in by_error["invocations"]] == ["search"]
+    assert [i["capability_key"] for i in by_server["invocations"]] == ["search"]
+    assert by_server["total"] == 1
+    assert paged["total"] == 2 and paged["next_cursor"] is not None
+    # The cursor belongs to the query it was issued for.
+    other = await client.get(
+        "/api/v1/mcp/invocations", params={"q": "jira", "limit": 1, "cursor": paged["next_cursor"]}
+    )
+    assert other.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Hand-off for a call the server never answered
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="an unanswered call carries a hand-off without arguments"
+)
+@pytest.mark.asyncio
+async def test_an_unanswered_call_carries_a_handoff_without_arguments(inv_client: tuple) -> None:
+    """spec mcp-gateway "Hand a failing MCP call's diagnosis to an agent": a call
+    that failed or timed out gets a prompt naming the server, tool, error, the
+    24 h failure count, session and call id; a success, a denial or an upstream's
+    own error gets none."""
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    await repo.insert(
+        _make_invocation(fs, capability_key="read_file", status="error", session_id="sess-9")
+    )
+    await repo.insert(_make_invocation(fs, capability_key="slow", status="timeout"))
+    await repo.insert(_make_invocation(fs, capability_key="fine"))
+    await repo.insert(_make_invocation(fs, capability_key="refused", status="denied"))
+    answered = _make_invocation(fs, capability_key="said_no", status="error")
+    answered.error_message = "upstream tool returned an error result (isError)"
+    await repo.insert(answered)
+
+    rows = (await client.get("/api/v1/mcp/invocations")).json()["invocations"]
+    by_key = {r["capability_key"]: r for r in rows}
+    assert by_key["fine"]["handoff"] is None
+    assert by_key["refused"]["handoff"] is None
+    failed = by_key["read_file"]["handoff"]["prompt"]
+    assert "fs" in failed and "read_file" in failed and "boom" in failed
+    assert "sess-9" in failed and str(by_key["read_file"]["id"]) in failed
+    assert "3 times in the last 24 hours" in failed
+    assert by_key["said_no"]["handoff"] is None
+    assert "timed out" in by_key["slow"]["handoff"]["prompt"]
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="status failed is every outcome but ok")
+@pytest.mark.asyncio
+async def test_status_failed_is_every_outcome_but_ok(inv_client: tuple) -> None:
+    """The Activity page's "Failed" filter: an error, a timeout and a denial."""
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    for key, status in (("a", "ok"), ("b", "error"), ("c", "timeout"), ("d", "denied")):
+        await repo.insert(_make_invocation(fs, capability_key=key, status=status))
+    body = (await client.get("/api/v1/mcp/invocations?status=failed")).json()
+    assert {r["capability_key"] for r in body["invocations"]} == {"b", "c", "d"}
+    assert body["total"] == 3

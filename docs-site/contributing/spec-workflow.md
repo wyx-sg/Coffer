@@ -20,7 +20,7 @@ openspec/
   specs/<capability>/
     spec.md                          purpose, requirements, scenarios (required)
     data-model.md                    entities and fields, when the capability has state
-    contracts/api.openapi.yaml       the hand-written wire contract, when it has endpoints
+    contracts/api.openapi.yaml       the wire contract, generated from the models, when it has endpoints
     <child>/spec.md                  a child capability, id <capability>/<child>
   changes/<change-id>/
     .openspec.yaml                   schema and creation date (+ skip_specs for no-delta work)
@@ -41,18 +41,19 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 | `agent-registry/claude-code`, `agent-registry/codex` | How each agent type realises those facets |
 | [`channels`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) | Messaging channels to agents, independent of platform |
 | `channels/telegram`, `channels/seatalk` | The per-platform mechanics |
-| [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | The turn platform (agent adapters, conversations, the event stream) and the web Chat page |
-| [`credentials`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/credentials/spec.md) | The encrypted credential store and the rule that everything else holds references |
+| [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | The turn platform (agent adapters, conversations, the event stream) and the web Conversations page |
+| [`secret`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md) | The encrypted secret store and the rule that everything else holds references |
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | The Coffer process: one per vault, discovery, the loopback HTTP guard, serving the UI, logs, terminal install |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | The macOS shell: window, tray, handshake, detect-or-spawn, the `.dmg` |
-| [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | Release channels, the feature registry, per-machine switches, closing surfaces |
+| [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | The feature registry, per-machine switches, closing surfaces |
 | [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | The model Coffer itself thinks with and its unattended passes |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | Plain-file knowledge collections and curation |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | Upstream MCP servers aggregated behind one endpoint |
 | [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | Aggregating each agent's native memory into Coffer's own notes |
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | Model provider connections projected into each agent's config |
-| [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | The kind-agnostic resource model, scope, audit log, retention, REST/CLI parity |
+| [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | The kind-agnostic resource model, scope, audit log, retention, the minimal-CLI rule |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | The master skill store and delivery to agents |
+| [`vault-storage`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-storage/spec.md) | The five storage classes under `~/.coffer/`, the vault as a git repository written through one validated commit, and the one-time upgrade |
 | [`vault-sync`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) | Converging the vault with a git remote the user owns |
 | [`web-ui`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md) | The application shell, information architecture, shared list and detail conventions, i18n |
 
@@ -60,24 +61,21 @@ A capability covers one behaviour across every layer and surface that delivers i
 
 ## Writing requirements and scenarios
 
-Every requirement states its rule with **SHALL** or **MUST** and owns at least one scenario, written as GIVEN, WHEN, THEN and AND steps. This excerpt is from [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md):
+Every requirement states its rule with **SHALL** or **MUST** and owns at least one scenario, written as GIVEN, WHEN, THEN and AND steps. This abridged excerpt is from [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md):
 
 ```markdown
-### Requirement: Stamp every build with a release channel
-Every build MUST carry exactly one release channel: `stable` for a build made by
-the release workflow from a tag, `dev` for every other build, including a local
-`make desktop` and a source install. `GET /api/v1/daemon/status` MUST report the
-channel as `channel`, and `coffer daemon status` MUST print it.
+### Requirement: Declare the experimental features in one registry
+Coffer MUST declare its experimental features in one registry, and every
+surface MUST take the list from it. The registry names exactly four features,
+in this order: `knowledge`, `memory`, `sync` and `models`.
 
-#### Scenario: a source build reports the dev channel
-- **GIVEN** a daemon started from a source checkout
-- **WHEN** the status is requested
-- **THEN** it reports `channel: "dev"`
+A stored setting for a key the registry does not name MUST be ignored by every
+read — logged, never listed — and MUST NOT fail anything.
 
-#### Scenario: the release workflow stamps the stable channel
-- **GIVEN** the channel stamp script run with `stable`
-- **WHEN** the build channel is read
-- **THEN** it is `stable`
+#### Scenario: a stored setting for a feature the registry does not name is ignored
+- **GIVEN** a daemon config whose `features` object holds a key the registry does not name
+- **WHEN** the daemon starts and the features and the daemon status are read
+- **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
 ```
 
 The rules, which `openspec/config.yaml` also feeds to the CLI when it plans a change:
@@ -94,10 +92,10 @@ The rules, which `openspec/config.yaml` also feeds to the CLI when it plans a ch
 Because a requirement has no number, you cite it by its capability and its exact title. From Markdown, link the spec and quote the title. From a code comment, write:
 
 ```python
-# spec experimental-features "Stamp every build with a release channel"
+# spec experimental-features "Declare the experimental features in one registry"
 ```
 
-`scripts/check_spec_citations.py` runs in `make lint` and scans every tracked file, including this site. It resolves each citation against the `### Requirement:` headings under `openspec/specs/`. A citation whose capability or title does not exist fails the gate. So renaming a requirement fails until every citation of the old title follows it. A title that an in-flight change adds or renames is accepted until that change is archived. The gate also rejects retired id forms, such as numbered requirement, spec or ADR ids, and `scripts/check_doc_numbering.py` keeps spec directories and ADR filenames free of numbers.
+`scripts/check_spec_citations.py` runs in `make lint` and scans every tracked file, including this site. It resolves each citation against the `### Requirement:` headings under `openspec/specs/`. A citation whose capability or title does not exist fails the gate. So renaming a requirement fails until every citation of the old title follows it. A title that an in-flight change adds or renames is accepted until that change is archived. Capabilities and ADRs are named, never numbered.
 
 ## The change workflow
 
@@ -159,17 +157,20 @@ Every scenario must be covered by at least one test, in any tier. The test names
 
 ```python [pytest]
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="a source build reports the dev channel"
+    spec="experimental-features",
+    scenario="a stored setting for a feature the registry does not name is ignored",
 )
-async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(client):
-    r = await client.get("/api/v1/daemon/status", headers={"X-Coffer-Token": ""})
-    assert r.json()["channel"] == "dev"
+def test_a_stored_setting_for_a_retired_feature_is_ignored(home):
+    daemon_config.write_feature_setting("retired_feature", False)
+    with _client() as c:
+        status = c.get("/api/v1/daemon/status").json()
+    assert "retired_feature" not in status["features"]
 ```
 
 ```ts [Vitest / Playwright]
 import { acceptance } from "@/test/acceptance"; // e2e specs import ./_acceptance
 
-acceptance("web-ui", "legacy /audit redirects to activity", async ({ page }) => {
+acceptance("web-ui", "activity gives each record its own tab", async ({ page }) => {
   // ...
 });
 ```
@@ -185,7 +186,7 @@ fn a_spawned_daemon_leaves_the_apps_process_group() { /* ... */ }
 `scripts/audit_acceptance.py` runs in `make verify-acceptance` and in CI. It scans every `spec.md` and every test file, and fails on any of these:
 
 - a scenario that no marker covers
-- a marker that names a capability or scenario that does not exist, usually after a rename
+- a marker that names a capability or scenario that does not exist, usually after a rename (a scenario that a change in progress adds counts as existing, and is listed, until that change is archived)
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 
@@ -199,16 +200,16 @@ The pytest marker is registered with `--strict-markers`, so a typo in the marker
 
 ## The end-to-end deliverable rule
 
-A capability ships only when a user can really operate it. That means backend persistence plus every surface that exposes it (CLI, MCP through `coffer-mcp-shim`, REST and, where it has one, the web UI), all wired together, with every scenario covered by a passing test. A backend with no surface, or a page with no backend, is not done.
+A capability ships only when a user can really operate it. That means backend persistence plus every surface that exposes it (REST, the web UI, MCP through `coffer-mcp-shim` and, where one is needed, a CLI command), all wired together, with every scenario covered by a passing test. A backend with no surface, or a page with no backend, is not done.
 
-One rule applies across every spec: **every mutation, and every read of state that is not a plain file, is reachable from both REST and the `coffer` CLI**, with the same daemon and the same error model. For a plain file the owning spec declares directly readable or editable — a knowledge document, a memory note, a skill's folder, an agent's own config file, the daemon log — the CLI satisfies the rule by naming the file with `coffer path`; the REST routes that serve such files stay for the web UI, which cannot read the disk. The [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) spec tests it across the whole command tree. A spec that cannot honour the rule records the gap in its `## Purpose`.
+One rule applies across every spec: **the CLI carries only what needs it.** A command exists for one of four reasons: a program Coffer installs or writes runs it, it must work when the daemon is down, a prompt Coffer hands an agent tells it to run it, or the web UI cannot do it. Every other operation is REST plus a page of the web UI, and a plain file that the owning spec declares directly readable or editable (a knowledge document, a memory note, a skill's folder, an agent's own config file, the daemon log) is read and edited with ordinary tools. The [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) spec tests that the command tree equals the reviewed list of commands and their reasons.
 
 ## Docs change with the code
 
 When a change alters behaviour, the same pull request updates:
 
 - the spec deltas, archived into `openspec/specs/`
-- `contracts/api.openapi.yaml`, when an endpoint or schema changes. Then run `make frontend-codegen`
+- `contracts/api.openapi.yaml`, when an endpoint or schema changes. It is never edited by hand: change the backend model and run `make contracts`, which regenerates the contract and then the frontend's types, and review the contract diff like any other
 - `data-model.md`, when an entity changes
 - The architecture pages under [`docs-site/architecture/`](/architecture/). `scripts/check_architecture_doc.py` fails if its code-layout tree or its built-in tool roster drifts from the code
 - the affected ADR, the pages of this site, and any `.agents/` convention
@@ -244,7 +245,7 @@ An ADR states **one** decision and argues every serious option, the chosen one i
 ## Consequences
 ```
 
-The directory records the **live** design, not a chronological log. When a decision changes, rewrite the ADR that owns it so it reads as if written today, with the design it replaced argued as one of its options. When the thing it decided is removed, delete the ADR. Git history keeps the rest. Add each new ADR to the index in [`docs/decisions/README.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md), which `check_doc_numbering.py` keeps in step with the files. A change to [Principles](/architecture/principles) itself is an amendment. It needs its own proposal pull request that explains motivation, impact and alternatives.
+The directory records the **live** design, not a chronological log. When a decision changes, rewrite the ADR that owns it so it reads as if written today, with the design it replaced argued as one of its options. When the thing it decided is removed, delete the ADR. Git history keeps the rest. Add each new ADR to the index in [`docs/decisions/README.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md), which `scripts/check_adr_index.py` keeps in step with the files. A change to [Principles](/architecture/principles) itself is an amendment. It needs its own proposal pull request that explains motivation, impact and alternatives.
 
 The site's [decision records](/architecture/decisions) page summarises the current ADRs.
 

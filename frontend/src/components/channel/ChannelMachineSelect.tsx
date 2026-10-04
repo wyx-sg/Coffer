@@ -35,7 +35,7 @@ import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { machineOptions, type MachineOption } from "@/lib/machineBinding";
 import { toneClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
-import { bindingState } from "./channelBinding";
+import { bindingState } from "@/lib/channels/channelBinding";
 
 interface Props {
   /** The channel being bound — its identity, which the PATCH is addressed to. */
@@ -43,7 +43,7 @@ interface Props {
   /** Its label, for the picker's accessible name and the toast. */
   name: string;
   /** Its current config — carried through the PATCH untouched beside the new
-   *  binding, so a rebind never drops a credential ref. */
+   *  binding, so a rebind never drops a secret ref. */
   config: Record<string, unknown>;
   /** The stored binding; null is unbound. */
   runsOn: string | null;

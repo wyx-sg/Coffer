@@ -45,32 +45,33 @@ These rules come from [Principles](/architecture/principles), which outranks eve
 
 ### The daemon listens on loopback only
 
-The HTTP API binds `127.0.0.1` and nothing else. Every router that reads or changes vault state declares the `require_token` dependency, so its requests must carry the API token in `X-Coffer-Token`. Only the readiness probe, `GET /api/v1/daemon/status`, answers without it. The token is minted on each daemon start and published in `~/.coffer/daemon.json`, written with mode `0600`. A host guard also rejects any request whose `Host` header is not a loopback authority (`127.0.0.1`, `localhost`, `::1`). That check defeats DNS rebinding, where a web page re-resolves its own hostname to `127.0.0.1`.
+The HTTP API binds `127.0.0.1` and nothing else. Every router that reads or changes vault state declares the `require_token` dependency, so its requests must carry the API token in `X-Coffer-Token`. Only the readiness probe, `GET /api/v1/daemon/status`, answers without it. The token is minted on each daemon start and published in `~/.coffer/daemon.json`, written with mode `0600`. A guard in front of every route also rejects any request whose `Host` header is not `127.0.0.1`, `localhost` or `[::1]` on the daemon's port. That check defeats DNS rebinding, where a web page re-resolves its own hostname to `127.0.0.1`. The same guard rejects any request whose `Origin` is not one of Coffer's own: the daemon's web origin, the desktop app, or an opted-in dev origin.
 
 When you contribute:
 
 - Never add a bind address, flag or setting that exposes the daemon beyond loopback.
-- Give every new router `dependencies=[Depends(require_token)]`, and never exempt a route from the host guard.
+- Give every new router `dependencies=[Depends(require_token)]`, and never exempt a route or a listener from the Host and Origin guard.
 - CORS is not the security boundary, and widening it grants nothing. The token is the boundary. Do not treat an origin check as authentication.
 
 ### Secrets exist only as ciphertext
 
-Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exists in memory only between decryption and the spawn or header injection that consumes it.
+Secrets live only as Fernet ciphertext, one file per secret (`~/.coffer/vault/secret/<ref>.enc`, or `local/secret/` for a machine-local one). Plaintext exists in memory only between decryption and the spawn or header injection that consumes it.
 
-- Store a **credential reference**, never a secret, in any other table, config file, resource spec or API response.
+- Store a **secret reference**, never a secret, in any other table, config file, resource spec or API response.
 - Never let plaintext reach the database, a log line, the audit log or any structured event. Watch exception messages and `repr`s that might include a request header or an environment block.
-- The Fernet master key is managed only by `coffer.infrastructure.credentials`. By default it is a `0600` file beside the database, or it lives in the OS keychain when the user opts in. It never goes into anything the vault publishes, such as a sync remote. It reaches another machine only through the explicit key export and import.
-- Credential material leaves the machine only as ciphertext, and only when the user explicitly asks.
+- The Fernet master key is managed only by `coffer.infrastructure.secret`, behind a storage port the build chooses: a signed release keeps it in a Keychain access group only Coffer's signed binaries can read; a development build keeps it in a `0600` file beside the database, or in the OS keychain when the user opts in. It never goes into anything the vault publishes, such as a sync remote. It reaches another machine only through a key backup the desktop app writes behind a presence check, and **Settings › Security › Import a master key**.
+- No route, command or MCP tool returns a secret's plaintext or the master key. The only exceptions are the desktop app's presence-gated reveal and key backup, and `coffer run`'s resolve of standalone `secret/` names. A new path that returns a value is a defect however it is audited ([Security model](/architecture/security)).
+- Secret material leaves the machine only as ciphertext, and only when the user explicitly asks.
 
 The `secrets-scan` CI job runs gitleaks over the full git history. A committed secret fails the pull request even if a later commit removes it. Use obviously fake values in tests and fixtures.
 
 ### `keyring` stays confined
 
-Only `backend/coffer/infrastructure/credentials/keyring_adapter.py` imports `keyring`. Every other module passes credential references. Import-linter contracts in `backend/pyproject.toml` enforce this ("keyring confined to infrastructure", "CLI does not access the keychain directly"), and `make lint` runs them. Do not add an `ignore_imports` waiver to get around them. Route the need through the credentials module instead.
+Only `backend/coffer/infrastructure/secret/keyring_adapter.py` imports `keyring`. Every other module passes secret references. Import-linter contracts in `backend/pyproject.toml` enforce this ("keyring confined to infrastructure", "CLI does not access the keychain directly"), and `make lint` runs them. Do not add an `ignore_imports` waiver to get around them. Route the need through the secrets module instead.
 
 ### Outbound requests to user-supplied URLs go through the SSRF guard
 
-`coffer.infrastructure.net.ssrf_guard.check_url` resolves a URL's host and rejects loopback, private, link-local and carrier-grade NAT destinations. The probes the provider editor runs before anything is saved (list models, test connection, detect protocol) validate the base URL with it. Endpoints the user configures as their own — HTTP MCP upstreams, model and transcription calls, the IM platforms, the sync remote — are exempt once Coffer is using them, because a loopback or LAN endpoint is a legitimate target there ([Principles → Network defaults](/architecture/principles)). When you add code that makes the daemon fetch a URL a user supplied, validate it with `check_url` first. The guard does not pin the resolved address through to the HTTP client, so a DNS-rebinding host could pass validation and then resolve elsewhere. That residual risk is accepted for a single-user, loopback-only daemon whose URLs come from its own user.
+`coffer.infrastructure.net.ssrf_guard.check_url` resolves a URL's host and rejects loopback, private, link-local and carrier-grade NAT destinations. The probes the provider editor runs before anything is saved (list models, test connection) validate the base URL with it. Endpoints the user configures as their own — HTTP MCP upstreams, model and transcription calls, the IM platforms, the sync remote — are exempt once Coffer is using them, because a loopback or LAN endpoint is a legitimate target there ([Principles → Network defaults](/architecture/principles)). When you add code that makes the daemon fetch a URL a user supplied, validate it with `check_url` first. The guard does not pin the resolved address through to the HTTP client, so a DNS-rebinding host could pass validation and then resolve elsewhere. That residual risk is accepted for a single-user, loopback-only daemon whose URLs come from its own user.
 
 ### User content stays on the machine
 
@@ -83,8 +84,8 @@ Knowledge paths go through one traversal guard, `infrastructure/knowledge/paths.
 ## Checklist for a security-relevant change
 
 - [ ] No new listener, bind address or route that bypasses the token and host checks.
-- [ ] No secret in a table other than `credentials`, in a log, in the audit log or in an API response.
-- [ ] No new `keyring` import outside the credentials module, and no new import-linter waiver.
+- [ ] No secret outside the secret store's ciphertext files (`vault/secret/<ref>.enc`): not in a table, in a log, in the audit log or in an API response.
+- [ ] No new `keyring` import outside the secrets module, and no new import-linter waiver.
 - [ ] User-supplied outbound URLs are validated with the SSRF guard.
 - [ ] User- or agent-supplied paths go through a traversal guard.
 - [ ] Tests use fake secrets, and `make verify` is green, including `lint-imports`.
@@ -93,6 +94,6 @@ Knowledge paths go through one traversal guard, `infrastructure/knowledge/paths.
 ## Related
 
 - [Security model](/architecture/security)
-- [Credentials guide](/guides/credentials)
+- [Secret store guide](/guides/secret-store)
 - [Design principles](/architecture/design-principles)
 - [`SECURITY.md`](https://github.com/wyx-sg/Coffer/blob/main/SECURITY.md)

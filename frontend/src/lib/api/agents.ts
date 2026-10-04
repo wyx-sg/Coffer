@@ -1,255 +1,210 @@
 // frontend/src/lib/api/agents.ts — request helpers for /api/v1/agents/*
 //
-// Every route here is addressed by the agent's `uid`, never by its name: the
-// name is a label the user edits, and a request built from it would stop
-// resolving the moment they did (ADR resource-identity-is-an-immutable-uid).
-// The name still travels on the READ side — `AgentOut.name` is what a heading
-// and a table row show — so a caller that has an agent has both.
+// Every route here is addressed by the agent's `uid` (ADR
+// identity-is-the-uid-inside-the-file). An agent is one per type per machine
+// and its name is the type's fixed name (`claude-code` / `codex`); what a
+// heading and a table row show is `AgentOut.display_name`.
 //
 // Wire types are the agent-registry contract's generated schemas
 // (`openspec/specs/agent-registry/contracts/api.openapi.yaml` → `generated/agent-registry.ts`),
-// re-exported under the names the hooks and pages already import. Transport is
-// the shared `call` (.agents/frontend.md §4).
-import { call, enc } from "@/lib/api/call";
+// under the names the hooks and pages import. Transport is the typed client
+// (.agents/frontend.md §4).
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/agent-registry";
 
+import type { AdoptMcpEntryBody, AdoptSkillReach, UnmanagedSkillOut } from "./agents-workspace";
+
 type Schemas = components["schemas"];
+
+/** Which scan location an unmanaged skill lives in (`skills` | `agents_dir`).
+ *  Callers hold it as the URL's string, so the daemon is what rejects an unknown one (422). */
+const loc = (location: string) => location as UnmanagedSkillOut["location"];
 
 // Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
 export type AgentType = Schemas["AgentType"];
 
-type ConfigFileFormat = Schemas["ConfigFileFormat"];
-
-/**
- * Hand-written rather than the contract's `ConfigFileInfo`: the contract makes
- * `folder_path` and `kind` required and `size` / `modified_at` optional; the
- * daemon (and the test fixtures) do the reverse.
- */
-export interface ConfigFileInfo {
-  key: string;
-  display_name: string;
-  path: string;
-  /** Absolute path of the containing folder. */
-  folder_path?: string;
-  format: ConfigFileFormat;
-  exists: boolean;
-  size: number | null;
-  modified_at: string | null;
-  kind?: Schemas["ConfigFileKind"];
-  files?: Schemas["DirChild"][] | null;
-}
-
-/** `GET /agents/{uid}/config-files` — an inline shape in the contract. */
-export interface ConfigFileListOut {
-  items: ConfigFileInfo[];
-}
+export type ConfigFileInfo = Schemas["ConfigFileInfoOut"];
 
 /** Body of a config-file save. `expected_fingerprint` makes the write
  *  conditional: the daemon refuses it with 409 CONFIG_FILE_STALE when the file
  *  changed on disk since the read that produced the fingerprint. */
 export type ConfigFileWrite = Schemas["ConfigFileWrite"];
 
-/** `path` / `folder_path` are absolute, for the external-editor actions. */
-export type ConfigFileContent = Schemas["ConfigFileContent"];
-
 /** An agent's Coffer connection: every part Coffer writes into the agent
  *  that applies now (`mcp` always, `memory_hook` while memory is on), and a
  *  state derived from them — `partial` is "needs repair". */
-export type CofferConnection = Schemas["CofferConnection"];
+export type CofferConnection = Schemas["CofferConnectionOut"];
 
-/**
- * Hand-written rather than the contract's `AgentOut`: the contract requires
- * `model` / `fast_model` / `wire_api` and makes `description` optional; the
- * pages and fixtures treat the binding as optional and `description` as
- * always present.
- */
-export interface AgentOut {
-  /** The agent Resource's immutable identity — what every route below takes,
-   *  and what every cross-resource reference to this agent holds (a scope's
-   *  agent list, a channel's `default_agent`, a skill binding). */
-  uid: string;
-  name: string;
-  /** The display title a person chose, shown in place of the name; null when
-   *  none is set. Edited through `PATCH /resources/{uid}`. */
-  title?: string | null;
-  type: AgentType;
-  config_dir: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  /** Per-agent model binding (spec provider-switching "Take projected model
-   * keys from the agent's binding"). The model the agent projects — null =
-   * unbound (falls back to the active connection). */
-  model?: string | null;
-  fast_model?: string | null;
-  wire_api?: string | null;
-}
+export type AgentOut = Schemas["AgentOut"];
 
-/** `GET /agents` — an inline shape in the contract. */
-export interface AgentListOut {
-  items: AgentOut[];
-}
+export type AgentCreate = Schemas["AgentCreate"];
 
-/**
- * Hand-written rather than the contract's `AgentCreate` / `AgentPatch`: the
- * forms send an explicit `null` for `name` / `config_dir` ("use the default"),
- * which the contract types as `string` only.
- */
-export interface AgentCreate {
-  type: AgentType;
-  // Optional — the server derives a stable default from the type when omitted.
-  name?: string | null;
-  // Optional override; default is the type's standard config directory.
-  config_dir?: string | null;
-  description?: string | null;
-}
+export type AgentPatch = Schemas["AgentPatch"];
 
-export interface AgentPatch {
-  config_dir?: string | null;
-  description?: string | null;
-  // Per-agent model binding; explicit null fast_model clears the fast slot.
-  model?: string | null;
-  fast_model?: string | null;
-  wire_api?: string | null;
-}
+/** One supported agent type on this machine: its fixed name, detection state,
+ *  directories, and — when registered — its uid. `addable` says whether
+ *  registering it now would succeed. */
+export type AgentTypeOut = Schemas["AgentTypeOut"];
 
-export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
-
-// Agent workspace wire types (MCP entries / plugins / unmanaged skills) live in
-// agents-workspace.ts for the file-size budget; re-exported so existing
-// `from "@/lib/api/agents"` import paths keep working.
-export type {
-  AdoptedResource,
-  AdoptMcpEntryBody,
-  McpEntriesResponse,
-  McpEntryDetailOut,
-  McpEntryOut,
-  PluginComponentOut,
-  PluginDetailOut,
-  PluginOut,
-  PluginsResponse,
-  SkillRefOut,
-  UnmanagedSkillDetailOut,
-  UnmanagedSkillOut,
-  UnmanagedSkillsResponse,
-} from "./agents-workspace";
-import type {
-  AdoptedResource,
-  AdoptMcpEntryBody,
-  McpEntriesResponse,
-  McpEntryDetailOut,
-  PluginDetailOut,
-  PluginsResponse,
-  SkillRefOut,
-  UnmanagedSkillDetailOut,
-  UnmanagedSkillsResponse,
-} from "./agents-workspace";
-import type { SkillFileContentOut, SkillFileTreeOut } from "./skills";
-
-// A directory-entry child is addressed by a POSIX relpath, so each SEGMENT is
-// encoded but the separators are kept — `enc` would escape the slashes and the
-// daemon would see one flat name instead of a path.
-const childPath = (relpath: string) => relpath.split("/").map(enc).join("/");
+/** Every hook in the agent's native config, plus Coffer's own hook's health. */
+export type AgentHooksOut = Schemas["AgentHooksOut"];
+export type NativeHook = Schemas["NativeHookOut"];
+export type CofferHook = Schemas["CofferHookOut"];
 
 export const agentsApi = {
-  list: () => call<AgentListOut>("/agents"),
-  register: (body: AgentCreate) => call<AgentOut>("/agents", { method: "POST", body }),
-  get: (uid: string) => call<AgentOut>(`/agents/${enc(uid)}`),
+  list: () => unwrap(getApiClient().GET("/agents")),
+  register: (body: AgentCreate) => unwrap(getApiClient().POST("/agents", { body })),
+  get: (uid: string) => unwrap(getApiClient().GET("/agents/{uid}", { params: { path: { uid } } })),
   patch: (uid: string, body: AgentPatch) =>
-    call<AgentOut>(`/agents/${enc(uid)}`, { method: "PATCH", body }),
-  remove: (uid: string) => call<void>(`/agents/${enc(uid)}`, { method: "DELETE" }),
-  // Read-only discovery: installed-but-unregistered agents the user can add.
-  candidates: () => call<AgentCandidatesOut>("/agents/candidates"),
+    unwrap(getApiClient().PATCH("/agents/{uid}", { params: { path: { uid } }, body })),
+  // One row per supported type, registered or not.
+  types: () => unwrap(getApiClient().GET("/agents/types")),
 
   // Config files are read AND written in-app. A write carries the fingerprint
   // from the read that seeded the editor, so a file changed underneath the
   // editor is refused (409) rather than overwritten.
-  listConfigFiles: (uid: string) => call<ConfigFileListOut>(`/agents/${enc(uid)}/config-files`),
+  listConfigFiles: (uid: string) =>
+    unwrap(getApiClient().GET("/agents/{uid}/config-files", { params: { path: { uid } } })),
   readConfigFile: (uid: string, key: string) =>
-    call<ConfigFileContent>(`/agents/${enc(uid)}/config-files/${enc(key)}`),
+    unwrap(
+      getApiClient().GET("/agents/{uid}/config-files/{key}", { params: { path: { uid, key } } }),
+    ),
   writeConfigFile: (uid: string, key: string, body: ConfigFileWrite) =>
-    call<ConfigFileInfo>(`/agents/${enc(uid)}/config-files/${enc(key)}`, {
-      method: "PUT",
-      body,
-    }),
+    unwrap(
+      getApiClient().PUT("/agents/{uid}/config-files/{key}", {
+        params: { path: { uid, key } },
+        body,
+      }),
+    ),
 
-  connection: (uid: string) => call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`),
+  // Read-only: every hook the agent's own files and enabled plugins declare.
+  hooks: (uid: string) =>
+    unwrap(getApiClient().GET("/agents/{uid}/hooks", { params: { path: { uid } } })),
+
+  connection: (uid: string) =>
+    unwrap(getApiClient().GET("/agents/{uid}/coffer-connection", { params: { path: { uid } } })),
   connect: (uid: string) =>
-    call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`, { method: "POST" }),
+    unwrap(getApiClient().POST("/agents/{uid}/coffer-connection", { params: { path: { uid } } })),
   disconnect: (uid: string) =>
-    call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`, { method: "DELETE" }),
+    unwrap(getApiClient().DELETE("/agents/{uid}/coffer-connection", { params: { path: { uid } } })),
 
-  // MCP entries (specs agent-registry/005 workspace amendment)
-  mcpEntries: (uid: string) => call<McpEntriesResponse>(`/agents/${enc(uid)}/mcp-entries`),
+  // MCP entries (spec agent-registry "List the MCP entries in the agent's own config files")
+  mcpEntries: (uid: string) =>
+    unwrap(getApiClient().GET("/agents/{uid}/mcp-entries", { params: { path: { uid } } })),
   // One entry in full, read-only. `source` is sent whenever known — it is what
   // tells two same-named entries (claude_code's two files) apart.
-  mcpEntry: (uid: string, entry: string, source?: string) => {
-    const qs = source ? `?source=${enc(source)}` : "";
-    return call<McpEntryDetailOut>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}${qs}`);
-  },
+  mcpEntry: (uid: string, entry: string, source?: string) =>
+    unwrap(
+      getApiClient().GET("/agents/{uid}/mcp-entries/{entry}", {
+        params: { path: { uid, entry }, query: { source: source || undefined } },
+      }),
+    ),
   // Deletes the entry from the agent's own config file (a .bak is written by
   // the daemon). `source` names which config file the entry came from — an
   // entry name can repeat across sources.
-  removeMcpEntry: (uid: string, entry: string, source?: string) => {
-    const qs = source ? `?source=${enc(source)}` : "";
-    return call<void>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}${qs}`, {
-      method: "DELETE",
-    });
-  },
+  removeMcpEntry: (uid: string, entry: string, source?: string) =>
+    unwrapVoid(
+      getApiClient().DELETE("/agents/{uid}/mcp-entries/{entry}", {
+        params: { path: { uid, entry }, query: { source: source || undefined } },
+      }),
+    ),
   adoptMcpEntry: (uid: string, entry: string, body: AdoptMcpEntryBody) =>
-    call<AdoptedResource>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}/adopt`, {
-      method: "POST",
-      body,
-    }),
+    unwrap(
+      getApiClient().POST("/agents/{uid}/mcp-entries/{entry}/adopt", {
+        params: { path: { uid, entry } },
+        body,
+      }),
+    ),
 
-  // Plugins (spec agent-registry, workspace amendment). Enable/disable
+  // Plugins (spec agent-registry "List an agent's installed plugins without writing anything"). Enable/disable
   // writes the agent's documented config surface; uninstall drops the entry
   // (Codex) or delegates to the agent's own CLI (Claude Code).
-  plugins: (uid: string) => call<PluginsResponse>(`/agents/${enc(uid)}/plugins`),
+  plugins: (uid: string) =>
+    unwrap(getApiClient().GET("/agents/{uid}/plugins", { params: { path: { uid } } })),
   plugin: (uid: string, id: string) =>
-    call<PluginDetailOut>(`/agents/${enc(uid)}/plugins/${enc(id)}`),
+    unwrap(
+      getApiClient().GET("/agents/{uid}/plugins/{plugin_id}", {
+        params: { path: { uid, plugin_id: id } },
+      }),
+    ),
   togglePlugin: (uid: string, id: string, enabled: boolean) =>
-    call<void>(`/agents/${enc(uid)}/plugins/${enc(id)}`, { method: "PATCH", body: { enabled } }),
+    unwrapVoid(
+      getApiClient().PATCH("/agents/{uid}/plugins/{plugin_id}", {
+        params: { path: { uid, plugin_id: id } },
+        body: { enabled },
+      }),
+    ),
   uninstallPlugin: (uid: string, id: string) =>
-    call<void>(`/agents/${enc(uid)}/plugins/${enc(id)}`, { method: "DELETE" }),
+    unwrapVoid(
+      getApiClient().DELETE("/agents/{uid}/plugins/{plugin_id}", {
+        params: { path: { uid, plugin_id: id } },
+      }),
+    ),
 
-  // Config-file child (per-file inside a directory-backed config key).
+  // Config-file child (per-file inside a directory-backed config key). The
+  // relpath is a POSIX path; the client escapes its separators into one path
+  // segment and the daemon's `:path` route reads it back as the path.
   readConfigChild: (uid: string, key: string, relpath: string) =>
-    call<ConfigFileContent>(
-      `/agents/${enc(uid)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
+    unwrap(
+      getApiClient().GET("/agents/{uid}/config-files/{key}/files/{relpath}", {
+        params: { path: { uid, key, relpath } },
+      }),
     ),
   writeConfigChild: (uid: string, key: string, relpath: string, body: ConfigFileWrite) =>
-    call<ConfigFileInfo>(
-      `/agents/${enc(uid)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
-      { method: "PUT", body },
+    unwrap(
+      getApiClient().PUT("/agents/{uid}/config-files/{key}/files/{relpath}", {
+        params: { path: { uid, key, relpath } },
+        body,
+      }),
+    ),
+  // Deletes one file inside a directory entry (the daemon keeps a .bak).
+  deleteConfigChild: (uid: string, key: string, relpath: string) =>
+    unwrapVoid(
+      getApiClient().DELETE("/agents/{uid}/config-files/{key}/files/{relpath}", {
+        params: { path: { uid, key, relpath } },
+      }),
     ),
 
-  // Unmanaged skills (specs agent-registry/005 workspace amendment)
+  // Unmanaged skills (spec skill-manager "List unmanaged skills in an agent's skill locations")
   unmanagedSkills: (uid: string) =>
-    call<UnmanagedSkillsResponse>(`/agents/${enc(uid)}/unmanaged-skills`),
-  adoptUnmanagedSkill: (uid: string, skill: string, location: string) =>
-    call<SkillRefOut>(`/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}/adopt`, {
-      method: "POST",
-      body: { location },
-    }),
+    unwrap(getApiClient().GET("/agents/{uid}/unmanaged-skills", { params: { path: { uid } } })),
+  adoptUnmanagedSkill: (
+    uid: string,
+    skill: string,
+    location: string,
+    options: { name?: string | null; reach?: AdoptSkillReach | null } = {},
+  ) =>
+    unwrap(
+      getApiClient().POST("/agents/{uid}/unmanaged-skills/{skill}/adopt", {
+        params: { path: { uid, skill } },
+        body: { location: loc(location), name: options.name, reach: options.reach },
+      }),
+    ),
   // Read-only preview of one unmanaged folder (spec skill-manager "Preview an
   // unmanaged skill read-only") — the same tree/content shapes as a managed
   // skill's Files tab, addressed by folder name + scan location.
   unmanagedSkill: (uid: string, skill: string, location: string) =>
-    call<UnmanagedSkillDetailOut>(
-      `/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}?location=${enc(location)}`,
+    unwrap(
+      getApiClient().GET("/agents/{uid}/unmanaged-skills/{skill}", {
+        params: { path: { uid, skill }, query: { location: loc(location) } },
+      }),
     ),
   unmanagedSkillFiles: (uid: string, skill: string, location: string) =>
-    call<SkillFileTreeOut>(
-      `/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}/files?location=${enc(location)}`,
+    unwrap(
+      getApiClient().GET("/agents/{uid}/unmanaged-skills/{skill}/files", {
+        params: { path: { uid, skill }, query: { location: loc(location) } },
+      }),
     ),
   unmanagedSkillFileContent: (uid: string, skill: string, location: string, path: string) =>
-    call<SkillFileContentOut>(
-      `/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}/files/content` +
-        `?location=${enc(location)}&path=${enc(path)}`,
+    unwrap(
+      getApiClient().GET("/agents/{uid}/unmanaged-skills/{skill}/files/content", {
+        params: { path: { uid, skill }, query: { location: loc(location), path } },
+      }),
     ),
   deleteUnmanagedSkill: (uid: string, skill: string, location: string) =>
-    call<void>(`/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}?location=${enc(location)}`, {
-      method: "DELETE",
-    }),
+    unwrapVoid(
+      getApiClient().DELETE("/agents/{uid}/unmanaged-skills/{skill}", {
+        params: { path: { uid, skill }, query: { location: loc(location) } },
+      }),
+    ),
 };

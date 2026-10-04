@@ -2,21 +2,50 @@
 
 from __future__ import annotations
 
+import pathlib
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, Response, status
+from fastapi import APIRouter, Depends, Header, status
 from pydantic import BaseModel, Field
 
+from coffer.application.reconcile.reconciler import Reconciler
+from coffer.application.skill import drift_view
 from coffer.application.skill.builtin_seed import is_builtin
 from coffer.application.skill.service import SkillService
+from coffer.application.skill.source_service import SkillSourceService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
-from coffer.domain.skill.drift import DriftEntry
+from coffer.domain.skill.drift import DriftEntry, DriftKind
+from coffer.domain.skill.source import (
+    ArchiveImportSource,
+    BuiltinSource,
+    GitImportSource,
+    LocalImportSource,
+)
+from coffer.domain.skill.source_status import SourceStatus
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
+from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
-from coffer.surfaces.http.skill_dependencies import get_skill_service
+from coffer.surfaces.http.skill_dependencies import (
+    get_optional_skill_source_service,
+    get_skill_service,
+)
+from coffer.surfaces.http.skill_requires_view import requires_view
+from coffer.surfaces.http.skill_source_schemas import (
+    ArchiveImportSourceOut,
+    GitImportSourceOut,
+    SkillRequirementOut,
+    SkillSecretRequirementOut,
+    SkillSkillRequirementOut,
+    SkillSourceStatusOut,
+    SkillToolRequirementOut,
+    archive_source_out,
+    git_source_out,
+    status_out,
+)
 
 router = APIRouter(
     prefix="/api/v1/skills",
@@ -46,7 +75,7 @@ class SkillBindingOut(BaseModel):
     Both halves of the agent's identity ride along: ``agent_uid`` is what a
     client follows to that agent, ``agent_name`` is what it prints. A delivery
     is a fact about an agent row, so it keeps pointing at the same agent when
-    the user renames it (ADR resource-identity-is-an-immutable-uid).
+    the user renames it (ADR identity-is-the-uid-inside-the-file).
     """
 
     agent_uid: str
@@ -56,18 +85,47 @@ class SkillBindingOut(BaseModel):
     link_mode: LinkMode | None = None
 
 
+class LocalImportSourceOut(BaseModel):
+    """A skill copied in from a folder on disk; the path is informational."""
+
+    type: Literal["local_import"]
+    original_path: str
+
+
+class BuiltinSourceOut(BaseModel):
+    """Coffer generated this skill. It carries no provenance fields at all:
+    the master folder is rewritten from the running build at every start."""
+
+    type: Literal["builtin"]
+
+
+SkillSourceOut = Annotated[
+    LocalImportSourceOut | ArchiveImportSourceOut | GitImportSourceOut | BuiltinSourceOut,
+    Field(discriminator="type"),
+]
+
+
+def _source_out(
+    source: LocalImportSource | ArchiveImportSource | GitImportSource | BuiltinSource,
+) -> LocalImportSourceOut | ArchiveImportSourceOut | GitImportSourceOut | BuiltinSourceOut:
+    if isinstance(source, LocalImportSource):
+        return LocalImportSourceOut(type="local_import", original_path=source.original_path)
+    if isinstance(source, ArchiveImportSource):
+        return archive_source_out(source)
+    if isinstance(source, GitImportSource):
+        return git_source_out(source)
+    return BuiltinSourceOut(type="builtin")
+
+
 class SkillOut(BaseModel):
     # Identity first, label second — ``/api/v1/skills/{uid}`` is what every
-    # other route here takes (ADR resource-identity-is-an-immutable-uid).
+    # other route here takes (ADR identity-is-the-uid-inside-the-file).
     uid: str
     #: Fixed once registered: the master folder, the delivered links and the
     #: SKILL.md ``name:`` all carry it (409 NAME_IMMUTABLE on a change).
     name: str
-    #: Display text shown in place of ``name``; set through
-    #: ``PATCH /api/v1/resources/{uid}``. Null = none.
-    title: str | None = None
     description: str
-    source: dict[str, Any]
+    source: SkillSourceOut
     # Coffer's own: the folder is rewritten from the running build at every
     # boot, so deleting it is refused (409 RESOURCE_PROTECTED) while enabling,
     # disabling and narrowing its scope stay the owner's to decide. The surface
@@ -81,10 +139,31 @@ class SkillOut(BaseModel):
     scope: ScopeOut | None
     version_hash: str
     master_path: str
+    #: The master folder is gone from disk (removed outside Coffer); the row,
+    #: its reach and its history are still here.
+    master_missing: bool
     last_synced_from_source_at: datetime | None
     created_at: datetime
     updated_at: datetime
     bindings: list[SkillBindingOut]
+    #: The commands its SKILL.md declares it needs, read from the master folder
+    #: on each request (spec skill-manager "Show the commands a skill declares
+    #: it needs").
+    requires: list[SkillRequirementOut]
+    #: The Coffer secrets it declares it needs (``requires: {secrets: [...]}``),
+    #: each with whether the secret store holds it (spec skill-manager "Declare
+    #: the secrets a skill requires").
+    requires_secrets: list[SkillSecretRequirementOut]
+    #: The MCP servers and custom-tool groups it calls (``requires: {tools:
+    #: [...]}``), each with its state now (spec skill-manager "Declare the
+    #: tools a skill requires").
+    requires_tools: list[SkillToolRequirementOut]
+    #: The skills it loads (``metadata.requires``), each with whether it is
+    #: delivered to the same agents.
+    requires_skills: list[SkillSkillRequirementOut]
+    #: A Git-imported skill's last update check on this machine; null for
+    #: every other source.
+    source_status: SkillSourceStatusOut | None
 
 
 class SkillListOut(BaseModel):
@@ -108,9 +187,14 @@ class DriftEntryOut(BaseModel):
 
     skill_name: str
     agent_name: str
-    kind: str
+    kind: DriftKind
     target_path: str
-    suggested_remedy: str
+    #: A finding no repair settles (a folder in the way, a folder no skill
+    #: owns, a missing master) handed to the person's agent; null when Repair
+    #: is the fix. What the kind means is the surface's own words, keyed on
+    #: ``kind`` (spec skill-manager "Hand unsettled skill drift to an agent
+    #: with a prompt").
+    handoff: HandoffOut | None
 
 
 class DriftReportOut(BaseModel):
@@ -135,22 +219,18 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
 
 # There is no surface-level name guard here any more. It existed because a
 # skill's NAME was the URL path segment and also its folder name under
-# ``~/.coffer/skills/<name>/``, so a traversal attempt (``..``, ``/``, ``\``)
+# ``~/.coffer/vault/skills/<name>/``, so a traversal attempt (``..``, ``/``, ``\``)
 # arriving in the path had to be refused before it reached the filesystem. The
 # path segment is now a uid the daemon minted, and a name only ever enters
 # through ``ResourceService``, which validates it once for every kind
-# (ADR resource-identity-is-an-immutable-uid). A second copy of that rule here
+# (ADR identity-is-the-uid-inside-the-file). A second copy of that rule here
 # would be a rule nothing can violate, kept alive for a route shape that is
 # gone.
 
 
-async def _agents_by_id(svc: SkillService) -> dict[int, Resource]:
-    """Build an agent-row-id -> agent map once per request (avoids an N+1).
-
-    Keyed on the integer row id because that is what a binding stores as its
-    foreign key; the uid and the name both come off the row it finds.
-    """
-    return {a.id: a for a in await svc.list_agents()}
+async def _agents_by_uid(svc: SkillService) -> dict[str, Resource]:
+    """Build an agent-uid -> agent map once per request (avoids an N+1)."""
+    return {a.uid: a for a in await svc.list_agents()}
 
 
 def _drift_out(e: DriftEntry) -> DriftEntryOut:
@@ -158,58 +238,72 @@ def _drift_out(e: DriftEntry) -> DriftEntryOut:
     return DriftEntryOut(
         skill_name=e.skill_name,
         agent_name=e.agent_name,
-        kind=e.kind.value,
+        kind=e.kind,
         target_path=e.target_path,
-        suggested_remedy=e.suggested_remedy,
+        handoff=handoff_out(e.handoff),
     )
 
 
 async def _to_skill_out(
     svc: SkillService,
     r: Resource,
-    agents_by_id: dict[int, Resource],
+    agents_by_uid: dict[str, Resource],
     *,
-    bindings_by_skill: dict[int, list[BindingState]] | None = None,
+    bindings_by_skill: dict[str, list[BindingState]] | None = None,
+    sources: SkillSourceService | None = None,
+    statuses: dict[str, SourceStatus] | None = None,
 ) -> SkillOut:
     cfg = SkillConfig.model_validate(r.config)
+    source_status: SkillSourceStatusOut | None = None
+    if isinstance(cfg.source, GitImportSource):
+        if statuses is not None:
+            status = statuses.get(r.uid)
+        else:
+            status = await sources.status(r) if sources is not None else None
+        source_status = status_out(status, cfg.source.commit)
     # Single-skill handlers (get / import) take the per-skill round-trip —
     # list handlers prebuild the map once via
     # ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.
     if bindings_by_skill is not None:
-        bindings = bindings_by_skill.get(r.id, [])
+        bindings = bindings_by_skill.get(r.uid, [])
     else:
         bindings = await svc.bindings_for(r.uid)
+    needs = await requires_view(svc, r, agents_by_uid, bindings, bindings_by_skill)
     return SkillOut(
         uid=r.uid,
         name=r.name,
-        title=r.title,
         description=cfg.skill_md_description,
-        source=cfg.source.model_dump(mode="json"),
+        source=_source_out(cfg.source),
         builtin=is_builtin(r.config),
         enabled=r.enabled,
         scope=ScopeOut.of(r.scope),
         version_hash=cfg.version_hash,
         master_path=svc.master_path(r.name),
+        master_missing=not pathlib.Path(svc.master_path(r.name)).is_dir(),
         last_synced_from_source_at=cfg.last_synced_from_source_at,
         created_at=r.created_at,
         updated_at=r.updated_at,
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
-        bindings=[_binding_out(b, agents_by_id) for b in bindings if b.enabled],
+        bindings=[_binding_out(b, agents_by_uid) for b in bindings if b.enabled],
+        requires=needs.commands,
+        requires_secrets=needs.secrets,
+        requires_tools=needs.tools,
+        requires_skills=needs.skills,
+        source_status=source_status,
     )
 
 
-def _binding_out(b: BindingState, agents_by_id: dict[int, Resource]) -> SkillBindingOut:
+def _binding_out(b: BindingState, agents_by_uid: dict[str, Resource]) -> SkillBindingOut:
     """One delivery row on the wire.
 
     A binding whose agent row has gone is still reported, because the row is
     evidence that a copy was delivered somewhere and dropping it would make the
     delivery list quietly shorter than the truth. It is rendered with the
-    integer FK in both fields, which is what the surface has: there is no uid to
-    invent for a row that is no longer there.
+    agent's uid in both fields, which is what the binding still holds.
     """
-    agent = agents_by_id.get(b.agent_resource_id)
-    fallback = str(b.agent_resource_id)
+    agent = agents_by_uid.get(b.agent_uid)
+    fallback = b.agent_uid
     return SkillBindingOut(
         agent_uid=agent.uid if agent else fallback,
         agent_name=agent.name if agent else fallback,
@@ -225,14 +319,19 @@ def _binding_out(b: BindingState, agents_by_id: dict[int, Resource]) -> SkillBin
 @router.get("", response_model=SkillListOut)
 async def list_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    sources: SkillSourceService | None = Depends(get_optional_skill_source_service),  # noqa: B008
 ) -> SkillListOut:
     rs = await svc.list_skills()
-    agents_by_id = await _agents_by_id(svc)
+    agents_by_uid = await _agents_by_uid(svc)
     # Prebuild the binding lookup once — collapses what was a 2N+2 query
     # pattern (one ``list_for_skill`` + one ``get`` per skill) into ~3.
     bindings_by_skill = await svc.bindings_grouped_by_skill()
+    statuses = await sources.statuses() if sources is not None else {}
     items = [
-        await _to_skill_out(svc, r, agents_by_id, bindings_by_skill=bindings_by_skill) for r in rs
+        await _to_skill_out(
+            svc, r, agents_by_uid, bindings_by_skill=bindings_by_skill, statuses=statuses
+        )
+        for r in rs
     ]
     return SkillListOut(items=items)
 
@@ -244,42 +343,37 @@ async def import_skill(
     actor: str = Depends(_actor),
 ) -> SkillOut:
     r = await svc.import_local(path=body.path, actor=actor, overwrite=body.overwrite)
-    return await _to_skill_out(svc, r, await _agents_by_id(svc))
+    return await _to_skill_out(svc, r, await _agents_by_uid(svc))
 
 
 @router.get("/{uid}", response_model=SkillOut)
 async def get_skill(
     uid: str,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    sources: SkillSourceService | None = Depends(get_optional_skill_source_service),  # noqa: B008
 ) -> SkillOut:
     r = await svc.get_skill(uid)
-    return await _to_skill_out(svc, r, await _agents_by_id(svc))
-
-
-@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def delete_skill(
-    uid: str,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> Response:
-    await svc.remove(uid=uid, actor=actor)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return await _to_skill_out(svc, r, await _agents_by_uid(svc), sources=sources)
 
 
 @router.post("/verify", response_model=DriftReportOut)
 async def verify_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    reconciler: Reconciler = Depends(get_reconciler),  # noqa: B008
 ) -> DriftReportOut:
-    report = await svc.verify()
+    # The ``skill_link`` target's dry-run plan, read as a drift report.
+    report = await drift_view.verify(svc, reconciler)
     return DriftReportOut(entries=[_drift_out(e) for e in report.entries])
 
 
 @router.post("/repair", response_model=RepairReportOut)
 async def repair_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    reconciler: Reconciler = Depends(get_reconciler),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> RepairReportOut:
-    result = await svc.repair_drift(actor=actor)
+    # The plan's repairable drift, applied through the reconciler.
+    result = await drift_view.repair(svc, reconciler, actor=actor)
     return RepairReportOut(
         remediated=[_drift_out(e) for e in result.remediated],
         remaining=DriftReportOut(entries=[_drift_out(e) for e in result.remaining.entries]),

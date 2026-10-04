@@ -23,7 +23,6 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
-    clear_active_turns,
 )
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnStarted
 from coffer.domain.chat.message import Role, TextBlock
@@ -33,14 +32,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
+from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import FakeAgentProvider
-
-
-@pytest.fixture(autouse=True)
-def _clean() -> Any:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 class _StreamThenHang:
@@ -88,7 +81,7 @@ async def test_a_crash_keeps_the_flushed_partial_for_the_sweep(
     fresh_engine = create_async_engine_with_pragmas(url)
     try:
         conv = await chat.create_conversation(agent_key="builtin")
-        await orchestrator.start_turn(conv.id, "hi")
+        await start_turn(orchestrator, conv.id, "hi")
         await asyncio.wait_for(adapter.streamed.wait(), timeout=5.0)
         await asyncio.sleep(0.05)  # let the flush's write commit
 

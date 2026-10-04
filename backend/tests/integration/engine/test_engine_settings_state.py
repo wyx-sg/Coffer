@@ -1,9 +1,9 @@
-"""The engine's settings row as other code reads it (spec internal-engine).
+"""The engine's settings document as other code reads it (spec internal-engine).
 
-Real ``InternalEngineConfigService`` over the real SQLAlchemy repo and a SQLite
-file under ``tmp_path``: the synced state area that carries the row between
-machines, and the unattended workers that read their switch and interval from
-it while they run.
+Real ``InternalEngineConfigService`` over the real vault-document repo in the
+test's own HOME: the one document that carries the settings between machines
+(``state/settings/internal-engine.json``), and the unattended workers that
+read their switch and interval from it while they run.
 """
 
 from __future__ import annotations
@@ -18,27 +18,28 @@ from dataclasses import dataclass
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.engine_settings_sync import DOC, EngineSettingsSyncState
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory import aggregate_worker
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.upkeep_schedule import wait_for_next_pass
 from coffer.domain.internal_engine_config import AGGREGATE, CURATE, DISTIL, UpkeepSetting
+from coffer.domain.vault.writers import WRITER_SYNC, CommitMeta
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyInternalEngineConfigRepo,
-)
+from coffer.infrastructure.persistence.internal_engine_repo import VaultInternalEngineConfigRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.vault.instance import vault_repository, vault_writer
+
+DOC = "state/settings/internal-engine.json"
 
 
 @dataclass
 class _Machine:
     service: InternalEngineConfigService
-    area: EngineSettingsSyncState
+    repo: VaultInternalEngineConfigRepo
     audit: AuditService
 
 
@@ -49,9 +50,9 @@ async def machine(tmp_path: pathlib.Path) -> AsyncIterator[_Machine]:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    repo = SqlAlchemyInternalEngineConfigRepo(sm)
+    repo = VaultInternalEngineConfigRepo()
     service = InternalEngineConfigService(repo=repo, audit=audit)
-    yield _Machine(service, EngineSettingsSyncState(service, internal_repo=repo), audit)
+    yield _Machine(service, repo, audit)
     await engine.dispose()
 
 
@@ -63,62 +64,37 @@ async def test_the_defaults_publish_nothing_and_a_choice_publishes_one_document(
     machine: _Machine,
 ) -> None:
     # Never written.
-    assert await machine.area.export_docs() == []
+    assert vault_repository().tree("HEAD", "state/") == {}
 
-    # Written, but back to the defaults: the same decision as no row.
+    # Written, but back to the defaults: the same decision as no document.
     await machine.service.update(model="m", actor="api")
     await machine.service.update(model=None, actor="api")
     await machine.service.set_upkeep(CURATE, UpkeepSetting(enabled=True), actor="api")
-    assert await machine.area.export_docs() == []
+    assert vault_repository().tree("HEAD", "state/") == {}
 
     await machine.service.update(model="brain", actor="api")
-    docs = await machine.area.export_docs()
-    assert [path for path, _ in docs] == [DOC]
-    assert docs[0][1]["model"] == "brain"
-
-
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="a document missing a key leaves this machine's value alone",
-)
-async def test_an_omitted_key_is_an_older_machine_and_an_explicit_null_is_a_decision(
-    machine: _Machine,
-) -> None:
-    await machine.service.set_upkeep(DISTIL, UpkeepSetting(enabled=False, interval_s=900))
-    await machine.service.set_model_timeout(120)
-    await machine.service.set_transcribe_model("hears")
-
-    errors = await machine.area.import_docs([(DOC, {"model": "from-elsewhere"})])
-    assert errors == []
-    held = await machine.service.get()
-    assert held.model == "from-elsewhere"
-    assert held.upkeep(DISTIL) == UpkeepSetting(enabled=False, interval_s=900)
-    assert held.model_timeout_s == 120
-    assert held.transcribe_model == "hears"
-
-    errors = await machine.area.import_docs(
-        [(DOC, {"model": "from-elsewhere", "model_timeout_s": None, "transcribe_model": None})]
-    )
-    assert errors == []
-    held = await machine.service.get()
-    assert held.model_timeout_s is None
-    assert held.transcribe_model is None
-    assert held.upkeep(DISTIL) == UpkeepSetting(enabled=False, interval_s=900)
+    assert list(vault_repository().tree("HEAD", "state/")) == [DOC]
+    assert (await machine.service.get()).model == "brain"
 
 
 @pytest.mark.acceptance(
     spec="internal-engine",
     scenario="deleting the settings document resets this machine to the defaults",
 )
-async def test_a_deleted_document_resets_every_setting_audited_as_sync(
-    machine: _Machine,
-) -> None:
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the engine's settings converge and a deletion means the defaults",
+)
+async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> None:
     await machine.service.update(model="brain", actor="api")
     await machine.service.set_upkeep(CURATE, UpkeepSetting(enabled=False, interval_s=600))
     await machine.service.set_model_timeout(200)
     await machine.service.set_transcribe_model("hears")
 
-    await machine.area.delete_docs([f"{DOC}"])
+    # Another machine's deletion, arriving as a commit.
+    vault_writer().delete_file(
+        DOC, meta=CommitMeta(writer=WRITER_SYNC, operation="sync", summary="merged")
+    )
 
     held = await machine.service.get()
     assert held.model is None
@@ -126,11 +102,6 @@ async def test_a_deleted_document_resets_every_setting_audited_as_sync(
     assert held.transcribe_model is None
     for name in (AGGREGATE, DISTIL, CURATE):
         assert held.upkeep(name) == UpkeepSetting(enabled=True, interval_s=None)
-
-    entries = await machine.audit.query(event_type="internal_engine_model_set", limit=50)
-    sync_entries = [e for e in entries if e.actor == "sync"]
-    assert len(sync_entries) >= 1
-    assert await machine.area.export_docs() == []
 
 
 def _enabled(service: InternalEngineConfigService, name: str):  # type: ignore[no-untyped-def]

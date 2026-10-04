@@ -10,8 +10,10 @@ import pytest
 from starlette.testclient import TestClient
 
 from coffer.infrastructure.mcp.factory import build_upstream
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 
 def _app(tmp_path, monkeypatch, port_start: int):
@@ -119,16 +121,15 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
     from httpx import ASGITransport, AsyncClient
 
     from coffer.application.audit_service import AuditService
-    from coffer.application.credentials.resolver import CredentialResolver
     from coffer.application.mcp.discovery import CapabilityDiscovery
     from coffer.application.mcp.gateway import MCPGatewaySession
     from coffer.application.mcp.supervisor import SubprocessSupervisor
     from coffer.application.resource_service import ResourceService
+    from coffer.application.secret.resolver import SecretResolver
     from coffer.domain.mcp.server_config import MCPServerConfig
     from coffer.domain.resource import Kind
-    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
     from coffer.infrastructure.mcp.persistence import (
-        MCPCapabilityPreferenceRepo,
+        MCPCapabilityPreferenceStore,
         MCPInvocationRepo,
     )
     from coffer.infrastructure.persistence.base import Base
@@ -136,10 +137,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         create_async_engine_with_pragmas,
         session_maker,
     )
-    from coffer.infrastructure.persistence.repos import (
-        SqlAlchemyAuditRepo,
-        SqlAlchemyResourceRepo,
-    )
+    from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
     from coffer.surfaces.http import errors as err_handlers
     from coffer.surfaces.http.auth import set_active_token as _set_token
     from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
@@ -178,7 +176,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     fs = await rsvc.register(
@@ -193,14 +191,14 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         },
         actor="test",
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv = MCPInvocationRepo(sm)
 
     def factory(session_id: str) -> MCPGatewaySession:
         sup = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         disc = CapabilityDiscovery(
             resource_service=rsvc,
@@ -244,10 +242,8 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
                 headers={"Mcp-Session-Id": session_id},
             )
 
-            # Disable read_file via prefs. The preference table is joined by
-            # the integer surrogate key, which is what ``register`` already
-            # handed back — no lookup, and nothing that a label could shift.
-            await prefs.set_enabled(fs.id, "tool", "read_file", False)
+            # Disable read_file via prefs, keyed by the server's uid.
+            await prefs.set_enabled(fs.uid, "tool", "read_file", False)
 
             # Try calling the disabled tool
             r = await client.post(
@@ -320,8 +316,8 @@ def _err_app():
         (lambda e: e.ResourceAlreadyExists("mcp_server", "dup"), 409, "RESOURCE_ALREADY_EXISTS"),
         (lambda e: e.UnknownKind("widget"), 400, "UNKNOWN_KIND"),
         (lambda e: e.ConfigValidationError("bad config"), 422, "CONFIG_INVALID"),
-        (lambda e: e.CredentialMissing("kc://ref"), 400, "CREDENTIAL_MISSING"),
-        (lambda e: e.CredentialLocked("locked"), 503, "CREDENTIAL_LOCKED"),
+        (lambda e: e.SecretMissing("kc://ref"), 400, "SECRET_MISSING"),
+        (lambda e: e.SecretLocked("locked"), 503, "SECRET_LOCKED"),
         (lambda e: e.UpstreamUnavailable("down"), 503, "UPSTREAM_UNAVAILABLE"),
         (lambda e: e.UpstreamTimeout("slow"), 504, "UPSTREAM_TIMEOUT"),
         (lambda e: e.ToolDisabled("off"), 403, "TOOL_DISABLED"),
@@ -336,8 +332,8 @@ def _err_app():
         "ResourceAlreadyExists",
         "UnknownKind",
         "ConfigValidationError",
-        "CredentialMissing",
-        "CredentialLocked",
+        "SecretMissing",
+        "SecretLocked",
         "UpstreamUnavailable",
         "UpstreamTimeout",
         "ToolDisabled",
@@ -349,12 +345,15 @@ def _err_app():
 )
 def test_each_coffer_error_maps_to_status_and_code(exc_factory, expected_status, expected_code):
     """Every CofferError subclass maps to its declared HTTP status + envelope code."""
+    from types import SimpleNamespace
+
     from starlette.testclient import TestClient
 
     from coffer.domain import errors as domain_errors
+    from coffer.domain import secret_errors
 
     app = _err_app()
-    exc = exc_factory(domain_errors)
+    exc = exc_factory(SimpleNamespace(**{**vars(domain_errors), **vars(secret_errors)}))
 
     @app.get("/boom")
     async def _boom():
@@ -387,6 +386,8 @@ def test_every_domain_error_code_has_a_status():
 
     # Only the product's own errors: test suites define throwaway subclasses
     # (a fake gate refusal, say) that are never meant to reach a response.
+    from coffer.domain import secret_errors  # noqa: F401  (registers its subclasses)
+
     codes = {
         c.code for c in _subclasses(domain_errors.CofferError) if c.__module__.startswith("coffer.")
     }
@@ -416,7 +417,7 @@ def test_base_coffer_error_falls_back_to_500():
 
 def test_pydantic_validation_error_is_sanitised(caplog):
     """A raised pydantic ValidationError returns a generic 422 and never echoes
-    the submitted per-field input (which may carry PII/credentials)."""
+    the submitted per-field input (which may carry PII/secrets)."""
     import logging
 
     from pydantic import BaseModel, ValidationError
@@ -453,6 +454,8 @@ def test_pydantic_validation_error_is_sanitised(caplog):
     assert "X-Coffer-Trace" in r.headers
     # The structured error IS logged server-side for the operator.
     assert any("http.validation_error" in rec.getMessage() for rec in caplog.records)
+    # ...without the submitted value: the log is no safer a place for it.
+    assert all("secret-token" not in repr(rec.__dict__) for rec in caplog.records)
 
 
 def test_unhandled_exception_returns_500_without_leaking_detail(caplog):

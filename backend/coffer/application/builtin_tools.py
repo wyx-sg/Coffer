@@ -11,9 +11,10 @@ registers the directory instead (:class:`AgentDirectory`) — memory's notes are
 Markdown under the memory root, found with the agent's own search (spec memory
 "Expose no memory tool and name the memory root at session start"). The
 handshake names that directory the way it names a tool, and under the same
-rule: only while the feature that owns it is switched on (spec
-experimental-features "Withdraw what a switched-off feature put in front of
-agents"). It lives here so the gateway can name it without importing the kind.
+rule: a tool or directory an experimental feature owns is there only while
+that feature is switched on (spec experimental-features "Withdraw what a
+switched-off feature put in front of agents"). It lives here so the gateway can
+name it without importing the kind.
 
 Contract 6 is honoured: this module imports no kind-specific code. Per-kind
 modules live under `application/<kind>/builtin_tools.py` and are wired into

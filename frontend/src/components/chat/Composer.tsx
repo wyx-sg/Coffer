@@ -1,10 +1,12 @@
 // components/chat/Composer.tsx
-// Text input + send button pinned at the bottom of the message thread. While a
-// turn streams the Send button becomes a Stop button in the same slot; the
-// input itself stays live, since a message sent mid-turn queues server-side.
-// Files attach through the paperclip, by dropping them on the composer, or by
-// pasting an image; each uploads at once and shows as a chip, and Send waits
-// until every upload is done (spec chat "Attach files from the Chat page composer").
+// The reply box pinned at the bottom of the message thread: attached files'
+// chips, the text, then a toolbar with the paperclip on the left and Send on
+// the right. While a turn streams Send becomes Stop in the same slot; the input
+// itself stays live, since a message sent mid-turn queues server-side. Files
+// attach through the paperclip, by dropping them on the composer, or by pasting
+// an image; each uploads at once and shows as a chip, and Send waits until every
+// upload is done (spec chat "Attach files from the Conversations page composer"). A file
+// refused before upload is not a chip: one line under the box says why.
 import {
   forwardRef,
   useImperativeHandle,
@@ -13,10 +15,9 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Paperclip, Send, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatAttachment } from "@/lib/api/chat";
 import { useComposerAttachments } from "@/lib/hooks/useComposerAttachments";
@@ -24,54 +25,57 @@ import { type ComposerRestore, useComposerRestore } from "@/lib/hooks/useCompose
 import { useFileDrop } from "@/lib/hooks/useFileDrop";
 import { cn, formatBytes } from "@/lib/utils";
 import { AttachmentChip } from "./AttachmentChip";
+import { ComposerToolbar } from "./ComposerToolbar";
 
 interface Props {
-  /**
-   * Send the message with the uploads that finished, in attach order. May
-   * return a promise of whether the send was accepted: the chips stay attached
-   * until it resolves `true`, and a refused message's text comes back, so a
-   * refused send (the error surfaces wherever the caller shows send errors) can
-   * be retried as it was. Returning nothing counts as accepted.
-   */
+  /** Send with the finished uploads, in attach order. A promise of whether it was
+   *  accepted keeps the chips (and gives the text back) until it resolves true. */
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
-  /**
-   * Hard-disable the composer (textarea + send). Used for the brief
-   * draft-creation window — NOT for streaming, which never locks the composer.
-   */
+  /** Hard-disable (the draft's create window) — never for streaming. */
   disabled?: boolean;
-  /**
-   * True while a turn streams. The composer stays ENABLED — a message sent now
-   * queues server-side. Swaps Send for Stop and shows a "will queue" hint.
-   */
+  /** A turn is running: still enabled (a send queues), Send becomes Stop. */
   streaming?: boolean;
-  /** Called when the user stops an in-flight turn. Shown only while streaming. */
   onStop?: () => void;
-  /**
-   * A refused message to put back — the draft's first message, refused after
-   * the draft's own composer was gone. Applied once; `onRestored` then fires.
-   */
+  /** A refused message to put back once; `onRestored` then fires. */
   restore?: ComposerRestore | null;
   onRestored?: () => void;
+  /** The input's placeholder — "Message Claude Code…", "Reply…", "…it queues". */
+  placeholder?: string;
+  /** Compact controls (agent, model, effort) shown in the footer, left of Send. */
+  controls?: ReactNode;
+  /** The working folder of an open conversation, read-only, beside the paperclip (null: Coffer's workspace). */
+  cwd?: string | null;
+  /** A control in the folder's place — the draft's folder picker. */
+  workspace?: ReactNode;
+  /** A question waits: text answers it, so files cannot go with the message. */
+  attachmentsBlocked?: boolean;
+  /** One muted line under the box ("Nothing is sent until you press Send."). */
+  note?: string;
 }
 
-/**
- * Imperative handle: lets the parent load text into the composer. Used when the
- * user edits a queued message — it is pulled out of the queue and back into the
- * input to amend, then re-sent (re-queuing it at the tail).
- */
+/** Lets the parent load text in — a queued message pulled back to be edited. */
 export interface ComposerHandle {
   setText: (text: string) => void;
 }
 
-/**
- * Max height (px) the textarea grows to before it scrolls internally — roughly
- * ten lines, matching Claude Code / Codex's grow-then-scroll input. Kept in sync
- * with the `max-h-[200px]` class below.
- */
+/** Grow-then-scroll cap (px), in sync with the `max-h-[200px]` class below. */
 const MAX_HEIGHT = 200;
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { onSend, disabled = false, streaming = false, onStop, restore, onRestored },
+  {
+    onSend,
+    disabled = false,
+    streaming = false,
+    onStop,
+    restore,
+    onRestored,
+    placeholder,
+    controls,
+    cwd,
+    workspace,
+    note,
+    attachmentsBlocked = false,
+  },
   ref,
 ) {
   const { t } = useTranslation();
@@ -79,7 +83,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // A send whose outcome is still pending: its chips are not sent twice.
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const files = useComposerAttachments();
   const { dragging, handlers: dropHandlers } = useFileDrop(disabled, files.add);
 
@@ -107,7 +110,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // A message needs words or a finished file, and never leaves while an upload
   // is in flight or a failed one is still attached — nothing is dropped silently.
   const hasContent = value.trim().length > 0 || files.ready.length > 0;
-  const canSend = hasContent && !files.uploading && !files.failed && !disabled && !sending;
+  const canSend =
+    hasContent &&
+    !files.uploading &&
+    !files.failed &&
+    !disabled &&
+    !sending &&
+    !(attachmentsBlocked && files.ready.length > 0);
 
   const handleSend = () => {
     if (!canSend) return;
@@ -155,93 +164,81 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const showStop = streaming && !!onStop;
 
   return (
-    <div
-      className={cn(
-        "border-t border-border bg-background px-4 py-3",
-        dragging && "bg-accent ring-2 ring-inset ring-ring",
-      )}
-      {...dropHandlers}
-      data-testid="composer"
-    >
-      {files.items.length > 0 && (
-        <ul className="mb-2 flex flex-wrap gap-1.5" aria-label={t("chat.attachments.listLabel")}>
-          {files.items.map((it) => (
-            <li key={it.key}>
-              <AttachmentChip
-                name={it.name}
-                detail={formatBytes(it.size)}
-                mime={it.mime}
-                state={it.status === "ready" ? undefined : it.status}
-                error={it.error}
-                onRemove={() => files.remove(it.key)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex items-end gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          hidden
-          data-testid="composer-file-input"
-          onChange={(e) => {
-            files.add(Array.from(e.target.files ?? []));
-            // Reset so picking the same file again still fires a change.
-            e.target.value = "";
-          }}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled}
-          aria-label={t("chat.composer.attach")}
-          className="mb-0.5 shrink-0"
+    // A file dragged over the page restyles only this box — an accent border
+    // and "Drop to attach" — never a full-pane overlay; the limits are said
+    // only by the line under the box when a file is refused.
+    <div className="px-8 pb-4 pt-2" {...dropHandlers} data-testid="composer">
+      <div className="flex w-full flex-col gap-1.5">
+        <div
+          className={cn(
+            "flex flex-col gap-2.5 rounded-xl border bg-surface-raised pb-2.5 pl-3.5 pr-3 pt-3 transition-colors duration-fast",
+            dragging ? "border-accent" : "border-border",
+          )}
+          data-dragging={dragging || undefined}
         >
-          <Paperclip className="size-4" aria-hidden="true" />
-        </Button>
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={dragging ? t("chat.composer.dropHint") : t("chat.composer.placeholder")}
-          disabled={disabled}
-          rows={1}
-          className="max-h-[200px] min-h-[40px] resize-none py-2 leading-5"
-          aria-label={t("chat.composer.ariaLabel")}
-        />
-        {showStop ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onStop}
-            aria-label={t("chat.composer.stop")}
-            className="mb-0.5 shrink-0"
-          >
-            <Square className="size-4" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSend}
-            disabled={!canSend}
-            aria-label={t("chat.composer.send")}
-            className="mb-0.5 shrink-0"
-          >
-            <Send className="size-4" />
-          </Button>
-        )}
+          {files.items.length > 0 && (
+            <ul
+              className="flex flex-wrap gap-1.5"
+              aria-label={t("conversations.attachments.listLabel")}
+            >
+              {files.items.map((it) => (
+                <li key={it.key}>
+                  <AttachmentChip
+                    name={it.name}
+                    detail={formatBytes(it.size)}
+                    mime={it.mime}
+                    state={it.status === "ready" ? undefined : it.status}
+                    error={it.error}
+                    onRemove={() => files.remove(it.key)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={
+              dragging
+                ? t("conversations.composer.dropHint")
+                : (placeholder ??
+                  t(
+                    streaming
+                      ? "conversations.composer.queuePlaceholder"
+                      : "conversations.composer.placeholderAny",
+                  ))
+            }
+            disabled={disabled}
+            rows={1}
+            className="max-h-[200px] min-h-6 resize-none rounded-none border-0 bg-transparent p-0 leading-6 shadow-none focus-visible:ring-0"
+            aria-label={t("conversations.composer.ariaLabel")}
+          />
+          <ComposerToolbar
+            onPickFiles={(picked) => files.add(picked)}
+            disabled={disabled}
+            controls={controls}
+            cwd={cwd}
+            workspace={workspace}
+            showStop={showStop}
+            onStop={onStop}
+            canSend={canSend}
+            onSend={handleSend}
+          />
+        </div>
+        {note ? (
+          <p data-testid="composer-note" className="px-1 text-xs text-text-muted">
+            {note}
+          </p>
+        ) : null}
+        {files.refusal ? (
+          <p role="alert" data-testid="composer-refusal" className="px-1 text-xs text-danger">
+            {files.refusal}
+          </p>
+        ) : null}
       </div>
-      {streaming && (
-        <p className="mt-1.5 text-xs text-muted-foreground">{t("chat.composer.streaming")}</p>
-      )}
     </div>
   );
 });

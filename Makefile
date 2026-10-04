@@ -1,35 +1,61 @@
 _VENV_PY := .venv/bin/python3
 PY := $(or $(and $(wildcard $(_VENV_PY)),$(_VENV_PY)),python3)
 BACKEND := backend
+# Every Python step imports this checkout's backend, never whichever checkout the
+# shared venv's editable install points at (worktrees share one venv).
+export PYTHONPATH := $(CURDIR)/$(BACKEND)$(if $(PYTHONPATH),:$(PYTHONPATH))
 FRONTEND := frontend
+
+# Backend pytest runs on pytest-xdist workers. PYTEST_WORKERS is xdist's `-n`:
+# `auto` (default) = one worker per core, a number pins it, and `0` runs the
+# tier serially in this process (the escape hatch for debugging with pdb or
+# bisecting an order-dependent failure). `--dist loadgroup` keeps every test
+# marked `@pytest.mark.xdist_group(name=...)` on one worker; see
+# .agents/testing.md "Running in Parallel". PYTEST_ARGS is passed through
+# untouched — CI uses it to pick one duration-balanced shard (pytest-split).
+PYTEST_WORKERS ?= auto
+PYTEST_ARGS ?=
+# Per-test wall-clock cap for the integration tier (pytest-timeout), so a hung
+# test fails within minutes, by name, instead of stalling the run for hours. A
+# test that needs longer says so with @pytest.mark.timeout(seconds).
+PYTEST_TIMEOUT ?= 300
+PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-acceptance openspec-validate verify-benchmark \
+	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark verify-secrets \
+	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
 	bundle-binaries \
 	desktop desktop-stage-binaries desktop-lint desktop-test \
-	frontend-codegen docs-reference \
+	contracts frontend-codegen docs-reference docs-build refresh-prices \
 	lint format dev clean
 
 help:
 	@echo "Coffer Makefile targets:"
-	@echo "  make install               create venv + install backend + frontend deps"
+	@echo "  make install               create .venv from backend/uv.lock (uv, frozen) + npm deps (frontend, OpenSpec CLI, e2e)"
 	@echo "  make install-e2e-browsers  download the Playwright chromium build (heavy)"
 	@echo "  make hooks                 install pre-commit + commit-msg git hooks"
 	@echo ""
 	@echo "  Verification (4 test tiers + lint, see .agents/testing.md):"
-	@echo "  make verify                fast path: lint + unit + integration + contract + acceptance audit"
+	@echo "  make verify                fast path: lint + unit + integration + contract + acceptance audit,"
+	@echo "                            timing each stage into .coffer-verify.timings"
 	@echo "  make verify-all            verify + e2e (full suite)"
 	@echo "  make verify-unit           unit tier only (includes purity guardrail)"
 	@echo "  make verify-integration    integration tier only"
 	@echo "  make verify-contract       contract tier only"
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
+	@echo "  make verify-visual         screenshot baseline: every route, light + dark (not in verify / verify-e2e)"
+	@echo "  make visual-update         re-record this platform's screenshot baseline after a deliberate visual change"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
-	@echo "  make verify-benchmark      gateway-overhead budget benchmark (COFFER_RUN_BENCHMARKS=1)"
-	@echo "  make lint                  ruff + mypy + eslint + tsc + knip + import-linter + file/response_model checks"
-	@echo "  make format                ruff format + prettier"
+	@echo "  make verify-benchmark      every perf-budget test, the slow ones too (COFFER_RUN_BENCHMARKS=1)"
+	@echo "  make verify-secrets        gitleaks over the full git history (skips when gitleaks is not installed)"
+	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
+	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
+	@echo "  make lint                  every static gate: repo checks (scripts/check_*.py, contract freshness),"
+	@echo "                            ruff, mypy, import-linter, then the frontend (i18n keys, codegen, eslint, tsc, knip)"
+	@echo "  make format                ruff format + ruff check --fix over backend/ and evals/ (prettier: run it per file)"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
 	@echo "  make eval                  AI eval harness: tool-search suite (local) + baseline gate"
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
@@ -43,23 +69,26 @@ help:
 	@echo "  make desktop-stage-binaries  stage externalBin placeholders so cargo can compile"
 	@echo ""
 	@echo "  Dev:"
-	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
+	@echo "  make dev                   run backend (:38470) + frontend (:5173) in parallel"
+	@echo "  make contracts             regenerate every spec's contracts/api.openapi.yaml from the Pydantic models, then the frontend types"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
-	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
+	@echo "  make docs-reference        regenerate the docs site's CLI reference pages (en and zh)"
+	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; not in verify)"
+	@echo "  make refresh-prices        refresh the bundled model price list from pydantic/genai-prices (release time; network)"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
-# Use `./.venv/bin/python3` directly in the install recipe instead of $(PY).
-# $(PY) is evaluated at parse time: when .venv doesn't yet exist, it expands
-# to the system `python3`, which on Homebrew macOS is PEP-668-protected and
-# rejects `pip install --upgrade pip` with "externally-managed-environment".
-# By creating the venv inside the recipe and then calling its python directly,
-# the install path works on a fresh checkout regardless of the host OS's pip
-# policy.
+# The backend installs exactly what backend/uv.lock pins, the way CI and the
+# release do (`uv sync --frozen --extra dev`), into the repo-root .venv every
+# other target reads. A pip install of the `>=` floors would resolve versions
+# CI never tested, and a local verify could then fail (or pass) for reasons
+# CI does not share. uv installs the backend itself editable.
 install:
-	@if [ ! -d .venv ]; then python3 -m venv .venv; fi
-	./.venv/bin/python3 -m pip install --upgrade pip
-	./.venv/bin/python3 -m pip install -e '$(BACKEND)[dev]'
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "install: uv not found — install it (https://docs.astral.sh/uv/)"; \
+		exit 1; \
+	}
+	UV_PROJECT_ENVIRONMENT=$(CURDIR)/.venv uv sync --frozen --extra dev --project $(BACKEND) --python 3.12
 	@if [ -d $(FRONTEND) ] && command -v npm >/dev/null 2>&1; then \
 		cd $(FRONTEND) && npm install; \
 	else \
@@ -94,8 +123,26 @@ hooks:
 		echo "hooks: .venv/bin/pre-commit missing — run 'make install' first"; exit 1; \
 	fi
 
-verify: lint verify-unit verify-integration verify-contract verify-acceptance
-	@$(PY) scripts/verify_stamp.py write && echo "verify: OK — recorded .coffer-verify.stamp"
+# Each stage runs in order and its wall time lands in .coffer-verify.timings
+# (`<stage> <seconds>s <ok|FAILED>`, one line per stage run), printed at the
+# end whether the run passed or stopped at a failing stage.
+VERIFY_STAGES := lint verify-unit verify-integration verify-contract verify-acceptance
+VERIFY_TIMINGS := .coffer-verify.timings
+
+verify:
+	@: > $(VERIFY_TIMINGS); \
+	for stage in $(VERIFY_STAGES); do \
+		start=$$(date +%s); \
+		$(MAKE) --no-print-directory $$stage; status=$$?; \
+		if [ $$status -eq 0 ]; then result=ok; else result=FAILED; fi; \
+		printf '%-20s %5ss  %s\n' "$$stage" "$$(( $$(date +%s) - start ))" "$$result" >> $(VERIFY_TIMINGS); \
+		if [ $$status -ne 0 ]; then \
+			echo ""; echo "verify: stage timings ($(VERIFY_TIMINGS))"; cat $(VERIFY_TIMINGS); \
+			exit $$status; \
+		fi; \
+	done; \
+	echo ""; echo "verify: stage timings ($(VERIFY_TIMINGS))"; cat $(VERIFY_TIMINGS)
+	@echo "verify: OK"
 verify-all: verify verify-e2e
 
 # Two halves of one rule: `openspec validate --strict` fails a requirement
@@ -113,13 +160,25 @@ openspec-validate:
 
 lint:
 	$(PY) scripts/check_file_sizes.py
+# The wire contracts are generated from the Pydantic models (Principles,
+# "Contract direction"); this fails when a checked-in contract is not what the
+# models produce, or a served route has no owning spec. Fix: `make contracts`.
+	$(PY) scripts/gen_contracts.py --check
 	$(PY) scripts/check_response_models.py
-	$(PY) scripts/check_doc_numbering.py
+	$(PY) scripts/check_adr_index.py
 	$(PY) scripts/check_spec_citations.py
 	$(PY) scripts/check_architecture_doc.py
 	$(PY) scripts/check_pyinstaller_specs.py
 	$(PY) scripts/check_cli_reference.py
+	$(PY) scripts/check_docs_locales.py
+	$(PY) scripts/check_error_codes_reference.py
 	$(PY) scripts/check_removed_commands.py
+	$(PY) scripts/check_platform_calls.py
+	$(PY) scripts/check_bare_tasks.py
+	$(PY) scripts/check_coffer_paths.py
+	$(PY) scripts/check_agent_type_branches.py
+	$(PY) scripts/check_frontend_colors.py
+	$(PY) scripts/check_ignored_sources.py
 # Both trees are checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
 # (line-length 88, the starter rule set) because nothing above it carried a
@@ -142,58 +201,63 @@ lint:
 # config is frontend/package.json's "knip" key, and the script is
 # `npx --yes knip@<pinned>`: the same on-demand pattern `make desktop` uses for
 # the Tauri CLI, so it needs no entry in the lockfile.
-	@if [ -d $(FRONTEND)/node_modules ]; then \
-		PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check && \
-		cd $(FRONTEND) && npm run lint && npm run typecheck && npm run knip; \
-	else \
-		echo "lint: $(FRONTEND)/node_modules missing — skipping frontend"; \
+# A missing node_modules fails (it does not skip): a skipped frontend leg would
+# still let `make verify` record a fresh stamp for a tree whose frontend was
+# never checked.
+	@if [ ! -d $(FRONTEND)/node_modules ]; then \
+		echo "lint: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \
 	fi
+	PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check
+	cd $(FRONTEND) && npm run lint && npm run typecheck && npm run knip
 
 verify-unit:
 	$(PY) scripts/check_unit_purity.py
-	@if [ -d $(BACKEND)/tests/unit ]; then \
-		$(PY) -m pytest $(BACKEND)/tests/unit; \
-	else \
-		echo "verify-unit: $(BACKEND)/tests/unit/ does not exist yet — skipping backend"; \
+	$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/unit
+	@if [ ! -d $(FRONTEND)/node_modules ]; then \
+		echo "verify-unit: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \
 	fi
-	@if [ -d $(FRONTEND)/node_modules ]; then \
-		cd $(FRONTEND) && npx vitest run src; \
-	else \
-		echo "verify-unit: $(FRONTEND)/node_modules missing — skipping frontend"; \
-	fi
+	cd $(FRONTEND) && npx vitest run src
 
 # Backend-only, as .agents/testing.md documents. The frontend has no
 # tier-by-directory layout: its tests are co-located `*.test.tsx` beside the
 # module they cover and all of them run in `verify-unit`'s `vitest run src`.
-# A `frontend/tests/integration` leg used to sit here; that directory was the
-# first scaffold's shape, deleted when the real web shell landed, and the guard
-# it left behind could only ever print its own skip message.
+# One integration run per machine: scripts/verify_lock.py queues a second run
+# (another worktree or session) until the first finishes, because two runs at
+# once slow each other until time-based tests fail. COFFER_VERIFY_LOCK=off skips it.
 verify-integration:
-	@if [ -d $(BACKEND)/tests/integration ]; then \
-		$(PY) -m pytest $(BACKEND)/tests/integration; \
-	else \
-		echo "verify-integration: $(BACKEND)/tests/integration/ does not exist yet — skipping backend"; \
-	fi
+	$(PY) scripts/verify_lock.py -- $(PY) -m pytest $(PYTEST_XDIST) --timeout=$(PYTEST_TIMEOUT) $(PYTEST_ARGS) $(BACKEND)/tests/integration
+
+# Re-measure the per-test durations CI's integration shards are balanced by
+# (pytest-split, .github/workflows/verify.yml). Serial on purpose: under xdist
+# the numbers include contention, and the durations plugin records on the
+# controller's reporter, which only a serial run is sure to own. Rewrites the
+# file from scratch, so deleted tests drop out. Re-run when shards drift apart.
+test-durations:
+	$(PY) -m pytest -n 0 -q $(BACKEND)/tests/integration \
+		--store-durations --clean-durations --durations-path $(BACKEND)/.test_durations
 
 verify-benchmark:
 	COFFER_RUN_BENCHMARKS=1 $(PY) -m pytest $(BACKEND)/tests -m benchmark
 
+# The same scan CI's `secrets-scan` job runs (gitleaks over the full history,
+# honouring .gitleaksignore). CI runs it through gitleaks-action; locally it
+# needs a gitleaks binary on PATH and skips without one.
+verify-secrets:
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --source . --redact --no-banner; \
+	else \
+		echo "verify-secrets: gitleaks is not installed — skipping (CI's secrets-scan job runs it)"; \
+	fi
+
 # Backend-only, as .agents/testing.md documents. The one frontend contract test
 # (`frontend/src/bootstrap.contract.test.ts`) is co-located and runs in
-# `verify-unit`; `frontend/tests/contract/` has never existed, so the leg that
-# used to guard on it only ever printed a skip.
+# `verify-unit`.
 verify-contract:
-	@if [ -d $(BACKEND)/tests/contract ]; then \
-		$(PY) -m pytest $(BACKEND)/tests/contract; \
-	else \
-		echo "verify-contract: $(BACKEND)/tests/contract/ does not exist yet — skipping backend"; \
-	fi
+	$(PY) -m pytest $(BACKEND)/tests/contract
 
 # `npx playwright test` runs BOTH projects in e2e/playwright.config.ts: `web`
 # (browser specs under e2e/web/specs/) and `mcp` (cross-process shim+daemon
-# specs under e2e/mcp/specs/, no browser). A pytest leg used to follow, guarded
-# on `e2e/*.py`; no such file has ever existed in this repo — the MCP shim
-# tests it claimed to skip are the Playwright `mcp` project above.
+# specs under e2e/mcp/specs/, no browser).
 verify-e2e:
 	@if [ ! -f e2e/playwright.config.ts ]; then \
 		echo "verify-e2e: no e2e/playwright.config.ts — skipping"; \
@@ -203,10 +267,32 @@ verify-e2e:
 		cd e2e && npx playwright test; \
 	fi
 
+# Visual baseline (e2e/playwright.visual.config.ts): its own fresh daemon
+# (:18100) and Vite (:5174), baselines per platform under
+# e2e/visual/specs/__screenshots__/<platform>/. Deliberately outside verify and
+# verify-e2e — see .agents/testing.md "Visual baseline".
+VISUAL_PW := npx playwright test -c playwright.visual.config.ts
+
+verify-visual:
+	@if [ ! -d e2e/node_modules ]; then \
+		echo "verify-visual: e2e/node_modules missing — run 'make install' first"; exit 1; \
+	else \
+		cd e2e && $(VISUAL_PW); \
+	fi
+
+visual-update:
+	@if [ ! -d e2e/node_modules ]; then \
+		echo "visual-update: e2e/node_modules missing — run 'make install' first"; exit 1; \
+	else \
+		cd e2e && $(VISUAL_PW) --update-snapshots; \
+	fi
+
+# Backend and evals only. The frontend tree is not prettier-clean as a whole,
+# so a whole-tree `prettier --write` would reformat files no change touched;
+# run `npx prettier --write <files>` in frontend/ on the files you changed.
 format:
 	$(PY) -m ruff format $(BACKEND) evals
 	$(PY) -m ruff check --fix $(BACKEND) evals
-	@if [ -d $(FRONTEND)/node_modules ]; then cd $(FRONTEND) && npm run format; fi
 
 eval:
 	$(PY) -m pytest evals/tests -q
@@ -243,7 +329,7 @@ lock:
 	}
 	uv lock --project $(BACKEND)
 
-# Run backend (:8000) + frontend (:5173) in parallel for browser dev.
+# Run backend (:38470) + frontend (:5173) in parallel for browser dev.
 #
 # The backend MUST go through `coffer.infrastructure.daemon.entry` rather
 # than `uvicorn coffer.main:app` directly: entry.py is what allocates the
@@ -264,7 +350,7 @@ lock:
 # cofferDevTokenInjection finds no daemon.json, and injects no token — so
 # the page bakes in the wrong base URL and shows "Failed to fetch" forever.
 dev:
-	@echo "Starting backend (:8000) and frontend (:5173). Ctrl-C to stop both."
+	@echo "Starting backend (:38470) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
 	DAEMON_JSON="$$HOME/.coffer/daemon.json"; \
 	(cd $(BACKEND) && COFFER_DEV_CORS=1 PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
@@ -278,7 +364,7 @@ dev:
 		sleep 1; \
 		_elapsed=$$(($$_elapsed + 1)); \
 	done; \
-	_port=$$($(PY) -c "import json,sys; d=json.load(open('$$DAEMON_JSON')); print(d.get('port',8000))" 2>/dev/null || echo 8000); \
+	_port=$$($(PY) -c "import json,sys; d=json.load(open('$$DAEMON_JSON')); print(d.get('port',38470))" 2>/dev/null || echo 38470); \
 	until curl -sf "http://127.0.0.1:$$_port/api/v1/daemon/status" >/dev/null 2>&1; do \
 		if [ $$_elapsed -ge 30 ]; then \
 			echo "dev: daemon HTTP not ready on port $$_port within 30 s — aborting."; \
@@ -291,16 +377,39 @@ dev:
 	(cd $(FRONTEND) && npm run dev) & \
 	wait
 
+# Models → contracts → frontend types, in that order: the second step reads
+# what the first wrote.
+contracts:
+	$(PY) scripts/gen_contracts.py
+	$(MAKE) frontend-codegen
+
 frontend-codegen:
 	@if [ -d $(FRONTEND) ]; then \
 		cd $(FRONTEND) && npm run codegen; \
 	fi
 
-# The CLI and REST reference pages are generated from the code;
-# scripts/check_cli_reference.py (in `lint`) fails when they drift.
+# The CLI reference pages (an index plus one page per command group, English
+# and Chinese) are generated from the code; scripts/check_cli_reference.py (in
+# `lint`) fails when they drift.
 docs-reference:
 	$(PY) docs-site/scripts/gen_cli_reference.py
-	$(PY) docs-site/scripts/gen_rest_reference.py
+
+# The bundled model price list shipped in each build is refreshed once per
+# release; the daemon keeps a daily cached copy on top of it (spec
+# provider-switching "Refresh the bundled price list in the background").
+# Needs the network; not in verify.
+refresh-prices:
+	$(PY) scripts/refresh_model_prices.py
+
+# The published site, built the way .github/workflows/pages.yml builds it.
+# VitePress fails the build on a dead internal link, so this is the local way
+# to find one before CI's Pages job does. Not part of `verify`.
+docs-build:
+	@if [ ! -d docs-site/node_modules ]; then \
+		echo "docs-build: installing docs-site dependencies"; \
+		cd docs-site && npm ci; \
+	fi
+	cd docs-site && npm run build
 
 bundle-binaries:
 	bash ./scripts/build_binaries.sh
@@ -308,9 +417,9 @@ bundle-binaries:
 # --- Desktop shell (docs/decisions/desktop-shell-over-a-shared-frontend.md) ---
 #
 # Deliberately NOT a prerequisite of `verify`: the Rust toolchain is a
-# prerequisite of `make desktop` only, and no CI workflow installs one for
-# the test gates. `make desktop-test` is how anyone with a toolchain runs
-# the crate's unit tests.
+# prerequisite of `make desktop*` only. The `desktop.yml` workflow installs one
+# and runs `make desktop-lint` and `make desktop-test`; locally, anyone with a
+# toolchain runs the same targets.
 #
 # `desktop` produces an UNSIGNED, un-notarised Coffer.app + .dmg. macOS will
 # refuse a browser-downloaded copy on double-click until a Developer ID

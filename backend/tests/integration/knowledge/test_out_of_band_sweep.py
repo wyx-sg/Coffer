@@ -2,12 +2,12 @@
 
 This is the promise that makes the layer a directory rather than a database
 (spec knowledge "Keep direct file edits a complete way to change knowledge"): a
-person edits a Markdown file under ``~/.coffer/knowledge/<collection>/`` in
-their own editor — or drops a new one in with Finder — and Coffer carries the
-edit into the rest of the collection. Nothing registers it, nothing indexes it
-and no row is written, so the only thing that can notice it is the sweep
-comparing each document's modification time with its own ``coffer_curated_at``
-frontmatter (see "Run curation on a sweep and on demand" and "Settle an item
+person edits a Markdown file under ``~/.coffer/vault/knowledge/<collection>/``
+in their own editor — or drops a new one in with Finder — and Coffer carries
+the edit into the rest of the collection. Nothing registers it, nothing indexes
+it and no row is written, so the only thing that can notice it is the sweep
+comparing each document's content at the vault's ``HEAD`` with what curation
+last settled (see "Run curation on a sweep and on demand" and "Settle an item
 only after its pass completes").
 
 The sweep owes material in the hidden inbox first: until it is merged, it is
@@ -35,7 +35,8 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge import curation_state, fs, inbox, paths
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 _DROPPED = "The account gateway owns the session cache.\n"
 
@@ -47,7 +48,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 # A uid a test can spell, and deliberately not the name: a
                 # lookup that worked because the two matched would prove
                 # nothing about addressing a collection by identity.
@@ -116,8 +116,7 @@ class _Loop:
 
 @pytest.fixture
 def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    root = tmp_path / "knowledge"
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(root))
+    root = _knowledge_root()
     fs.create_collection_dir("shopee")
     return root
 
@@ -133,7 +132,7 @@ def _worker(service: KnowledgeService, loop: _Loop) -> CurationWorker:
 
     return CurationWorker(
         service=service,
-        curate=CurationPass(agent=loop, models=_Models(), credential_resolver=lambda ref: "key"),
+        curate=CurationPass(agent=loop, models=_Models(), secret_resolver=lambda ref: "key"),
         is_enabled=_enabled,
         deliver=None,
         list_collections=_collections,
@@ -165,23 +164,24 @@ async def test_a_document_dropped_in_by_hand_is_picked_up_by_the_next_sweep(corp
     assert _DROPPED.strip() in brief
     assert f"The document a person edited: {_DROPPED_RELPATH}" in brief
 
-    # The pass's own write is a document an agent reads, and is stamped so the
+    # The pass's own write is a document an agent reads, and is settled so the
     # sweep does not hand it back.
     written = fs.read_file("shopee/session-cache-1.md")
     assert written.curated_at != ""
 
-    # The watermark is written into the person's own file, which is what makes
-    # the next sweep a no-op without any state Coffer has to keep ("Settle an item
-    # only after its pass completes").
+    # What curation settled the person's file as is recorded by content, which
+    # is what makes the next sweep a no-op without touching their file
+    # ("Settle an item only after its pass completes").
     assert fs.read_file(_DROPPED_RELPATH).curated_at != ""
-    assert fs.edited_documents("shopee") == ()
+    assert "coffer_curated_at" not in (corpus / _DROPPED_RELPATH).read_text(encoding="utf-8")
+    assert curation_state.edited_documents("shopee") == ()
 
 
 @pytest.mark.anyio
 async def test_the_sweep_does_not_rewrite_the_edited_document(corpus) -> None:  # type: ignore[no-untyped-def]
-    """It is the person's file. Settling the pass may stamp it and nothing
-    else — the body, and any frontmatter they wrote themselves, come through
-    untouched ("Settle an item only after its pass completes")."""
+    """It is the person's file. Settling the pass writes nothing into it —
+    the body, and any frontmatter they wrote themselves, come through untouched
+    ("Settle an item only after its pass completes")."""
     _drop(
         "dropped-by-hand.md",
         "---\ntitle: My own title\ndescription: what I wrote\nactor: user\n"
@@ -202,7 +202,7 @@ async def test_the_sweep_does_not_rewrite_the_edited_document(corpus) -> None:  
 
 @pytest.mark.anyio
 async def test_a_second_sweep_starts_no_pass_until_the_document_changes(corpus) -> None:  # type: ignore[no-untyped-def]
-    """The watermark is what stops a corpus being re-curated every minute."""
+    """What curation settled is what stops a corpus being re-curated every minute."""
     dropped = _drop("dropped-by-hand.md", _DROPPED)
 
     service = KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
@@ -243,7 +243,7 @@ async def test_the_inbox_is_drained_before_edited_documents(corpus) -> None:  # 
     assert f"The document a person edited: {_DROPPED_RELPATH}" in loop.briefs[1]
     # Material a pass folded in leaves the inbox; nothing is owed any more.
     assert inbox.inbox_items("shopee") == ()
-    assert fs.edited_documents("shopee") == ()
+    assert curation_state.edited_documents("shopee") == ()
 
 
 _DROPPED_RELPATH = "shopee/dropped-by-hand.md"

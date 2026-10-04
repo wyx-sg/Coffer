@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Composition Root With Explicit Wiring](composition-root-explicit-wiring.md), [Resource Identity Is an Immutable `uid`](resource-identity-is-an-immutable-uid.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), spec resource-framework "Keep creation a per-kind seam", spec resource-framework "Run the kind's cleanup before a deletion completes", spec resource-framework "Let a kind refuse a deletion before anything is torn down", spec resource-framework "Treat a resource's name as a mutable label", PR #386, PR #406
+**Related**: [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Composition Root With Explicit Wiring](composition-root-explicit-wiring.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), spec resource-framework "Keep creation a per-kind seam", spec resource-framework "Run the kind's cleanup before a deletion completes", spec resource-framework "Let a kind refuse a deletion before anything is torn down", spec resource-framework "Treat a resource's name as a mutable label", PR #386, PR #406
 
 ## Context
 
@@ -13,7 +13,7 @@ rename, delete — in one kind-agnostic `ResourceService`, and forbids that
 service from importing any kind. But almost every kind has something to say
 about some of those operations:
 
-- A skill's row must be backed by a master folder, so the generic create path
+- A skill's resource must be backed by a master folder, so the generic create path
   must not make one; a builtin skill must not be deletable; disabling a skill
   must reclaim its delivered copies; renaming it must move its directory.
 - A channel's `default_agent` must name a registered agent inside the channel's
@@ -23,8 +23,10 @@ about some of those operations:
   it must release live upstream connections.
 - A provider starts scoped to the agents its protocol can serve, not to every
   agent.
-- Memory rows are derived per machine and must not sync; one skill
-  (`coffer-guide`) is derived output and must not sync either.
+- Memory partitions are derived per machine and must not sync, and an agent is
+  true of one machine only; one skill (`coffer-guide`) is derived output and
+  must not sync either. Where a resource file lives is what decides whether it
+  travels.
 
 The core needs a way to consult a kind at the right moment of each operation
 without knowing which kinds exist, and the contract has to make one property
@@ -52,15 +54,20 @@ calls it:
 | `name`, `display_name`, `config_schema` | Kind key, label, Pydantic model every config is validated against on write | every kind |
 | `generic_create_allowed` | `False` refuses creation (and config update) through the generic `POST`/`PATCH`; the kind's own service passes `allow_lifecycle_kind=True` | `False` for `agent`, `skill`, `knowledge`, `memory` |
 | `supports_scope` | Whether a non-null per-agent scope may be set | `True` for `mcp_server`, `skill`, `channel`, `provider` |
-| `converges` | Whether the kind's rows travel to the sync remote | `False` for `memory` |
-| `converges_row(config)` | Per-row refinement of `converges`; can only withhold | `skill` (withholds `coffer-guide`) |
+| `toggleable` | Whether the kind has an enabled switch at all; `False` refuses enable and disable with `RESOURCE_NOT_TOGGLEABLE` | `False` for `knowledge`, `memory` |
+| `storage` | The storage class the kind's resource files live in (`vault`, `local`, `derived`), which is also the sync policy | `local` for `agent`, `derived` for `memory`, `vault` otherwise |
+| `storage_row(config)` | Per-row refinement of `storage`, decided by the config alone | `skill` (files `coffer-guide` as derived) |
+| `exclusive_flags` | Config flags at most one resource of the kind may hold; the vault validator refuses a commit that leaves two | `provider` (`internal_default`) |
+| `name_fixed`, `name_fixed_resets` | The name cannot change once registered, because it is quoted outside Coffer; a rename is refused with `NAME_IMMUTABLE` before any hook runs | `mcp_server`, `skill`, `agent` |
+| `name_from_config(config)` | The one name a row may carry, derived from its config | `agent` |
+| `titled` | Whether rows carry the optional display `title` | `False` for `agent`, `mcp_server`, `skill`, `knowledge` |
 
 **Pure functions of the config** — consulted while building a write, never
 reject it:
 
 | Hook | Used for | Set by |
 | --- | --- | --- |
-| `credential_ref_extractor(config)` | The refs the service probes in the credential store before any write | `mcp_server`, `channel`, `provider` |
+| `secret_ref_extractor(config)` | The refs the service probes in the secret store before any write, and cites when deciding whether a delete may release a secret | `mcp_server`, `channel`, `provider` |
 | `audit_redactor(config)` | An audit-safe copy of the config | `mcp_server` |
 | `default_scope(config)` | The scope a new row starts with, consulted once at register | `provider` |
 
@@ -69,10 +76,10 @@ operation with nothing changed:
 
 | Hook | Operation | Set by |
 | --- | --- | --- |
-| `validate_name(name)` | register and rename | `mcp_server` (reserves `__`), `skill` (frontmatter name rule) |
+| `validate_name(name)` | register, rename and every change to the resource's file | `mcp_server` (reserves `__`, caps the name at 24 characters), `skill` (frontmatter name rule) |
 | `validate_config(config)` | register only, so an unrelated edit never re-probes the filesystem | `channel`, `provider` |
-| `on_update_config(resource, config)` | update config | `channel`, `provider` |
-| `on_rename(resource, new_name)` | rename — moves whatever is keyed by the name; a failure aborts, and on a lost race the service calls it again to move back | `knowledge`, `memory` (`skill` and `mcp_server` declare `name_fixed`, so a rename of either is refused before any hook runs) |
+| `on_update_config(resource, config)` | update config | `channel`, `provider`, `mcp_server` (evicts live connections built from the old config) |
+| `on_rename(resource, new_name)` | rename — moves whatever is keyed by the name; a failure aborts, and on a lost race the service calls it again to move back | `knowledge`, `memory` (`skill`, `mcp_server` and `agent` declare `name_fixed`, so a rename of any of them is refused before any hook runs) |
 | `validate_scope_for(resource, scope)` | update scope | `channel` |
 | `validate_delete(resource)` | delete, before any cleanup | `skill` (refuses builtin skills with `RESOURCE_PROTECTED`) |
 
@@ -81,7 +88,7 @@ a change that already happened and have no way to undo it:
 
 | Hook | Operation | Set by |
 | --- | --- | --- |
-| `on_enabled_changed(resource)` | enable/disable, only on a real transition | `agent`, `skill` |
+| `on_enabled_changed(resource)` | enable/disable, only on a real transition | `agent`, `skill`, `mcp_server` |
 | `on_scope_changed(resource)` | update scope | `skill` |
 | `on_delete(resource)` | delete — the one reaction that runs *before* the row is removed, so cleanup can still read it, but after `validate_delete` has let the delete through | `agent`, `skill`, `knowledge`, `memory`, `mcp_server`, `channel` |
 
@@ -93,7 +100,7 @@ a change that already happened and have no way to undo it:
   is tested against a `fake_kind`. Closures let a hook reach its kind's
   services without the core knowing their types.
 - **Cons.** The record grows a field whenever some kind needs a new moment
-  (rename, per-row sync withholding and scope pre-validation were each added
+  (rename, per-row storage and scope pre-validation were each added
   this way), and a field's contract lives in its comment. Hook names are not
   perfectly regular (`on_update_config` and `on_rename` are validators despite
   the `on_` prefix).
@@ -173,10 +180,11 @@ new hook must be declared in one of the groups:
   resolve it; if it raises, the exception propagates and the row stays, but
   whatever cleanup already ran is not rolled back, which is why refusal
   belongs in `validate_delete`.
-- **Pure config functions** (`credential_ref_extractor`, `audit_redactor`,
-  `default_scope`, `converges_row`) take the config alone, so any caller can
-  ask them with what it already holds — including the sync applier, which holds
-  a document with no row behind it yet.
+- **Pure config functions** (`secret_ref_extractor`, `audit_redactor`,
+  `default_scope`, `storage_row`, `name_from_config`) take the config alone, so
+  any caller can ask them with what it already holds — including the vault
+  store, which files a resource it is creating, and a validator judging a file
+  that arrived by a hand edit or a sync merge.
 - **Creation is the one operation a kind may keep.** A kind with an invariant
   beyond config validation sets `generic_create_allowed=False` and creates
   through its own service; there is no generic create route or command for
@@ -187,16 +195,17 @@ new hook must be declared in one of the groups:
 
 - Each operation's order is fixed in one place: `ResourceService` in
   `application/resource_service.py`, with scope and rename in
-  `resource_scope_ops.py` and `resource_rename_ops.py`. For example, delete is
-  `validate_delete` → `on_delete` → row removed → orphaned credentials released
-  → audited; rename is the `name_fixed` refusal → name rules → collision check
-  → `on_rename` → column write (with `on_rename` called again to move back if a
-  racing writer took the name) → audited.
+  `application/resource_scope_ops.py` and `application/resource_rename_ops.py`.
+  For example, delete is `validate_delete` → `on_delete` → resource file removed
+  → orphaned secrets released → audited; rename is the `name_fixed` refusal →
+  name rules → collision check → `on_rename` → file write under the new name
+  (with `on_rename` called again to move back if a racing writer took the name)
+  → audited.
 - A guard declared on the `Kind` holds on every surface at once — the kind's own
   route, the generic route and the CLI — rather than one guard per route.
 - Adding a hook is a change to `domain/resource.py` and to the service method
   that calls it, reviewed as a contract change; the comment on each field is
   its specification.
 - Which kinds may carry a scope and where each enforces it is decided in
-  [Per-Agent Resource Scope](per-agent-resource-scope.md); why `converges` and
-  `converges_row` exist is [Sync Withholds Derived Output](sync-withholds-derived-output.md).
+  [Per-Agent Resource Scope](per-agent-resource-scope.md); why `storage` and
+  `storage_row` exist is [Sync Withholds Derived Output](sync-withholds-derived-output.md).

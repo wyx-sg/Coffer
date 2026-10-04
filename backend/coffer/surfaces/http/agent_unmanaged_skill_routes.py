@@ -10,7 +10,7 @@ contents), adopt them into the master store, or delete them from disk.
 
 The agent is addressed by ``{uid}`` like everywhere else, but ``{skill}`` is a
 DIRECTORY name and stays one: an unmanaged folder has no resource row, so there
-is no uid to name it by (ADR resource-identity-is-an-immutable-uid). Adoption is
+is no uid to name it by (ADR identity-is-the-uid-inside-the-file). Adoption is
 the moment one is minted, which is why its response carries the new uid.
 """
 
@@ -19,9 +19,11 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from coffer.application.skill import file_ops
+from coffer.domain.scope import Scope
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 from coffer.surfaces.http.skill_dependencies import get_skill_service
@@ -37,7 +39,7 @@ Location = Literal["skills", "agents_dir"]
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 
@@ -47,7 +49,7 @@ router = APIRouter(
 class UnmanagedSkillOut(BaseModel):
     name: str
     path: str
-    location: str  # "skills" | "agents_dir"
+    location: Location
     valid: bool
     reason: str | None
     foreign_link: bool
@@ -67,8 +69,20 @@ class UnmanagedSkillDetailOut(UnmanagedSkillOut):
     description: str | None
 
 
+class AdoptReach(BaseModel):
+    """Who gets the adopted skill: every agent, only the listed agents, or
+    nobody (the skill is adopted switched off)."""
+
+    mode: Literal["everywhere", "restricted", "disabled"] = "everywhere"
+    #: Agent uids; read only when ``mode`` is ``restricted``.
+    agents: list[str] = Field(default_factory=list)
+
+
 class AdoptBody(BaseModel):
-    location: str
+    location: Location
+    #: The skill's name in Coffer; absent keeps the SKILL.md front matter's name.
+    name: str | None = Field(default=None, min_length=1)
+    reach: AdoptReach | None = None
 
 
 class SkillRefOut(BaseModel):
@@ -184,11 +198,17 @@ async def adopt_unmanaged_skill(
     svc: Any = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> SkillRefOut:
+    reach = body.reach
     resource = await svc.adopt_unmanaged(
         agent_uid=uid,
         skill_name=skill,
         location=body.location,
         actor=actor,
+        name=body.name,
+        enabled=reach is None or reach.mode != "disabled",
+        scope=Scope(agents=reach.agents)
+        if reach is not None and reach.mode == "restricted"
+        else None,
     )
     return SkillRefOut(uid=resource.uid, name=resource.name)
 
@@ -201,7 +221,7 @@ async def adopt_unmanaged_skill(
 async def delete_unmanaged_skill(
     uid: str,
     skill: str,
-    location: str,
+    location: Location,
     svc: Any = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> Response:

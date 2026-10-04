@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
+from datetime import UTC, datetime
 
 from coffer.domain.knowledge.entry import (
     ACTOR_AGENT,
@@ -39,14 +40,23 @@ def visible(entry: pathlib.Path) -> bool:
 
 
 def is_listed(name: str) -> bool:
-    """Whether a person browsing this folder should see the file.
+    """Whether a file of this name can be listed at all: any visible one.
 
-    Every visible file except a ``README.md``, which describes the directory it
-    sits in rather than being content in it. Not restricted to
-    Markdown: a file a person drops in by hand is theirs to see and delete,
-    whatever it is.
+    Not restricted to Markdown: a file a person drops in by hand is theirs to see
+    and delete, whatever it is. The one file this hides is decided by where it
+    sits, not by its name — see :func:`is_collection_readme`.
     """
-    return not name.startswith(".") and name != paths.README_NAME
+    return not name.startswith(".")
+
+
+def is_collection_readme(path: pathlib.Path) -> bool:
+    """Whether ``path`` is a collection's own ``README.md`` — at the collection root.
+
+    It describes the collection rather than being content in it, so it is kept out
+    of listings, counts and curation ("Keep the collection README out of the
+    corpus"). A ``README.md`` in a subfolder is an ordinary document.
+    """
+    return path.name == paths.README_NAME and path.parent.parent == paths.knowledge_root()
 
 
 def is_markdown(name: str) -> bool:
@@ -63,10 +73,27 @@ def count_files(directory: pathlib.Path, *, markdown_only: bool = False) -> int:
         return 0
     keep = is_markdown if markdown_only else is_listed
     total = 0
-    for _root, dirnames, filenames in os.walk(directory):
+    for root, dirnames, filenames in os.walk(directory):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
-        total += sum(1 for f in filenames if keep(f))
+        total += sum(
+            1 for f in filenames if keep(f) and not is_collection_readme(pathlib.Path(root) / f)
+        )
     return total
+
+
+def latest_edit(directory: pathlib.Path) -> str | None:
+    """When the newest document under ``directory`` was written (ISO 8601,
+    UTC), by file time; ``None`` when it holds none."""
+    newest = 0.0
+    for root, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for f in filenames:
+            path = pathlib.Path(root) / f
+            if is_markdown(f) and not is_collection_readme(path):
+                newest = max(newest, path.stat().st_mtime)
+    if not newest:
+        return None
+    return datetime.fromtimestamp(newest, tz=UTC).isoformat()
 
 
 def readme_description(collection: str) -> str:
@@ -113,6 +140,8 @@ def list_collections() -> tuple[CollectionEntry, ...]:
             description=readme_description(d.name),
             document_count=count_files(d, markdown_only=True),
             pending_count=_count_inbox(d.name),
+            folder_path=str(d),
+            updated_at=latest_edit(d),
         )
         for d in found
     )
@@ -167,7 +196,7 @@ def list_level(relpath: str) -> CatalogueLevel:
                     file_count=count_files(child),
                 )
             )
-        elif is_listed(child.name):
+        elif is_listed(child.name) and not is_collection_readme(child):
             files.append(_file_entry(child))
     segments = paths.split(relpath)
     if len(segments) == 1:
@@ -228,6 +257,6 @@ def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
         for name in sorted(filenames):
             # The narrow rule: this feeds the catalogue and curation, both of
             # which need text.
-            if is_markdown(name):
+            if is_markdown(name) and not is_collection_readme(pathlib.Path(root) / name):
                 found.append(_file_entry(pathlib.Path(root) / name))
     return tuple(sorted(found, key=lambda f: f.path))

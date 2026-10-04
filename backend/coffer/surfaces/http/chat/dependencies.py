@@ -15,10 +15,11 @@ agent kind.
 from __future__ import annotations
 
 from coffer.application.chat.attachments import ChatAttachmentService
-from coffer.application.chat.ports import ModelCatalogPort
+from coffer.application.chat.ports import ChannelMirrorPort, ModelCatalogPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.infrastructure.chat.adapter_support import ChannelNoteResolver
 
 _chat_service: ChatService | None = None
 
@@ -99,3 +100,33 @@ def get_attachment_service() -> ChatAttachmentService:
     if _attachment_service is None:
         raise RuntimeError("chat attachment service not initialised")
     return _attachment_service
+
+
+_channel_mirror: ChannelMirrorPort | None = None
+_channel_note_reader: ChannelNoteResolver | None = None
+
+
+def set_channel_note_reader(reader: ChannelNoteResolver | None) -> None:
+    """Called by the channel kind's composition (spec channels "Tell a
+    channel-driven agent it is on a chat channel"); ``None`` unwires it."""
+    global _channel_note_reader
+    _channel_note_reader = reader
+
+
+def get_channel_note_reader() -> ChannelNoteResolver | None:
+    """The channel kind's note reader, or ``None`` when no channel kind is wired
+    — the note then names the channel only."""
+    return _channel_note_reader
+
+
+def set_channel_mirror(mirror: ChannelMirrorPort | None) -> None:
+    """Called by the channel kind's composition (spec chat "Mirror a web reply
+    into the channel it came from"); ``None`` unwires it."""
+    global _channel_mirror
+    _channel_mirror = mirror
+
+
+def get_channel_mirror() -> ChannelMirrorPort | None:
+    """FastAPI Depends() target. ``None`` when no channel kind is wired — chat
+    then works exactly as before, with nothing mirrored."""
+    return _channel_mirror

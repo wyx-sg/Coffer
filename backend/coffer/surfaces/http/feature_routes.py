@@ -28,7 +28,7 @@ def _out(state: FeatureState) -> FeatureOut:
 async def list_features(
     features: FeatureService = Depends(get_feature_service),  # noqa: B008
 ) -> FeatureListOut:
-    return FeatureListOut(channel=features.channel, features=[_out(s) for s in features.list()])
+    return FeatureListOut(features=[_out(s) for s in features.list()])
 
 
 @router.put("/{key}", response_model=FeatureOut)
@@ -51,7 +51,7 @@ async def unset_feature(
     key: str,
     features: FeatureService = Depends(get_feature_service),  # noqa: B008
 ) -> FeatureOut:
-    """Remove this machine's setting, so the feature follows the channel default.
+    """Remove this machine's setting, so the feature is off again.
 
     Answers with the feature's state after the removal. The same refusals as
     the switch: 404 ``FEATURE_UNKNOWN``, 409 ``FEATURE_PINNED``.

@@ -2,38 +2,44 @@
 //
 // ALL queries + mutations for the `memory` kind (agents/frontend.md §3). Keys
 // are hierarchical under one `["memory"]` root so a write with cross-cutting
-// effects — a sync, a distil pass — can invalidate the whole subtree with a
-// prefix, mirroring `lib/hooks/useKnowledge.ts`.
+// effects — Update memory, a distil pass — can invalidate the whole subtree
+// with a prefix, mirroring `lib/hooks/useKnowledge.ts`.
 //
-// A partition's file keys hang off that partition's own key rather than a
-// sibling root, because a sync or distil pass rewrites the files on disk:
-// nesting them means the broad invalidation those mutations already do
-// reaches the open preview too, with no key threaded through by hand.
+// A partition's memories, retired memories, files and delivered text hang off
+// that partition's own key, so the broad invalidation Update memory does
+// reaches the open partition page too, and deleting a partition can drop its
+// whole subtree in one `removeQueries`.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  listPartitionFiles,
+  getDelivered,
+  getDeliveries,
+  getNote,
+  getReading,
+  listNotes,
   listPartitions,
-  readPartitionFile,
+  listRetired,
+  saveNote,
   sync,
 } from "@/lib/api/memory";
 import {
+  memoryDeliveredKey,
+  memoryDeliveriesKey,
   memoryKey,
-  memoryPartitionFileKey,
+  memoryNoteKey,
+  memoryNotesKey,
   memoryPartitionFilesKey,
   memoryPartitionsKey,
+  memoryReadingKey,
+  memoryRetiredKey,
+  resourcesKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
-
-/** Aggregation and the distil pass both rewrite whole partitions on disk —
- * partition list, note counts and every file under them — so both invalidate
- * the full `["memory"]` prefix rather than threading a narrower key. */
-function invalidateMemory(qc: ReturnType<typeof useQueryClient>): void {
-  void qc.invalidateQueries({ queryKey: memoryKey });
-}
+import { resourcesApi } from "@/lib/api/resources";
 
 export function useMemoryPartitions() {
   return useQuery({
@@ -42,30 +48,82 @@ export function useMemoryPartitions() {
   });
 }
 
-/** The partition's directory, recursively — one read for the whole tree, as
- * the skill file browser does: a partition holds tens of files, not a repo. */
-export function usePartitionFiles(partitionUid: string) {
+/** A partition's memories, newest wording as the last distil pass left them. */
+export function useMemoryNotes(uid: string) {
   return useQuery({
-    queryKey: memoryPartitionFilesKey(partitionUid),
-    queryFn: async () => (await listPartitionFiles(partitionUid)).root,
-    enabled: partitionUid.length > 0,
+    queryKey: memoryNotesKey(uid),
+    queryFn: async () => (await listNotes(uid)).notes,
+    enabled: uid.length > 0,
   });
 }
 
-/** One file out of that directory, read-only. */
-export function usePartitionFileContent(partitionUid: string, path: string | null) {
+/** One memory in full: body (frontmatter stripped by the daemon) + provenance. */
+export function useMemoryNote(uid: string, slug: string | null) {
   return useQuery({
-    queryKey: memoryPartitionFileKey(partitionUid, path ?? ""),
-    queryFn: () => readPartitionFile(partitionUid, path as string),
-    enabled: Boolean(partitionUid && path),
+    queryKey: memoryNoteKey(uid, slug ?? ""),
+    queryFn: () => getNote(uid, slug as string),
+    enabled: Boolean(uid && slug),
+  });
+}
+
+/** Save one memory's body (spec memory "Edit a memory in the web UI or on
+ *  disk"). Resolves with the new fingerprint, so the editor's next save does
+ *  not conflict with its own previous one. The saved note replaces the cached
+ *  read, so the page shows the new body and update time at once; the list and
+ *  the partition rows (newest update) are refetched. A refused save is the
+ *  editor's to show, so there is no toast. */
+export function useSaveMemoryNote(uid: string, slug: string) {
+  const qc = useQueryClient();
+  return useCallback(
+    async (body: string, expectedFingerprint: string): Promise<string> => {
+      const saved = await saveNote(uid, slug, { body, expected_fingerprint: expectedFingerprint });
+      qc.setQueryData(memoryNoteKey(uid, slug), saved);
+      void qc.invalidateQueries({ queryKey: memoryNotesKey(uid) });
+      void qc.invalidateQueries({ queryKey: memoryPartitionsKey });
+      return saved.fingerprint;
+    },
+    [qc, uid, slug],
+  );
+}
+
+/** The memories the partition retired, each with its reason. */
+export function useMemoryRetired(uid: string) {
+  return useQuery({
+    queryKey: memoryRetiredKey(uid),
+    queryFn: async () => (await listRetired(uid)).retired,
+    enabled: uid.length > 0,
+  });
+}
+
+/** The exact session-start text each connected agent receives in the
+ *  partition's project. */
+export function useMemoryDelivered(uid: string) {
+  return useQuery({
+    queryKey: memoryDeliveredKey(uid),
+    queryFn: async () => (await getDelivered(uid)).agents,
+    enabled: uid.length > 0,
+  });
+}
+
+/** When the agents' memory was last read, and whose read failed — the
+ *  Memory header's "Read 14 min ago" and its failure banner (spec memory
+ *  "Report the last read of the agents' memory"). */
+export function useMemoryReading() {
+  return useQuery({ queryKey: memoryReadingKey, queryFn: getReading });
+}
+
+/** Per agent, the last seven days of memory delivery. */
+export function useMemoryDeliveries() {
+  return useQuery({
+    queryKey: memoryDeliveriesKey,
+    queryFn: getDeliveries,
   });
 }
 
 /** Update memory: read every agent's latest native memory, then distil every
  * partition that gained new entries (spec memory "Update memory in one
- * action"). Partitions, note counts and every partition's files can all
- * change, so the invalidation is the full `["memory"]` prefix — same breadth
- * as knowledge's curation.
+ * action"). Partitions, memories and every partition's files can all change,
+ * so the invalidation is the full `["memory"]` prefix.
  *
  * A distil pass already running over a partition does not fail the request —
  * the daemon reports that partition as skipped — and the shared run list is
@@ -78,7 +136,7 @@ export function useSyncMemory() {
   return useMutation({
     mutationFn: sync,
     onSuccess: (result) => {
-      invalidateMemory(qc);
+      void qc.invalidateQueries({ queryKey: memoryKey });
       toast.success(
         t("memory.syncDone", {
           count: result.entries_written,
@@ -91,5 +149,31 @@ export function useSyncMemory() {
     },
     onError: (error) => toast.error(translateApiError(t, error)),
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
+  });
+}
+
+/** Delete a partition whose repository is gone (spec memory "Report
+ * unresolvable partitions") through the kind-agnostic resource route. The
+ * partition's own sub-queries are removed before the list is invalidated, so an
+ * open partition page cannot refetch a 404.
+ *
+ * No `onError` toast: the one place this runs is a ConfirmDialog, which stays
+ * open and shows the failure itself. */
+export function useDeletePartition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uid: string) => resourcesApi.remove(uid),
+    onSuccess: (_data, uid) => {
+      for (const key of [
+        memoryNotesKey(uid),
+        memoryRetiredKey(uid),
+        memoryPartitionFilesKey(uid),
+        memoryDeliveredKey(uid),
+      ]) {
+        qc.removeQueries({ queryKey: key });
+      }
+      void qc.invalidateQueries({ queryKey: memoryPartitionsKey });
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+    },
   });
 }

@@ -17,7 +17,7 @@ import pytest
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnError, TurnStarted
 from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, uid_of, wait_until
 
 
 def _clean_reply(text: str = "done") -> FakeAgentAdapter:
@@ -54,16 +54,18 @@ async def test_reaction_ack_on_receipt_and_completion(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "hi", platform_message_id="msg-42"))
     await wait_until(lambda: "Hello world" in adapter.texts())
     # Both marks land on the user's own inbound message id, receipt before done.
-    await wait_until(lambda: ("owner", "msg-42", "✅") in adapter.reactions)
+    await wait_until(lambda: ("owner", "msg-42", "👌") in adapter.reactions)
 
     assert adapter.reactions == [
         ("owner", "msg-42", "👀"),
-        ("owner", "msg-42", "✅"),
+        ("owner", "msg-42", "👨‍💻"),
+        ("owner", "msg-42", "👌"),
     ]
 
 
-async def test_errored_turn_keeps_only_the_receipt_reaction(env: ChannelEnv) -> None:
-    # An errored turn earns the 👀 receipt but no ✅ completion mark.
+@pytest.mark.acceptance(spec="channels", scenario="a failed turn ends on the failed mark")
+async def test_errored_turn_ends_on_the_failed_reaction(env: ChannelEnv) -> None:
+    # An errored turn is received, runs, and ends on the failed mark — never done.
     env.provider.adapter = FakeAgentAdapter(
         [TurnStarted(), TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]
     )
@@ -72,7 +74,11 @@ async def test_errored_turn_keeps_only_the_receipt_reaction(env: ChannelEnv) -> 
     await env.processor.on_message(inbound("tg", "owner", "hi", platform_message_id="msg-7"))
     await wait_until(lambda: any(t.startswith("⚠️") for t in adapter.texts()))
 
-    assert adapter.reactions == [("owner", "msg-7", "👀")]
+    assert adapter.reactions == [
+        ("owner", "msg-7", "👀"),
+        ("owner", "msg-7", "👨‍💻"),
+        ("owner", "msg-7", "😢"),
+    ]
 
 
 @pytest.mark.acceptance(
@@ -105,4 +111,22 @@ async def test_failing_reaction_still_delivers_the_reply(env: ChannelEnv) -> Non
     assert ("owner", "still here") in adapter.sent
     assert ("owner", "msg-9", "👀") in adapter.reactions
     # The channel stays live for the next message.
-    assert env.processor.binding("tg") is not None
+    assert env.processor.binding(uid_of("tg")) is not None
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a turn's marks follow it from receipt to its end"
+)
+async def test_an_interrupted_turn_ends_on_the_stopped_mark(env: ChannelEnv) -> None:
+    env.provider.adapter = FakeAgentAdapter(
+        [
+            TurnStarted(),
+            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"),
+        ]
+    )
+    adapter = await _reacting_channel(env)
+
+    await env.processor.on_message(inbound("tg", "owner", "go", platform_message_id="msg-3"))
+    await wait_until(lambda: ("owner", "msg-3", "🤷") in adapter.reactions)
+
+    assert [emoji for _c, _m, emoji in adapter.reactions] == ["👀", "👨‍💻", "🤷"]

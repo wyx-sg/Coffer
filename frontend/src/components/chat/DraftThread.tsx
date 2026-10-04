@@ -1,14 +1,16 @@
 // src/components/chat/DraftThread.tsx
-// The blank "new chat" surface shown before a conversation exists (the draft).
-// Chat talks only to Coffer-managed agents (Claude Code / Codex); sending the
-// first message is what actually creates the conversation (see
-// useChatController.sendDraft). The turn runs in the Coffer-managed workspace
-// (~/.coffer/workspace) by default — there is no per-turn working-directory
-// picker. When no managed agent is available, an install/configure empty state
-// is shown instead.
-import { useTranslation } from "react-i18next";
-import { Bot, MessageSquareOff } from "lucide-react";
+// The draft New conversation opens (`/conversations/new`): "New conversation" in
+// the title bar, one line saying which agent will run in which folder, and the
+// composer whose first send creates the conversation (see
+// useChatController.sendDraft) — no welcome or suggestions. The folder picker
+// sits in the composer's toolbar beside the paperclip; the agent, model and
+// effort on its right. A hand-off (Ask an agent) opens it with a prompt already
+// in the composer (`restore`), waiting for Send, and says so under the box. When
+// no managed agent is available, a state with a way to the Agents page replaces
+// the composer (NoManagedAgentHelp).
+import { Trans, useTranslation } from "react-i18next";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import {
   Select,
   SelectContent,
@@ -16,123 +18,131 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ChatAttachment } from "@/lib/api/chat";
+import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { Composer } from "./Composer";
+import { DraftTitleBar } from "./ConversationHeader";
+import { DraftWorkspacePicker } from "./DraftWorkspacePicker";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
+import { NoManagedAgentHelp } from "./NoManagedAgentHelp";
 
 interface Props {
   agents: AgentProviderInfo[];
   agentKey: string;
+  /** The folder the turn will run in; null is Coffer's own workspace. */
+  cwd?: string | null;
   /** True when no Coffer-managed agent is available (shows an empty state). */
   noManagedAgent?: boolean;
   onAgentChange: (agentKey: string) => void;
-  /** The chosen per-conversation model for the new conversation (null = default). */
+  onCwdChange?: (cwd: string | null) => void;
   modelValue?: string | null;
   onModelChange?: (model: string | null) => void;
-  /** The reasoning level that model runs at (null = the agent's own default). */
   effortValue?: string | null;
   onEffortChange?: (effort: string | null) => void;
   /** Create the conversation and send; resolves whether the create succeeded. */
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
   /** True while the create-then-send round-trip is in flight. */
   creating?: boolean;
+  /** Text to type into the composer once (a hand-off's prompt); never sent by itself. */
+  restore?: ComposerRestore | null;
+  onRestored?: () => void;
+  /** Opened from Ask an agent: say nothing is sent until Send. */
+  fromHandoff?: boolean;
 }
 
 export function DraftThread({
   agents,
   agentKey,
+  cwd = null,
   noManagedAgent = false,
   onAgentChange,
+  onCwdChange,
   modelValue = null,
   onModelChange,
   effortValue = null,
   onEffortChange,
   onSend,
   creating = false,
+  restore,
+  onRestored,
+  fromHandoff = false,
 }: Props) {
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
+  const dir = cwd ? abbreviateHomePath(cwd) : t("conversations.draft.workspace");
 
-  // A Coffer LLM connection is an OPTIONAL override, not a prerequisite: chat
-  // shells out to the agent's own runtime (Claude Agent SDK / codex app-server),
-  // which runs on the agent's OWN login when nothing is projected (spec
-  // provider-switching "Revert an agent to its built-in login"). So we never
-  // block the draft on "no connection" — the composer is always available and
-  // the turn runs on the built-in model.
-
-  // No Coffer-managed agent on PATH / registered — there is nothing to chat
-  // with, so guide the user to install or configure one.
   if (noManagedAgent) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
-        <MessageSquareOff
-          className="size-12 text-muted-foreground/40"
-          strokeWidth={1.25}
-          aria-hidden
-        />
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold">{t("chat.draft.noAgentTitle")}</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">{t("chat.draft.noAgentBody")}</p>
-        </div>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <DraftTitleBar />
+        <NoManagedAgentHelp />
       </div>
     );
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Top bar: the agent, chosen before the first message rather than in a modal. */}
-      <div className="flex items-center gap-3 border-b border-border bg-card/50 px-4 py-2">
-        <div className="flex items-center gap-1.5">
-          <Bot className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
-          <Select value={agentKey} onValueChange={onAgentChange}>
-            <SelectTrigger
-              className="h-7 w-48 border-none bg-transparent px-1 text-sm font-medium shadow-none"
-              aria-label={t("chat.newConversation.agent")}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((a) => (
-                <SelectItem key={a.agent_key} value={a.agent_key} disabled={!a.available}>
-                  {a.display_name}
-                  {a.available ? "" : ` (${t("chat.newConversation.unavailable")})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Model for the new conversation, beside the agent picker. Offered
-            whether or not a connection is configured — with none, it lists the
-            agent's built-in models (spec provider-switching "Serve one model
-            list to every surface"). */}
-        <ModelPicker
-          agentKey={agentKey}
-          value={modelValue}
-          onCommit={(model) => onModelChange?.(model)}
-        />
-        {/* And how hard that model thinks, arranged exactly as in the open
-            conversation's AgentModelBar. Same self-hiding rule: an agent whose
-            models report no levels renders nothing here, so the draft bar looks
-            untouched for it. It belongs on the DRAFT and not only after the
-            fact because the first turn is the one a user most wants to pitch —
-            by the time the conversation exists, that turn is already running. */}
-        <EffortPicker
-          agentKey={agentKey}
-          model={modelValue}
-          value={effortValue}
-          onCommit={(effort) => onEffortChange?.(effort)}
-        />
-      </div>
-
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <Bot className="mb-3 size-8 text-primary/70" strokeWidth={1.5} />
-        <p className="text-sm text-muted-foreground">
-          {t("chat.draft.guide", { agent: agentName })}
+      <DraftTitleBar />
+      <div className="flex flex-1 items-center justify-center px-8 text-center">
+        <p className="text-sm text-text-muted">
+          <Trans
+            i18nKey="conversations.draft.line"
+            values={{ agent: agentName, dir }}
+            components={{ mono: <span className="font-mono" /> }}
+          />
         </p>
       </div>
-      <Composer onSend={onSend} disabled={creating} />
+      <Composer
+        onSend={onSend}
+        disabled={creating}
+        restore={restore}
+        onRestored={onRestored}
+        note={fromHandoff ? t("conversations.draft.handoffNote") : undefined}
+        workspace={<DraftWorkspacePicker cwd={cwd} onChange={(next) => onCwdChange?.(next)} />}
+        controls={
+          <>
+            <Select value={agentKey} onValueChange={onAgentChange}>
+              <SelectTrigger
+                className="h-control-sm w-auto gap-2 border-none bg-transparent px-1.5 text-xs font-medium shadow-none"
+                aria-label={t("conversations.newConversation.agent")}
+              >
+                <AgentBadge type={agentKey} size="sm" tooltip={false} />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Only agents that can run are offered (spec chat "Create the
+                conversation on the first send"): an unmanaged one cannot start. */}
+                {agents
+                  .filter((a) => a.available)
+                  .map((a) => (
+                    <SelectItem key={a.agent_key} value={a.agent_key}>
+                      {a.display_name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {/* Offered with or without a connection: with none, the agent's built-in
+            models (spec provider-switching "Serve one model list to every surface"). */}
+            <ModelPicker
+              agentKey={agentKey}
+              value={modelValue}
+              onCommit={(model) => onModelChange?.(model)}
+            />
+            {/* Renders nothing for an agent whose models report no levels. It is on
+            the draft because the first turn runs the moment the conversation exists. */}
+            <EffortPicker
+              agentKey={agentKey}
+              model={modelValue}
+              value={effortValue}
+              onCommit={(effort) => onEffortChange?.(effort)}
+            />
+          </>
+        }
+        placeholder={t("conversations.composer.placeholder", { agent: agentName })}
+      />
     </div>
   );
 }

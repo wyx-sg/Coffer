@@ -10,7 +10,6 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
-from typer.main import get_command
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -21,15 +20,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
-from coffer.surfaces.cli.main import app as cli_app
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 
 class _Config(BaseModel):
@@ -65,7 +61,7 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
                 generic_create_allowed=False,
             ),
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     app = FastAPI()
@@ -97,20 +93,9 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
     finally:
         await engine.dispose()
 
-    # The command line has no kind-agnostic create either: `add` exists only
-    # on a kind group whose kind supplies its own, and memory — whose
-    # partitions only aggregation provisions — has none at all.
-    tree = get_command(cli_app).commands  # type: ignore[attr-defined]
-    memory = set(tree["memory"].commands)
-    assert "add" not in memory
-    # Nor a switch: a partition cannot be disabled (every one reaches every agent).
-    assert {"list", "show", "edit", "rm"} <= memory
-    assert not {"enable", "disable"} & memory
-    assert "add" in set(tree["mcp"].commands)
-
 
 class _FailingReleaseStore:
-    """Holds the credential but refuses to delete it — recording each attempt,
+    """Holds the secret but refuses to delete it — recording each attempt,
     so a delete path that never tries the release cannot pass as "the release
     failed and the delete still completed"."""
 
@@ -156,13 +141,13 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
                 name="vault",
                 display_name="Vault",
                 config_schema=_SecretConfig,
-                credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+                secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
                 on_delete=on_delete,
             ),
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
-        credentials=creds,
+        secrets=creds,
     )
     try:
         created = await svc.register("vault", "a", {"secret_ref": "only-mine"}, "cli")
@@ -170,7 +155,7 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
         before = await audit.query(resource=created)
         assert len(before) >= 2
 
-        # The credential release fails, yet the completed deletion is not an error.
+        # The secret release fails, yet the completed deletion is not an error.
         assert creds.delete_calls == []
         await svc.delete(created.uid, actor="cli")
         assert creds.delete_calls == ["only-mine"]  # the release really was attempted

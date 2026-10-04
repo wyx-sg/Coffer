@@ -8,11 +8,15 @@
 // halves of "add a channel" the same shape as the two halves of "edit" one.
 //
 // Nothing here reaches the network. `planChannel` (schema.ts) turns the values
-// this validates into the resource config and the credential writes; the
+// this validates into the resource config and the secret writes; the
 // dialog is what sequences them.
-import { addChannelFormSchema, type AddChannelFormValues } from "./schema";
+import { addChannelFormSchema, type AddChannelFormValues } from "@/lib/channels/schema";
 import type { ChannelFieldErrors, ChannelSecretDraft } from "./AddChannelSecretFields";
 import type { ChannelType } from "@/lib/api/channels";
+
+/** The add dialog's steps, in order: 1 Platform · 2 Connect · 3 Pair. */
+export const ADD_STEPS = ["platform", "connect", "pair"] as const;
+export type AddStep = (typeof ADD_STEPS)[number];
 
 /** Schema path (wire field name) → the input it is rendered under. */
 const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
@@ -22,7 +26,7 @@ const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
   app_secret: "appSecret",
 };
 
-/** A blank credential draft — what the form opens on and resets to. */
+/** A blank secret draft — what the form opens on and resets to. */
 export const EMPTY_SECRET_DRAFT: ChannelSecretDraft = {
   botToken: "",
   appId: "",

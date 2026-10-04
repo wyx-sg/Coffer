@@ -18,6 +18,9 @@ makes "both sides" checkable rather than remembered.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -55,10 +58,20 @@ class PartitionOut(BaseModel):
     #: partitions"). Surfaced
     #: rather than hidden: only the developer can decide it is not coming back.
     unresolvable: bool
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on every resource"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
+    #: When a distil pass last finished over this partition; ``null`` if none
+    #: has ("Present a partition as its memories").
+    distilled_at: datetime | None = None
+    #: One memory's line to show the partition by — the most recently updated.
+    sample: str | None = None
+    #: The agents (resource names) this partition's memory came from.
+    sources: list[str] = Field(default_factory=list)
+    #: Entries read from the agents that no distil pass has decided on yet, and
+    #: which agents they came from.
+    waiting_entries: int = 0
+    waiting_agents: list[str] = Field(default_factory=list)
+    #: When the partition's newest memory was last updated; ``null`` when it
+    #: holds none — the Overview's "Last update 14 min ago".
+    updated_at: str | None = None
 
 
 class PartitionListOut(BaseModel):
@@ -101,6 +114,12 @@ class NoteSummaryOut(BaseModel):
     search_terms: list[str]
     created_at: str
     updated_at: str
+    #: The agents (resource names) this memory was learned from, read off its
+    #: provenance — what the list shows beside each memory.
+    agents: list[str] = Field(default_factory=list)
+    #: The absolute path of the note's own file (``notes/<slug>.md``), so a page can
+    #: open or reveal it without walking the partition's file tree to find it.
+    file_path: str = ""
 
 
 class NoteListOut(BaseModel):
@@ -118,6 +137,19 @@ class NoteOut(NoteSummaryOut):
 
     body: str
     origins: list[OriginOut]
+    #: sha256 hex of the note file's bytes as read; hand it back as
+    #: ``expected_fingerprint`` to save an edit ("Edit a memory in the web UI
+    #: or on disk").
+    fingerprint: str = ""
+
+
+class NoteSave(BaseModel):
+    """A note's new body, from the web UI's editor. The frontmatter is kept."""
+
+    body: str = Field(min_length=1)
+    #: The ``fingerprint`` the editor's read carried. A note changed since is
+    #: refused with 409 ``MEMORY_NOTE_CONFLICT``.
+    expected_fingerprint: str = Field(min_length=1)
 
 
 class RetiredNoteOut(BaseModel):
@@ -172,28 +204,9 @@ class AggregationResultOut(BaseModel):
     skipped: list[str]
 
 
-class ComposedContextOut(BaseModel):
-    """The session-start payload, and enough accounting to audit the ceiling.
-
-    There is no ``layers`` field any more. Delivery is not a two-tier digest: it
-    is the whole index of the current repository's partition plus what is known
-    about the developer, so naming a layer would name a structure the payload no
-    longer has ("Deliver the index and the notes path at session start").
-    """
-
-    text: str
-    partition: str
-    notes_included: int
-    #: How many index lines the ceiling left out. The text names the count and
-    #: the directory holding them, which is what makes a trim a small loss:
-    #: every line that did not fit is still a file ("Bound delivery and prefer
-    #: the current repository").
-    notes_omitted: int
-
-
 class FileNodeOut(BaseModel):
-    """One entry in a partition's own directory ("Present partitions as a table
-    and a file tree").
+    """One entry in a partition's own directory ("Present a partition as its
+    memories").
 
     Same shape as the skill kind's file tree so the two surfaces render through
     one component on the frontend. ``path`` is POSIX and relative to the
@@ -207,7 +220,7 @@ class FileNodeOut(BaseModel):
     path: str
     abs_path: str
     folder_abs_path: str
-    type: str
+    type: Literal["file", "dir"]
     size: int | None = None
     #: True on a directory whose descendants were clipped at the walk bound.
     truncated: bool = False
@@ -216,52 +229,3 @@ class FileNodeOut(BaseModel):
 
 class FileTreeOut(BaseModel):
     root: FileNodeOut
-
-
-class FileContentOut(BaseModel):
-    """One file's content, read-only.
-
-    No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
-    make a later write conditional, and this family has no write. The tree under
-    ``~/.coffer/memory/`` is derived ("Keep the memory tree derived and local") —
-    an edit here would be overwritten
-    by the next aggregation pass, so the surface does not offer one.
-    """
-
-    path: str
-    abs_path: str
-    folder_abs_path: str
-    #: Empty when ``binary`` is true.
-    content: str
-    truncated: bool
-    binary: bool
-    size: int
-
-
-class ContextQuery(BaseModel):
-    """Body for composing a session-start context ("Deliver the index and the
-    notes path at session start").
-
-    A ``POST`` despite being a read, because the query is structured rather than
-    a couple of scalar filters (knowledge's ``search`` is a ``POST`` for the same
-    reason) — nothing here has a side effect on the memory tree itself.
-    """
-
-    cwd: str = Field(default="")
-    #: The calling agent's uid — who fired, for ``record_fired`` below. It does
-    #: not shape the payload: every partition is composed for every
-    #: agent.
-    #:
-    #: A uid rather than a name because of who sends it: the hook command
-    #: Coffer wrote into that agent's settings file at install time and does
-    #: not rewrite. A name baked into that command would attribute fires to
-    #: nobody the first time the agent was relabelled, so there is one spelling
-    #: here and it is the one that cannot change.
-    agent_uid: str | None = None
-    #: Omitted or null uses the server's default ceiling.
-    ceiling_tokens: int | None = None
-    #: Whether serving this payload counts as a real delivery ("Audit every
-    #: delivery fire"). The
-    #: installed hook always sets this; a management-surface preview must not,
-    #: so it never records a fire that did not happen.
-    record_fired: bool = False

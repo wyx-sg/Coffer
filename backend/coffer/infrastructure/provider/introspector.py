@@ -11,11 +11,12 @@ blocks.
 from __future__ import annotations
 
 import asyncio
-from urllib.parse import urlparse
 
 import httpx
 
-from coffer.application.provider.ports import LOCAL_PROTOCOLS
+from coffer.application.provider.ports import ListedModel
+from coffer.domain.provider.config import is_loopback_url
+from coffer.domain.usage.pricing import ModelPrice
 from coffer.infrastructure.net.ssrf_guard import check_url
 
 #: Default base URL per WIRE PROTOCOL (None = the SDK's own default, i.e.
@@ -38,8 +39,40 @@ _ANTHROPIC_VERSION = "2023-06-01"
 #: budget is long enough for a reasoning model's first reply to a one-token
 #: request, since there is no retry behind it.
 _TIMEOUT = 30.0
-#: Loopback hostnames → an internal-only (ollama-style) connection.
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"})
+
+_PER_MTOK = 1_000_000
+
+
+def _per_mtok(value: object) -> float | None:
+    """A per-token USD rate (OpenRouter sends strings) as USD per 1M tokens;
+    ``None`` for a missing, malformed or negative ("varies") rate."""
+    try:
+        rate = float(str(value))
+    except (TypeError, ValueError):
+        return None
+    if rate < 0:
+        return None
+    return round(rate * _PER_MTOK, 6)
+
+
+def reported_price(extra: dict[str, object] | None) -> ModelPrice | None:
+    """The price a ``/models`` entry reports, OpenRouter's shape: a
+    ``pricing`` object of per-token rates (``prompt``, ``completion``,
+    ``input_cache_read``, ``input_cache_write``). ``None`` when the entry
+    carries no usable input and output rate."""
+    pricing = (extra or {}).get("pricing")
+    if not isinstance(pricing, dict):
+        return None
+    prompt = _per_mtok(pricing.get("prompt"))
+    completion = _per_mtok(pricing.get("completion"))
+    if prompt is None or completion is None:
+        return None
+    return ModelPrice(
+        input=prompt,
+        output=completion,
+        cache_read=_per_mtok(pricing.get("input_cache_read")),
+        cache_write_5m=_per_mtok(pricing.get("input_cache_write")),
+    )
 
 
 class ProviderIntrospector:
@@ -50,31 +83,37 @@ class ProviderIntrospector:
         return base_url or PROTOCOL_BASE_URLS.get(provider)
 
     async def _guard(self, provider: str, url: str | None) -> None:
-        # Local protocols point at loopback (which the guard blocks); exempt them.
-        if provider in LOCAL_PROTOCOLS or not url:
+        # Only a URL that really is loopback is exempt (a local runtime). The
+        # exemption follows the URL, never the declared protocol: ``provider`` is
+        # whatever the caller sent, and "ollama" must not switch the guard off.
+        if not url or is_loopback_url(url):
             return
         await asyncio.to_thread(check_url, url)
 
     def _openai_client(self, base_url: str | None, api_key: str | None):  # type: ignore[no-untyped-def]
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
         return AsyncOpenAI(
             api_key=api_key or "not-needed",
             base_url=base_url,
             timeout=_TIMEOUT,
             max_retries=0,
+            # A redirect would carry the key to another host, past the SSRF guard
+            # that only saw this one (spec secret "Send a secret only to the
+            # origin it was approved for").
+            http_client=DefaultAsyncHttpxClient(follow_redirects=False),
         )
 
     async def list_models(
         self, *, provider: str, base_url: str | None, api_key: str | None
-    ) -> list[str]:
+    ) -> list[str | ListedModel]:
         url = self._base_url(provider, base_url)
         await self._guard(provider, url)
         if provider == "anthropic":
-            return await self._anthropic_models(url, api_key)
+            return list(await self._anthropic_models(url, api_key))
         client = self._openai_client(url, api_key)
         page = await client.models.list()
-        return [m.id for m in page.data]
+        return [ListedModel(id=m.id, price=reported_price(m.model_extra)) for m in page.data]
 
     async def _anthropic_models(self, base_url: str | None, api_key: str | None) -> list[str]:
         root = (base_url or "https://api.anthropic.com").rstrip("/")
@@ -112,40 +151,3 @@ class ProviderIntrospector:
                 },
             )
             r.raise_for_status()
-
-    async def detect_protocol(self, *, base_url: str | None, api_key: str | None) -> str:
-        url = (base_url or "").strip()
-        if not url:
-            return "unknown"
-        # Loopback endpoints are ollama-style (internal-only) — classify
-        # without an outbound probe (the SSRF guard would block them anyway).
-        # Parse the host precisely: substring matching would mis-tag a remote
-        # host like "my-localhost-proxy.example.com" as a keyless local provider.
-        parsed = urlparse(url if "://" in url else f"http://{url}")
-        if (parsed.hostname or "").lower() in _LOOPBACK_HOSTS:
-            return "ollama"
-        await self._guard("", url)
-        # OpenAI-compatible probe first (most third-party gateways speak it): a
-        # successful GET /models means openai-wire. An anthropic endpoint rejects
-        # the bearer-auth /models call and falls through.
-        try:
-            client = self._openai_client(url, api_key)
-            await client.models.list()
-            return "openai"
-        except Exception:
-            pass
-        # Anthropic-wire probe: GET /v1/models with x-api-key + anthropic-version.
-        try:
-            root = url.rstrip("/")
-            if root.endswith("/v1"):
-                root = root[:-3].rstrip("/")
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
-                r = await c.get(
-                    f"{root}/v1/models",
-                    headers={"x-api-key": api_key or "", "anthropic-version": _ANTHROPIC_VERSION},
-                )
-                r.raise_for_status()
-            return "anthropic"
-        except Exception:
-            pass
-        return "unknown"

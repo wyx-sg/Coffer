@@ -19,6 +19,8 @@ import {
   type PendingEcho,
 } from "@/lib/chat/echoes";
 import { messagesKey } from "@/lib/api/queryKeys";
+import { contentBlock } from "@/lib/chat/contentBlock";
+import { ev } from "@/test/chatEvents";
 
 const T0 = Date.parse("2026-01-01T12:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -29,8 +31,12 @@ function userRow(id: string, seq: number, text: string, createdAt: number): Mess
     conversation_id: "conv-1",
     seq,
     role: "user",
-    content: [{ type: "text", text }],
+    content: [contentBlock({ type: "text", text })],
     status: "complete",
+    prompt_tokens: null,
+    completion_tokens: null,
+    model_id: null,
+    finished_at: null,
     created_at: iso(createdAt),
   };
 }
@@ -41,8 +47,12 @@ function assistantRow(id: string, seq: number, text: string): Message {
     conversation_id: "conv-1",
     seq,
     role: "assistant",
-    content: [{ type: "text", text }],
+    content: [contentBlock({ type: "text", text })],
     status: "complete",
+    prompt_tokens: null,
+    completion_tokens: null,
+    model_id: null,
+    finished_at: null,
     created_at: iso(T0),
   };
 }
@@ -139,8 +149,8 @@ describe("echoes that carry attachments", () => {
     return {
       ...userRow(id, seq, text, T0 + 50),
       content: [
-        { type: "text", text },
-        ...files.map((f) => ({ type: "attachment" as const, filename: f, mime: "image/png" })),
+        contentBlock({ type: "text", text }),
+        ...files.map((f) => contentBlock({ type: "attachment", filename: f, mime: "image/png" })),
       ],
     };
   }
@@ -148,12 +158,12 @@ describe("echoes that carry attachments", () => {
   test("an echo shows its text then one attachment block per file", () => {
     const echo = createEcho("look", [], T0, [png]);
     expect(echoContent(echo)).toEqual([
-      { type: "text", text: "look" },
-      { type: "attachment", filename: "shot.png", mime: "image/png" },
+      contentBlock({ type: "text", text: "look" }),
+      contentBlock({ type: "attachment", filename: "shot.png", mime: "image/png" }),
     ]);
     // An attachment-only echo carries no empty text block.
     expect(echoContent(createEcho("", [], T0, [png]))).toEqual([
-      { type: "attachment", filename: "shot.png", mime: "image/png" },
+      contentBlock({ type: "attachment", filename: "shot.png", mime: "image/png" }),
     ]);
   });
 
@@ -213,7 +223,7 @@ describe("handleEvent settles echoes", () => {
     // echo, so the turn settling must.
     const qc = new QueryClient();
     const { ctx, echoes } = makeCtx(qc);
-    await handleEvent({ event: "turn_done", data: { stop_reason: "end_turn" } }, ctx);
+    await handleEvent(ev("turn_done", { stop_reason: "end_turn" }), ctx);
     expect(echoes).toEqual([[]]);
   });
 
@@ -221,7 +231,7 @@ describe("handleEvent settles echoes", () => {
     // (d) Stop mid-turn: the turn settles with an interrupted stop reason.
     const qc = new QueryClient();
     const { ctx, echoes } = makeCtx(qc);
-    await handleEvent({ event: "turn_done", data: { stop_reason: "interrupted" } }, ctx);
+    await handleEvent(ev("turn_done", { stop_reason: "interrupted" }), ctx);
     expect(echoes).toEqual([[]]);
   });
 
@@ -229,7 +239,7 @@ describe("handleEvent settles echoes", () => {
     // (d) A failed turn: the persisted user row + failed reply replace the echo.
     const qc = new QueryClient();
     const { ctx, echoes } = makeCtx(qc);
-    await handleEvent({ event: "turn_error", data: { code: "MODEL_ERROR", message: "x" } }, ctx);
+    await handleEvent(ev("turn_error", { code: "MODEL_ERROR", message: "x" }), ctx);
     expect(echoes).toEqual([[]]);
     expect(ctx.setLiveMessage).toHaveBeenCalledWith(null);
   });
@@ -237,7 +247,7 @@ describe("handleEvent settles echoes", () => {
   test("turn_start leaves the echoes alone (the refetch it triggers retires them)", async () => {
     const qc = new QueryClient();
     const { ctx } = makeCtx(qc);
-    await handleEvent({ event: "turn_start", data: {} }, ctx);
+    await handleEvent(ev("turn_start"), ctx);
     expect(ctx.setEchoes).not.toHaveBeenCalled();
   });
 
@@ -245,7 +255,7 @@ describe("handleEvent settles echoes", () => {
     const qc = new QueryClient();
     const { ctx } = makeCtx(qc);
     ctx.isCancelled = () => true;
-    await handleEvent({ event: "turn_done", data: { stop_reason: "end_turn" } }, ctx);
+    await handleEvent(ev("turn_done", { stop_reason: "end_turn" }), ctx);
     expect(ctx.setEchoes).not.toHaveBeenCalled();
   });
 });
@@ -268,23 +278,22 @@ describe("handleEvent folds a turn into the live bubble in emission order", () =
       isCancelled: () => false,
     };
 
-    await handleEvent({ event: "text_delta", data: { text: "Let me " } }, ctx);
-    await handleEvent({ event: "text_delta", data: { text: "look." } }, ctx);
+    await handleEvent(ev("text_delta", { text: "Let me " }), ctx);
+    await handleEvent(ev("text_delta", { text: "look." }), ctx);
     await handleEvent(
-      {
-        event: "tool_call",
-        data: { tool_use_id: "tu-1", tool_name: "read_file", tool_input: { path: "a" } },
-      },
+      ev("tool_call", { tool_use_id: "tu-1", tool_name: "read_file", tool_input: { path: "a" } }),
       ctx,
     );
     await handleEvent(
-      {
-        event: "tool_result",
-        data: { tool_use_id: "tu-1", tool_name: "read_file", output: { ok: 1 }, error: null },
-      },
+      ev("tool_result", {
+        tool_use_id: "tu-1",
+        tool_name: "read_file",
+        output: { ok: 1 },
+        error: null,
+      }),
       ctx,
     );
-    await handleEvent({ event: "text_delta", data: { text: "It says hi." } }, ctx);
+    await handleEvent(ev("text_delta", { text: "It says hi." }), ctx);
 
     expect(live!.blocks.map((b) => [b.type, b.text ?? b.tool_use_id])).toEqual([
       ["text", "Let me look."],

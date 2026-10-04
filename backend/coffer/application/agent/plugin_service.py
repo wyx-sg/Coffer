@@ -40,6 +40,7 @@ from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.descriptor import descriptor_for
+from coffer.domain.agent.plugin_bundle import PluginPart
 from coffer.domain.agent.plugin_capability import (
     PluginCapability,
     PluginModel,
@@ -151,6 +152,21 @@ class AgentPluginService:
             can_uninstall=out.can_uninstall,
             contents=contents,
         )
+
+    async def get_part(self, uid: str, plugin_id: str, kind: str, name: str) -> PluginPart:
+        """One skill, command, subagent or MCP server the plugin's package holds
+        (``kind`` is ``skills`` / ``commands`` / ``agents`` / ``mcp-servers``),
+        resolved against what the package really contains. Read-only; anything
+        the package lacks is ``PluginNotFound``."""
+        detail = await self.get_plugin(uid, plugin_id)
+        part = (
+            self._detail_reader.find_part(detail.contents.root, kind, name)
+            if self._detail_reader is not None and detail.contents is not None
+            else None
+        )
+        if part is None:
+            raise PluginNotFound(plugin_id, f"{kind}/{name}")
+        return part
 
     def _uninstall_available(self, cap: PluginCapability) -> bool:
         """In-app uninstall is possible when the capability allows it AND, for

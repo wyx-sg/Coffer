@@ -5,12 +5,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { useDaemonOutOfDate, useDaemonStatus, useRestartDaemon } from "./useDaemon";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 // The skew check is a Tauri IPC call; stub it so these run in either host.
 vi.mock("@/lib/tauri", () => ({
   daemonVersionMatches: vi.fn(),
   restartDaemon: vi.fn(),
   applyDaemonConnection: vi.fn(),
+  // The shell's restart; the browser's is lib/daemonRestart.test.ts.
+  inDesktopShell: () => true,
 }));
 const { daemonVersionMatches, restartDaemon, applyDaemonConnection } = await import("@/lib/tauri");
 const daemonVersionMatchesMock = vi.mocked(daemonVersionMatches);
@@ -62,6 +67,35 @@ describe("useDaemonStatus", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("not authorized");
   });
+
+  test("a probe that never answered keeps reading as failed while a retry is in flight", async () => {
+    let release: (value: unknown) => void = () => undefined;
+    const GET = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: undefined,
+        error: { error: { code: "DAEMON_OFFLINE", message: "unreachable" } },
+      })
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    getApiClientMock.mockReturnValue({ GET } as unknown as ReturnType<typeof getApiClient>);
+
+    const { result } = renderHook(() => useDaemonStatus(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    act(() => void result.current.refetch());
+    await waitFor(() => expect(result.current.isFetching).toBe(true));
+    expect(result.current.isError).toBe(true);
+    expect((result.current.error as { code?: string }).code).toBe("DAEMON_OFFLINE");
+
+    await act(async () => {
+      release({
+        data: { status: "ready", version: "1.0.0", port: 38470 },
+        error: undefined,
+      });
+    });
+    await waitFor(() => expect(result.current.isError).toBe(false));
+    expect(result.current.data?.status).toBe("ready");
+  });
 });
 
 describe("useDaemonOutOfDate", () => {
@@ -92,7 +126,7 @@ describe("useRestartDaemon", () => {
   beforeEach(() => vi.clearAllMocks());
 
   test("installs the connection the restart returned, then refetches the whole cache", async () => {
-    const connection = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh" };
+    const connection = { baseUrl: "http://127.0.0.1:38470/api/v1", token: "fresh" };
     restartDaemonMock.mockResolvedValue({ pid: 1, started: true, ...connection } as never);
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");

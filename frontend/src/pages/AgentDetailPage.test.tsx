@@ -1,296 +1,257 @@
-// frontend/src/pages/AgentDetailPage.test.tsx
+// src/pages/AgentDetailPage.test.tsx — the agent page: eight path tabs behind a More overflow, the header's action per state, a type not added.
 //
-// The page is reached as `/agents/:uid`, so the fixture agent's uid (`u-cur`)
-// is deliberately not its name (`cur`): the heading reads the name, and every
-// request the page and its dialogs make is addressed to the uid.
+// The page's collaborators are stubbed at their module boundary: the route
+// (type → uid), the row actions (the dialogs and menu the list shares), the
+// counts, and each tab — every tab has its own test next to it.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+
+import "@/i18n";
+import { acceptance } from "@/test/acceptance";
+import type { AgentRowState } from "@/lib/agents/rowState";
 import { AgentDetailPage } from "./AgentDetailPage";
 
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgent: vi.fn(),
-  useAgents: vi.fn(() => ({ data: [] })),
-  usePatchAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useRemoveAgent: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  // Stubs for the (lazily-mounted) Config files + MCP surfaces.
-  useAgentConfigFiles: vi.fn(() => ({ data: [], isPending: false, error: null })),
-  useAgentConfigFile: vi.fn(() => ({ data: undefined, isPending: false })),
-  useAgentConfigChild: vi.fn(() => ({ data: undefined, isPending: false })),
-  useAgentPlugins: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
-  useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useAgentConnection: vi.fn(() => ({
-    data: { state: "disconnected", parts: [] },
-    isPending: false,
-  })),
-  useAgentConnect: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+vi.mock("@/lib/hooks/useAgentRoute", () => ({ useAgentRoute: vi.fn() }));
+const { change, enable, stub } = vi.hoisted(() => ({
+  change: vi.fn(),
+  enable: vi.fn(),
+  stub: (name: string) => () => <div data-testid="tab-body">{name}</div>,
 }));
-// The edit form renames through the kind-agnostic resource PATCH, so that
-// module is stubbed too. All four writes are declared, not just the rename:
-// a factory that omitted one would fail any render that reached for it.
-vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useSetResourceTitle: vi.fn(() => ({
-    mutate: vi.fn(),
-    mutateAsync: vi.fn().mockResolvedValue({}),
-    reset: vi.fn(),
-    isPending: false,
-    error: null,
-  })),
-  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useDeleteResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useRenameResource: vi.fn(() => ({
-    mutateAsync: vi.fn().mockResolvedValue({}),
-    isPending: false,
-    error: null,
-  })),
+vi.mock("@/lib/hooks/useAgents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useAgents")>()),
+  useAgentHooks: () => ({ data: undefined, refetch: vi.fn(), isFetching: false }),
+  useAgentConnection: () => ({ data: undefined }),
+  useAgent: () => ({ data: undefined }),
+  useAgentPlugins: () => ({ data: pluginsData }),
 }));
-const hooks = await import("@/lib/hooks/useAgents");
-const useAgentMock = vi.mocked(hooks.useAgent);
-const resourceHooks = await import("@/lib/hooks/useResourceMutations");
+let pluginsData: { items: { cache_present: boolean }[] } | undefined;
+// Rotate proxy token is in ⋯ only while the agent routes through Coffer's proxy.
+let rotateAction: { key: string; label: string; onSelect: () => void } | null = null;
+vi.mock("@/components/agents/detail/useRotateProxyToken", () => ({
+  useRotateProxyAction: () => rotateAction,
+}));
+vi.mock("@/components/agents/list/useAgentRowActions", () => ({ useAgentRowActions: vi.fn() }));
+vi.mock("@/lib/hooks/useFeatures", () => ({ useFeatureEnabled: () => true }));
+// No managed agent to ask: a hand-off offers Copy prompt only.
+vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
 
+vi.mock("@/components/agents/AgentOverviewTab", () => ({ AgentOverviewTab: stub("overview") }));
+vi.mock("@/components/agents/AgentSkillsTab", () => ({ AgentSkillsTab: stub("skills") }));
+vi.mock("@/components/agents/AgentMcpServersTab", () => ({ AgentMcpServersTab: stub("mcp") }));
+vi.mock("@/components/agents/AgentPluginsTab", () => ({ AgentPluginsTab: stub("plugins") }));
+vi.mock("@/components/agents/AgentHooksTab", () => ({ AgentHooksTab: stub("hooks") }));
+vi.mock("@/components/agents/AgentConfigFilesTab", () => ({ AgentConfigFilesTab: stub("config") }));
+vi.mock("@/components/agents/AgentMemoryTab", () => ({ AgentMemoryTab: stub("memory") }));
+vi.mock("@/components/agents/sessions/AgentSessionsTab", () => ({
+  AgentSessionsTab: stub("sessions"),
+}));
+
+const routeMod = await import("@/lib/hooks/useAgentRoute");
+const actionsMod = await import("@/components/agents/list/useAgentRowActions");
+
+const TYPE_ROW = {
+  type: "claude_code" as const,
+  uid: "agt_cc",
+  name: "claude-code",
+  display_name: "Claude Code",
+  state: "installed_active" as const,
+  addable: false,
+  config_dir: "/Users/u/.claude",
+  standard_config_dir: "/Users/u/.claude",
+  other_config_dir: null,
+  default_skill_dir: "/Users/u/.claude/skills",
+  version: "2.1.281",
+};
 const AGENT = {
-  uid: "u-cur",
-  name: "cur",
-  type: "codex" as const,
-  config_dir: "/home/u/.codex",
-  description: null,
-  created_at: "2026-05-22T00:00:00Z",
-  updated_at: "2026-05-22T00:00:00Z",
+  uid: "agt_cc",
+  type: "claude_code" as const,
+  name: "claude-code",
+  display_name: "Claude Code",
+  config_dir: "/Users/u/.claude",
+  model: "claude-opus-5-5",
+  effort: null,
+  tier_models: null,
+  state: "installed_active" as const,
+  version: "2.1.281",
+  created_at: "2026-06-12T00:00:00Z",
+  updated_at: "2026-06-12T00:00:00Z",
 };
 
-function mockAgentLoaded() {
-  useAgentMock.mockReturnValue({
-    data: AGENT,
+function mockRoute(opts: { added?: boolean; rowState?: AgentRowState; typeRow?: object } = {}) {
+  const added = opts.added ?? true;
+  const typeRow = { ...TYPE_ROW, uid: added ? "agt_cc" : null, ...opts.typeRow };
+  vi.mocked(routeMod.useAgentRoute).mockReturnValue({
+    type: "claude_code",
+    typeRow,
+    uid: added ? "agt_cc" : "",
+    agent: added ? AGENT : undefined,
     isPending: false,
     error: null,
-    refetch: vi.fn(),
-  } as unknown as ReturnType<typeof hooks.useAgent>);
+    notAdded: !added,
+  } as unknown as ReturnType<typeof routeMod.useAgentRoute>);
+  vi.mocked(actionsMod.useAgentRowActions).mockReturnValue({
+    state: opts.rowState ?? "connected",
+    actions: [{ key: "copy-uid", label: "Copy uid", onSelect: vi.fn() }],
+    primary: null,
+    dialogs: null,
+    open: { change, enable, configDir: vi.fn() },
+  } as unknown as ReturnType<typeof actionsMod.useAgentRowActions>);
 }
 
-function renderAt(path = "/agents/u-cur") {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function Where() {
+  return <output data-testid="where">{useLocation().pathname}</output>;
+}
+
+function renderAt(path = "/agents/claude_code") {
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/agents/:uid" element={<AgentDetailPage />} />
-          <Route path="/agents" element={<div>agents list</div>} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/agents/:type" element={<AgentDetailPage />} />
+        <Route path="/agents/:type/:tab" element={<AgentDetailPage />} />
+      </Routes>
+      <Where />
+    </MemoryRouter>,
   );
 }
 
-afterEach(() => vi.clearAllMocks());
-
-describe("AgentDetailPage header and tab routing", () => {
-  test("header shows a back link, the type as a product name, and actions ordered Connect · Edit · Delete", () => {
-    mockAgentLoaded();
-    renderAt();
-    expect(screen.getByRole("link", { name: /back to agents/i })).toHaveAttribute(
-      "href",
-      "/agents",
-    );
-    // Product name in the header chip (and again on the overview), never the key.
-    expect(screen.getAllByText("Codex").length).toBeGreaterThan(0);
-    expect(screen.queryByText("codex")).not.toBeInTheDocument();
-    const names = screen
-      .getAllByRole("button")
-      .map((b) => b.textContent?.trim() ?? "")
-      .filter((n) => /coffer|^edit$|^delete$/i.test(n));
-    expect(names).toEqual(["Connect to Coffer", "Edit", "Delete"]);
-  });
-
-  test("?tab= opens that tab and clicking a tab writes it to the URL", () => {
-    mockAgentLoaded();
-    renderAt("/agents/u-cur?tab=plugins");
-    expect(screen.getByRole("tab", { name: /^plugins$/i })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    // Radix tabs activate on mousedown.
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /config files/i }));
-    expect(screen.getByRole("tab", { name: /config files/i })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-  });
-
-  test("an unknown ?tab= falls back to the overview", () => {
-    mockAgentLoaded();
-    renderAt("/agents/u-cur?tab=nope");
-    expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute("aria-selected", "true");
-  });
+afterEach(() => {
+  vi.clearAllMocks();
+  pluginsData = undefined;
+  rotateAction = null;
 });
 
 describe("AgentDetailPage", () => {
-  test("renders the header, all seven workspace tabs, and the overview by default", () => {
-    mockAgentLoaded();
-
-    renderAt();
-
-    expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
-
-    // The seven workspace tabs. Plugins is the only one that acts on the agent;
-    // Memory and Conversations are read-only views of what it keeps on disk.
-    expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /^plugins$/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /^memory$/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /conversations/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(7);
-
-    // Categories that were never built keep their absence pinned.
-    expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /memory & rules/i })).not.toBeInTheDocument();
-    // The Instructions tab was removed as redundant with Config files; master-
-    // instructions delivery stays available via the API/CLI.
-    expect(screen.queryByRole("tab", { name: /instructions/i })).not.toBeInTheDocument();
-
-    // The Coffer connection control lives in the header.
-    expect(screen.getByRole("button", { name: /^connect to coffer$/i })).toBeInTheDocument();
-    // Overview (default tab) shows the config directory but no Skill directory row.
-    expect(screen.getByText("/home/u/.codex")).toBeInTheDocument();
-    expect(screen.queryByText(/skill directory/i)).not.toBeInTheDocument();
+  // Tabs and paths here; Overview's summary rows and Config files' instructions
+  // file are asserted under the same scenario in their own tab tests.
+  acceptance("agent-registry", "the agent detail page carries six tabs and a More menu", () => {
+    mockRoute();
+    renderAt("/agents/claude_code/skills");
+    // Six in the strip, no counts, and no Model tab; Plugins and Memory sit behind More.
+    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
+    expect(tabs).toEqual([
+      "Overview",
+      "Skills",
+      "MCP servers",
+      "Hooks",
+      "Config files",
+      "Sessions",
+    ]);
+    expect(screen.getByRole("button", { name: "More" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Skills/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("tab-body")).toHaveTextContent("skills");
+    // Radix activates a tab on mousedown.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /Hooks/ }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/hooks");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Overview" }));
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
   });
 
-  // `agent` declares no scope (ADR per-agent-resource-scope) — it is not a resource other agents
-  // draw on, so there is no activation scope to edit. The page mounts no
-  // ScopeControl at all: an agent's own enable/disable is not a header concern
-  // here, so not even the control's no-scope enable/disable fallback appears.
-  test("mounts no scope control for the agent", () => {
-    mockAgentLoaded();
-    renderAt();
-    expect(screen.queryByTestId("scope-control")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /every agent/i })).not.toBeInTheDocument();
+  test("an open tab inside More gives More its name; a hidden tab that needs you adds a dot", () => {
+    mockRoute();
+    renderAt("/agents/claude_code");
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Plugins", "Memory"]);
+    fireEvent.click(items[1]);
+    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/memory");
+    expect(screen.getByRole("button", { name: "Memory" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
   });
 
-  test("clicking Edit opens the edit form in a modal dialog", () => {
-    mockAgentLoaded();
-
-    renderAt();
-
-    // No dialog until the Edit button is clicked.
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /edit agent/i })).toBeInTheDocument();
+  test("a plugin whose files are gone puts a warning dot on More", () => {
+    pluginsData = { items: [{ cache_present: false }] };
+    mockRoute();
+    const { container } = renderAt("/agents/claude_code");
+    expect(container.querySelector("button[aria-haspopup='menu'] .bg-warning")).not.toBeNull();
   });
 
-  test("the edit form renames first, then PATCHes the agent's own fields", async () => {
-    // The name is a LABEL now, so the form lets the user change it — and a
-    // rename is the kind-agnostic `PATCH /resources/{uid}` every kind renames
-    // through, not the agent kind's own PATCH. Both are addressed to the uid,
-    // and the rename goes first: it is the one write that can be refused for a
-    // reason the user has to fix, and a refusal must leave the rest unapplied.
-    mockAgentLoaded();
-    const order: string[] = [];
-    const renameAsync = vi.fn(async () => {
-      order.push("rename");
+  test("the removed Model address opens Overview", () => {
+    mockRoute();
+    renderAt("/agents/claude_code/model");
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
+    expect(screen.getByTestId("tab-body")).toHaveTextContent("overview");
+  });
+
+  test("the header names the agent by its type and carries no detail line", () => {
+    mockRoute();
+    renderAt();
+    expect(screen.getByRole("heading", { name: /Claude Code/ })).toBeInTheDocument();
+    expect(screen.queryByText(/v2\.1\.281/)).not.toBeInTheDocument();
+  });
+
+  acceptance("agent-registry", "the header carries one status pill and a fixed action pair", () => {
+    // The header never turns into a fix button: Connect, Repair and Turn on are the Overview's.
+    for (const [rowState, word] of [
+      ["not_connected", "Not connected"],
+      ["connected", "Connected"],
+      ["needs_repair", "Needs repair"],
+      ["disabled", "Off"],
+    ] as const) {
+      mockRoute({ rowState });
+      const { unmount } = renderAt();
+      expect(screen.getByText(word)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "New conversation" })).toBeInTheDocument();
+      for (const name of ["Connect", "Repair", "Turn on", "Check again"]) {
+        expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+      }
+      unmount();
+    }
+  });
+
+  test("an agent left behind has ⋯ only", () => {
+    mockRoute({ rowState: "config_left_behind", typeRow: { state: "config_only" } });
+    renderAt();
+    expect(screen.getByText("Config left behind")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New conversation" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "More actions for Claude Code" }),
+    ).toBeInTheDocument();
+  });
+
+  acceptance(
+    "provider-switching",
+    "Rotate proxy token is offered only while the agent routes through the proxy",
+    () => {
+      mockRoute({ rowState: "connected" });
+      const first = renderAt();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for Claude Code" }));
+      expect(
+        screen.queryByRole("menuitem", { name: "Rotate proxy token" }),
+      ).not.toBeInTheDocument();
+      first.unmount();
+
+      const onSelect = vi.fn();
+      rotateAction = { key: "rotate-token", label: "Rotate proxy token", onSelect };
+      renderAt();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for Claude Code" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Rotate proxy token" }));
+      expect(onSelect).toHaveBeenCalled();
+    },
+  );
+
+  test("a type not added yet shows the header and Connect, and no tabs", () => {
+    mockRoute({ added: false, rowState: "not_added", typeRow: { addable: true } });
+    renderAt("/agents/claude_code");
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.getByText("Claude Code isn’t connected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(change).toHaveBeenCalledWith("add");
+  });
+
+  test("a type that is not installed offers the daemon's install prompt", () => {
+    mockRoute({
+      added: false,
+      rowState: "not_installed",
+      typeRow: {
+        state: "missing",
+        version: null,
+        install_handoff: { prompt: "Please install Claude Code on this machine." },
+      },
     });
-    const patchAsync = vi.fn(async () => {
-      order.push("patch");
-    });
-    vi.mocked(resourceHooks.useRenameResource).mockReturnValue({
-      mutateAsync: renameAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof resourceHooks.useRenameResource>);
-    vi.mocked(hooks.usePatchAgent).mockReturnValue({
-      mutateAsync: patchAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof hooks.usePatchAgent>);
-
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "renamed" } });
-    fireEvent.change(within(dialog).getByLabelText("Description"), {
-      target: { value: "the one I use" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
-
-    expect(renameAsync).toHaveBeenCalledWith({ kind: "agent", uid: "u-cur", name: "renamed" });
-    // The second write only goes out once the rename has resolved, so it is
-    // awaited rather than asserted on the same tick.
-    await waitFor(() =>
-      expect(patchAsync).toHaveBeenCalledWith({
-        uid: "u-cur",
-        body: { description: "the one I use" },
-      }),
-    );
-    expect(order).toEqual(["rename", "patch"]);
-  });
-
-  test("an unchanged name is not sent as a rename", async () => {
-    // Every save would otherwise carry a rename to the name the agent already
-    // has — a write with nothing to write, and a 409 waiting to happen the day
-    // the daemon starts treating "taken by me" as taken.
-    mockAgentLoaded();
-    const renameAsync = vi.fn().mockResolvedValue({});
-    const patchAsync = vi.fn().mockResolvedValue({});
-    vi.mocked(resourceHooks.useRenameResource).mockReturnValue({
-      mutateAsync: renameAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof resourceHooks.useRenameResource>);
-    vi.mocked(hooks.usePatchAgent).mockReturnValue({
-      mutateAsync: patchAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof hooks.usePatchAgent>);
-
-    renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Description"), {
-      target: { value: "only this changed" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
-
-    await waitFor(() =>
-      expect(patchAsync).toHaveBeenCalledWith({
-        uid: "u-cur",
-        body: { description: "only this changed" },
-      }),
-    );
-    expect(renameAsync).not.toHaveBeenCalled();
-  });
-
-  test("?tab= opens that tab, so returning from a row's page keeps your place", () => {
-    // Memory and Conversations rows open their own detail pages; the back link
-    // on those pages carries ?tab= so the reader lands where they left rather
-    // than on Overview.
-    mockAgentLoaded();
-
-    renderAt("/agents/u-cur?tab=conversations");
-
-    expect(screen.getByRole("tab", { name: /conversations/i })).toHaveAttribute(
-      "data-state",
-      "active",
-    );
-    expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute(
-      "data-state",
-      "inactive",
-    );
-  });
-
-  test("shows a not-found message when the agent fails to load", () => {
-    useAgentMock.mockReturnValue({
-      data: undefined,
-      isPending: false,
-      error: { code: "RESOURCE_NOT_FOUND", message: "nope" },
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof hooks.useAgent>);
-
-    renderAt();
-    expect(screen.getByText(/failed to load agents/i)).toBeInTheDocument();
+    expect(screen.getByText("Claude Code isn’t installed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/npm|install -g/);
   });
 });

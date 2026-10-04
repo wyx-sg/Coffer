@@ -1,136 +1,153 @@
 // frontend/src/components/skills/SkillFileViewer.tsx
-// Right pane of the skill Files tab. Reads by default — markdown (.md) renders
-// via the shared <Markdown> component, other text files show as raw <pre> —
-// and edits behind an explicit Edit, through the same <FileEditor> the agent
-// config pane uses. The master folder is the source of truth and
-// FOLDER-delivered skills are symlinked to it, so a saved edit reaches every
-// agent without re-delivery. The <FileActions> bar still opens / reveals the
-// file for edits that want a real editor.
+// The right half of the Files tab card (canvas 4.3.01, 4.3.12–4.3.16;
+// Foundations 0.6.03): the 40px toolbar — the file's path under the skill's
+// name, its size, and the actions — over the file.
 //
-// Binary files, and files the read truncated, stay read-only: saving a partial
-// read would cut the file short on disk. So does every file of a builtin skill,
-// and it says why — Coffer rewrites that folder at every start, so an edit would
-// not survive (spec skill-manager "Regenerate Coffer's builtin skill from the
-// build").
+// - SKILL.md and other Markdown open rendered, its front matter a key / value
+//   block above the title, with a Preview / Source switch and Edit.
+// - Code files show their text with line numbers, a wrap toggle and Edit.
+// - Editing is an explicit mode (SkillFileEditing): Cancel and Save, ⌘S saves,
+//   and a save refused because the file changed on disk keeps the text and
+//   offers Compare… and Copy my text.
+// - A binary file says it can't be previewed and offers Reveal in Finder.
+// - A file too large to read whole shows its start, read-only, under a grey bar
+//   with Open in editor; agents still get all of it.
+// - Every file of the built-in skill is read-only: Coffer rewrites that folder
+//   at every start (spec skill-manager "Regenerate Coffer's builtin skill from
+//   the build").
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Pencil } from "lucide-react";
 
-import { FileActions } from "@/components/FileActions";
-import { FileEditor } from "@/components/FileEditor";
-import { FILE_PANE_BODY } from "@/components/filePane";
-import { CodeView } from "@/components/preview/CodeView";
-import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
-import { skillsApi } from "@/lib/api/skills";
+import { SkillFileEditing } from "@/components/skills/SkillFileEditing";
+import { FileBody } from "@/components/files/FileBody";
+import { BinaryPane, TruncatedBar } from "@/components/files/FileStates";
+import { isMarkdownPath } from "@/components/files/middlePath";
+import { ViewerToolbar, type FileView } from "@/components/files/ViewerToolbar";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
+import { useFsActions } from "@/lib/fsActions";
 import { useFileDraft } from "@/lib/hooks/useFileDraft";
-import { useSkillFileContent } from "@/lib/hooks/useSkills";
+import { useSkillFileContent, useWriteSkillFile } from "@/lib/hooks/useSkills";
+import { usePreferredEditor } from "@/lib/preferences";
 
-function isMarkdown(path: string): boolean {
-  return /\.mdx?$/i.test(path);
-}
-
-export function SkillFileViewer({
-  uid,
-  path,
-  builtin = false,
-}: {
+interface Props {
   uid: string;
+  /** The skill's name: the toolbar's path starts with it, and the unsaved-changes dialog names it. */
+  owner: string;
   path: string;
   builtin?: boolean;
-}) {
+  /** Told when the file gains or loses unsaved edits, for the tree's dot. */
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+export function SkillFileViewer({ uid, owner, path, builtin = false, onDirtyChange }: Props) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const editor = usePreferredEditor();
+  const fs = useFsActions();
   const content = useSkillFileContent(uid, path);
+  const write = useWriteSkillFile(uid);
+  const [view, setView] = useState<FileView>("preview");
+  const [wrap, setWrap] = useState(false);
   const draft = useFileDraft({
     loaded: content.data?.content,
     fingerprint: content.data?.fingerprint,
     save: async (text, expectedFingerprint) => {
-      const saved = await skillsApi.writeFileContent(uid, {
+      const saved = await write.mutateAsync({
         path,
         content: text,
-        expected_fingerprint: expectedFingerprint,
+        // Every vault write compares; with no fingerprint to state, the empty
+        // one is refused as stale rather than written blind.
+        expected_fingerprint: expectedFingerprint ?? "",
       });
       return saved.fingerprint;
     },
     reload: () => content.refetch(),
+    guard: { file: path, owner },
   });
+  const dirty = draft.editing && draft.dirty;
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+
+  const data = content.data;
+  const abs = data?.abs_path ?? null;
+  const shownPath = `${owner}/${path}`;
+  const openInEditor = () =>
+    abs && void fs.open(abs, editor).catch(() => toast.error(t("fileActions.openFailed")));
+  const reveal = () =>
+    abs && void fs.reveal(abs).catch(() => toast.error(t("fileActions.revealFailed")));
 
   if (content.isPending) {
-    return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
-  }
-  if (content.error) {
     return (
-      <p className="text-sm text-destructive" role="alert">
-        {translateApiError(t, content.error)}
-      </p>
-    );
-  }
-
-  const absPath = content.data?.abs_path;
-
-  // Path on the first row; the open/reveal actions share the editor's action
-  // row below it — <FileEditor> renders them left of Edit / Save / Cancel, the
-  // same as the agent config viewer (ConfigEditorPane). A binary file has no
-  // editor, so it shows the actions on their own.
-  const header = (
-    <span className="block shrink-0 truncate font-mono text-xs text-muted-foreground">{path}</span>
-  );
-
-  if (content.data?.binary) {
-    return (
-      <div className={FILE_PANE_BODY}>
-        {header}
-        {absPath ? (
-          <div className="shrink-0">
-            <FileActions filePath={absPath} />
-          </div>
-        ) : null}
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-          {t("skills.files.binary", { size: content.data.size })}
+      <>
+        <ViewerToolbar path={shownPath} />
+        <div className="space-y-2 p-4" aria-busy="true">
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="h-40 w-full" />
         </div>
-      </div>
+      </>
+    );
+  }
+  if (content.error || !data) {
+    return (
+      <>
+        <ViewerToolbar path={shownPath} />
+        <p className="p-4 text-sm text-danger" role="alert">
+          {translateApiError(t, content.error)}
+        </p>
+      </>
     );
   }
 
-  const text = content.data?.content ?? "";
-  const truncated = content.data?.truncated ?? false;
+  if (data.binary) {
+    return (
+      <>
+        <ViewerToolbar path={shownPath} size={data.size} />
+        <BinaryPane name={path.split("/").pop() ?? path} size={data.size} onReveal={reveal} />
+      </>
+    );
+  }
 
+  if (draft.editing) {
+    return (
+      <SkillFileEditing
+        uid={uid}
+        owner={owner}
+        path={path}
+        draft={draft}
+        reload={() => content.refetch()}
+      />
+    );
+  }
+
+  const markdown = isMarkdownPath(path) && !data.truncated;
+  const readOnly = builtin || data.truncated;
   return (
-    <div className={FILE_PANE_BODY}>
-      {header}
-
-      <FileEditor
-        value={draft.value}
-        onChange={draft.setDraft}
-        editing={draft.editing}
-        dirty={draft.dirty}
-        saving={draft.saving}
-        error={draft.error}
-        conflict={draft.conflict}
-        onEdit={draft.startEditing}
-        onCancel={draft.cancel}
-        onSave={draft.save}
-        onDiscardAndReload={() => void draft.discardAndReload()}
-        readOnlyReason={
-          builtin ? t("skills.builtinTooltip") : truncated ? t("files.readOnlyTruncated") : null
-        }
-        ariaLabel={t("skills.files.editorLabel", { path })}
-        filePath={absPath}
-        fill
+    <>
+      <ViewerToolbar
+        path={shownPath}
+        size={data.size}
+        view={markdown ? { value: view, onChange: setView } : undefined}
+        wrap={markdown ? undefined : { on: wrap, onChange: setWrap }}
       >
-        {/* The preview takes the rest of the pane, down to the bottom of the
-            window, and scrolls inside (components/filePane.ts). */}
-        {isMarkdown(path) ? (
-          <FindableMarkdown fill className="rounded-md border bg-background p-3">
-            {text}
-          </FindableMarkdown>
-        ) : (
-          <CodeView value={text} filename={path} fill className="bg-background" />
+        {readOnly ? null : (
+          <Button variant="outline" size="sm" onClick={draft.startEditing}>
+            <Pencil aria-hidden /> {t("common.edit")}
+          </Button>
         )}
-      </FileEditor>
-      {truncated ? (
-        <p className="shrink-0 text-xs text-muted-foreground">
-          {t("skills.files.truncated")} {t("skills.files.truncatedReadonly")}
-        </p>
+      </ViewerToolbar>
+      {data.truncated ? (
+        <TruncatedBar shown={data.content.length} total={data.size} onOpenInEditor={openInEditor} />
       ) : null}
-    </div>
+      <FileBody
+        path={path}
+        text={data.content}
+        view={view}
+        wrap={wrap}
+        truncated={data.truncated}
+      />
+    </>
   );
 }

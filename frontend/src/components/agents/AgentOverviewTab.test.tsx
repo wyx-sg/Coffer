@@ -1,484 +1,393 @@
-// frontend/src/components/agents/AgentOverviewTab.test.tsx
+// src/components/agents/AgentOverviewTab.test.tsx — the Overview tab in each state it renders.
 //
-// The Overview tab's connection panel: draft → test → confirm. Names and uids
-// are two different things here and the fixtures keep them apart — the picker's
-// option LABELS are connection names, while its option VALUES, the activation
-// call and the per-agent PATCH all carry uids. So `makeConn` mints a `u-`
-// prefixed uid beside every name, and an assertion about what was REQUESTED
-// spells the uid while an assertion about what was DISPLAYED spells the name.
-import { beforeEach, describe, expect, test, vi } from "vitest";
+// Connected / not connected / needs repair / disabled render the Connection
+// card with the one action the state calls for; config left behind and not
+// found replace the whole tab with their fix card. Only the network boundary
+// is faked (`fakeApi`), answering each request by path.
+import type { PropsWithChildren } from "react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
+import { AgentOverviewTab, type OverviewActions } from "./AgentOverviewTab";
+import type { AgentOut, AgentTypeOut, CofferConnection, CofferHook } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fakeApi } from "@/test/fakeApi";
 
-import { AgentOverviewTab } from "./AgentOverviewTab";
-import type { AgentOut } from "@/lib/api/agents";
-import type { Provider, ProviderModel } from "@/lib/api/providers";
+const callMock = fakeApi();
 
-vi.mock("@/lib/hooks/useProviders", () => ({
-  useProviders: vi.fn(),
-  useActivateProvider: vi.fn(),
-  useUseBuiltinProvider: vi.fn(),
+// The Models feature is on unless a test says otherwise.
+let modelsOn = true;
+vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
+  useFeatureEnabled: () => modelsOn,
 }));
-vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useListProviderModels: vi.fn(),
-  useTestConnection: vi.fn(),
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({ usePatchAgent: vi.fn() }));
 
-import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
-import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
-import { usePatchAgent } from "@/lib/hooks/useAgents";
-
-const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
-const useActivateMock = useActivateProvider as unknown as ReturnType<typeof vi.fn>;
-const useUseBuiltinMock = useUseBuiltinProvider as unknown as ReturnType<typeof vi.fn>;
-const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
-const useTestMock = useTestConnection as unknown as ReturnType<typeof vi.fn>;
-const usePatchAgentMock = usePatchAgent as unknown as ReturnType<typeof vi.fn>;
-
-const activateMutate = vi.fn();
-const useBuiltinMutate = vi.fn();
-const testMutate = vi.fn();
-const testReset = vi.fn();
-// Invoke onSuccess so the "re-project after binding" step (re-activate) runs.
-const patchAgentMutate = vi.fn((_vars: unknown, opts?: { onSuccess?: () => void }) =>
-  opts?.onSuccess?.(),
-);
-
-const agent: AgentOut = {
-  uid: "u-my-claude",
-  name: "my-claude",
+const HOME = "/Users/me";
+const AGENT: AgentOut = {
+  uid: "u-cc",
+  name: "claude-code",
   type: "claude_code",
-  config_dir: "/home/me/.claude",
-  description: null,
-  created_at: "",
-  updated_at: "",
+  config_dir: `${HOME}/.claude`,
+  display_name: "Claude Code",
+  model: "claude-opus-5-5",
+  effort: "high",
+  tier_models: null,
+  version: "2.1.281",
+  install_handoff: null,
+  connection_uid: null,
+  state: "installed_active",
+  created_at: "2026-06-12T08:00:00Z",
+  updated_at: "2026-09-27T18:04:00Z",
+};
+const TYPE_ROW: AgentTypeOut = {
+  type: "claude_code",
+  name: "claude-code",
+  display_name: "Claude Code",
+  state: "installed_active",
+  addable: false,
+  config_dir: `${HOME}/.claude`,
+  standard_config_dir: `${HOME}/.claude`,
+  other_config_dir: null,
+  default_skill_dir: `${HOME}/.claude/skills`,
+  version: "2.1.281",
+  install_handoff: null,
+  install_url: "",
+  uid: "u-cc",
+};
+const HOOK: CofferHook = {
+  event: "SessionStart",
+  path: `${HOME}/.claude/settings.json`,
+  health: "current",
+  trust: "not_required",
+  installed_command: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
+  expected_command: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
+  last_fired_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+};
+const CONNECTED: CofferConnection = {
+  state: "connected",
+  parts: [
+    { key: "mcp", installed: true, detail: "coffer shim" },
+    {
+      key: "memory_hook",
+      installed: true,
+      detail: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
+    },
+  ],
 };
 
-function makeConn(over: Partial<Provider> = {}): Provider {
-  const merged = {
-    // A uid that is NOT the name: everything the panel REQUESTS is addressed
-    // by it, so a picker that had kept using the name would fail loudly here
-    // rather than pass by coincidence.
-    uid: `u-${over.name ?? "official"}`,
-    name: "official",
-    protocol: "anthropic" as Provider["protocol"],
-    base_url: "https://api.anthropic.com",
-    credential_ref: "ref",
-    is_active: true,
-    internal_default: false,
-    transcribe_default: false,
-    // No curated model set by default — the picker introspects the endpoint.
-    models: [] as ProviderModel[],
-    enabled: true,
-    description: null,
-    created_at: "",
-    updated_at: "",
-    ...over,
-  };
-  // Default the compatible set from the wire (mirrors the backend default) unless
-  // the test pins it explicitly — the Overview picker filters on this set.
-  return {
-    ...merged,
-    compatible_agents:
-      over.compatible_agents ?? (merged.protocol === "openai" ? ["codex"] : ["claude_code"]),
-  };
+interface World {
+  connection: CofferConnection;
+  hook: CofferHook | null;
+  enabled: boolean;
+  transcripts: { title: string; source_path: string }[];
 }
+let world: World;
 
-// agnes: an openai gateway routed to Claude Code, serving its own model ids.
-function agnes(over: Partial<Provider> = {}): Provider {
-  return makeConn({
-    name: "agnes",
-    protocol: "openai",
-    base_url: "https://apihub.agnes-ai.com/v1",
-    is_active: false,
-    compatible_agents: ["claude_code"],
-    ...over,
-  });
+function route(path: string): unknown {
+  const p = path.split("?")[0];
+  if (p.endsWith("/coffer-connection")) return world.connection;
+  if (p.endsWith("/hooks"))
+    return {
+      coffer_hook: world.hook,
+      items: [
+        { event: "SessionStart", path: HOOK.path, coffer: true },
+        { event: "PreToolUse", path: HOOK.path, coffer: false },
+      ],
+      parse_errors: [],
+    };
+  if (p === "/skills")
+    return {
+      items: [
+        { uid: "s1", bindings: [{ agent_uid: "u-cc" }] },
+        { uid: "s2", bindings: [] },
+      ],
+    };
+  if (p.endsWith("/unmanaged-skills")) return { items: [{ name: "a" }, { name: "b" }] };
+  if (p.endsWith("/mcp-entries"))
+    return {
+      items: [
+        { name: "coffer", is_coffer: true, matches_resource: null },
+        { name: "github", is_coffer: false, matches_resource: null },
+      ],
+    };
+  if (p.endsWith("/plugins")) return { items: [{ id: "x@m", marketplace: "m", enabled: true }] };
+  if (p.endsWith("/native-memory")) return { items: [{}, {}] };
+  if (p.endsWith("/transcripts"))
+    return {
+      total: 412,
+      next_cursor: null,
+      limit: 3,
+      sessions: world.transcripts.map((s) => ({
+        ...s,
+        session_id: s.title,
+        project_path: `${HOME}/WorkEnv/AI/Coffer`,
+        last_activity_at: new Date(Date.now() - 5 * 3600_000).toISOString(),
+        started_at: null,
+        message_count: 3,
+      })),
+    };
+  if (p.endsWith("/config-files"))
+    return {
+      items: [
+        {
+          key: "settings",
+          display_name: "settings.json",
+          path: HOOK.path,
+          exists: true,
+          kind: "file",
+        },
+        {
+          key: "claude-md",
+          display_name: "CLAUDE.md",
+          path: `${HOME}/.claude/CLAUDE.md`,
+          exists: false,
+          kind: "file",
+        },
+      ],
+    };
+  if (p === "/daemon/status") return { features: {} };
+  if (p === "/resources/u-cc") return { uid: "u-cc", enabled: world.enabled };
+  if (p.startsWith("/resources")) return { resources: [{ uid: "m1", enabled: true, scope: null }] };
+  if (p === "/providers") return { providers: [] };
+  if (p === "/agents/types") return { types: [TYPE_ROW] };
+  throw new Error(`unexpected request ${path}`);
 }
-
-function passingTest() {
-  useTestMock.mockReturnValue({
-    mutate: testMutate,
-    reset: testReset,
-    isPending: false,
-    data: { ok: true, message: "OK" },
-  });
-}
-
-/** Curated/introspected entries for chat ids — the common `text` case. */
-function text(...ids: string[]): ProviderModel[] {
-  return ids.map((id) => ({ id, modality: "text" as const }));
-}
-
-function openSelectOptions(triggerName: RegExp): string[] {
-  const trigger = screen.getByRole("combobox", { name: triggerName });
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  return screen.getAllByRole("option").map((o) => o.textContent ?? "");
-}
-
-/** Like `openSelectOptions` but tolerates an EMPTY dropdown, and closes it
- *  again so a second picker can be inspected in the same test. */
-function peekSelectOptions(triggerName: RegExp): string[] {
-  const trigger = screen.getByRole("combobox", { name: triggerName });
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  const opts = screen.queryAllByRole("option").map((o) => o.textContent ?? "");
-  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-  return opts;
-}
-
-const confirmBtn = () => screen.getByRole("button", { name: /confirm switch/i });
-const testBtn = () => screen.getByRole("button", { name: /test connection/i });
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  useActivateMock.mockReturnValue({ mutate: activateMutate, isPending: false });
-  useUseBuiltinMock.mockReturnValue({ mutate: useBuiltinMutate, isPending: false });
-  // The model dropdown is populated by introspecting the connection (the
-  // connection no longer carries a model — spec provider-switching "Take
-  // projected model keys from the agent's binding"); resolve its catalogue.
-  useListMock.mockReturnValue({
-    mutate: (_probe: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-      opts?.onSuccess?.({ models: text("claude-opus-4-8", "claude-haiku-4-5") }),
+  world = {
+    connection: CONNECTED,
+    hook: HOOK,
+    enabled: true,
+    transcripts: [{ title: "Fix SeaTalk reconnect", source_path: "/s/1.jsonl" }],
+  };
+  callMock.mockImplementation(async (path: string) => route(path));
+});
+afterEach(() => vi.clearAllMocks());
+
+function actions(): OverviewActions {
+  return {
+    onConnection: vi.fn(),
+    onEnable: vi.fn(),
+    onChangeConfigDir: vi.fn(),
+  };
+}
+
+function renderTab(over: { agent?: Partial<AgentOut>; typeRow?: Partial<AgentTypeOut> } = {}) {
+  const acts = actions();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const Wrapper = ({ children }: PropsWithChildren) => (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
+  render(
+    <AgentOverviewTab
+      agent={{ ...AGENT, ...over.agent }}
+      typeRow={{ ...TYPE_ROW, ...over.typeRow }}
+      actions={acts}
+    />,
+    { wrapper: Wrapper },
+  );
+  return acts;
+}
+
+describe("AgentOverviewTab — connection card", () => {
+  test("connected: lists both parts with their files and offers no fix button", async () => {
+    renderTab();
+    expect(await screen.findByText(/reaches Coffer through one MCP entry/)).toBeInTheDocument();
+    expect(screen.getByText("MCP entry")).toBeInTheDocument();
+    expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
+    expect(screen.getByText("Memory hook")).toBeInTheDocument();
+    expect(screen.getByText(/fired 2h ago/)).toBeInTheDocument();
+    expect(screen.getAllByText("Current")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /Connect|Repair|Turn on|Disconnect/ })).toBeNull();
   });
-  // Default: no test run yet.
-  useTestMock.mockReturnValue({
-    mutate: testMutate,
-    reset: testReset,
-    isPending: false,
-    data: undefined,
+
+  test("not connected: names the files it would write and offers Connect", async () => {
+    world.connection = {
+      state: "disconnected",
+      parts: CONNECTED.parts.map((p) => ({ ...p, installed: false, detail: null })),
+    };
+    const acts = renderTab();
+    expect(await screen.findByText(/You review the lines first/)).toBeInTheDocument();
+    expect(screen.getAllByText("Not set")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
-  usePatchAgentMock.mockReturnValue({ mutate: patchAgentMutate, isPending: false });
-  useProvidersMock.mockReturnValue({ data: [] });
+
+  test("needs repair: names the out-of-date hook and offers Repair (a connect)", async () => {
+    world.connection = { ...CONNECTED, state: "partial" };
+    world.hook = { ...HOOK, health: "stale" };
+    const acts = renderTab();
+    expect(
+      await screen.findByText(/runs a command this Coffer no longer accepts/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Repair" }));
+    expect(acts.onConnection).toHaveBeenCalledWith("connect");
+  });
+
+  test("disabled: parts read Idle, MCP and Skills serve nothing, offers Turn on", async () => {
+    world.enabled = false;
+    const acts = renderTab();
+    expect(await screen.findAllByText("Idle")).toHaveLength(2);
+    expect(await screen.findAllByText(/None while off/)).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
+    expect(acts.onEnable).toHaveBeenCalled();
+  });
+
+  acceptance("agent-registry", "the Overview offers the action the state calls for", async () => {
+    const button = (n: string) => screen.queryByRole("button", { name: n });
+    // Not connected: Connect.
+    world.connection = {
+      state: "disconnected",
+      parts: CONNECTED.parts.map((p) => ({ ...p, installed: false, detail: null })),
+    };
+    renderTab();
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeInTheDocument();
+    cleanup();
+    // Connected: no button at all.
+    world.connection = CONNECTED;
+    renderTab();
+    expect(await screen.findByText(/reaches Coffer through one MCP entry/)).toBeInTheDocument();
+    expect(button("Connect")).toBeNull();
+    expect(button("Repair")).toBeNull();
+    expect(button("Turn on")).toBeNull();
+    cleanup();
+    // Partial: Repair.
+    world.connection = { ...CONNECTED, state: "partial" };
+    world.hook = { ...HOOK, health: "stale" };
+    renderTab();
+    expect(await screen.findByRole("button", { name: "Repair" })).toBeInTheDocument();
+    cleanup();
+    // Off: Turn on.
+    world.connection = CONNECTED;
+    world.hook = HOOK;
+    world.enabled = false;
+    renderTab();
+    expect(await screen.findByRole("button", { name: "Turn on" })).toBeInTheDocument();
+  });
+
+  test("the memory hook row appears only when the connection lists that part", async () => {
+    world.connection = { state: "connected", parts: [CONNECTED.parts[0]] };
+    renderTab();
+    expect(await screen.findByText("MCP entry")).toBeInTheDocument();
+    expect(screen.queryByText("Memory hook")).not.toBeInTheDocument();
+  });
 });
 
-describe("AgentOverviewTab", () => {
-  test("shows the agent type and config directory", () => {
-    render(<AgentOverviewTab agent={agent} />);
-    // The type reads as a product name, never the registry key.
-    expect(screen.getByText("Claude Code")).toBeInTheDocument();
-    expect(screen.queryByText("claude_code")).not.toBeInTheDocument();
-    expect(screen.getByText("/home/me/.claude")).toBeInTheDocument();
-  });
-
-  test("lists only wire-compatible connections for the agent", () => {
-    useProvidersMock.mockReturnValue({
-      data: [
-        makeConn({ name: "official", is_active: true }),
-        makeConn({ name: "kimi", protocol: "anthropic", is_active: false }),
-        makeConn({ name: "gpt", protocol: "openai", is_active: false }),
-      ],
-    });
-    render(<AgentOverviewTab agent={agent} />);
-    const options = openSelectOptions(/provider/i);
-    expect(options).toContain("official");
-    expect(options).toContain("kimi");
-    expect(options).not.toContain("gpt");
-  });
-
-  test("a connection the user switched off is not offered", () => {
-    // `compatible_agents` reports the CONFIGURED reach and is deliberately not
-    // narrowed by `enabled` (so a management surface can still show a disabled
-    // connection's agent list), which means this picker has to test the switch
-    // itself. It did not, so a connection the user had switched off stayed
-    // offerable here — and picking it would have projected a key from a
-    // connection the vault considers off.
-    useProvidersMock.mockReturnValue({
-      data: [makeConn({ name: "live" }), makeConn({ name: "switched-off", enabled: false })],
-    });
-    render(<AgentOverviewTab agent={agent} />);
-    const options = openSelectOptions(/provider/i);
-    expect(options).toContain("live");
-    expect(options).not.toContain("switched-off");
-  });
-
+describe("AgentOverviewTab — tiles, model, details", () => {
+  // Overview shows no Title or Name field, and its summary rows each open their tab.
   acceptance(
-    "provider-switching",
-    "the agent's model picker offers a fixed list without free-form entry",
-    () => {
-      useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });
-      render(<AgentOverviewTab agent={agent} />);
-      const options = openSelectOptions(/^model$/i);
-      // The connection's INTROSPECTED models, never its stored model field.
-      expect(options).toContain("claude-opus-4-8");
-      expect(options).toContain("claude-haiku-4-5");
-      // No free-text escape hatch: a model id is chosen, never typed.
-      expect(options.some((o) => /custom/i.test(o))).toBe(false);
-      expect(screen.queryByRole("textbox")).toBeNull();
+    "agent-registry",
+    "the agent detail page carries six tabs and a More menu",
+    async () => {
+      renderTab();
+      const mcp = await screen.findByRole("link", { name: /MCP servers/ });
+      expect(mcp).toHaveAttribute("href", "/agents/claude_code/mcp-servers");
+      expect(
+        await within(mcp).findByText("1 through Coffer · 1 in .claude.json"),
+      ).toBeInTheDocument();
+      const skills = screen.getByRole("link", { name: /^Skills/ });
+      expect(skills).toHaveAttribute("href", "/agents/claude_code/skills");
+      expect(
+        await within(skills).findByText("1 from Coffer · 2 not managed by Coffer"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /^Plugins/ })).toHaveAttribute(
+        "href",
+        "/agents/claude_code/plugins",
+      );
+      const hooks = screen.getByRole("link", { name: /^Hooks/ });
+      expect(hooks).toHaveAttribute("href", "/agents/claude_code/hooks");
+      expect(
+        await within(hooks).findByText("In settings.json · 1 is Coffer’s"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/^(Title|Name)$/)).not.toBeInTheDocument();
     },
   );
 
-  test("picking a connection is a draft: it stages a default model, activates nothing", () => {
-    useProvidersMock.mockReturnValue({ data: [agnes()] });
-    useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-        opts?.onSuccess?.({ models: text("agnes-2.0", "agnes-1.5-flash") }),
-    });
-    render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-    // Nothing is projected on a mere pick …
-    expect(activateMutate).not.toHaveBeenCalled();
-    expect(patchAgentMutate).not.toHaveBeenCalled();
-    expect(useBuiltinMutate).not.toHaveBeenCalled();
-    // … but a default model is staged (the Test button needs a model to enable).
-    expect(testBtn()).toBeEnabled();
+  test("the Model section reads provider, model, effort and route, and Change… opens the dialog", async () => {
+    renderTab();
+    expect(await screen.findByText("Built-in login (Anthropic account)")).toBeInTheDocument();
+    expect(screen.getByText("claude-opus-5-5")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
+    expect(screen.getByText("Straight to Anthropic, not through Coffer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    expect(await screen.findByText("Change Claude Code’s model")).toBeInTheDocument();
   });
-
-  test("confirm stays disabled until the connection test passes", () => {
-    useProvidersMock.mockReturnValue({
-      data: [makeConn({ name: "official", is_active: true }), agnes()],
-    });
-    useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-        opts?.onSuccess?.({ models: text("agnes-2.0") }),
-    });
-    const { rerender } = render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-    expect(confirmBtn()).toBeDisabled();
-    passingTest();
-    rerender(<AgentOverviewTab agent={agent} />);
-    expect(confirmBtn()).toBeEnabled();
-  });
-
-  test("a failed test keeps confirm disabled and shows the error message", () => {
-    useProvidersMock.mockReturnValue({
-      data: [makeConn({ name: "official", is_active: true }), agnes()],
-    });
-    useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-        opts?.onSuccess?.({ models: text("agnes-2.0") }),
-    });
-    const { rerender } = render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-    useTestMock.mockReturnValue({
-      mutate: testMutate,
-      reset: testReset,
-      isPending: false,
-      data: { ok: false, message: "invalid key" },
-    });
-    rerender(<AgentOverviewTab agent={agent} />);
-    expect(confirmBtn()).toBeDisabled();
-    expect(screen.getByText("invalid key")).toBeInTheDocument();
-  });
-
-  test("test then confirm binds both model slots and activates the connection", () => {
-    useProvidersMock.mockReturnValue({
-      data: [makeConn({ name: "official", is_active: true }), agnes()],
-    });
-    useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-        opts?.onSuccess?.({ models: text("agnes-2.0", "agnes-1.5-flash") }),
-    });
-    const { rerender } = render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-    fireEvent.click(testBtn());
-    // Test probes the drafted connection + staged model (test-connection needs a model).
-    expect(testMutate).toHaveBeenCalledWith({
-      provider: "openai",
-      model: "agnes-2.0",
-      base_url: "https://apihub.agnes-ai.com/v1",
-      credential_ref: "ref",
-    });
-    passingTest();
-    rerender(<AgentOverviewTab agent={agent} />);
-    fireEvent.click(confirmBtn());
-    // Confirm PATCHes both slots (default = first model) then activates.
-    expect(patchAgentMutate).toHaveBeenCalledWith(
-      { uid: "u-my-claude", body: { model: "agnes-2.0", fast_model: "agnes-2.0" } },
-      expect.anything(),
-    );
-    expect(activateMutate).toHaveBeenCalledWith("u-agnes");
-  });
-
-  test("Codex confirm binds only the model (no fast slot)", () => {
-    const codex: AgentOut = { ...agent, uid: "u-my-codex", name: "my-codex", type: "codex" };
-    useProvidersMock.mockReturnValue({ data: [agnes({ compatible_agents: ["codex"] })] });
-    useListMock.mockReturnValue({
-      mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-        opts?.onSuccess?.({ models: text("gpt-5-codex", "gpt-5") }),
-    });
-    const { rerender } = render(<AgentOverviewTab agent={codex} />);
-    expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-    fireEvent.click(testBtn());
-    passingTest();
-    rerender(<AgentOverviewTab agent={codex} />);
-    fireEvent.click(confirmBtn());
-    expect(patchAgentMutate).toHaveBeenCalledWith(
-      { uid: "u-my-codex", body: { model: "gpt-5-codex" } },
-      expect.anything(),
-    );
-    expect(activateMutate).toHaveBeenCalledWith("u-agnes");
-  });
-
-  test("switching to built-in confirms without a test", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ name: "official", is_active: true })] });
-    render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: /built-in/i }));
-    // Built-in needs no endpoint test — confirm is enabled straight away.
-    expect(confirmBtn()).toBeEnabled();
-    fireEvent.click(confirmBtn());
-    expect(useBuiltinMutate).toHaveBeenCalledWith("anthropic");
-    expect(activateMutate).not.toHaveBeenCalled();
-    expect(patchAgentMutate).not.toHaveBeenCalled();
-  });
-
-  test("confirm is disabled when the draft matches the applied state", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ is_active: true })] });
-    render(<AgentOverviewTab agent={agent} />);
-    // No change staged yet → nothing to confirm.
-    expect(confirmBtn()).toBeDisabled();
-  });
-
-  test("Codex has no fast-model slot", () => {
-    const codex: AgentOut = { ...agent, uid: "u-my-codex", name: "my-codex", type: "codex" };
-    useProvidersMock.mockReturnValue({
-      data: [makeConn({ protocol: "openai", is_active: true })],
-    });
-    render(<AgentOverviewTab agent={codex} />);
-    expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-  });
-
-  test("the built-in login offers NO model control at all, only where to choose one", () => {
-    // Nothing reads `agent.model` on the built-in login, so a model dropdown
-    // there would write a field nobody reads. The model is chosen per
-    // conversation instead — in chat, with /model. So this branch offers no
-    // control whatsoever, just the sentence saying where the choice happens.
-    useProvidersMock.mockReturnValue({ data: [] });
-    render(<AgentOverviewTab agent={agent} />);
-    expect(screen.queryByRole("combobox", { name: /^model$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /fast model/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/chosen per conversation/i)).toBeInTheDocument();
-  });
-
-  test("picking a connection brings the model slots back, enabled", () => {
-    useProvidersMock.mockReturnValue({ data: [agnes()] });
-    render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-    expect(screen.getByRole("combobox", { name: /^model$/i })).toBeEnabled();
-    expect(screen.getByRole("combobox", { name: /fast model/i })).toBeEnabled();
-  });
-
-  // --- the connection's curated model set narrows the picker (spec provider-switching) ----
-  // `models` on a connection is the set the user curated on its detail page.
-  // Non-empty ⇒ it IS the catalogue (no endpoint introspection at all); empty
-  // ⇒ "no restriction", and the options come from introspection as before.
-
-  test("a curated connection supplies the model options and is never introspected", () => {
-    const listMutate = vi.fn();
-    useListMock.mockReturnValue({ mutate: listMutate });
-    useProvidersMock.mockReturnValue({
-      data: [agnes({ is_active: true, models: text("agnes-2.0", "agnes-1.5-flash") })],
-    });
-    render(<AgentOverviewTab agent={agent} />);
-
-    const options = openSelectOptions(/^model$/i);
-    expect(options).toEqual(["agnes-2.0", "agnes-1.5-flash"]);
-    // The endpoint is never probed for its catalogue — the curated list is it.
-    expect(listMutate).not.toHaveBeenCalled();
-  });
-
-  test("picking a curated connection stages its first model without introspecting", () => {
-    const listMutate = vi.fn();
-    useListMock.mockReturnValue({ mutate: listMutate });
-    useProvidersMock.mockReturnValue({
-      data: [
-        makeConn({ name: "official", is_active: true }),
-        agnes({ models: text("agnes-2.0", "agnes-1.5-flash") }),
-      ],
-    });
-    render(<AgentOverviewTab agent={agent} />);
-    openSelectOptions(/provider/i);
-    fireEvent.click(screen.getByRole("option", { name: "agnes" }));
-
-    expect(listMutate).not.toHaveBeenCalled();
-    // The staged model came from the curated list, so Test is ready to run.
-    fireEvent.click(testBtn());
-    expect(testMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "agnes-2.0", provider: "openai" }),
-    );
-  });
-
-  test("an EMPTY curated set keeps today's behaviour: introspect the endpoint", () => {
-    const listMutate = vi.fn(
-      (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
-        opts?.onSuccess?.({ models: text("agnes-2.0", "agnes-1.5-flash") }),
-    );
-    useListMock.mockReturnValue({ mutate: listMutate });
-    useProvidersMock.mockReturnValue({ data: [agnes({ is_active: true, models: [] })] });
-    render(<AgentOverviewTab agent={agent} />);
-
-    const options = openSelectOptions(/^model$/i);
-    expect(options).toContain("agnes-2.0");
-    expect(options).toContain("agnes-1.5-flash");
-    expect(listMutate).toHaveBeenCalled();
-  });
-
-  // --- the curated set is narrowed to modality `text` (spec provider-switching "Offer only text
-  // models to chat pickers") ---
-  // One endpoint answers for chat AND embeddings; the agent's binding is a CHAT
-  // binding, so only `text` entries may be offered as the model it runs on.
 
   acceptance(
-    "provider-switching",
-    "a non-text curated model never reaches a chat model picker",
-    () => {
-      const listMutate = vi.fn();
-      useListMock.mockReturnValue({ mutate: listMutate });
-      useProvidersMock.mockReturnValue({
-        data: [
-          agnes({
-            is_active: true,
-            models: [
-              { id: "agnes-2.0", modality: "text" },
-              { id: "agnes-embed-3", modality: "embedding" },
-            ],
-          }),
-        ],
-      });
-      render(<AgentOverviewTab agent={agent} />);
-
-      // Both of Claude Code's slots are chat slots: the embedding id is offered
-      // in neither, and the endpoint is still never probed.
-      expect(peekSelectOptions(/^model$/i)).toEqual(["agnes-2.0"]);
-      expect(peekSelectOptions(/fast model/i)).toEqual(["agnes-2.0"]);
-      expect(listMutate).not.toHaveBeenCalled();
+    "experimental-features",
+    "a page omits the section that belongs to a switched-off feature",
+    async () => {
+      modelsOn = false;
+      try {
+        renderTab();
+        expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument();
+        // The model and effort stay; the provider line, the link to the Model
+        // tab and any notice about the switched-off feature do not.
+        expect(screen.getByText("High")).toBeInTheDocument();
+        expect(screen.queryByText("Provider")).toBeNull();
+        expect(screen.queryByText(/Built-in login/)).toBeNull();
+        expect(screen.queryByRole("button", { name: "Change…" })).toBeNull();
+        expect(screen.queryByText(/switched off|needs/i)).toBeNull();
+      } finally {
+        modelsOn = true;
+      }
     },
   );
 
-  test("a curated set with NO text entry offers no model and still never introspects", () => {
-    // "Restricted" is decided by the WHOLE curated set, not by its text slice —
-    // so curating only an embedding model means no chat model at all, rather
-    // than silently falling back to the endpoint's full catalogue (mirrors the
-    // daemon).
-    const listMutate = vi.fn();
-    useListMock.mockReturnValue({ mutate: listMutate });
-    useProvidersMock.mockReturnValue({
-      data: [agnes({ is_active: true, models: [{ id: "agnes-embed-3", modality: "embedding" }] })],
-    });
-    render(<AgentOverviewTab agent={agent} />);
-
-    expect(peekSelectOptions(/^model$/i)).toEqual([]);
-    expect(peekSelectOptions(/fast model/i)).toEqual([]);
-    expect(listMutate).not.toHaveBeenCalled();
+  test("a null effort reads Chosen by the agent", async () => {
+    renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
+    expect(await screen.findByText("Effort")).toBeInTheDocument();
+    expect(screen.getAllByText("Chosen by the agent").length).toBeGreaterThan(0);
   });
 
-  test("with no compatible connection, still defaults to the built-in connection", () => {
-    useProvidersMock.mockReturnValue({ data: [makeConn({ protocol: "openai" })] });
-    render(<AgentOverviewTab agent={agent} />);
-    // No dead-end empty state: the connection dropdown always renders and
-    // defaults to the built-in login (spec: built-in is the baseline).
-    const combobox = screen.getByRole("combobox", { name: /provider/i });
-    expect(combobox).toHaveTextContent(/built-in/i);
+  test("details carry version first, config directory, uid and registered date", async () => {
+    renderTab();
+    expect(await screen.findByText("v2.1.281")).toBeInTheDocument();
+    expect(screen.queryByText("Type")).toBeNull();
+    expect(screen.getByText(`${HOME}/.claude`)).toBeInTheDocument();
+    expect(screen.getByText("u-cc")).toBeInTheDocument();
+    expect(screen.getByText("12 Jun 2026")).toBeInTheDocument();
+  });
+});
+
+describe("AgentOverviewTab — problem states replace the tab", () => {
+  const CODEX = { type: "codex" as const, config_dir: `${HOME}/.codex` };
+
+  test("config left behind: what is still there and the reinstall prompt", async () => {
+    renderTab({
+      agent: { ...CODEX, install_handoff: { prompt: "Please reinstall OpenAI Codex." } },
+      typeRow: { ...CODEX, state: "config_only", standard_config_dir: `${HOME}/.codex` },
+    });
+    expect(screen.getByText("Install Codex")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/npm|install -g/);
+    expect(screen.queryByText("Connection")).not.toBeInTheDocument();
+    expect(screen.getByText("Left in ~/.codex")).toBeInTheDocument();
+    expect(screen.getByText("Last version")).toBeInTheDocument();
+  });
+
+  test("not found: reinstall, change config directory; check again re-reads", async () => {
+    const acts = renderTab({ agent: CODEX, typeRow: { ...CODEX, state: "missing" } });
+    expect(screen.getByText("Codex can’t be found at ~/.codex")).toBeInTheDocument();
+    expect(screen.getByText("~/.codex/config.toml")).toBeInTheDocument();
+    expect(screen.getByText("Last known configuration")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change config directory" }));
+    expect(acts.onChangeConfigDir).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Remove from Coffer" })).toBeNull();
+    await screen.findByText(/Checked at \d\d:\d\d/);
+    callMock.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() =>
+      expect(callMock).toHaveBeenCalledWith(
+        "/agents/types",
+        expect.objectContaining({ method: "GET" }),
+      ),
+    );
   });
 });

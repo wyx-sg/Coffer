@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import pathlib
 import sys
 
 from alembic import context
@@ -21,6 +20,7 @@ from coffer.infrastructure.mcp import (
 from coffer.infrastructure.persistence import models  # noqa: F401 — kind-agnostic models
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas
+from coffer.infrastructure.vault.home import runs_db_path
 
 cfg = context.config
 
@@ -70,19 +70,20 @@ def _db_url() -> str:
        the daemon's own URL this way). A caller that names a database must
        get exactly that database; reading the environment instead would let
        a test, or a daemon started with an explicit URL, silently migrate
-       whatever ``COFFER_DB_URL`` / ``~/.coffer/coffer.db`` points at — the
+       whatever ``COFFER_DB_URL`` / ``~/.coffer/runs.db`` points at — the
        developer's real vault.
     2. ``COFFER_DB_URL`` from the environment — the plain ``alembic`` CLI
        path (``cd backend && alembic -c .../alembic.ini upgrade head``), where
        the ini carries only the placeholder and nobody set the option.
-    3. ``~/.coffer/coffer.db``, the daemon's default location.
+    3. ``~/.coffer/runs.db``, the daemon's default location (the history
+       database; ADR storage-is-five-classes-by-nature).
     """
     configured = cfg.get_main_option("sqlalchemy.url")
     if configured and configured != _INI_PLACEHOLDER:
         return configured
     return os.environ.get(
         "COFFER_DB_URL",
-        f"sqlite+aiosqlite:///{pathlib.Path.home()}/.coffer/coffer.db",
+        f"sqlite+aiosqlite:///{runs_db_path()}",
     )
 
 

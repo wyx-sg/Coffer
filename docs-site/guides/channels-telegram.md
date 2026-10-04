@@ -24,20 +24,9 @@ Telegram is the channel you can set up entirely on your own. It needs no public 
 The token is full control of the bot. Keep it out of chat logs, screenshots and shell history. If it leaks, send `/revoke` to BotFather and rotate it in Coffer (see [Rotate the token](#rotate-the-token)).
 :::
 
-You do not need to set a description or a command list: Coffer registers the bot's command menu on start and fills in an empty description. A description you set yourself in BotFather is left as it is.
+You do not need to set a description or a command list: Coffer registers the bot's command menus on start and fills in an empty description. A description you set yourself in BotFather is left as it is.
 
 ## 2. Register the channel
-
-::: code-group
-
-```sh [CLI]
-# Paste the token at the prompt; it is read from stdin, not your shell history
-coffer credentials set channel/tg/bot-token
-
-coffer channel add my-telegram --type telegram \
-  --bot-token-ref channel/tg/bot-token \
-  --agent claude-code
-```
 
 ```text [Web UI]
 Channels → Add channel
@@ -48,45 +37,16 @@ Channels → Add channel
 → Create
 ```
 
-:::
+The default agent is a registered agent, as the **Agents** page lists it. The channel is bound to the machine you register it from and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
 
-`--agent` is the name of a registered agent, as the **Agents** page lists it. The channel is bound to the machine you register it from and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
-
-Check that it is running:
-
-```sh
-coffer channel show my-telegram
-```
-
-```text
-channel:  my-telegram (telegram)
-uid:      9b2e…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-secret:   bot_token_ref = channel/tg/bot-token
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     not paired
-```
+Check that it is running: the channel's header shows its status and where it runs.
 
 ## 3. Pair your account
 
-1. Issue a code, on the channel's page with **Generate pairing code** in the account section, or:
-
-   ```sh
-   coffer channel pair my-telegram
-   ```
-
-   ```text
-   pairing code: K7QM3XPA
-   expires at:   2026-09-24T15:04:05Z
-   pair link:    https://t.me/my_coffer_bot?start=K7QM3XPA
-   Send this code to the bot from the account that should own the channel.
-   ```
+1. Issue a code, on the channel's **Overview** with **Generate pairing code**. The dialog shows the code and the pair link.
 
 2. Open the pair link on the phone signed in to your account (**Open the pairing link** on the web page) and tap **Start**. Or open the bot and send `K7QM3XPA` as a message.
-3. The bot confirms the pairing. You are the owner.
+3. The bot confirms the pairing and sends the help once. You are the owner.
 
 The code is single-use, expires after an hour, and is invalidated after 10 wrong guesses. Until you pair, the bot does not answer anyone.
 
@@ -94,12 +54,12 @@ The code is single-use, expires after an hour, and is invalidated after 10 wrong
 
 Send the bot a message, for example `list the files in my home directory`. You should see:
 
-1. a 👀 reaction on your message as soon as Coffer receives it;
-2. for a longer turn, a status message showing each tool call (`⏳ Bash · list home directory`) and then the reply as it is written;
-3. the final reply, formatted, with the status message removed;
-4. a ✅ reaction on your message when the turn finished cleanly.
+1. a 👀 reaction on your message as soon as Coffer receives it, which becomes 👨‍💻 when the turn starts;
+2. for a longer turn, the status line (`⏳ Working · 12s · 2 steps`, then the newest steps) and the reply as it is written;
+3. the final reply, formatted, with the status removed;
+4. a 👌 reaction on your message when the turn finished — 😢 if it failed, 🤷 if it was stopped. Telegram lets a bot react with a fixed list of emoji only, and these are on it.
 
-Open **Chat** in the web UI and the same conversation is there, marked `via my-telegram`.
+Open **Conversations** in the web UI and the same conversation is there, its source badge reading `Telegram · DM` (hover it for the channel's name).
 
 ## How replies look
 
@@ -107,11 +67,27 @@ Telegram replies are built from the agent's Markdown.
 
 - **Rich messages** — where the Bot API server Coffer reaches supports them, a reply with headings, lists, tables or code is sent as a rich message that keeps that structure.
 - **HTML fallback** — otherwise the reply is converted to Telegram's HTML subset and split into messages of at most 4,000 characters on paragraph boundaries. A chunk Telegram refuses as HTML is re-sent as plain text.
-- **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Elsewhere, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent. A quick reply opens no status message at all.
-- **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/agent`, `/model`, `/effort`, `/status` and `/help` are shown only to you.
-- **Selection cards** — `/agent`, `/model` and `/effort` with no argument answer with an inline keyboard. The card's title is a heading or a bold first line.
+- **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Where the server supports rich drafts, the status header sits in the draft's collapsible thinking block. In a group, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent; it is sent silently, so it does not buzz the group. A quick reply opens no status message at all.
+- **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
+- **Withdrawing** — every reply in a group carries an inline 🗑 button, and the owner can also quote a reply and send `/del`. Either deletes the whole reply, however many messages it was split into. Telegram lets a bot delete a message for 48 hours; past that the owner is told privately it can no longer be deleted. Coffer deletes the `/del` message too when the bot has the right to delete messages in that chat; give it that right if you want the chat kept tidy. Only the owner's tap counts. Group replies still stream as described above. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
+- **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
+- **Private command answers** — in a group, where the server supports ephemeral messages, the answer to `/help`, and the one-line notice that a private-chat command was sent in a group, are shown only to you.
+- **Cards** — in a private chat a bare `/model`, `/dir` or `/resume` answers with an inline keyboard, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs). `/help` carries **New**, **Stop**, **Model**, **Status** and **Resume** in a private chat and only **New** and **Stop** in a group. `/new` carries **Agent**, **Model** and **Dir** in a private chat and only **Agent** in a group. The card's title is a heading or a bold first line.
 
-Coffer probes each newer Bot API surface (rich messages, drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
+Coffer probes each newer Bot API surface (rich messages, drafts, rich drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
+
+## Command menus
+
+Coffer registers the bot's command menus with Telegram every time the channel starts, from the same list the help text uses:
+
+| Where | Commands in the menu |
+| --- | --- |
+| Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/del`, `/help` |
+| Groups | `/new`, `/stop`, `/del`, `/help` |
+
+Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
+
+A command tapped from a group's menu arrives as `/status@my_coffer_bot`. Coffer treats it as `/status` addressed to the bot, so it answers even when the group requires a mention. A command naming another bot, such as `/status@some_other_bot`, is not for this one and is ignored.
 
 ## Media
 
@@ -119,7 +95,7 @@ Every type Telegram attaches to a message drives a turn: photos, documents, voic
 
 - A photo arrives at its largest size. A caption becomes the message text.
 - An album — several photos sent together — is collected for one second and handled as **one** turn with all its images and the album's caption.
-- Documents such as PDFs are extracted to text for the agent. Voice and audio are transcribed when speech to text is on (**Settings → Coffer's model**); otherwise the agent gets the audio file.
+- Documents such as PDFs are extracted to text for the agent. Voice and audio are transcribed when speech to text is on (**Settings › General → Coffer's model**); otherwise the agent gets the audio file.
 - A file over 20 MB — the Bot API's download limit for bots — is never fetched. The turn text notes it once, so the agent's reply mentions that it did not receive the file.
 - A download that fails is noted as `[attachment '<name>' could not be downloaded]` and the turn runs on the rest of the message.
 
@@ -149,21 +125,16 @@ The Bot API only reports mentions in the text of a plain message, so an @mention
 
 Telegram bots start with **privacy mode on**, which means the bot only sees messages that mention it, reply to it, or are commands. That is what the default `require_mention: true` expects, so nothing needs changing.
 
-If you turn `require_mention` off so the bot acts on every owner message in a group — **Edit** → **In group chats** → **Answer only when @mentioned**, or `coffer channel edit <name> --no-require-mention` — the bot also needs to see them:
+If you turn `require_mention` off so the bot acts on every owner message in a group — the channel's **Settings** → **In group chats** → **Answer only when @mentioned** — the bot also needs to see them:
 
 1. In BotFather, send `/setprivacy`, choose the bot and select **Disable**.
 2. Remove the bot from the group and add it again. The change applies only to groups the bot joins afterwards.
 
-Until you do, `coffer channel show` prints a `warning:` line naming this fix.
+Until you do, the channel's page shows a warning naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Edit**, enter the new token in **New bot token** and **Save changes**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
-
-```sh
-coffer channel show my-telegram               # find the bot_token_ref
-coffer credentials set channel/tg/bot-token   # paste the new token
-```
+On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched.
 
 ## Limits
 
@@ -179,11 +150,12 @@ coffer credentials set channel/tg/bot-token   # paste the new token
 ## Troubleshooting
 
 **The bot does not answer at all.**
-Run `coffer channel show my-telegram`.
+Open the channel's page under **Channels**.
 
-- `running: False` — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
-- `peer: not paired` — pair first. An unpaired bot answers nobody.
-- `runs on: … (another machine)` — only that machine polls the bot. Rebind with `coffer channel bind my-telegram`.
+- The header says it is not running — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
+- **Who can use it** on the **Overview** lists nobody — pair first. An unpaired bot answers nobody.
+- The header says it runs on another machine — only that machine polls the bot. Choose **Run it here…**, or change **Runs on** on the **Settings** tab.
+- The channel names a machine no longer in this vault, so it runs nowhere. Choose **Run it here**, or change **Runs on** on the **Settings** tab.
 
 **The bot answers someone else, or stops answering after a second machine was set up.**
 Two consumers are polling the same bot. This happens when the same token is registered twice, under two channel names or on two vaults. Keep one registration.
@@ -201,5 +173,5 @@ The Bot API server does not offer rich messages, so replies use the HTML fallbac
 
 - [Channels](/guides/channels) — commands, scope, machine binding and security for every channel.
 - [SeaTalk](/guides/channels-seatalk)
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [Spec: channels/telegram](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/telegram/spec.md)

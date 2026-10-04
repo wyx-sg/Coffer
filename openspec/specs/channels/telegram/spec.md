@@ -37,14 +37,14 @@ parsed for a mention, so an @mention inside a media caption is not recognized.
 
 ### Requirement: Configure a Telegram channel by a bot token reference
 A Telegram channel's configuration MUST be a **bot token reference** and nothing
-else beyond the fields every channel carries ([channels](../spec.md) "Register channels as a credential-referencing resource kind"). The token
-itself lives in the credential store; the reference is probed at registration.
+else beyond the fields every channel carries ([channels](../spec.md) "Register channels as a secret-referencing resource kind"). The token
+itself lives in the secret store; the reference is probed at registration.
 
 #### Scenario: register a telegram channel whose token reference resolves
-- **GIVEN** a bot token stored in the credential store under a reference
+- **GIVEN** a bot token stored in the secret store under a reference
 - **WHEN** a telegram channel is registered with that reference and no other type-specific field
 - **THEN** the channel is stored carrying the reference, not the token itself
-- **AND** a telegram registration naming a reference with no stored credential is rejected
+- **AND** a telegram registration naming a reference with no stored secret is rejected
 
 ### Requirement: Receive updates by long polling
 Telegram inbound MUST use **long polling**, with the update offset committed only
@@ -203,12 +203,33 @@ card stays an ordinary message.
 
 #### Scenario: a group command answer is sent as an ephemeral message to the asker
 - **GIVEN** a telegram group on a Bot API server that offers ephemeral messages
-- **WHEN** the owner's `/status` answer is delivered in that group
+- **WHEN** the owner's `/help` answer is delivered in that group
 - **THEN** it is sent as an ephemeral message addressed to the owner's user id
 - **AND** a selection card in the same group is sent as an ordinary message
 
+### Requirement: Delete a withdrawn reply with deleteMessage
+Withdrawing a bot reply ([channels](../spec.md) "Withdraw a bot reply on the owner's command") MUST
+delete each of its messages with `deleteMessage`, which the Bot API allows for a
+bot's own message for **48 hours**; the adapter declares that window and that
+withdrawing removes the message. Every message a send produced is reported — a
+reply cut into chunks hands back each chunk's id, rich or plain — so the whole reply
+goes. The reply pointer of an inbound message (`reply_to_message`) is what `/del`
+reads as its quote, and the owner's own `/del` message is deleted too when the bot
+has the right to. Past the window the platform refuses and the core tells the owner
+privately.
+
+#### Scenario: every chunk of a reply is reported and deleted
+- **GIVEN** a Telegram reply long enough to be sent as several messages
+- **WHEN** it is sent and then withdrawn
+- **THEN** the send reports every chunk's message id, and each is removed with `deleteMessage`
+
+#### Scenario: a quote reaches the core as the reply pointer
+- **GIVEN** a Telegram message that replies to another message
+- **WHEN** it is normalised
+- **THEN** the inbound message carries the replied-to message id
+
 ### Requirement: Render selection cards as inline keyboards
-A selection card ([channels](../spec.md) "Offer command choices as owner-gated selection cards") MUST be rendered as an **inline
+A selection card ([channels](../spec.md) "Offer choices and actions as owner-gated cards") MUST be rendered as an **inline
 keyboard**, and a tap arrives as a callback query carrying the button's opaque
 value. Telegram has no title element of its own, so the card's title MUST be
 carried in the text: as a **heading** of the rich message when the Bot API
@@ -305,3 +326,100 @@ nothing.
 - **GIVEN** a paired Telegram private chat where the bot's topics are off
 - **WHEN** the owner sends `/thread`
 - **THEN** the bot answers that Threaded Mode must be turned on in BotFather and creates nothing
+
+### Requirement: Treat a command addressed to this bot by name as the command
+A command a Telegram client sends from a group's menu arrives as
+`/<command>@<bot username>`. When the username is this bot's own
+(case-insensitively) the transport MUST hand the core `/<command>` with the
+suffix removed and MUST count the message as addressed to the bot, so a group
+that requires a mention still answers it. A command naming another bot is not
+addressed to this one: in a group it is dropped like any un-addressed message.
+
+#### Scenario: /cmd@thisbot runs the command
+- **GIVEN** a paired Telegram group that requires a mention, and a bot named `CofferBot`
+- **WHEN** the owner sends `/status@CofferBot`
+- **THEN** the core receives an addressed `/status` and answers it
+
+#### Scenario: /cmd@otherbot is not for this bot
+- **GIVEN** a paired Telegram group and a bot named `CofferBot`
+- **WHEN** the owner sends `/status@SomeOtherBot`
+- **THEN** the message is not addressed to this bot and nothing answers it
+
+### Requirement: Mark a turn's progress with reactions from Telegram's list
+Telegram's `setMessageReaction` accepts only the fixed emoji list under
+`ReactionTypeEmoji` in the Bot API; any other emoji is refused. The Telegram
+transport MUST declare its progress marks from that list — 👀 received, 👨‍💻
+working, 👌 done, 😢 failed, 🤷 stopped — and MUST refuse an emoji outside it
+before calling the platform, so a mark can never fail invisibly the way ✅ did.
+
+#### Scenario: every mark is on the Bot API's reaction list
+- **GIVEN** the Telegram transport's declared reaction set
+- **WHEN** it is compared with the Bot API's allowed reaction emoji
+- **THEN** every mark is on the list, and an emoji that is not (✅, ❌) is refused
+  before any call is made
+
+### Requirement: Mention the asker by name in a group answer
+Every Telegram group answer MUST open with a real mention of the asker: an
+inline mention link `[<name>](tg://user?id=<from.id>)`, which rich messages and
+the HTML subset both render as a mention that notifies — it works for a member
+with no username. The id is the sender's `from.id`; the name is their display
+name. A direct answer carries none, and the silent status message carries none
+(it is deleted before the answer).
+
+#### Scenario: a group answer mentions the asker by name
+- **GIVEN** a Telegram group message from a member named Alex with id 4242
+- **WHEN** the turn's answer is delivered
+- **THEN** it opens with `[Alex](tg://user?id=4242)`, and the HTML fallback renders
+  that as a `tg://user?id=4242` link named Alex
+
+### Requirement: Collapse a reply's details
+A Telegram reply's `## Details` section MUST arrive collapsed. A rich message
+wraps it in `<details><summary>Details</summary>…</details>`, the rich format's
+disclosure block, which holds lists, tables and code (an expandable quotation
+holds inline text only). The HTML fallback, which has no such element, sends it
+as expandable quotations under a bold `Details` line. Every message after a
+reply's first is sent silently and opens with `(2/3)`.
+
+#### Scenario: a details section arrives collapsed
+- **GIVEN** a reply whose last section is headed `## Details`
+- **WHEN** it is delivered as a rich message
+- **THEN** that section is inside a `<details>` block summarised `Details`, and on
+  the HTML fallback it is an expandable quotation in a numbered, silent message
+
+### Requirement: Show the working status in a direct chat's thinking block
+Where the Bot API offers `sendRichMessageDraft` (10.1; private chats only), a
+direct chat's draft MUST be a rich draft: the status header ([channels](../spec.md)
+"Show a turn's working state as one status line") in the draft-only
+`<tg-thinking>` block, the narration and step lines under it as a list, and the
+answer written so far as rich markdown. A server that does not know the method
+latches it off (see "Read the bot's identity from getMe and latch off
+unsupported surfaces") and the same snapshot goes out as the plain
+`sendMessageDraft`; a server without rich messages is not asked. Groups have no
+draft and keep the silent status message.
+
+#### Scenario: a direct chat's draft shows the status in its thinking block
+- **GIVEN** a Telegram server that offers rich drafts, and a direct chat's turn
+- **WHEN** its live snapshot is the status block and an answer
+- **THEN** one `sendRichMessageDraft` carries the header in `<tg-thinking>`, the
+  steps as a list and the answer as markdown, with the stop control, and no
+  plain draft is sent
+
+### Requirement: Register command menus per chat scope and language
+The transport MUST register its command menus with `setMyCommands` per chat
+scope: every command for private chats (`all_private_chats`, and the default
+scope for clients that predate scopes), and only `new`, `stop` and `help` for
+groups (`all_group_chats`) — the commands that control a group's own
+conversation; `model`, `dir`, `status`, `resume` and `thread` work only in a
+direct chat (see [channels](../spec.md) "Answer the conversation commands from
+any paired chat"). Each scope is registered
+twice, once with no `language_code` (the English descriptions) and once with
+`zh` (the Chinese ones), so a Chinese Telegram client shows Chinese
+descriptions. The hidden `/start` is never
+listed.
+
+#### Scenario: private chats get every command and groups the group set, in English and Chinese
+- **GIVEN** a Telegram channel starting
+- **WHEN** it registers its menus
+- **THEN** the private-chat scope lists all nine commands and the group scope
+  lists new, stop, del and help, each once in English and once
+  with `language_code` `zh`

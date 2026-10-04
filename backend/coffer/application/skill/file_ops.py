@@ -1,11 +1,11 @@
 """Read-only file-tree + file-content helpers for a skill's master folder.
 
-A skill's canonical master folder lives at ``~/.coffer/skills/<name>/`` and is
+A skill's canonical master folder lives at ``~/.coffer/vault/skills/<name>/`` and is
 Coffer-owned (see ``infrastructure/skill/master_store.py``). Surfaces show that
 folder as a file tree, let the user read individual files, and let them save an
-edited file back (``write_skill_file``).
+edited file back (through the vault writer, ``content_ops``).
 
-This is a "helper module beside ``service.py``" (like ``verify_ops.py``):
+This is a "helper module beside ``service.py``" (like ``lifecycle_ops.py``):
 free functions, no class state. They are pure-ish reads of
 the filesystem — no mutation, no DB, no audit — so they take a resolved
 ``pathlib.Path`` rather than the ``SkillService`` instance.
@@ -21,9 +21,9 @@ each entry), so a cyclic symlink cannot send the recursion into a loop.
 from __future__ import annotations
 
 import hashlib
-import os
 import pathlib
 from dataclasses import dataclass, field
+from typing import Literal
 
 from coffer.domain.skill.paths import is_within
 
@@ -54,7 +54,7 @@ class FileNode:
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     children: list[FileNode] = field(default_factory=list)
     # Set on a directory whose descendants were clipped at ``MAX_TREE_DEPTH``.
@@ -214,61 +214,3 @@ def read_skill_file(master_folder: pathlib.Path, relpath: str) -> FileContent:
     return FileContent(
         path=rel, content=text, truncated=truncated, binary=False, size=size, fingerprint=fp
     )
-
-
-def write_skill_file(master_folder: pathlib.Path, relpath: str, content: str) -> FileContent:
-    """Overwrite an existing text file under ``master_folder`` and re-read it.
-
-    Containment is enforced exactly as in :func:`read_skill_file`: the resolved
-    target MUST stay inside the (resolved) master folder. Only an *existing
-    regular file* may be written — this is an editor for the skill's current
-    files, not a create-file or create-directory affordance. The write is
-    atomic (temp file + ``os.replace``) so a failure can't leave a half-written
-    file, and it preserves the existing UTF-8 text contract: a binary file is
-    rejected rather than clobbered with text. The re-read result carries the
-    NEW ``fingerprint``, so an editor that keeps the buffer open can issue its
-    next write without a round-trip through the read endpoint.
-
-    This function does no staleness check of its own — the optimistic
-    ``expected_fingerprint`` comparison lives one layer up, in
-    ``content_ops.write_skill_file``, beside the existence check and the audit
-    record, so it happens before anything here touches the filesystem.
-
-    Raises:
-        ValueError: ``relpath`` resolves outside the master folder, the content
-            exceeds ``MAX_FILE_BYTES``, or the target is an existing binary file.
-        FileNotFoundError: no regular file exists at the resolved path.
-    """
-    root = master_folder.resolve()
-    candidate = (root / relpath).resolve(strict=False)
-    if not is_within(candidate, root):
-        raise ValueError(f"path escapes skill folder: {relpath!r}")
-    if candidate == root or not candidate.is_file():
-        raise FileNotFoundError(relpath)
-
-    encoded = content.encode("utf-8")
-    if len(encoded) > MAX_FILE_BYTES:
-        raise ValueError(f"content exceeds {MAX_FILE_BYTES} bytes")
-
-    # Refuse to turn an existing binary file into text — the editor only ever
-    # surfaces text files, so a binary target here means a malformed request.
-    with candidate.open("rb") as fh:
-        existing_head = fh.read(MAX_FILE_BYTES + 1)
-    if b"\x00" in existing_head[:MAX_FILE_BYTES]:
-        raise ValueError("refusing to overwrite a binary file with text")
-
-    # Atomic replace: write a sibling temp file, fsync, then rename over the
-    # target. The temp file lives in the same directory so os.replace is a true
-    # atomic rename (same filesystem).
-    tmp = candidate.with_name(f".{candidate.name}.coffer-tmp")
-    try:
-        with tmp.open("wb") as fh:
-            fh.write(encoded)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, candidate)
-    finally:
-        # If os.replace succeeded the temp is gone; clean up only on failure.
-        tmp.unlink(missing_ok=True)
-
-    return read_skill_file(master_folder, relpath)

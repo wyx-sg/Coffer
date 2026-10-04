@@ -1,4 +1,5 @@
 // frontend/src/components/DataTable.test.tsx
+import { acceptance } from "@/test/acceptance";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { DataTable, type Column } from "./DataTable";
@@ -41,7 +42,7 @@ describe("DataTable", () => {
     expect(screen.queryByText("alpha")).not.toBeInTheDocument();
   });
 
-  test("pagination splits rows into pages", () => {
+  test("shows the first N rows and Load N more adds the next ones, never numbered pages", () => {
     render(
       <DataTable
         rows={ROWS}
@@ -53,8 +54,32 @@ describe("DataTable", () => {
     );
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.queryByText("gamma")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByText("Showing 2 of 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /next/i })).toBeNull();
+    // Only one row is left, so the button offers one.
+    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
+    expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("gamma")).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /load/i })).toBeNull();
+  });
+
+  test("a new search shows the first N matches again", () => {
+    const many: Row[] = Array.from({ length: 5 }, (_, i) => ({ id: String(i), name: `x-${i}` }));
+    render(
+      <DataTable
+        rows={many}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        pageSize={2}
+        search={{ accessor: (r) => r.name, placeholder: "search" }}
+        emptyMessage="none"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load 2 more" }));
+    expect(screen.getByText("Showing 4 of 5")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "x" } });
+    expect(screen.getByText("Showing 2 of 5")).toBeInTheDocument();
   });
 
   test("clicking a row fires onRowClick", () => {
@@ -181,10 +206,12 @@ describe("DataTable", () => {
     expect(screen.getByText("item-11")).toBeInTheDocument();
 
     // …and changing it in Settings to a smaller valid size re-renders the
-    // mounted table live: item-11 moves onto page 2.
+    // mounted table live: the first 10 show, and Load 2 more brings item-11.
     act(() => setDefaultPageSize(10));
     expect(screen.getByText("item-0")).toBeInTheDocument();
     expect(screen.queryByText("item-11")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load 2 more" }));
+    expect(screen.getByText("item-11")).toBeInTheDocument();
   });
 
   test("bulk actions only operate on the currently-filtered rows (selection ∩ filter)", () => {
@@ -192,8 +219,6 @@ describe("DataTable", () => {
     const sel = {
       ariaSelectAll: "all",
       ariaSelectRow: (r: Row) => `row ${r.name}`,
-      bulkLabel: (n: number) => `${n} selected`,
-      clearLabel: "clear",
       renderBulkActions: ({ selectedRows }: { selectedRows: Row[]; clear: () => void }) => {
         lastSelected = selectedRows;
         return <span>bulk-{selectedRows.length}</span>;
@@ -215,77 +240,126 @@ describe("DataTable", () => {
       target: { value: "alpha" },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: "all" }));
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 selected")).toBeInTheDocument();
     expect(lastSelected.map((r) => r.name)).toEqual(["alpha"]);
 
-    // Clearing the filter must NOT pull the still-hidden rows into the batch,
-    // but DOES re-surface selected rows that were filtered out: only "alpha"
-    // was ever selected, so the batch stays exactly ["alpha"].
-    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "" } });
-    expect(lastSelected.map((r) => r.name)).toEqual(["alpha"]);
+    // The bar takes the search box's place; Clear brings the box back with its text.
+    expect(screen.queryByRole("textbox", { name: "search" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByRole("textbox", { name: "search" })).toHaveValue("alpha");
   });
 
-  test("a row hidden by the filter drops out of the bulk batch", () => {
+  test("a row that leaves the table drops out of the bulk batch", () => {
     let lastSelected: Row[] = [];
     const sel = {
       ariaSelectAll: "all",
       ariaSelectRow: (r: Row) => `row ${r.name}`,
-      bulkLabel: (n: number) => `${n} selected`,
-      clearLabel: "clear",
       renderBulkActions: ({ selectedRows }: { selectedRows: Row[]; clear: () => void }) => {
         lastSelected = selectedRows;
         return <span>bulk-{selectedRows.length}</span>;
       },
+    };
+    const table = (rows: Row[]) => (
+      <DataTable
+        rows={rows}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        selection={sel}
+        emptyMessage="none"
+      />
+    );
+    const { rerender } = render(table(ROWS));
+    fireEvent.click(screen.getByRole("checkbox", { name: "row alpha" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "row beta" }));
+    expect(screen.getByText("2 of 3 selected")).toBeInTheDocument();
+
+    rerender(table(ROWS.filter((r) => r.name !== "alpha")));
+    expect(screen.getByText("1 of 2 selected")).toBeInTheDocument();
+    expect(lastSelected.map((r) => r.name)).toEqual(["beta"]);
+  });
+
+  acceptance("web-ui", "a selection bar counts the rows and Esc clears it", () => {
+    const sel = {
+      ariaSelectAll: "all",
+      ariaSelectRow: (r: Row) => `row ${r.name}`,
+      renderBulkActions: () => <span>bulk</span>,
     };
     render(
       <DataTable
         rows={ROWS}
         columns={COLS}
         rowKey={(r) => r.id}
-        search={{ accessor: (r) => r.name, placeholder: "search" }}
         selection={sel}
         emptyMessage="none"
       />,
     );
-
-    // Select alpha + beta while unfiltered, then filter to "beta": alpha is now
-    // hidden, so the bulk batch reflects only the visible "beta".
     fireEvent.click(screen.getByRole("checkbox", { name: "row alpha" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "row beta" }));
-    expect(screen.getByText("2 selected")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("textbox", { name: "search" }), {
-      target: { value: "beta" },
-    });
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
-    expect(lastSelected.map((r) => r.name)).toEqual(["beta"]);
+    expect(screen.getByText("bulk")).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryByText("bulk")).toBeNull();
   });
 
-  test("server pagination: renders rows as-is and drives page changes through callbacks", () => {
+  test("a sortable column sorts newest first, then oldest first, then back to the default order", () => {
+    type Run = { id: string; at: string | null };
+    const runs: Run[] = [
+      { id: "mid", at: "2026-10-02T00:00:00Z" },
+      { id: "none", at: null },
+      { id: "new", at: "2026-10-03T00:00:00Z" },
+      { id: "old", at: "2026-10-01T00:00:00Z" },
+    ];
+    const cols: Column<Run>[] = [
+      { key: "id", header: "Name", cell: (r) => r.id },
+      { key: "at", header: "Last used", cell: () => "", sortable: true, sortValue: (r) => r.at },
+    ];
+    render(<DataTable rows={runs} columns={cols} rowKey={(r) => r.id} emptyMessage="none" />);
+    const order = () =>
+      screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => r.textContent);
+    expect(screen.queryByRole("button", { name: "Name" })).toBeNull();
+    const head = screen.getByRole("button", { name: "Last used" });
+    expect(order()).toEqual(["mid", "none", "new", "old"]);
+    fireEvent.click(head);
+    expect(order()).toEqual(["new", "mid", "old", "none"]);
+    expect(head.closest("th")).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(head);
+    expect(order()).toEqual(["old", "mid", "new", "none"]);
+    expect(head.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    fireEvent.click(head);
+    expect(order()).toEqual(["mid", "none", "new", "old"]);
+    expect(head.closest("th")).toHaveAttribute("aria-sort", "none");
+  });
+
+  test("server pagination: Load more asks for the next page and keeps the ones before", () => {
     const onPageChange = vi.fn();
     const onPageSizeChange = vi.fn();
-    // Caller passes ONE page (2 of 50). The table must not slice/hide them and
-    // must report 25 pages, delegating next/prev to the callbacks.
-    render(
-      <DataTable
-        rows={ROWS.slice(0, 2)}
-        columns={COLS}
-        rowKey={(r) => r.id}
-        serverPagination={{
-          page: 1,
-          pageSize: 2,
-          total: 50,
-          onPageChange,
-          onPageSizeChange,
-        }}
-        emptyMessage="none"
-      />,
+    const props = {
+      columns: COLS,
+      rowKey: (r: Row) => r.id,
+      emptyMessage: "none",
+    };
+    const pager = (page: number) => ({
+      page,
+      pageSize: 2,
+      total: 3,
+      onPageChange,
+      onPageSizeChange,
+    });
+    // Caller passes ONE page (2 of 3); the table must not slice or hide it.
+    const { rerender } = render(
+      <DataTable {...props} rows={ROWS.slice(0, 2)} serverPagination={pager(1)} />,
     );
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("beta")).toBeInTheDocument();
-    expect(screen.getByText(/page 1 of 25/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByText("Showing 2 of 3")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
     expect(onPageChange).toHaveBeenCalledWith(2);
+    // The caller hands over page 2: it is shown under page 1.
+    rerender(<DataTable {...props} rows={ROWS.slice(2)} serverPagination={pager(2)} />);
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("gamma")).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).toBeNull();
   });
 
   test("controlled search: forwards typing and resets the server page to 1", () => {
@@ -341,8 +415,6 @@ describe("DataTable", () => {
     const sel = {
       ariaSelectAll: "all",
       ariaSelectRow: (r: Row) => `row ${r.name}`,
-      bulkLabel: (n: number) => `${n} selected`,
-      clearLabel: "clear",
       renderBulkActions: () => <span>bulk</span>,
     };
     // pageSize 2 over 3 rows → page 1 holds alpha + beta; gamma is on page 2.
@@ -358,9 +430,31 @@ describe("DataTable", () => {
     );
     // Header checkbox selects only the current page (2 of 3).
     fireEvent.click(screen.getByRole("checkbox", { name: "all" }));
-    expect(screen.getByText(/^2 selected$/)).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 selected")).toBeInTheDocument();
     // The escalation banner offers selecting all 3; clicking it selects them all.
     fireEvent.click(screen.getByRole("button", { name: /select all 3/i }));
-    expect(screen.getByText(/^3 selected$/)).toBeInTheDocument();
+    expect(screen.getByText("3 of 3 selected")).toBeInTheDocument();
+  });
+  test("rowFooter renders a full-width row under a row, and isRowClickable gates the click", () => {
+    const onRowClick = vi.fn();
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        onRowClick={onRowClick}
+        isRowClickable={(r) => r.id !== "2"}
+        rowFooter={(r) => (r.id === "2" ? <span>notice-for-beta</span> : null)}
+        emptyMessage="none"
+      />,
+    );
+    const footer = screen.getByText("notice-for-beta").closest("td");
+    expect(footer).toHaveAttribute("colspan", "1");
+    // One footer row only: alpha and gamma return null.
+    expect(document.querySelectorAll("[data-row-footer]")).toHaveLength(1);
+    fireEvent.click(screen.getByText("beta"));
+    expect(onRowClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("alpha"));
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
   });
 });

@@ -28,7 +28,7 @@ async def _paired_group(env: ChannelEnv, name: str = "st") -> tuple[FakeChannelA
     """A channel paired to the owner's DM plus a live group session driven by
     one @mention, so a lifecycle event has something real to tear down."""
     resource = await env.register_channel(name)
-    adapter = env.bind(resource, FakeChannelAdapter(supports_groups=True))
+    adapter = env.bind(resource, FakeChannelAdapter())
     await env.pair(resource, "owner", sender_id="owner-1")
     await env.processor.on_message(
         inbound(
@@ -42,7 +42,7 @@ async def _paired_group(env: ChannelEnv, name: str = "st") -> tuple[FakeChannelA
         )
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
-    return adapter, resource.id
+    return adapter, resource.uid
 
 
 @pytest.mark.acceptance(

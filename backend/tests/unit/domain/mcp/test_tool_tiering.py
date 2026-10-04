@@ -139,3 +139,76 @@ def test_split_prefixed_splits_on_the_first_separator():
     assert split_prefixed("jira__jira_get_issue") == ("jira", "jira_get_issue")
     assert split_prefixed("srv__weird__tool") == ("srv", "weird__tool")
     assert split_prefixed("bare") == ("", "bare")
+
+
+# --- the person's per-tool exposure overrides ---------------------------------
+
+
+def test_a_pinned_tool_is_listed_even_when_unused_and_over_budget():
+    tools = _catalogue("jira", 10)
+
+    result = select_listed_tools(
+        tools,
+        {("jira", "t0"): 9, ("jira", "t1"): 8},
+        builtin_prefix=PREFIX,
+        budget=2,
+        exposure={"jira__t9": "listed"},
+    )
+
+    # The pin takes one of the two slots; the busiest auto tool takes the other.
+    assert _names(result) == ["jira__t0", "jira__t9"]
+    assert result.hidden_count == 8
+
+
+def test_a_search_only_tool_is_hidden_even_when_busiest_and_under_budget():
+    tools = _catalogue("jira", 3)
+
+    result = select_listed_tools(
+        tools,
+        {("jira", "t0"): 99},
+        builtin_prefix=PREFIX,
+        budget=50,
+        exposure={"jira__t0": "search"},
+    )
+
+    assert _names(result) == ["jira__t1", "jira__t2"]
+    assert result.hidden_count == 1
+
+
+def test_pins_beyond_the_budget_are_all_listed_and_leave_auto_nothing():
+    tools = _catalogue("jira", 6)
+
+    result = select_listed_tools(
+        tools,
+        {("jira", "t5"): 50},
+        builtin_prefix=PREFIX,
+        budget=2,
+        exposure={"jira__t0": "listed", "jira__t1": "listed", "jira__t2": "listed"},
+    )
+
+    assert _names(result) == ["jira__t0", "jira__t1", "jira__t2"]
+
+
+def test_auto_is_the_default_and_matches_no_overrides():
+    tools = _catalogue("jira", 8)
+    usage = {("jira", "t6"): 3}
+
+    plain = select_listed_tools(tools, usage, builtin_prefix=PREFIX, budget=3)
+    empty = select_listed_tools(tools, usage, builtin_prefix=PREFIX, budget=3, exposure={})
+
+    assert _names(plain) == _names(empty)
+    assert "jira__t6" in _names(plain)
+
+
+def test_a_server_whose_tools_are_all_search_only_gets_no_reserved_slot():
+    tools = [*_catalogue("quiet", 2), *_catalogue("busy", 3)]
+
+    result = select_listed_tools(
+        tools,
+        {},
+        builtin_prefix=PREFIX,
+        budget=2,
+        exposure={"quiet__t0": "search", "quiet__t1": "search"},
+    )
+
+    assert _names(result) == ["busy__t0", "busy__t1"]

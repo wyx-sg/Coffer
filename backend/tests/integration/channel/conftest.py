@@ -15,7 +15,6 @@ the chat integration tests use.
 from __future__ import annotations
 
 import asyncio
-import inspect
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -30,7 +29,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.channel.inbound import ChannelBinding, InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
-from coffer.application.channel.ports import AdapterCallbacks
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.channel.store_ports import ChannelPeer
@@ -40,24 +38,22 @@ from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     clear_active_turns,
 )
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
-    ChannelCapabilities,
-    ChoiceButton,
     InboundAttachment,
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
-    SentMessage,
 )
-from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
+    ChannelReplyRepo,
     ChannelThreadConversationRepo,
 )
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
@@ -66,10 +62,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.surfaces.http.channel_wiring import ChatQuestions
+from tests.support.channel import FakeChannelAdapter as FakeChannelAdapter
+from tests.support.channel import FakeLiveText as FakeLiveText
+from tests.support.vault_stores import make_resource_repo
+from tests.support.waiting import wait_until  # noqa: F401  (re-exported to the channel tests)
 from tests.unit.chat.conftest import FakeAgentAdapter
 
 #: The agent key this fixture's own scripted provider is registered under, and
@@ -87,7 +85,6 @@ def channel_row(name: str, config: dict[str, Any], *, id: int = 1) -> Resource:
     """
     now = datetime.now(tz=UTC)
     return Resource(
-        id=id,
         uid=f"uid-of-{name}",
         kind="channel",
         name=name,
@@ -118,24 +115,15 @@ class _StubAgentConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def wait_until(
-    predicate: Any,
-    *,
-    timeout: float = 5.0,
-    interval: float = 0.01,
-    message: str = "condition not met within timeout",
-) -> None:
-    """Poll ``predicate`` (sync or async) until truthy, bounded by ``timeout``."""
-    deadline = asyncio.get_running_loop().time() + timeout
-    while True:
-        result = predicate()
-        if inspect.isawaitable(result):
-            result = await result
-        if result:
-            return
-        if asyncio.get_running_loop().time() >= deadline:
-            pytest.fail(message)
-        await asyncio.sleep(interval)
+#: ``{channel name: uid}`` for every channel ``register_channel`` has made. A
+#: channel is addressed on the wire by its uid now, but a test reads better with
+#: the name it registered the channel under, so the helpers below translate.
+_UIDS: dict[str, str] = {}
+
+
+def uid_of(name: str) -> str:
+    """The uid of the channel a test registered as ``name`` (unknown: as given)."""
+    return _UIDS.get(name, name)
 
 
 def inbound(
@@ -144,7 +132,7 @@ def inbound(
     text: str,
     *,
     sender_display: str = "Owner",
-    sender_id: str = "",
+    sender_id: str | None = None,
     thread_id: str = "",
     chat_kind: str = "direct",
     chat_title: str = "",
@@ -155,16 +143,20 @@ def inbound(
     sender_mention_id: str = "",
     attachments: Sequence[InboundAttachment] = (),
     quoted_message_id: str = "",
+    group_main: bool = False,
 ) -> InboundMessage:
     return InboundMessage(
-        channel=channel,
+        channel=uid_of(channel),
         chat_id=chat_id,
         sender_display=sender_display,
         text=text,
         platform_message_id=platform_message_id,
         ephemeral_id=ephemeral_id,
         timestamp=datetime.now(tz=UTC),
-        sender_id=sender_id,
+        # A direct chat's id IS its person's id on both platforms, so a DM
+        # message that names no sender is the chat's own person; a group message
+        # that names none stays anonymous (the group gate refuses it).
+        sender_id=(chat_id if chat_kind == "direct" else "") if sender_id is None else sender_id,
         sender_mention_id=sender_mention_id,
         thread_id=thread_id,
         chat_kind=chat_kind,
@@ -173,6 +165,7 @@ def inbound(
         mentions_others=mentions_others,
         attachments=tuple(attachments),
         quoted_message_id=quoted_message_id,
+        group_main=group_main,
     )
 
 
@@ -197,7 +190,7 @@ def tap_event(
     chat_id: str,
     data: str,
     *,
-    sender_id: str = "",
+    sender_id: str | None = None,
     chat_kind: str = "direct",
     thread_id: str = "",
     platform_message_id: str = "",
@@ -208,9 +201,10 @@ def tap_event(
     the in-place card refresh.
     """
     return InboundCallback(
-        channel=channel,
+        channel=uid_of(channel),
         chat_id=chat_id,
-        sender_id=sender_id,
+        # As for ``inbound``: a direct chat's id is its person's id.
+        sender_id=(chat_id if chat_kind == "direct" else "") if sender_id is None else sender_id,
         data=data,
         platform_message_id=platform_message_id,
         chat_kind=chat_kind,
@@ -224,17 +218,17 @@ def lifecycle_event(
     """A non-message platform event about the bot's standing in a chat, for
     driving ``processor.on_lifecycle``."""
     return InboundLifecycle(
-        channel=channel, chat_id=chat_id, kind=kind, actor_display=actor_display
+        channel=uid_of(channel), chat_id=chat_id, kind=kind, actor_display=actor_display
     )
 
 
 # ---------------------------------------------------------------------------
-# Fakes at the non-local boundaries (IM platform, credential store, child process)
+# Fakes at the non-local boundaries (IM platform, secret store, child process)
 # ---------------------------------------------------------------------------
 
 
 class FakeKeyring:
-    """In-memory credential store satisfying the ResourceService keyring port."""
+    """In-memory secret store satisfying the ResourceService keyring port."""
 
     def __init__(self) -> None:
         self._values: dict[str, str] = {}
@@ -244,316 +238,6 @@ class FakeKeyring:
 
     def get(self, ref: str) -> str | None:
         return self._values.get(ref)
-
-
-class FakeChannelAdapter:
-    """Recording ``ChannelAdapter`` — the only fake the channel core needs."""
-
-    def __init__(
-        self,
-        *,
-        supports_edit: bool = True,
-        supports_live_text: bool | None = None,
-        live_text_persists: bool = False,
-        supports_typing: bool = True,
-        max_message_chars: int = 4096,
-        supports_buttons: bool = False,
-        supports_card_update: bool = False,
-        supports_media: bool = True,
-        supports_groups: bool = False,
-        supports_history_fetch: bool = False,
-        supports_reactions: bool = False,
-        set_reaction_fails: bool = False,
-        mention_template: str = "",
-        mention_email_template: str = "",
-        direct_threads_are_replies: bool = False,
-    ) -> None:
-        self._caps = ChannelCapabilities(
-            supports_edit=supports_edit,
-            # A transport that can edit has a live surface by definition; one
-            # that cannot may still stream (SeaTalk) — a test says so explicitly.
-            supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
-            live_text_persists=live_text_persists,
-            supports_typing=supports_typing,
-            max_message_chars=max_message_chars,
-            supports_buttons=supports_buttons,
-            supports_card_update=supports_card_update,
-            supports_media=supports_media,
-            supports_groups=supports_groups,
-            supports_history_fetch=supports_history_fetch,
-            supports_reactions=supports_reactions,
-            # How this transport spells an @mention, if it can at all ("Mention
-            # the asker in a group answer").
-            # Shaped like SeaTalk's tag in the tests that set it; "" is the
-            # Telegram-shaped default, where a reply carries no mention.
-            mention_template=mention_template,
-            # …and its second, address-keyed spelling where it has one (SeaTalk),
-            # used only when the primary id is missing.
-            mention_email_template=mention_email_template,
-            # Typing is two endpoints, not one (SeaTalk: single_chat_typing /
-            # group_chat_typing): a fake may hold the DM one alone, exactly like
-            # a transport that never gained the group call.
-            # SeaTalk-shaped when True: a DM reply-in-thread is a casual reply
-            # (see "Key conversation identity by channel, chat and thread").
-            direct_threads_are_replies=direct_threads_are_replies,
-        )
-        # When True, ``set_reaction`` raises — proves the best-effort suppression
-        # at the call sites (a failed ack must never break the turn) (see
-        # "Acknowledge receipt and completion by capability").
-        self._set_reaction_fails = set_reaction_fails
-        self.started = False
-        self.stopped = False
-        self.callbacks: AdapterCallbacks | None = None
-        self.sent: list[tuple[str, str]] = []  # (chat_id, text)
-        # (chat_id, text, thread_id, chat_kind) for every send_text call — the
-        # full routing detail, kept separate so every existing ``.sent``/
-        # ``.texts()`` assertion above stays a plain 2-tuple.
-        self.sent_routed: list[tuple[str, str, str, str]] = []
-        # "Attach a group reply to the message it answers": the reply target of
-        # each send_text, positionally aligned with
-        # ``sent`` ("" when the send answered nothing in particular).
-        self.sent_reply_targets: list[str] = []
-        #: The EphemeralTarget of each send_text, positionally aligned with
-        #: ``sent`` (None when the answer was said out loud).
-        self.sent_ephemeral: list[Any] = []
-        # Telegram's chat action: what each send_typing claimed to be doing.
-        self.typing_actions: list[str] = []
-        # (chat_id, text, buttons) for sends that carried a selection card.
-        self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
-        # The card title each of those sends carried, positionally aligned with
-        # ``cards`` so existing 3-tuple assertions stay untouched.
-        self.card_titles: list[str] = []
-        # (chat_id, message_id, text, buttons, title) for every update_card.
-        self.card_updates: list[tuple[str, str, str, list[ChoiceButton], str]] = []
-        self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
-        self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
-        self.typing: list[str] = []  # chat_ids
-        # (chat_id, chat_kind, thread_id) for every send_typing call — the full
-        # routing detail, kept separate so existing ``.typing`` assertions stay
-        # a plain list of chat ids (mirrors ``sent_routed``).
-        self.typing_routed: list[tuple[str, str, str]] = []
-        # (chat_id, message_id, emoji) for every set_reaction call (see
-        # "Acknowledge receipt and completion by capability").
-        self.reactions: list[tuple[str, str, str]] = []
-        # (chat_id, path, caption, as_photo) for each uploaded file.
-        self.media: list[tuple[str, str, str | None, bool]] = []
-        # (chat_id, path, caption, as_photo, thread_id, chat_kind) — the full
-        # routing detail for each upload, kept separate so every existing
-        # ``.media`` assertion stays a plain 4-tuple (mirrors ``sent_routed``).
-        self.media_routed: list[tuple[str, str, str | None, bool, str, str]] = []
-        # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
-        # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
-        self.thread_items: list[ForwardedItem] = []
-        # Scriptable thread-history attachments ("Download the media a thread's
-        # messages carry") — the images/files the
-        # thread's own messages carry, already downloaded; unset yields ``()``.
-        self.thread_attachments: tuple[InboundAttachment, ...] = ()
-        # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
-        # so a test can assert the fetch happened (or, on a non-fetching
-        # transport, that it never did).
-        self.fetch_thread_calls: list[tuple[str, str]] = []
-        # The ``chat_kind`` each of those fetches carried, positionally aligned
-        # with ``fetch_thread_calls`` — a DM thread reads a different endpoint
-        # from a group one, so the kind the core passed is worth asserting.
-        self.fetch_thread_kinds: list[str] = []
-        # Scriptable ``fetch_quoted`` result ("Ground a turn in the message it
-        # quotes") and the ids the core asked it to resolve.
-        self.quoted_items: list[ForwardedItem] = []
-        self.quoted_attachments: tuple[InboundAttachment, ...] = ()
-        self.fetch_quoted_calls: list[str] = []
-        # "Grow a reply in place on one live surface": every live-text handle the
-        # core opened this session, and the
-        # switch that makes the transport refuse to open one.
-        self.live_handles: list[FakeLiveText] = []
-        self.live_text_unavailable = False
-        # When True the live surface IS the reply (SeaTalk's stream): closing it
-        # finishes the message in place and leaves the caller nothing to send.
-        self.live_text_finalizes = False
-        # (chat_id, mark, body, thread_id) for every ``open_thread`` the core
-        # asked for ("Open parallel conversations in a direct chat"), and the
-        # scripted refusal a transport with no threads available raises.
-        self.opened_threads: list[tuple[str, str, str, str]] = []
-        self.open_thread_fails_with: Exception | None = None
-        self._next_id = 0
-
-    @property
-    def capabilities(self) -> ChannelCapabilities:
-        return self._caps
-
-    def texts(self) -> list[str]:
-        return [text for _chat_id, text in self.sent]
-
-    def _new_id(self) -> str:
-        self._next_id += 1
-        return f"m{self._next_id}"
-
-    async def start(self, callbacks: AdapterCallbacks) -> None:
-        self.started = True
-        self.stopped = False
-        self.callbacks = callbacks
-
-    async def stop(self) -> None:
-        self.started = False
-        self.stopped = True
-
-    async def send_text(
-        self,
-        chat_id: str,
-        markdown: str,
-        *,
-        buttons: Sequence[ChoiceButton] | None = None,
-        title: str = "",
-        thread_id: str = "",
-        chat_kind: str = "direct",
-        reply_to_message_id: str = "",
-        ephemeral: Any = None,
-    ) -> SentMessage:
-        # "Keep non-answer chatter private in a group": which sends were
-        # addressed to one member of the group only.
-        self.sent_ephemeral.append(ephemeral)
-        self.sent.append((chat_id, markdown))
-        self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
-        # "Attach a group reply to the message it answers": what each send
-        # pointed back at, so a test can assert a group
-        # reply is attached to the message it answers.
-        self.sent_reply_targets.append(reply_to_message_id)
-        if buttons:
-            self.cards.append((chat_id, markdown, list(buttons)))
-            self.card_titles.append(title)
-        return SentMessage(message_id=self._new_id())
-
-    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
-        if self.open_thread_fails_with is not None:
-            raise self.open_thread_fails_with
-        thread_id = f"t{len(self.opened_threads) + 1}"
-        self.opened_threads.append((chat_id, mark, body, thread_id))
-        return thread_id
-
-    async def update_card(
-        self,
-        chat_id: str,
-        message_id: str,
-        markdown: str,
-        buttons: Sequence[ChoiceButton],
-        *,
-        title: str = "",
-        chat_kind: str = "direct",
-    ) -> None:
-        self.card_updates.append((chat_id, message_id, markdown, list(buttons), title))
-
-    async def open_live_text(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> FakeLiveText | None:
-        if not self._caps.supports_live_text or self.live_text_unavailable:
-            return None
-        handle = FakeLiveText(self, chat_id, thread_id=thread_id, chat_kind=chat_kind)
-        self.live_handles.append(handle)
-        return handle
-
-    async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
-        self.edits.append((chat_id, message_id, text))
-
-    async def delete_message(self, chat_id: str, message_id: str) -> None:
-        self.deleted.append((chat_id, message_id))
-
-    async def send_typing(
-        self,
-        chat_id: str,
-        *,
-        thread_id: str = "",
-        chat_kind: str = "direct",
-        action: str = "typing",
-    ) -> None:
-        self.typing_actions.append(action)
-        self.typing.append(chat_id)
-        self.typing_routed.append((chat_id, chat_kind, thread_id))
-
-    async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        self.reactions.append((chat_id, message_id, emoji))
-        if self._set_reaction_fails:
-            raise RuntimeError("set_reaction failed (scripted)")
-
-    async def send_media(
-        self,
-        chat_id: str,
-        path: str,
-        *,
-        caption: str | None = None,
-        as_photo: bool = True,
-        thread_id: str = "",
-        chat_kind: str = "direct",
-    ) -> SentMessage:
-        self.media.append((chat_id, path, caption, as_photo))
-        self.media_routed.append((chat_id, path, caption, as_photo, thread_id, chat_kind))
-        return SentMessage(message_id=self._new_id())
-
-    async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        self.fetch_thread_calls.append((chat_id, thread_id))
-        self.fetch_thread_kinds.append(chat_kind)
-        return list(self.thread_items), self.thread_attachments
-
-    async def fetch_quoted(
-        self, message_id: str
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        self.fetch_quoted_calls.append(message_id)
-        return list(self.quoted_items), self.quoted_attachments
-
-    async def tap(
-        self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""
-    ) -> None:
-        """Simulate a selection-card button tap arriving from the platform."""
-        assert self.callbacks is not None and self.callbacks.on_callback is not None
-        await self.callbacks.on_callback(
-            InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=value)
-        )
-
-
-class FakeLiveText:
-    """The fake's live surface ("Grow a reply in place on one live surface"),
-    shaped like Telegram's: the first
-    update sends a message, later ones edit it, and closing deletes it and hands
-    the whole final text back for the ordinary send path."""
-
-    def __init__(
-        self,
-        adapter: FakeChannelAdapter,
-        chat_id: str,
-        *,
-        thread_id: str = "",
-        chat_kind: str = "direct",
-    ) -> None:
-        self._adapter = adapter
-        self._chat_id = chat_id
-        self._thread_id = thread_id
-        self._chat_kind = chat_kind
-        self.message_id = ""
-        self.closed = False
-        self.final = ""
-        self.snapshots: list[str] = []
-
-    async def update(self, text: str) -> None:
-        self.snapshots.append(text)
-        if not self.message_id:
-            sent = await self._adapter.send_text(
-                self._chat_id, text, thread_id=self._thread_id, chat_kind=self._chat_kind
-            )
-            self.message_id = sent.message_id
-            return
-        if self._adapter.live_text_finalizes:
-            return  # a stream re-renders its own message — no new chat traffic
-        await self._adapter.edit_text(self._chat_id, self.message_id, text)
-
-    async def close(self, text: str) -> str:
-        self.closed = True
-        self.final = text
-        if self._adapter.live_text_finalizes:
-            # A stream cannot be deleted: it finishes carrying the final text.
-            return ""
-        if self.message_id:
-            await self._adapter.delete_message(self._chat_id, self.message_id)
-        return text
 
 
 class FakeModelSuggestions:
@@ -568,9 +252,13 @@ class FakeModelSuggestions:
     def __init__(self) -> None:
         self._by_agent: dict[str, list[str]] = {}
         self._efforts: dict[tuple[str, str | None], list[str]] = {}
+        self._labels: dict[str, str] = {}
 
-    def add(self, agent_key: str, models: list[str]) -> None:
+    def add(
+        self, agent_key: str, models: list[str], *, labels: dict[str, str] | None = None
+    ) -> None:
         self._by_agent[agent_key] = models
+        self._labels.update(labels or {})
 
     def add_efforts(self, agent_key: str, levels: list[str], *, model: str | None = None) -> None:
         self._efforts[(agent_key, model)] = levels
@@ -579,75 +267,11 @@ class FakeModelSuggestions:
         return list(self._by_agent.get(agent_key, []))
 
     async def model_labels(self, agent_key: str) -> dict[str, str]:
-        # Unlabelled, so a button shows its bare id as before.
-        return {m: m for m in self._by_agent.get(agent_key, [])}
+        # Unlabelled unless a test names them, so a button shows its bare id.
+        return {m: self._labels.get(m, m) for m in self._by_agent.get(agent_key, [])}
 
     async def efforts(self, agent_key: str, model: str | None) -> list[str]:
         return list(self._efforts.get((agent_key, model), []))
-
-
-@dataclass
-class FakeIngestedDocument:
-    """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels "Save a
-    sent document into a collection") — only the two
-    attributes `/save`'s confirmation message reads. ``path`` is ``None`` while
-    the upload waits in the collection's inbox to be merged (spec knowledge
-    "Submit every entrance's input as material")."""
-
-    path: str | None
-    title: str
-
-
-class FakeCollectionCatalog:
-    """In-memory ``CollectionCatalogPort``: a fixed collection list, exactly
-    like the real ``KnowledgeService.collection_names`` but with no
-    knowledge kind behind it (the channel core never imports one — import-linter
-    contract 5f)."""
-
-    def __init__(self, names: Sequence[str] = ()) -> None:
-        self.names = list(names)
-        #: How many times `/save` asked. It takes no agent and the answer does
-        #: not vary, so the count is all there is to observe.
-        self.calls = 0
-
-    async def collection_names(self) -> list[str]:
-        self.calls += 1
-        return list(self.names)
-
-
-class FakeIngestService:
-    """In-memory ``IngestPort``: records every call, and can be scripted to
-    raise — the one-line-message contract `/save` relies on (never a stack
-    trace to the chat) — or to return a scripted document."""
-
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-        #: Set by a test to make the next ``ingest`` raise instead of succeed.
-        self.fails_with: Exception | None = None
-        #: Set by a test to answer as a knowledge layer with a model would: the
-        #: upload waits in the inbox, so there is no document path yet.
-        self.pending = False
-
-    async def ingest(
-        self,
-        *,
-        collection: str,
-        filename: str,
-        data: bytes,
-        actor: str,
-    ) -> FakeIngestedDocument:
-        self.calls.append(
-            {
-                "collection": collection,
-                "filename": filename,
-                "data": data,
-                "actor": actor,
-            }
-        )
-        if self.fails_with is not None:
-            raise self.fails_with
-        path = None if self.pending else f"{collection}/{filename}.md"
-        return FakeIngestedDocument(path=path, title=filename)
 
 
 class StubWebSocketController:
@@ -655,7 +279,7 @@ class StubWebSocketController:
 
     The real connector's threading is pinned in ``test_seatalk_ws.py`` against
     the fake SDK; what the runtime needs from it here is only the converge
-    contract — who is wanted, with which materialized credentials.
+    contract — who is wanted, with which materialized secrets.
     """
 
     def __init__(self, *, fail: bool = False) -> None:
@@ -697,14 +321,18 @@ class StubWebSocketController:
 class ScriptedAgentProvider:
     """``AgentProvider`` whose adapter a test swaps in before sending."""
 
-    def __init__(self, adapter: Any, agent_key: str = "builtin") -> None:
+    def __init__(self, adapter: Any, agent_key: str = "builtin", store: Any = None) -> None:
         self.adapter = adapter
         self.agent_key = agent_key
         self.last_agent_config: dict[str, Any] | None = None
+        #: The conversation store, when set: the config a conversation opens
+        #: with is persisted there, exactly as the real providers do.
+        self.store = store
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         self.last_agent_config = agent_config
-        return None
+        if self.store is not None:
+            await self.store.set_agent_config(conversation_id, AgentConfig.from_json(agent_config))
 
     async def build_adapter(self, conversation_id: str) -> Any:
         return self.adapter
@@ -746,8 +374,6 @@ class ChannelEnv:
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
     model_suggestions: FakeModelSuggestions
-    collections: FakeCollectionCatalog
-    ingest: FakeIngestService
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -803,7 +429,9 @@ class ChannelEnv:
 
     def add_agent(self, agent_key: str, reply: str = "from-other") -> ScriptedAgentProvider:
         """Register a second scripted agent so routing tests have a target."""
-        provider = ScriptedAgentProvider(default_reply_adapter(reply), agent_key=agent_key)
+        provider = ScriptedAgentProvider(
+            default_reply_adapter(reply), agent_key=agent_key, store=self.provider.store
+        )
         self.registry.register(provider, display_name=agent_key.title())
         return provider
 
@@ -823,7 +451,7 @@ class ChannelEnv:
         """The uid of the agent row for ``agent_key``, registering it if needed.
 
         The helper a scope and a ``default_agent`` are both written with: both
-        hold agent uids (ADR resource-identity-is-an-immutable-uid), and a uid
+        hold agent uids (ADR identity-is-the-uid-inside-the-file), and a uid
         only exists once there is a row to mint it for.
         """
         name = name or agent_key.replace("_", "-")
@@ -864,17 +492,22 @@ class ChannelEnv:
             else {"channel_type": "telegram", "bot_token_ref": ref}
         )
         cfg.setdefault("default_agent", await self.agent_uid(DEFAULT_AGENT_KEY))
-        return await self.resources.register(kind="channel", name=name, config=cfg, actor="test")
+        resource = await self.resources.register(
+            kind="channel", name=name, config=cfg, actor="test"
+        )
+        _UIDS[name] = resource.uid
+        return resource
 
     async def pair(
         self, resource: Resource, chat_id: str = "owner", *, sender_id: str | None = None
     ) -> ChannelPeer:
         peer = ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id=chat_id,
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
-            sender_id=sender_id,
+            # Every pairing carries its sender; a DM's is the chat's own id.
+            sender_id=chat_id if sender_id is None else sender_id,
         )
         await self.peers.upsert(peer)
         return peer
@@ -889,8 +522,16 @@ class ChannelEnv:
         require_mention: bool = True,
         ignore_other_mentions: bool = False,
         agent_scope: Scope | None = None,
+        directories: Sequence[str] = (),
+        new_conversation_after_idle_hours: float = 24.0,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
+        _UIDS[resource.name] = resource.uid
+        if hasattr(adapter, "_name"):
+            # A real adapter built by the infrastructure fixtures was named
+            # "tg"/"st"; in the daemon the factory names it by the channel's uid,
+            # which is what its inbound messages carry.
+            adapter._name = resource.uid
         self.processor.bind(
             ChannelBinding(
                 resource=resource,
@@ -901,6 +542,8 @@ class ChannelEnv:
                 require_mention=require_mention,
                 ignore_other_mentions=ignore_other_mentions,
                 agent_scope=agent_scope,
+                directories=tuple(directories),
+                new_conversation_after_idle_hours=new_conversation_after_idle_hours,
             )
         )
         return adapter
@@ -920,13 +563,13 @@ class ChannelEnv:
         per-thread binding ("Key conversation identity by channel, chat and
         thread"), which replaced ``peer.active_conversation_id``
         as the source of truth."""
-        row = await self.threads.get(resource.id, chat_id, thread_id)
+        row = await self.threads.get(resource.uid, chat_id, thread_id)
         return row.active_conversation_id if row is not None else None
 
     async def thread_preferred_agent(
         self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
     ) -> str | None:
-        row = await self.threads.get(resource.id, chat_id, thread_id)
+        row = await self.threads.get(resource.uid, chat_id, thread_id)
         return row.preferred_agent if row is not None else None
 
     async def audit_entries(
@@ -947,25 +590,26 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     keyring = FakeKeyring()
     kinds: dict[str, Any] = {}
-    resources = ResourceService(
-        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=keyring
-    )
-    peers = ChannelPeerRepo(sm)
+    resource_repo = make_resource_repo()
+    resources = ResourceService(kinds=kinds, repo=resource_repo, audit=audit, secrets=keyring)
+    # As channel_wiring builds them: the pairings document is named after its
+    # channel and goes with the channel's rename and delete.
+    peers = ChannelPeerRepo(name_of=resource_repo.name_of)
+    resource_repo.add_follower(peers.documents.follow)
     threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
 
-    provider = ScriptedAgentProvider(default_reply_adapter())
+    conversation_repo = ConversationRepo(sm)
+    provider = ScriptedAgentProvider(default_reply_adapter(), store=conversation_repo)
     registry = AgentProviderRegistry()
     registry.register(provider, display_name="Coffer Assistant")
     chat = ChatService(
-        conversations=ConversationRepo(sm),
+        conversations=conversation_repo,
         messages=MessageRepo(sm),
         registry=registry,
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
     model_suggestions = FakeModelSuggestions()
-    collections = FakeCollectionCatalog()
-    ingest = FakeIngestService()
     processor = InboundProcessor(
         peers=peers,
         threads=threads,
@@ -975,8 +619,8 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
         agents=registry,
         model_suggestions=model_suggestions,
-        collections=collections,
-        ingest=ingest,
+        replies=ChannelReplyRepo(sm),
+        questions=ChatQuestions(),
     )
 
     created_adapters: list[FakeChannelAdapter] = []
@@ -986,12 +630,12 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         created_adapters.append(adapter)
         return adapter
 
-    resolver = CredentialResolver(keyring)
+    resolver = SecretResolver(keyring)
 
-    async def materialize(refs: dict[str, str]) -> dict[str, str]:
-        # The real resolver, so failures raise CredentialMissing exactly as
+    async def materialize(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
+        # The real resolver, so failures raise SecretMissing exactly as
         # production wiring does.
-        return resolver.materialize(refs)
+        return resolver.materialize(refs, destination)
 
     websockets = StubWebSocketController()
     runtime = ChannelRuntime(
@@ -1040,8 +684,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         provider=provider,
         registry=registry,
         model_suggestions=model_suggestions,
-        collections=collections,
-        ingest=ingest,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,

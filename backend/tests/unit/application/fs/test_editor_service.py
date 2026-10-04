@@ -1,52 +1,35 @@
-"""Unit coverage for EditorDetectService (preferred-editor picker detection)."""
+"""Unit coverage for EditorDetectService (preferred-editor picker detection).
+
+Whether an editor is installed, and which value launches it, is the platform
+adapter's answer (``tests/unit/infrastructure/platform/test_desktop.py``);
+here the port is a fake.
+"""
 
 from __future__ import annotations
 
-from coffer.application.fs import editor_service
 from coffer.application.fs.editor_service import EditorDetectService
 
-
-def test_lists_macos_apps_by_bundle_name(monkeypatch):
-    """On macOS, installed .app bundles are returned by their app name."""
-    monkeypatch.setattr("sys.platform", "darwin")
-    installed = {"Visual Studio Code", "Zed"}
-    monkeypatch.setattr(editor_service, "_mac_app_installed", lambda name: name in installed)
-
-    options = EditorDetectService().list_editors()
-
-    values = [o.value for o in options]
-    assert values == ["Visual Studio Code", "Zed"]  # curated order preserved
-    vscode = next(o for o in options if o.value == "Visual Studio Code")
-    assert vscode.label == "Visual Studio Code"
+from ._fake_platform import FakePlatform
 
 
-def test_lists_path_executables_on_linux(monkeypatch):
-    """On Linux, editors resolvable on PATH are returned by their command."""
-    monkeypatch.setattr("sys.platform", "linux")
-    on_path = {"code": "/usr/bin/code", "subl": "/usr/bin/subl"}
-    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: on_path.get(cmd))
+def test_lists_what_the_platform_reports_installed_in_curated_order():
+    platform = FakePlatform(editors={"Zed": "Zed", "Visual Studio Code": "Visual Studio Code"})
 
-    options = EditorDetectService().list_editors()
+    options = EditorDetectService(platform).list_editors()
 
-    assert [o.value for o in options] == ["code", "subl"]
+    assert [o.value for o in options] == ["Visual Studio Code", "Zed"]
+    assert options[0].label == "Visual Studio Code"
 
 
-def test_returns_empty_when_nothing_installed(monkeypatch):
+def test_the_launch_value_is_the_platforms_not_the_label():
+    # Kate has no application bundle, so the port is asked by its command.
+    platform = FakePlatform(editors={"kate": "/usr/bin/kate-launcher"})
+
+    options = EditorDetectService(platform).list_editors()
+
+    assert [(o.label, o.value) for o in options] == [("Kate", "/usr/bin/kate-launcher")]
+
+
+def test_returns_empty_when_nothing_installed():
     """No installed editor → empty list (the UI falls back to system default)."""
-    monkeypatch.setattr("sys.platform", "linux")
-    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: None)
-
-    assert EditorDetectService().list_editors() == []
-
-
-def test_gui_only_editors_are_skipped_on_linux(monkeypatch):
-    """A macOS-only editor (no command) is never returned on Linux even if a
-    same-named binary somehow resolves — detection keys off the command field."""
-    monkeypatch.setattr("sys.platform", "linux")
-    # `which` says everything is present; Nova/Xcode/Emacs have command=None so
-    # they must still be excluded on Linux.
-    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
-
-    values = {o.value for o in EditorDetectService().list_editors()}
-    assert "Nova" not in values
-    assert "Xcode" not in values
+    assert EditorDetectService(FakePlatform()).list_editors() == []

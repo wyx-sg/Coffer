@@ -122,3 +122,32 @@ def test_file_handler_writes_to_coffer_log_dir(
     assert "hello world from test" in contents, (
         f"Expected 'hello world from test' in daemon.log; got:\n{contents}"
     )
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="output written to stderr after a rotation lands in the current log"
+)
+def test_rotation_carries_the_process_stderr_to_the_new_file(tmp_path: Path) -> None:
+    """The detached daemon's fd 2 *is* daemon.log; rotation must not strand it
+    in daemon.log.1, where nothing reads it and it is deleted after three
+    rollovers (spec daemon "Write one bounded daemon log in one format")."""
+    import subprocess
+    import sys
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    script = (
+        "import logging, sys\n"
+        "from coffer.infrastructure.logging import setup\n"
+        "h = setup._FdFollowingRotatingHandler("
+        f"{str(log_dir / 'daemon.log')!r}, maxBytes=200, backupCount=2)\n"
+        "logging.getLogger().addHandler(h)\n"
+        "logging.getLogger().setLevel('INFO')\n"
+        "for i in range(10):\n"
+        "    logging.info('x' * 60)\n"
+        "sys.stderr.write('RAW-AFTER-ROTATION\\n'); sys.stderr.flush()\n"
+    )
+    with open(log_dir / "daemon.log", "ab") as f:
+        subprocess.run([sys.executable, "-c", script], stdout=f, stderr=f, check=True)
+    assert "RAW-AFTER-ROTATION" in (log_dir / "daemon.log").read_text()
+    assert not any("RAW-AFTER-ROTATION" in p.read_text() for p in log_dir.glob("daemon.log.*"))

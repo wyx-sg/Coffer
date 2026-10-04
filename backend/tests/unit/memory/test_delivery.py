@@ -15,44 +15,53 @@ from coffer.domain.memory.delivery import (
     HOOKS_KEY,
     MARKER,
     DeliveryStatus,
+    EntrySpec,
     MalformedDeliveryConfig,
-    context_invocation,
+    entry_command,
     find_command,
-    hook_command,
-    install_entry,
+    hook_invocation,
+    install_entries,
     is_installed,
     remove_entry,
 )
 
+
+def install_entry(
+    text: str, *, event: str, command: str, matcher: str | None, timeout: int | None = None
+) -> str:
+    """One entry on one event, through the function production uses."""
+    return install_entries(text, (EntrySpec(event, command, matcher, timeout),))
+
+
 # ---------------------------------------------------------------------------
-# hook_command / context_invocation
+# entry_command / hook_invocation
 # ---------------------------------------------------------------------------
 
 
-def test_context_invocation_shells_out_to_coffer_memory_context() -> None:
+def test_hook_invocation_shells_out_to_coffer_memory_hook() -> None:
     """The agent is spelled by uid — the one thing a rename cannot change."""
-    assert context_invocation("7a1f") == 'coffer memory context --agent-uid 7a1f --cwd "$PWD"'
+    assert hook_invocation("7a1f") == 'coffer memory hook --agent-uid 7a1f --cwd "$PWD"'
 
 
-def test_context_invocation_quotes_its_argument() -> None:
+def test_hook_invocation_quotes_its_argument() -> None:
     """Quoting is not there for the uids Coffer mints, which are plain hex.
 
     It is there because this builds a shell command out of a value from the
     database, and a builder that is only safe for well-formed input is one bad
     row away from being a shell injection.
     """
-    inv = context_invocation("uid with spaces")
+    inv = hook_invocation("uid with spaces")
     assert "'uid with spaces'" in inv
 
 
-def test_hook_command_is_marker_prefixed() -> None:
-    cmd = hook_command("codex")
+def test_entry_command_is_marker_prefixed() -> None:
+    cmd = entry_command("codex")
     assert cmd.startswith(f": {MARKER};")
-    assert context_invocation("codex") in cmd
+    assert hook_invocation("codex") in cmd
 
 
 # ---------------------------------------------------------------------------
-# install_entry: fresh config, idempotency, foreign-entry preservation
+# install_entries: fresh config, idempotency, foreign-entry preservation
 # ---------------------------------------------------------------------------
 
 
@@ -80,8 +89,10 @@ def test_install_omits_matcher_when_none() -> None:
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
 def test_install_is_idempotent_and_installing_twice_leaves_one_entry() -> None:
-    once = install_entry("", event="SessionStart", command=hook_command("cc"), matcher="startup")
-    twice = install_entry(once, event="SessionStart", command=hook_command("cc"), matcher="startup")
+    once = install_entry("", event="SessionStart", command=entry_command("cc"), matcher="startup")
+    twice = install_entry(
+        once, event="SessionStart", command=entry_command("cc"), matcher="startup"
+    )
     entries = json.loads(twice)[HOOKS_KEY]["SessionStart"]
     assert len(entries) == 1
 
@@ -96,13 +107,13 @@ def test_install_leaves_a_foreign_hook_on_the_same_event_untouched() -> None:
         }
     }
     new_text = install_entry(
-        json.dumps(foreign), event="SessionStart", command=hook_command("cc"), matcher="startup"
+        json.dumps(foreign), event="SessionStart", command=entry_command("cc"), matcher="startup"
     )
     entries = json.loads(new_text)[HOOKS_KEY]["SessionStart"]
     assert len(entries) == 2
     commands = {e["hooks"][0]["command"] for e in entries}
     assert "/usr/local/bin/my-hook.sh" in commands
-    assert hook_command("cc") in commands
+    assert entry_command("cc") in commands
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -120,7 +131,7 @@ def test_install_leaves_unrelated_top_level_keys_and_other_events_untouched() ->
     }
     text = json.dumps(skynet_fixture)
     new_text = install_entry(
-        text, event="SessionStart", command=hook_command("cc"), matcher="startup"
+        text, event="SessionStart", command=entry_command("cc"), matcher="startup"
     )
     data = json.loads(new_text)
     assert data["env"] == {}
@@ -142,7 +153,7 @@ def test_remove_takes_out_only_coffers_entry_and_preserves_foreign_hooks() -> No
         "hooks": {
             "UserPromptSubmit": [
                 {"hooks": [{"type": "command", "command": "/skynet/beforeSubmitPrompt.sh"}]},
-                {"hooks": [{"type": "command", "command": hook_command("codex")}]},
+                {"hooks": [{"type": "command", "command": entry_command("codex")}]},
             ],
             "Stop": [{"hooks": [{"type": "command", "command": "/skynet/stop.sh"}]}],
         }
@@ -157,14 +168,14 @@ def test_remove_takes_out_only_coffers_entry_and_preserves_foreign_hooks() -> No
 
 
 def test_remove_drops_a_now_empty_event_array() -> None:
-    fixture = {"hooks": {"SessionStart": [{"hooks": [{"command": hook_command("cc")}]}]}}
+    fixture = {"hooks": {"SessionStart": [{"hooks": [{"command": entry_command("cc")}]}]}}
     new_text = remove_entry(json.dumps(fixture), event="SessionStart")
     data = json.loads(new_text)
     assert "SessionStart" not in data.get(HOOKS_KEY, {})
 
 
 def test_remove_drops_the_top_level_hooks_key_once_it_is_empty() -> None:
-    fixture = {"hooks": {"SessionStart": [{"hooks": [{"command": hook_command("cc")}]}]}}
+    fixture = {"hooks": {"SessionStart": [{"hooks": [{"command": entry_command("cc")}]}]}}
     new_text = remove_entry(json.dumps(fixture), event="SessionStart")
     assert HOOKS_KEY not in json.loads(new_text)
 
@@ -190,8 +201,8 @@ def test_find_command_returns_none_when_absent() -> None:
 
 
 def test_find_command_returns_the_installed_command() -> None:
-    text = install_entry("", event="SessionStart", command=hook_command("cc"), matcher="startup")
-    assert find_command(text, event="SessionStart") == hook_command("cc")
+    text = install_entry("", event="SessionStart", command=entry_command("cc"), matcher="startup")
+    assert find_command(text, event="SessionStart") == entry_command("cc")
     assert is_installed(text, event="SessionStart")
 
 

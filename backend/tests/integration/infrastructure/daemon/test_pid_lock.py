@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read, write
 
 
-def _info(port: int = 8000) -> DaemonInfo:
+def _info(port: int = 38470) -> DaemonInfo:
     return DaemonInfo(
         version=1,
         pid=1234,
@@ -32,9 +32,9 @@ def test_write_tolerates_preexisting_stale_tmp(tmp_path):
     f = tmp_path / "daemon.json"
     (tmp_path / "daemon.json.tmp").write_text("stale junk")  # simulate a crash
 
-    write(f, _info(port=8001))
+    write(f, _info(port=38471))
 
-    assert read(f).port == 8001
+    assert read(f).port == 38471
     assert f.stat().st_mode & 0o777 == 0o600
 
 

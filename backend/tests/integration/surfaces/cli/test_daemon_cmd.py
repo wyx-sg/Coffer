@@ -9,7 +9,7 @@ state that key has to remain usable in.
 
 The default port is stood in for by a monkeypatched ``DEFAULT_PORT`` wherever a
 test needs to hold it, because the developer's own daemon is usually on the
-real 8000 and a test must not have to win it.
+real 38470 and a test must not have to win it.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ def test_start_skips_the_pre_flight_under_the_range_override(
 ) -> None:
     """A test daemon scans a range of its own, so there is no port to pre-check.
 
-    Without this the pre-flight would diagnose 8000 — a port the start under
+    Without this the pre-flight would diagnose 38470 — a port the start under
     the override was never going to touch — and refuse to spawn every test
     daemon on a developer's machine whose real daemon is up.
     """
@@ -184,14 +184,14 @@ def test_port_set_writes_the_file_even_with_a_daemon_running(
     will not start cannot be served by the daemon — and the CLI writes the file
     in every state instead of only as a fallback.
     """
-    _live(monkeypatch, 8000)
+    _live(monkeypatch, 38470)
 
     res = runner.invoke(app, ["config", "set", "daemon.port", "8123"])
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] == 8123
     # The daemon owns its bound socket and cannot move, so the user is told
     # the change is still owed a restart.
-    assert "8000" in res.output
+    assert "38470" in res.output
     assert "coffer daemon restart" in res.output
 
 
@@ -241,107 +241,3 @@ def test_port_clear_away_from_a_daemon_on_a_chosen_port_asks_for_a_restart(
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] is None
     assert "coffer daemon restart" in res.output
-
-
-@pytest.mark.acceptance(
-    spec="daemon", scenario="the command line changes residency with no daemon running"
-)
-def test_the_command_line_changes_residency_with_no_daemon_running(
-    home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`service` writes straight to launchd with no daemon and no database,
-    and there is no idle window left to set. launchd is faked: nothing here
-    may touch the real one."""
-    from coffer.infrastructure.daemon import login_service
-
-    installed = {"value": False}
-    plist = home / "Library" / "LaunchAgents" / "fake.plist"
-
-    def _install() -> Path:
-        installed["value"] = True
-        return plist
-
-    def _uninstall() -> bool:
-        was = installed["value"]
-        installed["value"] = False
-        return was
-
-    monkeypatch.setattr(login_service, "is_supported", lambda: True)
-    monkeypatch.setattr(login_service, "is_installed", lambda: installed["value"])
-    monkeypatch.setattr(login_service, "install", _install)
-    monkeypatch.setattr(login_service, "uninstall", _uninstall)
-    monkeypatch.setattr(login_service, "plist_path", lambda: plist)
-
-    res = runner.invoke(app, ["daemon", "service", "install"])
-    assert res.exit_code == 0, res.output
-    assert f"login service installed: {plist}" in res.output
-    assert installed["value"] is True
-
-    res = runner.invoke(app, ["daemon", "service", "status"])
-    assert res.exit_code == 0, res.output
-    assert f"installed: {plist}" in res.output
-
-    res = runner.invoke(app, ["daemon", "service", "uninstall"])
-    assert res.exit_code == 0, res.output
-    assert "login service removed" in res.output
-    assert installed["value"] is False
-
-    # No daemon, so no database and no audit table was ever reached.
-    assert not (home / ".coffer" / "coffer.db").exists()
-
-    res = runner.invoke(app, ["daemon", "idle", "show"])
-    assert res.exit_code != 0
-    assert "No such command" in res.output
-    assert not (home / ".coffer" / "daemon.json").exists()
-
-
-@pytest.mark.acceptance(
-    spec="daemon", scenario="an idle window left in the daemon config is ignored and dropped"
-)
-def test_an_idle_window_left_in_the_config_is_ignored_and_dropped(
-    home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A file an earlier build wrote still starts the daemon on its pinned
-    port with no idle watcher, and the next write drops the stale key."""
-    import asyncio
-
-    from coffer.infrastructure.daemon import entry
-
-    path = home / ".coffer" / "daemon-config.json"
-    path.write_text(json.dumps({"port": 8123, "idle_shutdown_hours": 6, "machine_name": "lap"}))
-
-    # The daemon starts: it binds the pinned port, and the only watcher it
-    # runs beside uvicorn is the supersession check — nothing counts idleness.
-    assert daemon_config.effective_port() == 8123
-    watchers: set[str] = set()
-
-    class _FakeServer:
-        def __init__(self, config: object) -> None:
-            self.started = False
-            self.should_exit = False
-
-        async def serve(self) -> None:
-            self.started = True
-            await asyncio.sleep(0.05)  # let _run_server start its watchers
-            current = asyncio.current_task()
-            watchers.update(
-                t.get_name() for t in asyncio.all_tasks() if t is not current and not t.done()
-            )
-
-    class _Sock:
-        def fileno(self) -> int:
-            return 7
-
-    monkeypatch.setattr(entry.uvicorn, "Server", _FakeServer)
-    entry._run_server(_Sock(), lambda: None)  # type: ignore[arg-type]
-    assert "daemon-orphan-evictor" in watchers
-    assert not any("idle" in name for name in watchers), watchers
-
-    res = runner.invoke(app, ["config", "set", "daemon.port", "8200"])
-    assert res.exit_code == 0, res.output
-
-    written = _config(home)
-    assert written["port"] == 8200
-    assert "idle_shutdown_hours" not in written
-    # Merge semantics hold for every other key.
-    assert written["machine_name"] == "lap"

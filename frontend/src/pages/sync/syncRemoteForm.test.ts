@@ -1,15 +1,27 @@
 // frontend/src/pages/sync/syncRemoteForm.test.ts
 import { describe, expect, test } from "vitest";
 
-import { isDirty, isGitRemoteUrl, validateRemote, type FormState } from "./syncRemoteForm";
+import type { SyncRemote } from "@/lib/api/sync";
+import {
+  EMPTY_FORM,
+  formFromRemote,
+  isGitRemoteUrl,
+  isHttpsUrl,
+  toRemoteInput,
+  validateRemote,
+  type FormState,
+} from "./syncRemoteForm";
 
-const base: FormState = {
+const stored: SyncRemote = {
   url: "https://git.example.com/me/vault.git",
   branch: "main",
-  credentialRef: "",
-  includeCredentials: false,
-  intervalSeconds: 3600,
+  secret_ref: "secret/gitlab-token",
+  username: "oauth2",
+  include_secret: false,
+  interval_seconds: 3600,
+  enabled: true,
 };
+const base: FormState = formFromRemote(stored);
 
 describe("isGitRemoteUrl", () => {
   test.each([
@@ -31,31 +43,52 @@ describe("isGitRemoteUrl", () => {
   );
 });
 
-describe("validateRemote", () => {
-  test("a valid draft has no errors", () => {
-    expect(validateRemote(base)).toEqual({});
+test("only an https:// URL sends a user name", () => {
+  expect(isHttpsUrl("https://gitlab.com/me/v.git")).toBe(true);
+  expect(isHttpsUrl("git@github.com:me/v.git")).toBe(false);
+  expect(isHttpsUrl("ssh://git@github.com/me/v.git")).toBe(false);
+});
+
+test("validateRemote flags only a URL that is not a git remote", () => {
+  expect(validateRemote(base)).toEqual({});
+  expect(validateRemote({ ...base, url: "nope" })).toEqual({ url: "url" });
+});
+
+describe("formFromRemote", () => {
+  test("no remote opens on the defaults", () => {
+    expect(formFromRemote(null)).toEqual(EMPTY_FORM);
+    expect(EMPTY_FORM).toMatchObject({ branch: "main", intervalSeconds: 3600, enabled: true });
   });
 
-  test("flags the URL and an interval under a minute, each by field", () => {
-    expect(validateRemote({ ...base, url: "nope", intervalSeconds: 59 })).toEqual({
-      url: "url",
-      interval: "interval",
-    });
-    expect(validateRemote({ ...base, intervalSeconds: 60 })).toEqual({});
-    expect(validateRemote({ ...base, intervalSeconds: Number.NaN })).toEqual({
-      interval: "interval",
-    });
+  test("the default user name reads as empty; any other is kept", () => {
+    expect(formFromRemote({ ...stored, username: "coffer" }).username).toBe("");
+    expect(base.username).toBe("oauth2");
   });
 });
 
-describe("isDirty", () => {
-  test("ignores surrounding whitespace in text fields", () => {
-    expect(isDirty({ ...base, url: `  ${base.url}  ` }, base)).toBe(false);
+describe("toRemoteInput", () => {
+  test("trims, defaults the branch, and sends no secret for an empty pick", () => {
+    const out = toRemoteInput(
+      { ...base, url: `  ${base.url} `, branch: " ", secretRef: "" },
+      stored,
+    );
+    expect(out).toMatchObject({ url: base.url, branch: "main", secret_ref: null });
   });
 
-  test("any real difference counts", () => {
-    expect(isDirty({ ...base, includeCredentials: true }, base)).toBe(true);
-    expect(isDirty({ ...base, intervalSeconds: 120 }, base)).toBe(true);
-    expect(isDirty({ ...base, branch: "vault" }, base)).toBe(true);
+  test("an empty user name on an HTTPS remote sends the default", () => {
+    expect(toRemoteInput({ ...base, username: "" }, stored).username).toBe("coffer");
+  });
+
+  test("a non-HTTPS remote keeps the stored user name, whatever the draft says", () => {
+    const ssh = { ...base, url: "git@github.com:me/vault.git", username: "typed" };
+    expect(toRemoteInput(ssh, stored).username).toBe("oauth2");
+    expect(toRemoteInput(ssh, null).username).toBe("coffer");
+  });
+
+  test("Only when I press Sync now is enabled: false, the interval kept", () => {
+    expect(toRemoteInput({ ...base, enabled: false }, stored)).toMatchObject({
+      enabled: false,
+      interval_seconds: 3600,
+    });
   });
 });

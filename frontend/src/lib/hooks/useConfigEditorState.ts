@@ -1,18 +1,23 @@
 // frontend/src/lib/hooks/useConfigEditorState.ts — spec agent-registry.
-// All state + data plumbing for the agent config editor, extracted from
-// AgentConfigFilesEditor.tsx so the component stays inside the size cap. It
-// owns the selection (file / directory / child), the read queries behind the
-// right pane, and the draft/save state for the selected file — the last of
-// which it delegates to the shared useFileDraft, since the skill master-file
-// editor needs exactly the same behaviour.
+// All state + data plumbing for the agent's Config files tab, kept apart from
+// the components so they stay inside the size cap. It owns the selection
+// (file / directory / child — kept in the URL as `?file=<key>[/<relpath>]` so a
+// reload or a link opens the same file), the read queries behind the right
+// pane, and the draft/save state for the selected file — the last of which it
+// delegates to the shared useFileDraft.
+//
+// Every allowlisted entry is listed, including a file the agent has not created
+// yet: the tab shows the instructions files beside the settings files, and a
+// missing one can be created from here (the write creates it).
 //
 // Changing the selection replaces the loaded content, which drops the draft
-// (useFileDraft). So while the draft is dirty a selection is not applied
-// directly: it is parked as `pendingSelection` for the component to confirm
-// with the user, then applied (or dropped) through the two resolvers below.
+// (useFileDraft). The selection is a location change, so while the draft is
+// dirty the shell's unsaved-changes guard (useUnsavedGuard) stops it and asks
+// first; nothing here needs to hold a selection back.
 import { useState } from "react";
+import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 
-import type { ConfigFileInfo } from "@/lib/api/agents";
+import { baseName } from "@/lib/agents/configFiles";
 import { agentsApi } from "@/lib/api/agents";
 import {
   useAgentConfigChild,
@@ -21,27 +26,23 @@ import {
 } from "@/lib/hooks/useAgents";
 import { useFileDraft } from "@/lib/hooks/useFileDraft";
 
-// Surface only config entries that actually exist on disk: a single file the
-// agent has not created yet (`exists === false`) or a directory with no files
-// is dropped rather than shown as a dimmed "not created" / "empty" row. The
-// curated allowlist still bounds WHAT may appear (and the REST/CLI write path
-// still sees absent entries) — this just keeps the read-only viewer to things
-// the user can actually open.
-export function visibleConfigFiles(files: ConfigFileInfo[]): ConfigFileInfo[] {
-  return files.filter((f) => (f.kind === "directory" ? (f.files ?? []).length > 0 : f.exists));
+/** `?file=` → the selected key and, for a directory entry's file, its relpath. */
+function parseFileParam(value: string | null): { key: string | null; child: string | null } {
+  if (!value) return { key: null, child: null };
+  const slash = value.indexOf("/");
+  if (slash < 0) return { key: value, child: null };
+  return { key: value.slice(0, slash), child: value.slice(slash + 1) || null };
 }
 
-export function useConfigEditorState(agentUid: string) {
+/** `owner` is the agent's name, for the unsaved-changes dialog's sentence. */
+export function useConfigEditorState(agentUid: string, owner: string) {
   const files = useAgentConfigFiles(agentUid);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  // When set, the selection is a child file inside the directory-backed
-  // config key `selectedKey` (relpath within that directory).
-  const [selectedChild, setSelectedChild] = useState<string | null>(null);
-  const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
-  // A selection change held back because the draft is dirty; `null` = none.
-  const [pendingSelection, setPendingSelection] = useState<(() => void) | null>(null);
-
-  const selectedInfo = (files.data ?? []).find((f) => f.key === selectedKey);
+  const [params, setParams] = useSearchParams();
+  const { key: selectedKey, child: selectedChild } = parseFileParam(params.get("file"));
+  // Directories start open (the tree shows their files); a click folds one.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const allFiles = files.data ?? [];
+  const selectedInfo = allFiles.find((f) => f.key === selectedKey);
   const isDirSelected = !selectedChild && selectedInfo?.kind === "directory";
 
   // Top-level file content — gated off for directory nodes (the directory key
@@ -49,20 +50,10 @@ export function useConfigEditorState(agentUid: string) {
   const file = useAgentConfigFile(agentUid, selectedChild || isDirSelected ? null : selectedKey);
   const child = useAgentConfigChild(agentUid, selectedKey ?? "", selectedChild ?? "");
 
-  // The curated allowlist (spec agent-registry "List an agent's config files with
-  // their locations"), filtered
-  // to entries that exist on disk — not-yet-created files and empty directories
-  // are hidden.
-  const allFiles = visibleConfigFiles(files.data ?? []);
-
   const activeQuery = selectedChild ? child : file;
   const activeContent = activeQuery.data;
-
-  // A file the agent has not created yet reads as empty with `exists: false`.
-  // Saving one would create it from the UI, which the allowlist deliberately
-  // does not do here — the write path creates children of a directory entry,
-  // not top-level files.
-  const readOnlyMissing = !selectedChild && activeContent?.exists === false;
+  /** The selected top-level file is not on disk yet; saving creates it. */
+  const missing = !selectedChild && activeContent?.exists === false;
 
   const draft = useFileDraft({
     loaded: activeContent?.content,
@@ -76,48 +67,43 @@ export function useConfigEditorState(agentUid: string) {
       // file's metadata), so the next save re-reads for it via the reload below.
       return undefined;
     },
-    reload: () => activeQuery.refetch(),
+    guard: {
+      file: selectedChild ?? (selectedInfo ? baseName(selectedInfo.path) : (selectedKey ?? "")),
+      owner,
+    },
+    reload: async () => {
+      await activeQuery.refetch();
+      // A created file changes the listing (exists, size), not only the content.
+      if (missing) await files.refetch();
+    },
   });
 
-  // Apply a selection now, or park it while unsaved edits are on screen.
-  function guarded(apply: () => void) {
-    if (draft.dirty) setPendingSelection(() => apply);
-    else apply();
+  function setFileParam(value: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("file", value);
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   function selectFile(key: string) {
-    guarded(() => {
-      setSelectedKey(key);
-      setSelectedChild(null);
-    });
+    setFileParam(key);
   }
 
   function selectDirectory(key: string) {
-    guarded(() => {
-      setSelectedKey(key);
-      setSelectedChild(null);
-      setExpandedDirs((prev) => ({ ...prev, [key]: !prev[key] }));
-    });
+    setFileParam(key);
+    // Re-clicking the open directory folds it; picking another one opens it.
+    setCollapsed((prev) => ({
+      ...prev,
+      [key]: selectedKey === key && !selectedChild && !prev[key],
+    }));
   }
 
   function selectChild(key: string, relpath: string) {
-    guarded(() => {
-      setSelectedKey(key);
-      setSelectedChild(relpath);
-    });
-  }
-
-  /** The user chose to drop the draft: apply the parked selection. */
-  function confirmPendingSelection() {
-    const apply = pendingSelection;
-    setPendingSelection(null);
-    if (!apply) return;
-    draft.cancel();
-    apply();
-  }
-
-  function cancelPendingSelection() {
-    setPendingSelection(null);
+    setFileParam(`${key}/${relpath}`);
   }
 
   return {
@@ -127,17 +113,13 @@ export function useConfigEditorState(agentUid: string) {
     selectedChild,
     selectedInfo,
     isDirSelected,
-    expandedDirs,
+    collapsed,
     selectFile,
     selectDirectory,
     selectChild,
     activeQuery,
     activeContent,
-    readOnlyMissing,
+    missing,
     draft,
-    /** True while a selection waits on the discard-changes confirmation. */
-    hasPendingSelection: pendingSelection !== null,
-    confirmPendingSelection,
-    cancelPendingSelection,
   };
 }

@@ -28,43 +28,44 @@ coffer daemon stop       # SIGTERM, then wait for it to exit
 coffer daemon restart    # stop (if running), then start
 ```
 
+In the web UI, **Settings → Daemon → Restart** restarts it from a browser too: the daemon starts its successor, which waits for it to exit before binding the port, then exits itself, and the page reloads from the new daemon (which has a new token). The desktop app's Restart stops and starts the daemon from outside instead. `coffer daemon restart` keeps doing it from outside, so it also works on a daemon that no longer answers.
+
 `coffer daemon status` prints what the daemon reports about itself:
 
 ```text
 status:  ready
 version: 0.2.0
-channel: stable
-port:    8000
+port:    38470
 pid:     41822
 ```
 
-`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. `channel` is the build's release channel, which decides which [experimental features](/guides/experimental-features) are on by default. Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. Four [experimental features](/guides/experimental-features) are off until you switch them on. Add `--json` for scripts.
 
 With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 
 A few behaviours worth knowing:
 
-- `start` decides "already running" by asking the daemon, not by checking whether `daemon.json` exists. A discovery file left behind by a crash never blocks a start.
+- `start` decides "already running" by asking the daemon, not by checking whether `daemon.json` exists. A discovery file left behind by a crash never blocks a start. `start` reports success only once the new daemon answers its status call; if the daemon refuses to start (a vault migration is required, git is too old) it says so and points at `daemon.log`.
 - `start` checks the port before spawning. If something else holds it, you get the diagnosis at once instead of a ten-second timeout (see [When the port is taken](#when-the-port-is-taken)).
 - `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger.
 - `restart` is how a setting read before the daemon binds (the port) takes effect.
 
-To open the UI the daemon serves, run `coffer open`. It reads the daemon's port from `~/.coffer/daemon.json` and opens your browser at that address; `--no-browser` prints the URL instead.
+To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port is in `~/.coffer/daemon.json` (38470 by default). The [desktop app](/guides/desktop-app) opens it for you.
 
 ## Choose the port
 
-The daemon listens on **port 8000** by default and never scans for another one. A fixed port keeps a bookmark to the UI working, and it keeps what the browser stores for that origin (the interface language, page size, sidebar state, preferred editor) from resetting when the port moves.
+The daemon listens on **port 38470** by default and never scans for another one. A fixed port keeps a bookmark to the UI working, and it keeps what the browser stores for that origin (the interface language, page size, sidebar state, preferred editor) from resetting when the port moves.
 
 To move it:
 
 ```sh
 coffer config get daemon.port        # the configured port
 coffer config set daemon.port 8765   # always bind 8765 from now on
-coffer daemon restart                # apply it
-coffer config unset daemon.port      # back to 8000
+coffer daemon restart                # apply it (or Restart now on Settings → Daemon)
+coffer config unset daemon.port      # back to 38470
 ```
 
-`daemon.port` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. For the same reason the port has no page in the web UI and no REST route.
+`daemon.port` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. **Settings → Daemon** writes the same file through the running daemon, and its **Restart now** applies the change; the page then reloads from the new port.
 
 A change applies at the next start. If a daemon is running on the old port, `set` and `unset` say so and tell you to run `coffer daemon restart`.
 
@@ -73,8 +74,8 @@ A change applies at the next start. If a daemon is running on the old port, `set
 If the port is held by another process, the daemon refuses to start rather than binding a different port, and names what holds it:
 
 ```text
-port 8000 is the port Coffer's daemon binds, but something else is already using it.
-  held by: pid 5120  python3 -m http.server 8000
+port 38470 is the port Coffer's daemon binds, but something else is already using it.
+  held by: pid 5120  python3 -m http.server 38470
   fix one of:
     stop that process, then    coffer daemon start
     use a different port       coffer config set daemon.port <port>
@@ -86,19 +87,7 @@ When the holder is itself a Coffer daemon, the message says so: most often it is
 
 Started on demand, the daemon is down exactly when an agent makes its first call of the day or a chat message arrives with no Coffer window open, and whoever asks first waits for a cold start. On macOS you can install it as a per-user launchd agent instead:
 
-::: code-group
-
-```sh [CLI]
-coffer daemon service install     # start at login, restart after a crash
-coffer daemon service status      # installed or not, and where
-coffer daemon service uninstall   # stop starting it at login
-```
-
-```text [Web UI]
-Settings → General → Coffer's daemon → Start at login
-```
-
-:::
+Turn on **Settings → Daemon → Start at login**: the daemon starts at login and restarts after a crash.
 
 The service is the plist `~/Library/LaunchAgents/dev.coffer.daemon.plist` (label `dev.coffer.daemon`). It:
 
@@ -108,10 +97,10 @@ The service is the plist `~/Library/LaunchAgents/dev.coffer.daemon.plist` (label
 - runs `~/.coffer/bin/coffer-daemon`, the symlink that always points at the current build, so it keeps working across upgrades (a source install falls back to the Python module command);
 - writes to the same `~/.coffer/logs/daemon.log` as every other start.
 
-`uninstall` deletes the plist and leaves a running daemon running. Neither command needs a daemon. The web toggle does the same through the daemon and records a `daemon_residency_updated` audit entry; the CLI records none, because it must work when no daemon, and so no database, is available.
+Turning the toggle off deletes the plist and leaves a running daemon running. Each change is recorded as a `daemon_residency_updated` audit entry.
 
 ::: info
-The login service is macOS only. On any other host, `service install` and `service uninstall` exit non-zero with a message, and `service status` reports that it is not supported.
+The login service is macOS only. On any other host the **Start at login** toggle reports that it is not supported.
 :::
 
 ## Files the daemon reads and writes
@@ -120,8 +109,8 @@ The login service is macOS only. On any other host, `service install` and `servi
 | --- | --- |
 | `~/.coffer/daemon.json` | The discovery file every client reads: `version` (the file's schema), `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`, written atomically, removed when the daemon exits. A missing or malformed file means "no daemon". |
 | `~/.coffer/daemon.lock` | The lock that keeps it to one daemon per vault. It stays on disk between runs; the lock lives on the open file, not on its existence. |
-| `~/.coffer/daemon-config.json` | Machine-local settings read before the database opens: `port`, `features`, `machine_id`, `machine_name`, and the agents a switched-off `memory` feature withdrew its hook from. Mode `0600`. Never synced. |
-| `~/.coffer/coffer.db` | The vault's SQLite database. |
+| `~/.coffer/daemon-config.json` | Machine-local settings read before anything else opens: `port`, `proxy_port` (the local model proxy's port), `features` (this machine's experimental-feature switches), `machine_id` and `machine_name`. Mode `0600`. Never synced. |
+| `~/.coffer/vault/`, `local/`, `content/`, `derived/`, `runs.db` | Coffer's state, in five storage classes; see [Persistence](/architecture/persistence). |
 | `~/.coffer/logs/` | Logs; see below. |
 | `~/.coffer/bin/` | Deployed binaries (frozen builds only); see [Upgrades](#upgrades-and-rollback). |
 
@@ -146,13 +135,7 @@ You rarely need to open the file: the **Activity → Daemon** tab reads it with 
 
 The daemon mints a new random token on every start and writes it into `daemon.json`. Clients read it from there; the page the daemon serves to your browser carries it too, so a plain reload after a restart is authenticated again with no action from you.
 
-To rotate it without restarting:
-
-```sh
-coffer daemon rotate-token
-```
-
-Clients that read `daemon.json` pick up the new value; an open browser tab needs a reload.
+To rotate it without restarting, press **Rotate…** under **Settings → Security → Daemon access token** and confirm. Clients that read `daemon.json` pick up the new value; an open browser tab needs a reload.
 
 ## Upgrades and rollback
 
@@ -184,20 +167,20 @@ To roll back to the previous build:
    cd ~/.coffer/bin
    for b in coffer coffer-daemon coffer-mcp-shim; do ln -sfn 0.1.1/$b $b; done
    ```
-3. If the newer build migrated the database, restore the copy it took first (next section). Otherwise the older build refuses to open it.
+3. If the newer build migrated the history database, restore the copy it took first (next section). Otherwise the older build refuses to open it. Rolling back across the one-time vault upgrade is different: see [Upgrading an existing Coffer](/guides/upgrading#roll-it-back).
 4. Start again: `coffer daemon start`.
 
 ## Database migrations and automatic backups
 
-Schema migrations run when the daemon starts. Before a migration changes an on-disk `coffer.db`, the daemon copies it (with its `-wal` and `-shm` companions) beside the original as `coffer.db.pre-<revision>`, where `<revision>` is the schema revision the file was at. The three newest copies are kept. Nothing is copied when the schema is already current, which is every start except the first one after an upgrade.
+Schema migrations of the history database, `runs.db`, run when the daemon starts. Before a migration changes it, the daemon copies it (with its `-wal` and `-shm` companions) beside the original as `runs.db.pre-<revision>`, where `<revision>` is the schema revision the file was at. The three newest copies are kept. Nothing is copied when the schema is already current, which is every start except the first one after an upgrade.
 
 To go back to a pre-migration copy:
 
 ```sh
 coffer daemon stop
 cd ~/.coffer
-mv coffer.db coffer.db.broken
-cp coffer.db.pre-0103 coffer.db          # and the -wal / -shm files, if present
+mv runs.db runs.db.broken
+cp runs.db.pre-0136 runs.db          # and the -wal / -shm files, if present
 ```
 
 Then start the build that matches that schema.
@@ -207,10 +190,12 @@ Then start the build that matches that schema.
 If the database was migrated by a newer build, or by a development branch whose migrations this build does not ship, the daemon stops at startup with:
 
 ```text
-database schema revision '0105' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove ~/.coffer/coffer.db to start fresh.
+database schema revision '0118' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
 ```
 
-Install the newer build again, or restore the `coffer.db.pre-*` copy taken before that build migrated it.
+Install the newer build again, or restore the `runs.db.pre-*` copy taken before that build migrated it.
+
+A home that still keeps its state in `coffer.db`, from a Coffer before the vault layout, is not migrated by the daemon: it refuses to start and names `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Back up a vault
 
@@ -218,12 +203,13 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 
 | Path | Why it matters |
 | --- | --- |
-| `coffer.db` (+ `-wal`, `-shm`) | Every resource, setting, conversation and log table. |
-| `master.key` | The key that decrypts every stored credential. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
-| `knowledge/` | Your knowledge collections. |
-| `skills/` | The master skill store. |
+| `vault/` | Every resource definition, shared setting, knowledge collection, skill folder and encrypted secret, with their full history in `vault/.git`. |
+| `local/` | This machine's agents, reach, retention, sync remote and secret approvals. |
+| `content/` | Attachments and the chat workspace. |
+| `runs.db` (+ `-wal`, `-shm`) | Conversations, the audit log, invocation logs, sync rounds, usage. |
+| `master.key` | The key that decrypts every stored secret. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
 
-`memory/` is derived from your agents' own memory files and can be regenerated. To take a consistent copy, stop the daemon first:
+`derived/`, including the memory tree derived from your agents' own memory files, can be regenerated. To take a consistent copy, stop the daemon first:
 
 ```sh
 coffer daemon stop
@@ -232,10 +218,10 @@ coffer daemon start
 ```
 
 ::: warning
-A backup that includes `master.key` can decrypt every credential in it. Store it like a password. A backup without the key keeps the credentials as ciphertext nobody can read.
+A backup that includes `master.key` can decrypt every secret in it. Store it like a password. A backup without the key keeps the secrets as ciphertext nobody can read.
 :::
 
-If you run Coffer on several machines, [vault sync](/guides/vault-sync) keeps a history of the vault's documents in a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.
+If you run Coffer on several machines, [vault sync](/guides/vault-sync) pushes the vault repository, history included, to a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.
 
 ## Agent home variables are not inherited
 

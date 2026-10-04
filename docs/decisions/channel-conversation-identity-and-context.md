@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Key conversation identity by channel, chat and thread", "Keep DM, group-main and thread turns apart", "Reply in place inside threads", "Ground a turn in the message it quotes", "Ground a DM thread's turn in the thread", "Download the media a thread's messages carry", "Open every turn with its message origin");
+**Related**: spec channels ("Key conversation identity by channel, chat and thread", "Open a new conversation after an idle period", "Open a new conversation when the active one is archived", "Keep DM, group-main and thread turns apart", "Reply in place inside threads", "Ground a turn in the message it quotes", "Ground a DM thread's turn in the thread", "Download the media a thread's messages carry", "Open every turn with its message origin");
 spec channels/seatalk ("Identify a thread by its root message", "Resolve a quoted message with the bot's own token", "Read every page of a thread", "Fetch a DM thread from its own endpoint");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Channel Switches](channel-switches-structural-vs-parametric.md), [Channel Owner Gate](channel-owner-gate.md);
 PRs #245, #353, #428
@@ -34,13 +34,26 @@ update, and its Bot API offers bots no history read at all.
 
 ### Option A — Identity `(channel, chat, thread)`; the transport reads the thread and the quote with the bot's own token and folds them into the turn text (chosen)
 
-**Identity.** `channel_thread_conversations` (migration `0041`) holds one row
-per `(resource_id, chat_id, thread_id)`: the active conversation and the
-thread's sticky agent. A DM or group main timeline is `thread_id = ""`; each
+**Identity.** `channel_thread_conversations` holds one row per
+`(resource_id, chat_id, thread_id)`: the active conversation and the thread's
+sticky settings (agent, model, effort, working directory —
+[Channel Switches](channel-switches-structural-vs-parametric.md)). A DM or group main timeline is `thread_id = ""`; each
 thread is its own row. On SeaTalk a thread's id is its root message's id, so an
 @mention in the group main timeline roots a new thread at itself and the reply
 goes there. Owner and pairing identity stay on `channel_peers`, one row per
-chat. Replies return to the same chat and thread they came from.
+chat. Replies return to the same chat and thread they came from. In a direct
+chat the key's thread is used only when that thread is a conversation of its
+own (a parallel thread opened with `/thread`, or a Telegram private-chat
+topic); any other direct-chat thread keys to the DM's `""` conversation.
+
+**Lifetime.** A key's active conversation does not live forever. A message
+opens a new conversation, exactly as `/new` opens one (the sticky settings
+carry over), when the active one has been idle longer than the channel's
+`new_conversation_after_idle_hours` (default 24; 0 never does) — the chat is
+told in one line — or when the owner has archived it, in which case nothing is
+announced because archiving was the owner's own act and the conversation stays
+archived. The idle clock is per key, so each group thread rolls over
+independently. Rolling over is by recency, not by topic.
 
 **Context.** On a transport declaring `supports_history_fetch` (SeaTalk), the
 core's `fold_turn_context` (`application/channel/turn_context.py`) asks the
@@ -67,7 +80,9 @@ different agents in different threads. The agent sees what the owner was
 looking at when they wrote "as above", including pictures. The quote
 resolution works only because the transport, not the agent, performs it.
 
-Cons: a long thread is re-read and re-sent on every turn in it, costing tokens
+Cons: a conversation rolled over by idleness starts cold, so a topic resumed
+after the idle period loses its context (`/resume` brings the old one back); a
+long thread is re-read and re-sent on every turn in it, costing tokens
 and a few API calls each time; the same earlier messages appear in the history
 once per turn. A thread past 20 pages loses its newest messages (the cap
 exists only so a runaway cursor cannot stall a turn). Group-main history is
@@ -79,15 +94,14 @@ reachable (per-app ids) and scoped to the right conversation.
 
 ### Option B — Identity per chat (the peer)
 
-How it works — the design first shipped: one active conversation per
-`(channel, chat)`, stored on the peer row.
+How it works: one active conversation per `(channel, chat)`, stored on the
+peer row.
 
 Pros: simplest mapping; one row per chat.
 
 Cons: in a group with threads, two threads shared one conversation and one
 turn lock, so concurrent @mentions collided ("a turn is already running") and
-each thread's history leaked into the other. Replaced by per-thread identity
-in PR #245; migration `0084` later dropped the peer's leftover columns.
+each thread's history leaked into the other (PR #245 replaced it).
 
 Loses because the platforms' own unit of conversation is the thread.
 
@@ -132,11 +146,31 @@ retention and privacy surface of its own.
 Loses because the fetch is needed anyway and the copy adds a store without
 removing it.
 
+### Option F — One conversation per key that lives until the owner ends it
+
+How it works: the key's conversation stays active until the owner sends `/new`,
+whatever its age or archive state.
+
+Pros: nothing happens that the owner did not ask for; the context is never
+lost to a clock.
+
+Cons: a chat left alone for weeks answers the next question inside a stale
+session whose context window is full of old work, so the first message after a
+break is the one most likely to get a confused or expensive answer; and a
+conversation the owner archived on the web would be answered into, reviving it
+without a trace on the page. An owner who wants this still has it:
+`new_conversation_after_idle_hours = 0` never rolls over.
+
+Loses because a long-running chat needs a boundary the owner does not have to
+remember to draw, and archiving has to mean the conversation is closed.
+
 ## Decision
 
 A channel conversation is identified by `(channel, chat, thread)`, stored in
-`channel_thread_conversations` with that thread's sticky agent; a DM or group
-main timeline is the empty thread. On a transport that can read history, each
+`channel_thread_conversations` with that thread's sticky settings; a DM or group
+main timeline is the empty thread. A message opens a new conversation for its
+key when the active one is archived or has been idle longer than the channel's
+`new_conversation_after_idle_hours` (default 24, 0 = never). On a transport that can read history, each
 non-command turn is grounded by the transport fetching the thread's own
 messages (every page, oldest first, bounded) and the quoted message with the
 bot's own token, downloading their media, and folding them into the turn's text
@@ -146,6 +180,7 @@ Rules a future change must respect:
 
 - Anything that selects a conversation or a sticky choice keys on all three
   parts.
+- A channel message never un-archives a conversation.
 - Context reads happen in the transport with the bot's credentials, gated on
   `supports_history_fetch`, and degrade to nothing on failure.
 
@@ -157,7 +192,10 @@ Rules a future change must respect:
   the update (Telegram) needs neither.
 - Token cost grows with thread length per turn; the page cap is the only
   bound.
-- Enforced by: migration `0041`'s table and
+- A quiet chat does not carry a stale session: the first message after the
+  idle period starts clean with the same agent, model, effort and directory.
+- Enforced by: the `channel_thread_conversations` table
+  (`infrastructure/channel/thread_persistence.py`) and
   `application/channel/conversation_ops.py`;
   `application/channel/turn_context.py`;
   `infrastructure/channel/seatalk_history.py`.

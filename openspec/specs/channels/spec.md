@@ -12,14 +12,14 @@ stream — so the cost of N channels and M agents is N + M, never N × M: a new
 channel type is one adapter plus one config schema and touches no agent or
 conversation code, and any agent registered on the turn platform is reachable
 from any channel with no channel-side change. The turn platform — conversations,
-the pending queue, the turn lifecycle and the web Chat page onto them — is spec
+the pending queue, the turn lifecycle and the Conversations page onto them — is spec
 `chat`; a channel consumes it and never reimplements it.
 
 This spec owns what every channel type shares. The per-platform mechanics live
 in its two children: [`channels/telegram`](telegram/spec.md) (the Bot API
 transport) and [`channels/seatalk`](seatalk/spec.md) (the SeaTalk websocket
 transport and SeaTalk's own message shapes). Watching and steering the same
-conversation from the browser is the web Chat page's, in spec `chat`. Channels
+conversation from the browser is the Conversations page's, in spec `chat`. Channels
 route to **managed** agents (Claude Code, Codex, …) only: [Coffer's Model Is an
 Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)
 retired the built-in agent as a chat persona, so it is an internal `coffer__*`
@@ -42,12 +42,12 @@ Deliberately out of scope:
   own agent. Coffer neither proxies nor manages these: stacking Coffer's channel
   in front would collide with their runtime, holding a token that is then
   written into an external process's config defeats the vault, and the official
-  cloud integrations have no local credential to hold at all. A native or
+  cloud integrations have no local secret to hold at all. A native or
   official channel that does not support a platform simply does not run there;
   Coffer does not bridge it. Coffer's channel plane manages only what Coffer
   hosts.
 - **A copy-to-clipboard button.** Telegram's inline buttons can carry
-  `copy_text`, but a `ChoiceButton` is only ever built by the agent and model
+  `copy_text`, but a `ChoiceButton` is only ever built by Coffer's own command
   cards, so an agent has no way to ask for one; offering it would need a second
   agent-facing sentinel beside `MEDIA:`, with its own parsing, false-positive
   risk on ordinary prose, and spec.
@@ -55,32 +55,34 @@ Deliberately out of scope:
   chatter private in a group"; the per-platform mechanics are in
   [`channels/telegram`](telegram/spec.md).
 
+Channels are always on: no experimental feature gates their routes or adapters. While `memory` is off, a channel turn carries no memory index or retrieval; channels have no knowledge command — a person asks the agent in the chat to put a file or the conversation into knowledge, and the agent writes it (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the knowledge feature's surfaces").
+
 ## Requirements
 
-### Requirement: Register channels as a credential-referencing resource kind
+### Requirement: Register channels as a secret-referencing resource kind
 The system MUST provide a `channel` resource kind with per-type configuration, a
 default agent key, and optional default agent configuration. Each child spec
-states its own type's fields. Secrets MUST live in the credential store only;
+states its own type's fields. Secrets MUST live in the secret store only;
 configuration carries references, which are probed at registration time, and a
 registration whose reference does not resolve is rejected with nothing
 persisted.
 
 A channel is addressed by its immutable `uid`
-([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md));
-its config is the type, the credential refs, the default agent and its config,
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md));
+its config is the type, the secret refs, the default agent and its config,
 and `runs_on` — the `machine_id` of the one machine whose daemon runs this
 channel's adapter (see "Bind each channel to the one machine that runs it").
 
 #### Scenario: register a telegram channel
-- **GIVEN** a bot token stored under a credential ref
+- **GIVEN** a bot token stored under a secret ref
 - **WHEN** the user registers a channel named `tg` with type telegram and that ref
 - **THEN** the channel is listed with its config and enabled state
 - **AND** the registration is audited
 
-#### Scenario: reject a channel with a missing credential
-- **GIVEN** no credential stored under the referenced name
+#### Scenario: reject a channel with a missing secret
+- **GIVEN** no secret stored under the referenced name
 - **WHEN** the user registers a channel pointing at it
-- **THEN** registration fails with a credential error and nothing is persisted
+- **THEN** registration fails with a secret error and nothing is persisted
 
 ### Requirement: Run the channel lifecycle through the resource framework
 Channel lifecycle (register, enable, disable, update, delete) MUST ride the
@@ -99,11 +101,72 @@ deleting the channel stops the adapter and removes its peer binding.
 - **WHEN** the user deletes the channel resource
 - **THEN** the adapter stops and the peer binding is removed
 
+#### Scenario: renaming a channel keeps its adapter running
+- **GIVEN** an enabled channel with a running adapter
+- **WHEN** the owner renames the channel
+- **THEN** the adapter is not restarted, and it keeps answering under the new name
+
+### Requirement: Restart a channel's adapter on demand
+A running adapter reads its secret once, when it is built, and the lifecycle
+only rebuilds an adapter when the channel's configuration or routing changes, so
+the daemon MUST offer an explicit restart: `POST /api/v1/channels/{uid}/restart`
+stops the channel's adapter and its inbound connection (a SeaTalk websocket),
+forgets any failure it was waiting out, and starts them afresh at once from the
+stored configuration and the secret as it is now. It answers whether the adapter
+is running afterwards; a disabled channel, or one bound to another machine, stays
+stopped. The Channels page's **Reconnect** action MUST call it.
+
+Replacing a secret under its existing ref MUST restart the adapter that uses it
+without anyone asking: the daemon notices that the stored value changed and
+rebuilds the adapter and, for SeaTalk, reconnects the websocket with the new
+secret. Adapters, failure state and pending
+pairing codes are all keyed by the channel's `uid`, so renaming a channel never
+restarts it.
+
+#### Scenario: a restart rebuilds the adapter on demand
+- **GIVEN** an enabled channel with a running adapter
+- **WHEN** the owner presses Reconnect
+- **THEN** the old adapter stops and a new one starts and reads its secret again
+- **AND** a channel waiting out a failed start is retried at once, and a disabled channel stays stopped
+
+#### Scenario: a replaced secret restarts the adapter
+- **GIVEN** a running channel whose bot token or app secret is stored under a ref
+- **WHEN** a new value is stored under the same ref
+- **THEN** the adapter is rebuilt with the new value, and for SeaTalk the websocket reconnects with it
+- **AND** a channel whose secret did not change is left running
+
+### Requirement: Report a channel whose secret waits for approval
+A channel's adapter reads its bot token or app secret through the secret
+boundary, which holds a secret that no one has approved for this channel (see
+[secret](../secret/spec.md)). When that is why an adapter did not
+start, the daemon MUST record the cause and report it, rather than a generic
+stopped state: the channel status carries `secret_approval` with a `state` of
+`pending` (waiting for the owner's approval in the Coffer app) or `refused` (the
+owner declined; it stays refused until the channel's destination changes) and the
+`secret_ref` it concerns, never a value. The field is absent when the adapter
+runs, when the failure has any other cause, and when the channel is disabled or
+not bound here. The lifecycle MUST retry on its normal failure interval, so an
+approval given meanwhile starts the adapter with no restart; a pairing and the
+channel's settings are untouched throughout. The Channels page and the Overview
+attention item MUST name the approval (and, for `refused`, that it was refused)
+instead of "not running" or a suggestion to replace the key.
+
+#### Scenario: a channel whose secret waits for approval says so and starts once approved
+- **GIVEN** an enabled channel whose secret has not been approved for it
+- **WHEN** the lifecycle tries to start its adapter
+- **THEN** the channel's status reports `secret_approval` with state `pending` and the secret's ref, and the adapter is not running
+- **AND** once the owner approves it, the next retry starts the adapter and the field disappears, with no restart
+
 ### Requirement: Pair exactly one owner with a single-use code
 The daemon MUST issue, per channel, an 8-character single-use pairing code
 (unambiguous alphabet, 1-hour TTL, bounded wrong-guess attempts). A message
 consisting of the code binds its sender as the channel's sole peer, replacing
-any previous peer, and the sender receives a confirmation. All other senders
+any previous peer, and the sender receives a three-line confirmation — "✅
+Paired — you own <bot>.", that only the owner can use it and how to use it in a
+group, and how to see the commands ("send /help", or on Telegram "tap /") —
+where <bot> is the channel's name on SeaTalk and `@username` on Telegram. The
+help card (see "Offer the commands as a help card") follows the confirmation
+automatically. All other senders
 MUST be ignored silently: a stranger messaging the bot produces zero observable
 response and zero turns, while the owner's traffic is unaffected, so the bot
 never reveals it is alive to strangers. A code that expires or suffers repeated
@@ -119,7 +182,7 @@ pairing again rebinds the channel to the new sender.
 #### Scenario: pair by sending the code
 - **GIVEN** an issued pairing code
 - **WHEN** a sender messages the bot with exactly that code
-- **THEN** the sender becomes the channel's peer and receives a confirmation
+- **THEN** the sender becomes the channel's peer and receives the confirmation "✅ Paired — you own <bot>." followed by the help card
 - **AND** the pairing is audited and the code cannot be reused
 
 #### Scenario: an expired or wrong code does not pair
@@ -142,8 +205,8 @@ channel layer MUST reach agents only through the turn platform's seams:
 conversation service, turn orchestrator (spec `chat`). The conversation is an
 ordinary one, recorded in the vault with full history. When the active
 conversation has been deleted, the peer's next message creates a fresh
-conversation with the thread's agent — its sticky `/agent` choice while that
-agent is still inside the channel's scope, else the channel's default agent; when the daemon restarts mid-turn, the turn
+conversation with the thread's agent — its sticky agent (chosen with `/new <agent>`, see "Switch the agent with /new") while that
+agent is still inside the channel's scope, else the channel's default agent — opened with the thread's other remembered settings (see "Keep a chat's settings across its conversations"); when the daemon restarts mid-turn, the turn
 platform's startup sweep marks the orphaned turn failed and the channel
 conversation simply continues on the next message.
 
@@ -167,7 +230,7 @@ each call from its input (e.g. `⏳ Bash · list the desktop`,
 `✅ Read · wedding.json`). Capabilities are declared by the adapter, not
 special-cased in the core: a `ChannelCapabilities` record states what the
 adapter can do — a live-updating surface via `supports_live_text`, rewriting a
-delivered message via `supports_edit` (the two are independent), interactive
+delivered selection card via `supports_card_update`, interactive
 buttons via `supports_buttons`, a typing indicator — and the core picks
 rendering strategies from it. When the platform rejects a formatted message the
 channel retries the same content as plain text before reporting failure, and
@@ -179,6 +242,12 @@ when the platform rate-limits outbound sends, sends back off and retry.
 - **THEN** the reply arrives as multiple messages split on paragraph
   boundaries, in order
 
+#### Scenario: a rate-limited send backs off and retries
+- **GIVEN** a platform that answers a send with a rate limit and says how long to wait
+- **WHEN** the channel sends a reply
+- **THEN** it waits that long and sends again, a bounded number of times, and
+  reports the failure only if the platform keeps refusing
+
 #### Scenario: markdown rendering degrades by channel capability
 - **GIVEN** the same markdown reply
 - **WHEN** delivered through telegram and through a channel without rich text
@@ -188,39 +257,61 @@ when the platform rate-limits outbound sends, sends back off and retry.
 #### Scenario: channel progress lines describe each tool call from its input
 - **GIVEN** a paired channel on an adapter that can edit messages
 - **WHEN** the agent invokes a tool during a turn
-- **THEN** the progress status line names the tool and a short descriptor drawn
-  from its input (e.g. the Bash description, the file basename for Read) in a
-  direct chat; a raw command, or an argument of a tool it has no rule for, is
-  never used as the descriptor
+- **THEN** the call's step line in the status block names the tool and a short
+  descriptor drawn from its input (e.g. the Bash description, the file basename
+  for Read) in a direct chat; a raw command, or an argument of a tool it has no
+  rule for, is never used as the descriptor
 
 #### Scenario: a group's progress lines name only the tool
 - **GIVEN** a paired group chat on an adapter that can edit messages
 - **WHEN** the agent invokes a tool during a turn
-- **THEN** the progress status line names the tool and nothing from its input,
-  because everyone in the group reads it
+- **THEN** the call's step line in the status block names the tool and nothing
+  from its input, because everyone in the group reads it
 
 ### Requirement: Answer the conversation commands from any paired chat
-Commands `/new`, `/stop`, `/status`, `/help` MUST work from any paired chat.
-`/new` starts a fresh conversation with the thread's current agent (its sticky
-`/agent` choice while that agent is still inside the channel's scope, else the
-channel's default agent), `/stop`
-interrupts the running turn, `/status` reports the active conversation, agent,
-and turn state (and the parallel thread's mark inside one), and `/help` lists the commands. `/stop` and `/new` take effect
-even while a turn is running; other messages join the conversation's pending
-queue (spec `chat` — the one the web shows; the channel refuses past 10 waiting
-and tells the peer the channel is busy) and run in order, a burst of them
-arriving as one turn (see "Take a burst of messages as one turn"). A message arriving
-exactly when the previous turn finishes joins the queue rather than racing it:
-turns for one conversation never overlap.
+Nine words are Coffer's commands in a paired chat, and nothing else: `/new`,
+`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/del` and `/help`
+(`/start` is a hidden alias of `/help`). They are split by chat type. In a
+**direct chat** all nine work. In a **group** only `/new`, `/stop`, `/del` and
+`/help` work — they
+control the group's own conversation — and `/model`, `/dir`, `/status`,
+`/resume` and `/thread` work only in a direct chat: sent in a group by the owner
+(see "Act in a group only on an addressed message from the owner"), one of
+those five is answered with one line in English and Chinese saying it works in a
+private chat with the bot, delivered privately to the sender where the platform
+can (see "Keep non-answer chatter private in a group"), and does nothing else —
+it is not passed to the agent as a message. A group's `/help` lists only the
+four group commands, and a card offered in a group (the `/new` card, the help
+card) carries no button for a direct-chat command.
+`/new [agent]` starts a fresh conversation with the chat's settings (see "Keep a
+chat's settings across its conversations" and "Switch the agent with /new"),
+`/stop` interrupts the running turn, `/status` reports the chat's state (see
+"Report the chat's state as a status card") and `/help` lists the commands (see
+"Offer the commands as a help card") and `/del` withdraws a bot reply (see
+"Withdraw a bot reply on the owner's command"). `/stop` and `/new` take effect even while
+a turn is running; other messages join the conversation's pending queue (spec
+`chat` — the one the web shows) and run in order, a burst of them arriving as one
+turn (see "Take a burst of messages as one turn"). A message that joins the
+queue behind a running turn MUST be answered "⏳ Queued — runs when the current
+one finishes." Up to 10 may wait; only a message arriving while 10 already wait
+is dropped, and the chat MUST be told it was dropped and why (the only place the
+limit is mentioned).
+`/new` MUST answer with a one-line card — "🆕 New conversation · <agent> ·
+<model> · <directory>" — carrying Agent, Model and Dir buttons in a direct chat
+and the Agent button alone in a group: Agent opens the agent card (see "Switch
+the agent with /new"), Model and Dir run `/model` and `/dir`; a transport
+without buttons gets the same line as text. A message arriving exactly
+when the previous turn finishes joins the queue rather than racing it: turns for
+one conversation never overlap.
 
-These are the commands that need nothing of the conversation; the ones that
-configure the conversation the chat is bound to — `/agent`, `/model`, `/effort`
-— are specified in "Switch the conversation's agent from chat" and "Switch the
-model and reasoning effort from chat", `/save` in "Save a sent document into
-a collection", and `/thread` and `/threads` in "Open parallel conversations in a
-direct chat". All of them live on one roster (see "Register the bot's command
-menu and profile from one roster"), so none of the lists derived from it can go
-stale.
+The commands that configure the conversation the chat is bound to are specified
+in their own requirements — `/model` in "Switch the model and reasoning effort
+from chat", `/dir` in "Choose the working directory from chat", `/resume` in
+"Resume an earlier conversation from chat", and `/thread` in "Open parallel conversations beside a direct chat".
+All of them live on one roster (see "Register the bot's command menu and profile
+from one roster"), so none of the lists derived from it can go stale, and every
+other text that starts with `/` is a message (see "Pass unreserved slash text to
+the agent").
 
 #### Scenario: /new starts a fresh conversation
 - **GIVEN** a paired channel with an active conversation
@@ -233,6 +324,7 @@ stale.
 - **GIVEN** a turn in progress
 - **WHEN** the peer sends `/stop`
 - **THEN** the turn ends as interrupted and the chat is responsive again
+- **AND** where the platform can edit a message, "⏹ Stopping…" is edited into "⏹ Stopped after 12s." (the turn's real duration) instead of a second message being sent
 
 #### Scenario: messages during a turn are queued in order
 - **GIVEN** a turn in progress
@@ -240,21 +332,117 @@ stale.
 - **THEN** they run as consecutive turns in arrival order after the first ends
 
 #### Scenario: the queue is bounded and overflow is reported
-- **GIVEN** a full message queue
-- **WHEN** the peer sends another message
-- **THEN** the message is dropped and the peer is told the channel is busy
+- **GIVEN** a turn in progress
+- **WHEN** the peer sends ten more messages, each after the quiet window of the one before has closed (so none merges into another), and then an eleventh
+- **THEN** each of the ten is answered "⏳ Queued — runs when the current one finishes.", and all ten run in order
+- **AND** the eleventh is dropped and the peer is told that ten were already waiting
+
+#### Scenario: a direct-chat command in a group is declined with one line
+- **GIVEN** a paired group where the owner is addressed
+- **WHEN** the owner sends `/model`, `/dir`, `/status`, `/resume` or `/thread`
+- **THEN** the sender alone is told, in one line, that the command works in a private chat with the bot
+- **AND** no setting changes, no thread opens, and nothing reaches the agent as a message
+
+#### Scenario: a group's help lists only the group commands
+- **GIVEN** a paired group and a paired direct chat
+- **WHEN** the owner sends `/help` in each
+- **THEN** the group's answer lists `/new`, `/stop`, `/del` and `/help` only, with New and Stop as its buttons
+- **AND** the direct chat's answer lists all nine commands
+
+#### Scenario: /new answers with a one-line card
+- **GIVEN** a paired chat on a button-capable transport with two agents the channel may drive
+- **WHEN** the owner sends `/new`, taps Agent, and taps the second agent
+- **THEN** the first answer is one line naming the agent, the model and the directory, with Agent, Model and Dir buttons
+- **AND** Agent offers the channel's agents with the current one ticked, and the tap starts a fresh conversation on the second agent
+
+### Requirement: Withdraw a bot reply on the owner's command
+A reply in a group cannot be unsaid by the platform on its own, and the agent can
+read everything the owner keeps in Coffer, so the owner MUST be able to take any bot
+reply back. Two owner-only ways do it, and both end the same way. The command
+`/del` withdraws the reply it QUOTES (the platform's reply pointer or quote), the
+whole reply — every part a long answer was cut into, the files it carried and its
+details card — and `/del` with no quote withdraws the bot's most recent reply in
+that chat (in a thread, in that thread; in a group's main chat, anywhere in the
+group). It works in groups and in direct chats. And every bot reply in a group
+carries a 🗑 button on its last text message, where the transport has buttons and
+can withdraw at all.
+
+Both are owner-only: `/del` passes the same owner gate as every command, and a tap on
+🗑 by anyone else does nothing and says nothing. What "withdraw" does is the
+transport's own fact, declared as capabilities: Telegram deletes the messages
+(`withdraw_removes`), SeaTalk — which has no delete — rewrites each card into a
+neutral "🗑 Withdrawn" card without buttons. Each platform has a window after which
+it refuses (`withdraw_window_hours`: 48 for Telegram, 168 for SeaTalk); a reply past
+it is not touched and the owner is told so in their direct chat, never in the group.
+The owner's own `/del` message is deleted too where the platform lets the bot remove
+it (Telegram, given the right), and left alone otherwise. A direct-chat reply a
+transport cannot take back (SeaTalk's streamed text) is not recorded, and `/del`
+says there is nothing to withdraw.
+
+To make that reliable the channel records, for every reply, which platform messages
+it was delivered as — in `runs.db` (`channel_replies`: chat, thread, reply id, the
+message ids, the time sent; never the text), so a daemon restart inside the window
+loses nothing — and forgets a reply once it is older than the longest window. Each
+withdrawal is audited as `channel_reply_withdrawn` with the actor (the owner), the
+channel and how many messages went, and no content.
+
+#### Scenario: /del with a quote withdraws that whole reply
+- **GIVEN** a paired group where the bot answered the owner in a reply sent as several messages
+- **WHEN** the owner sends `/del` quoting one of those messages
+- **THEN** every message of that reply is withdrawn through the adapter
+- **AND** the reply is no longer on record
+
+#### Scenario: /del without a quote withdraws the latest reply
+- **GIVEN** a paired chat where the bot has answered twice
+- **WHEN** the owner sends `/del` quoting nothing
+- **THEN** only the more recent reply is withdrawn and the earlier one stays
+
+#### Scenario: a long reply is withdrawn in every part
+- **GIVEN** a reply cut into several messages and followed by an uploaded file
+- **WHEN** the owner withdraws it
+- **THEN** each text part, and a file on a transport that can delete one, is withdrawn
+
+#### Scenario: nobody but the owner can withdraw a reply
+- **GIVEN** a paired group with a bot reply on record
+- **WHEN** someone who is not the owner sends `/del` or taps the reply's 🗑
+- **THEN** nothing is withdrawn and nothing is said in the group
+
+#### Scenario: a group reply carries a trash button the owner can tap
+- **GIVEN** a paired group on a button-capable transport that can withdraw
+- **WHEN** the bot answers and the owner taps 🗑 under the reply
+- **THEN** the last message of the reply carries that button, and the tap withdraws the whole reply
+
+#### Scenario: a direct chat reply carries no trash button
+- **GIVEN** a paired direct chat
+- **WHEN** the bot answers
+- **THEN** the reply has no 🗑 button, and `/del` still withdraws it
+
+#### Scenario: a reply past the platform window is reported privately
+- **GIVEN** a reply on record that was sent longer ago than the transport's withdraw window
+- **WHEN** the owner sends `/del` quoting it, in a group
+- **THEN** no message is touched
+- **AND** the owner is told in their direct chat that it can no longer be withdrawn, and the group is told nothing
+
+#### Scenario: a withdrawal is audited without content
+- **GIVEN** a reply the owner withdraws
+- **WHEN** the withdrawal completes
+- **THEN** a `channel_reply_withdrawn` audit entry records the owner, the channel and the message count and carries no text
+
+#### Scenario: replies are remembered across a restart
+- **GIVEN** a reply recorded before the daemon restarted
+- **WHEN** a new ledger opens the same database
+- **THEN** the reply and every message id of it are found by any of its messages, and replies past the retention are pruned
 
 ### Requirement: Notify the paired owner on demand
-A notify entry point (REST + CLI) MUST deliver arbitrary text to a channel's
-paired peer, independent of any conversation and with no inbound message — for
-example `coffer channel notify my-telegram "build finished"` or the matching
-REST call. Notify on a channel with no paired peer fails with a clear error and
+A notify entry point (`POST /api/v1/channels/{uid}/notify`) MUST deliver arbitrary text to a
+channel's paired peer, independent of any conversation and with no inbound message — the call
+the Channels page's **Send test** makes. Notify on a channel with no paired peer fails with a clear error and
 sends nothing. This is the outbound foundation any feature that alerts the user
 reuses.
 
 #### Scenario: notify delivers to the paired owner
 - **GIVEN** a paired channel
-- **WHEN** notify is called via REST and via CLI
+- **WHEN** notify is called via REST, and again with the Channels page's Send test
 - **THEN** the text arrives in the IM chat both times
 
 #### Scenario: notify on an unpaired channel fails cleanly
@@ -262,86 +450,119 @@ reuses.
 - **WHEN** notify is called
 - **THEN** the call fails with a clear error and nothing is sent
 
-### Requirement: Manage channels from the Channels page and the CLI
-The Channels page MUST list channels, register new ones (storing secrets
-through the credential store), show each row's paired peer and health, set each
-channel's reach (enable/disable and scope), bind each channel to the machine
-that runs it (see "Bind each channel to the one machine that runs it"), and
-delete a channel from its row. A channel's detail page MUST show its status
-(adapter running, paired peer, and the inbound state the channel's type
-reports — for SeaTalk, its websocket connection),
-issue pairing codes, edit the channel, send a test notification to its paired
-owner (see "Notify the paired owner on demand"), and delete it.
+### Requirement: Manage channels from the Channels page
+The Channels page MUST be a list beside a detail pane. The **list** shows every
+channel as one row — its platform, its name and one line saying what state it is
+in — grouped by that state (needs attention, connected, running on another
+machine, off), filterable by name, with a way to register a new channel (storing
+secrets through the secret store); a row opens the channel. The **detail pane**
+MUST show the open channel's status (adapter running, paired peer, and the
+inbound state the channel's type reports — for SeaTalk, its websocket
+connection) in a header that is the same in every state: the platform mark, the
+name, a status pill, a meta line saying where it runs, a secondary **Send test**
+(a test notification to its paired owner, see "Notify the paired owner on
+demand") and a ⋯ menu holding only **Reconnect** (see "Restart a channel's
+adapter on demand"). A control that cannot run in the current state MUST be
+disabled rather than hidden, and a disabled **Send test** MUST say why in its
+tooltip. The fix for a problem MUST sit in a banner between the header and the
+tabs — one banner, one fix button (Reconnect now, Replace token or secret, Take
+it back, Retry, Open Secrets, Run it here, Generate pairing code), and for a
+missing SeaTalk SDK also the hand-off "Ask an agent" with Copy prompt behind
+its chevron. A channel that is off, or run by another Mac, is not a problem: it
+MUST show a quiet grey box with one small button (Turn on, Run it here…, the
+latter confirming first) instead of a banner. Changing the machine, replacing
+the secret and deleting live in the Settings tab. The detail pane MUST split into two tabs, in this order: **Overview**, the
+default, at the bare `/channels/<uid>` — a single column of sections — who can use it (the paired owners as a bordered
+list, each with Remove, and Add owner below it), the default agent, the agents the
+channel may drive (its reach) and the latest conversations it started, with an
+Open Conversations link filtered by `?source=<uid>`; it lists no commands — and **Settings**, at `/channels/<uid>/settings` — the
+settings below, the machine that runs it (see "Bind each channel to the one
+machine that runs it") and its secrets, and the channel's deletion. Choosing a tab
+changes the address and nothing else.
 
-Editing changes the channel's default agent, its type's plain settings (a
-SeaTalk app id), its title and its two group-gating switches, `require_mention` and
-`ignore_other_mentions` (see "Configure when the bot answers in a group"). Rotating an existing
-secret happens **in place**: the new value MUST be written to the credential
-store under the ref the channel already cites before the configuration is
-saved, and that ref MUST stay in the saved configuration, so a rotation moves
-no secret and leaves the channel's machine binding and pairing untouched. A
-secret field left blank rotates nothing.
+Settings are saved as they change, with no save button, and say whether the last
+change was saved. They cover the channel's title, its type's plain settings (a
+SeaTalk app id), its two group-gating switches, `require_mention` and
+`ignore_other_mentions` (see "Configure when the bot answers in a group"), and
+the rest of what this requirement and the others in this spec name as a channel
+setting. A secret is shown masked and replaced through its own dialog, **in
+place**: the new value MUST be written to the secret store under the ref the
+channel already cites before the configuration is saved, and that ref MUST stay in
+the saved configuration, so a rotation moves no secret and leaves the channel's
+machine binding and pairing untouched. A secret left blank rotates nothing.
 
-The CLI MUST offer these operations in the `coffer channel` group. Its uniform
-lifecycle verbs are `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and
-`scope <name> [--agents a,b | --all | --none]` (see
-[resource-framework](../resource-framework/spec.md), the requirement that
-generates each kind's lifecycle verbs), and its channel-specific commands are
-`pair`, `bind` and `notify`:
+Registering, editing, enabling, disabling, scoping and deleting a channel are the framework's own
+lifecycle operations (see [resource-framework](../resource-framework/spec.md)), done on the
+Channels page and over `/api/v1/resources`; pairing, binding, restarting and notifying are the
+channel routes under `/api/v1/channels/{uid}`. Coffer has no `channel` command group. The page
+MUST report the channel's configuration together with its status — adapter run state, paired
+peer, machine binding and the inbound state its type reports — with the group gating and the
+idle period shown as the settings with their defaults filled in, as the daemon reads them. Saving
+a setting changes only that setting: every switch, setting and ref it does not touch keeps its
+stored value. `coffer secret set <ref>` rotates a secret under a ref the channel's
+configuration cites.
 
-- `coffer channel show <name>` MUST report the channel's configuration together
-  with its status — adapter run state, paired peer, machine binding and the
-  inbound state its type reports — in plain and `--json` output.
-- `coffer channel add` and `coffer channel edit` MUST take the group-gating
-  switches as `--require-mention/--no-require-mention` and
-  `--ignore-other-mentions/--no-ignore-other-mentions`. `edit` also takes
-  `--name`, `--title` and `--description`, and it changes only what it is
-  given: every switch, setting and ref it is not given keeps its stored value.
-- `coffer credentials set <ref>` rotates a secret under a ref that
-  `coffer channel show` reports.
+The channel's status (`GET /api/v1/channels/{uid}/status`) carries its
+**settings**: the typed reading of its stored configuration with every default
+filled in (`TelegramChannelConfig` or `SeaTalkChannelConfig` in this capability's
+contract). The Channels page starts every settings field from them, so a
+default is written in one place, in the daemon, and no surface
+keeps a copy. A stored configuration that no longer validates reports no
+settings, and the page says so rather than guess.
 
-Editing a channel's default agent or type settings is served by the detail page
+Changing a channel's default agent or type settings is served by the detail page
 and `PATCH /api/v1/resources/{uid}`.
 
-#### Scenario: register and list channels from the command line
-- **GIVEN** a running daemon and a stored credential
-- **WHEN** the user runs `coffer channel add` and `coffer channel list`
-- **THEN** the channel is created and appears in the listing
+#### Scenario: register a channel from the Add dialog and list it
+- **GIVEN** a running daemon and a stored secret
+- **WHEN** the user registers a channel in the Channels page's Add dialog and opens the list
+- **THEN** the channel is created and appears in the list
 
 #### Scenario: channel status reports runtime, pairing, and callback details
 - **GIVEN** channels in various states
-- **WHEN** the user queries status via REST and with `coffer channel show`
+- **WHEN** the user queries status via REST and on the Channels page
 - **THEN** adapter run state, paired peer, and the channel type's own inbound
   state are reported accurately
 
+#### Scenario: a channel's settings arrive with their defaults filled in
+- **GIVEN** a channel whose stored configuration names none of the optional settings
+- **WHEN** its status is read
+- **THEN** the settings carry every default (group gating, quiet windows, replies, idle period, directories)
+- **AND** the Channels page shows them without a default of its own
+
 #### Scenario: rotating a channel secret keeps its refs and pairing
 - **GIVEN** a registered telegram channel whose bot token is stored under a
-  credential ref
-- **WHEN** the owner enters a new bot token in the channel detail page's edit
-  dialog and saves
+  secret ref
+- **WHEN** the owner enters a new bot token in the channel's replace-token dialog
+  and confirms
 - **THEN** the new token is written under the channel's existing ref first
 - **AND** the channel's configuration is then saved to the same channel with
   every ref unchanged, so nothing its pairing and binding hang off moves
 
-#### Scenario: the group-gating switches are edited from the command line
+#### Scenario: the group-gating switches are edited in the Settings tab
 - **GIVEN** a registered channel with `require_mention` on and `ignore_other_mentions` off (the defaults)
-- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on through `coffer channel edit`
+- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on in the channel's Settings tab
 - **THEN** the saved configuration carries both changes and every other setting and ref as it was
 
-#### Scenario: a channel's lifecycle and reach run from its own command group
+#### Scenario: a channel's lifecycle and reach run through the resource routes
 - **GIVEN** a registered, enabled channel named `tg`
-- **WHEN** the user runs `coffer channel edit tg --title "Phone bot"`, `coffer channel scope tg --agents codex`, `coffer channel disable tg` and then `coffer channel rm tg`
+- **WHEN** the user, on the Channels page or over `/api/v1/resources`, sets its title to "Phone bot", scopes it to `codex` only, disables it and then deletes it
 - **THEN** the title is saved with every ref unchanged, the channel's scope names only `codex`, and the adapter stops when it is disabled
 - **AND** the removal deletes the channel and its peer binding, and each step is audited
+
+#### Scenario: a channel's detail opens on Overview and keeps Settings on its own tab
+- **GIVEN** a registered channel
+- **WHEN** `/channels/<uid>/settings` is opened, and then the Overview tab is chosen
+- **THEN** the first shows the channel's settings, and choosing Overview moves the address to the bare `/channels/<uid>`
 
 ### Requirement: Audit the events that grant the right to drive turns
 Channel events MUST be audited where an event grants or moves the right to
 drive turns: a pairing code issued, and a sender claiming it, each queryable in
-the audit log by channel with the sender. Those two are the whole
+the audit log by channel — the claim with the claiming sender's id. Those two are the whole
 channel-specific audit surface, alongside the automatic resource-lifecycle audit
 the framework records. Traffic MUST NOT be audited — a notification sent and a
 turn run are neither irreversible nor invisible afterwards, and the conversation
-and its messages, readable from the web Chat page (spec `chat`) and the REST
+and its messages, readable from the Conversations page (spec `chat`) and the REST
 API, are already their record.
 
 #### Scenario: notifications and turns leave no channel audit entry
@@ -350,62 +571,24 @@ API, are already their record.
 - **THEN** the audit log gains no entry for the notification or the turn
 - **AND** the two pairing entries are still the only channel-specific entries for that channel
 
-### Requirement: Switch the conversation's agent from chat
-The owner MUST be able to switch the conversation's agent from chat. `/agent`
-with no argument reports the current agent and the registry's available agent
-keys; `/agent <key>` validates the key against the agent registry and, on
-success, records it as the peer's sticky preference and opens a fresh
-conversation pinned to it (an existing conversation's agent cannot change), so
-subsequent messages and `/new` use the chosen agent until it is switched again.
-An unknown key is rejected with the valid keys listed and the active
-conversation unchanged; no channel-side code is added per agent.
-
-On a transport that `supports_buttons` (see "Offer command choices as
-owner-gated selection cards"), `/agent` with no argument renders the choices as
-an interactive selection card instead of a text list; tapping a button performs
-the same switch. The card carries a **title element** where the transport has
-one, so its subject is scannable without crowding the body. After a tap lands, a
-transport that `supports_card_update` MUST **rewrite the card in place** so its
-tick moves to the new choice — a card left advertising the option the user just
-took invites a second tap that does nothing. The rewrite is best-effort: the
-switch is already done and confirmed in chat, so a transport without the
-capability, or a rewrite the platform refuses, changes nothing the user relies
-on.
-
-#### Scenario: /agent switches the agent and sticks
-- **GIVEN** a paired channel with a second scripted agent registered
-- **WHEN** the peer sends `/agent <second>` and then a message
-- **THEN** a fresh conversation pinned to the second agent becomes active, the
-  message is answered by it, and `/new` reuses it until switched again
-
-#### Scenario: /agent rejects an unknown agent
-- **GIVEN** a paired channel
-- **WHEN** the peer sends `/agent nope`
-- **THEN** the channel replies that the agent is unknown and lists the valid
-  keys, and the active conversation is unchanged
-
-#### Scenario: a tapped selection card is rewritten with the new choice
-- **GIVEN** a paired channel on a transport that `supports_card_update`, showing
-  an `/agent` selection card
-- **WHEN** the owner taps a different agent's button
-- **THEN** the card is rewritten in place with the tick moved to the agent just
-  chosen; on a transport without the capability nothing is rewritten and the
-  switch still succeeds, and a rewrite the platform refuses leaves the switch
-  and its confirmation intact
-
 ### Requirement: Gate inbound traffic on sender identity
 The owner gate MUST verify sender identity, not only chat identity. Every
 inbound envelope carries a `sender_id`, whose platform meaning each child spec
 names; pairing records it on the peer, and an inbound message is accepted only
-when its `chat_id` matches and — when the peer has a stored `sender_id` — its
-sender matches. A peer paired before this requirement (no stored `sender_id`)
-degrades to the chat-id-only gate.
+when its `chat_id` matches and its sender matches the peer's stored
+`sender_id`. A message that names no sender is refused, in a direct chat as in a
+group: ownership that cannot be proven is not ownership. Pairing refuses the
+same way — a code sent in a message that names no sender binds nobody and burns
+no attempt.
 
-The peer is a `ChannelPeer`: `(resource, chat_id)`, display name, paired-at, a
-pointer to the active conversation, the paired sender's identity (`sender_id`),
-and sticky preferences (the chosen agent) — one row per (channel, chat): the
-paired owner plus one row per group or thread the owner has addressed the bot
-in. The core never sees platform payloads: every adapter produces and consumes
+The peer is a `ChannelPeer`: `(resource, chat_id)`, display name, paired-at and
+the paired sender's identity (`sender_id`) — one row per (channel, chat): the
+paired owner plus one row per group the owner has addressed the bot in. The
+conversation a chat is in the middle of, and its sticky preferences (the chosen
+agent, model, effort and directory), are not on the peer: they live in the
+thread conversation rows keyed by (channel, chat, thread).
+
+The core never sees platform payloads: every adapter produces and consumes
 the normalized `InboundMessage`, `InboundCallback` and `OutboundMessage`
 envelopes, and inbound carries the sender's identity for this gate.
 
@@ -414,78 +597,101 @@ envelopes, and inbound carries the sender's identity for this gate.
 - **WHEN** a message arrives with the same chat id but a different sender id
 - **THEN** no reply is sent and no turn is started
 
+#### Scenario: a direct message that names no sender is ignored
+- **GIVEN** a paired channel
+- **WHEN** a message arrives in the owner's chat but the transport supplied no sender id
+- **THEN** no reply is sent and no turn is started
+
+#### Scenario: a pairing code sent with no sender binds nobody
+- **GIVEN** a channel with a pending pairing code
+- **WHEN** the right code arrives in a message that names no sender
+- **THEN** nobody is paired and the code is still valid
+
 #### Scenario: ignore messages from strangers
 - **GIVEN** a paired channel
 - **WHEN** a different account messages the bot
 - **THEN** no reply is sent and no turn or conversation is created
 
-### Requirement: Summarise only a turn that did not end normally
-After a turn that did not end normally the channel MUST send one compact
-completion summary as a fresh message: a failure reports the error, an
-interrupt reports the stop, and the tool-iteration limit reports the limit, each
-with tool count, duration, and token usage. A turn error is reported to the IM
-chat as a short notice and the channel stays up. A clean success MUST send
-**no** summary on any channel — the reply itself is the completion signal, so
-the fact line would only be noise (this holds regardless of whether the
-transport can edit messages).
+### Requirement: Backfill DM sender ids in the vault upgrade
+The vault upgrade MUST set, once, the `sender_id` of every direct-chat pairing
+that carries an empty one to the pairing's `chat_id` — a direct chat's id is the
+person's id on Telegram and on SeaTalk. At runtime the owner gate MUST refuse a
+message whose sender id is empty and MUST NOT complete or repair a pairing from
+an inbound message: no legacy reader is kept.
+
+#### Scenario: the vault upgrade backfills a DM pairing's sender id
+- **GIVEN** a vault holding a direct-chat pairing whose `sender_id` is empty
+- **WHEN** the vault upgrade runs
+- **THEN** the pairing's `sender_id` equals its `chat_id`
+- **AND** a second run changes nothing
+
+#### Scenario: a message with an empty sender id is refused
+- **GIVEN** an inbound message whose sender id is empty
+- **WHEN** the owner gate evaluates it
+- **THEN** no turn runs and no pairing is changed
+
+### Requirement: Summarise a turn that did not end normally
+After a turn that did not end normally the chat is told how it ended in one
+line, and nothing more: a failure says what happened and ends "Send it again to
+retry." (never an error code), an interrupt ends "⏹ Stopped after 12s." — the
+turn's real duration — and where the platform can edit a message that line
+replaces the "⏹ Stopping…" a `/stop` sent instead of following it. A turn error
+is reported to the IM chat as a short notice and the channel stays up. Where a
+long turn pings (see "Ping the asker when a long turn ends"), the ping carries
+the tool count and tokens too. A clean success MUST send **no** closing line —
+the reply itself is the completion signal, so a fact line would only be noise
+(this holds regardless of whether the transport can edit messages); the one
+line a clean *long* turn may end with is its ping.
 
 #### Scenario: a turn error is reported to the IM chat
 - **GIVEN** a scripted agent that fails mid-turn
 - **WHEN** the peer sends a message
-- **THEN** the IM chat receives a short error notice and the channel stays up
+- **THEN** the IM chat receives a short notice that says what happened and ends "Send it again to retry." — no error code — and the channel stays up
 
 #### Scenario: a turn that does not end normally sends a completion summary
 - **GIVEN** a paired channel
-- **WHEN** a turn fails, is interrupted, or hits the tool-iteration limit
-- **THEN** a compact completion summary is sent to the chat reporting the outcome
-  (the error / stop / limit) with tool count, duration, and tokens
+- **WHEN** a turn fails or is interrupted
+- **THEN** the chat is told the outcome in one line — what failed with "Send it
+  again to retry.", or "⏹ Stopped after <duration>." — and no separate fact
+  summary follows
 
 #### Scenario: a clean success sends no completion summary
 - **GIVEN** a paired channel (whether or not the transport can edit messages)
-- **WHEN** a turn completes successfully
+- **WHEN** a turn shorter than the ping threshold completes successfully
 - **THEN** no completion summary is sent — the reply itself is the end-of-turn
   signal
 
 ### Requirement: Switch the model and reasoning effort from chat
-The owner MUST be able to switch the model from chat. `/model` with no argument
-reports the current model; `/model <name>` stores the raw upstream model string,
-passed through to the bound agent's CLI verbatim. A channel curates no models,
-so nothing is validated here: the model namespace belongs to the CLI, not to
-Coffer, and a name that agent cannot run surfaces as the CLI's own error relayed
-to the chat on the next turn. A model switch takes effect on the next turn in
-the same conversation (the model is re-read each turn, unlike the agent and
-working directory).
+The owner MUST be able to choose the model and its reasoning effort from chat
+with one command, `/model`, because both managed agents present the two as one
+choice. The choice applies to the next turn of the same conversation (the model
+and effort are re-read each turn, unlike the agent and working directory) and is
+remembered for the chat (see "Keep a chat's settings across its conversations").
 
-On a transport that `supports_buttons` (see "Offer command choices as
-owner-gated selection cards"), `/model` with no argument renders the choices as
-a selection card. They come from the agent's model catalogue — read back from
-the installed CLI, the one list Coffer has of what that agent can run — in
-**full**, because nothing curates it. It is shown one **page** at a time (see "Offer command choices
-as owner-gated selection cards"), opening on the page holding the model currently in effect, so a freshly rendered
-card always has its tick in view. Free-text `/model <name>` still reaches a
-model the user can already name — including one the catalogue does not list —
-and the card's body says so. Each button shows the model's **name**, not its raw
-id, and the tap still carries the id: a card has no room for the web picker's
-name beside the id, and a truncated id can hide the one part that tells two
-choices apart. A model with no name shows its id, and a 1M-context variant says
-"1M", so `fable` and `claude-fable-5-1[1m]` read as two different choices. No
-surface refuses an id: a channel binds an agent and nothing more. With no
-suggestions it falls back to the text report.
-
-**`/effort` is the other half of that choice.** For an agent whose models take a
-reasoning level, the model id is not the whole decision, and the level is not
-part of the model NAME, so it is its own command rather than an argument to
-`/model`. It behaves exactly as `/model` does: no argument reports the level in
-effect and renders the choices as a selection card where the transport
-`supports_buttons`, an argument applies it to the next turn of the SAME
-conversation, a tap takes the same path as the text, and Coffer validates
-nothing — the level reaches the agent verbatim. The levels offered are those of
-the model the conversation is actually ON, read from the same catalogue `/model`
-offers, so a level menu never describes a model the conversation is not
-running. An agent whose model reports no levels has nothing to choose between:
-`/effort` says so in one line rather than rendering an empty card. Like `/model`
-there is no clearing form, and `/new` is the way back to the agent's own
-default, since a fresh conversation carries no overrides at all.
+- `/model <name>` sets the model. The name is matched against the agent's model
+  catalogue by id or by the name its button shows, case-insensitively; a name
+  the catalogue does not list is passed through verbatim, because the model
+  namespace belongs to the agent's CLI and not to Coffer — a name that agent
+  cannot run surfaces as the CLI's own error on the next turn.
+- `/model <level>` — a word of the closed effort vocabulary `minimal`, `low`,
+  `medium`, `high`, `xhigh`, `max`, which no model name uses — sets the effort
+  alone. `/model <name> <level>` sets both.
+- `/model default` clears both, returning the conversation and the chat to the
+  agent's own defaults.
+- `/model` with no argument reports the model and effort in effect and, on a
+  transport that `supports_buttons` (see "Offer choices and actions as
+  owner-gated cards"), renders a two-step card. The **model step** offers the
+  agent's catalogue — read back from the installed CLI, the one list Coffer has
+  of what that agent can run — in **full**, one page at a time, opening on the
+  page holding the model in effect. Each button shows the model's **name**, not
+  its raw id, and the tap still carries the id: a model with no name shows its
+  id, and a 1M-context variant says "1M", so `fable` and `claude-fable-5-1[1m]`
+  read as two different choices. Tapping a model sets it; when that model
+  reports reasoning levels the same card is rewritten into the **effort step**
+  — the levels of the model now in effect — and tapping a level sets it,
+  answered "Model: <model> · effort <level> — from your next message". A model with no levels ends the choice
+  at the model step. Where the card cannot be rewritten in place the effort step
+  arrives as a fresh card. With no catalogue it falls back to the text report.
 
 #### Scenario: /model switches the model for the next turn
 - **GIVEN** a paired channel in an active conversation
@@ -499,123 +705,64 @@ default, since a fresh conversation carries no overrides at all.
 - **THEN** the buttons read "Fable 5.1" and "Fable 1M"
 - **AND** tapping either carries its model id
 
-### Requirement: Save a sent document into a collection
-A document sent to a Coffer channel MUST be ingestible into a collection through
-the same conversion path the Knowledge page uses, so the phone and that page are
-two ends of one entrance (spec `knowledge`). `/save` is the command that does
-it. The channel MUST confirm the collection with the owner before storing, and
-MUST NOT store anything from a non-owner.
+#### Scenario: /model with a level sets the effort only
+- **GIVEN** a paired channel whose conversation runs a pinned model
+- **WHEN** the peer sends `/model high`
+- **THEN** the next turn runs at effort `high` on the same model
 
-#### Scenario: a document sent to a channel is saved into a collection
-- **GIVEN** a paired owner who has sent a document to the channel,
-- **WHEN** the owner follows it with `/save <collection>` naming a collection
-  that exists,
-- **THEN** the document is ingested into that collection through the same
-  conversion path the Knowledge page uses,
-- **AND** a `/save` from anyone but the paired owner stores nothing.
+#### Scenario: /model default clears the model and effort
+- **GIVEN** a conversation with a model and an effort set from chat
+- **WHEN** the peer sends `/model default`
+- **THEN** the conversation and the chat carry neither, so the agent's own
+  defaults apply from the next turn and in the next conversation
 
-#### Scenario: a save that names no collection asks which one
-- **GIVEN** a paired owner who has sent a document but named no collection,
-- **WHEN** they send `/save`,
-- **THEN** the channel offers the collections it may save into and stores
-  nothing until one is chosen — on a transport without buttons it lists them as
-  text,
-- **AND** a `/save` with no document pending is refused in one line.
-
-### Requirement: Offer command choices as owner-gated selection cards
-On a transport that declares the `supports_buttons` capability, the core MAY
-render a command's choice list as an **interactive selection card**; outbound
-text MAY carry `ChoiceButton`s, which a button-capable transport renders as such
-a card. A button tap arrives as a normalized `InboundCallback` carrying an
-opaque value instead of text; the core MUST **owner-gate it exactly like a
-message** (chat + sender identity, see "Gate inbound traffic on sender
-identity") before routing it to the same switch the text command performs. A tap
-never pairs, and an unsupported transport silently keeps the text path. This
-realizes the interactive-button capability that
-[Channel Adapter Framework](../../../docs/decisions/channel-adapter-framework.md)'s
-`ChannelCapabilities` anticipated ("show buttons?").
-
-The card payload MUST follow each platform's published shape, which each child
-spec states. A card the platform refuses is not the end of the command: the
-handler falls back to the plain-text answer it already has, so a rejected card
-degrades to a working message instead of leaving the user with silence. The
-rejection is logged so it stays diagnosable.
-
-A card carries a **bounded number of buttons** — six, navigation included. A
-choice list longer than that bound is **paginated**: the card shows four choices
-plus `← Prev` / `Next →`, and a navigation tap **rewrites the same message** at
-the next window through the same `supports_card_update` path an applied choice
-uses. One rule serves both cards — `/agent`'s two choices are under the bound
-and render with no navigation chrome at all, and `/effort`'s handful of levels
-likewise.
-
-A navigation payload lives in its own callback namespace (`page:<kind>:<index>`),
-disjoint from the `agent:` / `model:` / `effort:` values a choice carries, and
-fixed-size so it fits the tightest callback budget any transport declares. The
-separation is what guarantees the invariant: **a page turn changes nothing.**
-The set of kinds that namespace admits is closed and explicit, so adding a card
-that ticks a current choice means adding its kind there too; a `page:` value
-naming a kind Coffer does not render is dropped, not applied. It re-reads what
-is in effect and re-renders; it can never be mistaken for a choice, and a
-malformed navigation value is dropped rather than allowed to fall through to the
-switch. Because the page in view may not hold the option in effect, the card's
-body always names what is in effect and which page it is on, so a page showing
-no tick never reads as a card claiming nothing is selected.
-
-Unlike the cosmetic rewrite after a choice, a page turn is something the user
-asked to see, so it degrades rather than dropping: where the message cannot be
-rewritten in place — no `supports_card_update`, or an update the platform
-refused — the requested page is posted as a fresh card, and as plain text if
-that is refused too.
-
-#### Scenario: a selection-card tap switches the agent
-- **GIVEN** a paired channel on a button-capable transport, with a second agent
-  registered
-- **WHEN** the owner sends `/agent` (rendered as a selection card) and taps the
-  second agent's button
-- **THEN** a fresh conversation pinned to the second agent becomes active, as if
-  the owner had typed `/agent <second>`
-
-#### Scenario: a long selection card is browsed page by page in place
-- **GIVEN** a paired channel on a button-capable transport showing a `/model`
-  card built from a catalogue far longer than one card can carry
-- **WHEN** the owner taps `Next →`
-- **THEN** the same card message is rewritten with the following page of models
-  — no second card is posted, no model is switched, and the body still names the
-  model in effect and the page it is on; the last page offers no `Next →`, and a
-  page turn the platform will not apply in place arrives as a fresh card (or as
-  plain text) rather than as silence
-
-#### Scenario: a non-owner selection-card tap is ignored
-- **GIVEN** a paired channel whose peer has a stored `sender_id`
-- **WHEN** a different member of the chat taps a selection-card button
-- **THEN** the tap is ignored and the owner's agent/model is unchanged
-
-#### Scenario: a refused selection card falls back to the text reply
-- **GIVEN** a button-capable transport that refuses the selection card outright
-- **WHEN** the owner sends `/agent` or `/model`
-- **THEN** the command answers with its plain-text report instead and the
-  refusal is logged — silence is the one outcome a command must never produce
+#### Scenario: a model tap leads to the effort step
+- **GIVEN** a `/model` card on a transport that can rewrite a card, for an agent
+  whose models report reasoning levels
+- **WHEN** the owner taps a model
+- **THEN** the model is set and the same card now offers that model's levels
+- **AND** tapping a level sets the effort for the next turn
 
 ### Requirement: Tell a channel-driven agent it is on a chat channel
 A channel-originated turn MUST tell the agent it is bridged to a chat channel,
-not a terminal: the agent receives a short system-prompt note carrying the
-channel name and mobile-chat guidance — keep replies concise without dropping
-evidence (an investigation's key log lines, error messages and IDs are quoted
-verbatim, not summarised away), and it cannot click permission or confirmation
-dialogs on the user's computer (they may be away from it). This prevents
-terminal-sized replies, findings the user has to ask a second time to see the
-evidence for, and silent waits on un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
-conversation whose `channel_uid` is set, and names the channel by its current
-label.
+not a terminal. The agent receives a short system-prompt note naming **where**
+it is — the platform, the chat kind (direct chat, group chat, group thread) and
+the channel by its current label — and **what renders there**, in the sentence
+or two the running transport declares as its `render_notes` (SeaTalk: bold,
+italic, inline code, code fences and lists, but no headings, links or tables;
+Telegram: its rich Markdown, tables included). It then asks for a reply shaped
+for a phone: do not narrate steps (Coffer already shows the working state); the
+first line is the outcome in one sentence, because it becomes the notification;
+at most about 15 lines, anything longer under a `## Details` heading; code blocks
+under 30 lines, longer logs attached as files; diagrams and charts as PNG files,
+never as source; and, when the agent needs a yes or a choice before it goes on,
+to call `coffer__ask` (see "Ask the owner in the chat and take the answer back
+to the agent").
+Concise never drops evidence — an investigation's key log lines, error messages
+and IDs are quoted verbatim — and the agent is told it cannot click permission
+or confirmation dialogs on the user's computer. Web-UI turns are unaffected —
+the note rides only on a conversation whose `channel_uid` is set. A channel that
+has been deleted, or is not running, still gets the note, saying less.
 
 #### Scenario: the channel-driven agent is told it is on a chat channel
 - **GIVEN** a channel-originated conversation
 - **WHEN** a turn is driven from the channel
-- **THEN** the agent receives a system-prompt note naming the channel and telling
-  it to keep replies concise, to quote an investigation's key evidence
-  verbatim, and that it cannot click the user's OS dialogs, while a web-UI
-  conversation gets no such note
+- **THEN** the agent receives a system-prompt note naming the platform, the chat
+  kind and the channel, telling it not to narrate its steps, to quote an
+  investigation's key evidence verbatim, and that it cannot click the user's OS
+  dialogs, while a web-UI conversation gets no such note
+
+#### Scenario: the note lists what renders on the platform the turn is on
+- **GIVEN** a SeaTalk group-thread conversation on a running channel
+- **WHEN** its turn's note is composed
+- **THEN** it says the turn is in a SeaTalk group thread and that headings, links
+  and tables do not render there (write one bullet per row)
+
+#### Scenario: the note asks for the answer's shape
+- **WHEN** a channel turn's note is composed
+- **THEN** it asks for the outcome in one first sentence, long content under
+  `## Details`, diagrams as PNG files, and a `coffer__ask` call when the agent
+  needs the owner's answer
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each
@@ -684,7 +831,7 @@ is not used for it.
 
 **This is the one place in Coffer where user content may leave the machine, and
 it is off by default.** With no connection designated for transcription, no
-model chosen for it, an unsupported protocol, or a credential that will not
+model chosen for it, an unsupported protocol, or a secret that will not
 resolve, nothing is uploaded: the voice is handed to the agent as an audio file
 rather than lost. A failed or slow request degrades the same way — a
 transcription problem MUST never fail a turn. The constitution permits this:
@@ -701,21 +848,27 @@ than vault state, and the transcript lands locally like any other turn text.
 ### Requirement: Treat an addressed group chat as its own peer
 The system MUST treat a group chat as a first-class peer. When the paired owner
 @mentions the bot (or the message is delivered as an addressed group event) the
-bot answers there; the group becomes an additional `channel_peers` row keyed by
-`(channel, group chat id)`, inheriting the owner's `sender_id`.
+bot answers there; the group becomes an additional peer in the channel's pairings, the vault document
+`state/channel-peers/<channel name>.json`, keyed by the group chat id and inheriting
+the owner's `sender_id`.
 
 #### Scenario: the owner @mentions the bot in a group main chat
 - **GIVEN** a paired channel and a group chat with no active thread
 - **WHEN** the owner @mentions the bot in the group's main chat
-- **THEN** a turn runs and the reply is delivered into a thread rather than the
-  group main chat, no thread history is read, and a `channel_peers` row is
-  created for the group chat inheriting the owner's `sender_id`
+- **THEN** a turn runs, no thread history is read, and a peer is recorded for the
+  group chat inheriting the owner's `sender_id`
+- **AND** where the platform threads group replies (SeaTalk) the reply is delivered
+  into a thread rather than the group main chat, while an ordinary Telegram group,
+  which has no thread to put it in, is answered in the chat itself
 
 ### Requirement: Act in a group only on an addressed message from the owner
 The bot MUST act in a group ONLY on an addressed message (an @mention of the
 bot). Un-addressed group messages are ignored. An addressed message from a
 non-owner — including one whose `sender_id` the transport could not supply — is
-refused with a short "not authorized" reply and starts no turn.
+refused with the short reply "🚫 Only <bot>’s owners can use it here." and starts no turn. A non-owner
+message that is **not** addressed — which reaches the gate only when the channel
+is set to answer without a mention — is dropped silently: the refusal is spoken
+to someone who spoke to the bot, never to the room's chatter.
 
 #### Scenario: an un-addressed group message is ignored
 - **GIVEN** a paired channel and a group chat the bot is a member of
@@ -725,8 +878,13 @@ refused with a short "not authorized" reply and starts no turn.
 #### Scenario: a non-owner @mention in a group is refused
 - **GIVEN** a paired channel with a known owner
 - **WHEN** someone other than the owner @mentions the bot in a group chat
-- **THEN** the bot replies that the sender is not authorized and no turn is
+- **THEN** the bot replies "🚫 Only <bot>’s owners can use it here." and no turn is
   started
+
+#### Scenario: a non-owner's un-addressed group message is dropped silently
+- **GIVEN** a paired channel set to answer in groups without a mention, and a group chat
+- **WHEN** someone other than the owner sends a group message that does not address the bot
+- **THEN** no reply is sent, no turn is started and no peer row is created
 
 #### Scenario: an empty sender_id in a group cannot bypass the owner gate
 - **GIVEN** a paired channel with a known owner and a group chat
@@ -804,15 +962,15 @@ channel is one answer the machines must share.
 - An unrestricted scope MUST mean every registered agent. That is the pre-scope
   behaviour and what every existing channel carries, so no channel needs a data
   migration.
-- `agents: [<agent>, …]` MUST narrow `/agent` at all three of its surfaces: the
-  listing, the selection card, and the validation of a chosen key (typed or
-  tapped). They MUST read one narrowed set — a card that offers an agent the
-  next check rejects is the specific failure this requires.
+- `agents: [<agent>, …]` MUST narrow `/new <agent>` at every surface that
+  names an agent: the list of valid names an unknown one is answered with, and
+  the validation of a chosen name. They MUST read one narrowed set — a list that
+  offers an agent the next check rejects is the specific failure this requires.
 - **One vocabulary above the binding.** A scope and a `default_agent` both name
   agent **uids**, which is also what a reach picker offers, so every comparison
   between them is made directly and no translation exists to get backwards. A
   uid this vault does not hold admits no agent at all.
-- **One crossing, below it.** `/agent`, the sticky per-thread choice and the
+- **One crossing, below it.** `/new <agent>`, the sticky per-thread choice and the
   turn router all speak the agent **key** the turn platform routes on. That key
   MUST be derived from the uid at exactly ONE place — the runtime gate, where the
   resource row becomes a live binding — and nothing below that point may hold a
@@ -848,12 +1006,12 @@ channel is one answer the machines must share.
   a channel the owner deliberately switched off MUST remain editable, so a wrong
   bot token or app secret can still be corrected without reactivating it
   first.
-- A thread's sticky `/agent` choice MUST be dropped in favour of the channel
+- A thread's sticky agent choice MUST be dropped in favour of the channel
   default once the scope no longer admits it, so narrowing a scope takes effect
   on the next conversation rather than waiting on whoever set the preference.
 
 Reach and the machine binding answer different questions and MUST never be
-merged: reach (`enabled` + `scope`, on the resource row) says **which agents**
+merged: reach (`enabled` + `scope`, in this machine's reach record) says **which agents**
 this channel may drive and whether it is live here, and is set per machine and
 stays on it; the binding (`runs_on`, in the channel's config) says **which
 machine** runs the adapter, and travels because it is one answer for the whole
@@ -862,10 +1020,9 @@ carry two unrelated answers.
 
 #### Scenario: a channel may only route to the agents in its scope
 - **GIVEN** a paired channel whose scope names one of the two registered agents,
-- **WHEN** the owner sends `/agent`, and then `/agent <the other one>`,
-- **THEN** the listing and the selection card offer only the scoped agent, and
-  the switch to the other one is refused — whether it is typed or tapped from a
-  card rendered before the scope was narrowed.
+- **WHEN** the owner sends `/new nope`, and then `/new <the other one>`,
+- **THEN** the list of valid names offers only the scoped agent, and the switch
+  to the other one is refused.
 
 #### Scenario: a channel's scope names agent resources, not agent keys
 - **GIVEN** a running channel whose default agent is registered as an agent
@@ -873,7 +1030,7 @@ carry two unrelated answers.
 - **WHEN** the owner narrows the channel's scope to that agent resource — its
   uid, which is what the reach control offers,
 - **THEN** the edit is accepted, the channel keeps running, and the scope
-  reaches `/agent` translated into the agent key that surface speaks.
+  reaches `/new <agent>` translated into the agent key that surface speaks.
 
 #### Scenario: a channel scoped to no agent is dormant
 - **GIVEN** an enabled channel whose scope is set to the empty list,
@@ -917,9 +1074,9 @@ identity — a polled bot, a held WebSocket — tolerates
 exactly ONE consumer, so "which machine answers this bot" must have exactly one
 answer, and that answer is written down. Its configuration carries `runs_on`,
 the `machine_id` of the machine whose daemon starts this channel's adapter
-(spec `vault-sync`, "Derive machine identity from the host"). It is configuration and not a
-property of the row, because it MUST travel with the channel document — every
-machine holding the document reads the same name, and every machine but one
+(spec `vault-sync`, "Derive machine identity from the host"). It is configuration in the channel's
+file and not part of its reach, because it MUST travel with that file — every
+machine holding the file reads the same name, and every machine but one
 finds it is not being named; reach MUST NOT travel and MUST NOT be made to carry
 this.
 
@@ -943,14 +1100,17 @@ this.
   Starting a channel on the grounds that nobody else claims it would be the
   rival-consumer failure arriving by the back door: every machine that cannot
   resolve the id would reason identically and they would all start.
-- A `runs_on` that **cannot be a machine id** MUST NOT be honoured as a binding.
-  A channel's configuration is a bag the system has written other things into
-  before — the retired machine axis put ULIDs under this very key — so a value of
-  the wrong shape names no machine that has ever existed and is a fossil, not a
-  decision. Coffer MUST bind such a channel to this machine, the answer it would
-  have given had the key been absent. This is the one case where an existing
-  value is overwritten, and it is the one case where leaving it would silently
-  stop a working bot on upgrade.
+- A `runs_on` that **cannot be a machine id**, found when an existing vault is
+  upgraded, MUST NOT be honoured as a binding. A channel's configuration is a bag
+  the system has written other things into before — the retired machine axis put
+  ULIDs under this very key — so a value of the wrong shape names no machine that
+  has ever existed and is a fossil, not a decision. The upgrade MUST bind such a
+  channel to this machine, the answer it would have given had the key been
+  absent. This is the one case where an existing value is overwritten, and it is
+  the one case where leaving it would silently stop a working bot on upgrade.
+  Past the upgrade a value is written only by the surfaces, and they
+  refuse an id the machine registry does not hold; whatever else ends up
+  there fails closed and is reported as a binding to an unknown machine.
 - Rebinding MUST converge without a restart and without a command that reaches
   another machine: changing `runs_on` is an ordinary configuration edit. The
   losing machine MUST stop its adapter within one reconcile tick of seeing the
@@ -961,11 +1121,11 @@ this.
   allowed and is sometimes the only option — the old machine may be the one that
   is broken — but it opens a window, bounded by that machine's sync interval, in
   which both adapters are live; the surface offering the rebind MUST say so.
-- A channel's configuration MUST carry credential **references** only, never
+- A channel's configuration MUST carry secret **references** only, never
   secret material, exactly as it did when it never travelled — the rule is
   unchanged, and travelling is what makes it load-bearing rather than merely
   tidy. Ciphertext for those refs travels only when the user opts the remote in
-  to credentials, and a machine holding ciphertext without the master key MUST
+  to secrets, and a machine holding ciphertext without the master key MUST
   report those refs locked rather than failing decryption silently.
 - A channel bound to another machine MUST NOT be refused by this machine's own
   preconditions. Its `default_agent` names an agent on the machine that runs it;
@@ -1006,12 +1166,12 @@ which no field inside Coffer could prevent.
 - **GIVEN** an enabled channel running on this machine
 - **WHEN** the user binds it to another machine
 - **THEN** this machine stops its adapter on the next reconcile, without a
-  daemon restart, and the channel's binding is what the next converge round
-  publishes
+  daemon restart, and the channel's binding is what the next sync round
+  pushes
 
 ### Requirement: Drive every managed agent from one bot
 One bot MUST control all agents. A single paired Coffer-hosted bot drives any
-managed agent, switchable via `/agent` and selection cards, so from one paired
+managed agent, switchable with `/new <agent>`, so from one paired
 chat the owner reaches every registered agent with a chosen model; agent choice
 is per conversation, and since each thread is its own conversation (see "Key
 conversation identity by channel, chat and thread") one bot can run different
@@ -1021,7 +1181,7 @@ exists.
 
 #### Scenario: one bot runs different agents in different threads
 - **GIVEN** a paired channel and a group
-- **WHEN** the owner switches thread A to a different agent and leaves thread B
+- **WHEN** the owner switches thread A to a different agent with `/new <agent>` and leaves thread B
   on the channel default
 - **THEN** thread A's conversation drives the switched agent and thread B's
   drives the default — one bot running different agents per thread
@@ -1030,8 +1190,8 @@ exists.
 Coffer-hosted channels MUST have a unified management surface. A management
 view lists every Coffer-hosted channel with its status, paired owner, agent, and
 health, mirroring the MCP-server / memory / skill management surfaces; each
-channel's credentials (bot tokens, app secrets) are held in the Coffer vault.
-Externally-hosted channels are out of scope (a non-goal).
+channel's secrets (bot tokens, app secrets) are held in the Coffer vault.
+The Channels page holds each channel's setup, connection status and settings only: it shows no conversation history, and each channel links to the Conversations page filtered to that channel (spec [chat](../chat/spec.md) "Show every conversation on the Conversations page"). Externally-hosted channels are out of scope (a non-goal).
 
 #### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
 - **GIVEN** a registered and running Coffer-hosted channel with a paired owner
@@ -1040,6 +1200,11 @@ Externally-hosted channels are out of scope (a non-goal).
 - **THEN** it reports the channel's enabled status, its live health (adapter
   running), the paired owner, and the routed agent — mirroring the MCP-server /
   memory / skill management surfaces
+
+#### Scenario: a channel links to its conversations instead of showing them
+- **GIVEN** a SeaTalk channel with three conversations
+- **WHEN** the user opens it on the Channels page
+- **THEN** it shows its setup, connection status and settings and no conversation list, and its link opens the Conversations page filtered to that channel
 
 ### Requirement: Download the media a thread's messages carry
 Thread-history media MUST be downloaded, not flattened to a dead link. When the
@@ -1093,7 +1258,7 @@ In a direct chat the key's thread is the thread only when that thread is a
 conversation of its own: a parallel thread `/thread` opened, or any thread on a
 platform where a direct-chat thread only exists because someone created it
 (Telegram's private-chat topics). Any other direct-chat thread keys to the DM's
-`""` conversation (see "Open parallel conversations in a direct chat"). The key
+`""` conversation (see "Open parallel conversations beside a direct chat"). The key
 decides which conversation a message joins; the reply still goes to the thread
 the message came from.
 
@@ -1109,6 +1274,63 @@ the message came from.
 - **WHEN** the owner replies inside a thread under one of the bot's answers, a thread `/thread` did not open
 - **THEN** the turn runs in the direct chat's conversation, with its context
 - **AND** the reply is posted inside that thread
+
+### Requirement: Open a new conversation after an idle period
+A channel MUST open a new conversation when the owner's next message reaches a
+chat whose active conversation has been idle longer than the channel's
+`new_conversation_after_idle_hours` (default 24, from 0 to 8760; 0 never does).
+Idle time is measured from the conversation's last activity, in hours. It
+applies to every conversation a channel keeps, per key: a direct chat's
+conversation and each group thread's or parallel thread's own (see "Key
+conversation identity by channel, chat and thread"). The old conversation stays
+where it was, in the conversation list; the chat is told in one short line,
+`🆕 Started a new conversation after 24 h idle.`, before the answer. The new
+conversation opens exactly as `/new` opens one, so the chat's sticky agent,
+model, effort and directory carry over (see "Keep a chat's settings across its
+conversations").
+
+The setting is edited on the Channels page, on the channel's Settings tab, and
+the channel's status reports it.
+
+#### Scenario: a chat idle past the configured hours opens a new conversation
+- **GIVEN** a paired chat whose active conversation was last active 25 hours ago, on a channel with the default 24
+- **WHEN** the owner sends a message
+- **THEN** a new conversation becomes the chat's active one and answers the message
+- **AND** the chat is told `Started a new conversation after 24 h idle`
+- **AND** the old conversation is still in the conversation list
+
+#### Scenario: a chat active within the idle period keeps its conversation
+- **GIVEN** a paired chat whose active conversation was last active 23 hours ago
+- **WHEN** the owner sends a message
+- **THEN** the message joins that conversation and nothing is announced
+
+#### Scenario: zero idle hours never opens a new conversation
+- **GIVEN** a channel whose `new_conversation_after_idle_hours` is 0 and a conversation idle for 90 days
+- **WHEN** the owner sends a message
+- **THEN** the message joins that conversation
+
+#### Scenario: the idle period applies to each group thread's conversation
+- **GIVEN** two threads of one group, each with its own conversation, one idle past the period and one not
+- **WHEN** the owner messages both threads
+- **THEN** only the idle thread opens a new conversation
+
+#### Scenario: the idle period comes from the channel's settings
+- **WHEN** a channel config omits `new_conversation_after_idle_hours`, sets it to 0, or sets it below 0 or above 8760
+- **THEN** it is 24, it is 0 (never), and it is refused
+- **AND** the owner can set it to 6 on the channel's Settings tab, and a value outside the range is refused
+
+### Requirement: Open a new conversation when the active one is archived
+A message that reaches a chat whose active conversation is archived MUST open a
+new conversation, the same way a deleted one is replaced. The archived
+conversation stays archived: a channel message never un-archives it and the
+retention sweep never deletes it on account of the message. Nothing is announced
+— archiving was the owner's own act.
+
+#### Scenario: a message to an archived conversation opens a new one
+- **GIVEN** a paired chat whose active conversation the owner archived on the web
+- **WHEN** the owner sends a message to the chat
+- **THEN** a new conversation becomes the chat's active one and answers the message
+- **AND** the archived conversation is still archived and has not been deleted
 
 ### Requirement: Persist inbound attachments as references
 Inbound attachments MUST be visible on later turns. The persisted user message
@@ -1162,8 +1384,8 @@ has a chat id to aim at. The block is folded in after command detection (a
 prefixed `/help` would stop being a command) and after the empty-envelope check,
 and is persisted on the user message exactly like thread context — the single
 source of truth (see "Persist inbound attachments as references") stays one
-string. It rides on **every** turn, not just a conversation's first: `/agent`
-can swap the agent mid-conversation (see "Drive every managed agent from one
+string. It rides on **every** turn, not just a conversation's first: `/new <agent>`
+can swap the agent between conversations of one thread (see "Drive every managed agent from one
 bot") and a resumed session would otherwise lose it. Title and sender name are
 chat-member-settable, so both are collapsed to one clipped line before they
 reach the prompt — a rename cannot forge extra origin lines. Where a platform
@@ -1203,11 +1425,11 @@ same group/thread, not a DM.
 
 #### Scenario: a group selection-card tap replies in the group/thread
 - **GIVEN** a paired channel with a group peer, on a button-capable transport,
-  with a second agent registered
-- **WHEN** the owner taps an `/agent` selection-card button in a group thread
-- **THEN** the switch is applied to that group thread and the "switched"
+  whose agent offers a model catalogue
+- **WHEN** the owner taps a `/model` selection-card button in a group thread
+- **THEN** the model is applied to that group thread's conversation and the
   confirmation is routed back into the group/thread (never a DM); a non-owner's
-  tap is refused with a routed "not authorized" reply and no switch
+  tap is refused with the same routed "Only <bot>’s owners can use it here." reply and no switch
 
 ### Requirement: Configure when the bot answers in a group
 Per-group inbound gating MUST be configurable. A channel may set
@@ -1243,17 +1465,24 @@ about *when* to answer, not *who* may drive turns.
 
 ### Requirement: Acknowledge receipt and completion by capability
 Receipt and progress MUST be acknowledged, capability-gated (never by transport
-type). On a `supports_reactions` transport an ack reaction (👀) marks receipt on
-the owner's own message immediately, and a ✅ marks completion on a clean finish
-(an errored/interrupted turn keeps just the receipt). A transport without
-reactions uses its typing/working signal as the receipt-and-progress cue
-instead. All best-effort — a failed ack never breaks the turn.
+type). On a `supports_reactions` transport the owner's own message carries one
+reaction that follows the turn: a **received** mark the moment it arrives (a
+message queued behind a running turn keeps it), a **working** mark when its turn
+starts, and one of **done** (a clean finish, including one that ends on a
+question for the owner), **failed** (an error) or
+**stopped** (interrupted) when it ends. Which emoji each stage uses is the
+transport's declared `reactions` set, because a platform may accept only a fixed
+list — each child spec names its own. A reaction replaces the previous one, so
+the message shows where the turn is now. A transport without reactions uses its
+typing/working signal as the receipt-and-progress cue instead. All best-effort —
+a failed mark never breaks the turn.
 
 #### Scenario: receipt and completion are acked with reactions where supported
 - **GIVEN** a paired channel on an adapter that supports reactions
 - **WHEN** the owner sends a message that drives a clean turn
-- **THEN** a 👀 reaction is set on the owner's own message immediately on receipt and
-  a ✅ reaction on completion, both targeting that inbound message id
+- **THEN** the received mark is set on the owner's own message immediately on
+  receipt, the working mark when the turn starts, and the done mark on
+  completion, all targeting that inbound message id
 
 #### Scenario: a transport without reaction support attempts no reaction
 - **GIVEN** a paired channel on an adapter that does not support reactions,
@@ -1266,29 +1495,42 @@ instead. All best-effort — a failed ack never breaks the turn.
 - **WHEN** the owner sends a message that drives a turn
 - **THEN** the reply is still delivered — the best-effort reaction is suppressed
 
+#### Scenario: a failed turn ends on the failed mark
+- **GIVEN** a paired channel on an adapter that supports reactions
+- **WHEN** the owner's message drives a turn that errors
+- **THEN** the message's marks are received, working, then failed — never done
+
+#### Scenario: a turn's marks follow it from receipt to its end
+- **GIVEN** a paired channel on an adapter that supports reactions
+- **WHEN** the owner's message drives a turn that is interrupted
+- **THEN** the message's marks are received, working, then stopped
+
 ### Requirement: Grow a reply in place on one live surface
 A reply MUST grow in place, by whatever live-text mechanism the platform has —
 chosen from the adapter's declared capabilities, never its type — so the answer
 never arrives as a run of fragments. The capability the core asks about is
 `supports_live_text` ("is there a surface I can keep updating while this turn
-runs?"), NOT `supports_edit` ("can a delivered message be rewritten?"). The two
-flags are set independently, because a transport can have a live surface while
-being unable to rewrite a delivered message at all; keying the strategy on
-`supports_edit` silently denied such a transport the live experience it does
-support, and its replies arrived as several chunked messages at the end of the
-turn.
+runs?"), whether the transport gets there by editing one message (Telegram) or
+by streaming one (SeaTalk, which cannot rewrite a delivered message at all). The
+core asks for a live-text handle and never branches on the mechanism underneath,
+so no capability says "can rewrite a delivered text message": keying the strategy
+on that would silently deny a streaming transport the live experience it does
+support, and its replies would arrive as several chunked messages at the end of
+the turn.
 
 A turn keeps exactly ONE live surface. WHEN it opens depends on whether that
 surface becomes the reply or is scaffolding thrown away at the end, which the
 adapter declares as `live_text_persists`. Where it persists, the surface opens
-the moment the turn starts and says so — an acknowledgement the user can see,
+the moment the turn starts and says so — its status line (see "Show a turn's
+working state as one status line") is an acknowledgement the user can see,
 because the wait between a message and an answer is otherwise the whole of what
 they get, and on a long turn it reads as the bot having missed them. That
 acknowledgement costs no extra message: the reply is the same one, rewritten in
 place. Where the surface is scaffolding, it opens only once the turn has run
 past the update interval — either tool activity opens it or the reply text does
 — so a reply that finishes sooner opens none, avoiding a create → delete →
-resend flicker.
+resend flicker. A turn still thinking in silence opens it on the status line's
+first tick.
 
 The cadence of updates belongs to the TRANSPORT, which alone knows its own
 limits: the core offers every snapshot and each surface buffers to what it can
@@ -1300,6 +1542,12 @@ exceeds the cap. They are escaped rather than sent as plain text because the
 message has to be able to carry an @mention from the moment it is created (see
 "Mention the asker in a group answer"), and a mention is only a name in rich
 text.
+
+A transport may also declare that its surface cannot stream in a GROUP
+(`streams_in_groups` false — SeaTalk, whose stream cannot be rewritten and so
+cannot be withdrawn): a group turn there opens no surface at all, shows the typing
+indication, and its finished reply is sent through the ordinary send path (see
+"Withdraw a bot reply on the owner's command"). Direct chats stream as before.
 
 How a surface *ends* is the transport's business, and each child spec states its
 own. A transport with no live surface at all posts no interim traffic; its final
@@ -1328,6 +1576,11 @@ heartbeat never breaks the turn.
   progress first, then the accumulating reply — and it finishes carrying the
   final reply, so nothing is sent twice and the answer never arrives as
   fragments
+
+#### Scenario: a group turn opens no live surface on a transport that cannot stream in a group
+- **GIVEN** a paired group on a transport that streams in direct chats but declares it cannot in a group
+- **WHEN** a turn runs and writes its reply
+- **THEN** no live surface is opened, and the finished reply arrives through the ordinary send path
 
 ### Requirement: Process each inbound event once
 Inbound events MUST be de-duplicated: a redelivered platform event (same message
@@ -1520,49 +1773,48 @@ stops the bot from *acting* on everything, this one stops it from *saying*
 everything out loud. Every command declares which side of that line it falls on,
 on the same roster "Register the bot's command menu and profile from one roster"
 registers the menu from: `/new` and `/stop` change state the whole room shares
-and stay visible, and so does `/save`, whose outcome is a file the room's other
-members can be expected to want to know about; the ones that answer only the
-asker — `/agent`, `/model`, `/effort`, `/status`, `/help` — are delivered
-privately where the transport can. A roster entry that declares nothing is
-**visible**, so privacy is something a command opts into rather than something it
-acquires by omission; a command that is not on the roster at all is answered
-privately, because an "unknown command" scolding is the least useful thing to
-broadcast. The two defaults differ because they answer different questions —
-what a command Coffer ships decided, versus what to do with a string nobody
-declared.
+and stay visible; the ones that answer only the asker — `/help`, and the
+one-line notice a direct-chat command (`/model`, `/dir`, `/status`, `/resume`,
+`/thread`) gets in a group — are delivered privately where the transport can. A roster entry that declares
+nothing is **visible**, so privacy is something a command opts into rather than
+something it acquires by omission; a "Did you mean" correction (see "Pass
+unreserved slash text to the agent") is answered privately, because a correction
+is the least useful thing to broadcast.
 
 **Selection cards are deliberately excluded.** A card is the one surface that
-must be *rewritten* after it is used (see "Offer command choices as owner-gated
-selection cards"), and a privately-delivered message is rewritten through a
+must be *rewritten* after it is used (see "Offer choices and actions as owner-gated cards"), and a privately-delivered message is rewritten through a
 different address space whose delivery the platform does not guarantee. A card
 that cannot be reliably rewritten keeps offering the option already taken, which
-is precisely what the rewrite in "Offer command choices as owner-gated
-selection cards" exists to prevent, so a card stays an
-ordinary message until the rewrite is as reliable as the send. Worth revisiting
-only if a platform makes that edit as reliable as an ordinary one.
+is precisely what the rewrite exists to prevent, so a card stays an ordinary
+message until the rewrite is as reliable as the send. Worth revisiting only if a
+platform makes that edit as reliable as an ordinary one.
 
 #### Scenario: a group command answer is shown only to the asker
 - **GIVEN** a paired group on a transport that can deliver a message only one member sees
-- **WHEN** the owner sends `/status` in that group, and then `/new`
-- **THEN** the `/status` answer is delivered privately to the owner
+- **WHEN** the owner sends `/help` in that group, and then `/new`
+- **THEN** the `/help` answer is delivered privately to the owner
 - **AND** the `/new` confirmation is an ordinary message the group can see
 
 ### Requirement: Register the bot's command menu and profile from one roster
-The bot MUST introduce itself. Its command menu is registered with the platform
-from Coffer's own command roster, and its prose profile (description, short
-description) is **filled in when empty**, so a user opening the bot for the
-first time sees what it is and what it accepts instead of an empty chat. The
-registered menu MUST list every command the channel actually handles — a command
-the help text offers but the menu omits is a drift bug, not a design choice.
-This is enforced structurally rather than by review: the menu, the help text and
-the per-command privacy flag (see "Keep non-answer chatter private in a group")
-are all rendered from one roster, so adding a command is one entry plus its
-handler, with no second list to forget. Copy the owner already wrote, and the
-bot's name, are their branding decision and MUST NOT be overwritten.
+The bot MUST introduce itself. Its command menus are registered with the
+platform from Coffer's own command roster, and its prose profile (description,
+short description) is **filled in when empty**, so a user opening the bot for
+the first time sees what it is and what it accepts instead of an empty chat. The
+registered menus MUST list the commands the channel actually handles — a command
+the help text offers but the private-chat menu omits is a drift bug, not a
+design choice. This is enforced structurally rather than by review: the menus,
+the help text, the typo guard (see "Pass unreserved slash text to the agent")
+and the per-command privacy flag (see "Keep non-answer chatter private in a
+group") are all rendered from one roster, so adding a command is one entry plus
+its handler, with no second list to forget. Each entry carries its description
+in English and Chinese, and whether it works only in a direct chat — which keeps it out of a group's menu and help. A platform with no menu API (SeaTalk) introduces
+the commands through the help card instead (see "Offer the commands as a help
+card"). Copy the owner already wrote, and the bot's name, are their branding
+decision and MUST NOT be overwritten.
 
 #### Scenario: the command menu matches the commands that exist
 - **GIVEN** the channel command roster,
-- **WHEN** the transport registers its command menu,
+- **WHEN** the transport registers its private-chat command menu,
 - **THEN** every command the channel handles is registered.
 
 ### Requirement: Pair by a one-tap start link
@@ -1652,9 +1904,14 @@ only shouting. Four constraints bound it.
   Where the platform documents a second way to address a member, it is a
   FALLBACK for a sender whose id is missing, never the primary: the id is the
   identifier that is always present.
+- A platform whose mention is a link that shows a name (Telegram) spells it
+  with the asker's display name as well as the id; the name is stripped of
+  anything that could end the link text.
 - It degrades silently: no id and no usable fallback, or a transport that cannot
-  mention from an id alone, yields an ordinary unmentioned reply — never a broken
-  tag.
+  mention at all, yields an ordinary unmentioned reply — never a broken tag.
+- Only a surface that persists as the reply carries the mention while it grows;
+  scaffolding that is deleted before the answer carries none, and the answer —
+  a new message — opens with it.
 
 #### Scenario: a group reply @mentions whoever asked
 - **GIVEN** an addressed message in a group from a member the transport named,
@@ -1695,8 +1952,7 @@ inside the window restarts it. The window is 1.5 seconds after a text message.
 It is 5 seconds after a message that is rarely the whole ask: a forwarded chat
 record, or files with no text. Both windows are the channel's own settings,
 `wait_after_text_seconds` and `wait_after_forward_seconds`, each from 0 to 60
-seconds and edited on the Channels page or with `coffer channel edit
---wait-after-text/--wait-after-forward`; 0 runs every such message as its own
+seconds and edited on the Channels page; 0 runs every such message as its own
 turn.
 
 The coalesced turn carries:
@@ -1706,19 +1962,23 @@ The coalesced turn carries:
   attaches to and mentions.
 
 Every message is still acknowledged when it arrives (see "Acknowledge receipt
-and completion by capability"), never only when the window closes. Messages
+and completion by capability"), never only when the window closes, and every
+message of the burst — not only the last — carries the turn's later marks, so none
+stays on its receipt mark; a message `/stop` discards from the burst is marked
+stopped. Messages
 sent while a turn is running are coalesced the same way before they join the
 conversation's pending queue.
 
 A slash command is never held. It first releases what its chat and thread are
 holding, so the turn it follows still runs first. `/stop` is the exception:
-it drops the held messages instead, since they had not started.
+it drops the held messages instead, since they had not started. A tap on a command
+button is the command typed, so it settles the held messages the same way.
 
 #### Scenario: a forwarded record and its follow-up become one turn
 - **GIVEN** a paired direct chat
 - **WHEN** the owner forwards a chat record and, two seconds later, sends "look into this"
 - **THEN** one turn runs, and its text holds the forwarded record followed by "look into this"
-- **AND** both messages were acknowledged when they arrived
+- **AND** both messages were acknowledged when they arrived, and both carry the turn's done mark when it ends
 
 #### Scenario: messages further apart than the window are separate turns
 - **GIVEN** a paired direct chat
@@ -1728,7 +1988,7 @@ it drops the held messages instead, since they had not started.
 #### Scenario: /stop drops messages still being held
 - **GIVEN** a message waiting in its quiet window
 - **WHEN** the owner sends `/stop` before the window closes
-- **THEN** the waiting message never becomes a turn
+- **THEN** the waiting message never becomes a turn, and it is marked stopped
 
 #### Scenario: a channel's quiet windows come from its settings
 - **GIVEN** a channel whose config sets no windows
@@ -1736,9 +1996,9 @@ it drops the held messages instead, since they had not started.
 - **THEN** it waits 1.5 seconds after text and 5 seconds after a forward
 - **AND** a config may set either window anywhere from 0 to 60 seconds, and a value outside that range is refused
 
-#### Scenario: the quiet windows are edited from the command line
+#### Scenario: the quiet windows are edited in the channel's settings
 - **GIVEN** a registered channel
-- **WHEN** the owner runs `coffer channel edit <name> --wait-after-text 0 --wait-after-forward 8`
+- **WHEN** the owner sets the wait after a text message to 0 and the wait after a forward to 8 in the channel's settings
 - **THEN** the channel's config holds those two windows and every other setting is unchanged
 
 #### Scenario: the quiet windows are edited on the Channels page
@@ -1746,7 +2006,102 @@ it drops the held messages instead, since they had not started.
 - **WHEN** the owner changes the wait after a text message and saves
 - **THEN** the channel's config holds the new window and the other settings are unchanged
 
-### Requirement: Open parallel conversations in a direct chat
+### Requirement: Offer choices and actions as owner-gated cards
+On a transport that declares the `supports_buttons` capability, the core MAY
+render a command's choice list as an **interactive selection card**; outbound
+text MAY carry `ChoiceButton`s, which a button-capable transport renders as such
+a card. A button tap arrives as a normalized `InboundCallback` carrying an
+opaque value instead of text; the core MUST **owner-gate it exactly like a
+message** (chat + sender identity, see "Gate inbound traffic on sender
+identity") before routing it to the same switch the text command performs. A tap
+never pairs, and an unsupported transport silently keeps the text path. This
+realizes the interactive-button capability that
+[Channel Adapter Framework](../../../docs/decisions/channel-adapter-framework.md)'s
+`ChannelCapabilities` anticipated ("show buttons?").
+
+Two kinds of button exist. A **choice** carries `model:`, `effort:`, `dir:`,
+`resume:` or `collection:` and applies that choice. A **command button** carries
+`cmd:<name>` — the Stop, New, Model, Resume and Dir buttons of the status and
+help cards — and a tap runs exactly what typing `/<name>` in that chat or thread
+runs.
+
+The card payload MUST follow each platform's published shape, which each child
+spec states. A card the platform refuses is not the end of the command: the
+handler falls back to the plain-text answer it already has, so a rejected card
+degrades to a working message instead of leaving the user with silence. The
+rejection is logged so it stays diagnosable. After a choice lands, a transport
+that `supports_card_update` MUST **rewrite the card in place** so its tick moves
+to the new choice — a card left advertising the option the user just took
+invites a second tap that does nothing. The rewrite is best-effort: the choice
+is already applied and confirmed in chat, so a transport without the
+capability, or a rewrite the platform refuses, changes nothing the user relies
+on.
+
+A card carries a **bounded number of buttons** — six, navigation included. A
+choice list longer than that bound is **paginated**: the card shows four choices
+plus `← Prev` / `Next →`, and a navigation tap **rewrites the same message** at
+the next window through the same `supports_card_update` path an applied choice
+uses. One rule serves every card — a handful of levels or directories render
+with no navigation chrome at all.
+
+A navigation payload lives in its own callback namespace (`page:<kind>:<index>`),
+disjoint from the values a choice carries, and fixed-size so it fits the
+tightest callback budget any transport declares. The separation is what
+guarantees the invariant: **a page turn changes nothing.** The set of kinds that
+namespace admits is closed and explicit, so adding a card that ticks a current
+choice means adding its kind there too; a `page:` value naming a kind Coffer
+does not render is dropped, not applied. It re-reads what is in effect and
+re-renders; it can never be mistaken for a choice, and a malformed navigation
+value is dropped rather than allowed to fall through to the switch. Because the
+page in view may not hold the option in effect, the card's body always names
+what is in effect and which page it is on, so a page showing no tick never reads
+as a card claiming nothing is selected.
+
+Unlike the cosmetic rewrite after a choice, a page turn is something the user
+asked to see, so it degrades rather than dropping: where the message cannot be
+rewritten in place — no `supports_card_update`, or an update the platform
+refused — the requested page is posted as a fresh card, and as plain text if
+that is refused too.
+
+#### Scenario: a command button runs the command it names
+- **GIVEN** a paired channel on a button-capable transport showing a `/status`
+  card
+- **WHEN** the owner taps its New button
+- **THEN** a fresh conversation becomes active exactly as if the owner had typed
+  `/new` in that chat
+
+#### Scenario: a long selection card is browsed page by page in place
+- **GIVEN** a paired channel on a button-capable transport showing a `/model`
+  card built from a catalogue far longer than one card can carry
+- **WHEN** the owner taps `Next →`
+- **THEN** the same card message is rewritten with the following page of models
+  — no second card is posted, no model is switched, and the body still names the
+  model in effect and the page it is on; the last page offers no `Next →`, and a
+  page turn the platform will not apply in place arrives as a fresh card (or as
+  plain text) rather than as silence
+
+#### Scenario: a non-owner selection-card tap is ignored
+- **GIVEN** a paired channel whose peer has a stored `sender_id`
+- **WHEN** a different member of the chat taps a selection-card button
+- **THEN** the tap is ignored and the owner's model and conversation are
+  unchanged
+
+#### Scenario: a refused selection card falls back to the text reply
+- **GIVEN** a button-capable transport that refuses the selection card outright
+- **WHEN** the owner sends `/model` or `/status`
+- **THEN** the command answers with its plain-text report instead and the
+  refusal is logged — silence is the one outcome a command must never produce
+
+#### Scenario: a tapped selection card is rewritten with the new choice
+- **GIVEN** a paired channel on a transport that `supports_card_update`, showing
+  a selection card
+- **WHEN** the owner taps a different choice
+- **THEN** the card is rewritten in place with the tick moved to the choice just
+  made; on a transport without the capability nothing is rewritten and the
+  choice still applies, and a rewrite the platform refuses leaves the choice and
+  its confirmation intact
+
+### Requirement: Open parallel conversations beside a direct chat
 A direct chat MUST be one conversation, and the owner MUST be able to open
 further conversations beside it deliberately:
 - `/thread [title]` opens a **parallel thread**. It is a thread in the direct
@@ -1755,13 +2110,14 @@ further conversations beside it deliberately:
   spec states.
 - Each parallel thread is numbered per chat, and it MUST carry the mark
   `🧵#N title` (title defaulting to `Task`) wherever it is shown: the thread's
-  root message or topic name, the conversation's title on the web, `/status`
-  inside it, and `/threads`.
-- `/threads` answers how many parallel threads the chat has, and lists each
-  one's mark, agent, and whether a turn is running, waiting, or idle, newest
-  first.
-- `/thread` in a group answers that every group thread is already its own
-  conversation, and opens nothing.
+  root message or topic name, the conversation's title on the web, and `/status`
+  both inside it and in the direct chat.
+- `/status` in the direct chat says how many parallel threads the chat has and
+  lists each one's mark, agent, and whether a turn is running, waiting, or idle,
+  newest first.
+- `/thread` works only in a direct chat; in a group it is declined (see
+  "Answer the conversation commands from any paired chat"), because every group
+  thread is already its own conversation.
 
 A thread in a direct chat that `/thread` did not open is, on a platform where
 such threads are casual replies, part of the direct chat's conversation. It is
@@ -1773,7 +2129,566 @@ still answered inside that thread.
 - **THEN** a thread marked `🧵#1 deploy check` appears in the chat
 - **AND** a message in that thread runs in a new conversation titled `🧵#1 deploy check`, while the direct chat's own conversation is untouched
 
-#### Scenario: /threads counts and lists the parallel threads
+#### Scenario: /status in a direct chat lists its parallel threads
 - **GIVEN** a direct chat with two parallel threads, one of them running a turn
-- **WHEN** the owner sends `/threads`
+- **WHEN** the owner sends `/status` in the direct chat
 - **THEN** the answer says there are two parallel threads and lists both marks, each with its agent and its state
+
+### Requirement: Switch the agent with /new
+The owner MUST be able to switch which agent answers in a chat with `/new
+<agent>`: the agent of an existing conversation cannot change, so choosing
+another one is starting a fresh conversation with it, and one command says so.
+The argument is a name the owner sees — the agent's display name or its
+lowercase hyphenated name (`claude-code`, `codex`), matched case-insensitively
+with `-`, `_` and spaces treated alike — never an internal key, and no answer
+shows one. It is validated against the agents the channel may drive (see "Limit
+the agents a channel may drive to its scope"); on success it becomes the chat
+thread's sticky agent, so later messages and `/new` use it until switched again.
+A model and effort chosen for the previous agent do not follow it to a different
+one; the working directory does. An unknown name is refused with the valid names
+listed and the active conversation unchanged; no channel-side code is added per
+agent. The `/new` card's Agent button offers the same agents as a card, the one
+in effect ticked; a tap does exactly what `/new <agent>` does, and a tap naming
+an agent the channel may no longer drive is refused with nothing changed.
+
+#### Scenario: /new with an agent name switches and sticks
+- **GIVEN** a paired channel with a second scripted agent registered
+- **WHEN** the peer sends `/new <second agent's name>` and then a message
+- **THEN** a fresh conversation pinned to the second agent becomes active, the
+  message is answered by it, and a bare `/new` reuses it until switched again
+
+#### Scenario: /new rejects an unknown agent name
+- **GIVEN** a paired channel
+- **WHEN** the peer sends `/new nope`
+- **THEN** the channel replies that the agent is unknown and lists the valid
+  names, and the active conversation is unchanged
+
+### Requirement: Keep a chat's settings across its conversations
+A chat thread MUST remember its settings — the agent, the model, the reasoning
+effort and the working directory — and a fresh conversation opened there, by
+`/new`, by a deleted conversation being replaced, or by `/dir`, MUST open with
+them. What the thread has not set falls back, in a group thread, to the group's
+defaults (see "Set a group's defaults from its main chat"), and then to the
+channel's own default agent and agent configuration. `/model default` and `/dir
+default` are the ways back to the defaults.
+
+#### Scenario: /new keeps the chat's model, effort and directory
+- **GIVEN** a paired chat whose owner set a model, an effort and an allowed
+  directory from chat
+- **WHEN** the owner sends `/new`
+- **THEN** the fresh conversation runs on the same agent, model, effort and
+  directory
+
+#### Scenario: a group thread inherits the group's defaults
+- **GIVEN** a group whose defaults name an agent
+- **WHEN** the owner starts a new thread in that group
+- **THEN** that thread's conversation opens on the group's agent
+
+### Requirement: Pass unreserved slash text to the agent
+Only Coffer's nine commands (see "Answer the conversation commands from any
+paired chat") MUST be taken out of the conversation. Any other text starting
+with `/` — an agent's own command such as `/compact` or a skill invoked as
+`/review`, or a message that opens with a path such as `/Users/me/app crashes` —
+is an ordinary message and reaches the agent exactly like any other. A single
+slash-word within one edit (for names of four letters or fewer) or two edits
+(for longer names) of a Coffer command — a swap of two neighbouring letters
+counting as one — is a slip, and is answered with one line, `Did you mean
+/stop?`, and runs nothing. The commands this set replaced (`/agent`, `/effort`,
+`/threads`, `/save`) are not reserved: `/threads` is a slip of `/thread`, and
+the others reach the agent.
+
+#### Scenario: an unreserved slash word reaches the agent
+- **GIVEN** a paired channel
+- **WHEN** the owner sends `/compact`
+- **THEN** a turn runs with `/compact` in its text and no command answers
+
+#### Scenario: a message starting with a path reaches the agent
+- **GIVEN** a paired channel
+- **WHEN** the owner sends `/Users/me/app crashes on start`
+- **THEN** the message is answered by the agent as an ordinary message
+
+#### Scenario: a near miss of a command is corrected, not sent
+- **GIVEN** a paired channel
+- **WHEN** the owner sends `/stpo`
+- **THEN** the channel answers `Unknown command /stpo. Did you mean /stop? Send /help for all commands.` and no turn runs
+
+#### Scenario: a removed command reaches the agent as text
+- **GIVEN** a paired channel
+- **WHEN** the owner sends `/agent codex`
+- **THEN** no agent is switched and the text reaches the agent as a message
+
+### Requirement: Choose the working directory from chat
+The owner MUST be able to move a chat's conversation to another working
+directory from chat — but only to a directory the channel allows. A channel's
+Settings carry its Working directories: a **Default**, the absolute path new
+conversations start in (stored as the default agent configuration's `cwd`; set
+on the Channels page and cleared there; none means the Coffer workspace `~/.coffer/content/workspace`), and the list **Allowed for
+/dir**, `directories`, absolute paths shown as rows with Remove and an Add
+directory… folder picker, the default's row marked "default", and edited on the Channels page;
+each entry also admits the directories beneath it. With no allowed directory,
+`/dir` is off.
+`/dir <path>` accepts an allowed path or one beneath it, `/dir <name>` the base
+name of exactly one allowed path; either must be an existing directory. Because
+an agent's session is tied to its directory, setting one opens a fresh
+conversation there and remembers the directory for the chat; the previous
+conversation stays one `/resume` away. `/dir default` returns to the channel's
+default directory. `/dir` with no argument reports the directory in effect and,
+where the transport has buttons, offers the allowed ones as a "Working
+directory" card naming each by its path (under the home directory as `~/…`),
+plus Default when the channel's default is not one of them. A switch answers
+"📁 Now in <path> — started a fresh conversation". A channel that allows no
+directory says `/dir` is off and where to add one; a directory outside the list
+is refused with the allowed ones named.
+
+#### Scenario: /dir switches to an allowed directory in a fresh conversation
+- **GIVEN** a paired channel whose allow-list names an existing directory
+- **WHEN** the owner sends `/dir <that directory's name>` and then a message
+- **THEN** a fresh conversation runs that message in the directory, and the
+  previous conversation is still listed by `/resume`
+
+#### Scenario: /dir refuses a directory outside the allow-list
+- **GIVEN** a paired channel whose allow-list names one directory
+- **WHEN** the owner sends `/dir /etc`
+- **THEN** the channel refuses, naming the allowed directory, and the active
+  conversation and its directory are unchanged
+
+#### Scenario: the channel's directories are edited on the Channels page
+- **GIVEN** a registered channel
+- **WHEN** the owner sets its directories in the channel's settings on the Channels page
+- **THEN** the channel's configuration carries exactly those absolute paths, and
+  removing every row clears them
+
+#### Scenario: the channel's default directory is edited on the Channels page
+- **GIVEN** a registered channel
+- **WHEN** the owner sets its Default working directory in the channel's settings on the Channels page
+- **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and clearing the field removes it
+- **AND** a relative path is refused with nothing saved, in the Default working directory and in the allowed list alike
+
+### Requirement: Resume an earlier conversation from chat
+Every conversation a chat thread opens MUST be remembered for that thread, and
+the owner MUST be able to return to one from chat. `/resume` lists the thread's
+recent conversations, newest first, each by title, agent and age, with the one
+in effect ticked, as a card where the transport has buttons; `/resume <n>` or a
+tap makes the n-th the thread's active conversation again, so the next message
+continues it. Only conversations this chat thread opened are offered — never one
+from the web or another chat, and a tapped value naming any other conversation
+is refused. A conversation deleted since is left out.
+
+#### Scenario: /resume lists this chat's earlier conversations
+- **GIVEN** a paired chat that has opened two conversations with `/new`
+- **WHEN** the owner sends `/resume`
+- **THEN** both are listed by title, newest first, with the active one ticked
+
+#### Scenario: /resume n reopens that conversation
+- **GIVEN** a paired chat with an earlier conversation listed second by `/resume`
+- **WHEN** the owner sends `/resume 2` and then a message
+- **THEN** the message continues that earlier conversation
+
+#### Scenario: /resume never offers another chat's conversation
+- **GIVEN** two paired chats of one channel, each with its own conversations
+- **WHEN** the owner sends `/resume` in one of them, or taps a resume value
+  naming the other chat's conversation
+- **THEN** only that chat's own conversations are offered, and the foreign one is
+  refused
+
+### Requirement: Report the chat's state as a status card
+`/status` MUST answer what the chat is running in words a person reads, under
+the title "Status": the conversation's title (or its parallel mark); one line
+with the agent by its display name, the model by the name its button shows, the
+effort when one is set, and the working directory (under the home directory as
+`~/…`); then "Running", "Running · n waiting", "n waiting" or "Idle"; in a
+direct chat, one "Parallel threads (n):" line naming each with its agent and its state (see "Open
+parallel conversations beside a direct chat"). It shows no conversation or agent
+ids. Where the transport has buttons it is a card whose buttons — Stop while a
+turn runs, then New, Model, Resume, Dir — run those commands, so a user who
+remembers one word reaches every action by tapping; elsewhere it is text.
+In a group where the answer can be delivered to the asker alone (see "Keep
+non-answer chatter private in a group") it is sent that way, as text: a card is
+always an ordinary message the whole room would see. The same holds for the
+help card.
+
+#### Scenario: /status shows names, not ids, with action buttons
+- **GIVEN** a paired chat on a button-capable transport with an active
+  conversation
+- **WHEN** the owner sends `/status`
+- **THEN** a card titled "Status" names the conversation, the agent by display name, the model,
+  the effort and the directory, carries the New, Model, Resume and Dir buttons —
+  and Stop too while a turn runs — and contains no conversation id
+
+### Requirement: Offer the commands as a help card
+`/help` MUST list the commands from the roster on one line, each with its
+arguments, then say that anything else is a message to the agent; where the
+transport has buttons it is a card titled "Commands" carrying New, Stop, Model,
+Status and Resume in a direct chat. In a group `/help` lists only `/new`,
+`/stop`, `/del` and `/help`, and its card carries New and Stop alone. The help card is
+sent automatically right after pairing succeeds (pairing is a direct chat). A
+platform with no command menu (SeaTalk) shows what the bot accepts through
+`/help`.
+
+#### Scenario: /help is a card with the five actions
+- **GIVEN** a paired chat on a button-capable transport
+- **WHEN** the owner sends `/help`
+- **THEN** a card lists the commands and carries the New, Stop, Model, Status
+  and Resume actions as buttons
+
+#### Scenario: the help card follows pairing
+- **GIVEN** an unpaired channel with an issued pairing code
+- **WHEN** the owner pairs by sending the code
+- **THEN** the pairing is confirmed and the help card listing every command follows it
+
+### Requirement: Set a group's defaults from its main chat
+On a platform where every @mention in a group's main chat roots a fresh thread
+(SeaTalk), a command sent in the main chat MUST configure the group rather than
+that one-message thread: `/new <agent>` sets the group's default agent, which
+every new thread of the group inherits (see "Keep a chat's settings across its
+conversations"), and the answer says so, while bare `/new` says what the
+defaults are; and `/stop` interrupts every turn running in that group and lists
+what it stopped. A thread's own settings still win inside it. `/model`, `/dir`,
+`/status` and `/resume` are direct-chat commands and set nothing here (see
+"Answer the conversation commands from any paired chat"). Where a group's main
+chat is itself one conversation (a Telegram group without topics) nothing
+changes: commands apply to that conversation.
+
+#### Scenario: an agent sent in a SeaTalk group's main chat becomes the default for new threads
+- **GIVEN** a paired SeaTalk group
+- **WHEN** the owner sends `@bot /new <agent>` in the group's main chat, and
+  later @mentions the bot with a question in the main chat
+- **THEN** the first answer says the agent is the default for new threads, and
+  the question's thread runs on that agent
+
+#### Scenario: /stop in a SeaTalk group's main chat stops every turn in the group
+- **GIVEN** a paired SeaTalk group with turns running in two of its threads
+- **WHEN** the owner sends `@bot /stop` in the group's main chat
+- **THEN** both turns are interrupted and the answer lists both
+
+### Requirement: Show a turn's working state as one status line
+While a turn runs, its live surface MUST open with one status block the reader
+can take in at a glance: a header saying that the turn is working, for how long,
+and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
+failed count when there is one); the agent's latest narration as a `💬` line;
+and the newest three step lines, older ones collapsed into `+N earlier`. A step
+line names the tool, plus a short descriptor from its input in a direct chat
+only; a group's step lines carry nothing from the input. The answer written so
+far follows under a rule. The header MUST keep ticking while nothing else
+happens — a long silent tool still shows time passing — on the cadence the live
+surfaces already keep alive at, so the tick costs no extra traffic.
+
+Text the agent writes before a tool call is narration ("Let me check the
+logs"): once the tool call arrives it moves up into the `💬` line and the answer
+tail shows only text written after the last tool call. The final reply keeps
+every segment the agent wrote, with a paragraph break between the text either
+side of a tool call, so two sentences never run together.
+
+A channel setting `show_steps` (default on) hides the step lines and keeps the
+header and narration — useful in a busy group. It is edited on the Channels
+page.
+
+A transport that must shorten a snapshot to its own limit clips the answer's
+oldest words and keeps the status block whole; only a limit too small for the
+block drops the step lines, then the header.
+
+#### Scenario: a long turn shows elapsed time and step count in one status line
+- **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
+  one of which failed
+- **WHEN** its status block is drawn
+- **THEN** the header reads `⏳ Working · 2m 14s · 8 steps (1 failed)`, followed by
+  `+5 earlier` and the newest three step lines
+
+#### Scenario: narration between tool calls moves to the status line
+- **GIVEN** a turn whose agent writes a sentence and then calls a tool
+- **WHEN** the tool call arrives and the agent then writes its answer
+- **THEN** the sentence appears as the status block's `💬` line and the answer
+  alone grows under the rule
+
+#### Scenario: the status line keeps ticking during a silent tool
+- **GIVEN** a turn whose tool runs for minutes without producing an event
+- **WHEN** the live surface is next redrawn on its cadence
+- **THEN** the header shows the new elapsed time
+
+#### Scenario: the final reply keeps every paragraph the agent wrote
+- **GIVEN** a turn whose agent wrote text, called a tool, then wrote more text
+- **WHEN** the reply is delivered
+- **THEN** it holds both texts with a paragraph break between them
+
+#### Scenario: hiding steps keeps only the header
+- **GIVEN** a channel with `show_steps` off
+- **WHEN** a turn calls a tool
+- **THEN** the status block shows the header and narration but no step line
+
+#### Scenario: the step lines are hidden in the channel's settings
+- **WHEN** the owner switches the channel's step lines off in its settings, then on again
+- **THEN** the channel's `show_steps` setting is off, then on again
+
+### Requirement: Ping the asker when a long turn ends
+A turn that ran at least the channel's `notify_after_seconds` (default 90, from
+0 to 3600; 0 turns it off) MUST end with one short new message wherever its
+answer would not notify on its own — that is, where the answer was delivered by
+finishing a live surface that persists from the turn's start (see "Grow a reply
+in place on one live surface"): a message created minutes ago notifies nobody
+when it is finished. The ping reads `✅ Done · 4m 12s — <first line of the
+answer>`, the first line read as plain words and clipped to 120 characters; a
+turn that failed or was stopped pings `⚠️ Failed · …` or `⏹ Stopped · …` with the tool count and tokens, and
+that ping takes the place of its separate summary. It is sent the way the turn's
+other replies are — into the same chat and thread — and in a group it opens with
+the asker's @mention (see "Mention the asker in a group answer"). A turn whose
+answer went out as a new message (a scaffolding surface, or a stream that died
+and fell back to the ordinary send) needs no ping: that message already
+notified. A turn shorter than the threshold sends none either — the answer
+itself is the signal.
+
+Presence is not observable on any platform, so duration is the only signal. The
+setting is edited on the Channels page.
+
+#### Scenario: a long turn whose answer does not notify ends with a ping
+- **GIVEN** a transport whose streamed answer persists from the turn's start, and
+  a turn that ran 4 minutes 12 seconds against the default threshold
+- **WHEN** the turn ends cleanly
+- **THEN** after the streamed answer one new message reads `✅ Done · 4m 12s —`
+  followed by the answer's first line in plain words
+
+#### Scenario: a short turn or a zero threshold sends no ping
+- **GIVEN** a turn shorter than the threshold, and a long turn on a channel whose
+  threshold is 0
+- **WHEN** each ends
+- **THEN** neither sends a ping
+
+#### Scenario: an answer sent as a new message needs no ping
+- **GIVEN** a transport whose live surface is scaffolding deleted before the answer
+- **WHEN** a long turn ends
+- **THEN** no ping is sent — the answer's own new message notified
+
+#### Scenario: a long failed turn pings instead of summarising
+- **GIVEN** a long turn on a persisting surface that errors after one tool
+- **WHEN** it ends
+- **THEN** exactly one message follows the answer: `⚠️ Failed · <elapsed> · 1 tool
+  — <error>`
+
+#### Scenario: the ping threshold comes from the channel's settings
+- **WHEN** a channel config omits `notify_after_seconds`, sets it to 0, or sets it
+  past 3600
+- **THEN** it is 90, it is 0 (off), and it is refused
+
+#### Scenario: the ping threshold is edited in the channel's settings
+- **WHEN** the owner sets the ping threshold to 0 in the channel's settings
+- **THEN** the channel's threshold is 0, and a value past 3600 is refused
+
+### Requirement: Shape a reply for what the chat can show
+A finished reply MUST pass one structure pass before the platform renderer,
+driven by the transport's declared capabilities, never its type:
+
+- A transport that does not render tables (`renders_tables` false) receives each
+  table as one bullet per row, `- **checkout** · failed · 3DS timeout`; a table
+  of more than 12 rows or 4 columns keeps its first five rows as bullets and
+  goes out whole as an attached `.csv`.
+- A transport with `max_inline_code_lines` set receives a longer fenced block as
+  its first three lines plus a note, and the whole block as an attached file
+  (`.log`, `.diff`, `.txt` by the fence's language).
+- The files follow the answer, through the transport's ordinary file upload,
+  under their own names. A transport that cannot send files keeps everything in
+  the body instead.
+- A `## Details` section — where the agent is asked to put long content — is the
+  transport's to present: one that collapses it does so (see each child spec).
+- A reply cut into several messages is never cut inside a fenced code block (a
+  fence longer than one message is closed and reopened, its language kept), and
+  every message after the first opens with its place, `(2/3)`, so a busy group
+  can follow it.
+
+#### Scenario: a table becomes bullet rows where the chat cannot show tables
+- **GIVEN** a transport that does not render tables
+- **WHEN** a reply holds a three-column table of two rows
+- **THEN** it is delivered as two bullet rows, the first cell of each in bold, and
+  no file is attached
+
+#### Scenario: a long log is attached as a file
+- **GIVEN** a transport that keeps at most 30 lines of code inline
+- **WHEN** a reply holds a 40-line `log` block
+- **THEN** the reply keeps its first three lines and names `log-1.log`, which holds
+  all 40 lines
+
+#### Scenario: a table's CSV and a long log follow the answer as files
+- **GIVEN** a transport that renders no tables and keeps 30 lines of code inline
+- **WHEN** a reply holds a 20-row table and a 50-line log
+- **THEN** the answer is delivered first, then `table-1.csv` and `log-2.log` are
+  uploaded as documents
+
+#### Scenario: a code block is never split across messages
+- **GIVEN** a reply longer than one message whose fenced block holds a blank line
+- **WHEN** it is cut into messages
+- **THEN** no message holds half a fence, and an oversized fence is closed and
+  reopened with its language
+
+### Requirement: Offer a reply's details behind a summary card
+On a transport that has cards (`supports_buttons`) but does not collapse a
+`## Details` section itself (`collapses_details` false), a clean reply's details
+section MUST move behind a summary card: the answer's head is delivered as the
+reply, then a card whose title is the answer's first line, whose body says how
+many lines of details there are, and whose buttons are **Details** and **As
+file**. The details are kept as a file under the temporary directory, keyed by a
+random id the buttons carry (`details:<id>`, `detailsfile:<id>`). A tap is
+owner-gated like every card tap: **Details** posts them into the card's thread
+and rewrites the card to say so, **As file** uploads them as a `.md`, and an id
+whose file is gone answers that the details are no longer available. A card the
+platform refuses leaves the details as an ordinary message — they are never
+lost. A transport that collapses details (Telegram) sends no such card.
+
+#### Scenario: details go behind a card where the chat cannot collapse them
+- **GIVEN** a transport with cards that does not collapse details
+- **WHEN** a reply `Deploy is green on live.` ends with a two-line `## Details`
+  section
+- **THEN** the reply carries the head only, and a card titled `Deploy is green on
+  live.` reads `2 more lines of details.` with the buttons Details and As file
+
+### Requirement: Name a channel by any display name
+A channel's name MUST be any display name a person types — spaces, capitals and
+any script included, up to 80 characters — and MUST be renamable. Channels are
+told apart by their `uid`, so two channels may share a display name. The
+display name is the channel's title (resource-framework "Carry an optional
+editable title on the kinds that have one"): the Channels page's Add dialog
+registers what was typed as the title and derives the resource's name from it —
+lowercased, every run of characters the name rules refuse turned into one `-`,
+`channel` when nothing is left — stepping to `-2`, `-3`, … past a name another
+channel already holds, so adding a channel never fails on a name the person did
+not type. The channel's Settings show the display name as its Name and edit it
+as the title. REST keeps addressing a channel by its `uid`, and the display name is
+its `title`.
+
+#### Scenario: a channel is named by any display name
+- **GIVEN** the Add channel dialog on the Channels page
+- **WHEN** the owner names a new Telegram channel "Team bot!" and connects it
+- **THEN** the channel is registered with the title "Team bot!" and the name `team-bot`
+- **AND** a second channel named "Team bot!" is registered as `team-bot-2` rather than refused
+
+### Requirement: Check credentials before they are saved
+The daemon MUST offer `POST /api/v1/channels/validate-credentials`, which asks a
+chat platform whether a set of credentials works without storing, caching or
+logging them and without starting a channel. The request names the platform and
+the credentials as typed (a Telegram bot token, or a SeaTalk app secret with its
+app id) and MAY name an existing channel by `channel_uid`. The answer is `ok`,
+the bot it identified (`bot_handle`, `bot_name`; SeaTalk has no handle), and
+`same_bot`: whether the credentials are that channel's own bot — a Telegram
+token is compared by the bot id both tokens report, a SeaTalk secret by the app
+id, which a replacement that omits it takes from the stored channel — and null
+when there is nothing to compare, including when the stored secret cannot be
+read. A refusal is an ordinary answer, `ok: false` with a `reason` (`missing`,
+`rejected`, `unreachable` or `timeout`), never an error response. The platform
+call MUST be bounded by a timeout of about eight seconds.
+
+The Add channel and Replace token dialogs MUST call it once the person stops
+typing: Add channel for a pasted Telegram token ("Found @bot", "The token works.
+It will run on this Mac (name)."), Replace token or secret for the new value
+("Works — this is @bot", and for the same bot "Same bot as before, so the
+pairing with {owner} still holds."). A failure is stated under the field, and a
+rejected value cannot be replaced. Connecting is never disabled for a missing
+field: the form reports under each empty field when Connect is pressed.
+
+#### Scenario: check a token as it is pasted
+- **GIVEN** a Telegram bot token the platform accepts
+- **WHEN** it is sent to `POST /api/v1/channels/validate-credentials`
+- **THEN** the answer is `ok` with the bot's handle
+- **AND** nothing is stored
+
+#### Scenario: a replacement says whether it is the same bot
+- **GIVEN** a Telegram channel whose stored token belongs to bot A
+- **WHEN** a replacement token is checked against that channel
+- **THEN** `same_bot` is true for a token of bot A and false for a token of bot B
+- **AND** it is null when the stored token can no longer be read
+
+#### Scenario: a refused or unreachable platform is reported, not raised
+- **GIVEN** a token the platform rejects, and a platform that does not answer in time
+- **WHEN** each is checked
+- **THEN** the answers are `ok: false` with the reasons `rejected` and `timeout`, as normal responses
+
+### Requirement: Add a channel in three steps and pair from the dialog that shows the code
+The Add channel dialog MUST take three steps — Platform, Connect, Pair — under a
+stepper that carries no accent colour. **Platform** lists each platform with its
+logo, what connecting it needs, a one-line description and its capabilities, with
+no filter and no count. **Connect** asks for a name, the default agent and the
+platform's credentials, and registers the channel on Connect. **Pair** issues a
+pairing code and waits for the owner's message; when someone pairs it turns into a
+done state naming the owner, saying that the channel answers only them, and how
+to try it with the default agent. "Pair later" leaves the step. A channel's
+pairing codes appear only in this step and in the Add an owner dialog, which show
+the code with Copy, where to send it, how long it lasts, the platform's one-tap
+link where there is one, and a waiting line; an expired code is shown struck
+through, says why, and offers a new one in place. With no channel at all the
+Channels page keeps its header and offers the platforms as a bordered list that
+opens the dialog at Connect.
+
+#### Scenario: add a channel in three steps
+- **GIVEN** the Add channel dialog on its Platform step
+- **WHEN** a platform is chosen, the name and token are entered and Connect is pressed
+- **THEN** a pairing code is shown with a waiting line
+- **AND** when the owner sends it, the step names the owner and offers Done
+
+#### Scenario: an expired pairing code is struck through in place
+- **GIVEN** an Add an owner dialog whose code has expired
+- **WHEN** it is read
+- **THEN** the code is struck through and marked Expired with the reason
+- **AND** it offers Cancel and Generate a new code
+
+#### Scenario: a first run offers the platforms
+- **GIVEN** no channel exists
+- **WHEN** the Channels page is opened
+- **THEN** it keeps its header and lists the platforms with what each needs
+- **AND** choosing one opens Add channel at its Connect step
+
+### Requirement: Ask the owner in the chat and take the answer back to the agent
+A question raised in a channel conversation (spec chat "Pause a turn on a question
+for the owner") MUST go out in that chat, one card per question in order: the
+context (a diff as a code block), "❓ <question>", the options — with their
+descriptions listed in the body when any has one — as up to four equal buttons,
+and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
+✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
+like every card tap. The owner's next text message in that chat or thread while
+the question is pending MUST be taken as the answer and not start or queue a
+turn. Nothing MUST be posted in the owner's name. Once the question is answered —
+in the chat or on the Conversations page — or cancelled, every card of it MUST be
+rewritten in place to "✓ Answered: <answer> · HH:MM" ("✓ Answered in Coffer:
+<answer> · HH:MM" for a web answer, "Stopped" when cancelled); where the platform
+cannot rewrite it, that line is sent as a reply. A long turn that is waiting on a
+question pings "❓ Needs you · <elapsed> — <question>" on a surface that pings.
+
+#### Scenario: a tap answers the agent without a message from the owner
+- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
+- **WHEN** the owner taps Yes
+- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
+
+#### Scenario: a text reply answers the pending question
+- **GIVEN** a pending question in the owner's Telegram chat
+- **WHEN** the owner sends "only the read replica"
+- **THEN** the agent receives that text as the answer and no new turn starts
+
+#### Scenario: an answer given in Coffer rewrites the chat card
+- **GIVEN** a pending question shown in Telegram
+- **WHEN** the owner answers Yes on the Conversations page
+- **THEN** the Telegram message reads "✓ Answered in Coffer: Yes · 11:42" and its keyboard is gone
+
+#### Scenario: a multi-select question is answered with Submit in the chat
+- **GIVEN** a SeaTalk card for a multi-select question with three options
+- **WHEN** the owner taps two options and then Submit
+- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
+
+#### Scenario: a question with described options lists them in the card
+- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
+- **WHEN** its card goes out
+- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
+
+#### Scenario: several questions go out one card at a time
+- **GIVEN** an ask of two questions in a SeaTalk chat
+- **WHEN** the owner answers the first
+- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
+
+#### Scenario: a non-owner's tap is refused
+- **GIVEN** a question card in a paired group
+- **WHEN** a member who is not the owner taps an option
+- **THEN** the group is told only the bot’s owners can use it and the question stays pending
+
+#### Scenario: stopping a turn rewrites the pending card
+- **GIVEN** a pending question card in a chat
+- **WHEN** the owner stops the turn
+- **THEN** the card reads "Stopped" with its buttons gone
+
+#### Scenario: a long turn that waits on the owner pings
+- **GIVEN** a long turn on a persisting surface
+- **WHEN** it raises a question
+- **THEN** a short message reads "❓ Needs you · <elapsed> — <question>" before the card

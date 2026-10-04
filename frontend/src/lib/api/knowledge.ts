@@ -8,8 +8,8 @@
 //
 // There is no `search` and no `grep` here because the daemon serves neither
 // (see "Cover knowledge management on REST and the CLI"). New knowledge goes in as MATERIAL — an
-// upload here, an agent's `coffer__write`, the CLI — which waits in the collection's hidden inbox
-// until a curation pass merges it into the documents; with no internal model
+// upload here, an agent's file in `.inbox/` — which waits in the collection's hidden inbox
+// until a curation pass curates it into the documents; with no internal model
 // configured it becomes a document as it is.
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
@@ -22,30 +22,33 @@
 // `collection` are NAMES — the same strings the tree hands back. A caller that
 // holds a `CollectionOut` has both and picks by what it is asking for.
 //
-// Transport via the shared `call` (.agents/frontend.md §4); wire types in
+// Transport via the typed client (.agents/frontend.md §4); wire types in
 // `knowledgeTypes.ts`.
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
+  ChangeDetailOut,
+  ChangeOut,
+  ChangesOut,
   CollectionListOut,
   CollectionOut,
-  CurationOut,
+  CurationRunOut,
+  DocumentHistoryOut,
   FileOut,
   FileSave,
   IngestedDocumentOut,
+  VersionBodyOut,
   TreeOut,
+  VersionDiffOut,
 } from "./knowledgeTypes";
 
 // Re-export the wire types so `import { … } from "./api"` sees one surface.
 export * from "./knowledgeTypes";
 
-/** `/api/v1/knowledge` — the root every knowledge route hangs off. */
-const ROOT = "/knowledge";
-
 // --- collections ------------------------------------------------------------
 
 export function listCollections(): Promise<CollectionListOut> {
-  return call<CollectionListOut>(`${ROOT}/collections`);
+  return unwrap(getApiClient().GET("/knowledge/collections"));
 }
 
 /**
@@ -57,7 +60,7 @@ export function createCollection(payload: {
   name: string;
   description?: string | null;
 }): Promise<CollectionOut> {
-  return call<CollectionOut>(`${ROOT}/collections`, { method: "POST", body: payload });
+  return unwrap(getApiClient().POST("/knowledge/collections", { body: payload }));
 }
 
 // --- catalogue --------------------------------------------------------------
@@ -72,13 +75,13 @@ export function createCollection(payload: {
  * dot-prefixed entries except the inbox").
  */
 export function getTree(path: string): Promise<TreeOut> {
-  return call<TreeOut>(`${ROOT}/tree?path=${enc(path)}`);
+  return unwrap(getApiClient().GET("/knowledge/tree", { params: { query: { path } } }));
 }
 
 /** One file, whole — a document or an inbox item (`inbox: true`). Carries the
  *  `fingerprint` a save hands back. */
 export function getFile(path: string): Promise<FileOut> {
-  return call<FileOut>(`${ROOT}/file?path=${enc(path)}`);
+  return unwrap(getApiClient().GET("/knowledge/file", { params: { query: { path } } }));
 }
 
 /**
@@ -90,7 +93,7 @@ export function getFile(path: string): Promise<FileOut> {
  * included.
  */
 export function saveFile(payload: FileSave): Promise<FileOut> {
-  return call<FileOut>(`${ROOT}/file`, { method: "PUT", body: payload });
+  return unwrap(getApiClient().PUT("/knowledge/file", { body: payload }));
 }
 
 /**
@@ -104,39 +107,129 @@ export function saveFile(payload: FileSave): Promise<FileOut> {
  * caller confirms first. 204, so nothing comes back.
  */
 export function deleteFile(path: string): Promise<void> {
-  return call<void>(`${ROOT}/file?path=${enc(path)}`, { method: "DELETE" });
+  return unwrapVoid(getApiClient().DELETE("/knowledge/file", { params: { query: { path } } }));
 }
 
 // --- curation ---------------------------------------------------------------
 
 /**
- * Run ONE curation pass over one collection now — the manual trigger for the
- * pass the background sweep otherwise runs on an interval. It takes one
- * pending item and merges it into the collection's documents.
+ * Curate one collection now: the daemon runs one pass per pending item —
+ * inbox items oldest first, then documents edited since curation last saw
+ * them — until none is left, each pass still bounded, stopping at the first
+ * that fails. The answer lists every pass's outcome; progress (n of m) is on
+ * the in-flight list (`/upkeep/runs`) while the request is open.
  *
- * `document` names a particular document to carry through; omitted, the pass
- * takes the oldest pending item — inbox material first, then a document edited
- * since curation last saw it — which is what the page's button wants. A pass
- * with no internal model configured comes back `no_model`, having promoted the
- * inbox to documents as it stood (`promoted`) — a clean 200, not an error — so
- * every status here is something the page reports rather than a failure.
- *
- * A second pass over the same collection is refused with 409
- * `UPKEEP_ALREADY_RUNNING` rather than queued (see "Run one pass per collection
- * at a time").
+ * `document` curates just that document. With no internal model configured
+ * the run comes back `no_model`, having promoted the inbox as it stood — a
+ * clean 200. A second run over the same collection is refused with 409
+ * `UPKEEP_ALREADY_RUNNING` rather than queued.
  */
-export function curateCollection(uid: string, document?: string | null): Promise<CurationOut> {
-  return call<CurationOut>(`${ROOT}/collections/${enc(uid)}/curate`, {
-    method: "POST",
-    body: { document: document ?? null },
-  });
+export function curateCollection(uid: string, document?: string | null): Promise<CurationRunOut> {
+  return unwrap(
+    getApiClient().POST("/knowledge/collections/{uid}/curate", {
+      params: { path: { uid } },
+      body: { document: document ?? null },
+    }),
+  );
+}
+
+// --- history ------------------------------------------------------------------
+
+/**
+ * Recent changes across every collection, or one (`collection` is its NAME),
+ * newest first, with the items still waiting in each inbox (see "Keep every
+ * document's history and undo a pass as a whole").
+ */
+export function listChanges(params: {
+  collection?: string | null;
+  limit?: number;
+}): Promise<ChangesOut> {
+  return unwrap(
+    getApiClient().GET("/knowledge/changes", {
+      params: {
+        query: {
+          // An empty collection or a zero limit is "not given", as before.
+          ...(params.collection ? { collection: params.collection } : {}),
+          ...(params.limit ? { limit: params.limit } : {}),
+        },
+      },
+    }),
+  );
+}
+
+/** One change in full: every document it touched, with its diff. */
+export function getChange(version: string): Promise<ChangeDetailOut> {
+  return unwrap(
+    getApiClient().GET("/knowledge/changes/{version}", { params: { path: { version } } }),
+  );
+}
+
+/**
+ * Undo a curation pass as a whole: every document it wrote goes back to how
+ * it was before, as a new change naming the user. Refused with 409
+ * `KNOWLEDGE_UNDO_CONFLICT` (details name the `document`) when a later change
+ * to one of them would be lost; nothing is written then.
+ */
+export function undoPass(version: string): Promise<ChangeOut> {
+  return unwrap(
+    getApiClient().POST("/knowledge/changes/{version}/undo", { params: { path: { version } } }),
+  );
+}
+
+/** A document's versions, newest first, each with its writer and time. */
+export function getHistory(path: string): Promise<DocumentHistoryOut> {
+  return unwrap(getApiClient().GET("/knowledge/history", { params: { query: { path } } }));
+}
+
+/** What one version did to the document, against the version before it. */
+export function getVersionDiff(path: string, version: string): Promise<VersionDiffOut> {
+  return unwrap(
+    getApiClient().GET("/knowledge/history/diff", { params: { query: { path, version } } }),
+  );
+}
+
+/** A document's body as one version left it — what Compare with current reads. */
+export function getVersionBody(path: string, version: string): Promise<VersionBodyOut> {
+  return unwrap(
+    getApiClient().GET("/knowledge/history/version", { params: { query: { path, version } } }),
+  );
+}
+
+/**
+ * Put back what a delete removed — a document, or a whole collection with its
+ * documents, README and waiting items — as one new change naming the user.
+ * Refused with 409 when the path (`KNOWLEDGE_RESTORE_CONFLICT`) or the
+ * collection's name (`KNOWLEDGE_COLLECTION_EXISTS`) is taken again.
+ */
+export function restoreDeleted(version: string): Promise<ChangeOut> {
+  return unwrap(
+    getApiClient().POST("/knowledge/changes/{version}/restore", {
+      params: { path: { version } },
+    }),
+  );
+}
+
+/** Rewrite a collection's description — the opening paragraph of its README.
+ *  A collection has no title: its heading is its folder name. */
+export function describeCollection(uid: string, description: string): Promise<CollectionOut> {
+  return unwrap(
+    getApiClient().PUT("/knowledge/collections/{uid}/description", {
+      params: { path: { uid } },
+      body: { description },
+    }),
+  );
+}
+
+/** Put one version back, as a NEW version naming the user — the past is never rewritten. */
+export function restoreVersion(payload: { path: string; version: string }): Promise<FileOut> {
+  return unwrap(getApiClient().POST("/knowledge/history/restore", { body: payload }));
 }
 
 // --- ingestion ----------------------------------------------------------------
 
 /**
  * Convert an uploaded document into material for a collection. The Markdown
- * extracted from it joins the collection's inbox and is merged into the
+ * extracted from it joins the collection's inbox and is curated into the
  * documents by the next pass (`pending: true`); with no internal model
  * configured it is promoted to a document on the spot and `path` names it.
  * Neither the original nor the extracted Markdown is kept beyond that — the
@@ -146,11 +239,19 @@ export function uploadFile(params: {
   /** The collection's NAME: this lands material in its directory. */
   collection: string;
   file: File;
+  /** Aborts the request — the upload dialog's Cancel while it converts. */
+  signal?: AbortSignal;
 }): Promise<IngestedDocumentOut> {
   const form = new FormData();
   form.append("file", params.file);
   form.append("collection", params.collection);
   // A FormData body goes out with no Content-Type: the browser sets the
-  // multipart boundary itself (see `call`).
-  return call<IngestedDocumentOut>(`${ROOT}/upload`, { method: "POST", body: form });
+  // multipart boundary itself. `body` only carries the generated type.
+  return unwrap(
+    getApiClient().POST("/knowledge/upload", {
+      signal: params.signal,
+      body: { collection: params.collection, file: "" },
+      bodySerializer: () => form,
+    }),
+  );
 }

@@ -17,6 +17,7 @@ import dataclasses
 import inspect
 from typing import TYPE_CHECKING
 
+from coffer.application.resource_actor import acting_as
 from coffer.application.resource_kind_ops import check_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import NameImmutable, ResourceAlreadyExists
@@ -44,7 +45,12 @@ def refuse_fixed_name(kind_def: Kind, resource: Resource, new_name: str) -> None
     is not fixed, passes.
     """
     if kind_def.name_fixed and new_name != resource.name:
-        raise NameImmutable(resource.kind, resource.name, kind_def.name_fixed_resets)
+        raise NameImmutable(
+            resource.kind,
+            resource.name,
+            kind_def.name_fixed_resets,
+            derived=kind_def.name_from_config is not None,
+        )
 
 
 async def rename(
@@ -66,19 +72,22 @@ async def rename(
     refuse_fixed_name(kind_def, before, new_name)
     check_name(kind_def, new_name)
     # Checked explicitly, before any write, so a collision is a clean 409 that
-    # has moved nothing — neither the row nor a kind's directory. The
-    # (kind, name) unique constraint still backs this up for a racing writer;
-    # ``ResourceRepo.rename`` translates it into the same error.
+    # has moved nothing — neither the resource's file nor a kind's directory.
     if await service._repo.find_by_name(before.kind, new_name) is not None:
         raise ResourceAlreadyExists(before.kind, new_name)
+    # A file that cannot be written now (read-only, or an unsettled edit) is
+    # refused before the hook moves the kind's directory.
+    await service._repo.ensure_writable(uid)
     await _fire(kind_def, before, new_name)
     try:
-        renamed = await service._repo.rename(uid, new_name)
-    except ResourceAlreadyExists:
-        # The racing writer the pre-check cannot exclude. The hook has already
-        # moved the kind's directory, so ask it to move it back before the
-        # failure propagates — otherwise the row keeps its old name while its
-        # directory sits under the new one.
+        with acting_as(actor):
+            renamed = await service._repo.rename(uid, new_name)
+    except BaseException:
+        # Whatever stopped the write (a racing writer, a refusal from the
+        # vault): the hook has already moved the kind's directory, so ask it
+        # to move it back before the failure propagates — otherwise the
+        # resource keeps its old name while its directory sits under the new
+        # one.
         await _fire(kind_def, dataclasses.replace(before, name=new_name), before.name)
         raise
     await service._audit.record(

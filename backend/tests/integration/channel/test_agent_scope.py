@@ -6,9 +6,9 @@ A channel's framework-level per-agent scope (ADR per-agent-resource-scope) is re
 way round from every other kind's: a channel is an inbound surface no agent
 consumes, so its scope names the agents the channel may DRIVE.
 
-Three things must agree, or the owner sees a card offering an agent the very
-next check rejects: the `/agent` listing, the `/agent` card, and the validation
-of a chosen key (typed or tapped). The dormant case (an empty agent list) is
+Two things must agree, or the owner is offered an agent the very next check
+rejects: the list an unknown `/new <agent>` answers with, and the validation of
+the name typed. The dormant case (an empty agent list) is
 the runtime's: such a channel never starts, so it accepts no turn at all.
 """
 
@@ -26,6 +26,7 @@ from .conftest import (
     Resource,
     inbound,
     tap_event,
+    uid_of,
     wait_until,
 )
 
@@ -49,52 +50,33 @@ async def _scoped(
 @pytest.mark.acceptance(
     spec="channels", scenario="a channel may only route to the agents in its scope"
 )
-async def test_agent_listing_is_narrowed_to_the_scope(env: ChannelEnv) -> None:
-    _resource, adapter = await _scoped(env, Scope(agents=["builtin"]))
-
-    await env.processor.on_message(inbound("tg", "owner", "/agent"))
-
-    [text] = adapter.texts()
-    assert "Available: builtin" in text
-    assert "codex" not in text
-
-
-async def test_agent_card_is_narrowed_to_the_scope(env: ChannelEnv) -> None:
-    """The card must offer exactly what the validator accepts — a card that
-    offers an out-of-scope agent is the failure this narrowing exists for."""
-    _resource, adapter = await _scoped(env, Scope(agents=["builtin"]), buttons=True)
-
-    await env.processor.on_message(inbound("tg", "owner", "/agent"))
-
-    [(_chat, _text, buttons)] = adapter.cards
-    assert [b.value for b in buttons] == ["agent:builtin"]
-
-
-async def test_typed_switch_to_an_out_of_scope_agent_is_refused(env: ChannelEnv) -> None:
+async def test_an_out_of_scope_agent_is_unknown_and_not_listed(env: ChannelEnv) -> None:
     resource, adapter = await _scoped(env, Scope(agents=["builtin"]))
 
-    await env.processor.on_message(inbound("tg", "owner", "/agent codex"))
+    await env.processor.on_message(inbound("tg", "owner", "/new codex"))
 
-    assert any("Unknown agent 'codex'" in t for t in adapter.texts())
+    [text] = adapter.texts()
+    assert text == "Unknown agent 'codex'. Available: Coffer Assistant (builtin)"
     assert await env.thread_preferred_agent(resource) is None  # nothing stuck
+    assert await env.active_conversation(resource) is None
 
 
-async def test_tapped_switch_to_an_out_of_scope_agent_is_refused(env: ChannelEnv) -> None:
-    """A stale card (rendered before the scope was narrowed) must not become a
-    way past the check."""
+async def test_an_agent_tap_outside_the_scope_switches_nothing(env: ChannelEnv) -> None:
+    """An agent card rendered before the scope narrowed still carries the old
+    agent; its tap is refused and nothing sticks."""
     resource, adapter = await _scoped(env, Scope(agents=["builtin"]), buttons=True)
 
     await env.processor.on_callback(tap_event("tg", "owner", "agent:codex"))
 
-    assert any("codex" in t for t in adapter.texts())
+    assert adapter.texts() == ["That agent is no longer one this bot may use — send /new."]
     assert await env.thread_preferred_agent(resource) is None
+    assert await env.active_conversation(resource) is None
 
 
 async def test_switch_inside_the_scope_still_works(env: ChannelEnv) -> None:
     resource, _adapter = await _scoped(env, Scope(agents=["builtin", "codex"]))
 
-    await env.processor.on_message(inbound("tg", "owner", "/agent codex"))
-    await wait_until(lambda: True)
+    await env.processor.on_message(inbound("tg", "owner", "/new codex"))
 
     assert await env.thread_preferred_agent(resource) == "codex"
     conv = await env.chat.get_conversation(await env.active_conversation(resource))
@@ -106,11 +88,11 @@ async def test_an_unscoped_channel_offers_every_agent(env: ChannelEnv) -> None:
     is why channels need no data migration."""
     _resource, adapter = await _scoped(env, None)
 
-    await env.processor.on_message(inbound("tg", "owner", "/agent"))
+    await env.processor.on_message(inbound("tg", "owner", "/new nobody"))
 
     [text] = adapter.texts()
-    assert "builtin" in text
-    assert "codex" in text
+    assert "Coffer Assistant (builtin)" in text
+    assert "Codex (codex)" in text
 
 
 @pytest.mark.acceptance(spec="channels", scenario="/new starts a fresh conversation")
@@ -120,12 +102,11 @@ async def test_a_sticky_agent_narrowed_out_falls_back_to_the_channel_default(
     """Someone switched to codex, then the owner narrowed the channel to the
     default agent only. The next conversation must not open on codex."""
     resource, _adapter = await _scoped(env, Scope(agents=["builtin", "codex"]))
-    await env.processor.on_message(inbound("tg", "owner", "/agent codex"))
-    await wait_until(lambda: True)
+    await env.processor.on_message(inbound("tg", "owner", "/new codex"))
     assert await env.thread_preferred_agent(resource) == "codex"
 
     # The runtime rebinds the channel with the narrowed scope.
-    env.processor.unbind(resource.name)
+    env.processor.unbind(resource.uid)
     env.bind(resource, FakeChannelAdapter(), agent_scope=Scope(agents=["builtin"]))
 
     await env.processor.on_message(inbound("tg", "owner", "/new"))
@@ -144,7 +125,7 @@ async def test_a_channel_scoped_to_no_agent_is_never_started(env: ChannelEnv) ->
 
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
     assert env.created_adapters == []
 
 
@@ -157,30 +138,30 @@ async def test_narrowing_a_scope_past_the_default_agent_never_reaches_the_runtim
     offline by a scope edit that looked like it succeeded."""
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
 
     other = await env.agent_uid("codex")
     with pytest.raises(ScopeInvalidError, match="unable to drive anything"):
         await env.resources.update_scope(resource.uid, Scope(agents=[other]), actor="test")
 
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     assert (await env.resources.get(resource.uid)).scope is None
 
 
 async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv) -> None:
-    """A scope edit must reach `/agent` within a tick, so the binding's snapshot
+    """A scope edit must reach `/new <agent>` within a tick, so the binding's snapshot
     is part of what the reconciler compares. Uses the dormant scope, now the
     only narrowing that can stop a running channel."""
     resource = await env.register_channel("tg")
     await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
 
     await env.resources.update_scope(resource.uid, None, actor="test")
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
 
 
 @pytest.mark.acceptance(
@@ -203,15 +184,15 @@ async def test_narrowing_to_the_channels_own_agent_is_accepted(env: ChannelEnv) 
     mine = await env.agent_uid(DEFAULT_AGENT_KEY)
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
 
     await env.resources.update_scope(resource.uid, Scope(agents=[mine]), actor="test")
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     # ...and the binding carries it in the vocabulary everything below the gate
-    # reads — `/agent`, the card, the routing of a chosen key.
-    binding = env.processor.binding("tg")
+    # reads — `/new <agent>` and the routing of a chosen key.
+    binding = env.processor.binding(uid_of("tg"))
     assert binding is not None
     assert binding.agent_scope == Scope(agents=[DEFAULT_AGENT_KEY])
 
@@ -276,5 +257,5 @@ async def test_a_channel_bound_to_no_agent_never_starts(env: ChannelEnv) -> None
 
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
     assert env.created_adapters == []

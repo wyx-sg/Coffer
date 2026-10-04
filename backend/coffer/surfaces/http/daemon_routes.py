@@ -3,34 +3,33 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import secrets
 import signal
-import stat
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 import coffer
+from coffer import build_channel
+from coffer.application.agent.connection_service import AgentConnectionService
 from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
-from coffer.application.log_reader import (
-    at_least,
-    matches_level,
-    parse_log_lines,
-    tail_lines,
-)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.daemon import config as daemon_config
-from coffer.infrastructure.daemon import login_service
-from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.daemon import login_service, pid_lock
+from coffer.infrastructure.daemon.phase import get_daemon_phase, set_daemon_phase
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
+from coffer.infrastructure.vault.home import coffer_home, daemon_json_path
+from coffer.surfaces.http import daemon_port
+from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token
+from coffer.surfaces.http.daemon_log_routes import router as log_router
+from coffer.surfaces.http.daemon_runtime import runtime_health
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
@@ -42,8 +41,6 @@ from coffer.surfaces.http.feature_dependencies import (
 )
 from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 from coffer.surfaces.http.schemas import (
-    DaemonLogListOut,
-    DaemonLogRecordOut,
     DaemonResidencyIn,
     DaemonResidencyOut,
     DaemonStatusOut,
@@ -52,38 +49,15 @@ from coffer.surfaces.http.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
+router.include_router(log_router)
 
-# Daemon lifecycle phase — written by app.py's lifespan, read by /status.
-# Lives here (the reader) so app.py stays under the 400-line guideline and
-# daemon_routes no longer needs a circular import of app at request time.
-# uvicorn serves only after the lifespan's startup half returns, so no request
-# can observe the daemon before it is ready: there is no "starting" phase.
-_DaemonPhase = Literal["ready", "draining"]
-
-_DAEMON_PHASE: _DaemonPhase = "ready"
-
-
-def get_daemon_phase() -> _DaemonPhase:
-    return _DAEMON_PHASE
-
-
-def set_daemon_phase(phase: _DaemonPhase) -> None:
-    global _DAEMON_PHASE
-    _DAEMON_PHASE = phase
+# Daemon lifecycle phase: owned by infrastructure.daemon.phase (the entry's
+# uvicorn server flips it to "draining" the moment shutdown begins, before the
+# lifespan's teardown), read here by /status.
+__all__ = ["get_daemon_phase", "router", "set_daemon_phase", "set_started_at"]
 
 
 _STARTED_AT = datetime.now(tz=UTC)
-_PORT = 8000  # set by composition root
-
-
-def set_port(port: int) -> None:
-    global _PORT
-    _PORT = port
-
-
-def get_port() -> int:
-    """The port the daemon is serving on (set by the composition root)."""
-    return _PORT
 
 
 def set_started_at(started_at: datetime) -> None:
@@ -100,6 +74,7 @@ async def get_status(
     resource_service: ResourceService | None = Depends(get_resource_service_optional),  # noqa: B008
     health_repo: MCPServerHealthRepo | None = Depends(get_health_repo_optional),  # noqa: B008
     features: FeatureService | None = Depends(get_feature_service_optional),  # noqa: B008
+    connection: AgentConnectionService | None = Depends(get_agent_connection_service_optional),  # noqa: B008
 ) -> DaemonStatusOut:
     phase = get_daemon_phase()
     # An app assembled without create_app has published no service; the
@@ -154,56 +129,52 @@ async def get_status(
         # mismatch say which daemon it attached to, not merely that one exists.
         executable=sys.executable,
         started_at=_STARTED_AT,
-        port=_PORT,
+        port=daemon_port.get_port(),
         upstream_summary=upstream_summary,
-        channel=features.channel,
         features=features.enabled_map(),
         machine_id=daemon_config.read_cached_machine_id(),
         machine_name=daemon_config.read_machine_name(),
+        pid=os.getpid(),
+        commit=build_channel.COMMIT,
+        data_dir=_display_path(coffer_home()),
+        connected_agents=await _connected_agents(connection),
+        runtime=runtime_health(),
     )
 
 
-# === T035: shutdown / rotate-token ===
+def _display_path(path: Path) -> str:
+    """``path`` written ``~/…`` when it sits under the home folder, as the UI shows paths."""
+    home = Path(os.environ.get("HOME", "~")).expanduser()
+    try:
+        return "~/" + path.relative_to(home).as_posix()
+    except ValueError:
+        return str(path)
+
+
+async def _connected_agents(connection: AgentConnectionService | None) -> int | None:
+    """How many agents carry Coffer's gateway entry, or ``None`` when it cannot be told.
+
+    Best-effort like the rest of the probe: it reads each agent's config file,
+    and a failure must never turn the readiness answer into an error.
+    """
+    if connection is None:
+        return None
+    try:
+        return len(await connection.connected_agents())
+    except Exception:
+        return None
+
+
+# === shutdown / rotate-token ===
 
 
 def _daemon_json_path() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
+    return daemon_json_path()
 
 
 def _schedule_shutdown() -> None:
     """Send SIGTERM to ourselves; the daemon entry's signal handler does the cleanup."""
     os.kill(os.getpid(), signal.SIGTERM)
-
-
-def _atomic_write_0600(target: Path, contents: str) -> None:
-    """Write `contents` to `target` atomically with mode 0600.
-
-    Uses O_CREAT|O_EXCL with explicit mode bits so the file never exists
-    on-disk with broader-than-0600 permissions (the previous
-    pattern of ``write_text`` + ``chmod`` left the file readable by other
-    users with a non-restrictive umask for the window between the two calls).
-    """
-    tmp_path = target.with_suffix(target.suffix + ".tmp")
-    # Best-effort: clear any stale tmp from a previous crashed run so O_EXCL
-    # below succeeds. The unlink is itself permission-safe.
-    import contextlib as _contextlib
-
-    with _contextlib.suppress(FileNotFoundError):
-        tmp_path.unlink()
-    fd = os.open(
-        str(tmp_path),
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-        stat.S_IRUSR | stat.S_IWUSR,
-    )
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(contents)
-    except Exception:
-        # On write failure, remove the partial tmp before re-raising.
-        with _contextlib.suppress(FileNotFoundError):
-            tmp_path.unlink()
-        raise
-    os.replace(str(tmp_path), str(target))
 
 
 @router.post(
@@ -217,13 +188,12 @@ async def rotate_token(
 ) -> TokenRotationOut:
     new_token = secrets.token_urlsafe(32)
     path = _daemon_json_path()
-    if not path.exists():
-        raise HTTPException(status_code=503, detail="daemon.json missing")
-    info = json.loads(path.read_text())
-    info["token"] = new_token
-    # Same atomic-replace + 0600 pattern as bootstrap.write. Use the helper
-    # so the tmp file never exists with mode wider than 0600.
-    _atomic_write_0600(path, json.dumps(info, indent=2))
+    try:
+        info = pid_lock.read(path)
+    except (OSError, ValueError, KeyError):
+        raise HTTPException(status_code=503, detail="daemon.json missing") from None
+    # The same atomic, 0600, unique-staging write the daemon publishes with.
+    pid_lock.write(path, replace(info, token=new_token))
     set_active_token(new_token)
     await audit.record(AuditEventType.TOKEN_ROTATED.value, actor=actor)
     return TokenRotationOut(token=new_token)
@@ -232,13 +202,9 @@ async def rotate_token(
 # === residency: whether the system starts the daemon at login ===
 #
 # Nothing ends the daemon on its own, so the login service is the whole
-# setting. It has a REST surface where the port ("Bind a fixed, settable port")
-# deliberately does not,
-# and the difference is which state each setting is reached from. A port is
-# changed when the daemon CANNOT start, so a route the daemon would have to
-# serve is useless exactly then. Residency is changed while Coffer is working
-# fine and the user is deciding how it should behave tomorrow — a settings
-# question, on the surface where settings live.
+# setting. The port of the next start has its own routes
+# (daemon_port_routes.py); the CLI stays its escape hatch, because a daemon
+# that cannot bind its port serves no route to change it.
 
 
 def _residency() -> DaemonResidencyOut:
@@ -293,67 +259,3 @@ async def put_residency(
 async def shutdown_daemon() -> Response:
     _schedule_shutdown()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# === daemon log tail ===
-
-
-def _lift(record: dict[str, Any], key: str) -> str | None:
-    """A parsed field as a string, or None when the line did not carry it."""
-    return str(record[key]) if key in record else None
-
-
-@router.get(
-    "/logs",
-    response_model=DaemonLogListOut,
-    # The router itself is unauthenticated so /status can serve as a readiness
-    # probe; log contents are not probe material, so this route carries its own
-    # token dependency.
-    dependencies=[Depends(require_token)],
-)
-async def list_daemon_logs(
-    since: datetime | None = Query(default=None),  # noqa: B008
-    errors_only: bool = Query(default=False),
-    #: Severity floor: everything at or above it survives. "Errors only" was
-    #: the only choice this surface offered, which made a warning — the level
-    #: most worth noticing before something breaks — visible only by reading
-    #: the whole file. ``errors_only`` stays for callers that already send it.
-    level: str = Query(default=""),
-    limit: int = Query(default=100, ge=1, le=500),
-) -> DaemonLogListOut:
-    """The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon``
-    reads, for the human looking at the Activity page.
-
-    The file interleaves several writers' formats (see ``log_reader``); they
-    are normalised there onto the same fields, so every row here carries the
-    time, level and logger its line actually stated."""
-    # The lexical prefilter below only holds while both sides are UTC: the log
-    # writes `…Z`, so a `since` carrying `+08:00` would compare as a later
-    # string than the very instant it names and cut the window at the top.
-    # Normalise here, once, rather than per line. A naive `since` is read as
-    # UTC, which is the only clock the log keeps.
-    if since is not None:
-        since = since.replace(tzinfo=UTC) if since.tzinfo is None else since.astimezone(UTC)
-    since_iso = since.isoformat() if since is not None else None
-    records: list[DaemonLogRecordOut] = []
-    # Parse oldest-first — a traceback is folded into the record above it —
-    # then walk the result backwards to serve the page newest-first.
-    for record in reversed(parse_log_lines(tail_lines(log_dir() / "daemon.log"))):
-        if len(records) >= limit:
-            break
-        if not matches_level(record, errors_only) or not at_least(record, level):
-            continue
-        at = str(record.get("timestamp", ""))
-        # Cheap prefilter: ISO-8601 sorts lexically, so a string compare
-        # is enough and costs no parsing per line.
-        if since_iso is not None and at and at < since_iso:
-            break
-        records.append(
-            DaemonLogRecordOut(
-                timestamp=_lift(record, "timestamp"),
-                level=_lift(record, "level"),
-                event=_lift(record, "event"),
-                record=record,
-            )
-        )
-    return DaemonLogListOut(records=records)

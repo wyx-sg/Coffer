@@ -3,10 +3,10 @@
 Extracted from ``TurnOrchestrator`` so the orchestrator file stays focused. The
 task publishes every ``AgentEvent`` to the conversation bus (so any number of web
 subscribers observe it) and, when the turn was started with a dedicated queue
-(a channel renderer's, or ``start_turn``'s), to that queue too — ending it with
+(a channel renderer's), to that queue too — ending it with
 a ``None`` sentinel. Every way a turn ends short keeps what it streamed (spec
 chat "Keep partial output when a turn is interrupted or fails"): a user
-interrupt finalises the partial as complete; an adapter stream that stops
+interrupt finalises the partial as stopped; an adapter stream that stops
 without a terminal event is reported as ``stream_ended`` and the partial marked
 failed; a daemon shutdown cancelling the task marks it failed too. Only a
 delete (``ActiveTurn.discarded``) throws the turn away. A turn ends exactly
@@ -33,6 +33,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
 
+from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_persistence import (
@@ -49,10 +50,15 @@ from coffer.domain.chat.events import (
     STREAM_ENDED_MESSAGE,
     TURN_TIMEOUT,
     AgentEvent,
+    QuestionAsked,
+    QuestionClosed,
+    ToolCall,
+    ToolResult,
     TurnDone,
     TurnError,
 )
 from coffer.domain.chat.message import AttachmentBlock, Message, Role
+from coffer.domain.chat.reply_file import ReplyFile
 
 log = logging.getLogger(__name__)
 
@@ -85,31 +91,72 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
     map each of its ``AttachmentBlock`` references back to an ``Attachment`` VO the
     adapter materialises. Reading them back from history (rather than threading a param
     down) means the reference survives a daemon restart and stays consistent with what
-    the web Chat page shows (see "Re-materialise attachments from persisted
+    the web Conversations page shows (see "Re-materialise attachments from persisted
     history")."""
     for msg in reversed(history):
         if msg.role is Role.USER:
             return [
-                Attachment(path=b.path, mime=b.mime, filename=b.filename)
+                Attachment(path=b.path, mime=b.mime, filename=b.filename, id=b.id, size=b.size)
                 for b in msg.content
                 if isinstance(b, AttachmentBlock)
             ]
     return []
 
 
-async def _next_event(events: AsyncIterator[AgentEvent], idle_timeout: float | None) -> AgentEvent:
+def _reply_files_of(adapter: AgentAdapter) -> list[ReplyFile]:
+    """The files the adapter says the reply changed; none for an adapter that does
+    not track them, and none when working them out fails."""
+    try:
+        return list(getattr(adapter, "reply_files", ()))
+    except Exception:
+        log.warning("Could not work out the files a reply changed", exc_info=True)
+        return []
+
+
+def _is_ask_tool(name: str) -> bool:
+    """Claude Code's own dialog tool, or ``coffer__ask`` under whatever
+    server prefix the agent gives it: both are rendered as the question block,
+    not as a tool card."""
+    return name == "AskUserQuestion" or name.endswith("coffer__ask")
+
+
+class _IdleWatch:
+    """The idle watchdog's deadline, which a pending question for the owner
+    suspends: silence while the turn waits on a person is not a wedge (the
+    question has its own 24-hour expiry)."""
+
+    def __init__(self, idle_timeout: float | None) -> None:
+        self.idle_timeout = idle_timeout
+        self.paused = False
+        self.timeout: asyncio.Timeout | None = None
+
+    def waiting(self, waiting_on_owner: bool) -> None:
+        """The turn started, or stopped, waiting on the owner."""
+        self.paused = waiting_on_owner
+        if self.timeout is not None and self.idle_timeout is not None:
+            when = (
+                None if waiting_on_owner else asyncio.get_running_loop().time() + self.idle_timeout
+            )
+            self.timeout.reschedule(when)
+
+
+async def _next_event(events: AsyncIterator[AgentEvent], watch: _IdleWatch) -> AgentEvent:
     """The adapter's next event, or ``TimeoutError`` after ``idle_timeout``
-    seconds of silence.
+    seconds of silence (none while the turn waits on the owner).
 
     The timeout cancels the wait *inside* the adapter's generator, so the
     adapter's own ``CancelledError`` handling runs — the same path a user
     interrupt takes — before the ``TimeoutError`` surfaces here. An external
     cancellation (interrupt, delete) still arrives as ``CancelledError``.
     """
-    if idle_timeout is None:
+    if watch.idle_timeout is None:
         return await events.__anext__()
-    async with asyncio.timeout(idle_timeout):
-        return await events.__anext__()
+    async with asyncio.timeout(None if watch.paused else watch.idle_timeout) as timeout:
+        watch.timeout = timeout
+        try:
+            return await events.__anext__()
+        finally:
+            watch.timeout = None
 
 
 async def run_turn_task(
@@ -120,6 +167,7 @@ async def run_turn_task(
     chat: ChatService,
     idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
     flush_interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
+    turn: questions.TurnContext | None = None,
 ) -> None:
     """Async task body: drive the adapter, publish events, persist the result.
 
@@ -138,13 +186,35 @@ async def run_turn_task(
     flusher = PartialFlusher(chat, content, interval=flush_interval)
     final_done: TurnDone | None = None
     error_event: TurnError | None = None
-    # An adapter may expose the resolved model id so the assistant message can
-    # record it. Other adapters need not; best-effort read.
-    model_id: str | None = getattr(adapter, "model_id", None)
     placeholder_id: str | None = None
     append_task: asyncio.Task[Message] | None = None
 
+    ask_tool_ids: set[str] = set()
+    watch = _IdleWatch(idle_timeout)
+    if turn is not None:
+        turn.on_waiting = watch.waiting
+
+    async def on_question(event: AgentEvent) -> None:
+        # A question the agent raised (or that closed): part of the reply, on the
+        # bus and in the channel renderer's queue, and on disk at once — the
+        # turn now waits, with nothing else to trigger a flush.
+        emit(event)
+        if isinstance(event, (QuestionAsked, QuestionClosed)):
+            content.add_question(event)
+            await flusher.flush_now(placeholder_id)
+
     async def finalize(done: TurnDone | None, error: TurnError | None) -> None:
+        if turn is not None:
+            # The turn is over: whatever it still waits on can no longer be
+            # answered, and the reply must say so.
+            await questions.close_turn(turn)
+        # An adapter may expose the model it ran on (spec chat "Record the model an
+        # adapter reports"). It learns that while the turn streams, so it is read
+        # now, at finalize time, never before the turn starts. Best-effort.
+        model_id: str | None = getattr(adapter, "model_id", None)
+        # Likewise what the reply changed in each file, which the adapter works
+        # out as the reply ends (spec chat "Record what each reply changed in each file").
+        reply_files = _reply_files_of(adapter)
         await finalize_assistant_message(
             chat=chat,
             conversation_id=conversation_id,
@@ -153,6 +223,7 @@ async def run_turn_task(
             content=content,
             final_done=done,
             error_event=error,
+            reply_files=reply_files,
         )
 
     try:
@@ -171,15 +242,17 @@ async def run_turn_task(
                 role=Role.ASSISTANT,
                 content=[],
                 status="streaming",
-                model_id=model_id,
             )
         )
         placeholder_id = (await asyncio.shield(append_task)).id
+        if turn is not None:
+            turn.reply_message_id = placeholder_id
+            turn.on_event = on_question
 
         events = (await adapter.run_turn(history=history, attachments=turn_attachments)).__aiter__()
         while True:
             try:
-                event = await _next_event(events, idle_timeout)
+                event = await _next_event(events, watch)
             except StopAsyncIteration:
                 break
             except TimeoutError:
@@ -198,6 +271,12 @@ async def run_turn_task(
                 )
                 emit(error_event)
                 break
+            if isinstance(event, ToolCall) and _is_ask_tool(event.tool_name):
+                ask_tool_ids.add(event.tool_use_id)
+                continue
+            if isinstance(event, ToolResult) and event.tool_use_id in ask_tool_ids:
+                continue
+            event = content.stamp(event)
             emit(event)
             content.add(event)
             await flusher.after(event, placeholder_id)
@@ -245,7 +324,7 @@ async def run_turn_task(
         # whole (same content, same status).
         if final_done is None and error_event is None:
             if active.interrupted:
-                # User interrupt: keep whatever the agent produced, complete.
+                # User interrupt: keep whatever the agent produced, as stopped.
                 final_done = TurnDone(
                     prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
                 )
@@ -272,6 +351,8 @@ async def run_turn_task(
         # leaves a persisted trace.
         await finalize(final_done, error_event)
     finally:
+        if turn is not None:
+            questions.release_turn(turn)
         flusher.stop()
         # Ownership-checked release — only our own entry, so a racing start that
         # registered a fresh turn is not lost.

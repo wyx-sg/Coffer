@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { useMcpCapabilities } from "./useMcpCapabilities";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -117,7 +120,7 @@ describe("useMcpCapabilities", () => {
 
     const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect((result.current.error as Error).message).toContain("empty capability response");
+    expect((result.current.error as Error).message).toContain("empty response");
   });
 
   test("falls back to UPSTREAM_UNAVAILABLE when the error envelope lacks a code", async () => {
@@ -130,8 +133,8 @@ describe("useMcpCapabilities", () => {
 
     const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
-    // The hook coerces missing code/message via `??` — assert the
-    // default-branch message lands rather than the user-facing copy.
-    expect((result.current.error as Error).message).toContain("list capabilities failed");
+    // `unwrap` coerces a missing code/message — assert the default-branch
+    // message lands rather than the user-facing copy.
+    expect((result.current.error as Error).message).toContain("request failed");
   });
 });

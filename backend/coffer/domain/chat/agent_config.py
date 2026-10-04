@@ -58,7 +58,7 @@ class AgentConfig:
 
     @classmethod
     def from_json(cls, raw: Mapping[str, Any]) -> AgentConfig:
-        """Parse a stored blob, tolerating legacy/partial shapes.
+        """Parse a stored blob, tolerating partial shapes.
 
         Non-string fields are dropped to ``None`` so a malformed blob degrades to
         an unconfigured config rather than raising.

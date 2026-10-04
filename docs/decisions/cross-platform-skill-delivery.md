@@ -3,12 +3,13 @@
 **Status**: Accepted
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md); research note [agent skills](../research/agent-skills.md)
+**Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md); research note [agent skills](../research/agent-skills.md)
 
 ## Context
 
-Coffer keeps one master folder per skill under `~/.coffer/skills/<name>/`, and
-that folder is the single editable copy (spec skill-manager "Keep one master
+Coffer keeps one master folder per skill under `~/.coffer/vault/skills/<name>/`
+(Coffer's own builtin skill, which is derived output, under
+`~/.coffer/derived/skills/<name>/`), and that folder is the single editable copy (spec skill-manager "Keep one master
 folder per skill"); the name in that path is fixed once the skill is
 registered ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)). Each registered agent must
 nevertheless see the skill in its own skills directory, under its own layout:
@@ -59,7 +60,7 @@ used is recorded per binding.
 - **Why it lost.** It is kept only as the Windows last resort, where it is
   recorded, marked and never mistaken for a link.
 
-### Option C — Point each agent's configuration at `~/.coffer/skills/`
+### Option C — Point each agent's configuration at `~/.coffer/vault/skills/`
 
 - **Pros.** No per-skill filesystem objects at all.
 - **Cons.** Both agents fix their skills path; where an override exists it
@@ -96,7 +97,8 @@ of the same rule.**
   fallback. Windows: symlink, else junction, else copy → `symlink`, `junction`
   or `copy_fallback`. The mode is decided per binding, not per OS, because one
   machine can mix filesystems, and it is recorded in the binding row (one row
-  per delivered `(skill, agent)` in `skill_agent_bindings`) and in the
+  per delivered `(skill, agent)` in `skill_agent_bindings`, in this machine's
+  derived database) and in the
   `skill_bound` audit event.
 - **Removal inspects before it removes.** A symlink is unlinked; a Windows
   junction is `rmdir`'d, which removes the link and not the target; a real
@@ -106,23 +108,28 @@ of the same rule.**
   Windows footgun of `rmtree` through a junction into the master.
 - **One predicate decides delivery.** A skill is delivered to an agent exactly
   when `skill.enabled and is_active(skill.scope, agent.uid)`, and the agent is
-  enabled (`application/skill/delivery_ops.py`). There is no per-`(skill,
+  enabled (`application/skill/link_reconcile.py`). There is no per-`(skill,
   agent)` switch. Both inputs are machine-local reach. Delivery is reconciled
-  per agent on every trigger that can change the answer.
+  from state on every pass of the unified reconciler, and at once after a
+  write that can change the answer.
 - **Report, never overwrite.** A target that holds something Coffer did not
   put there is reported as a conflict and left byte-identical; the link helper
   refuses to create over an existing path.
-- **Boot repairs only what is safe to repair unattended.** At every daemon
-  start, `application/skill/boot_reconcile.py` runs the same repair a person
-  can trigger on demand, restricted to `missing_link` (recreate it) and
+- **Every pass repairs only what is safe to repair unattended.** On every pass
+  of the unified reconciler (at start, on its period, after a change — ADR
+  [one-level-triggered-reconciler-compares-parameters](one-level-triggered-reconciler-compares-parameters.md)),
+  the skill-link target runs the same repair a person can trigger on demand, restricted to `missing_link` (recreate it) and
   `tampered_link` (rename the foreign link aside to a uniquely suffixed backup,
   then recreate). `replaced_with_regular`, `missing_master` and
   `orphan_master` are reported, never auto-remediated. The repair is audited
   with the actor `system`.
-- **Degraded delivery is visible.** A `copy_fallback` binding is badged on the
-  Skills page and carries `mode: copy_fallback` in its audit event; `verify`
-  treats a copy that carries the skill's `SKILL.md` as healthy, since a real
-  directory is the expected shape of that mode.
+- **Degraded delivery is visible where the copy is shown, not as a warning.**
+  A `copy_fallback` binding is listed on the skill's Delivery tab as **Copied,
+  not linked** and carries `mode: copy_fallback` in its audit event; the
+  library row carries no mark, because a copy made this way is a working
+  delivery. A copy whose content no longer matches master is reported as drift
+  and replaced from master; `verify` treats a copy that matches master as healthy,
+  since a real directory is the expected shape of that mode.
 
 ## Consequences
 
@@ -149,4 +156,4 @@ of the same rule.**
   spec skill-manager "Fall back to copying where links are unavailable",
   spec skill-manager "Deliver a skill only where it is enabled and in scope",
   spec skill-manager "Report a foreign target instead of overwriting it",
-  spec skill-manager "Heal safely repairable drift at daemon boot".
+  spec skill-manager "Heal safely repairable drift on every pass".

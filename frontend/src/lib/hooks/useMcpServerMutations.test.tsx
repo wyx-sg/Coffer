@@ -1,4 +1,5 @@
 // frontend/src/lib/hooks/useMcpServerMutations.test.tsx
+import type { KeyValueSecretRow } from "@/lib/secretValue";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,7 +8,10 @@ import type { PropsWithChildren } from "react";
 import { resourcesKey } from "@/lib/api/queryKeys";
 import { useImportMcpServers, useTestMcpServer } from "./useMcpServerMutations";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -29,7 +33,7 @@ const SERVER = {
   command: "npx",
   args: [] as string[],
   url: "",
-  env: [] as { key: string; value: string; isSecret: boolean }[],
+  env: [] as KeyValueSecretRow[],
 };
 
 describe("useImportMcpServers", () => {
@@ -54,7 +58,7 @@ describe("useImportMcpServers", () => {
     const created = new Map<string, string>();
     let imported: { name: string; uid: string }[] = [];
     await act(async () => {
-      imported = await result.current.mutateAsync({ servers: [SERVER], created });
+      imported = (await result.current.mutateAsync({ servers: [SERVER], created })).created;
     });
 
     expect(postMock).toHaveBeenCalledWith(
@@ -82,10 +86,11 @@ describe("useImportMcpServers", () => {
 
     let imported: { name: string; uid: string }[] = [];
     await act(async () => {
-      imported = await result.current.mutateAsync({
+      const report = await result.current.mutateAsync({
         servers: [SERVER],
         created: new Map([["fs", "u-filesystem"]]),
       });
+      imported = report.created;
     });
     expect(postMock).not.toHaveBeenCalled();
     // A retry that re-POSTs nothing must still say where the server is, or the

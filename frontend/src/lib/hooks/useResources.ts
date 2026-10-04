@@ -1,26 +1,14 @@
 // frontend/src/lib/hooks/useResources.ts
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { resourceListApi } from "@/lib/api/resourceList";
 import { resourceKey, resourcesByKindKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
 import type { Scope } from "@/lib/hooks/useScope";
-
-type ResourceOut = components["schemas"]["ResourceOut"];
 
 export function useResources(kind?: string) {
   return useQuery({
     queryKey: resourcesByKindKey(kind),
-    queryFn: async (): Promise<ResourceOut[]> => {
-      const client = getApiClient();
-      const { data, error } = await client.GET("/resources", {
-        params: { query: kind ? { kind } : {} },
-      });
-      if (error)
-        throwApiError(error, "INTERNAL_ERROR", `failed to list resources: ${kind ?? "all"}`);
-      return data?.resources ?? [];
-    },
+    queryFn: () => resourceListApi.list(kind),
   });
 }
 
@@ -29,20 +17,13 @@ export function useResources(kind?: string) {
 export function useResource(uid: string) {
   return useQuery({
     queryKey: resourceKey(uid),
-    queryFn: async (): Promise<ResourceOut> => {
-      const client = getApiClient();
-      const { data, error } = await client.GET("/resources/{uid}", {
-        params: { path: { uid } },
-      });
-      if (error) throwApiError(error, "RESOURCE_NOT_FOUND", "resource not found");
-      if (!data) throw new ApiError("RESOURCE_NOT_FOUND", "empty resource response");
-      return data;
-    },
+    queryFn: () => resourceListApi.get(uid),
     enabled: uid.length > 0,
   });
 }
 
 /** One resource's generic reach fields, as a table row needs them. */
+/** @ui-only derived row view; never crosses the wire. */
 export interface ResourceReach {
   enabled: boolean;
   scope: Scope | null;

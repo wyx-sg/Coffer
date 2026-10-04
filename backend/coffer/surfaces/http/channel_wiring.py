@@ -3,7 +3,7 @@
 Wires the kind, the peer repo, the inbound processor (against the chat
 platform's service handles), the adapter factory, the SeaTalk WebSocket
 controller, and the reconciling runtime. Runs
-AFTER ``wire_chat`` and ``wire_knowledge_kind``, whose results it takes as
+AFTER ``wire_chat``, whose result it takes as
 parameters.
 
 It also resolves this machine's identity, because a channel names the one
@@ -17,6 +17,8 @@ converges with anything.
 
 from __future__ import annotations
 
+import hashlib
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
@@ -24,32 +26,77 @@ from fastapi import FastAPI
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.channel.mirror import ChannelMirror
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
-from coffer.application.channel.sync_state import ChannelPeerSyncState
-from coffer.application.credentials.resolver import CredentialResolver
+from coffer.application.chat import questions
 from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.chat.question import QuestionBlock
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import SecretDestination, channel_destination
 from coffer.infrastructure.channel.persistence import (
+    ChannelOutboxRepo,
     ChannelPeerRepo,
+    ChannelReplyRepo,
     ChannelThreadConversationRepo,
 )
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.sync.identity import resolve_identity
-from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
+from coffer.surfaces.http.channel_credential_wiring import build_credential_check
+from coffer.surfaces.http.channel_routes import (
+    get_channel_service,
+    set_channel_service,
+    set_credential_check,
+)
+from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
 from coffer.surfaces.http.chat_wiring import ChatWiring
-from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
+from coffer.surfaces.http.secret_composition import boundary_resolver
+from coffer.surfaces.http.vault_composition import VaultStores
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.resource_service import ResourceService
+
+
+class ChatQuestions:
+    """The chat platform's questions, as the channel core's port (the channel
+    kind never imports the chat kind; this composition root does)."""
+
+    def pending_question_for(self, conversation_id: str) -> QuestionBlock | None:
+        return questions.pending_question_for(conversation_id)
+
+    async def answer(
+        self,
+        conversation_id: str,
+        question_id: str,
+        *,
+        selected: Sequence[str],
+        text: str | None,
+        via: str,
+        by: str,
+        index: int | None,
+    ) -> QuestionBlock:
+        return await questions.answer_question(
+            conversation_id,
+            question_id,
+            [questions.AnswerInput(selected=selected, text=text)],
+            via=via,
+            by=by,
+            index=index,
+        )
+
+    async def answer_text(
+        self, conversation_id: str, text: str, *, via: str, by: str
+    ) -> QuestionBlock | None:
+        return await questions.answer_pending_with_text(conversation_id, text, via=via, by=by)
 
 
 async def _ingest_websocket_event(channel_uid: str, envelope: dict[str, Any]) -> None:
@@ -69,22 +116,26 @@ def wire_channel_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    vault: VaultStores,
+    secret_store: EncryptedSecretStore,
     chat: ChatWiring,
-    knowledge: KnowledgeWiring,
-    sync: SyncContributions,
 ) -> ChannelRuntime:
     # Derived from the host, cached in ``daemon-config.json``, and stable for
     # the life of the daemon — so it is resolved once here rather than on every
     # reconcile tick and every status read.
     machine_id = resolve_identity().machine_id
-    features = app.state.feature_service
 
     async def local_machine_id() -> str:
         return machine_id
 
-    peers = ChannelPeerRepo(sm)
+    # Pairings are a vault document per channel that goes with it (spec
+    # vault-storage); what each thread is doing is history in runs.db.
+    peers = ChannelPeerRepo(name_of=vault.resources.name_of)
+    vault.resources.add_follower(peers.documents.follow)
+    peers.documents.add_owner_listener(vault.resources.announce)
     threads = ChannelThreadConversationRepo(sm)
+    outbox = ChannelOutboxRepo(sm)
+    replies = ChannelReplyRepo(sm)
     pairing = PairingManager()
     processor = InboundProcessor(
         peers=peers,
@@ -98,30 +149,60 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
-        # `/save` (spec channels "Save a sent document into a collection"): both
-        # already satisfy the channel
-        # core's Protocol shape structurally (``CollectionCatalogPort`` /
-        # ``IngestPort``), so the knowledge kind's own services go in
-        # directly — the channel core never imports the knowledge kind itself
-        # (import-linter contract 5f).
-        collections=knowledge.service,
-        ingest=knowledge.ingest_service,
-        # While knowledge is switched off `/save` answers that and saves
-        # nothing (spec experimental-features).
-        knowledge_enabled=lambda: features.is_enabled("knowledge"),
+        # Which platform messages make up each reply, so the owner can withdraw it (spec
+        # channels "Withdraw a bot reply on the owner's command").
+        replies=replies,
+        # Questions an agent asks the owner (spec channels "Ask the owner in the
+        # chat and take the answer back to the agent").
+        questions=ChatQuestions(),
     )
 
     # ``materialize_async`` is the resolver's own off-the-loop path;
     # hand-rolling ``to_thread`` here is how the two drifted apart before.
-    materialize = CredentialResolver(credential_store).materialize_async
+    materialize = boundary_resolver(secret_store).materialize_async
+    register_resource_destination("channel", _channel_secret_destination)
 
-    async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:
+    async def adapter_factory(uid: str, config: dict[str, object]) -> ChannelAdapter:
         parsed = parse_channel_config(dict(config))
+        # The adapter is named by the channel's uid, which a rename keeps: its
+        # inbound messages carry that in ``channel``. The boundary wants the
+        # label too, so it is read off the row.
+        name = (await resource_svc.get(uid)).name
         if parsed.channel_type == "telegram":
-            token = (await materialize({"token": parsed.bot_token_ref}))["token"]
-            return TelegramAdapter(name, token)
-        secret = (await materialize({"secret": parsed.app_secret_ref}))["secret"]
-        return SeaTalkAdapter(name, parsed.app_id, secret)
+            dest = channel_destination(uid, name, "telegram")
+            token = (await materialize({"token": parsed.bot_token_ref}, dest))["token"]
+            return TelegramAdapter(uid, token)
+        dest = channel_destination(uid, name, "seatalk", parsed.app_id)
+        secret = (await materialize({"secret": parsed.app_secret_ref}, dest))["secret"]
+        return SeaTalkAdapter(uid, parsed.app_id, secret)
+
+    def secret_revision(ref: str) -> str | None:
+        """A stamp of the stored ciphertext, which changes when the secret is
+        replaced; it reads the file and never decrypts it, so no key prompt."""
+        try:
+            data = secret_store.path_of(ref).read_bytes()
+        except OSError:
+            return None
+        return hashlib.sha256(data).hexdigest()[:16]
+
+    # A reply typed on the Chat page into a channel's conversation also goes to
+    # that chat (spec chat "Mirror a web reply into the channel it came from").
+    # Chat reaches it only through its own ``ChannelMirrorPort``, published here.
+    mirror = ChannelMirror(
+        resources=resource_svc,
+        threads=threads,
+        peers=peers,
+        outbox=outbox,
+        processor=processor,
+    )
+    set_channel_mirror(mirror)
+    # The facts the channel note of a channel-driven turn is written from (spec
+    # channels "Tell a channel-driven agent it is on a chat channel"): chat
+    # composes the note, only the channel kind knows platform, chat kind and
+    # what the running transport renders.
+    set_channel_note_reader(
+        ChannelNoteReader(resources=resource_svc, threads=threads, binding=processor.binding)
+    )
 
     runtime = ChannelRuntime(
         resources=resource_svc,
@@ -134,11 +215,19 @@ def wire_channel_kind(
         # this point in the wiring, so it is resolved at call time.
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
+        secret_revision=secret_revision,
         machine_id=local_machine_id,
+        # Each tick delivers what a running channel still owes its chats.
+        on_tick=mirror.flush,
     )
 
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)
+        # The history rows name the channel by uid and nothing cascades from
+        # a file, so they go here, with the channel.
+        await threads.delete_for_channel(channel.uid)
+        await outbox.delete_for_channel(channel.uid)
+        await replies.delete_for_channel(channel.uid)
 
     async def agent_names() -> dict[str, str]:
         """Every registered agent's UID mapped to its name.
@@ -172,18 +261,17 @@ def wire_channel_kind(
         audit=audit,
     )
     set_channel_service(service)
-    # Pairing identity is a synced state area again. It was removed when
-    # channels stopped travelling — a published pairing would have named a
-    # channel the other machine did not have — and that premise is gone: a
-    # channel travels, so rebinding it to another machine is a thing that
-    # happens, and pairings are what make a rebind cost nothing. They carry
-    # platform identity only; the conversation pointer stays on this machine.
-    #
-    # Appended to the ``SyncContributions`` collector every other area uses
-    # (``app_mcp_composition``, ``engine_config_composition``,
-    # ``agent_skill_wiring``); ``start_sync`` reads it once every kind is wired.
-    # It must go through that object and not onto ``app.state``: nothing reads
-    # ``app.state`` for state providers, so an area that registers there
-    # silently does not converge.
-    sync.state_providers.append(ChannelPeerSyncState(resource_svc, peers))
+    set_credential_check(build_credential_check(resource_svc, materialize))
     return runtime
+
+
+def _channel_secret_destination(
+    resource: Resource,
+) -> tuple[SecretDestination, dict[str, str]] | None:
+    """Where a channel's secret goes, for the secret boundary's listing."""
+    parsed = parse_channel_config(dict(resource.config))
+    if parsed.channel_type == "telegram":
+        dest = channel_destination(resource.uid, resource.name, "telegram")
+        return dest, {"token": parsed.bot_token_ref}
+    dest = channel_destination(resource.uid, resource.name, "seatalk", parsed.app_id)
+    return dest, {"secret": parsed.app_secret_ref}

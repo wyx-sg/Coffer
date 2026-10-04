@@ -1,8 +1,8 @@
 """The background worker that folds new knowledge into a collection's documents.
 
 It is **on by default** (spec knowledge "Curate on one owner machine only"): it is what merges each
-collection's inbox — uploads, agents' ``coffer__write`` — into the documents an
-agent reads, and what carries a person's edit to one document into the rest.
+collection's inbox — uploads, files agents write there — into the documents an
+agent reads, and what carries an edit to one document into the rest.
 A vault where it never runs is one whose new material waits unread.
 
 It is still bounded by an owner machine, because a pass rewrites synced
@@ -13,20 +13,30 @@ reported as a conflict.
 
 Shaped like ``RetentionWorker``: one catch-up sweep shortly after boot, then on
 an interval; a failing pass is logged and never kills the loop; a pending pass
-never blocks shutdown, because the watermark makes a sweep idempotent and the
-next boot picks up whatever was left.
+never blocks shutdown, because what is settled is recorded by content and a
+sweep is idempotent: the next boot picks up whatever was left.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from coffer.application.knowledge.curate import pending_items
+from coffer.application.knowledge.intake import adopt_dropped_files
+from coffer.application.knowledge.recording import settle
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
-from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+from coffer.application.upkeep_schedule import (
+    DEFAULT_INTERVALS,
+    IntervalReader,
+    wait_for_next_pass,
+)
+from coffer.domain.internal_engine_config import CURATE
 from coffer.domain.knowledge.entry import Pending
 
 logger = logging.getLogger(__name__)
@@ -34,10 +44,9 @@ logger = logging.getLogger(__name__)
 #: Long enough that a boot storm has settled before the first sweep.
 DEFAULT_START_DELAY_S = 60.0
 
-#: Short, because material a person just added should be readable by an agent
-#: in the same sitting. One pass is one small model call, so a sweep that finds
-#: nothing pending costs a directory walk.
-DEFAULT_INTERVAL_S = 60.0
+#: The pass's own cadence, kept in one place with the other passes' so the
+#: settings surface labels "default" with the number the worker really waits.
+DEFAULT_INTERVAL_S = DEFAULT_INTERVALS[CURATE]
 
 #: Passes one sweep may run per collection. A freshly migrated vault has
 #: dozens of pending items; draining them a few at a time keeps any single
@@ -77,8 +86,11 @@ class CurationWorker:
         lock: asyncio.Lock | None = None,
         runs: UpkeepRunRegistry = UPKEEP_RUNS,
         max_passes_per_sweep: int = MAX_PASSES_PER_SWEEP,
+        clock: PassClock = PASS_CLOCK,
     ) -> None:
         self._service = service
+        # Where the Automatic popover's "next in" comes from (``application.upkeep_clock``).
+        self._clock = clock
         self._curate = curate
         self._deliver = deliver
         self._is_enabled = is_enabled
@@ -101,20 +113,26 @@ class CurationWorker:
         # uid. They go behind the rest of the inbox next sweep (see ``_drain``).
         self._cut_off: set[tuple[str, Pending]] = set()
 
+    def _pass_lock(self) -> contextlib.AbstractAsyncContextManager[Any]:
+        return self._lock if self._lock is not None else contextlib.nullcontext()
+
     async def run_forever(self) -> None:
+        self._clock.waiting(CURATE, due_in_s=self._start_delay_s)
         await asyncio.sleep(self._start_delay_s)
         while True:
+            self._clock.running(CURATE)
             try:
                 await self.run_once()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 # A failed sweep must never end the loop: the next one is a
-                # fresh attempt, and the watermark tells it what is still owed.
+                # fresh attempt, and the pending list tells it what is still owed.
                 logger.warning("knowledge.curate_worker.sweep_failed", exc_info=True)
             # The operator's interval is re-read as the wait runs, so a change
             # in Settings lands within a slice rather than at the end of a wait
             # this worker committed to hours ago.
+            self._clock.waiting(CURATE)
             await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:
@@ -129,13 +147,23 @@ class CurationWorker:
                 await self._deliver()
             except Exception:
                 logger.warning("knowledge.curate_worker.delivery_failed", exc_info=True)
+        # A file an agent wrote into an inbox gets the frontmatter it lacks and
+        # an audit event, before the disk step below commits it (spec knowledge
+        # "Submit material by writing a file into the inbox").
+        try:
+            await adopt_dropped_files(self._service)
+        except Exception:
+            logger.warning("knowledge.curate_worker.intake_failed", exc_info=True)
+        # Edits made on disk since the last write become versions of their own
+        # now, whether or not curation runs here (spec knowledge "Keep every
+        # document's history and undo a pass as a whole").
+        try:
+            await settle(getattr(self._service, "history", None))
+        except Exception:
+            logger.warning("knowledge.curate_worker.history_failed", exc_info=True)
         if not await self._is_enabled():
             return
-        if self._lock is None:
-            await self._sweep()
-            return
-        async with self._lock:
-            await self._sweep()
+        await self._sweep()
 
     async def _sweep(self) -> None:
         for uid in await self._list_collections():
@@ -188,7 +216,10 @@ class CurationWorker:
             self._cut_off = {k for k in self._cut_off if k[0] != uid or k[1] in pending}
             pending = tuple(sorted(pending, key=lambda p: (uid, p) in self._cut_off))
             for item in pending[: self._max_passes]:
-                outcome = await self._curate(self._service, uid, item=item, actor="system")
+                # The vault lock is held for one pass, never the sweep: a pass is
+                # at most minutes and a sync round must not wait out a whole drain.
+                async with self._pass_lock():
+                    outcome = await self._curate(self._service, uid, item=item, actor="system")
                 status = str(outcome.get("status", ""))
                 if status == "truncated" and not outcome.get("gave_up"):
                     self._cut_off.add((uid, item))

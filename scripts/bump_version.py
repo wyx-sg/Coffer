@@ -80,9 +80,7 @@ def _bump_cargo_lock(text: str, version: str) -> str:
 def _bump_json_top_level(text: str, version: str, *, where: str) -> str:
     # The first top-level `"version": "..."` (two-space indent), so a nested
     # dependency's version in package-lock.json is never touched.
-    return _sub_once(
-        text, r'^  "version": "[^"]+"', f'  "version": "{version}"', where=where
-    )
+    return _sub_once(text, r'^  "version": "[^"]+"', f'  "version": "{version}"', where=where)
 
 
 def _bump_package_lock(text: str, version: str) -> str:
@@ -101,9 +99,7 @@ def _bump_package_lock(text: str, version: str) -> str:
 #: reads the same files back, so adding a file here means adding it there.
 TARGETS: dict[str, object] = {
     "backend/pyproject.toml": _bump_pyproject,
-    "frontend/package.json": lambda t, v: _bump_json_top_level(
-        t, v, where="frontend/package.json"
-    ),
+    "frontend/package.json": lambda t, v: _bump_json_top_level(t, v, where="frontend/package.json"),
     "frontend/package-lock.json": _bump_package_lock,
     "desktop/Cargo.toml": _bump_cargo_toml,
     "desktop/Cargo.lock": _bump_cargo_lock,
@@ -120,9 +116,7 @@ def bump(version: str, root: Path = _REPO_ROOT) -> list[Path]:
     them leaves every file untouched rather than half the set bumped.
     """
     if not _VERSION_RE.match(version):
-        raise SystemExit(
-            f"bump_version: {version!r} is not a version like 1.2.3 or 1.2.3rc1"
-        )
+        raise SystemExit(f"bump_version: {version!r} is not a version like 1.2.3 or 1.2.3rc1")
     pending: list[tuple[Path, str]] = []
     for rel, rewrite in TARGETS.items():
         path = root / rel

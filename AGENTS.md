@@ -37,18 +37,52 @@ If sources disagree: **principles win.** Flag inconsistency to the user.
 1. confirm today's scope back to the user
 2. open the right branch (see .agents/workflow.md)
 3. behaviour change? start an OpenSpec change first (/opsx:propose)
-4. work in small, committable chunks (one logical change per commit)
+4. work in small, committable chunks (one logical change per commit);
+   make verify before each commit — the commit hook asks when it is stale
 5. archive the change (/opsx:archive) in the same PR, before it merges
-6. before opening PR: make verify
-7. squash to one commit before final push
-8. open PR — STOP at PR-opened, wait for explicit user merge instruction
+6. squash to one commit before final push
+7. open PR — STOP at PR-opened, wait for explicit user merge instruction
 ```
+
 
 **Hard stops within a session:**
 
 - 25 substantial messages with no committed checkpoint → stop and triage with the user.
 - Tool failure repeating 3 times → stop, investigate root cause, do not retry blindly.
 - Any conflict with the principles or these rules → stop, ask, do not work around.
+
+### Four-way sync: spec · code · docs · design canvas
+
+Four things describe the product, and **changing one means changing the others in the same work item** — never as a follow-up, never "cleaned up later":
+
+| Surface | Where |
+| --- | --- |
+| Spec | `openspec/specs/**` (requirements, scenarios, `data-model.md`, contracts) |
+| Code | `backend/`, `frontend/`, `desktop/` (and their tests) |
+| Docs, external | `README.md` + `README.zh-CN.md`, `docs-site/**` (English + `zh/`) |
+| Docs, internal | `docs/decisions/` ADRs, `docs/research/`, `docs/skill-library/`, `.agents/*`, `AGENTS.md`, `CONTRIBUTING.md` |
+| Design canvas | the Claude Design canvases listed below (UI boards, kept outside the repo; see `DesignSync`) |
+
+- A UI change (layout, copy, states, navigation, a new or removed screen) redraws the affected canvas boards in the same work item. If the code is the one that is wrong, change the code back to match the board instead.
+- A change that starts in the spec, the docs or the canvas lands in the code too, and the other two.
+- The canvas shows the final product only: no version labels and no planning material. The "Experimental" mark on the four experimental features (knowledge, memory, sync, model switching) is part of the product and is drawn.
+- A work item is not done while any of the four disagrees with the others. Give this rule to subagents explicitly. Report a canvas change you could not make as an open item for the user rather than skipping it silently.
+
+**The canvases** — one Claude Design artifact per sidebar group, plus one each for Foundations, the Shell and the docs site, plus the design system. A new screen goes on the canvas of the sidebar group its page sits in; anything outside the sidebar (the frame, Overview, the menu bar, the Settings modal) is the Shell canvas. Boards are numbered `<canvas>.<page>.<nn>`, so a board's number names its canvas. Read the board you are about to change before you design or change a screen, and reuse its components, spacing, colour and copy so every screen keeps one visual style; the design system canvas and [`.agents/visual-language.md`](./.agents/visual-language.md) are the style source of truth.
+
+| # | Canvas | Covers | Link |
+| --- | --- | --- | --- |
+| 0 | Foundations | principles, tokens and every shared component, in seven pages (below) | <https://claude.ai/artifact/NicV38VfXwViA294jgRfBV> |
+| 1 | Shell | app shell and global states, Overview, menu bar, Settings modal | <https://claude.ai/artifact/Jz7f6MqShmdWx4N7YTRm49> |
+| 2 | Agents | Agents, Model providers | <https://claude.ai/artifact/NdBb9YeJXQSLq3ynUDC2Yr> |
+| 3 | Run | Conversations, Channels, channel messages in SeaTalk / Telegram | <https://claude.ai/artifact/UXVgGBZBtrDx3Uqnc3ke82> |
+| 4 | Capabilities | MCP servers, Custom tools, Skills, CLIs | <https://claude.ai/artifact/5bMJNV8g8TQz3CrvMEBS55> |
+| 5 | Context | Knowledge, Memory | <https://claude.ai/artifact/SiJTKEXTJWKxEmT3yNJkcR> |
+| 6 | System | Secrets, Activity, Usage, Sync | <https://claude.ai/artifact/GgTRNb7Ydtk3ZaTyK3vufH> |
+| 7 | Docs site | docs-site pages | <https://claude.ai/artifact/LycoMx54recg7ACG1x212D> |
+| — | Design System | tokens and shared components | <https://claude.ai/artifact/78ViLn9YyUszUNWhC8fyJh> |
+
+**Foundations pages** — the Foundations canvas groups shared components by what they do, one canvas page each: 0.1 Basics (global rules and tokens: principles, brand, colour and themes, type, space, motion, focus), 0.2 Inputs & actions, 0.3 Status & feedback, 0.4 Overlays, 0.5 Layout & navigation, 0.6 Data display, 0.7 Coffer patterns (pieces that only make sense with Coffer's agents, built from the others). Place a new component by taking the first rule that fits: a global rule or token → 0.1; meaningless without Coffer's agents → 0.7; floats above the page → 0.4; lays out the page or moves between pages → 0.5; the user enters a value or triggers something → 0.2; the system reports a state → 0.3; anything else that shows data → 0.6. A new board goes at the end of its page; a board number is never changed or reused.
 
 ## 4. Decide vs Ask
 
@@ -67,10 +101,10 @@ The user has delegated architectural authority. **Default to deciding and explai
 ## 5. Common Commands
 
 ```bash
-make install                # one-time: venv + backend deps
+make install                # one-time: .venv from uv.lock + frontend, OpenSpec CLI and e2e npm deps
 make verify                 # fast path (lint + unit + integration + contract + acceptance)
 make verify-all             # adds e2e
-make dev                    # backend (:8000) + frontend (:5173)
+make dev                    # backend (:38470) + frontend (:5173)
 
 git checkout -b feature/<short-name>
 git add <files> && git commit -m "feat(<scope>): <subject>"
@@ -91,13 +125,22 @@ Until both hit, keep flat. Example: split `stack.md` into a subfolder only when 
 
 ## 7. Docs Language
 
-Every doc in this repo is written in **English only**. There are no translation
-companions: no `.zh.md` files, no per-language mirror under `docs-site/`. A doc
-that needs to change is changed in place, in English.
+Two places are bilingual, English and Simplified Chinese; every other doc is
+English only.
 
-This applies to prose docs (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
-`SECURITY.md`, `.agents/**`, `docs/**`, `openspec/**`) and to
-the published site (`docs-site/**`). It does **not** apply to the Coffer web
-UI's own interface copy — the app ships English and 中文 through
+- **The docs site** (`docs-site/**`). English lives at the root and Chinese under
+  `docs-site/zh/`, page for page, with the same headings and anchors. A change to
+  an English page changes its `zh/` twin in the same commit.
+  `scripts/check_docs_locales.py` (in `make lint`) fails when a page, a sidebar
+  entry or a heading anchor exists in one tree and not the other. See
+  [Contributing › Docs site in two languages](./docs-site/contributing/index.md#docs-site-in-two-languages).
+- **The README**: `README.md` (English) and `README.zh-CN.md` (Chinese), each
+  linking the other at the top. Change both together.
+
+Everything else stays English only, with no translation companion: `AGENTS.md`,
+`CONTRIBUTING.md`, `SECURITY.md`, `.agents/**`, `docs/**` (ADRs, research) and
+`openspec/**` (specs and changes). The Coffer web UI's own interface copy is a
+separate matter — the app ships English and 中文 through
 `frontend/src/i18n/locales/`, and that language switcher is a product feature
-(see [`.agents/frontend.md`](./.agents/frontend.md)).
+(see [`.agents/frontend.md`](./.agents/frontend.md)). Use the app's Chinese terms
+(`zh.json`) in the Chinese docs.

@@ -3,52 +3,23 @@
 // Provider introspection (specs channels and knowledge): list a provider's models + test a
 // connection, so the model forms offer a fetched fixed list (no free-text
 // entry, spec provider-switching "Choose a model from a fixed list") and a
-// Test button — DevPilot-style. Requests go through the shared
-// `call` (.agents/frontend.md §4).
+// Test button — DevPilot-style. Requests go through the typed client's
+// `modelProbeApi` (.agents/frontend.md §4).
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { call } from "@/lib/api/call";
+import {
+  type EndpointModelsOut,
+  type ListModelsIn,
+  modelProbeApi,
+  type TestConnectionIn,
+} from "@/lib/api/providers";
 import { endpointModelsKey } from "@/lib/api/queryKeys";
-import type { ProviderModel } from "@/lib/api/providers";
 
-export interface ProviderProbe {
-  provider: string;
-  model?: string;
-  base_url?: string | null;
-  credential_ref?: string | null;
-  /** Inline, not-yet-saved key so the dialog can test/fetch before save. */
-  secret_value?: string | null;
-}
-
-export interface TestResult {
-  ok: boolean;
-  message: string;
-  detail?: Record<string, unknown>;
-}
-
-const post = <T>(path: string, body: unknown) => call<T>(path, { method: "POST", body });
-
-/** What an endpoint reports it serves. Each id carries the modality Coffer
- *  INFERRED from its name (spec provider-switching "Offer only text models to
- *  chat pickers") — a pre-fill for the
- *  connection's model table, never a stored fact: once an entry is curated, the
- *  modality the user left on it is the truth. */
-export interface EndpointModelsOut {
-  models: ProviderModel[];
-  message: string;
-}
+export type { EndpointModelsOut };
 
 /** List a provider's models. Empty list + message → the surface shows why. */
 export function useListProviderModels() {
-  return useMutation({
-    mutationFn: (p: ProviderProbe) =>
-      post<EndpointModelsOut>("/models/list-models", {
-        provider: p.provider,
-        base_url: p.base_url ?? null,
-        credential_ref: p.credential_ref ?? null,
-        secret_value: p.secret_value ?? null,
-      }),
-  });
+  return useMutation({ mutationFn: (p: ListModelsIn) => modelProbeApi.list(p) });
 }
 
 /** The model ids an endpoint itself serves, as a QUERY rather than the mutation
@@ -66,16 +37,10 @@ export function useListProviderModels() {
  *  answer the user must see, not a blip worth three silent attempts.
  *
  *  `endpointModelsKey` lives in `lib/api/queryKeys.ts` with every other key. */
-export function useEndpointModels(uid: string, probe: ProviderProbe) {
+export function useEndpointModels(uid: string, probe: ListModelsIn) {
   return useQuery({
     queryKey: endpointModelsKey(uid),
-    queryFn: () =>
-      post<EndpointModelsOut>("/models/list-models", {
-        provider: probe.provider,
-        base_url: probe.base_url ?? null,
-        credential_ref: probe.credential_ref ?? null,
-        secret_value: probe.secret_value ?? null,
-      }),
+    queryFn: () => modelProbeApi.list(probe),
     enabled: uid !== "",
     retry: false,
     refetchOnWindowFocus: false,
@@ -89,7 +54,5 @@ export function useEndpointModels(uid: string, probe: ProviderProbe) {
 
 /** Probe a chat provider with a minimal request. */
 export function useTestConnection() {
-  return useMutation({
-    mutationFn: (p: ProviderProbe) => post<TestResult>("/models/test-connection", p),
-  });
+  return useMutation({ mutationFn: (p: TestConnectionIn) => modelProbeApi.test(p) });
 }

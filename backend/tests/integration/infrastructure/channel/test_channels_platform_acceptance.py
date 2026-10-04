@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.application.channel.selection_cards import agent_card
+from coffer.application.channel.selection_cards import model_card
 from coffer.infrastructure.channel import live_text
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
@@ -89,7 +89,9 @@ async def test_the_streaming_surface_is_used_only_in_the_chats_that_have_it(
 async def test_the_current_choice_is_sent_as_a_disabled_button(
     fake_telegram: FakeTelegram,
 ) -> None:
-    card = agent_card(current="codex", choices=[("codex", "Codex"), ("claude_code", "Claude Code")])
+    card = model_card(
+        current="opus", picks=["opus", "sonnet"], labels={"opus": "Opus", "sonnet": "Sonnet"}
+    )
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
     try:
@@ -99,8 +101,8 @@ async def test_the_current_choice_is_sent_as_a_disabled_button(
 
     rows = fake_telegram.calls_for("sendMessage")[0]["reply_markup"]["inline_keyboard"]
     buttons = {b["callback_data"]: b for row in rows for b in row}
-    chosen, other = buttons["agent:codex"], buttons["agent:claude_code"]
+    chosen, other = buttons["model:opus"], buttons["model:sonnet"]
     assert "disabled" in chosen  # the platform's disabled state
-    assert chosen["text"] == "Codex ✓"  # marked as the current choice
+    assert chosen["text"] == "✓ Opus"  # marked as the current choice
     assert "disabled" not in other and "style" not in other
-    assert other["text"] == "Claude Code"
+    assert other["text"] == "Sonnet"

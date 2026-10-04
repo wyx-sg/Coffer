@@ -16,73 +16,48 @@ class DriftKind(StrEnum):
     ORPHAN_MASTER = "orphan_master"
 
 
-# Each remedy names an action that exists: per-(skill, agent) enable/disable
-# is gone (spec skill-manager), and repair re-links only missing/tampered
-# links — it never touches foreign content (spec skill-manager "Repair
-# repairable drift from master"). Backticked ``coffer ...`` commands are
-# resolved against the real CLI by tests/unit/domain/test_skill_drift_remedies.
-_REMEDIES: dict[DriftKind, str] = {
-    DriftKind.MISSING_LINK: (
-        "Run `coffer skill verify --fix` (or `coffer daemon restart`) to re-link it from master."
-    ),
-    DriftKind.TAMPERED_LINK: (
-        "Run `coffer skill verify --fix` (or `coffer daemon restart`) to point the link "
-        "back at master."
-    ),
-    DriftKind.REPLACED_WITH_REGULAR: (
-        "A non-Coffer file or folder occupies the target path and Coffer will not touch it; "
-        "move it away yourself, then run `coffer skill verify --fix`."
-    ),
-    DriftKind.MISSING_MASTER: (
-        "The master folder is gone; remove the record with `coffer skill rm <name>` "
-        "and add the skill again with `coffer skill add <folder>`."
-    ),
-    DriftKind.ORPHAN_MASTER: (
-        "A folder in Coffer's skill store has no Coffer record; move it out of the store "
-        "and add it with `coffer skill add <folder>`, or delete it."
-    ),
-}
-
-
-def suggested_remedy(kind: DriftKind) -> str:
-    return _REMEDIES[kind]
-
-
 @dataclass
 class DriftEntry:
     """One row in the drift report.
 
     Carries both the labels a person reads and the uids a repair addresses.
     They are not two spellings of one thing: the names are what the report
-    SAYS, and the uids are what ``repair_drift`` re-delivers against, so a
+    SAYS, and the uids are what a repair re-delivers against, so a
     skill renamed between the verify pass and the repair pass is still the
-    skill that gets repaired (ADR resource-identity-is-an-immutable-uid).
+    skill that gets repaired (ADR identity-is-the-uid-inside-the-file).
 
     Both uids are ``None`` for an ORPHAN_MASTER entry, which is a folder on
     disk that no resource row claims — there is no identity to record, and
-    nothing for a repair to address, which is why ``repair_drift`` skips that
+    nothing for a repair to address, which is why a repair skips that
     kind outright.
+
+    It carries no remedy text: what to do about a kind is said by each surface
+    in its own words (spec skill-manager "Report skill drift on request").
     """
 
     skill_name: str
     agent_name: str
     kind: DriftKind
     target_path: str
-    suggested_remedy: str
     skill_uid: str | None = None
     agent_uid: str | None = None
+    #: The prompt that hands a finding no repair settles to an agent
+    #: (``application/skill/drift_handoff.py``); ``None`` when Repair is the
+    #: fix. What a person reads about the kind is each surface's own words:
+    #: the web UI translates ``kind``, the CLI names its own commands.
+    handoff: str | None = None
 
 
 @dataclass
 class DriftReport:
-    """Output of `SkillService.verify()`."""
+    """The skill drift report (``drift_view.verify``)."""
 
     entries: list[DriftEntry] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class RepairResult:
-    """Output of `SkillService.repair_drift()`.
+    """The result of repairing drift (``drift_view.repair``).
 
     ``remediated`` holds entries that were successfully re-delivered;
     ``remaining`` is the residual DriftReport after the repair pass (entries

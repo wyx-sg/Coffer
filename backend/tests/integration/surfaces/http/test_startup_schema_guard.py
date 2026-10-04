@@ -15,7 +15,10 @@ import sqlite3
 import pytest
 
 from coffer.domain.errors import DatabaseSchemaTooNew
-from coffer.surfaces.http.migrations_runner import _alembic_config, _guard_schema_not_newer
+from coffer.infrastructure.persistence.migrations_runner import (
+    _alembic_config,
+    _guard_schema_not_newer,
+)
 from tests.integration.infrastructure.persistence.test_migrations_roundtrip import HEAD_REVISION
 
 

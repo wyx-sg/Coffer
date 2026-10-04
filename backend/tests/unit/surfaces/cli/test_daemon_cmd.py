@@ -26,7 +26,7 @@ def _setup_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A throwaway HOME, plus the port-range override every daemon test needs.
 
     ``daemon start`` pre-flights the port it is about to bind, which with no
-    override is the real 8000 — the port the developer's own daemon is usually
+    override is the real 38470 — the port the developer's own daemon is usually
     sitting on. These tests fake ``Popen`` and care about the spawn plumbing,
     not the port, so they pin a range of their own (as test_daemon_lifecycle.py
     does) rather than contending for a port they never intended to use.
@@ -57,6 +57,10 @@ def test_daemon_start_writes_pid_and_echoes(
 
     class _FakeProc:
         pid = 4242
+        returncode = None
+
+        def poll(self) -> None:
+            return None
 
         def kill(self) -> None:  # not used on happy path
             pass
@@ -64,12 +68,12 @@ def test_daemon_start_writes_pid_and_echoes(
     def _fake_popen(cmd: list[str], **kwargs: Any) -> _FakeProc:
         popen_args["cmd"] = cmd
         popen_args["kwargs"] = kwargs
-        # Simulate the child writing daemon.json synchronously so
-        # _wait_for_daemon_json returns True immediately.
         daemon_json.write_text(json.dumps({"port": 9999, "token": "t", "pid": 4242, "version": 1}))
         return _FakeProc()
 
     monkeypatch.setattr(_spawn.subprocess, "Popen", _fake_popen)
+    answers = iter([None, _fake_info()])  # nobody before the spawn, serving after it
+    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: next(answers))
 
     daemon_cmd.start()
     out = capsys.readouterr().out
@@ -110,12 +114,17 @@ def test_daemon_start_respawns_over_stale_daemon_json(
     # Stale file left by a crashed daemon — present, but nothing is serving.
     daemon_json.write_text(json.dumps({"port": 9999, "token": "t", "pid": 1, "version": 1}))
 
-    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: None)
+    answers = iter([None, _fake_info()])
+    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: next(answers))
 
     spawned = {"popen": False}
 
     class _FakeProc:
         pid = 7777
+        returncode = None
+
+        def poll(self) -> None:
+            return None
 
         def kill(self) -> None:
             pass
@@ -133,31 +142,60 @@ def test_daemon_start_respawns_over_stale_daemon_json(
     assert "daemon started" in capsys.readouterr().out
 
 
-def test_daemon_start_fails_when_child_never_writes_daemon_json(
+def test_daemon_start_fails_when_the_daemon_never_answers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """If the child never writes daemon.json within the timeout, start()
-    calls Popen.kill() and exits 1 with a helpful stderr message."""
+    """A daemon.json (even a fresh one) is not success: if nothing answers the
+    status call in time, start() kills the child and exits 1."""
     _setup_home(tmp_path, monkeypatch)
 
     class _FakeProc:
         pid = 4243
+        returncode = None
         killed = False
+
+        def poll(self) -> None:
+            return None
 
         def kill(self) -> None:
             type(self).killed = True
 
-    def _fake_popen(cmd: list[str], **kwargs: Any) -> _FakeProc:
-        return _FakeProc()
-
-    monkeypatch.setattr(_spawn.subprocess, "Popen", _fake_popen)
-    # Short-circuit the wait loop.
-    monkeypatch.setattr(daemon_cmd, "_wait_for_daemon_json", lambda path, timeout: False)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", lambda cmd, **kw: _FakeProc())
+    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: None)
+    monkeypatch.setattr(daemon_cmd, "START_TIMEOUT_SECONDS", 0.01)
 
     with pytest.raises(typer.Exit) as excinfo:
         daemon_cmd.start()
     assert excinfo.value.exit_code == 1
     assert _FakeProc.killed is True
+    assert "did not answer" in capsys.readouterr().err
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="start reports a daemon that refused to start")
+def test_daemon_start_reports_a_daemon_that_refused_and_exited(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The lifespan refuses (migration required, git too old) after daemon.json
+    is published and the process exits: start() must say so, not "started"."""
+    home = _setup_home(tmp_path, monkeypatch)
+    stale = home / ".coffer" / "daemon.json"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text(json.dumps({"port": 9999, "token": "t", "pid": 1, "version": 1}))
+
+    class _FakeProc:
+        pid = 4244
+        returncode = 2
+
+        def poll(self) -> int:
+            return 2
+
+    monkeypatch.setattr(_spawn.subprocess, "Popen", lambda cmd, **kw: _FakeProc())
+    monkeypatch.setattr(daemon_cmd.bootstrap, "live_daemon", lambda: None)
+
+    with pytest.raises(typer.Exit) as excinfo:
+        daemon_cmd.start()
+    assert excinfo.value.exit_code == 1
+    assert "exited at startup" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #
@@ -290,17 +328,6 @@ def test_daemon_stop_reports_failure_if_daemon_json_lingers(
 # --------------------------------------------------------------------------- #
 # _wait_for_daemon_json_*                                                      #
 # --------------------------------------------------------------------------- #
-
-
-def test_wait_for_daemon_json_returns_false_on_timeout(tmp_path: Path) -> None:
-    p = tmp_path / "missing.json"
-    assert daemon_cmd._wait_for_daemon_json(p, timeout=0.01) is False
-
-
-def test_wait_for_daemon_json_returns_true_when_present(tmp_path: Path) -> None:
-    p = tmp_path / "present.json"
-    p.write_text("{}")
-    assert daemon_cmd._wait_for_daemon_json(p, timeout=0.01) is True
 
 
 def test_wait_for_daemon_json_gone_returns_true_when_absent(tmp_path: Path) -> None:

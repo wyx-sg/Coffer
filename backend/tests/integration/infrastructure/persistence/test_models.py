@@ -1,4 +1,3 @@
-import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -9,84 +8,13 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.models import (
-    AuditLogModel,
-    ResourceModel,
-    RetentionPolicyModel,
-)
+from coffer.infrastructure.persistence.internal_engine_repo import VaultInternalEngineConfigRepo
+from coffer.infrastructure.persistence.models import AuditLogModel
+from coffer.infrastructure.vault.instance import vault_repository
 
 
 def _now() -> datetime:
     return datetime.now(tz=UTC)
-
-
-@pytest.mark.asyncio
-async def test_resource_model_round_trip(tmp_path):
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    async with sm() as s:
-        s.add(
-            ResourceModel(
-                uid=uuid.uuid4().hex,
-                kind="fake_kind",
-                name="t",
-                description=None,
-                config_json="{}",
-                enabled=True,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        await s.commit()
-    async with sm() as s:
-        row = (await s.execute(select(ResourceModel))).scalar_one()
-    assert row.kind == "fake_kind"
-    assert row.name == "t"
-    assert row.enabled is True
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_resource_unique_kind_name(tmp_path):
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    async with sm() as s:
-        s.add(
-            ResourceModel(
-                uid=uuid.uuid4().hex,
-                kind="fake_kind",
-                name="t",
-                description=None,
-                config_json="{}",
-                enabled=True,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        await s.commit()
-
-    import sqlalchemy.exc
-
-    async with sm() as s:
-        s.add(
-            ResourceModel(
-                uid=uuid.uuid4().hex,
-                kind="fake_kind",
-                name="t",
-                description=None,
-                config_json="{}",
-                enabled=True,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        with pytest.raises(sqlalchemy.exc.IntegrityError):
-            await s.commit()
-    await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -102,6 +30,7 @@ async def test_audit_log_round_trip(tmp_path):
                 event_type="resource_created",
                 resource_kind="mcp_server",
                 resource_name="filesystem",
+                resource_uid="aa11bb22cc33dd44ee55ff6677889900",
                 actor="cli",
                 details_json='{"config": {}}',
             )
@@ -110,72 +39,24 @@ async def test_audit_log_round_trip(tmp_path):
     async with sm() as s:
         row = (await s.execute(select(AuditLogModel))).scalar_one()
     assert row.event_type == "resource_created"
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_retention_policy_check_constraint(tmp_path):
-    """retention_days=0 is forbidden by the CHECK constraint."""
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-
-    import sqlalchemy.exc
-
-    async with sm() as s:
-        s.add(
-            RetentionPolicyModel(
-                table_name="audit_log",
-                retention_days=0,
-                last_pruned_at=None,
-                last_pruned_rows=0,
-                updated_at=_now(),
-            )
-        )
-        with pytest.raises(sqlalchemy.exc.IntegrityError):
-            await s.commit()
-
-    async with sm() as s:
-        s.add(
-            RetentionPolicyModel(
-                table_name="audit_log",
-                retention_days=None,
-                last_pruned_at=None,
-                last_pruned_rows=0,
-                updated_at=_now(),
-            )
-        )
-        await s.commit()
-
-    async with sm() as s:
-        row = (await s.execute(select(RetentionPolicyModel))).scalar_one()
-    assert row.retention_days is None
+    assert row.resource_uid == "aa11bb22cc33dd44ee55ff6677889900"
     await engine.dispose()
 
 
 @pytest.mark.acceptance(
     spec="internal-engine",
-    scenario="a second engine settings row is unrepresentable",
+    scenario="a second engine settings document is unrepresentable",
 )
 @pytest.mark.asyncio
-async def test_internal_engine_config_refuses_a_second_row(tmp_path):
+async def test_internal_engine_config_refuses_a_second_row() -> None:
     """ "Which settings does the engine use?" must not become a question with
-    two answers — the table itself refuses the second row rather than trusting
-    every writer to remember the singleton is a singleton."""
-    from sqlalchemy.exc import IntegrityError
-
-    from coffer.infrastructure.persistence.models import InternalEngineConfigModel
-
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    async with sm() as s:
-        s.add(InternalEngineConfigModel(id=1, model="m", updated_at=_now()))
-        await s.commit()
-    async with sm() as s:
-        s.add(InternalEngineConfigModel(id=2, model="other", updated_at=_now()))
-        with pytest.raises(IntegrityError):
-            await s.commit()
-    await engine.dispose()
+    two answers — the settings are one vault document at one fixed path, so
+    every write rewrites it rather than adding a second."""
+    repo = VaultInternalEngineConfigRepo()
+    await repo.set(model="m")
+    await repo.set(model="other")
+    assert list(vault_repository().tree("HEAD", "state/settings/")) == [
+        "state/settings/internal-engine.json"
+    ]
+    got = await repo.get()
+    assert got is not None and got.model == "other"

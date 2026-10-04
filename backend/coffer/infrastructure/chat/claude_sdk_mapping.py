@@ -79,7 +79,9 @@ def map_sdk_message(msg: Any, state: ClaudeParseState) -> list[AgentEvent]:
     """
     if isinstance(msg, SystemMessage):
         if msg.subtype == "init":
-            state.session_id = (msg.data or {}).get("session_id") or state.session_id
+            data = msg.data or {}
+            state.session_id = data.get("session_id") or state.session_id
+            state.model = data.get("model") or state.model
         return []
     if isinstance(msg, StreamEvent):
         return _stream_event(msg, state)
@@ -145,6 +147,9 @@ def _undelivered_text(full: str, streamed: str) -> str:
 
 def _assistant_blocks(msg: AssistantMessage, state: ClaudeParseState) -> list[AgentEvent]:
     out: list[AgentEvent] = []
+    if msg.parent_tool_use_id is None and msg.model:
+        # The model that wrote the reply — a sub-agent's own model is not the turn's.
+        state.model = str(msg.model)
     # Text blocks and streamed entries are both in order, so walking the entries
     # once alongside the blocks pairs them up. An exhausted iterator yields "",
     # which is exactly the "nothing streamed for this block" case.

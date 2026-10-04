@@ -9,8 +9,8 @@ document is unreachable until the catalogue in that skill names it.
 
 Kept out of ``app.py`` / ``chat_wiring.py``, both at the 400-LOC ceiling,
 mirroring the sibling ``*_wiring.py`` modules. Teardown never fires a pending
-pass: the watermark makes a sweep idempotent and the next boot picks up
-whatever was left, so making shutdown wait on an LLM loop would buy nothing.
+pass: what is settled is recorded by content, so a sweep is idempotent and
+the next boot picks up whatever was left, so making shutdown wait on an LLM loop would buy nothing.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.supervisor import spawn_restarting
+from coffer.domain.features import KNOWLEDGE, SYNC
 from coffer.domain.internal_engine_config import CURATE
 from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
@@ -38,7 +40,7 @@ _log = logging.getLogger(__name__)
 
 def wire_curation(
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     guide: BuiltinGuide,
 ) -> CurationPass:
     """Build the pass and register it for the route, the CLI and the worker."""
@@ -52,7 +54,7 @@ def wire_curation(
     curation = CurationPass(
         agent=LangchainAgenticReorg(),
         models=models,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         on_corpus_changed=_redeliver,
         read_timeout=read_internal_engine_timeout,
     )
@@ -72,7 +74,7 @@ async def curation_may_run(
     the knowledge twice. No owner set means a single-machine vault, where
     "here" is the only answer there is.
 
-    ``sync_on`` is the ``vault_sync`` feature. While it is off the vault is a
+    ``sync_on`` is the ``sync`` feature. While it is off the vault is a
     single-machine one whatever sync left behind: no round runs, so there is no
     other machine to fold the same material and no round to overlap, and an
     owner or a held round the user cannot reach while sync is closed must not
@@ -81,14 +83,12 @@ async def curation_may_run(
     config = await engine_config.get()
     if not sync_on:
         return config.upkeep(CURATE).enabled
-    if not config.curate_runs_on(sync.registry.machine_id):
+    if not config.curate_runs_on(sync.service.machine_id):
         return False
-    # And not while a round is waiting on the user — a held confirmation or
-    # an unresolved conflict (spec vault-sync "Never overlap a curation pass and a
-    # round"). A confirmation is answered on the promise that re-deriving the
-    # round yields the diff the user was shown, and a conflict is a choice
-    # between two versions; a rewriter that moves documents underneath either
-    # breaks exactly that.
+    # And not while a round is waiting on the user — a stop on conflicts, a
+    # hold or a join's differing files (spec vault-sync "Never overlap a
+    # curation pass and a round"). Each is a question about specific files,
+    # and a rewriter that moves them underneath the person breaks exactly that.
     return not await sync.service.divergence_outstanding()
 
 
@@ -122,19 +122,19 @@ def start_curation_worker(
         # minutes and rewrites a corpus, and the worker claims it in the same
         # upkeep-runs table the page's Curate button claims — so it has to be
         # the value that cannot be edited underneath either of them (ADR
-        # resource-identity-is-an-immutable-uid). The worker reads the
+        # identity-is-the-uid-inside-the-file). The worker reads the
         # directory name off the row itself.
-        return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
+        # Every collection: the kind has no enabled switch (spec knowledge
+        # "Serve every collection to every agent").
+        return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE)]
 
     async def is_enabled() -> bool:
-        # The knowledge feature first: while it is off the sweep skips its
+        # The ``knowledge`` feature first: while it is off the sweep skips its
         # round (spec experimental-features "Close every surface of a
         # switched-off feature"), and resumes on the next one once it is on.
-        if not features.is_enabled("knowledge"):
+        if not features.is_enabled(KNOWLEDGE):
             return False
-        return await curation_may_run(
-            engine_config, sync, sync_on=features.is_enabled("vault_sync")
-        )
+        return await curation_may_run(engine_config, sync, sync_on=features.is_enabled(SYNC))
 
     async def read_interval() -> int | None:
         """The operator's interval for this pass, re-read while the wait runs
@@ -150,12 +150,11 @@ def start_curation_worker(
         is_enabled=is_enabled,
         read_interval=read_interval,
         list_collections=list_collections,
-        # The same lock a converge round takes. Both rewrite vault content, and
-        # an export caught half-way through a pass is a torn snapshot that git
-        # reads as a deliberate change.
+        # The same lock a sync round takes: a merge computed over a collection
+        # half-way through a pass would carry a torn rewrite to other machines.
         lock=sync.service.lock,
     )
-    return asyncio.create_task(worker.run_forever())
+    return spawn_restarting(worker.run_forever, name="knowledge-curation")
 
 
 async def stop_curation_worker(task: asyncio.Task[None]) -> None:

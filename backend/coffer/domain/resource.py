@@ -1,16 +1,16 @@
 """Core Resource domain entities.
 
 A resource's identity is its **``uid``** — an opaque, immutable string minted
-once and never reused (ADR resource-identity-is-an-immutable-uid).
+once and never reused (ADR identity-is-the-uid-inside-the-file).
 Its ``name`` is a mutable label: unique within its kind, because a user should
 not have two skills called the same thing, but uniqueness is a constraint and
 not an identity. Everything that has to keep pointing at the same resource
 across a rename — a cross-resource reference, a synced document, a URL — holds
 the uid.
 
-``id`` is the integer surrogate primary key. It is the foreign key four
-kind-owned tables hold, it never leaves the process, and it is NOT the uid: it
-is a row number, so two machines allocate the same one to different resources.
+There is no integer surrogate any more: a resource is a file whose ``uid``
+is written inside it, and every table that used to hold a row number holds the
+uid (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations
@@ -24,11 +24,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from coffer.domain.scope import Scope
+from coffer.domain.vault.layout import StorageClass
 
-#: A name is still a single safe path segment. The identity no longer needs it
-#: to be — a uid addresses the row and names the synced document — but three
-#: kinds (`skill`, `knowledge`, `memory`) turn a name into a directory, so the
-#: rule survives as a property of the label rather than of the identity.
+#: A name is one safe path segment: three kinds (`skill`, `knowledge`,
+#: `memory`) turn it into a directory, so the rule survives as a label rule.
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 _NAME_MAX_LEN = 64
 
@@ -55,7 +54,7 @@ def validate_resource_name(name: str) -> None:
 
 
 #: The longest title a resource may carry (spec resource-framework "Carry an
-#: optional editable title on every resource"). Matches ``resources.title``.
+#: optional editable title on the kinds that have one").
 TITLE_MAX_LEN = 80
 
 
@@ -85,8 +84,6 @@ class Resource:
     lives in services keyed off the `kind` field.
     """
 
-    #: Integer surrogate primary key — internal, per-machine, never serialised.
-    id: int
     #: The identity: opaque, immutable, the same value on every machine that
     #: holds this resource. Everything outside the process addresses this.
     uid: str
@@ -107,10 +104,9 @@ class Resource:
     # Kind.supports_scope is True may set it (validate_scope).
     scope: Scope | None = None
     #: Optional display text (at most ``TITLE_MAX_LEN`` characters) that
-    #: surfaces show in place of ``name`` when it is set. Unlike the name it is
-    #: never quoted by an agent, so every kind may change it — including one
-    #: whose name is fixed (``Kind.name_fixed``). It travels with the synced
-    #: document; reach does not.
+    #: surfaces show in place of ``name`` when it is set — only on a kind that
+    #: carries one (``Kind.titled``). It travels with the synced document;
+    #: reach does not.
     title: str | None = None
 
 
@@ -136,7 +132,7 @@ class Kind:
     config_schema: type[BaseModel]
     # Whether the kind-agnostic POST /api/v1/resources endpoint may create this
     # kind. Kinds that own creation invariants beyond config validation — a
-    # skill's master folder under ~/.coffer/skills/, an agent's on-disk
+    # skill's master folder under ~/.coffer/vault/skills/, an agent's on-disk
     # detection — set this False so the generic path cannot create a row with
     # no backing artifact. Their dedicated services still create rows by
     # passing ``allow_lifecycle_kind=True`` to ResourceService.register
@@ -154,78 +150,65 @@ class Kind:
     # Whether this kind's rows carry an enabled switch at all. False means
     # every row is served and ``ResourceService.set_enabled`` refuses it with
     # ``ResourceNotToggleable`` (409), changing nothing. `knowledge` and
-    # `memory` set it False: nobody turns one collection or partition off —
-    # the whole layer is already switched by its experimental feature — and a
-    # disabled partition was still a file any agent could open (spec
+    # `memory` set it False: nobody turns one collection or partition off, and
+    # a disabled partition was still a file any agent could open (spec
     # resource-framework "Address every resource by an immutable uid through
     # one kind-agnostic surface").
     toggleable: bool = True
-    # Whether this kind's rows converge with the sync remote (spec vault-sync).
-    # True for everything the user authored — the rows a second machine is
-    # supposed to receive. False for a kind whose rows are DERIVED from what is
-    # installed on one machine: publishing those produces, at the other end, a
-    # row naming something that machine does not have, with nothing behind it,
-    # which the next local pass would recompute away anyway. `memory` is the
-    # only kind that sets it False today (spec memory "Keep the memory tree
-    # derived and local"). Declared here
-    # rather than listed in the exporter so the sync layer keeps one rule
-    # instead of a table of exceptions — the shape the retired machine-local
-    # kind list had.
-    converges: bool = True
-    # Optional per-ROW refinement of ``converges`` above: given a row's config,
-    # answer whether THAT row travels. Consulted only when ``converges`` is
-    # True — the flag can withhold a whole kind, this can withhold one row of a
-    # kind that otherwise travels, and neither can put back what the other
-    # held. Absent (the default) means the flag alone decides.
-    #
-    # It exists because a kind can carry both authored rows and derived ones.
-    # `skill` does: almost every skill is a bundle a person imported, and those
-    # are exactly what a second machine is supposed to receive — but Coffer's
-    # own `coffer-guide` is written by the running build from the live
-    # knowledge catalogue and this machine's own switches, re-rendered at every
-    # boot. Publishing it is publishing derived output: two machines with the
-    # same files but a different set of collections enabled render different
-    # bytes, overwrite each other every round, and never stop. The reasoning is
-    # ``memory``'s (spec memory "Keep the memory tree derived and local")
-    # applied to one row instead of a kind,
-    # so it is declared the same way — on the kind, beside the flag it refines
-    # — rather than as a name the sync layer would have to recognise.
-    #
-    # A function of the CONFIG alone, like ``default_scope`` and
-    # ``audit_redactor``, so every caller can ask it with what it already has:
-    # the exporter holds a ``Resource``, while the sync applier holds only a
-    # document that has just arrived and has no row behind it yet.
-    converges_row: Callable[[dict[str, Any]], bool] | None = None
+    # Which storage class this kind's resources are filed in (ADR
+    # storage-is-five-classes-by-nature): ``vault`` for everything a person
+    # authored (``vault/resources/<kind>/``, committed, synced when a remote is
+    # configured); ``local`` for a kind that is true of this machine only —
+    # `agent`, which names a config directory on this disk
+    # (``local/resources/agent/``, never committed); ``derived`` for a kind
+    # rebuilt from other state — `memory`, whose partitions each pass
+    # recomputes (``derived/resources/memory/``). The directory is the policy:
+    # nothing else decides whether a resource travels.
+    storage: StorageClass = StorageClass.VAULT
+    # Optional per-ROW refinement of ``storage``, given the row's config at
+    # creation. `skill` uses it to file Coffer's own `coffer-guide` — rendered
+    # from this machine's switches at every boot, so derived output — under
+    # ``derived/`` while every imported skill stays in the vault. A function of
+    # the config alone, so the store can answer it for a row it is creating.
+    storage_row: Callable[[dict[str, Any]], StorageClass] | None = None
+    # Config flags at most one resource of the kind may hold (``provider``'s
+    # ``internal_default``). The service keeps every write it makes to one
+    # holder; the vault validator refuses any commit — a hand edit, a merge —
+    # that would leave two, which is what a unique index did in SQL.
+    exclusive_flags: tuple[str, ...] = ()
     # Whether a registered row's NAME may change (ADR
     # names-visible-to-agents-are-fixed). True for a kind whose name is quoted
-    # outside Coffer, where a rename would break what quotes it: `mcp_server`,
-    # whose name prefixes every tool name an agent sees and that the agents'
-    # permission rules cite, and `skill`, whose name is the folder an agent
-    # loads it from. ``ResourceService.rename`` refuses a changed name on such a
-    # kind with ``NameImmutable`` before any hook or write, so there is no
-    # rename hook for it to supply. Its ``title`` stays editable.
+    # outside Coffer — `mcp_server` (it prefixes every tool name an agent sees)
+    # and `skill` (the folder an agent loads it from) — and for `agent`, whose
+    # name is its type. ``ResourceService.rename`` refuses a changed name with
+    # ``NameImmutable`` before any hook or write.
     name_fixed: bool = False
     # What deleting and registering the resource again would reset, for the
     # refusal message of a ``name_fixed`` kind: the user is told the only way
     # to a new name and what it costs. Unused when ``name_fixed`` is False.
     name_fixed_resets: str = ""
+    # Optional: the name a row of this kind MUST carry, derived from its
+    # config. `agent` is one per type, named by it (``claude_code`` →
+    # ``claude-code``, spec agent-registry "Keep one agent per type, named by it"), so
+    # registration refuses any other name rather than storing a label a person
+    # chose. ``None`` leaves the name to the caller.
+    name_from_config: Callable[[dict[str, Any]], str] | None = None
+    # Whether rows of this kind carry the optional display ``title`` (spec
+    # resource-framework "Carry an optional editable title on the kinds that
+    # have one"). False for `agent`, `knowledge`, `mcp_server`, `memory` and `skill`: each
+    # has a fixed name and nothing else to be called — a non-empty title is
+    # refused on register and on edit.
+    titled: bool = True
 
     # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
 
     # Optional kind-specific name validator, called BEFORE persistence by every
     # path that sets a name — registration AND rename. Raises to reject the
     # name. Used by `mcp_server` to reserve the `__` tool/prompt namespace
-    # separator (spec mcp-gateway "Namespace every upstream capability").
+    # separator (spec mcp-gateway "Namespace every upstream capability") and to
+    # cap its names at 24 characters (spec mcp-gateway "Manage MCP servers as
+    # resources").
     validate_name: Callable[[str], None] | None = None
-    # Optional validator for the name of a resource being CREATED here — run by
-    # ``ResourceService.register`` only when it mints the uid, after
-    # ``validate_name``. A rule that should hold for every name from now on
-    # without refusing the rows already registered goes here: a row that
-    # arrives from another machine carries its uid, so an older, longer name
-    # still converges, and nothing re-validates a row that is loaded. Used by
-    # `mcp_server` for its 24-character cap (spec mcp-gateway "Manage MCP
-    # servers as resources").
-    validate_new_name: Callable[[str], None] | None = None
     # Optional semantic config validation beyond ``config_schema`` shape,
     # applied at REGISTRATION only (already shape-validated). Given the validated
     # config dict; raises ``ValueError`` to reject the write (e.g. a channel's
@@ -322,11 +305,11 @@ class Kind:
     # that lets a second route quietly miss it.
     validate_delete: Callable[[Resource], None] | None = None
 
-    # Optional kind-supplied credential-ref extractor: given a validated config
+    # Optional kind-supplied secret-ref extractor: given a validated config
     # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
-    # ref at register/update time so a missing credential fails before any DB
+    # ref at register/update time so a missing secret fails before any DB
     # write — without the core knowing where a kind stores its refs.
-    credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
+    secret_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
     # Optional kind-supplied audit redactor: given a validated config dict,
     # return an audit-safe copy with secret-bearing fields stripped. Keeps the
     # kind-agnostic ResourceService from hardcoding any one kind's config shape

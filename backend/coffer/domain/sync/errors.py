@@ -1,58 +1,17 @@
-"""Vault-sync error family (spec vault-sync). Surfaces map these to HTTP codes."""
+"""Vault-sync errors a surface maps to an HTTP status (spec vault-sync).
+
+Each is an ordinary state of the feature a person can act on — no remote yet,
+a round or a machine that is not there, this machine asked to retire itself —
+never a fault, so none of them may fall through to a 500.
+"""
 
 from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
 
 
-class SyncBundleTooNew(CofferError):  # noqa: N818
-    """The remote's tree was written by a newer Coffer build. Maps to 409.
-
-    Mirrors ``DB_SCHEMA_TOO_NEW``: refuse a layout this build does not
-    understand rather than half-applying it — and rather than publishing over
-    it, which is the worse half on a remote the user's other machines share.
-    Raised by ``domain.sync.manifest.refuse_if_too_new``.
-    """
-
-    code = "SYNC_BUNDLE_TOO_NEW"
-
-    def __init__(self, found: int, supported: int) -> None:
-        super().__init__(
-            f"the sync remote's layout version {found} is newer than this build "
-            f"supports ({supported}); upgrade Coffer on this machine"
-        )
-        self.found = found
-        self.supported = supported
-
-
-class SyncBundleInvalid(CofferError):  # noqa: N818
-    """The working tree cannot hold the vault's layout. Maps to 422.
-
-    Raised while serializing, not while reading someone's archive: the tree
-    the vault converges through is the "bundle" now, and this is a directory
-    in it that is not a directory, or a root that is a file.
-    """
-
-    code = "SYNC_BUNDLE_INVALID"
-
-    def __init__(self, path: str, reason: str) -> None:
-        super().__init__(f"not a usable sync working tree ({reason}): {path}")
-        self.path = path
-        self.reason = reason
-
-
-class SyncSerializationError(CofferError):
-    """A document in the working tree is malformed. Maps to 422."""
-
-    code = "SYNC_SERIALIZATION_INVALID"
-
-    def __init__(self, detail: str) -> None:
-        super().__init__(f"invalid bundle document: {detail}")
-        self.detail = detail
-
-
 class MasterKeyFileInvalid(CofferError):  # noqa: N818
-    """A master-key file to import is missing or not a valid Fernet key. Maps to 422."""
+    """Key material to import is missing or not a valid Fernet key. Maps to 422."""
 
     code = "MASTER_KEY_FILE_INVALID"
 
@@ -62,37 +21,143 @@ class MasterKeyFileInvalid(CofferError):  # noqa: N818
         self.reason = reason
 
 
-class BackupRemoteInvalid(CofferError):  # noqa: N818
-    """The sync remote's configuration cannot be used as given. Maps to 422.
+class SyncNoRemote(CofferError):  # noqa: N818
+    """Nothing to sync with: no remote is configured. Maps to 409."""
 
-    The code and message keep the ``backup`` wording: both are wire contract
-    and the surfaces already match on them."""
+    code = "SYNC_NO_REMOTE"
 
-    code = "BACKUP_REMOTE_INVALID"
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(f"backup remote invalid: {reason}")
-        self.reason = reason
+    def __init__(self) -> None:
+        super().__init__("no sync remote is configured; set one first")
 
 
-class SyncJoinAmbiguous(CofferError):  # noqa: N818
-    """A returning machine whose base cannot be recovered. Maps to 409.
+class SyncNothingToRestore(CofferError):  # noqa: N818
+    """Undo for something that was not stopped or retired (or was set up again
+    since). Maps to 409."""
 
-    Its descriptor is in the remote's registry, so this machine has converged
-    before — but the commit it reached is gone (history rewritten, or the
-    descriptor predates the field). Neither default is safe to pick silently:
-    joining as new republishes everything the other machines deleted while this
-    one was away, and rebuilding from the remote discards whatever this vault
-    has that the remote does not. So the user chooses.
-    """
+    code = "SYNC_NOTHING_TO_RESTORE"
 
-    code = "SYNC_JOIN_AMBIGUOUS"
+
+class SyncRemoteExists(CofferError):  # noqa: N818
+    """Restoring a remote while another is set. Maps to 409."""
+
+    code = "SYNC_REMOTE_EXISTS"
+
+
+class SyncRoundNotFound(CofferError):  # noqa: N818
+    """No recorded round has this id. Maps to 404."""
+
+    code = "SYNC_ROUND_NOT_FOUND"
+
+    def __init__(self, round_id: int) -> None:
+        super().__init__(f"no sync round {round_id} is recorded on this machine")
+        self.round_id = round_id
+
+
+class SyncNoPlaintextFound(CofferError):  # noqa: N818
+    """ "Push anyway" when the last round found no plaintext secret. Maps to 409."""
+
+    code = "SYNC_NO_PLAINTEXT_FOUND"
+
+    def __init__(self) -> None:
+        super().__init__("the last round found no plaintext secret to push anyway")
+
+
+class SyncMachineNotFound(CofferError):  # noqa: N818
+    """No descriptor in the vault names this machine. Maps to 404."""
+
+    code = "SYNC_MACHINE_NOT_FOUND"
+
+    def __init__(self, machine_id: str) -> None:
+        super().__init__(f"no machine {machine_id} is in the vault")
+        self.machine_id = machine_id
+
+
+class SyncMachineNameInvalid(CofferError):  # noqa: N818
+    """A machine label that is empty or too long. Maps to 422."""
+
+    code = "SYNC_MACHINE_NAME_INVALID"
+
+
+class CannotRetireSelf(CofferError):  # noqa: N818
+    """Retiring the machine you are standing on. Maps to 422."""
+
+    code = "SYNC_CANNOT_RETIRE_SELF"
 
     def __init__(self, machine_id: str) -> None:
         super().__init__(
-            f"this machine ({machine_id}) has synced with this remote before, but the "
-            "commit it reached is no longer in the remote's history, so its base cannot "
-            "be recovered. Re-run the join choosing either to keep this vault's own "
-            "documents or to rebuild this machine from the remote."
+            f"{machine_id} is this machine; retire it from another machine, or "
+            "clear the sync remote here instead"
         )
-        self.machine_id = machine_id
+
+
+class MasterKeyPassphraseWrong(CofferError):  # noqa: N818
+    """A protected key file did not open with the passphrase given. Maps to 422.
+
+    Also the answer when no passphrase was given for a file that needs one:
+    the two are the same situation to the person holding the file.
+    """
+
+    code = "MASTER_KEY_PASSPHRASE_WRONG"
+
+    def __init__(self) -> None:
+        super().__init__("the passphrase does not open this key file")
+
+
+class MasterKeyPassphraseTooShort(CofferError):  # noqa: N818
+    """A key backup was asked for with a passphrase under the minimum. Maps to 422."""
+
+    code = "MASTER_KEY_PASSPHRASE_TOO_SHORT"
+
+    def __init__(self, minimum: int) -> None:
+        super().__init__(f"the passphrase must be at least {minimum} characters")
+        self.minimum = minimum
+
+
+class SyncVaultTargetInvalid(CofferError):  # noqa: N818
+    """The folder to move the vault to is unusable: not an absolute path, inside
+    or around the current vault, or its parent cannot be written. Maps to 422."""
+
+    code = "SYNC_VAULT_TARGET_INVALID"
+
+
+class SyncVaultTargetInCloud(CofferError):  # noqa: N818
+    """The folder to move the vault to is itself inside a folder another tool
+    synchronises. Maps to 422."""
+
+    code = "SYNC_VAULT_TARGET_IN_CLOUD"
+
+    def __init__(self, path: str, tool: str) -> None:
+        super().__init__(f"{path} is inside {tool}")
+        self.tool = tool
+
+
+class SyncVaultTargetNotEmpty(CofferError):  # noqa: N818
+    """The folder to move the vault to already holds something. Maps to 409."""
+
+    code = "SYNC_VAULT_TARGET_NOT_EMPTY"
+
+
+class SyncVaultMoveFailed(CofferError):  # noqa: N818
+    """The move or the check of the vault at its new place failed; the vault is
+    back where it was. Maps to 500."""
+
+    code = "SYNC_VAULT_MOVE_FAILED"
+
+
+__all__ = [
+    "CannotRetireSelf",
+    "MasterKeyFileInvalid",
+    "MasterKeyPassphraseTooShort",
+    "MasterKeyPassphraseWrong",
+    "SyncMachineNameInvalid",
+    "SyncMachineNotFound",
+    "SyncNoPlaintextFound",
+    "SyncNoRemote",
+    "SyncNothingToRestore",
+    "SyncRemoteExists",
+    "SyncRoundNotFound",
+    "SyncVaultMoveFailed",
+    "SyncVaultTargetInCloud",
+    "SyncVaultTargetInvalid",
+    "SyncVaultTargetNotEmpty",
+]

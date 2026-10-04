@@ -73,18 +73,68 @@ def test_the_label_is_distinct_from_the_desktop_bundle() -> None:
 # --- the rule that keeps this module from shutting Coffer down -------------
 
 
-def test_nothing_here_boots_a_loaded_job_out() -> None:
-    """`launchctl bootout` terminates the job's process, and on this machine
-    that process is usually the daemon serving the Settings page the call
-    came from. The reply never arrives, the switch reverts over a change that
-    did happen, and the replacement mints a token the open page does not
-    have. Read off the source, because the failure needs a Mac with a loaded
-    agent and a live request to show itself."""
-    import inspect
+@pytest.fixture
+def launchd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[tuple[str, ...]]:
+    """A fake launchd: records every launchctl call; the job is loaded with the
+    pid in ``state["pid"]`` (``None`` = loaded, nothing running under it)."""
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(login_service, "is_supported", lambda: True)
+    monkeypatch.setattr(login_service, "plist_path", lambda: tmp_path / "x.plist")
+    monkeypatch.setattr(login_service, "_is_loaded", lambda: True)
+    monkeypatch.setattr(login_service, "_launchctl", lambda *a: calls.append(a) or None)
+    return calls
 
-    # The quoted form is the argument a `_launchctl(...)` call would pass;
-    # the prose above may name the verb freely, and does.
-    assert '"bootout"' not in inspect.getsource(login_service)
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="removing the login service unloads it without stopping the daemon"
+)
+def test_uninstall_does_not_boot_out_a_job_with_a_running_daemon(
+    launchd: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`launchctl bootout` terminates the job's process — usually the daemon
+    serving the Settings page the call came from."""
+    (tmp_path / "x.plist").write_text("x")
+    monkeypatch.setattr(login_service, "_job_pid", lambda: 4242)
+    assert login_service.uninstall() is True
+    assert not (tmp_path / "x.plist").exists()
+    assert launchd == []  # nothing booted out
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="removing the login service unloads it without stopping the daemon"
+)
+def test_uninstall_boots_out_an_idle_loaded_job(
+    launchd: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "x.plist").write_text("x")
+    monkeypatch.setattr(login_service, "_job_pid", lambda: None)
+    login_service.uninstall()
+    assert [c[0] for c in launchd] == ["bootout"]
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="removing the login service unloads it without stopping the daemon"
+)
+def test_the_daemon_that_is_the_job_boots_it_out_as_it_exits(
+    launchd: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    monkeypatch.setattr(login_service, "_job_pid", lambda: os.getpid())
+    assert login_service.release_job_if_uninstalled() is True
+    assert [c[0] for c in launchd] == ["bootout"]
+
+
+def test_a_daemon_that_is_not_the_job_leaves_it_alone(
+    launchd: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(login_service, "_job_pid", lambda: 4_194_000)  # someone else's
+    assert login_service.release_job_if_uninstalled() is False
+    # And while the setting is still on, nothing is released at all.
+    (tmp_path / "x.plist").write_text("x")
+    monkeypatch.setattr(login_service, "_job_pid", lambda: __import__("os").getpid())
+    assert login_service.release_job_if_uninstalled() is False
+    assert launchd == []
 
 
 def test_the_path_comes_from_the_login_shell_not_the_daemons_environment() -> None:

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from coffer.infrastructure.channel.telegram_media import _oversized, media_specs
+from coffer.infrastructure.channel.telegram_media import _oversized_files, media_specs
 from coffer.infrastructure.channel.telegram_send import routing_params
 
 _TOO_BIG = 25 * 1024 * 1024
@@ -57,6 +57,10 @@ def test_several_attachments_keep_field_order() -> None:
         "voice": {"file_id": "o"},
     }
     assert [spec[0] for spec in media_specs(message)] == ["p", "d", "o"]
+
+
+def _oversized(message: dict[str, Any]) -> list[str]:
+    return list(_oversized_files(message).values())
 
 
 def test_oversized_file_is_named() -> None:

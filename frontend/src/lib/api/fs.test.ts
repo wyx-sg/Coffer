@@ -1,13 +1,13 @@
 // frontend/src/lib/api/fs.test.ts
 //
 // The web folder-picker browses the filesystem through the loopback daemon's
-// /fs/browse endpoint. We stub `globalThis.fetch` and assert the request
-// shaping (URL + auth headers + query encoding) and the success / error
-// envelope handling.
+// /fs/browse endpoint. We stub `globalThis.fetch` and assert what `fsApi`
+// puts on the wire (URL, query encoding, body). The typed client's own
+// behaviour (auth headers, error envelopes) is covered in client.test.ts.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { resetApiClient } from "./client";
 import { fsApi } from "./fs";
-import { ApiError } from "./errors";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -16,20 +16,21 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-// The token reaches the page as an injected global (see lib/auth.ts); these
-// tests set it the same way the daemon's served index.html does.
-const w = window as unknown as Record<string, unknown>;
+/** The `Request` the typed client handed to `fetch` on its `n`th call. */
+function sent(fetchMock: ReturnType<typeof vi.fn>, n = 0): Request {
+  return fetchMock.mock.calls[n][0] as Request;
+}
+
+beforeEach(() => {
+  resetApiClient();
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resetApiClient();
+});
 
 describe("fsApi.browse", () => {
-  beforeEach(() => {
-    w.__COFFER_TOKEN__ = "secret-token";
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    delete w.__COFFER_TOKEN__;
-  });
-
-  test("GETs /fs/browse with no query when path is omitted, sending auth headers", async () => {
+  test("GETs /fs/browse with no query when path is omitted", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse(200, { path: "/", parent: null, entries: [] }));
@@ -38,11 +39,9 @@ describe("fsApi.browse", () => {
     const out = await fsApi.browse();
     expect(out).toEqual({ path: "/", parent: null, entries: [] });
 
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/fs\/browse$/);
-    const headers = (init as RequestInit).headers as Record<string, string>;
-    expect(headers["X-Coffer-Token"]).toBe("secret-token");
-    expect(headers["X-Coffer-Actor"]).toBe("ui");
+    const request = sent(fetchMock);
+    expect(request.method).toBe("GET");
+    expect(request.url).toMatch(/\/fs\/browse$/);
   });
 
   test("URL-encodes the path into the query string", async () => {
@@ -59,55 +58,23 @@ describe("fsApi.browse", () => {
     expect(out.entries).toHaveLength(1);
     expect(out.parent).toBe("/home/u");
 
-    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    const calledUrl = sent(fetchMock).url;
     expect(calledUrl).toContain("?path=");
-    expect(calledUrl).toContain(encodeURIComponent("/home/u/my dir"));
+    expect(new URL(calledUrl).searchParams.get("path")).toBe("/home/u/my dir");
     // The raw space must not appear unencoded.
     expect(calledUrl).not.toContain("my dir");
   });
+});
 
-  test("sends an empty token header when no token is set", async () => {
-    delete w.__COFFER_TOKEN__;
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(200, { path: "/", parent: null, entries: [] }));
+describe("fsApi.open", () => {
+  test("sends the editor only when one is given, and resolves with nothing on 204", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await fsApi.browse();
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
-    expect(headers["X-Coffer-Token"]).toBe("");
-  });
+    await expect(fsApi.open("/a/b.md")).resolves.toBeUndefined();
+    await expect(fsApi.open("/a/b.md", "Cursor")).resolves.toBeUndefined();
 
-  test("throws an ApiError carrying the server envelope on a non-2xx response", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse(403, { error: { code: "FORBIDDEN", message: "no access" } }),
-        ),
-    );
-
-    await expect(fsApi.browse("/etc")).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "no access",
-    });
-    await expect(fsApi.browse("/etc")).rejects.toBeInstanceOf(ApiError);
-  });
-
-  test("falls back to a synthetic error when the error body is unparseable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response("not json", { status: 500, headers: { "Content-Type": "text/plain" } }),
-        ),
-    );
-
-    await expect(fsApi.browse()).rejects.toMatchObject({
-      code: "INTERNAL_ERROR",
-      message: expect.stringContaining("500"),
-    });
+    expect(await sent(fetchMock, 0).clone().json()).toEqual({ path: "/a/b.md" });
+    expect(await sent(fetchMock, 1).clone().json()).toEqual({ path: "/a/b.md", with: "Cursor" });
   });
 });

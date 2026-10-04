@@ -1,132 +1,214 @@
 // components/chat/MessageBubble.tsx
-// Renders a single chat message (user or assistant) including tool call cards.
+// One message of a conversation: the user's as a bubble on the right (with its
+// files and, for a channel conversation, the not-delivered mark); the agent's as
+// a column under its mark, name, time and state — text and tool-call cards in the
+// order the turn emitted them, then (as the reply ended) the "Stopped by you."
+// line, the files it changed, a failed-turn or lost-stream banner when it has
+// one, and Copy reply with its token counts.
 // Memoised: a streaming turn re-renders the thread per token, and every
 // already-persisted bubble keeps the same `message` reference across those.
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/useChatTurn";
-import { AttachmentChip } from "./AttachmentChip";
+import { messageText } from "@/lib/chat/mirror";
+import { AgentBadge } from "@/components/agent/AgentBadge";
+import { filesChanged } from "@/lib/conversations/filesChanged";
+import { replyText } from "@/lib/chat/replyText";
+import { unfinishedWork } from "@/lib/chat/stopped";
+import { ReplyFooter, ReplyStateText, StoppedLine, type ReplyState } from "./ReplyParts";
+import { FilesChangedCard } from "./FilesChangedCard";
+import { ThreadAttachment } from "./ThreadAttachment";
 import { ToolCallCard } from "./ToolCallCard";
+import { buildRows } from "@/lib/chat/replyRows";
+import { ToolCallGroup } from "./ToolCallGroup";
 import { MarkdownContent } from "./MarkdownContent";
+import { QuestionCard } from "./QuestionCard";
 
 interface Props {
   message?: Message;
   live?: LiveMessage;
-}
-
-type Segment =
-  | { kind: "text"; key: string; text: string }
-  | { kind: "tool"; key: string; use: ContentBlock; result?: ContentBlock };
-
-/**
- * An assistant turn's blocks as render segments, in the order the turn emitted
- * them: each text block is its own segment (never glued to the next one), and
- * each tool call is a card at its call's position carrying its result, wherever
- * in the turn that result arrived. A result is drawn only inside its call's card.
- */
-function buildSegments(blocks: ContentBlock[]): Segment[] {
-  const results = blocks.filter((b) => b.type === "tool_result");
-  const segments: Segment[] = [];
-  blocks.forEach((b, i) => {
-    if (b.type === "text" && b.text) {
-      segments.push({ kind: "text", key: `text-${i}`, text: b.text });
-    } else if (b.type === "tool_use") {
-      segments.push({
-        kind: "tool",
-        key: b.tool_use_id ?? `tool-${i}`,
-        use: b,
-        result: results.find((r) => r.tool_use_id === b.tool_use_id),
-      });
-    }
-  });
-  return segments;
-}
-
-function extractText(blocks: ContentBlock[]): string {
-  return blocks
-    .filter((b) => b.type === "text" && b.text)
-    .map((b) => b.text)
-    .join("");
+  /** For a user message the conversation's channel has not received yet: the
+   *  platform's name (spec chat "Show where a reply will also be sent"). */
+  undeliveredTo?: string;
+  /** The conversation's agent, for the header over its replies. */
+  agentKey?: string;
+  agentName?: string;
+  /** The failed-turn or lost-stream banner, drawn inside this reply. */
+  banner?: ReactNode;
+  /** Set when `banner` explains what became of this reply, whatever its row says. */
+  bannerState?: "failed" | "lost";
+  /** A question is pending for the user (the header says "Waiting for you"). */
+  waiting?: boolean;
+  /** A "Files changed" row with a diff was pressed; `selectedPath` is the row whose diff is open. */
+  onOpenFile?: (messageId: string, path: string) => void;
+  selectedPath?: string | null;
 }
 
 function attachmentBlocks(blocks: ContentBlock[]): ContentBlock[] {
   return blocks.filter((b) => b.type === "attachment");
 }
 
-function MessageBubbleImpl({ message, live }: Props) {
+function replyStateOf(
+  message: Message | undefined,
+  live: LiveMessage | undefined,
+  bannerState: Props["bannerState"],
+  waiting: boolean,
+): ReplyState {
+  if (bannerState) return bannerState;
+  if (live)
+    return live.interrupted
+      ? "stopped"
+      : live.streaming
+        ? waiting
+          ? "waiting"
+          : "running"
+        : "done";
+  if (message?.status === "streaming") return waiting ? "waiting" : "running";
+  if (message?.status === "stopped") return "stopped";
+  if (message?.status === "failed") return "failed";
+  return "done";
+}
+
+function MessageBubbleImpl({
+  message,
+  live,
+  undeliveredTo,
+  agentKey,
+  agentName,
+  banner,
+  bannerState,
+  waiting = false,
+  onOpenFile,
+  selectedPath,
+}: Props) {
   const { t } = useTranslation();
   const isUser = message ? message.role === "user" : false;
   const isLive = live !== undefined;
 
   if (isUser && message) {
-    const text = extractText(message.content);
+    const text = messageText(message.content);
     const attachments = attachmentBlocks(message.content);
     return (
       <div className="flex flex-col items-end gap-1">
         {text && (
-          <div className="w-fit max-w-[min(48rem,100%)] whitespace-pre-wrap break-words rounded-xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
+          <div className="w-fit max-w-[min(540px,100%)] whitespace-pre-wrap break-words rounded-xl bg-accent-soft px-3.5 py-2.5 text-sm leading-relaxed text-text">
             {text}
           </div>
         )}
         {attachments.length > 0 && (
-          <div className="flex max-w-[min(48rem,100%)] flex-wrap justify-end gap-1.5">
+          <div className="flex max-w-[min(540px,100%)] flex-wrap justify-end gap-1.5">
             {attachments.map((a, i) => (
-              <AttachmentChip
-                key={`${a.filename ?? "file"}-${i}`}
-                name={a.filename}
-                detail={a.mime}
-                mime={a.mime}
+              <ThreadAttachment
+                key={`${a.attachment_id ?? a.filename ?? "file"}-${i}`}
+                conversationId={message.conversation_id}
+                block={a}
               />
             ))}
           </div>
+        )}
+        {undeliveredTo && (
+          <p className="text-xs text-warning">
+            {t("conversations.mirror.notDelivered", { platform: undeliveredTo })}
+          </p>
         )}
       </div>
     );
   }
 
   // Assistant (persisted or live)
-  const segments = buildSegments(isLive ? live!.blocks : (message?.content ?? []));
-  const failed = !isLive && message?.status === "failed";
-  // A persisted streaming placeholder (turn still running server-side, seen
-  // after a reload/switch-back) renders as in-progress, not as a blank bubble.
-  const serverStreaming = !isLive && message?.status === "streaming";
+  const blocks = isLive ? live!.blocks : (message?.content ?? []);
+  const rows = buildRows(blocks);
+  const state = replyStateOf(message, live, bannerState, waiting);
+  // A call with no result is running only while the reply is; after a stop it
+  // was cut off, and after a lost stream or a failure the page cannot say.
+  const unfinished =
+    state === "running" || state === "waiting"
+      ? undefined
+      : state === "stopped"
+        ? "stopped"
+        : "lost";
+  const working = state === "running" || state === "waiting";
   const promptTokens = message?.prompt_tokens;
   const completionTokens = message?.completion_tokens;
   const showTokens = !isLive && (promptTokens != null || completionTokens != null);
+  const text = replyText(blocks);
 
   return (
-    <div className="flex justify-start">
-      <div className="w-fit max-w-[min(48rem,100%)] space-y-1">
-        {segments.map((seg) =>
-          seg.kind === "tool" ? (
-            <ToolCallCard key={seg.key} toolUse={seg.use} toolResult={seg.result} />
+    <div className="flex min-w-0 flex-col gap-2">
+      {agentKey ? (
+        <div className="flex items-center gap-2">
+          <AgentBadge type={agentKey} name={agentName} size="sm" tooltip={false} />
+          <span className="text-xs font-semibold text-text">{agentName}</span>
+          <ReplyStateText
+            state={state}
+            startedAt={live ? live.startedAt : message?.created_at}
+            finishedAt={live ? live.endedAt : message?.finished_at}
+          />
+        </div>
+      ) : null}
+      <div className={cn("min-w-0 space-y-2.5", agentKey && "pl-[30px]")}>
+        {rows.map((row, i) =>
+          row.kind === "group" ? (
+            <ToolCallGroup
+              key={row.key}
+              calls={row.calls}
+              trailing={working && i === rows.length - 1}
+              unfinished={unfinished}
+            />
+          ) : row.kind === "question" ? (
+            <QuestionCard key={row.key} question={row.question} />
+          ) : row.kind === "tool" ? (
+            <ToolCallCard
+              key={row.key}
+              toolUse={row.call.use}
+              toolResult={row.call.result}
+              unfinished={unfinished}
+            />
           ) : (
-            <div
-              key={seg.key}
-              className="rounded-xl rounded-tl-sm bg-card px-4 py-2.5 text-sm text-foreground shadow-sm"
-            >
-              <MarkdownContent content={seg.text} />
+            <div key={row.key} className="text-sm leading-relaxed text-text">
+              <MarkdownContent content={row.text} />
             </div>
           ),
         )}
-        {((isLive && live!.streaming) || serverStreaming) && segments.length === 0 && (
-          <div className="flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground">
-            <span className="animate-pulse">{t("chat.thinking")}</span>
+        {working && rows.length === 0 && (
+          <div className="flex items-center gap-1 py-1 text-xs text-text-muted">
+            <span className="animate-pulse">{t("conversations.thinking")}</span>
           </div>
         )}
-        {failed && <p className="px-4 text-xs text-destructive">{t("chat.message.failed")}</p>}
-        {showTokens && (
-          <p className="px-4 text-xs text-muted-foreground">
-            {t("chat.message.tokens", {
-              prompt: promptTokens ?? 0,
-              completion: completionTokens ?? 0,
-            })}
-          </p>
+        {state === "stopped" && <StoppedLine unfinished={unfinishedWork(blocks)} />}
+        {!working && (
+          <FilesChangedCard
+            conversationId={message?.conversation_id ?? ""}
+            messageId={message?.id ?? null}
+            estimate={filesChanged(blocks)}
+            onOpenFile={message && onOpenFile ? (path) => onOpenFile(message.id, path) : undefined}
+            selectedPath={selectedPath}
+          />
+        )}
+        {banner}
+        {!working && state !== "lost" && (
+          <ReplyFooter
+            text={text}
+            tokens={
+              showTokens
+                ? t("conversations.message.tokens", {
+                    prompt: formatTokens(promptTokens ?? 0),
+                    completion: formatTokens(completionTokens ?? 0),
+                  })
+                : null
+            }
+          />
         )}
       </div>
     </div>
   );
+}
+
+/** 18234 → "18.2k": the header counts, not the invoice. */
+function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
 export const MessageBubble = memo(MessageBubbleImpl);

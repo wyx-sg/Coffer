@@ -1,11 +1,11 @@
 """Tests for scripts/check_spec_citations.py — the requirement-citation gate.
 
-The gate holds two lines: a citation of a requirement names one that exists,
-and the retired id forms do not come back. Each rule is proved to bite on a
-synthetic tree and to stay quiet on the prose the real tree legitimately uses.
+The gate holds one line: a citation of a requirement names one that exists.
+Each case is proved to bite on a synthetic tree and to stay quiet on the prose
+the real tree legitimately uses.
 
 This file is itself scanned by the gate, so every example that must fail is
-assembled at runtime (`SPEC`, `CODE` and `SPECS_DIR` below) rather than written
+assembled at runtime (`SPEC` and `SPECS_DIR` below) rather than written
 out literally.
 """
 
@@ -21,10 +21,8 @@ import pytest
 from .conftest import REPO_ROOT
 
 _SCRIPT = REPO_ROOT / "scripts" / "check_spec_citations.py"
-_NUMBERING = REPO_ROOT / "scripts" / "check_doc_numbering.py"
 
 SPEC = "spec"
-CODE = "CODE"
 SPECS_DIR = "openspec" + "/specs"
 
 
@@ -87,7 +85,7 @@ def _cite(cap: str, title: str, *, comma: str = "") -> str:
     return f'{SPEC} {cap}{comma} "{title}"'
 
 
-# ---------------------------------------------------------------- rule 1
+# ---------------------------------------------------------------- citations
 
 
 @pytest.mark.parametrize(
@@ -212,61 +210,6 @@ def test_legitimate_prose_is_not_a_citation(gate, tree, text) -> None:
     assert _check(gate, tree, text) == ([], [])
 
 
-# ---------------------------------------------------------------- rule 2
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        f"see {SPEC} vault-sync E3 for the reason",
-        f"({SPEC} channels, D1a)",
-        f"raises {CODE}-027 on a bad env",
-        f"registered under {CODE}-REG",
-        f"as SPEC{'-'}012 requires",
-        # Task and review-finding ids from retired planning documents.
-        f"hardened under T{'-'}051",
-        f"(T{'-'}0072 verification)",
-        f"flaky before TEST{'-'}001",
-        f"see T{'-'}61 and TEST{'-'}01",
-        f"# P1{'-'}1: key off the status probe",
-        f"// P0{'-'}4: show the prompt at once",
-        f"# P4{'-'}2: a later finding",
-    ],
-)
-def test_each_retired_id_form_fails(gate, tree, text) -> None:
-    errors, _ = _check(gate, tree, text)
-    assert len(errors) == 1
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        f"{SPEC} vault-sync slice 7",
-        f"the {SPEC} daemon HTTP surface",
-        f"{CODE}-1234 is a port, not an id",
-        "SPEC_ID = 'x'",
-        f"a {CODE}-REGISTRY key",
-        "T-shirt sizes, a T-junction, TEST-mode",
-        "GPT-4 and P-256 and MP3-1",
-        "T-1000 model, an A/T-123 route, N-T-123 and SHA-256",
-    ],
-)
-def test_text_that_only_resembles_a_retired_id_passes(gate, tree, text) -> None:
-    assert _check(gate, tree, text) == ([], [])
-
-
-def test_a_change_folder_may_name_a_retired_id(gate, tree) -> None:
-    rel = "openspec/changes/in-flight/proposal.md"
-    assert _check(gate, tree, f"replaces {CODE}-027", rel) == ([], [])
-
-
-def test_numbered_spec_rejects_every_case() -> None:
-    numbering = _load(_NUMBERING, "check_doc_numbering")
-    for text in (f"{SPEC} 004", f"{SPEC}s 009", f"SPEC{'-'}012", f"{SPEC}-001"):
-        assert numbering.NUMBERED_SPEC.search(text), text
-    assert not numbering.NUMBERED_SPEC.search(f"{SPEC} 2026")
-
-
 # ---------------------------------------------------------------- malformed
 
 
@@ -295,3 +238,60 @@ def test_a_malformed_citation_of_a_real_capability_fails(gate, tree, text) -> No
 def test_a_string_literal_or_unknown_word_is_not_malformed(gate, tree, text) -> None:
     errors, _ = _check(gate, tree, text)
     assert not [e for e in errors if "malformed" in e]
+
+
+# ---------------------------------------------------------------- inside the specs
+
+
+_OWN = SPECS_DIR + "/knowledge/spec.md"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A link relative to the citing spec, resolved against its directory.
+        '[telegram](../channels/telegram/spec.md) "Download every Telegram media type"',
+        # A bare `see` names the file's own capability, wrapped like prose.
+        '(see "Use the file path as a\ndocument\'s identity")',
+    ],
+)
+def test_a_spec_internal_citation_of_an_existing_requirement_passes(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text, rel=_OWN)
+    assert errors == []
+    assert len(gate.find_citations(text, _OWN)) == 1
+
+
+@pytest.mark.parametrize(
+    ("text", "cap", "title"),
+    [
+        (
+            '[telegram](../channels/telegram/spec.md) "Download some Telegram media"',
+            "channels/telegram",
+            "Download some Telegram media",
+        ),
+        # A title that wraps across a Markdown line break is compared joined.
+        (
+            'the rule (see "Keep two\ntrees per collection")',
+            "knowledge",
+            "Keep two trees per collection",
+        ),
+    ],
+)
+def test_a_spec_internal_citation_of_a_missing_title_fails(gate, tree, text, cap, title) -> None:
+    errors, _ = _check(gate, tree, text, rel=_OWN)
+    assert len(errors) == 1
+    assert f"spec {cap} has no requirement titled {title!r}" in errors[0]
+
+
+def test_the_spec_internal_forms_are_read_only_under_openspec(gate, tree) -> None:
+    """Outside the specs, a relative `spec.md` link or a bare `see "..."` is not
+    a citation: the relative link would resolve somewhere else, and `see` is
+    ordinary prose."""
+    text = '[x](../channels/telegram/spec.md) "Download some media" — see "Keep two trees here"'
+    assert gate.find_citations(text, "docs-site/guides/x.md") == []
+    assert _check(gate, tree, text, rel="docs-site/guides/x.md") == ([], [])
+
+
+def test_a_short_quoted_label_after_see_is_not_a_citation(gate, tree) -> None:
+    text = 'the dialog shows (see "Current key") beside the file'
+    assert gate.find_citations(text, _OWN) == []

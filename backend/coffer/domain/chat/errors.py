@@ -18,19 +18,6 @@ class ConversationNotFound(CofferError):  # noqa: N818
         self.conversation_id = conversation_id
 
 
-class TurnInProgress(CofferError):  # noqa: N818
-    """Raised when a second message is sent to a conversation with an active turn."""
-
-    code = "TURN_IN_PROGRESS"
-
-    def __init__(self, conversation_id: str) -> None:
-        super().__init__(
-            f"conversation {conversation_id!r} already has a turn in progress; "
-            "wait for it to complete before sending another message"
-        )
-        self.conversation_id = conversation_id
-
-
 class UnknownAgent(CofferError):  # noqa: N818
     """Raised when a conversation names an ``agent_key`` no provider is registered for."""
 
@@ -93,15 +80,28 @@ class AttachmentNotFound(CofferError):  # noqa: N818
 
 
 class MessageNotFound(CofferError):  # noqa: N818
-    """A resend names no user message of that conversation — never sent there,
-    deleted with its conversation, or an assistant reply rather than a prompt."""
+    """A route names no such message in that conversation — a resend of anything
+    but one of its user messages, or the files of anything but one of its
+    replies; never there, or deleted with its conversation."""
 
     code = "MESSAGE_NOT_FOUND"
 
     def __init__(self, conversation_id: str, message_id: str) -> None:
-        super().__init__(f"no user message {message_id!r} in conversation {conversation_id!r}")
+        super().__init__(f"no such message {message_id!r} in conversation {conversation_id!r}")
         self.conversation_id = conversation_id
         self.message_id = message_id
+
+
+class ReplyFileNotFound(CofferError):  # noqa: N818
+    """A reply's changed-file diff was asked for under a path the reply did not
+    record (spec chat "Record what each reply changed in each file")."""
+
+    code = "REPLY_FILE_NOT_FOUND"
+
+    def __init__(self, message_id: str, path: str) -> None:
+        super().__init__(f"reply {message_id!r} recorded no changes to {path!r}")
+        self.message_id = message_id
+        self.path = path
 
 
 class AttachmentExpired(CofferError):  # noqa: N818
@@ -118,3 +118,41 @@ class AttachmentExpired(CofferError):  # noqa: N818
             "attach it again"
         )
         self.filename = filename
+
+
+class AttachmentUnavailable(CofferError):  # noqa: N818
+    """A thread asked for the bytes of a file no message of that conversation
+    references, or one the media sweep has since deleted (spec chat "Show a
+    message's attachments in the thread"). The chip stays a plain chip."""
+
+    code = "ATTACHMENT_UNAVAILABLE"
+
+    def __init__(self, attachment_id: str) -> None:
+        super().__init__(f"attachment not available: {attachment_id!r}")
+        self.attachment_id = attachment_id
+
+
+class QuestionClosed(CofferError):  # noqa: N818
+    """An answer to a question that is no longer waiting — already answered
+    (the first answer wins), cancelled, or gone with its turn (spec chat "Pause a
+    turn on a question for the owner")."""
+
+    code = "QUESTION_CLOSED"
+
+    def __init__(self, question_id: str) -> None:
+        super().__init__(
+            f"question {question_id!r} is not waiting for an answer any more "
+            "(it was answered, or its turn ended)"
+        )
+        self.question_id = question_id
+
+
+class QuestionAnswerInvalid(CofferError):  # noqa: N818
+    """An answer that does not fit its question: an unknown option, several
+    options on a single-choice question, or nothing at all."""
+
+    code = "QUESTION_ANSWER_INVALID"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"invalid answer: {reason}")
+        self.reason = reason

@@ -13,7 +13,7 @@ from coffer.domain.chat.events import TextDelta, TurnDone, TurnError, TurnStarte
 from coffer.domain.chat.message import Role, TextBlock
 from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, inbound, turn_body, wait_until
+from .conftest import ChannelEnv, inbound, turn_body, uid_of, wait_until
 
 
 def _text(message) -> str:  # type: ignore[no-untyped-def]
@@ -89,9 +89,10 @@ async def test_turn_error_is_delivered_as_a_short_notice(env: ChannelEnv) -> Non
 
     notice = next(t for t in adapter.texts() if t.startswith("⚠️"))
     assert "upstream timed out" in notice
-    assert "PROVIDER_TIMEOUT" in notice
+    assert "PROVIDER_TIMEOUT" not in notice
+    assert notice.endswith("Send it again to retry.")
     # The channel stays up: the binding is still live and answers commands.
-    assert env.processor.binding("tg") is not None
+    assert env.processor.binding(uid_of("tg")) is not None
 
 
 async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(
@@ -105,14 +106,6 @@ async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(
 
     assert adapter.texts() == ["⚠️ Unsupported message — send text, a photo, or a file."]
     assert await env.chat.list_conversations() == []
-
-
-async def test_unknown_command_gets_a_pointer_at_help(env: ChannelEnv) -> None:
-    _resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "/frobnicate now"))
-
-    assert adapter.texts() == ["Unknown command /frobnicate. /help"]
 
 
 async def test_help_lists_the_channel_commands(env: ChannelEnv) -> None:
@@ -133,10 +126,12 @@ async def test_status_reports_conversation_agent_and_queue(env: ChannelEnv) -> N
 
     assert len(adapter.texts()) == 1
     status = adapter.texts()[0]
-    assert "Conversation: none yet" in status
-    assert "Agent: builtin" in status
-    assert "Turn running: no" in status
-    assert "Queued: 0" in status
+    assert status.splitlines() == [
+        "Status",
+        "No conversation yet",
+        "Coffer Assistant · Default model · Default directory",
+        "Idle",
+    ]
 
 
 async def test_dangling_active_conversation_is_recreated_on_next_message(

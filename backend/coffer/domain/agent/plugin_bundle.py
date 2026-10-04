@@ -62,3 +62,21 @@ class PluginContents:
     agents: tuple[PluginComponent, ...] = ()
     hooks: tuple[str, ...] = ()
     mcp_servers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PluginPart:
+    """One thing a plugin contributes, resolved for the read-only detail pages.
+
+    ``root`` is the plugin's package directory. ``relpath`` (POSIX, relative to
+    ``root``) is the skill's folder (``skills/<name>``), the command's or
+    subagent's markdown file, or ``.mcp.json`` for an MCP server, whose entry —
+    exactly as written — is ``config``.
+    """
+
+    kind: str
+    name: str
+    root: str
+    relpath: str
+    description: str | None = None
+    config: dict[str, object] | None = None

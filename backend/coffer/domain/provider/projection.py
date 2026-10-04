@@ -1,376 +1,244 @@
-"""Pure text transforms that project a provider profile into native agent config.
+"""Pure text transforms that project a connection into Claude Code's
+``settings.json`` (the Codex half is :mod:`coffer.domain.provider.codex_projection`).
 
 No filesystem access — the application layer reads the agent's native config
 file, calls one of these to produce new text, and writes it back through the
-atomic store (``ConfigFileStore.write_text_atomic`` → atomic + ``.bak``). This
-mirrors ``domain/agent/mcp_install.py``'s ``apply_install``.
+atomic store. Both halves write ONLY Coffer-managed keys, merging into the
+user's existing file so unrelated content is preserved.
 
-Coffer supports exactly two agent types, and BOTH are projection targets — one
-transform pair (apply/remove) per agent (``ollama`` is the only wire that
-projects into none: it is internal-only, used by Coffer's own engine):
+What Claude Code gets (spec provider-switching "Project into Claude Code
+settings without clobbering them"):
 
-- Claude Code → ``~/.claude/settings.json`` (JSON): top-level ``apiKeyHelper``
-  (the key is fetched on demand, never written) plus ``env.ANTHROPIC_BASE_URL`` /
-  ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``.
-- Codex → ``~/.codex/config.toml`` (TOML): top-level ``model`` +
-  ``model_provider`` plus a ``[model_providers.coffer]`` table whose ``env_key``
-  names the env var Codex reads the key from (also never written here), and —
-  when the connection curates a model set — ``model_catalog_json`` pointing at a
-  Coffer-owned catalogue file so Codex's OWN model picker lists the endpoint's
-  models rather than OpenAI's. The catalogue's CONTENT is built here
-  (``codex_model_catalog_json``); writing and deleting the file is the
-  application layer's job, like every other projection write. The same
-  variable is added to ``shell_environment_policy.exclude``: Codex passes its
-  whole environment to the shell commands the agent runs by default, so
-  without it ``env`` in a turn would print the key into the transcript.
-
-Both write ONLY Coffer-managed keys, merging into the user's existing file so
-unrelated content is preserved.
+- ``apiKeyHelper`` — a command Coffer names; the key is fetched on demand,
+  never written.
+- ``env.ANTHROPIC_BASE_URL`` — where the agent sends its requests.
+- the top-level ``model`` and ``effortLevel`` — NOT ``env.ANTHROPIC_MODEL``,
+  which outranks ``model`` and would undo the user's own ``/model`` choice at
+  every launch.
+- ``env.ANTHROPIC_DEFAULT_<TIER>_MODEL`` for each pinned tier — the Haiku pin
+  also runs background tasks, which otherwise run on the main model behind a
+  custom base URL.
+- ``modelPicker`` — the connection's curated models in Claude Code's ``/model``
+  picker, replacing the built-in rows on an endpoint that serves no Claude ids.
+- for a local runtime, ``CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`` (local
+  runtimes reject Claude Code's beta request fields) and
+  ``CLAUDE_CODE_MAX_CONTEXT_TOKENS`` (Claude Code assumes 200k for an id it
+  does not know).
+- ``env.NO_PROXY`` gains ``127.0.0.1,localhost`` when the base URL is the local
+  model proxy, so a corporate ``HTTPS_PROXY`` never captures the loopback leg.
 """
 
 from __future__ import annotations
 
 import json
-import pathlib
-from collections.abc import MutableMapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-import tomlkit
-
-from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.agent.types import AgentType
-from coffer.domain.connection import CODEX_ENV_KEY as _CODEX_ENV_KEY
-from coffer.domain.provider.api_key_helper import (
-    anthropic_api_key_helper as anthropic_api_key_helper,
-)
+from coffer.domain.agent.tiers import CLAUDE_TIERS, tier_env_key
 from coffer.domain.provider.api_key_helper import is_managed_api_key_helper
-from coffer.domain.provider.codex_shell_env import (
-    drop_shell_env_exclude,
-    exclude_from_shell_env,
+from coffer.domain.provider.codex_projection import (
+    CODEX_CATALOG_TRUNCATION_LIMIT as CODEX_CATALOG_TRUNCATION_LIMIT,
 )
-from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.codex_projection import (
+    CODEX_MODEL_CATALOG_FILENAME as CODEX_MODEL_CATALOG_FILENAME,
+)
+from coffer.domain.provider.codex_projection import (
+    CODEX_MODEL_CATALOG_KEY as CODEX_MODEL_CATALOG_KEY,
+)
+from coffer.domain.provider.codex_projection import (
+    CODEX_PROVIDER_ID as CODEX_PROVIDER_ID,
+)
+from coffer.domain.provider.codex_projection import (
+    apply_codex_provider as apply_codex_provider,
+)
+from coffer.domain.provider.codex_projection import (
+    codex_model_catalog_json as codex_model_catalog_json,
+)
+from coffer.domain.provider.codex_projection import (
+    codex_model_catalog_path as codex_model_catalog_path,
+)
+from coffer.domain.provider.codex_projection import (
+    remove_codex_provider as remove_codex_provider,
+)
 
-# --- Codex provider-block identity --------------------------------------------
-
-#: The ``model_providers`` table key Coffer manages, and the ``model_provider``
-#: selector that points at it.
-CODEX_PROVIDER_ID = "coffer"
-#: The env var Codex reads the API key from (``model_providers.coffer.env_key``).
-#: Declared in the kind-agnostic ``domain.connection`` because the chat kind's
-#: Codex adapter has to materialise the key into the same variable; re-exported
-#: here so the projection's own vocabulary stays in one place.
-CODEX_ENV_KEY = _CODEX_ENV_KEY
-
-#: Filename of the model catalogue Coffer writes next to an agent's
-#: ``config.toml``, and what ``model_catalog_json`` is pointed at. The name also
-#: doubles as the OWNERSHIP MARKER: de-projection drops ``model_catalog_json``
-#: iff the path it holds ends in this filename, exactly as it drops
-#: ``apiKeyHelper`` iff :func:`is_managed_api_key_helper` owns it. So a
-#: catalogue the user wrote themselves is never removed, while one Coffer wrote
-#: always is — including one written into a relocated config dir, since the match
-#: is on the name, not on a path this module would have to re-derive.
-CODEX_MODEL_CATALOG_FILENAME = "coffer-model-catalog.json"
-
-#: Codex's TOML key that points at a model catalogue file.
-CODEX_MODEL_CATALOG_KEY = "model_catalog_json"
-
-#: How much of a TOOL RESULT Codex keeps before truncating it. NOT a context
-#: window: Codex's own built-in catalogue pairs ``{"mode": "tokens", "limit":
-#: 10000}`` with a ``context_window`` of 272000, so this bound describes Codex's
-#: harness rather than the endpoint — which is why Coffer can mirror the built-in
-#: value here instead of guessing one for a third-party endpoint.
-CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
-
-
-@dataclass(frozen=True)
-class ProjectionTarget:
-    """Where a connection projects: the agent type + its native config file."""
-
-    agent_type: AgentType
-    config_key: str
-    format: ConfigFileFormat
+#: Keys written into ``env`` besides the tier pins.
+_BASE_URL = "ANTHROPIC_BASE_URL"
+_DISABLE_BETAS = "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"
+_MAX_CONTEXT = "CLAUDE_CODE_MAX_CONTEXT_TOKENS"
+_NO_PROXY = "NO_PROXY"
+#: What ``NO_PROXY`` gains while the base URL is the loopback proxy.
+LOOPBACK_NO_PROXY = ("127.0.0.1", "localhost")
+#: The description every ``modelPicker`` option Coffer writes carries — the
+#: ownership marker de-projection reads, as the helper's command is for
+#: ``apiKeyHelper``. A picker the user wrote never carries it on every row.
+PICKER_MARKER = "via Coffer"
 
 
-_TARGETS: dict[Protocol, ProjectionTarget] = {
-    Protocol.ANTHROPIC: ProjectionTarget(AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON),
-    Protocol.OPENAI: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
-}
-
-#: The native-config target per AGENT type. The projection writer is chosen by
-#: which agent the connection is compatible with — NOT by the connection's wire —
-#: so an openai-compatible endpoint routed to Claude Code writes Claude's
-#: ``settings.json`` (anthropic shape), and vice versa.
-_AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
-    AgentType.CLAUDE_CODE: ProjectionTarget(
-        AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON
-    ),
-    AgentType.CODEX: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
-}
+def _load(text: str) -> dict[str, Any]:
+    data = json.loads(text) if text.strip() else {}
+    return data if isinstance(data, dict) else {}
 
 
-def wire_for_agent(agent_type: AgentType) -> Protocol | None:
-    """The wire whose ``deactivate`` covers ``agent_type`` — the inverse of the
-    wire→agent correspondence ``_TARGETS`` encodes. ``None`` for a type no wire
-    maps onto, so callers stay total.
-    """
-    for wire, target in _TARGETS.items():
-        if target.agent_type is agent_type:
-            return wire
-    return None
+def _dump(data: Mapping[str, Any]) -> str:
+    # ensure_ascii=False: settings.json may hold non-ASCII user content; don't
+    # rewrite it to \uXXXX on every switch.
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
-def target_for_agent(agent_type: AgentType) -> ProjectionTarget | None:
-    """The native-config target for an agent TYPE (the file + format its writer
-    touches). Every SUPPORTED agent type is a projection target, so this returns
-    a target for every member of ``AgentType``; the optional return is kept only
-    so callers stay total against a hand-built/unknown value."""
-    return _AGENT_TARGETS.get(agent_type)
+def _split(value: object) -> list[str]:
+    if not isinstance(value, str):
+        return []
+    return [p.strip() for p in value.split(",") if p.strip()]
+
+
+def _add_no_proxy(env: dict[str, Any]) -> None:
+    parts = _split(env.get(_NO_PROXY))
+    for host in LOOPBACK_NO_PROXY:
+        if host not in parts:
+            parts.append(host)
+    env[_NO_PROXY] = ",".join(parts)
+
+
+def _drop_no_proxy(env: dict[str, Any]) -> None:
+    """Take back only what :func:`_add_no_proxy` appended: the loopback pair
+    at the END of the list. A pair the user placed elsewhere is theirs."""
+    parts = _split(env.get(_NO_PROXY))
+    tail = list(LOOPBACK_NO_PROXY)
+    if parts[-len(tail) :] != tail:
+        return
+    rest = parts[: -len(tail)]
+    if rest:
+        env[_NO_PROXY] = ",".join(rest)
+    else:
+        env.pop(_NO_PROXY, None)
+
+
+def _is_managed_picker(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    options = value.get("options")
+    return (
+        isinstance(options, list)
+        and bool(options)
+        and all(isinstance(o, dict) and o.get("description") == PICKER_MARKER for o in options)
+    )
+
+
+def model_picker(models: Sequence[str], *, replace_builtin: bool) -> dict[str, Any]:
+    """The ``modelPicker`` value listing ``models`` (ids as labels — Coffer
+    authors no model names)."""
+    return {
+        "options": [{"model": m, "label": m, "description": PICKER_MARKER} for m in models],
+        "replaceBuiltInOptions": replace_builtin,
+    }
 
 
 def apply_anthropic_settings(
     text: str,
     *,
     base_url: str,
-    model: str | None,
-    fast_model: str | None,
     api_key_helper: str,
+    model: str | None = None,
+    effort: str | None = None,
+    tier_models: Mapping[str, str] | None = None,
+    picker_models: Sequence[str] = (),
+    replace_builtin_picker: bool = False,
+    local_context_window: int | None = None,
+    local: bool = False,
 ) -> str:
-    """Return new ``settings.json`` text with Coffer's anthropic provider keys.
+    """Return new ``settings.json`` text with Coffer's keys.
 
-    Merges into the user's existing JSON; unrelated keys are preserved. Sets the
-    top-level ``apiKeyHelper`` and the ``env`` provider vars; never writes
-    ``ANTHROPIC_API_KEY`` (it would override the helper). When ``model`` is
-    ``None`` (an unbound agent) the ``ANTHROPIC_MODEL`` var is omitted so the
-    agent runs on its OWN default model.
-
-    ``api_key_helper`` is REQUIRED and has no default: the only helper Coffer
-    may write is the per-connection one (:func:`anthropic_api_key_helper`), so a
-    caller must name the connection rather than fall back to a wire-keyed form
-    that cannot say which connection's key to fetch.
+    ``model`` / ``effort`` ``None`` leave the user's own top-level keys as they
+    are (the agent runs on whatever it was set to); a tier missing from
+    ``tier_models`` is unpinned. ``api_key_helper`` is REQUIRED and has no
+    default: a caller must name what the helper resolves.
     """
-    data = json.loads(text) if text.strip() else {}
-    if not isinstance(data, dict):  # a hand-edit left a non-object root
-        data = {}
+    data = _load(text)
     data["apiKeyHelper"] = api_key_helper
     env = data.get("env")
     if not isinstance(env, dict):
         env = {}
         data["env"] = env
-    env["ANTHROPIC_BASE_URL"] = base_url
+    env[_BASE_URL] = base_url
     if model:
-        env["ANTHROPIC_MODEL"] = model
+        data["model"] = model
+    if effort:
+        data["effortLevel"] = effort
+    pins = dict(tier_models or {})
+    for tier in CLAUDE_TIERS:
+        if pins.get(tier):
+            env[tier_env_key(tier)] = pins[tier]
+        else:
+            env.pop(tier_env_key(tier), None)
+    if picker_models:
+        data["modelPicker"] = model_picker(picker_models, replace_builtin=replace_builtin_picker)
+    elif _is_managed_picker(data.get("modelPicker")):
+        data.pop("modelPicker", None)
+    if local:
+        env[_DISABLE_BETAS] = "1"
     else:
-        env.pop("ANTHROPIC_MODEL", None)
-    if fast_model:
-        env["ANTHROPIC_SMALL_FAST_MODEL"] = fast_model
+        env.pop(_DISABLE_BETAS, None)
+    if local and local_context_window:
+        env[_MAX_CONTEXT] = str(local_context_window)
     else:
-        env.pop("ANTHROPIC_SMALL_FAST_MODEL", None)
-    # ensure_ascii=False: settings.json may hold non-ASCII user content; don't
-    # rewrite it to \uXXXX on every switch.
-    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+        env.pop(_MAX_CONTEXT, None)
+    _add_no_proxy(env)
+    return _dump(data)
 
 
-def codex_model_catalog_path(config_dir: pathlib.Path) -> pathlib.Path:
-    """Where Coffer's catalogue lives for an agent whose config dir is
-    ``config_dir`` — next to that agent's ``config.toml``, under the
-    Coffer-owned filename. ``model_catalog_json`` must be absolute, so the
-    caller must hand in an absolute config dir (``AgentConfig`` guarantees it)."""
-    return config_dir / CODEX_MODEL_CATALOG_FILENAME
-
-
-def codex_model_catalog_json(models: Sequence[str]) -> str | None:
-    """The ``model_catalog_json`` document for a connection's curated models — or
-    ``None`` when there is nothing honest to write.
-
-    ``model_catalog_json`` REPLACES Codex's built-in model list; it does not add
-    to it (verified against Codex 0.139.0: with a one-model catalogue, ``model/
-    list`` returns exactly that model). So a catalogue may only be written when
-    the user has curated a model set on the connection (``ProviderConfig.models``
-    — the ids ticked on its detail page). An EMPTY set means "no restriction",
-    and Coffer does not know what a third-party endpoint serves without a network
-    call it does not make here: a catalogue built from a guess would replace
-    Codex's own picker with that guess. ``None`` therefore means "write no
-    catalogue, and remove any stale one".
-
-    Every field emitted below is REQUIRED by Codex's parser — this file is a wire
-    contract with another program. Omitting one does not merely lose the
-    catalogue: Codex reports ``failed to parse model_catalog_json`` and falls back
-    to its built-in list, so the projection silently does not take effect.
-    """
-    if not models:
-        return None
-    entries: list[dict[str, object]] = [
-        {
-            "slug": model,
-            # The id IS the display name. Coffer authors no model names of its own
-            # (the 2026-09-09 amendment: catalogues are read back from agents and
-            # endpoints, never written down here), and the id is what the user
-            # ticked, so it is what they will recognise in Codex's picker.
-            # Prettifying it would mean maintaining a vendor-label table that goes
-            # stale the moment an endpoint adds a model.
-            "display_name": model,
-            # Codex's built-ins are ordered by ascending priority with the
-            # preferred model at 0 (gpt-5.5→0, gpt-5.4→2, … gpt-5.2→10), so the
-            # curated order is reproduced by the index. Ordering only.
-            "priority": index,
-            # The catalogue exists to put these models in Codex's picker.
-            "visibility": "list",
-            # The user curated these ids for an API endpoint, so they are
-            # API-usable by construction — not a guess.
-            "supported_in_api": True,
-            # --- values Coffer CANNOT derive for a third-party endpoint --------
-            # Coffer knows an endpoint's base URL and the ids the user ticked.
-            # Nothing below is discoverable from that, so each takes the value
-            # that claims the LEAST, and the cost of each being wrong is noted.
-            #
-            # No reasoning-effort presets claimed: Codex then sends no
-            # ``reasoning`` field at all (verified on a captured request). Claiming
-            # presets an endpoint does not implement would put an unknown
-            # parameter on every request — a hard 400 on a strict gateway. Cost of
-            # being conservative: a model that does support effort levels cannot
-            # be driven at a chosen effort from Codex.
-            "supported_reasoning_levels": [],
-            # Same argument for the two other request-shaping capabilities:
-            # unsupported => the parameter is never sent.
-            "supports_reasoning_summaries": False,
-            "support_verbosity": False,
-            # Sequential tool calls work everywhere; parallel ones are an opt-in
-            # capability. Cost of being conservative: a capable model runs its
-            # tool calls one at a time, i.e. slower, never broken.
-            "supports_parallel_tool_calls": False,
-            # No experimental tools assumed.
-            "experimental_supported_tools": [],
-            # The enum's least-committal value. Codex's own models opt into
-            # "shell_command"; on 0.139.0 both values produced an identical tool
-            # set on the wire, so this is the safe default rather than a bet on
-            # what a third-party model was trained to drive.
-            "shell_type": "default",
-            # Harness-level tool-output bound, not an endpoint property — see
-            # CODEX_CATALOG_TRUNCATION_LIMIT.
-            "truncation_policy": {"mode": "tokens", "limit": CODEX_CATALOG_TRUNCATION_LIMIT},
-            # Codex's own catalogue puts its ENTIRE agent system prompt here, and
-            # the field is required. Empty means Codex sends no ``instructions``
-            # (verified on a captured request) — it still sends its permissions,
-            # skills and environment developer messages and the full tool set, so
-            # the agent works, but without Codex's persona prompt. The
-            # alternative, copying OpenAI's prompt into a Coffer-written file,
-            # would pin one Codex version's prompt and silently override every
-            # later one; Coffer does not author another product's system prompt.
-            "base_instructions": "",
-        }
-        for index, model in enumerate(models)
-    ]
-    return json.dumps({"models": entries}, indent=2, ensure_ascii=False) + "\n"
-
-
-def _pop_managed_catalog(doc: MutableMapping[str, object]) -> None:
-    """Drop ``model_catalog_json`` iff it points at a COFFER-owned catalogue —
-    the same ownership discipline ``remove_anthropic_settings`` applies to
-    ``apiKeyHelper``. A user's own catalogue (any other filename) is left alone.
-    Compared as a POSIX basename: Coffer only ever writes posix paths here, and
-    parsing the value as a native path would make a pure transform
-    platform-dependent."""
-    value = doc.get(CODEX_MODEL_CATALOG_KEY)
-    if isinstance(value, str) and pathlib.PurePosixPath(value).name == (
-        CODEX_MODEL_CATALOG_FILENAME
-    ):
-        doc.pop(CODEX_MODEL_CATALOG_KEY, None)
-
-
-def apply_codex_provider(
-    text: str,
-    *,
-    base_url: str,
-    model: str | None,
-    wire_api: str,
-    display_name: str,
-    provider_id: str = CODEX_PROVIDER_ID,
-    env_key: str = CODEX_ENV_KEY,
-    catalog_path: pathlib.Path | None = None,
+def remove_anthropic_settings(
+    text: str, *, managed_model: str | None = None, managed_effort: str | None = None
 ) -> str:
-    """Return new ``config.toml`` text with Coffer's openai provider block.
+    """Inverse of :func:`apply_anthropic_settings` — strip every key Coffer
+    wrote so Claude Code falls back to its OWN login ("use built-in").
 
-    Merges into the user's existing TOML via tomlkit (comments / ordering /
-    unrelated keys preserved). Sets top-level ``model`` + ``model_provider`` and
-    the ``[model_providers.<provider_id>]`` table. When ``model`` is ``None`` (an
-    unbound agent) the top-level ``model`` is omitted so Codex uses its default.
-    ``env_key`` is also added to ``shell_environment_policy.exclude`` so the key
-    Codex reads from its environment never reaches a shell command it runs.
-
-    ``catalog_path`` points ``model_catalog_json`` at the Coffer-owned catalogue
-    (see :func:`codex_model_catalog_json`) so Codex's OWN model picker offers the
-    endpoint's models instead of OpenAI's. ``None`` means this connection curates
-    no model set: Codex's built-in list is left alone, and a catalogue pointer
-    Coffer wrote earlier is dropped.
+    ``apiKeyHelper`` goes only when it is Coffer's (:func:`is_managed_api_key_helper`);
+    the ``env`` keys (base URL, tier pins, the local-runtime pair, the
+    loopback ``NO_PROXY`` tail) go only while that helper was there — with a
+    helper the user wrote or none at all they are the user's own and stay;
+    ``modelPicker`` only when every option carries :data:`PICKER_MARKER`, and
+    the top-level ``model`` / ``effortLevel`` only while they still hold what
+    Coffer projected (``managed_model`` / ``managed_effort``, the agent's
+    binding): a model or effort the user has since picked with ``/model`` or
+    ``/effort`` is theirs and stays. Unrelated keys are preserved.
     """
-    doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
-    if model:
-        doc["model"] = model
-    else:
-        doc.pop("model", None)
-    doc["model_provider"] = provider_id
-    if catalog_path is None:
-        _pop_managed_catalog(doc)
-    else:
-        if not catalog_path.is_absolute():
-            # Codex resolves this key as an absolute path; a relative one would
-            # silently resolve against whatever cwd the agent was started in.
-            raise ValueError(f"{CODEX_MODEL_CATALOG_KEY} must be absolute, got {catalog_path}")
-        doc[CODEX_MODEL_CATALOG_KEY] = str(catalog_path)
-    # Recreate `model_providers` if absent OR if a hand-edit left a non-table
-    # value there (indexing into a scalar would raise).
-    if not isinstance(doc.get("model_providers"), MutableMapping):
-        doc["model_providers"] = tomlkit.table(is_super_table=True)
-    block = tomlkit.table()
-    block["name"] = display_name
-    block["base_url"] = base_url
-    block["wire_api"] = wire_api
-    block["env_key"] = env_key
-    doc["model_providers"][provider_id] = block
-    exclude_from_shell_env(doc, env_key)
-    return tomlkit.dumps(doc)
-
-
-def remove_anthropic_settings(text: str) -> str:
-    """Inverse of :func:`apply_anthropic_settings` — strip Coffer's managed keys so
-    Claude Code falls back to its OWN login ("use built-in"). Removes any
-    Coffer-managed ``apiKeyHelper`` (:func:`is_managed_api_key_helper`, so the
-    absolute, bare and legacy forms are all reverted — never a user-owned one) and the
-    ``env.ANTHROPIC_BASE_URL`` / ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``
-    vars; unrelated keys and env entries are preserved."""
-    data = json.loads(text) if text.strip() else {}
-    if not isinstance(data, dict):
+    raw = json.loads(text) if text.strip() else {}
+    if not isinstance(raw, dict):
         return "{}\n"
-    if is_managed_api_key_helper(data.get("apiKeyHelper")):
+    data: dict[str, Any] = raw
+    # The ownership marker for the ``env`` keys: they carry no mark of their
+    # own, so they are Coffer's only while Coffer's helper is in the file.
+    owned = is_managed_api_key_helper(data.get("apiKeyHelper"))
+    if owned:
         data.pop("apiKeyHelper", None)
+    if _is_managed_picker(data.get("modelPicker")):
+        data.pop("modelPicker", None)
+    if managed_model is not None and data.get("model") == managed_model:
+        data.pop("model", None)
+    if managed_effort is not None and data.get("effortLevel") == managed_effort:
+        data.pop("effortLevel", None)
     env = data.get("env")
-    if isinstance(env, dict):
-        for key in ("ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"):
+    if owned and isinstance(env, dict):
+        for key in (_BASE_URL, _DISABLE_BETAS, _MAX_CONTEXT):
             env.pop(key, None)
-    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+        for tier in CLAUDE_TIERS:
+            env.pop(tier_env_key(tier), None)
+        _drop_no_proxy(env)
+    return _dump(data)
 
 
-def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) -> str:
-    """Inverse of :func:`apply_codex_provider` — drop Coffer's provider block so
-    Codex falls back to its OWN default provider/model ("use built-in"). The
-    ``[model_providers.<provider_id>]`` table is always removed; ``model_provider``
-    and the top-level ``model`` are cleared ONLY when ``model_provider`` currently
-    points at Coffer (a user-selected provider is left untouched). A
-    ``model_catalog_json`` pointing at the Coffer-owned catalogue is dropped too,
-    so Codex's own model list comes back; one pointing anywhere else is the user's
-    and stays. ``COFFER_PROVIDER_KEY`` is dropped from
-    ``shell_environment_policy.exclude``. Unrelated keys are preserved."""
-    if not text.strip():
-        return ""
-    doc = tomlkit.parse(text)
-    _pop_managed_catalog(doc)
-    drop_shell_env_exclude(doc, CODEX_ENV_KEY)
-    providers = doc.get("model_providers")
-    if isinstance(providers, MutableMapping):
-        providers.pop(provider_id, None)
-        if not providers:
-            doc.pop("model_providers", None)
-    if doc.get("model_provider") == provider_id:
-        doc.pop("model_provider", None)
-        doc.pop("model", None)
-    return tomlkit.dumps(doc)
+__all__ = [
+    "CODEX_CATALOG_TRUNCATION_LIMIT",
+    "CODEX_MODEL_CATALOG_FILENAME",
+    "CODEX_MODEL_CATALOG_KEY",
+    "CODEX_PROVIDER_ID",
+    "LOOPBACK_NO_PROXY",
+    "PICKER_MARKER",
+    "apply_anthropic_settings",
+    "apply_codex_provider",
+    "codex_model_catalog_json",
+    "codex_model_catalog_path",
+    "model_picker",
+    "remove_anthropic_settings",
+    "remove_codex_provider",
+]

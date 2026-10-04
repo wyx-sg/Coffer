@@ -26,14 +26,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 # Agent UIDS. Nothing in a scope is a name any more, which is why these do not
 # look like anything a user typed.
@@ -66,7 +64,7 @@ async def _client(tmp_path):
         # only writes scope.
         "skill": make_skill_kind(None, None),  # type: ignore[arg-type]
     }
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = ResourceService(kinds=kinds, repo=repo, audit=audit)
 
@@ -107,7 +105,7 @@ async def test_get_scope_reports_kinds_without_scope(tmp_path):
     async with c:
         agent = await svc.register(
             kind="agent",
-            name="claude",
+            name="claude-code",
             config={"type": "claude_code"},
             actor="agent-service",
             allow_lifecycle_kind=True,
@@ -160,8 +158,10 @@ async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_p
 
 @pytest.mark.asyncio
 async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
-    """The three states stay distinct on the wire: an empty list is dormant, a
-    null list is unrestricted, and a null scope clears the scope entirely."""
+    """An empty list is dormant; a null list and a null scope both mean every
+    agent. Reach is one record per resource in ``local/reach.json``,
+    whose ``agents: null`` is the one way to say unrestricted, so a null list
+    reads back as no scope at all."""
     c, engine, svc = await _client(tmp_path)
     async with c:
         fs = await svc.register(
@@ -175,11 +175,14 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
         assert r.status_code == 200, r.text
         assert r.json()["scope"] == dormant
 
-        # A null list is unrestricted, which is not the same as no scope at all.
+        # A null list is unrestricted: stored as the same record as no scope.
         unrestricted = {"agents": None}
         r_u = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": unrestricted})
         assert r_u.status_code == 200, r_u.text
-        assert r_u.json()["scope"] == unrestricted
+        assert r_u.json()["scope"] is None
+
+        r_d = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": dormant})
+        assert r_d.json()["scope"] == dormant
 
         r2 = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": None})
         assert r2.status_code == 200, r2.text
@@ -233,7 +236,7 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
     async with c:
         agent = await svc.register(
             kind="agent",
-            name="claude",
+            name="claude-code",
             config={"type": "claude_code"},
             actor="agent-service",
             allow_lifecycle_kind=True,

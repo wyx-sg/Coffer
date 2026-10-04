@@ -85,7 +85,7 @@ async def _write_targets(
     *,
     model: Any,
     completion: LlmCompletionPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = DEFAULT_MODEL_TIMEOUT_S,
 ) -> set[str]:
     """Stage two, once per touched note. Returns the slugs actually written."""
@@ -98,7 +98,7 @@ async def _write_targets(
             partition=partition,
             model=model,
             completion=completion,
-            credential_resolver=credential_resolver,
+            secret_resolver=secret_resolver,
             timeout=timeout,
         )
         if result is None:
@@ -187,7 +187,7 @@ async def carry_out(
     retired: Sequence[RetiredNote],
     model: Any,
     completion: LlmCompletionPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = DEFAULT_MODEL_TIMEOUT_S,
 ) -> Counts:
     """Write the notes, then retire what they replaced, then record all of it."""
@@ -198,7 +198,7 @@ async def carry_out(
         counts,
         model=model,
         completion=completion,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         timeout=timeout,
     )
     records = _retirement_records(partition, plan, counts, written)

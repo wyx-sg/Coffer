@@ -44,24 +44,29 @@ where it is the only way to see anything at all.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import logging.handlers
 import os
 import sys
 import time
 from collections.abc import MutableMapping
-from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
 import structlog
 
+from coffer.application.runtime import correlation
+from coffer.application.runtime.correlation import bind_trace_id, get_trace_id
 from coffer.infrastructure.logging.eval_capture import install_eval_capture_handler
 from coffer.infrastructure.logging.files import log_dir
 
-_TRACE_ID: ContextVar[str | None] = ContextVar("coffer_trace_id", default=None)
-_SENTINEL: Final = "-"
+#: ``bind_trace_id`` / ``get_trace_id`` live with the rest of the correlation
+#: ids in ``application.runtime.correlation`` (so the audit service, which may
+#: not import infrastructure, reads the same value); re-exported here for the
+#: middleware and the error handlers that have always imported them from here.
+__all__ = ["bind_trace_id", "configure_logging", "get_trace_id"]
 
 #: Marks the stderr handler this module owns. ``configure_logging`` runs more
 #: than once (daemon boot, tests), and an unmarked handler could not be told
@@ -70,18 +75,17 @@ _SENTINEL: Final = "-"
 _STDERR_MARKER: Final = "_coffer_stderr"
 
 
-def bind_trace_id(trace_id: str | None) -> None:
-    _TRACE_ID.set(trace_id)
-
-
-def get_trace_id() -> str:
-    return _TRACE_ID.get() or _SENTINEL
-
-
 def _add_trace_id(
     _: Any, __: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
-    event_dict.setdefault("trace_id", get_trace_id())
+    """Stamp the correlation ids bound where the record was logged.
+
+    ``trace_id`` on every line (``-`` when none is bound); ``session_id``,
+    ``conversation_id`` and ``turn_id`` when the line was written inside an MCP
+    call or a chat/channel turn. A call site's own ``extra`` value wins.
+    """
+    for key, value in correlation.current().log_fields().items():
+        event_dict.setdefault(key, value)
     return event_dict
 
 
@@ -135,7 +139,8 @@ def _processors() -> list[Any]:
       was discarded, which made them look like dead weight in the source;
     * ``_add_trace_id`` stamps the request's id, so a failed response's
       ``X-Coffer-Trace`` header can be grepped for in the log — the point of
-      :mod:`coffer.surfaces.http.trace`;
+      :mod:`coffer.surfaces.http.trace` — plus the MCP session and the chat
+      turn a line was written in (``application.runtime.correlation``);
     * ``format_exc_info`` renders an ``exc_info=True`` traceback into this
       record's own ``exception`` field. That is what keeps a traceback *inside*
       one JSON line (the newlines are escaped) instead of letting it become a
@@ -188,6 +193,42 @@ def _stderr_is(path: Path) -> bool:
     return (err.st_dev, err.st_ino) == (target.st_dev, target.st_ino)
 
 
+class _FdFollowingRotatingHandler(logging.handlers.RotatingFileHandler):
+    """A rotating handler that takes the process's own stdout/stderr with it.
+
+    The detached daemon's fds 1 and 2 *are* ``daemon.log`` (the spawner, launchd
+    and the desktop all open it and hand it over), and rotation renames the file
+    out from under them: uvicorn's stray output, tracebacks and faulthandler
+    would then land in ``daemon.log.1`` and be deleted three rotations later,
+    never visible to the reader of ``daemon.log``. After each rollover the new
+    file is dup'd onto whichever of fds 1 and 2 pointed at the old one.
+    """
+
+    def doRollover(self) -> None:  # noqa: N802 — the stdlib hook's name
+        following = self._std_fds_on_this_file()
+        super().doRollover()
+        if self.stream is None:
+            return
+        for fd in following:
+            with contextlib.suppress(OSError):
+                os.dup2(self.stream.fileno(), fd)
+
+    def _std_fds_on_this_file(self) -> list[int]:
+        try:
+            ours = os.stat(self.baseFilename)
+        except OSError:
+            return []
+        fds: list[int] = []
+        for fd in (1, 2):
+            try:
+                st = os.fstat(fd)
+            except OSError:
+                continue
+            if (st.st_dev, st.st_ino) == (ours.st_dev, ours.st_ino):
+                fds.append(fd)
+        return fds
+
+
 def _attach_file_handler(formatter: logging.Formatter | None = None) -> None:
     """Attach a rotating file handler to the root logger.
 
@@ -217,7 +258,7 @@ def _attach_file_handler(formatter: logging.Formatter | None = None) -> None:
             existing.setFormatter(formatter)
             return
 
-    handler = logging.handlers.RotatingFileHandler(
+    handler = _FdFollowingRotatingHandler(
         log_path,
         maxBytes=10 * 1024 * 1024,  # 10 MB
         backupCount=3,
@@ -240,7 +281,7 @@ def _attach_stderr_handler(formatter: logging.Formatter) -> None:
     whoever swapped it, and the daemon's log stream is not theirs to collect.
     ``CliRunner`` and ``contextlib.redirect_stderr`` both do exactly that, and
     following them put ``{"event": "HTTP Request: GET …"}`` into the output a
-    ``coffer mcp list --json`` caller was parsing. A redirect made at the
+    ``coffer log mcp --json`` caller was parsing. A redirect made at the
     file-descriptor level — ``2>&1`` in a shell — is a different thing and
     still applies, because it moves the file behind the stream rather than the
     stream.

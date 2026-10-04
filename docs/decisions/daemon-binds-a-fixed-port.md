@@ -23,8 +23,8 @@ events for the user. Ten orphaned daemons were once found holding all of
 
 Two further constraints decide *where* a port setting can live:
 
-- the port is chosen in `bootstrap.acquire`, before the database is opened and
-  before migrations run, so no database-backed setting can carry it;
+- the port is chosen in `bootstrap.acquire`, before the vault is opened and
+  before migrations run, so no vault- or database-backed setting can carry it;
 - the daemon is spawned detached by whichever client first needs one
   ([Detect-or-Spawn](daemon-detect-or-spawn.md)) and inherits that client's
   environment — a shell profile reaches the user's own terminal and nothing
@@ -32,10 +32,20 @@ Two further constraints decide *where* a port setting can live:
 
 ## Options Considered
 
-### Option A — Fixed default 8000, overridable in a pre-database config file, refuse rather than fall back (chosen)
+### Option A — Fixed default 38470, overridable in a pre-database config file, refuse rather than fall back (chosen)
 
-With nothing configured the daemon binds exactly `127.0.0.1:8000`
-(`DEFAULT_PORT` in `infrastructure/daemon/config.py`). A user who needs another
+With nothing configured the daemon binds exactly `127.0.0.1:38470`
+(`DEFAULT_PORT` in `infrastructure/daemon/config.py`). The default is
+deliberately uncommon: the first version of this design fixed 8000, the most
+commonly squatted development port (Django, FastAPI, Jupyter and vLLM all
+start there, as does whatever a person left running), so the refuse-to-start
+path fired on the first launch of a machine that had nothing wrong with it.
+38470 is unassigned in IANA's service-name and port-number registry and below
+the ephemeral range macOS and IANA use (49152 and up). Linux's default range
+(32768–60999) does contain it, so a Linux machine can in principle hand it to an
+outgoing connection; that is rare and surfaces as the named startup refusal
+below rather than a silent move. The local model proxy's default is the
+next port, 38471, for the same reason. A user who needs another
 port sets it with `coffer config set daemon.port <n>`, which writes it into
 `~/.coffer/daemon-config.json` — mode `0600`, merged rather than replaced, read
 with nothing but the standard library before the bind. If the port cannot be
@@ -47,8 +57,9 @@ failing port is not the default — `coffer config unset daemon.port`.
 Pros: the origin never moves, so bookmarks and browser-stored preferences
 survive restarts; a conflict is visible and named instead of silent; the setting
 is reachable when the daemon is down, which is exactly when it is needed. Cons:
-a machine whose 8000 is permanently taken cannot start Coffer until the user
-runs one command. This is the conventional choice for local services with a web
+a machine whose 38470 is permanently taken cannot start Coffer until the user
+runs one command, and a person who bookmarked the old default loses the
+bookmark once (and the origin-keyed browser state with it) at the upgrade. This is the conventional choice for local services with a web
 UI — Ollama, Syncthing, Grafana, Home Assistant and Tailscale all fix a default
 and let it be changed — and it wins because a predictable origin is worth more
 than an automatic one.
@@ -63,7 +74,7 @@ development tools that print their URL on every start and that nobody
 bookmarks. Loses. The scan survives only as the `COFFER_PORT_RANGE_START` /
 `COFFER_PORT_RANGE_END` override (`bootstrap._bind_port`,
 `port_alloc.bind_free_socket`), which the test suite sets so concurrent test
-daemons stay away from the real 8000; no user-facing surface sets it.
+daemons stay away from the real default; no user-facing surface sets it.
 
 ### Option C — Scan by default, with an optional user-pinned port
 
@@ -86,10 +97,10 @@ again, by a different route. Loses.
 ### Option E — A row in the settings table
 
 Pros: one place for all settings, audited, reachable over REST. Cons: the port
-must be known before the database is opened and before migrations have created
-any table; a setting the daemon needs in order to start cannot live in the
-daemon's own database. The vault database also syncs between machines
-([Vault Sync](vault-sync.md)), and a port is a fact about one machine. Loses.
+must be known before the vault is opened and before the history database is
+migrated; a setting the daemon needs in order to start cannot live in state
+the daemon opens after it has bound. The vault also syncs between machines
+([Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md)), and a port is a fact about one machine. Loses.
 
 ### Option F — An OS-assigned port (`bind(0)`) published only through the discovery file
 
@@ -107,34 +118,42 @@ back. Loses.
 ## Decision
 
 The daemon binds exactly one loopback port: the one in
-`~/.coffer/daemon-config.json` if the user set one, otherwise 8000. It never
+`~/.coffer/daemon-config.json` if the user set one, otherwise 38470. It never
 falls back. If the port is taken it refuses to start and names the holder and
 the fixes; a Coffer daemon found holding it is identified as such and is not
 killed automatically, since it is most often the user's own daemon still
 warming up and otherwise belongs to another vault.
 
-`daemon-config.json` is the one piece of configuration that is not in SQLite.
-It holds the settings a daemon needs before it opens its database or that must
+`daemon-config.json` is the one piece of configuration that is not in the vault.
+It holds the settings a daemon needs before it opens the vault or that must
 not sync: the port, the machine's display name, the cached derived machine id,
-and the per-machine experimental-feature switches. Writes merge, keep keys this
-build does not know (so a file written by a newer build survives an older one),
-and drop retired keys. The file carries no `version` key; earlier builds wrote
-one that nothing read, and it is kept as an unknown key where it still exists.
+and the per-machine experimental-feature switches. Writes merge and keep keys this
+build does not know, so a file written by a newer build survives an older one.
+The file carries no `version` key: nothing would read it.
 An unreadable file warns and falls back to the default rather than stopping the
 boot, since a daemon that cannot boot cannot be repaired from the UI it serves.
 
-The setting is changed from the CLI only
-(`coffer config get|set|unset daemon.port`), which works with no daemon running. It has no REST route or settings panel: a
-port that is correct by default does not earn one, and the escape hatch belongs
-where a squatted port is diagnosed. A change takes effect at the next start;
-`coffer daemon restart` applies it.
+The setting is changed from the CLI
+(`coffer config get|set|unset daemon.port`), which works with no daemon running
+and is the escape hatch where a squatted port is diagnosed, or from Settings →
+Daemon (`PUT /api/v1/daemon/port`), which validates the value, refuses a port
+another process holds and writes the same file. A change takes effect at the
+next start; `coffer daemon restart`, or the Restart now beside the field,
+applies it. In the desktop shell that restart reads `~/.coffer/daemon.json`
+afresh while it waits for the replacement and hands the page the connection
+that file names, so the window follows the daemon to the new port.
 
 ## Consequences
 
 - A bookmark to the UI works across restarts, and so do the preferences the
   browser stored against that origin. The desktop shell gains nothing from it
-  directly (its page origin is `tauri://localhost`), but the browser host the
-  shell does not replace does.
+  directly (its page origin is `tauri://localhost`, and it reads the port from
+  the discovery file), but the browser host the shell does not replace does.
+- The default is a one-time break for anyone upgrading from 8000: the bookmark
+  and the origin-keyed browser state reset once, and the upgrade guide says so.
+  Agents follow by themselves, because the shim reads `daemon.json` and the
+  model proxy's address in each agent's config is derived from the configured
+  proxy port by the reconciler.
 - A port conflict is a startup failure, not a silent move. The daemon does not
   start until the user acts. [Detect-or-Spawn](daemon-detect-or-spawn.md)'s
   client-side pre-check prints the same message before spawning.
@@ -146,7 +165,7 @@ where a squatted port is diagnosed. A change takes effect at the next start;
   two sockets bind the same port while neither is listening, and a daemon is
   bound-but-not-listening for its whole boot window; setting it there let a
   second daemon bind the first one's port. macOS refuses that bind, so only the
-  Linux CI run found it (`test_port_alloc.py` pins it).
+  Linux CI run found it (`backend/tests/integration/infrastructure/daemon/test_port_alloc.py` pins it).
 - The port change is not audited. It is process configuration written with no
   daemon running, so the audit table is unreachable on exactly the path that
   matters; recording it only when a daemon happens to be up would be less

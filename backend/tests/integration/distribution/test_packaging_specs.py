@@ -267,7 +267,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
       * markitdown  — infrastructure/chat/document_extract.py (spec channels "Give
                       documents to every agent as extracted text")
       * openai      — infrastructure/provider/*
-      * langgraph / langchain — infrastructure/llm/*, infrastructure/chat/*
+      * langgraph — infrastructure/llm/* (the only importer of langgraph/langchain_*)
 
     The knowledge layer declares nothing here: it is a directory of markdown
     files with no converter, no index and no embedding client to bundle.
@@ -281,7 +281,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     """
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
     submodules = _collect_submodules_args(tree)
-    for pkg in ("markitdown", "openai", "langgraph", "langchain"):
+    for pkg in ("markitdown", "openai", "langgraph"):
         assert pkg in submodules, (
             f"daemon spec must collect_submodules({pkg!r}) — it is imported "
             "lazily by chat/provider code and PyInstaller misses it statically"
@@ -301,6 +301,59 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
     assert "anyio._backends._asyncio" in literals, (
         "shim spec must list 'anyio._backends._asyncio' as a hidden import"
     )
+
+
+def _spec_excludes(spec_name: str) -> set[str]:
+    analysis = _find_calls(_parse_spec(_REPO / "backend" / spec_name), "Analysis")[0]
+    return set(_extract_str_list(_get_kw(analysis, "excludes")))
+
+
+def test_cli_spec_excludes_nothing_the_cli_imports_at_start() -> None:
+    """Every package the CLI loads on start must be in the frozen CLI.
+
+    ``coffer.spec`` excluded SQLAlchemy and Alembic as daemon-only after
+    ``coffer migrate`` began importing them at module level, and the frozen
+    ``coffer`` then failed every command, ``--version`` included, with
+    ``ModuleNotFoundError: No module named 'sqlalchemy'``. An exclude wins over
+    the import graph, and nothing but a real PyInstaller build runs it, so this
+    imports the CLI's entry module in a clean interpreter and checks what it
+    loaded against the spec's excludes."""
+    probe = (
+        "import sys, coffer.surfaces.cli.main; "
+        "print('\\n'.join(sorted({m.split('.')[0] for m in sys.modules})))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=_REPO / "backend",
+        check=True,
+    )
+    loaded = set(result.stdout.split())
+    assert "coffer" in loaded
+    excluded_but_loaded = sorted(_spec_excludes("coffer.spec") & loaded)
+    assert not excluded_but_loaded, (
+        "coffer.spec excludes packages the CLI imports at start, so the frozen "
+        f"CLI cannot run at all: {excluded_but_loaded}"
+    )
+
+
+def test_cli_spec_ships_the_migration_tree_for_coffer_migrate() -> None:
+    """``coffer migrate`` runs Alembic on ``runs.db`` inside the CLI process,
+    and Alembic reads ``alembic.ini``, ``env.py`` and the revisions from disk,
+    so the CLI binary carries the tree as data the way the daemon does."""
+    tree = _parse_spec(_REPO / "backend" / "coffer.spec")
+    migrations = "coffer/infrastructure/persistence/migrations"
+    pairs = {
+        (node.elts[0].value, node.elts[1].value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Tuple)
+        and len(node.elts) == 2
+        and all(isinstance(e, ast.Constant) for e in node.elts)
+    }
+    assert (migrations, migrations) in pairs
+    assert {"alembic", "sqlalchemy.dialects.sqlite", "aiosqlite"} <= _collect_submodules_args(tree)
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +406,7 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
     deploys `coffer` and `coffer-mcp-shim` out of its
-    own directory (spec daemon "Deploy frozen sibling binaries and back up the vault
+    own directory (spec daemon "Deploy frozen sibling binaries and back up the history database
     before migrating") and finds `coffer-daemon` as a sibling
     (ADR daemon-detect-or-spawn), so an archive missing any of them ships a build whose helper
     processes cannot start.
@@ -462,8 +515,11 @@ def test_release_workflow_checksums_cover_both_tiers() -> None:
     assert "artifacts/$archive" in text or "artifacts/coffer-cli" in text, (
         "CLI archive must be written into artifacts/ so SHA256SUMS covers it"
     )
-    assert "artifacts/Coffer-unsigned-" in text, (
+    assert 'cp "$dmg" "artifacts/$name"' in text, (
         "the .dmg must be written into artifacts/ so SHA256SUMS covers it"
+    )
+    assert 'name="Coffer-unsigned-${triple}.dmg"' in text, (
+        "an unsigned .dmg must say so in its name"
     )
     assert "SHA256SUMS" in text, "release.yml must emit a SHA256SUMS file"
 
@@ -493,20 +549,21 @@ def test_release_workflow_does_not_swallow_errors() -> None:
     )
 
 
-def test_release_workflow_does_not_reference_apple_secrets() -> None:
-    """macOS signing/notarization is intentionally not wired. A disabled step
-    that NAMES secrets.APPLE_* still surfaces them in repo-secret audits and
-    security tooling, so the workflow must not reference them at all until a
-    dedicated signed-release workflow is added."""
+def test_release_workflow_names_apple_secrets_only_behind_the_signing_plan() -> None:
+    """Signing is wired, and gated: a step that hands an Apple or updater secret
+    to a command runs only when the plan step found that secret (the rest of
+    the rule is in test_release_signing.py). The removed `secrets.APPLE_ID`
+    (an app-specific password) is not how notarization authenticates here —
+    the App Store Connect API key is."""
     text = _release_yml_text()
-    assert "secrets.APPLE_CERTIFICATE" not in text, (
-        "release.yml must not reference secrets.APPLE_CERTIFICATE"
+    assert "secrets.APPLE_ID " not in text and "secrets.APPLE_ID}" not in text, (
+        "notarization authenticates with the App Store Connect API key, not an Apple ID"
     )
-    assert "secrets.APPLE_ID" not in text, "release.yml must not reference secrets.APPLE_ID"
+    assert "steps.plan.outputs.codesign" in text
 
 
 def test_release_workflow_tells_downloaders_the_build_is_unsigned() -> None:
-    """Until Apple signing is wired, the release must say so.
+    """A release built without a Developer ID must say so.
 
     The `-unsigned` filename suffix went with the .dmg and .app.zip the
     desktop shell produced; a tar.gz of CLI binaries never carried it. The
@@ -577,9 +634,7 @@ def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
     assert script.exists(), "scripts/smoke_test_bundle.sh is required by the smoke-test scenario"
     contents = script.read_text()
     assert "coffer-mcp-shim" in contents, "smoke_test_bundle.sh must locate and run coffer-mcp-shim"
-    assert '"initialize"' in contents or "'initialize'" in contents or "initialize" in contents, (
-        "smoke_test_bundle.sh must send a JSON-RPC initialize request"
-    )
+    assert "initialize" in contents, "smoke_test_bundle.sh must send a JSON-RPC initialize request"
     assert "jsonrpc" in contents.lower(), "smoke_test_bundle.sh must speak JSON-RPC"
     # The shim only replies after reaching a live daemon, and its frozen-binary
     # auto-spawn fallback can't relaunch itself — so the script must start the

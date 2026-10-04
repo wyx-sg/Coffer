@@ -2,7 +2,7 @@
 
 The orchestrator publishes a turn's ``AgentEvent``s to the bus, which
 
-  (a) keeps a **ring buffer** of the *current* turn's events so a late subscriber
+  (a) keeps a **replay buffer** of the *current* turn's events so a late subscriber
       (the desktop opened mid-turn, or watching a turn another surface started)
       catches up, then
 
@@ -45,6 +45,13 @@ class ConversationBus:
     def publish(self, event: AgentEvent) -> None:
         """Append a turn event to the replay buffer and fan it out live."""
         self._turn_buffer.append(event)
+        self._fan_out(event)
+
+    def publish_transient(self, event: AgentEvent) -> None:
+        """Fan an event out to the current subscribers only: it is not part of any
+        turn, so it never enters the replay buffer a later subscriber is caught up
+        from (a queued turn that failed to start is reported this way — replaying it
+        on every reconnect would show a failure nobody can act on)."""
         self._fan_out(event)
 
     def publish_queue_changed(self, event: AgentEvent) -> None:

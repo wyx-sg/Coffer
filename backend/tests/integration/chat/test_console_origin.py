@@ -7,7 +7,7 @@ A conversation the owner also drives from an IM channel carries a channel bindin
 the desktop can badge and observe it. A desktop-only conversation has no binding.
 
 The row stores the channel's uid, not its name (ADR
-resource-identity-is-an-immutable-uid) — a binding has to keep naming the same
+identity-is-the-uid-inside-the-file) — a binding has to keep naming the same
 channel after a rename. The name the console badge shows is resolved from that
 uid by the mapper.
 """
@@ -26,15 +26,17 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.surfaces.http.chat.conversation_routes import _conv_out
+from coffer.surfaces.http.chat.conversation_routes import _Channel, _conv_out, _Extras
 
 #: The channel resource this thread is bridged to, by uid.
 _STANDUP_UID = "7f2b6e0c9a1d4f8e5b3c2a6d0e9f1b47"
 #: What the mapper is given to resolve that uid with. In the daemon it is built
-#: once per request from the channel registry (``_channel_names``); here it is
-#: written out, because what this test is about is the mapper's own join and not
-#: the read that feeds it.
-_CHANNEL_NAMES = {_STANDUP_UID: "team-standup"}
+#: once per request from the channel registry (``_extras``); here it is written
+#: out, because what this test is about is the mapper's own join and not the
+#: read that feeds it.
+_EXTRAS = _Extras(
+    channels={_STANDUP_UID: _Channel("team-standup", "telegram")}, places={}, previews={}
+)
 
 
 @pytest.mark.acceptance(
@@ -72,7 +74,7 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
         )
     )
 
-    by_id = {c.id: _conv_out(c, _CHANNEL_NAMES) for c in await repo.list()}
+    by_id = {c.id: _conv_out(c, _EXTRAS) for c in await repo.list()}
     try:
         # --- Observable: the channel binding surfaces in the conversation list ---
         channel_out = by_id["c-channel"]

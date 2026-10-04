@@ -3,10 +3,11 @@
 **Status**: Accepted
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Related**: [Coffer Model Is an Internal Engine](coffer-model-is-an-internal-engine.md); spec chat ("Ship Claude Code and Codex subprocess providers", "Keep each agent adapter self-contained", "End every adapter stream with a terminal event", "Retry a forgotten resume id once as a fresh session", "Express a turn as typed events");
+**Related**: [Coffer Model Is an Internal Engine](coffer-model-is-an-internal-engine.md); spec chat ("Ship Claude Code and Codex subprocess providers on the type's one agent", "Keep each agent adapter self-contained", "End every adapter stream with a terminal event", "Retry a forgotten resume id once as a fresh session", "Express a turn as typed events");
 [Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md),
 [Channel Attachments](channel-attachments.md), [Channel Live Surface Strategy](channel-live-surface-strategy.md),
-[Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Session Subprocess Model](session-subprocess-model.md);
+[Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Session Subprocess Model](session-subprocess-model.md),
+[Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md);
 research note [Agent chat clients](../research/agent-chat-clients.md); PRs #77, #82, #101, #146
 
 ## Context
@@ -166,7 +167,11 @@ Rules a future change must respect:
 ## Consequences
 
 - Adding an agent means a provider and adapter pair speaking that agent's own
-  programmatic interface, registered in `surfaces/http/chat_provider_wiring.py`.
+  programmatic interface, bound to the agent's descriptor as its driver facet
+  (`infrastructure/chat/drivers.py`; [Agent Mechanisms Are Optional Facets on
+  the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md)).
+  The chat composition builds every driver the agent catalogue holds into the
+  provider registry, so no wiring file names the new agent.
 - A Claude Code CLI too old for a requested option fails at connect rather than
   degrading silently; the SDK's bundled binary makes that rare.
 - Upgrading `claude-agent-sdk` or Codex is a mapping-module change, tested
@@ -174,4 +179,5 @@ Rules a future change must respect:
   plus integration tests that skip when the binary is absent.
 - Enforced by: the import-linter contract confining `claude_agent_sdk` to
   `infrastructure/chat`; `claude_sdk_agent.py`, `codex_agent.py`,
-  `codex_app_server.py`, `codex_jsonrpc.py`.
+  `codex_app_server.py`, `codex_jsonrpc.py`, `claude_sdk_mapping.py` and
+  `codex_mapping.py` in `infrastructure/chat/`.

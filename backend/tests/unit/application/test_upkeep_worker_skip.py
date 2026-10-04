@@ -8,7 +8,7 @@ to fail the sweep (busy is an ordinary state, not a fault).
 Both workers sweep **uids**, and claim them, because that is what the route the
 button hits claims: the collision only happens if the two writers spell the
 target the same way, and a label is exactly what can be edited between them
-reading it (ADR resource-identity-is-an-immutable-uid). The uids below are
+reading it (ADR identity-is-the-uid-inside-the-file). The uids below are
 readable strings (``uid-busy``) rather than real hex, so a failure names which
 target was skipped; nothing in either worker parses them.
 """
@@ -25,6 +25,7 @@ from coffer.application.memory.distil_worker import DistilWorker
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, inbox
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 async def _enabled() -> bool:
@@ -42,7 +43,6 @@ class _Collections:
     async def collection(self, uid: str) -> Resource:
         now = datetime.now(tz=UTC)
         return Resource(
-            id=0,
             uid=uid,
             kind="knowledge",
             name=uid.removeprefix("uid-"),
@@ -63,11 +63,10 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     with nothing pending is skipped before the registry is ever consulted —
     which would make a busy/free test pass for the wrong reason.
     """
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     for name in ("busy", "free"):
         fs.create_collection_dir(name)
         inbox.submit_material(name, title="Session", description="d", body="b", actor="user")
-    return tmp_path / "knowledge"
+    return _knowledge_root()
 
 
 async def test_distil_worker_skips_a_partition_already_being_distilled() -> None:
@@ -197,3 +196,41 @@ async def test_a_delivery_that_raises_does_not_stop_the_sweep(corpus) -> None:  
     ).run_once()
 
     assert started == ["uid-free"]
+
+
+async def test_the_vault_lock_is_held_for_one_pass_not_the_whole_sweep(corpus) -> None:  # type: ignore[no-untyped-def]
+    """A sweep over several collections can run for minutes; a sync round waiting
+    on the lock must get its turn between passes ("Never overlap a curation pass
+    and a round" asks for no overlap, not for a whole-sweep monopoly)."""
+    import asyncio
+
+    lock = asyncio.Lock()
+    held_during: list[bool] = []
+    held_between: list[bool] = []
+
+    class _Watching(_Collections):
+        async def collection(self, uid: str) -> Resource:
+            # Resolved before each collection's pass, outside it.
+            held_between.append(lock.locked())
+            return await super().collection(uid)
+
+    async def _curate(svc: Any, collection_uid: str, **kwargs: Any) -> dict[str, object]:
+        held_during.append(lock.locked())
+        return {"status": "ok"}
+
+    async def _collections() -> list[str]:
+        return ["uid-busy", "uid-free"]
+
+    await CurationWorker(
+        service=_Watching(),  # type: ignore[arg-type]
+        curate=_curate,
+        is_enabled=_enabled,
+        deliver=None,
+        list_collections=_collections,
+        runs=UpkeepRunRegistry(),
+        lock=lock,
+    ).run_once()
+
+    assert held_during == [True, True]
+    assert held_between == [False, False]
+    assert lock.locked() is False

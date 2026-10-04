@@ -10,27 +10,25 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
-from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
+from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.fake_mcp_server import start_http_fake as _start_http_fake
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -58,7 +56,7 @@ async def _setup(
     SubprocessSupervisor,
     ResourceService,
     AuditService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     AsyncEngine,
 ]:
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -67,7 +65,7 @@ async def _setup(
     sm = session_maker(engine)
     audit_repo = SqlAlchemyAuditRepo(sm)
     audit = AuditService(audit_repo)
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     kinds: dict[str, Kind] = {
         "mcp_server": Kind(
             name="mcp_server",
@@ -81,9 +79,9 @@ async def _setup(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     discovery = CapabilityDiscovery(
         resource_service=rsvc,
         supervisor=supervisor,
@@ -111,7 +109,7 @@ async def test_first_list_tools_populates_preferences_and_caches(
         assert {t.prefixed_name for t in tools} == {"fs__read_file", "fs__write_file"}
         # Preferences row was inserted for each
         resource = await rsvc.get_by_name("mcp_server", "fs")
-        pref_rows = await prefs.list_for(resource.id, "tool")
+        pref_rows = await prefs.list_for(resource.uid, "tool")
         assert {p.capability_key for p in pref_rows} == {"read_file", "write_file"}
         # Each row records when it was first seen.
         assert all(p.first_seen_at is not None for p in pref_rows)
@@ -152,7 +150,7 @@ async def test_disabled_tool_is_filtered_out(
         # Populate preferences first
         await discovery.list_tools("fs")
         resource = await rsvc.get_by_name("mcp_server", "fs")
-        await prefs.set_enabled(resource.id, "tool", "write_file", False)
+        await prefs.set_enabled(resource.uid, "tool", "write_file", False)
         # Force re-query (clear cache) and verify write_file is gone
         discovery.invalidate("fs", "tool")
         tools = await discovery.list_tools("fs")
@@ -261,7 +259,7 @@ async def test_newly_discovered_tool_is_enabled_by_default(
         assert all(t.enabled for t in tools)
 
         resource = await rsvc.get_by_name("mcp_server", "fs")
-        pref_rows = await prefs.list_for(resource.id, "tool")
+        pref_rows = await prefs.list_for(resource.uid, "tool")
         wf = next(p for p in pref_rows if p.capability_key == "write_file")
         assert wf.enabled is True
         # The first sighting is recorded on the preference row itself.
@@ -290,7 +288,7 @@ async def test_missing_capability_preferences_preserved_across_invalidate(
         # Populate prefs + disable write_file
         await discovery.list_tools("fs")
         resource = await rsvc.get_by_name("mcp_server", "fs")
-        await prefs.set_enabled(resource.id, "tool", "write_file", False)
+        await prefs.set_enabled(resource.uid, "tool", "write_file", False)
 
         # Invalidate; re-query against the SAME upstream (which still has both)
         discovery.invalidate("fs", "tool")
@@ -298,7 +296,7 @@ async def test_missing_capability_preferences_preserved_across_invalidate(
         assert {t.original_name for t in tools} == {"read_file"}
 
         # Preference rows still show write_file=False
-        pref_rows = await prefs.list_for(resource.id, "tool")
+        pref_rows = await prefs.list_for(resource.uid, "tool")
         wf = next(p for p in pref_rows if p.capability_key == "write_file")
         assert wf.enabled is False
     finally:
@@ -311,9 +309,9 @@ async def test_missing_capability_preferences_preserved_across_invalidate(
 async def test_register_http_mcp_server_discovers_capabilities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Register an HTTP MCP server with a credential_ref; assert:
+    """Register an HTTP MCP server with a secret_ref; assert:
     - capabilities are discovered (tools list is populated)
-    - the credential value does not appear in any DB row (config column, audit entries)
+    - the secret value does not appear in any DB row (config column, audit entries)
     """
     backend = install_in_memory_keyring(monkeypatch)
 
@@ -329,8 +327,8 @@ async def test_register_http_mcp_server_discovers_capabilities(
             "transport": {
                 "type": "http",
                 "url": f"http://127.0.0.1:{port}/mcp",
-                # credential_refs maps a header name to a keyring key
-                "credential_refs": {"Authorization": "http_fake_token"},
+                # secret_refs maps a header name to a keyring key
+                "secret_refs": {"Authorization": "http_fake_token"},
             }
         }
 
@@ -347,12 +345,12 @@ async def test_register_http_mcp_server_discovers_capabilities(
                 "delete_file",
             }, f"Expected discovered tools, got: {tool_names}"
 
-            # --- Credential safety: scan every DB row for the secret value ---
+            # --- Secret safety: scan every DB row for the secret value ---
             # Check resources table (config column stores transport JSON)
             resource = await rsvc.get_by_name("mcp_server", "http_srv")
             config_str = str(resource.config)
             assert secret_value not in config_str, (
-                f"Credential leaked into resource.config: {config_str!r}"
+                f"Secret leaked into resource.config: {config_str!r}"
             )
 
             # Check audit entries
@@ -360,7 +358,7 @@ async def test_register_http_mcp_server_discovers_capabilities(
             for entry in all_audit:
                 entry_str = str(entry.details)
                 assert secret_value not in entry_str, (
-                    f"Credential leaked into audit entry details: {entry_str!r}"
+                    f"Secret leaked into audit entry details: {entry_str!r}"
                 )
         finally:
             await sup.dispose()
@@ -432,7 +430,7 @@ class _FakeSupervisor:
 
 def _discovery_with_supervisor(
     rsvc: ResourceService,
-    prefs: MCPCapabilityPreferenceRepo,
+    prefs: MCPCapabilityPreferenceStore,
     audit: AuditService,
     supervisor: object,
 ) -> CapabilityDiscovery:

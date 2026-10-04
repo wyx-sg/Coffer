@@ -5,12 +5,15 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { credentialDesktopHost, followLanguageInShell } from "./lib/tauri";
+import { followUpdatePreferenceInShell } from "./lib/shellUpdates";
+import { applyWindowChrome } from "./lib/windowChrome";
+import { initTheme } from "./lib/theme";
 import i18n from "./i18n"; // Initialises i18next before render
 import "./index.css";
 import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdown)
 
 /**
- * Credential the page on the desktop host, without holding up the paint.
+ * Secret the page on the desktop host, without holding up the paint.
  *
  * In a browser there is nothing to do: whoever served this document already
  * put the running daemon's token on `window.__COFFER_TOKEN__` (see lib/auth.ts).
@@ -34,10 +37,16 @@ import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdo
  * something else refetches them.
  */
 function bootstrap(): void {
+  // Resolve light / dark onto <html data-theme> before the first paint.
+  initTheme();
+  applyWindowChrome();
   void credentialDesktopHost(() => queryClient.invalidateQueries());
   // The desktop tray is labelled in the interface language; it cannot read
   // the choice itself, so the page reports it now and on every switch.
   followLanguageInShell(i18n);
+  // Likewise whether the shell checks for updates on its own ("Check
+  // automatically" on Settings › About), which the page keeps.
+  followUpdatePreferenceInShell();
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>

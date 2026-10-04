@@ -1,8 +1,8 @@
 """Revision 0104: a direct chat's thread row can say it is a parallel thread.
 
 ``channel_thread_conversations`` gains ``parallel_ordinal`` and
-``parallel_title`` (spec channels "Open parallel conversations in a direct
-chat"). Existing rows are left without an ordinal — which is what folds the
+``parallel_title`` (spec channels "Open parallel conversations beside a
+direct chat"). Existing rows are left without an ordinal — which is what folds the
 casual direct-chat threads recorded before into the direct chat's conversation —
 and the downgrade drops both columns again.
 

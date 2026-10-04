@@ -4,13 +4,15 @@
 Aggregation and distillation are two passes over two directories, but a person has
 one intent — "bring the notes up to date" — and either pass alone leaves the notes
 stale: aggregation only fills ``.raw/``, and distil only reads what is already
-there. So ``POST /api/v1/memory/sync`` and ``coffer memory sync`` run both, in that
+there. So ``POST /api/v1/memory/sync`` runs both, in that
 order, and the web UI offers them as one **Update memory** button.
 
-**Only partitions with undistilled raw entries are distilled.** An entry is
+**Only partitions with something to distil are distilled.** An entry is
 undistilled when no note's provenance and no ``RETIRED.md`` record names it (see
-"Distil incrementally in two stages"); a partition holding none would get nothing
-from a pass but a rewritten index, so it is not visited. That is also what makes
+"Distil incrementally in two stages"), and a note whose raw entries are all gone is
+owed its retirement (see "Retire a note whose raw entries are all gone"); a partition
+holding neither would get nothing from a pass but a rewritten index, so it is not
+visited. That is also what makes
 the answer useful: ``distilled`` names what actually changed. With no internal
 connection the pass is the mechanical one (see "Distil mechanically with no internal
 connection") — ``MemoryService.distil`` decides that, not this module.
@@ -27,9 +29,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from coffer.application.memory.aggregate import AggregationResult
-from coffer.application.memory.distil import has_undistilled
+from coffer.application.memory.distil import has_distil_work
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
+
+#: The in-flight entry Update memory itself holds while it runs, beside the
+#: per-partition claims (spec memory "Show Update memory's progress"). Not a
+#: uid — uids are ULIDs — so it can never collide with a partition's claim.
+#: It carries ``done``/``total`` over the partitions left to distil, which is
+#: what "Distilling 2 of 5 partitions" reads; while it has none yet, the
+#: action is still reading the agents' memory.
+UPDATE_RUN = "update"
 
 
 @dataclass(frozen=True)
@@ -41,9 +51,10 @@ class UpdateResult:
     """
 
     aggregation: AggregationResult
-    #: Partitions that held undistilled raw entries and were distilled.
+    #: Partitions that had something to distil — new raw entries, or a note whose
+    #: sources are gone — and were distilled.
     distilled: tuple[str, ...]
-    #: Partitions that held undistilled raw entries but whose distil pass was
+    #: Partitions that had something to distil but whose distil pass was
     #: already running elsewhere; that pass covers them.
     skipped: tuple[str, ...]
 
@@ -62,19 +73,21 @@ async def update_memory(
     raising (see "Record what each distil pass did"), so an exception here is a
     fault the caller should see, not a busy partition.
     """
-    aggregation = await service.aggregate(actor=actor)
-    distilled: list[str] = []
-    skipped: list[str] = []
-    for partition in await service.list_partitions():
-        if not has_undistilled(partition.name):
-            continue
-        async with runs.claimed(KIND_MEMORY, partition.uid) as claimed:
-            if not claimed:
-                skipped.append(partition.name)
-                continue
-            await service.distil(partition.uid, actor=actor)
-        distilled.append(partition.name)
+    async with runs.claimed(KIND_MEMORY, UPDATE_RUN) as tracked:
+        aggregation = await service.aggregate(actor=actor)
+        distilled: list[str] = []
+        skipped: list[str] = []
+        pending = [p for p in await service.list_partitions() if has_distil_work(p.name)]
+        for done, partition in enumerate(pending):
+            if tracked:
+                runs.progress(KIND_MEMORY, UPDATE_RUN, done=done, total=len(pending))
+            async with runs.claimed(KIND_MEMORY, partition.uid) as claimed:
+                if not claimed:
+                    skipped.append(partition.name)
+                    continue
+                await service.distil(partition.uid, actor=actor)
+            distilled.append(partition.name)
     return UpdateResult(aggregation=aggregation, distilled=tuple(distilled), skipped=tuple(skipped))
 
 
-__all__ = ["UpdateResult", "update_memory"]
+__all__ = ["UPDATE_RUN", "UpdateResult", "update_memory"]

@@ -3,10 +3,11 @@
 #
 # Output: dist/coffer-daemon (single-file executable)
 # Ships the built web UI (frontend/dist) as `webui/` — the daemon serves it
-# itself now that the desktop shell is gone (spec daemon "Serve the built web UI
-# from the daemon's own origin").
+# itself (spec daemon "Serve the built web UI from the daemon's own origin").
 
 # -*- mode: python ; coding: utf-8 -*-
+
+import os
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
@@ -35,7 +36,7 @@ hidden = (
     #                spec channels "Give documents to every agent as extracted
     #                text")
     #   openai     — providers/*
-    #   langgraph / langchain — llm/*, chat/*
+    #   langgraph  — infrastructure/llm/* (the only importer of langgraph/langchain)
     # The knowledge layer needs no index and no embedding client bundled: it is
     # a directory of markdown files an agent greps (ADR knowledge-is-plain-files).
     # Converters it does need — markitdown below turns an uploaded document into
@@ -56,7 +57,6 @@ hidden = (
     + collect_submodules("xlrd")
     + collect_submodules("openai")
     + collect_submodules("langgraph")
-    + collect_submodules("langchain")
     + [
         # Anyio sniffio backend
         "anyio._backends._asyncio",
@@ -78,6 +78,13 @@ datas = (
         (
             "coffer/application/knowledge/skill_assets",
             "coffer/application/knowledge/skill_assets",
+        ),
+        # The bundled model price list (pydantic/genai-prices, MIT) and its
+        # licence. JSON, not a module, so the import graph cannot see it; a
+        # build without it prices nothing from the bundled list.
+        (
+            "coffer/infrastructure/usage/price_list",
+            "coffer/infrastructure/usage/price_list",
         ),
     ]
     + collect_data_files("mcp", include_py_files=False)
@@ -156,6 +163,11 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
+    # A signed release (scripts/release_signing.sh) sets both: PyInstaller then
+    # signs this executable AND every binary it collects with the Developer ID
+    # under the hardened runtime, so the libraries a one-file build unpacks at
+    # start pass library validation. Unset — every other build — it stays
+    # ad-hoc signed, exactly as before.
+    codesign_identity=os.environ.get("COFFER_CODESIGN_IDENTITY") or None,
+    entitlements_file=os.environ.get("COFFER_ENTITLEMENTS_FILE") or None,
 )

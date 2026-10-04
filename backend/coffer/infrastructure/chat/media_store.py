@@ -1,7 +1,7 @@
 """File-backed store for the web composer's uploads (spec chat "Upload a file
 for a web message"; ADR chat-attachment-uploads).
 
-Each upload is two flat files under ``~/.coffer/chat-media``: the bytes, named
+Each upload is two flat files under ``~/.coffer/content/chat-media``: the bytes, named
 ``<id><ext>`` so an agent handed the path still sees the file's extension, and
 ``<id>.json`` recording the display name, type, size and the bytes' file name.
 Flat on purpose: the retention sweep (``coffer.infrastructure.media_retention``)
@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import pathlib
 import re
 import uuid
@@ -24,6 +23,7 @@ from datetime import datetime
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment, is_upload_id
 from coffer.domain.retention import MEDIA_RETENTION_DAYS
 from coffer.infrastructure.media_retention import prune_media_dir
+from coffer.infrastructure.vault.home import content_root
 
 _logger = logging.getLogger(__name__)
 
@@ -32,11 +32,10 @@ _SAFE_SUFFIX = re.compile(r"^\.[a-z0-9]{1,10}$")
 
 
 def default_chat_media_dir() -> pathlib.Path:
-    """``~/.coffer/chat-media`` — beside ``channel-media``. ``HOME`` is honoured
-    (not ``Path.home()``) so tests redirect it to a tmp dir, the same way the
-    channel media dir is resolved."""
-    home = pathlib.Path(os.environ.get("HOME") or "~").expanduser()
-    return home / ".coffer" / "chat-media"
+    """``~/.coffer/content/chat-media`` — beside ``channel-media``, in the
+    ``content`` class (ADR storage-is-five-classes-by-nature): the user's only
+    copy of what they uploaded, never synced. Resolved from ``HOME`` per call."""
+    return content_root() / "chat-media"
 
 
 class FileChatMediaStore:
@@ -94,7 +93,14 @@ class FileChatMediaStore:
         path = self._root / stored
         if not path.is_file():
             return None
-        return Attachment(path=str(path), mime=mime, filename=filename)
+        size = meta.get("size")
+        return Attachment(
+            path=str(path),
+            mime=mime,
+            filename=filename,
+            id=attachment_id,
+            size=size if isinstance(size, int) else None,
+        )
 
 
 __all__ = ["FileChatMediaStore", "default_chat_media_dir"]

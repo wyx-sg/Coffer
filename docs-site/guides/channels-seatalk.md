@@ -34,30 +34,20 @@ Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket del
 
 ## 2. Supply the WebSocket SDK
 
-1. Download SeaTalk's Python SDK for WebSocket event callbacks from the SeaTalk Open Platform. The package is `seatalk_oapi_sdk`; see SeaTalk's [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) documentation.
-2. Unpack it so that the package directory sits inside Coffer's vendor directory:
-
-   ```text
-   ~/.coffer/vendor/seatalk_oapi_sdk/
-   ```
-
-   To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **contains** `seatalk_oapi_sdk/`, in the environment the daemon starts from.
+1. Download SeaTalk's Python SDK for WebSocket event callbacks from the SeaTalk Open Platform. The package is `seatalk_oapi_sdk`; see SeaTalk's [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) documentation. The download stays with you, because it sits behind the platform's sign-in.
+2. Hand the rest to your agent. Once the channel is registered (step 3), a channel waiting for the SDK reads **SeaTalk's Python SDK isn't installed**, links SeaTalk's download page and offers **Ask an agent** (its menu copies the prompt; with no Coffer-managed agent available only **Copy prompt** is offered): a prompt that has your agent unpack the archive into Coffer's vendor directory. Press **Retry** once it is in place.
 
 Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start, and keeps retrying while it is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart.
 
-## 3. Register the channel
+To do it by hand instead, unpack the archive so that the package directory sits inside Coffer's vendor directory:
 
-::: code-group
-
-```sh [CLI]
-# Paste the App Secret at the prompt; it is read from stdin
-coffer credentials set channel/st/app-secret
-
-coffer channel add my-seatalk --type seatalk \
-  --app-id <APP_ID> \
-  --app-secret-ref channel/st/app-secret \
-  --agent claude-code
+```text
+~/.coffer/vendor/seatalk_oapi_sdk/
 ```
+
+To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **contains** `seatalk_oapi_sdk/`, in the environment the daemon starts from.
+
+## 3. Register the channel
 
 ```text [Web UI]
 Channels → Add channel
@@ -69,30 +59,9 @@ Channels → Add channel
 → Create
 ```
 
-:::
-
 The configuration is the App ID and a reference to the App Secret, plus the fields every channel has. The channel is bound to this machine and starts connecting immediately.
 
-Check the connection:
-
-```sh
-coffer channel show my-seatalk
-```
-
-```text
-channel:  my-seatalk (seatalk)
-uid:      4c7a…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-secret:   app_secret_ref = channel/st/app-secret
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     not paired
-inbound:  websocket (connected)
-```
-
-Wait for `connected` before the next step. The channel's page shows the same state as the **SeaTalk connection** badge on its status line.
+Check the connection: the **SeaTalk connection** badge on the channel's status line reads **Connected** when it is up. Wait for it before the next step.
 
 ## 4. Switch the app to WebSocket delivery
 
@@ -101,37 +70,39 @@ Wait for `connected` before the next step. The channel's page shows the same sta
 
 ## 5. Pair your account
 
-1. On the channel's page choose **Generate pairing code** in the account section, or run `coffer channel pair my-seatalk`.
+1. On the channel's **Overview** choose **Generate pairing code**.
 2. In SeaTalk, open a direct chat with the bot and send the eight-character code.
-3. The bot confirms. You are the channel's owner.
+3. The bot confirms and sends the help card once. SeaTalk has no command menu, so this card is how the bot shows what it accepts; send `/help` to see it again.
 
 SeaTalk has no start links, so you type the code. It is single-use, expires after one hour, and is invalidated after 10 wrong guesses.
 
-Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Chat](/guides/chat) page marked `via my-seatalk`.
+Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page with the source badge `SeaTalk · DM`.
 
 ## Connection states
 
-`coffer channel show` and the **SeaTalk connection** badge on the channel's page report the connection as the channel's inbound state. With `--json`, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
+The **SeaTalk connection** badge on the channel's page reports the connection as the channel's inbound state. Over REST, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
 
-| State | Badge label | Meaning |
+| State | Shown on the channel's page | Meaning |
 | --- | --- | --- |
-| `connecting` | Connecting… | Registering with SeaTalk. |
-| `connected` | Connected | Events are flowing. |
-| `kicked` | Kicked — another process holds this bot's connection | Another process registered the same app. Coffer waits 60 seconds before trying again rather than fighting for the connection. |
-| `sdk_missing` | SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
-| `error` | Error | The last attempt failed; the error is shown verbatim. Coffer retries with a backoff from 1 to 30 seconds. |
+| `connecting` | **Connecting** — Connecting… (**Reconnecting** — Reconnecting… after a failed attempt) | Registering with SeaTalk. |
+| `connected` | **Connected** | Events are flowing. |
+| `kicked` | **Kicked** — Another process took the connection | Another process registered the same app. Coffer waits 60 seconds before trying again rather than fighting for the connection. |
+| `sdk_missing` | **Can't start** — SeaTalk SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
+| `error` | **Can't connect** — Connection refused | The last attempt failed; `websocket_error` holds the error verbatim. Coffer retries with a backoff from 1 to 30 seconds. |
 
 No state is shown before the first attempt. Events that SeaTalk sends while the connection is down are not queued anywhere by Coffer.
 
 ## How replies look
 
-- **Streaming** — the reply is one message that grows while the agent writes, starting the moment the turn begins. Each update carries the full text so far. Coffer re-sends the latest text every 10 seconds on a long tool call, because SeaTalk ends a stream that goes 30 seconds without an update. SeaTalk clients older than 3.67 show the finished message when the stream closes.
-- **Long replies** — one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages.
-- **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. Messages are split to stay under SeaTalk's 4,096-byte cap.
+- **Streaming (direct chats)** — the reply is one message that grows while the agent writes, starting the moment the turn begins with the status line (`⏳ Working · 0s`). Each update carries the full text so far, and the status line's clock moves every 10 seconds. Coffer re-sends the latest text every 10 seconds on a long tool call, because SeaTalk ends a stream that goes 30 seconds without an update. SeaTalk clients older than 3.67 show the finished message when the stream closes.
+- **Group replies are cards, not streams.** In a group the bot shows the working and typing indicator while the turn runs, and the finished reply arrives as one interactive card, split into several cards if it is long. Cards are used because SeaTalk can rewrite a card but cannot delete or edit anything else, and that is what lets the owner withdraw a group reply (see below). Each card carries a 🗑 button.
+- **Long replies** — in a direct chat one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages numbered `(2/3)`, `(3/3)`.
+- **Long turns** — finishing a stream notifies nobody, because the message was created when the turn began. A turn longer than the channel's threshold (90 seconds by default) therefore ends with one new message, `✅ Done · 4m 12s — <first line>`, in the same thread; in a group it @mentions whoever asked.
+- **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. A table becomes one bullet per row (a big one also arrives as a `.csv`), and a code block over 30 lines arrives as a file. Messages are split to stay under SeaTalk's 4,096-byte cap.
+- **Details** — a `## Details` section goes behind a card titled with the answer's first line; **Details** posts it as a reply in the card's thread, **As file** sends it as a `.md`.
 - **Receipt** — SeaTalk has no reactions, so a typing indicator is kept alive every 3 seconds while the turn runs, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
-
-- **Tool progress** — before the answer starts, the message shows one line per tool call. In a **group** the line names only the tool (`⏳ Bash`), because everyone in the group reads it and a tool's input can carry a command, a query or a path. In a **direct chat** it adds the agent's own one-line description or the file name (`⏳ Bash · list the desktop`), never a raw command.
-- **Replies cannot be deleted or edited.** SeaTalk's Open Platform has no API to withdraw a bot's message, and a finished stream cannot be updated. Only interactive cards can be rewritten, and only by the bot that sent them, so Coffer offers no delete button on a streamed reply. Check the answer's basis before relying on it; a wrong reply stays in the chat.
+- **Tool progress** — under the status line, the message shows the newest tool calls, one line each. In a **group** the line names only the tool (`⏳ Bash`), because everyone in the group reads it and a tool's input can carry a command, a query or a path. In a **direct chat** it adds the agent's own one-line description or the file name (`⏳ Bash · list the desktop`), never a raw command.
+- **Withdrawing a reply.** SeaTalk's Open Platform has no API to delete a bot's message, and a finished stream cannot be updated. Only interactive cards can be rewritten, and only by the bot that sent them. So when the owner withdraws a group reply — by tapping its 🗑 button, or by quoting it and sending `/del` — Coffer rewrites each card of that reply into a neutral “🗑 Withdrawn” card with no buttons. The text is gone from the chat, but the card stays. SeaTalk allows rewriting for 7 days; past that the owner is told privately that the reply can no longer be withdrawn. Only the owner's tap or command counts, and `/del` without a quote withdraws the most recent reply in the group or thread. A direct-chat reply is a streamed message and cannot be withdrawn on SeaTalk. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 
 The keep-alive gives up after about 10 minutes with no new content, so a turn that stays silent that long lets its stream lapse. If a stream is ended by SeaTalk — an error or a gap past 30 seconds — Coffer does not reuse it. The partial message stays in the chat and the full reply is sent as ordinary messages.
 
@@ -151,13 +122,15 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** under **Edit** → **In group chats**, or run `coffer channel edit my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
+
+To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
 ### Quoted messages
 
-When you reply by quoting a message, Coffer looks the quoted message up with the bot's own credentials and folds it into the turn as `> sender: …` lines above your text, with its images and files attached. SeaTalk gives a message a different id for each app, so only the bot that received the quote can resolve it; the agent's own tools could not. If the lookup fails, the turn runs on your message alone.
+When you reply by quoting a message, Coffer looks the quoted message up with the bot's own secrets and folds it into the turn as `> sender: …` lines above your text, with its images and files attached. SeaTalk gives a message a different id for each app, so only the bot that received the quote can resolve it; the agent's own tools could not. If the lookup fails, the turn runs on your message alone.
 
 ### Forwarded chat history
 
@@ -169,7 +142,7 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 
 ## Cards
 
-`/agent`, `/model`, `/effort` and `/save` without an argument answer with an interactive card.
+In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactive card, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs). `/help` carries **New**, **Stop**, **Model**, **Status** and **Resume** there, and only **New** and **Stop** in a group; `/new` carries **Agent**, **Model** and **Dir** in a direct chat and only **Agent** in a group. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
 
 - Buttons are laid out in up to three rows. Short labels share a row; a long one such as "Claude Code" gets its own.
 - A card has at most six buttons; longer lists page with **← Prev** and **Next →**.
@@ -181,27 +154,27 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 Everything SeaTalk can attach drives a turn: images, files and documents, video, and voice or audio. Coffer downloads each one with the app's token, since SeaTalk file links require authentication.
 
 - Documents are extracted to text for the agent.
-- Voice is transcribed when speech to text is on (**Settings → Coffer's model**); otherwise the agent gets the audio file.
+- Voice is transcribed when speech to text is on (**Settings › General → Coffer's model**); otherwise the agent gets the audio file.
 - A file keeps its real filename.
 
 The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an image or file message in the same chat and thread, with any caption as a following message. See [Channels → Sending files back](/guides/channels#sending-files-back).
 
 ## Rotate the app secret
 
-On the channel's page choose **Edit**, enter **New app secret** and **Save changes**. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** can be changed in the same dialog.
+On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Secrets**.
 
 ## Limits
 
 | Limit | Value |
 | --- | --- |
-| Streamed reply | 4,096 characters per stream; the rest as ordinary messages |
+| Streamed reply (direct chat) | 4,096 characters per stream; the rest as ordinary messages |
 | Ordinary message | under 4,096 bytes |
 | Stream idle limit | 30 seconds (Coffer re-sends every 10) |
 | Card rewrite window | 7 days, interactive cards only |
 | Card content | 6 buttons in up to 3 rows; title 120 characters, description 1,000 |
 | Thread pages | 100 messages per page, bounded page count |
 | Thread history | Replies from the last 7 days only; no whispers or deleted messages |
-| Withdrawing a bot message | Not available |
+| Withdrawing a bot message | No delete API; a group reply card is rewritten to “🗑 Withdrawn” within 7 days |
 | Connections per app | 1 |
 
 ## Troubleshooting
@@ -210,10 +183,10 @@ On the channel's page choose **Edit**, enter **New app secret** and **Save chang
 Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`), and that `COFFER_SEATALK_SDK_DIR`, if you use it, is set where the daemon starts — not only in your current shell. Replies and notifications still work meanwhile.
 
 **The state is `kicked`.**
-Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, use `coffer channel bind` from the machine that currently runs it.
+Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, change **Runs on** on its **Settings** tab from the machine that currently runs it.
 
 **Re-verify fails in the Developer Portal.**
-The channel is not connected yet. Wait until `coffer channel show` shows `connected`, then press **Re-verify** again.
+The channel is not connected yet. Wait until the **SeaTalk connection** badge reads **Connected**, then press **Re-verify** again.
 
 **`connected`, but the bot never answers.**
 Check pairing (`peer: not paired` means the bot answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.
@@ -221,13 +194,13 @@ Check pairing (`peer: not paired` means the bot answers nobody), and that you @m
 **The bot says it can only see a few messages of a thread.**
 SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. A thread you started today reads in full. Forward or quote the older messages to give the agent that context.
 
-**The streamed reply stops midway and the answer arrives again below it.**
+**The streamed reply stops midway and the answer arrives again below it.** (Direct chats; group replies are not streamed.)
 SeaTalk ended the stream. The full answer is the one sent below.
 
 ## Related
 
 - [Channels](/guides/channels) — commands, scope, machine binding and security for every channel.
 - [Telegram](/guides/channels-telegram)
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [Spec: channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)
 - [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)

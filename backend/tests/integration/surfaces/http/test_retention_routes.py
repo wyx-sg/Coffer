@@ -16,11 +16,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyRetentionRepo,
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
 )
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_retention_service
@@ -45,7 +45,7 @@ async def _client(tmp_path, *extra_tables: PrunableTable):
     )
     for extra in extra_tables:
         registry.register(extra)
-    repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
+    repo = FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = RetentionService(registry=registry, repo=repo, audit=audit)
     await svc.initialize_defaults()
@@ -150,6 +150,47 @@ async def test_prune_all_tables(tmp_path):
         assert "audit_log" in body["tables"]
         # Empty database — 0 rows pruned
         assert body["tables"]["audit_log"] == 0
+    await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="web-ui", scenario="clear expired now removes what retention has passed"
+)
+@pytest.mark.asyncio
+async def test_prune_removes_only_what_the_window_has_passed(tmp_path):
+    """Clear expired now: the rows older than the window go, the rest stay."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from coffer.infrastructure.persistence.engine import session_maker
+    from coffer.infrastructure.persistence.models import AuditLogModel
+
+    c, engine = await _client(tmp_path)
+    now = datetime.now(tz=UTC)
+    async with session_maker(engine)() as s:
+        for age in (1, 3, 10, 40):
+            s.add(
+                AuditLogModel(
+                    timestamp=now - timedelta(days=age),
+                    event_type="resource_created",
+                    resource_kind="mcp_server",
+                    resource_name=f"r{age}",
+                    actor="cli",
+                    details_json=None,
+                )
+            )
+        await s.commit()
+    async with c:
+        r = await c.patch("/api/v1/retention/policies/audit_log", json={"retention_days": 7})
+        assert r.status_code == 200
+        r = await c.post("/api/v1/retention/prune", json={})
+        assert r.status_code == 200
+        assert r.json()["tables"]["audit_log"] == 2
+    async with session_maker(engine)() as s:
+        # The prune records itself too; that entry names no resource.
+        rows = select(AuditLogModel.resource_name).where(AuditLogModel.resource_name.is_not(None))
+        assert sorted((await s.execute(rows)).scalars().all()) == ["r1", "r3"]
     await engine.dispose()
 
 

@@ -14,7 +14,7 @@ def test_stdio_transport_minimal():
     assert t.type == "stdio"
     assert t.args == []
     assert t.env == {}
-    assert t.credential_refs == {}
+    assert t.secret_refs == {}
 
 
 def test_stdio_transport_full():
@@ -23,7 +23,7 @@ def test_stdio_transport_full():
         command="npx",
         args=["-y", "@mcp/server-filesystem", "/tmp"],
         env={"LOG_LEVEL": "info"},
-        credential_refs={"GITHUB_TOKEN": "github_pat_main"},
+        secret_refs={"GITHUB_TOKEN": "github_pat_main"},
         cwd="/tmp",
     )
     assert t.args == ["-y", "@mcp/server-filesystem", "/tmp"]
@@ -34,7 +34,7 @@ def test_http_transport_minimal():
     t = HttpTransport(type="http", url="https://api.example.com/mcp")
     assert t.type == "http"
     assert t.headers == {}
-    assert t.credential_refs == {}
+    assert t.secret_refs == {}
 
 
 def test_http_transport_validates_url():
@@ -66,18 +66,14 @@ def test_mcp_server_config_defaults():
     assert cfg.request_timeout_seconds == 120
 
 
-def test_mcp_server_config_ignores_retired_idle_timeout_key():
-    """A vault written while ``idle_timeout_seconds`` still existed may carry
-    the key in its stored ``Resource.config`` JSON. No idle GC was ever
-    implemented, so the field is gone; loading such a config must ignore the
-    stale key rather than reject the server. The key then disappears on the
-    resource's next write, because ``_validate_config`` persists
-    ``model_dump()`` of the validated model.
-    """
-    cfg = MCPServerConfig.model_validate(
-        {"transport": {"type": "stdio", "command": "x"}, "idle_timeout_seconds": 600}
-    )
-    assert not hasattr(cfg, "idle_timeout_seconds")
+def test_mcp_server_config_rejects_an_undeclared_key():
+    """The retired ``idle_timeout_seconds`` is stripped from stored configs by
+    the one-time vault upgrade, so the model refuses it — and any other key it does not
+    declare — rather than silently dropping it."""
+    with pytest.raises(ValidationError, match="idle_timeout_seconds"):
+        MCPServerConfig.model_validate(
+            {"transport": {"type": "stdio", "command": "x"}, "idle_timeout_seconds": 600}
+        )
 
 
 def test_mcp_server_config_validates_timeout_ranges():
@@ -94,7 +90,7 @@ def test_mcp_server_config_validates_timeout_ranges():
 def test_secret_in_env_rejected():
     """Static env values that look like API keys must be rejected.
 
-    Secrets go through credential_refs.
+    Secrets go through secret_refs.
     """
     with pytest.raises(ValidationError):
         StdioTransport(

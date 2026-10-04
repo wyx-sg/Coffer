@@ -5,6 +5,45 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Composer, type ComposerHandle } from "./Composer";
 
 describe("Composer", () => {
+  test("an open conversation's working folder is a read-only chip beside the paperclip", () => {
+    render(<Composer onSend={vi.fn()} cwd="/Users/me/WorkEnv/AI/Coffer" />);
+    const chip = screen.getByTestId("composer-folder");
+    expect(chip).toHaveTextContent("~/WorkEnv/AI/Coffer");
+    expect(chip.querySelector("button, input, [role=combobox]")).toBeNull();
+    expect(screen.queryByTestId("composer-folder")).toBeInTheDocument();
+  });
+
+  test("a conversation with no folder names Coffer's workspace; one with no cwd prop shows none", () => {
+    const { unmount } = render(<Composer onSend={vi.fn()} cwd={null} />);
+    expect(screen.getByTestId("composer-folder")).toHaveTextContent("Coffer’s workspace");
+    unmount();
+    render(<Composer onSend={vi.fn()} />);
+    expect(screen.queryByTestId("composer-folder")).not.toBeInTheDocument();
+  });
+
+  test("a picker passed as `workspace` stands in for the folder chip", () => {
+    render(<Composer onSend={vi.fn()} cwd="/x" workspace={<button>Pick folder</button>} />);
+    expect(screen.getByRole("button", { name: "Pick folder" })).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-folder")).not.toBeInTheDocument();
+  });
+
+  test("shows a muted note under the box when given one", () => {
+    render(<Composer onSend={vi.fn()} note="Nothing is sent until you press Send." />);
+    expect(screen.getByTestId("composer-note")).toHaveTextContent(
+      "Nothing is sent until you press Send.",
+    );
+  });
+
+  test("fills the content width — no centred max-width column", () => {
+    render(<Composer onSend={vi.fn()} />);
+    expect(screen.getByTestId("composer").innerHTML).not.toMatch(/max-w-\[/);
+  });
+
+  test("shows its controls in the footer beside Send", () => {
+    render(<Composer onSend={vi.fn()} controls={<span data-testid="ctl">agent</span>} />);
+    expect(screen.getByTestId("composer-controls")).toContainElement(screen.getByTestId("ctl"));
+  });
+
   test("renders textarea and send button", () => {
     render(<Composer onSend={vi.fn()} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
@@ -90,9 +129,12 @@ describe("Composer", () => {
     expect(onSend).toHaveBeenCalledWith("queue me", []);
   });
 
-  test("shows a 'will queue' hint while streaming", () => {
+  test("says a message sent while streaming will queue", () => {
     render(<Composer onSend={vi.fn()} streaming />);
-    expect(screen.getByText(/will queue/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveAttribute(
+      "placeholder",
+      "Reply — it queues until this turn finishes",
+    );
   });
 
   test("shows a Stop button while streaming and calls onStop", () => {
@@ -105,14 +147,24 @@ describe("Composer", () => {
     expect(onStop).toHaveBeenCalled();
   });
 
-  test("Stop replaces Send in place while streaming — one button, beside the input", () => {
+  test("Stop replaces Send in place while streaming — one button, in the toolbar", () => {
     render(<Composer onSend={vi.fn()} streaming onStop={vi.fn()} />);
     // The attach button stays; Stop takes Send's slot.
     expect(screen.getAllByRole("button")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
     const stop = screen.getByRole("button", { name: /stop/i });
-    // Same slot as Send: a sibling of the textarea, not a row underneath it.
-    expect(stop.parentElement).toBe(screen.getByRole("textbox").parentElement);
+    // Same slot as Send: the toolbar under the text, beside the paperclip.
+    expect(stop.parentElement).toBe(
+      screen.getByRole("button", { name: /attach files/i }).parentElement,
+    );
+  });
+
+  test("the reply box is two rows: the text on top, attach and Send under it", () => {
+    render(<Composer onSend={vi.fn()} />);
+    const toolbar = screen.getByRole("button", { name: /send/i }).parentElement!;
+    expect(toolbar).toContainElement(screen.getByRole("button", { name: /attach files/i }));
+    expect(toolbar).not.toContainElement(screen.getByRole("textbox"));
+    expect(screen.getByRole("textbox").nextElementSibling).toBe(toolbar);
   });
 
   test("without an onStop handler, streaming keeps the Send button", () => {

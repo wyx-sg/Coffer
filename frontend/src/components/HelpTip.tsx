@@ -75,7 +75,7 @@ export function HelpTip({ children, label, className }: Props) {
           type="button"
           aria-label={label ?? t("common.moreInfo")}
           className={cn(
-            "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-text-subtle transition-colors duration-fast hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
             className,
           )}
           onPointerEnter={hoverOpen}
@@ -98,7 +98,7 @@ export function HelpTip({ children, label, className }: Props) {
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="max-w-xs space-y-2 p-3 text-xs leading-relaxed text-muted-foreground"
+        className="space-y-2"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onPointerEnter={clear}
         onPointerLeave={hoverClose}

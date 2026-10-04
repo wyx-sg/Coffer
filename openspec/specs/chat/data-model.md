@@ -1,14 +1,15 @@
 # Data Model: Chat
 
-Two tables, one JSON column, one block union, one event union. Everything a
-turn produces lands in the two tables; everything a turn streams is the event
+Three tables, one JSON column, one block union, one event union. Everything a
+turn produces lands in the tables, which are history in `~/.coffer/runs.db`
+(machine-local, never synced); everything a turn streams is the event
 union, which is a wire contract and not storage.
 
 ## `conversations`
 
 One row per thread, whatever opened it. Not a Resource of the kind-agnostic
 Resource framework (see "Persist conversations and messages in SQLite") —
-conversations have no scope, no reach, and no credential, and they are created
+conversations have no scope, no reach, and no secret, and they are created
 by a message rather than by registration.
 
 | Column | Type | Notes |
@@ -22,13 +23,25 @@ by a message rather than by registration.
 | `archived_at` | TIMESTAMP, NULL | NULL = active. Set by the owner or by the auto-archive stage. |
 | `channel_uid` | TEXT, NULL | Return address: the **uid** of the channel this thread is also reachable on. "Has a binding" iff set. A uid and not a name, because a binding has to keep naming the same channel after the user renames it (ADR resource-identity-is-an-immutable-uid); the label a person or an agent reads is resolved from it at read time. |
 | `peer_chat_id` | TEXT, NULL | The chat id that return address aims at. |
-| `owner` | TEXT, NULL | The surface that owns this conversation, when it is not the developer's own. NULL = the developer's (every conversation chat itself or a channel opens). Written only by a surface that owns its conversations — `ChatService.create_conversation(owner=...)`; no surface currently passes one — and never exposed on the wire. An owned conversation is left out of both listings (see "Show every conversation on the Chat page") and stays readable by id. |
 
 Indexes: `idx_conversations_updated (updated_at)` — the recency ordering of
 "List conversations by latest activity" — and `idx_conversations_archived
 (archived_at)` — the active/archived split, which is two listings rather than
-one filtered list — and `idx_conversations_owner (owner)`, because every
-listing filters out owned conversations.
+one filtered list.
+
+### What a listed conversation carries beyond its row
+
+`ConversationOut` (the chat contract) adds three things read at request time,
+never stored on the row. Each is read once for a whole page — the channels, the
+places of the channel-bound conversations and the previews are one query each —
+so a longer page costs no more queries.
+
+| Field | Meaning |
+| --- | --- |
+| `preview` | The newest message's text blocks on one line (whitespace collapsed, clipped to 160 characters with an ellipsis). A channel turn's leading context blocks (`[Message origin]` and the like) are left out. A message with no words (tool-only) is skipped for the newest one that has some; null when none does. |
+| `running` | A turn is in flight right now — the orchestrator's in-process state, which a `streaming` message row only mirrors. |
+| `channel_binding.platform` | The channel's type key (`seatalk` / `telegram`); null once the channel is deleted. |
+| `channel_binding.place` | Where in the channel the conversation lives, from `channel_thread_history` and its thread row: `chat_kind` (`direct` / `group`, null when never learnt), `thread` (a thread or topic, not the chat's main timeline), `parallel_mark` (the `🧵#N title` of a `/thread` parallel conversation) and `chat_name` (a group's name when Coffer knows one; Coffer stores no group titles today, so it is null). Null when no chat is known for the conversation. |
 
 ### `agent_config` — the JSON column's shape
 
@@ -54,16 +67,35 @@ internal, so tightening it is not a wire change.
 | `seq` | INTEGER, NOT NULL | Position in the thread, from 0. |
 | `role` | TEXT | `user` \| `assistant`. |
 | `content` | TEXT | JSON list of content blocks (below). |
-| `status` | TEXT | `complete` \| `streaming` \| `failed`. A row is written `streaming` before the turn's first event and finalised in place (see "Sweep streaming rows left by a crashed daemon"). |
+| `status` | TEXT | `complete` \| `streaming` \| `stopped` \| `failed`. `stopped` is a reply the user interrupted (partial output kept); `failed` an errored or swept turn. A row is written `streaming` before the turn's first event and finalised in place (see "Sweep streaming rows left by a crashed daemon"). |
 | `model_id` | TEXT, NULL | The model the turn ran on, when the adapter named one. Never read back as configuration. |
 | `prompt_tokens` | INTEGER, NULL | |
 | `completion_tokens` | INTEGER, NULL | |
 | `created_at` | TIMESTAMP | |
+| `finished_at` | TIMESTAMP, NULL | When an assistant reply ended (complete, stopped or failed). Null while it streams, on user messages, on rows from before the column existed, and on rows the startup sweep failed. |
 
 Constraints: `uq_chat_messages_conv_seq (conversation_id, seq)` — one message
 per position, which is what makes the sequence a sequence — and
 `idx_chat_messages_conv (conversation_id, seq)`, the history read of "Bound turn
 context to the most recent 200 messages".
+
+## `chat_reply_files`
+
+What one assistant reply changed in each file it wrote (see "Record what each
+reply changed in each file"). One row per file per reply; none for a reply that
+changed nothing and for replies from before the table existed.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `message_id` | TEXT, PK part, FK → `chat_messages.id` `ON DELETE CASCADE` | The reply. The cascade is what deletes the rows with the reply, with its conversation and with retention's prune. |
+| `path` | TEXT, PK part | The file's absolute path as the agent wrote it. |
+| `seq` | INTEGER, NOT NULL | Position in the reply's list, first-touched first. |
+| `added` | INTEGER, NOT NULL | Lines added, counted from the diff. |
+| `removed` | INTEGER, NOT NULL | Lines removed, counted from the diff. |
+| `diff` | TEXT, NULL | The unified diff (3 lines of context, `--- a/<path>` / `+++ b/<path>`). NULL when `diff_omitted` is set, or for an empty file that was created. |
+| `diff_omitted` | TEXT, NULL | `binary` (not UTF-8 text) or `too_large` (over 1 MB); the counts are then line totals either side. |
+
+Index: `idx_chat_reply_files_message (message_id, seq)`. At most 200 files are kept per reply.
 
 ### Content blocks
 
@@ -74,8 +106,8 @@ and discriminated by `type`:
 | --- | --- | --- |
 | `text` | `text` | |
 | `tool_use` | `tool_use_id`, `tool_name`, `tool_input` | Rendered as its own card. |
-| `tool_result` | `tool_use_id`, `tool_name`, `output`, `error` | Pairs with its `tool_use` by id. |
-| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/channel-media` for a channel's download, `~/.coffer/chat-media` for a Chat page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
+| `tool_result` | `tool_use_id`, `tool_name`, `output`, `error`, `duration_ms` | Pairs with its `tool_use` by id. `duration_ms` is how long the tool ran, stamped by the turn runner between the call and its result; absent when unknown. |
+| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/content/channel-media` for a channel's download, `~/.coffer/content/chat-media` for a Conversations page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
 
 ### The attachment value object
 
@@ -85,10 +117,11 @@ at turn time (see "Re-materialise attachments from persisted history"). Audio is
 transcribed and documents are extracted before the adapter sees them; images and
 anything else survive as attachments for the adapter to materialise natively.
 
-### Chat page uploads — files, not a table
+### Conversations page uploads — files, not a table
 
-A file attached on the Chat page is stored before its message is sent, as two
-flat files under `~/.coffer/chat-media` (see "Upload a file for a web message"):
+A file attached on the Conversations page is stored before its message is sent, as two
+flat files under `~/.coffer/content/chat-media` (see "Upload a file for a web message"), in the
+`content/` class: the user's only copy, not synced:
 
 | File | Content |
 | --- | --- |
@@ -146,8 +179,7 @@ every other retained table:
 | --- | --- |
 | `CONVERSATION_NOT_FOUND` | Any operation naming a conversation that does not exist. |
 | `UNKNOWN_AGENT` | A turn names an `agent_key` no provider answers for (see "Distinguish a missing agent path from a bad turn body"). A *subresource path* for the same key is 404 instead. |
-| `AGENT_CONFIG_REJECTED` | The named agent refuses the configuration — e.g. a `cwd` that is not an existing directory. |
-| `TURN_IN_PROGRESS` | The immediate-or-refuse entry point was asked to start a turn while one is running. The queueing path ("Queue messages sent during a turn") never raises it. |
+| `AGENT_CONFIG_REJECTED` | The named agent refuses the configuration — e.g. a `cwd` that is not an existing directory — or no enabled managed agent of the type exists (`reason` `agent_not_managed`). |
 
 ## What points at a conversation from outside
 
@@ -169,7 +201,8 @@ need; `20260621_0036_chat_models_to_provider_resources` moved model state out of
 the conversation; `20260916_0083_drop_conversation_model_id` removed the last of
 it, leaving the model on the message that ran (`model_id`) and on
 `agent_config` as an override — one column answering one question each.
-`20260918_0091_conversation_owner` added `owner` and `idx_conversations_owner`;
+`20260918_0091_conversation_owner` added `owner` and `idx_conversations_owner`, and
+`20261002_0138_drop_conversation_owner` dropped both again: no surface ever set it;
 `20260918_0096_cross_references_point_at_uids` renamed `channel_name` to
 `channel_uid` and rewrote each stored channel name into that channel's uid;
 `20260923_0102_conversation_agent_key_has_no_default` dropped the `builtin`

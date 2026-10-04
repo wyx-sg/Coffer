@@ -6,7 +6,7 @@
 // That asymmetry is the whole component. Every stored reference to an agent —
 // a channel's `default_agent`, a resource scope's agent list, a skill binding —
 // holds the uid, because a reference has to keep pointing at the same agent
-// after the owner relabels it (ADR resource-identity-is-an-immutable-uid). A
+// after the owner relabels it (ADR identity-is-the-uid-inside-the-file). A
 // uid is also the one thing a person cannot read. So every surface that binds
 // an agent faces the same two-sided problem, and solving it once here is what
 // stops each of them solving it slightly differently.
@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAgents } from "@/lib/hooks/useAgents";
-import { displayName } from "@/lib/resourceTitle";
 
 interface Props {
   /** Ties the control to its own <Label>. */
@@ -48,7 +47,7 @@ export function AgentSelect({ id, label, value, onChange, disabled }: Props) {
   const { t } = useTranslation();
   const { data: agents } = useAgents();
 
-  const known = (agents ?? []).map((a) => ({ uid: a.uid, name: displayName(a) }));
+  const known = (agents ?? []).map((a) => ({ uid: a.uid, name: a.name }));
   // A stored uid this vault has no agent for still gets an option, labelled
   // with the uid itself — there is no name to print, and printing nothing
   // would hide the binding rather than report it.

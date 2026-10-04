@@ -5,12 +5,18 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import {
   providersApi,
+  type Provider,
   type ProviderCreate,
   type ProviderPatch,
-  type Protocol,
 } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
-import { providerKey, providersKey } from "@/lib/api/queryKeys";
+import {
+  endpointModelsKey,
+  localRuntimesKey,
+  pendingApprovalsKey,
+  providerKey,
+  providersKey,
+} from "@/lib/api/queryKeys";
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
 function useProviderToastError() {
@@ -19,10 +25,13 @@ function useProviderToastError() {
   return (error: unknown) => toast.error(translateApiError(t, error));
 }
 
-export function useProviders() {
+/** The connections. `enabled` is false while the Models feature is off: a
+ *  surface that is always on reads them only when the route answers. */
+export function useProviders(enabled = true) {
   return useQuery({
     queryKey: providersKey,
     queryFn: async () => (await providersApi.list()).providers,
+    enabled,
   });
 }
 
@@ -36,12 +45,30 @@ export function useProvider(uid: string) {
   });
 }
 
+/** Which local runtime answers at `baseUrl` (null = each default port). A
+ *  QUERY so the Add dialog shows its loading / error states; it runs only
+ *  while `enabled` (the user chose the local path) and a Test re-asks it.
+ *  `retry: false`: nothing answering is an answer. */
+export function useDetectLocalRuntimes(baseUrl: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: localRuntimesKey(baseUrl),
+    queryFn: () => providersApi.detectLocal(baseUrl),
+    enabled,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// No onError toast: the Add dialog renders the failure inline under its form.
 export function useCreateProvider() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ProviderCreate) => providersApi.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
+      // The key goes only to an approved URL: a binding the registration could
+      // not approve waits from now, so the approvals are read now.
+      qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
   });
 }
@@ -54,6 +81,8 @@ export function useUpdateProvider() {
       providersApi.update(vars.uid, vars.patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
+      // A moved base URL asks again from the save.
+      qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
     onError,
   });
@@ -66,41 +95,33 @@ export function useUpdateProvider() {
 // afterwards, while `providerKey(uid)` answers the same row before and after.
 // The detail page's URL does not change either, so nothing navigates.
 
+/** Replace a provider's key; the new value is stored at once.
+ *  No onError toast: the Replace dialog renders the failure inline. */
+export function useReplaceProviderKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { uid: string; secret: string }) =>
+      providersApi.update(vars.uid, { secret_value: vars.secret }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: providersKey });
+    },
+  });
+}
+
 export function useDeleteProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();
   return useMutation({
     mutationFn: (uid: string) => providersApi.remove(uid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: providersKey });
-    },
-    onError,
-  });
-}
-
-export function useActivateProvider() {
-  const qc = useQueryClient();
-  // Switching writes native config; a failure (e.g. unwritable config dir)
-  // must surface rather than silently leave the old provider active.
-  const onError = useProviderToastError();
-  return useMutation({
-    mutationFn: (uid: string) => providersApi.activate(uid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: providersKey });
-    },
-    onError,
-  });
-}
-
-/** Switch a wire's agent(s) back to their own built-in login (clears the active
- * connection + removes Coffer's projection). */
-export function useUseBuiltinProvider() {
-  const qc = useQueryClient();
-  const onError = useProviderToastError();
-  return useMutation({
-    mutationFn: (wire: Protocol) => providersApi.useBuiltin(wire),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: providersKey });
+    // The detail and its endpoint probe go first, so a stale detail view
+    // cannot refetch a 404; the row leaves the cached list at once, because
+    // the page opens the list's first provider and must not reopen this one
+    // before the refetch lands; then the list is refetched.
+    onSuccess: (_data, uid) => {
+      qc.removeQueries({ queryKey: providerKey(uid) });
+      qc.removeQueries({ queryKey: endpointModelsKey(uid) });
+      qc.setQueryData<Provider[]>(providersKey, (old) => old?.filter((p) => p.uid !== uid));
+      void qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });

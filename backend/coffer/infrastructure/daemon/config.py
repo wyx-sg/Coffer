@@ -1,8 +1,9 @@
 """``~/.coffer/daemon-config.json`` — the daemon's settings, read before it binds.
 
-This is the one piece of Coffer configuration that cannot live in SQLite. The
-port is chosen in :func:`coffer.infrastructure.daemon.bootstrap.acquire`, which
-runs before the database is opened and before migrations have created any table
+This is the one piece of Coffer configuration that must be readable before the
+vault and the database open. The port is chosen in
+:func:`coffer.infrastructure.daemon.bootstrap.acquire`, which runs before the
+database is opened and before migrations have created any table
 to read; and it cannot be an environment variable either, because the daemon is
 spawned detached by whichever surface first needs one (the CLI, an agent's MCP
 shim) and inherits *that caller's* environment — a shell profile reaches the
@@ -23,7 +24,9 @@ import socket
 from pathlib import Path
 from typing import Any
 
+from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT as _DEFAULT_PROXY_PORT
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
+from coffer.infrastructure.vault.home import daemon_config_path
 
 _logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ _logger = logging.getLogger(__name__)
 #: port that moves silently resets the UI's own remembered state. A default the
 #: daemon refuses to start without is the trade that ADR
 #: "The Desktop Shell Returns" chose in its place.
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 38470
 
 #: Ports the daemon will accept as a fixed port. The floor is not arbitrary:
 #: binding below 1024 needs privileges the daemon does not have and must not
@@ -50,12 +53,8 @@ class InvalidPort(ValueError):  # noqa: N818
     """Raised when a caller asks for a port the daemon could never bind."""
 
 
-def _coffer_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
-
-
 def config_path() -> Path:
-    return _coffer_dir() / "daemon-config.json"
+    return daemon_config_path()
 
 
 def validate_port(port: int) -> int:
@@ -132,13 +131,6 @@ def effective_port() -> int:
     return DEFAULT_PORT if fixed is None else fixed
 
 
-#: Keys an earlier build wrote that no current setting reads. Every read
-#: ignores them and every write removes them (spec daemon "Change residency from
-#: the settings page or the command line"): ``idle_shutdown_hours`` configured
-#: an idle stand-down the daemon no longer has.
-_RETIRED_KEYS = frozenset({"idle_shutdown_hours"})
-
-
 def _merge(**fields: Any) -> None:
     """Write ``fields`` into the config file, keeping everything else.
 
@@ -148,11 +140,8 @@ def _merge(**fields: Any) -> None:
     preservation is the whole forward-compatibility story — earlier builds also
     stamped a ``version``, which nothing ever read or branched on; files that
     carry it keep it, as an unknown key like any other.
-
-    The one exception is :data:`_RETIRED_KEYS`: a setting that no longer
-    decides anything is dropped on every write, so the file stops stating it.
     """
-    payload = {k: v for k, v in (_read_raw() or {}).items() if k not in _RETIRED_KEYS}
+    payload = dict(_read_raw() or {})
     payload.update(fields)
     write_json_0600(config_path(), payload)
 
@@ -169,6 +158,64 @@ def write_fixed_port(port: int | None) -> None:
     if port is not None:
         validate_port(port)
     _merge(port=port)
+
+
+# --- model proxy port -------------------------------------------------------
+#
+# The local model proxy (ADR api-key-providers-are-reached-through-a-separate-
+# local-model-proxy) binds its own fixed loopback port, for the same reason the
+# daemon does: the value is written into Claude Code's and Codex's own config
+# files (``ANTHROPIC_BASE_URL``, ``[model_providers.coffer] base_url``), so a
+# port that moved on its own would silently disconnect every agent. It lives in
+# this file because the proxy is spawned before — and survives — any daemon
+# that could answer from the database.
+
+#: The port the model proxy binds when the user has configured nothing — one
+#: number, in the vocabulary the projection that writes it into the agents'
+#: files also reads.
+DEFAULT_PROXY_PORT = _DEFAULT_PROXY_PORT
+
+
+def read_proxy_port() -> int | None:
+    """The proxy port the user pinned, or ``None`` to mean :data:`DEFAULT_PROXY_PORT`.
+
+    Same reading as :func:`read_fixed_port`: an absent, unreadable or
+    nonsensical value is "no usable instruction", whose safe reading is the
+    default — never some other port.
+    """
+    payload = _read_raw()
+    if payload is None:
+        return None
+    port = payload.get("proxy_port")
+    if port is None:
+        return None
+    if not isinstance(port, int) or isinstance(port, bool):
+        _logger.warning("daemon config proxy_port %r is not an integer; ignoring it", port)
+        return None
+    try:
+        return validate_port(port)
+    except InvalidPort as exc:
+        _logger.warning("daemon config proxy_port: %s; ignoring it", exc)
+        return None
+
+
+def effective_proxy_port() -> int:
+    """The port the model proxy binds at its next start — the one answer the
+    proxy's own bind, the daemon's supervisor and every projected agent config
+    share."""
+    fixed = read_proxy_port()
+    return DEFAULT_PROXY_PORT if fixed is None else fixed
+
+
+def write_proxy_port(port: int | None) -> None:
+    """Pin the proxy's port, or clear the setting with ``None``.
+
+    Takes effect when the proxy next starts; agents' configs are re-projected
+    with the new value by whoever calls this.
+    """
+    if port is not None:
+        validate_port(port)
+    _merge(proxy_port=port)
 
 
 # --- machine identity -------------------------------------------------------
@@ -237,13 +284,13 @@ def write_cached_machine_id(machine_id: str) -> None:
 #
 # A machine's own choice of which experimental features are on (spec
 # experimental-features "Decide a feature's state per machine"). It lives here
-# rather than in the database on purpose: the database syncs, and a switch in
-# it would switch every machine at once. Unlike the settings above, a change
+# rather than in the database on purpose: a machine's own choice is machine-local,
+# and the vault (not the history database) is what syncs. Unlike the settings above, a change
 # takes effect at once — the running daemon's feature service holds the value
 # and writes it here before it answers.
 
 #: The environment variable that pins features for tests and CI,
-#: ``vault_sync=on,memory=off``. Read once, when the daemon starts.
+#: ``<key>=on,<other>=off``. Read once, when the daemon starts.
 FEATURES_ENV = "COFFER_FEATURES"
 
 _ON = frozenset({"on", "true", "1"})
@@ -285,7 +332,7 @@ def write_feature_setting(key: str, enabled: bool) -> None:
 
 def clear_feature_setting(key: str) -> None:
     """Remove one feature from the ``features`` object, keeping every other key
-    in it, so the feature falls back to the channel default."""
+    in it, so the feature is off again."""
     payload = _read_raw() or {}
     current = payload.get("features")
     features = dict(current) if isinstance(current, dict) else {}

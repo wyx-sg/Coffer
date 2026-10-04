@@ -4,6 +4,91 @@
  */
 
 export interface paths {
+    "/api/v1/knowledge/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Changes
+         * @description Recent changes across every collection (or one, by its name), newest
+         *     first, with the items still waiting in each inbox.
+         */
+        get: operations["recent_changes_api_v1_knowledge_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change Detail
+         * @description One change in full: every document it touched, with its diff.
+         */
+        get: operations["change_detail_api_v1_knowledge_changes__version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Deleted
+         * @description Put back what a delete removed — a document, or a whole collection with
+         *     its documents, README and waiting items — as one new change naming the user.
+         *     409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
+         *     the path or the name is taken again; nothing is written then.
+         */
+        post: operations["restore_deleted_api_v1_knowledge_changes__version__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes/{version}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Pass
+         * @description Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
+         *     the document a later change would lose; nothing is written then.
+         */
+        post: operations["undo_pass_api_v1_knowledge_changes__version__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/collections": {
         parameters: {
             query?: never;
@@ -11,222 +96,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List collections
-         * @description Every collection: the top-level folders under the knowledge root, each
-         *     with the first paragraph of its `README.md` as `description`, its
-         *     documents counted, and the material waiting in its inbox counted
-         *     apart. Hidden entries (anything dot-prefixed) are excluded from the
-         *     document count, and `README.md` itself is neither listed nor counted
-         *     (see "Keep the collection README out of the corpus").
-         *
-         *     The two counts answer different questions — how much an agent can
-         *     read today, and how much has arrived that it cannot read yet. A
-         *     collection with pending material is one curation has not reached,
-         *     which a single total would hide.
-         *
-         *     The list can legitimately be empty — nothing auto-provisions, so a
-         *     fresh installation has no collections until someone creates one.
-         */
-        get: operations["listKnowledgeCollections"];
+        /** List Collections */
+        get: operations["list_collections_api_v1_knowledge_collections_get"];
         put?: never;
-        /**
-         * Create a collection
-         * @description Creates one collection: a directory under the knowledge root, and one
-         *     `knowledge` Resource for it — which is what gives the collection a
-         *     lifecycle and an audit trail. The kind has no `enabled` switch (see
-         *     "Serve every collection to every agent").
-         *     Nothing else creates one — not a read, not a write, not an agent's
-         *     working directory (see "Create collections only deliberately").
-         *
-         *     `name` is a single path segment. Names that would escape the root
-         *     (containing `/`, `\` or `..`, or dot-only) are rejected, as is a name
-         *     already taken. A `description` is written into the new collection's
-         *     `README.md`; omitted, the collection simply has no description until
-         *     someone writes that README by hand.
-         */
-        post: operations["createKnowledgeCollection"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/tree": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List one level of one collection
-         * @description One level, not the whole tree: the immediate subdirectories of `path`
-         *     and the documents directly in it, each with the `title` and
-         *     `description` from its frontmatter.
-         *
-         *     `path` is relative to the knowledge root — `shopee` for a collection's
-         *     top level, `shopee/account` for a folder inside it. The listing is
-         *     generated at call time by walking the directory and reading frontmatter,
-         *     never materialized (see "Store each collection as one tree of Markdown
-         *     files"). The collection's `README.md` is absent, and so is every hidden
-         *     entry but one: at a collection's root, a non-empty `.inbox` is listed
-         *     as a directory (`inbox: true`, `file_count` its items), and `path`
-         *     `<collection>/.inbox` lists those items as files, each titled from its
-         *     frontmatter or by its file name (see "Hide dot-prefixed entries except
-         *     the inbox").
-         */
-        get: operations["readKnowledgeTree"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/file": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read a document
-         * @description The document's full text, plus its frontmatter fields and the two
-         *     absolute on-disk paths the UI needs to offer open-in-editor and
-         *     reveal-in-file-manager on the file and on its folder (see "Return
-         *     absolute paths on reads"). `curated_at` says when curation last had it
-         *     in front of it. `fingerprint` is the sha256 of the file's bytes, which a
-         *     save hands back (see "Save a document edited in the web UI").
-         *
-         *     `path` may also name an item in a collection's `.inbox`; it is read the
-         *     same way and carries `inbox: true` — it can be looked at, never saved
-         *     or deleted.
-         *
-         *     Whole file, always: no chunking, no passage granularity, no `top_k`.
-         *     Bytes come off disk at call time, so an edit made in the person's own
-         *     editor is what comes back.
-         */
-        get: operations["readKnowledgeFile"];
-        /**
-         * Save an edited document's body
-         * @description Replaces the document's body with `body` and keeps its frontmatter
-         *     exactly as it is on disk — title, description, actor, the curation
-         *     stamp and any key a person added (see "Save a document edited in the
-         *     web UI"). `expected_fingerprint` is the `fingerprint` the editor's read
-         *     carried; a file whose bytes changed since is refused with 409
-         *     `KNOWLEDGE_FILE_CONFLICT` and left untouched. The write is atomic, and
-         *     it moves the file's modification time past its curation stamp, so the
-         *     sweep treats it as a person's edit (see "Let newer statements win and a
-         *     person's edit stand"). Recorded in the audit log as `knowledge_edited`.
-         *
-         *     Only a Markdown document: the collection itself, its `README.md`, an
-         *     inbox item or anything else hidden, and a file that is not Markdown are
-         *     refused as `KNOWLEDGE_PATH_UNSAFE`.
-         */
-        put: operations["saveKnowledgeFile"];
-        post?: never;
-        /**
-         * Delete a document
-         * @description Removes the document from disk. There is nothing else to remove — no
-         *     index row, no chunks, no embedding — so the deletion is complete when
-         *     the file is gone. Recorded in the audit log with the actor.
-         *
-         *     **Any** document, whoever wrote it (see "Let only a person delete a
-         *     document"): the tree is the person's as much as curation's. No
-         *     agent-facing tool deletes anything. A path that is not a document — the
-         *     collection itself, its `README.md`, or anything hidden — is refused as
-         *     `KNOWLEDGE_PATH_UNSAFE`.
-         */
-        delete: operations["deleteKnowledgeFile"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/material": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit new knowledge to a collection
-         * @description Submits **material** — a title, a description and a Markdown body — into
-         *     the collection's inbox, for a curation pass to merge into the documents
-         *     (see "Submit every entrance's input as material"). It takes no path and
-         *     no folder, and replaces nothing: where the knowledge belongs, and what
-         *     in it is new, is curation's to decide. Two submissions of the same title
-         *     are two pieces of material.
-         *
-         *     The submission itself is a plain file write — no LLM, no conversion, no
-         *     indexing step (see "Submit material through coffer__write").
-         *     `description` is required, not optional: it is what curation reads first
-         *     when deciding where material belongs, and what the skill's catalogue
-         *     shows if the material becomes a document of its own (see "Carry title,
-         *     description and actor in frontmatter").
-         *
-         *     `status` says what became of it: `pending` while it waits in the inbox,
-         *     with no `path` — an inbox address vanishes once the material is
-         *     merged — or `written`, with the document's `path`, when no internal
-         *     model is configured and the material was promoted to a document as it
-         *     stood (see "Promote material directly when no model is configured").
-         *
-         *     This is the route the CLI's `coffer knowledge write` calls; an agent
-         *     reaches the same service through `coffer__write`.
-         */
-        post: operations["submitKnowledgeMaterial"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Convert a document and submit it to a collection
-         * @description The entrance for a document the person did not write as Markdown. The
-         *     file is converted to Markdown and given its frontmatter (see "Fill
-         *     frontmatter on converted material") — `title` from the document falling back to its file name,
-         *     `description` from the internal connection where one is configured and
-         *     from the document's opening prose where not — and **submitted as
-         *     material** into `collection`'s inbox, exactly as `POST /material` does.
-         *     What is new in it is then appended to the collection's knowledge by the
-         *     next pass; with no internal model, it becomes a document of its own on
-         *     the spot (see "Promote material directly when no model is configured").
-         *
-         *     **Neither file is kept.** The original bytes are not stored anywhere,
-         *     and the extracted Markdown lives only as the inbox item until a pass
-         *     merges it: the upload is the carrier of its knowledge, not the
-         *     knowledge. There is no `folder` — where the knowledge lands is
-         *     curation's to decide — no hidden `.raw/`, no re-conversion on a
-         *     schedule and no external-source tracking.
-         *
-         *     Supported inputs are exactly what `markitdown` handles (PDF, `.docx`,
-         *     `.pptx`, `.xlsx`, `.xls`, HTML, EPUB) plus plain text, Markdown and
-         *     CSV. The call is bounded: **one file**, a size ceiling, and a refusal
-         *     that names the limit. All-or-nothing — a conversion failure leaves
-         *     nothing behind, not even an inbox item.
-         *
-         *     Upload is deliberately **not** an agent tool (see "Expose exactly one
-         *     knowledge tool"): a document enters through a human surface — this
-         *     route, the CLI, or a channel that confirms the collection with its
-         *     paired owner.
-         */
-        post: operations["uploadKnowledgeDocument"];
+        /** Create Collection */
+        post: operations["create_collection_api_v1_knowledge_collections_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -243,57 +117,174 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Run one curation pass over one collection
-         * @description One bounded agentic pass, driven by the internal model connection, whose
-         *     tool surface is **four** operations — `list_documents`, `read_document`,
-         *     `write_document`, `retire_document` — fenced to this collection's
-         *     documents: none of them can reach the inbox, the collection's
-         *     `README.md` or another collection (see "Curate through a fenced
-         *     four-tool pass").
+         * Curate
+         * @description Curate now: a pass per pending item until none is left, or one pass over
+         *     the document named ("Run curation on a sweep and on demand").
          *
-         *     The pass takes **one item**. Name a `document` in the body to carry one
-         *     edited document through; omit the body and the pass takes the oldest
-         *     pending item — inbox material first, then a document whose modification
-         *     time is newer than its `coffer_curated_at` (see "Run curation on a sweep
-         *     and on demand") — which is what the page's "Curate now" button wants.
-         *     One item either way: a trigger is never a corpus-wide rewrite (see
-         *     "Bound a pass to eight writes").
-         *
-         *     Its context is bounded — the item in full, at most five candidate
-         *     documents in full, and the collection's catalogue of titles and
-         *     descriptions (see "Assemble a pass from a bounded context") — and its
-         *     writes are bounded to eight, with `refused` reporting what the bound or
-         *     the no-file-references rule (see "Refuse file-name references in
-         *     documents") turned away. New material that contradicts a document wins;
-         *     a document a person edited is never reverted (see "Let newer statements
-         *     win and a person's edit stand").
-         *
-         *     `status` is `ok` when a pass ran; `truncated` when the recursion limit
-         *     cut the pass off before it completed — it carries the same counters as
-         *     `ok`, the writes that landed stay, and the item is left pending (see
-         *     "Bound a pass to eight writes"); `no_model` when no internal connection
-         *     is configured, in which case every inbox item was promoted to a document
-         *     as it stood and `promoted` lists them; `up_to_date` when nothing is
-         *     pending; `too_large` when the item does not fit the model's context
-         *     (`limit` then names the ceiling) — such an item is never shown to the
-         *     model and never left pending: material is promoted to a document as it
-         *     stands (`promoted`), and an edited document is stamped curated
-         *     (`stamped`) so the sweep stops re-offering it (see "Report every pass
-         *     outcome as a status"); and `failed` when the pass did not
-         *     complete — in which case the item is left as it was, so it is curated
-         *     later rather than lost (see "Settle an item only after its pass
-         *     completes"). All of them are **200**: none is a fault of the request.
-         *
-         *     **One pass per collection at a time** (see "Run one pass per collection
-         *     at a time"). A request that arrives while a pass over the same
-         *     collection is still running is refused with `409` rather than queued:
-         *     the caller asked to start a pass, and no pass is going to start. Which
-         *     collections are being curated right now is readable at
-         *     `GET /api/v1/upkeep/runs` (spec mcp-gateway's contract), so a surface
-         *     that mounts mid-pass shows the button as already running instead of
-         *     inviting the second click.
+         *     The collection is named by its uid; the run resolves the row itself, so an
+         *     unknown uid is the same 404 every route here gives. Two guards, in this
+         *     order on purpose. The registry claim is about THIS collection and is held
+         *     for the whole run: a second trigger while it runs is refused (409
+         *     ``UPKEEP_ALREADY_RUNNING``) rather than queued ("Run one pass per collection
+         *     at a time"), and it is keyed on the uid the sweep claims too. The
+         *     vault-write lock is about the whole vault and is taken per pass, so a sync
+         *     round is not held off for the minutes a run can take ("Never overlap
+         *     curation with a sync round").
          */
-        post: operations["curateKnowledgeCollection"];
+        post: operations["curate_api_v1_knowledge_collections__uid__curate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{uid}/description": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Describe Collection
+         * @description Rewrite the opening paragraph of the collection's README.
+         */
+        put: operations["describe_collection_api_v1_knowledge_collections__uid__description_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read File */
+        get: operations["read_file_api_v1_knowledge_file_get"];
+        /** Save File */
+        put: operations["save_file_api_v1_knowledge_file_put"];
+        post?: never;
+        /** Delete File */
+        delete: operations["delete_file_api_v1_knowledge_file_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document History
+         * @description A document's versions, newest first, each with its writer and time.
+         */
+        get: operations["document_history_api_v1_knowledge_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Version Diff
+         * @description What one version did to the document.
+         */
+        get: operations["version_diff_api_v1_knowledge_history_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Version
+         * @description Put one version of a document back, as a new change naming the user.
+         */
+        post: operations["restore_version_api_v1_knowledge_history_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Version Body
+         * @description The document's body as one version left it.
+         */
+        get: operations["version_body_api_v1_knowledge_history_version_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Tree */
+        get: operations["read_tree_api_v1_knowledge_tree_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_v1_knowledge_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -304,540 +295,683 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_upload_api_v1_knowledge_upload_post */
+        Body_upload_api_v1_knowledge_upload_post: {
+            /** Collection */
+            collection: string;
+            /** File */
+            file: string;
+        };
         /**
-         * @description One collection, as the collection list sees it.
-         * @example {
-         *       "uid": "9f2c1a7b4e8d4c1fa0b3d5e6f7081920",
-         *       "name": "shopee",
-         *       "description": "Internal systems at Shopee — services, data plane, the chains between them.",
-         *       "document_count": 23,
-         *       "pending_count": 2
-         *     }
+         * ChangeDetailOut
+         * @description One change in full: every document it touched, each with its diff.
          */
-        CollectionOut: {
+        ChangeDetailOut: {
+            change: components["schemas"]["ChangeOut"];
+            /** Diffs */
+            diffs: components["schemas"]["DocumentDiffOut"][];
+        };
+        /**
+         * ChangeOut
+         * @description One change to knowledge: one commit naming its writer.
+         */
+        ChangeOut: {
             /**
-             * @description The collection Resource's immutable identity, and what every route
-             *     addressing this collection takes. A client that has a collection
-             *     from this list never has to look one up by name to act on it.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             * Actor
+             * @description The audit actor of the operation.
              */
-            uid: string;
+            actor: string | null;
             /**
-             * @description A mutable label, unique among collections, which is also the
-             *     directory name under the knowledge root — a rename moves the
-             *     directory. Use it to display the collection and to build the
-             *     `path` and `collection` arguments of the file, material and upload
-             *     routes, which are filesystem values; use `uid` for anything that
-             *     has to keep pointing at this collection.
+             * Agent
+             * @description The agent that wrote it (writer `agent`), or for a curation pass who submitted the item it curated — an agent's name, or `user`.
              */
+            agent: string | null;
+            /**
+             * Collections
+             * @description The collections the change touched.
+             */
+            collections: string[];
+            /** Documents */
+            documents: components["schemas"]["DocumentChangeOut"][];
+            /**
+             * Item
+             * @description The item a curation pass curated.
+             */
+            item: string | null;
+            /**
+             * Operation
+             * @description `pass`, `save`, `delete`, `promote`, `submit`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`. Only a `pass` can be undone.
+             */
+            operation: string;
+            /** Restored From */
+            restored_from: string | null;
+            /**
+             * Status
+             * @description A curation pass's outcome status.
+             */
+            status: string | null;
+            /** Summary */
+            summary: string;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Undoes */
+            undoes: string | null;
+            /**
+             * Version
+             * @description The change's id (its commit), what diff, restore and undo take.
+             */
+            version: string;
+            /**
+             * Writer
+             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` Coffer's curation pass; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools).
+             * @enum {string}
+             */
+            writer: "user" | "agent" | "curation" | "sync" | "disk";
+        };
+        /**
+         * ChangesOut
+         * @description Recent changes across collections, newest first, with the items still waiting.
+         */
+        ChangesOut: {
+            /** Changes */
+            changes: components["schemas"]["ChangeOut"][];
+            /**
+             * Next Cursor
+             * @description Pass back as `cursor` for the next page; null on the last.
+             */
+            next_cursor: string | null;
+            /** Waiting */
+            waiting: components["schemas"]["WaitingItemOut"][];
+        };
+        /** CollectionCreate */
+        CollectionCreate: {
+            /** Description */
+            description?: string | null;
+            /** Name */
             name: string;
-            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
-            title?: string | null;
-            /**
-             * @description The first paragraph of the collection's `README.md`, empty when
-             *     there is none. Never stored in the database (see "Read a
-             *     collection's description from its README").
-             */
+        };
+        /**
+         * CollectionDescribeIn
+         * @description A collection's new description: its README's opening paragraph.
+         */
+        CollectionDescribeIn: {
+            /** Description */
+            description: string;
+        };
+        /** CollectionListOut */
+        CollectionListOut: {
+            /** Collections */
+            collections: components["schemas"]["CollectionOut"][];
+        };
+        /** CollectionOut */
+        CollectionOut: {
+            /** Description */
             description: string;
             /**
-             * @description Documents in the collection's tree, counted recursively, hidden
-             *     entries and the collection's own `README.md` excluded — what an
-             *     agent can read today.
+             * Document Count
+             * @default 0
              */
             document_count: number;
             /**
-             * @description Material waiting in the collection's inbox to be merged (see "Hide
-             *     dot-prefixed entries except the inbox") — what has arrived and an
-             *     agent cannot read yet. Counted apart because a single total would
-             *     hide a collection curation has not reached.
-             */
-            pending_count: number;
-        };
-        CollectionListOut: {
-            collections: components["schemas"]["CollectionOut"][];
-        };
-        /**
-         * @example {
-         *       "name": "shopee",
-         *       "description": "Internal systems at Shopee — services, data plane, the chains between them."
-         *     }
-         */
-        CollectionCreate: {
-            /** @description One path segment. No `/`, no `\`, no `..`, not dot-only. */
-            name: string;
-            /**
-             * @description Written into the new collection's `README.md` as its first
-             *     paragraph. Omitted, the collection has no description until someone
-             *     writes that README themselves.
-             */
-            description?: string | null;
-        };
-        /** @description A subdirectory at the level being listed. */
-        DirectoryOut: {
-            /** @description Path relative to the knowledge root — pass it back to `GET /tree` to descend. */
-            path: string;
-            /** @description The directory's own name. */
-            name: string;
-            /** @description Files beneath it, counted recursively; for the inbox, its items. */
-            file_count: number;
-            /**
-             * @description True for a collection's `.inbox` and the items waiting in it —
-             *     material a person may read but not edit or delete (see "Hide
-             *     dot-prefixed entries except the inbox").
-             */
-            inbox: boolean;
-        };
-        /**
-         * @description One file as a tree row shows it — enough to judge relevance without
-         *     reading the body.
-         */
-        FileSummaryOut: {
-            /** @description Path relative to the knowledge root. The document's identity. */
-            path: string;
-            title: string;
-            /** @description What the file says it is about. Required on write (see "Carry title, description and actor in frontmatter"). */
-            description: string;
-            /**
-             * @description Who last wrote it.
-             * @enum {string}
-             */
-            actor: "agent" | "user";
-            /** @description ISO-8601 timestamp from frontmatter. */
-            updated_at: string;
-            /**
-             * @description True for a collection's `.inbox` and the items waiting in it —
-             *     material a person may read but not edit or delete (see "Hide
-             *     dot-prefixed entries except the inbox").
-             */
-            inbox: boolean;
-        };
-        /** @description One level of one collection — never the whole tree. */
-        TreeOut: {
-            /** @description The level that was listed, relative to the knowledge root. */
-            path: string;
-            directories: components["schemas"]["DirectoryOut"][];
-            files: components["schemas"]["FileSummaryOut"][];
-        };
-        /**
-         * @description One document in full: its frontmatter, its body, and the absolute
-         *     paths the UI needs for open-in-editor and reveal-in-file-manager.
-         */
-        FileOut: {
-            /** @description Path relative to the knowledge root. The document's identity. */
-            path: string;
-            title: string;
-            description: string;
-            /** @enum {string} */
-            actor: "agent" | "user";
-            created_at: string;
-            updated_at: string;
-            /** @description The Markdown body, frontmatter stripped. */
-            body: string;
-            /** @description Absolute on-disk path of the file (see "Return absolute paths on reads"). */
-            file_path: string;
-            /** @description Absolute on-disk path of its containing folder (see "Return absolute paths on reads"). */
-            folder_path: string;
-            /**
-             * @description When curation last had this document in front of it
-             *     (`coffer_curated_at`), empty when it never has (see "Settle an item
-             *     only after its pass completes"). A document modified since is what
-             *     the sweep comes back for (see "Run curation on a sweep and on
-             *     demand").
-             */
-            curated_at: string;
-            /**
-             * @description sha256 hex of the file's bytes as read. Hand it back as
-             *     `expected_fingerprint` on `PUT /file`; a file changed since is
-             *     refused (see "Save a document edited in the web UI").
-             */
-            fingerprint: string;
-            /**
-             * @description True for a collection's `.inbox` and the items waiting in it —
-             *     material a person may read but not edit or delete (see "Hide
-             *     dot-prefixed entries except the inbox").
-             */
-            inbox: boolean;
-        };
-        /**
-         * @description A document's new body from the web UI's editor (see "Save a document
-         *     edited in the web UI"). The frontmatter is kept as it is on disk, so
-         *     none of it is sent.
-         */
-        FileSave: {
-            /** @description Document path relative to the knowledge root. */
-            path: string;
-            /** @description The new Markdown body, without frontmatter. */
-            body: string;
-            /** @description The `fingerprint` the editor's `GET /file` carried. */
-            expected_fingerprint: string;
-        };
-        /**
-         * @description New knowledge for a collection (see "Submit every entrance's input as
-         *     material"). No path, no folder and no lane: where it belongs is
-         *     curation's to decide.
-         * @example {
-         *       "collection": "shopee",
-         *       "title": "Session ownership",
-         *       "description": "Which service owns a login session, and what reads it.",
-         *       "body": "Login state is owned by `account.session`.\n"
-         *     }
-         */
-        MaterialIn: {
-            /**
-             * @description The collection's directory name — a filesystem value, like every
-             *     path on this family. Must name a registered collection.
-             */
-            collection: string;
-            /** @description Names the subject; also the slug of the document it becomes if promoted. */
-            title: string;
-            /**
-             * @description Required. What curation reads first when deciding where material
-             *     belongs, and what the catalogue shows if it becomes a document of
-             *     its own (see "Carry title, description and actor in frontmatter").
-             */
-            description: string;
-            /**
-             * @description The Markdown body. Frontmatter is written by the layer, not supplied here.
+             * Folder Path
              * @default
              */
-            body: string;
-        };
-        /**
-         * @description What became of submitted material. `pending`: it waits in the inbox for
-         *     a pass to merge, and there is no path to report. `written`: no internal
-         *     model is configured, so it was promoted to a document as it stood, and
-         *     `path` is that document (see "Promote material directly when no model is
-         *     configured").
-         * @example {
-         *       "status": "pending",
-         *       "collection": "shopee",
-         *       "title": "Session ownership",
-         *       "path": null
-         *     }
-         */
-        SubmissionOut: {
-            /** @enum {string} */
-            status: "pending" | "written";
-            /** @description The collection's name. */
-            collection: string;
-            title: string;
-            /** @description The document it became, with `status` `written`; null while pending. */
-            path: string | null;
-        };
-        /**
-         * @description Which item to take. The whole body is optional — omitted, the pass takes
-         *     the oldest pending item: inbox material first, then a document whose
-         *     modification time is newer than its `coffer_curated_at` (see "Run
-         *     curation on a sweep and on demand"), which is what the page's button
-         *     wants.
-         * @example {
-         *       "document": "shopee/account/login-sessions.md"
-         *     }
-         */
-        CurationRequest: {
+            folder_path: string;
+            /** Name */
+            name: string;
             /**
-             * @description One document to carry through, relative to the knowledge root. An
-             *     inbox item cannot be named: the inbox is not addressable.
+             * Pending Count
+             * @default 0
              */
-            document?: string | null;
+            pending_count: number;
+            /** Uid */
+            uid: string;
+            /** Updated At */
+            updated_at: string | null;
         };
-        /**
-         * @description What one pass did. Every status is a 200 — a collection with no model
-         *     configured, or with nothing pending, is an ordinary state of the feature
-         *     and not a fault of the request (see "Promote material directly when no
-         *     model is configured").
-         * @example {
-         *       "status": "ok",
-         *       "collection": "shopee",
-         *       "item": "shopee/.inbox/session-ownership.md",
-         *       "model": "internal-model",
-         *       "written": 2,
-         *       "retired": 1,
-         *       "refused": 0,
-         *       "documents_before": 22,
-         *       "documents_after": 23,
-         *       "limit": 0,
-         *       "promoted": [],
-         *       "gave_up": false,
-         *       "stamped": ""
-         *     }
-         */
+        /** CurationOut */
         CurationOut: {
-            /**
-             * @description `truncated` when the recursion limit cut the pass off: the same
-             *     counters as `ok`, but the item is left pending, not settled —
-             *     unless `gave_up` is true.
-             *     `no_model` when no internal connection is configured — every inbox
-             *     item was promoted to a document as it stood, never an error.
-             *     `up_to_date` when nothing is pending. `too_large` when the item
-             *     does not fit, `limit` naming the ceiling: the item is never shown
-             *     to the model and never left pending — material is promoted as it
-             *     stands (`promoted`), an edited document is stamped curated
-             *     (`stamped`). `failed` leaves the item as it was so it is curated
-             *     later rather than lost.
-             * @enum {string}
-             */
-            status: "ok" | "truncated" | "no_model" | "up_to_date" | "too_large" | "failed";
-            /** @description The collection's NAME, not its uid — this is what a surface renders. */
+            /** Collection */
             collection: string;
             /**
-             * @description The item the pass took, when it took one: an inbox item's path, or
-             *     the edited document's.
+             * Documents After
+             * @default 0
              */
-            item: string;
-            /**
-             * @description The internal model that ran it, so a surprising rewrite is
-             *     traceable to a model rather than to Coffer.
-             */
-            model: string;
-            /** @description Documents this pass wrote. */
-            written: number;
-            /** @description Documents this pass retired, their content written elsewhere. */
-            retired: number;
-            /**
-             * @description Writes the pass refused — a document naming another file (see
-             *     "Refuse file-name references in documents"), the eight-write bound
-             *     (see "Bound a pass to eight writes"), or a path outside the
-             *     collection's documents. Reported rather than swallowed, because a
-             *     pass that hit its bound has more to absorb than it managed.
-             */
-            refused: number;
-            documents_before: number;
             documents_after: number;
-            /** @description The item-size ceiling, present only with `status` `too_large`. */
-            limit: number;
             /**
-             * @description Documents material was promoted into as it stood: the whole inbox
-             *     with `status` `no_model` (see "Promote material directly when no
-             *     model is configured"), the one oversized item of material with
-             *     `status` `too_large`, or the one item a pass gave up on (`gave_up`).
-             *     Empty otherwise.
+             * Documents Before
+             * @default 0
              */
-            promoted: string[];
+            documents_before: number;
             /**
-             * @description With `status` `truncated`: the item's third consecutive cut-off, so
-             *     the pass settled it rather than leaving it owed — material promoted
-             *     as it stood (named in `promoted`), an edited document stamped (see
-             *     "Bound a pass to eight writes").
+             * Gave Up
+             * @default false
              */
             gave_up: boolean;
             /**
-             * @description The edited document stamped curated without a pass, present only
-             *     with `status` `too_large` when the oversized item was a document —
-             *     there is nothing to promote, and the stamp stops the sweep
-             *     re-offering it. Empty otherwise.
+             * Item
+             * @default
+             */
+            item: string;
+            /**
+             * Limit
+             * @default 0
+             */
+            limit: number;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Promoted */
+            promoted: string[];
+            /**
+             * Refused
+             * @default 0
+             */
+            refused: number;
+            /**
+             * Retired
+             * @default 0
+             */
+            retired: number;
+            /**
+             * Stamped
+             * @default
              */
             stamped: string;
-        };
-        /**
-         * @description What an upload became. Note `converter` is reported here and written
-         *     **nowhere on disk**, and nothing of the upload itself is kept: the
-         *     extracted Markdown is material, and the original bytes are gone
-         *     (see "Convert uploads into material without keeping them").
-         */
-        IngestedDocumentOut: {
             /**
-             * @description The document the upload became when it was promoted on the spot
-             *     (no internal model to merge it), relative to the knowledge root;
-             *     null while it waits in the inbox.
+             * Status
+             * @enum {string}
              */
-            path: string | null;
-            title: string;
+            status: "ok" | "truncated" | "no_model" | "up_to_date" | "too_large" | "failed";
+            /**
+             * Written
+             * @default 0
+             */
+            written: number;
+        };
+        /** CurationRequest */
+        CurationRequest: {
+            /** Document */
+            document?: string | null;
+        };
+        /**
+         * CurationRunOut
+         * @description What Curate now did: every pass it ran, in order (spec knowledge "Report
+         *     every pass outcome as a status").
+         */
+        CurationRunOut: {
+            /** Collection */
+            collection: string;
+            /** Passes */
+            passes: components["schemas"]["CurationOut"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "failed" | "no_model" | "up_to_date";
+            /** Total */
+            total: number;
+        };
+        /** DirectoryOut */
+        DirectoryOut: {
+            /** File Count */
+            file_count: number;
+            /**
+             * Inbox
+             * @default false
+             */
+            inbox: boolean;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * DocumentChangeOut
+         * @description One document a change touched.
+         */
+        DocumentChangeOut: {
+            /**
+             * Added
+             * @description Lines added.
+             */
+            added: number;
+            /**
+             * Path
+             * @description Knowledge-root-relative document path.
+             */
+            path: string;
+            /**
+             * Removed
+             * @description Lines removed.
+             */
+            removed: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "modified" | "removed";
+        };
+        /**
+         * DocumentDiffOut
+         * @description What one change did to one document, as a unified diff.
+         */
+        DocumentDiffOut: {
+            /** Added */
+            added: number;
+            /**
+             * Diff
+             * @description A unified diff; empty when the change made no textual change.
+             */
+            diff: string;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "modified" | "removed";
+        };
+        /**
+         * DocumentHistoryOut
+         * @description A document's versions, newest first.
+         */
+        DocumentHistoryOut: {
+            /** Path */
+            path: string;
+            /** Versions */
+            versions: components["schemas"]["DocumentVersionOut"][];
+        };
+        /**
+         * DocumentVersionOut
+         * @description One version of a document: the change that made it.
+         */
+        DocumentVersionOut: {
+            change: components["schemas"]["ChangeOut"];
+            /**
+             * Removed
+             * @description True when this change removed the document.
+             */
+            removed: boolean;
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /** FileOut */
+        FileOut: {
+            /** Actor */
+            actor: string;
+            /** Body */
+            body: string;
+            /** Created At */
+            created_at: string;
+            /**
+             * Curated At
+             * @default
+             */
+            curated_at: string;
+            /** Description */
             description: string;
-            /** @description Which converter produced the Markdown. */
+            /** File Path */
+            file_path: string;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Folder Path */
+            folder_path: string;
+            /**
+             * Inbox
+             * @default false
+             */
+            inbox: boolean;
+            /** Path */
+            path: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * FileSave
+         * @description A document's new body, from the web UI's editor ("Save a document edited
+         *     in the web UI"). The frontmatter is kept as it is on disk.
+         */
+        FileSave: {
+            /** Body */
+            body: string;
+            /** Expected Fingerprint */
+            expected_fingerprint: string;
+            /** Path */
+            path: string;
+        };
+        /** FileSummaryOut */
+        FileSummaryOut: {
+            /** Actor */
+            actor: string;
+            /** Description */
+            description: string;
+            /**
+             * Inbox
+             * @default false
+             */
+            inbox: boolean;
+            /** Path */
+            path: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** IngestedDocumentOut */
+        IngestedDocumentOut: {
+            /** Converter */
             converter: string;
-            /** @description True when the upload waits in the inbox for a pass to merge it. */
+            /** Description */
+            description: string;
+            /** Path */
+            path: string | null;
+            /** Pending */
             pending: boolean;
+            /** Title */
+            title: string;
+        };
+        /** TreeOut */
+        TreeOut: {
+            /** Directories */
+            directories: components["schemas"]["DirectoryOut"][];
+            /** Files */
+            files: components["schemas"]["FileSummaryOut"][];
+            /** Path */
+            path: string;
         };
         /**
-         * @description The app-wide error shape (`surfaces/http/errors.py`). Contract-only
-         *     alias — there is no Pydantic model of this name.
+         * VersionBodyOut
+         * @description A document's body as one version left it, for Compare with current.
          */
-        ErrorEnvelope: {
-            error: {
-                /** @description e.g. `KNOWLEDGE_COLLECTION_NOT_FOUND`, `KNOWLEDGE_PATH_UNSAFE`. */
-                code: string;
-                message: string;
-                details?: Record<string, never>;
-            };
-        };
-    };
-    responses: {
-        /**
-         * @description A path that escapes the knowledge root, names a hidden entry — for a
-         *     write or a delete, the inbox included; a read or a listing may name the
-         *     inbox — or cannot name a document because it is the collection itself
-         *     or its `README.md` (`KNOWLEDGE_PATH_UNSAFE`). The rule lives in path
-         *     construction rather than in a check each handler remembers to make,
-         *     which is why it is reported here (see "Guard every path through one
-         *     module").
-         */
-        UnsafePath: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
+        VersionBodyOut: {
+            /** Body */
+            body: string;
+            /** Path */
+            path: string;
+            /** Version */
+            version: string;
         };
         /**
-         * @description A curation pass over this collection is already in flight
-         *     (`UPKEEP_ALREADY_RUNNING`). Refused rather than queued — the caller
-         *     asked to start a pass, and no pass is going to start (see "Run one pass
-         *     per collection at a time").
+         * VersionDiffOut
+         * @description One version's diff of one document.
          */
-        UpkeepAlreadyRunning: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /** @description A collection of that name already exists (`KNOWLEDGE_COLLECTION_EXISTS`). */
-        AlreadyExists: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
+        VersionDiffOut: {
+            /** Added */
+            added: number;
+            /**
+             * Diff
+             * @description A unified diff; empty when the change made no textual change.
+             */
+            diff: string;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "modified" | "removed";
+            /** Version */
+            version: string;
         };
         /**
-         * @description No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown uid
-         *     is always an error — nothing is conjured into existence by being asked
-         *     for (see "Create collections only deliberately").
+         * VersionRestoreIn
+         * @description Put one version of a document back, as a new change.
          */
-        CollectionNotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /** @description No file at that path (`KNOWLEDGE_FILE_NOT_FOUND`). */
-        FileNotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
+        VersionRestoreIn: {
+            /**
+             * Path
+             * @description Knowledge-root-relative document path.
+             */
+            path: string;
+            /**
+             * Version
+             * @description The version to restore.
+             */
+            version: string;
         };
         /**
-         * @description The file changed on disk since the editor read it
-         *     (`KNOWLEDGE_FILE_CONFLICT`); nothing was written (see "Save a document
-         *     edited in the web UI").
+         * WaitingItemOut
+         * @description An item waiting in a collection's inbox — not a change yet.
          */
-        FileConflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /**
-         * @description The document could not be converted (`INGEST_REJECTED`). `details`
-         *     carries a `reason` — `unsupported_type`, `scanned_pdf` or
-         *     `empty_conversion` — and the rejected `doc_type`, so a surface can name
-         *     the format it will not take instead of failing vaguely. Legacy
-         *     `.doc`/`.ppt`, `.rtf` and `.odt` reach this case deliberately: no
-         *     converter claims them, so they are refused cleanly rather than turned
-         *     into a misleading conversion failure. Nothing half-converted is stored:
-         *     no inbox item, no document and no original is left behind.
-         */
-        IngestRejected: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /**
-         * @description The upload is past the size ceiling (`KNOWLEDGE_UPLOAD_TOO_LARGE`).
-         *     Refused before any conversion or write is attempted, naming the limit so
-         *     the caller knows what to shrink below (see "Bound uploads and leave
-         *     nothing behind on failure").
-         */
-        UploadTooLarge: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /**
-         * @description A converter library the call needs is absent (`ENGINE_UNAVAILABLE`) —
-         *     one of MarkItDown's format backends on an upload. The daemon stays up
-         *     and the answer names the engine.
-         */
-        EngineUnavailable: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /** @description Request schema validation failed (FastAPI's `HTTPValidationError` shape). */
-        ValidationFailed: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
+        WaitingItemOut: {
+            /** Collection */
+            collection: string;
+            /** Path */
+            path: string;
+            /** Submitted At */
+            submitted_at: string;
+            /**
+             * Submitted By
+             * @description The agent that submitted it, or `user`.
+             */
+            submitted_by: string;
+            /** Title */
+            title: string;
         };
     };
-    parameters: {
-        /**
-         * @description The collection Resource's immutable uid. Not the collection's name:
-         *     that name is also the top-level directory under
-         *     `~/.coffer/knowledge/`, and renaming a collection moves the directory
-         *     with it — so a name is precisely the thing that does not stay put. The
-         *     uid does, and a pass started before a rename is a pass over the same
-         *     collection after it.
-         */
-        CollectionUid: string;
-        /**
-         * @description A directory path relative to the knowledge root: a collection, or a
-         *     folder nested inside one. Required — there is a dedicated route for the
-         *     collection list, so this one always names a level.
-         */
-        TreePath: string;
-        /**
-         * @description A document path relative to the knowledge root —
-         *     `<collection>/…/<name>.md`. This is the document's identity; there is
-         *     no id.
-         */
-        FilePath: string;
-        /**
-         * @description Who is writing, for the audit trail and for the file's `actor`
-         *     frontmatter. `agent` is recorded as such; anything else, an absent
-         *     header included, is recorded as `user`.
-         */
-        ActorHeader: "agent" | "user";
-    };
+    responses: never;
+    parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listKnowledgeCollections: {
+    recent_changes_api_v1_knowledge_changes_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                collection?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    change_detail_api_v1_knowledge_changes__version__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeDetailOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_deleted_api_v1_knowledge_changes__version__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    undo_pass_api_v1_knowledge_changes__version__undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_collections_api_v1_knowledge_collections_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -846,18 +980,32 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionListOut"];
                 };
             };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    createKnowledgeCollection: {
+    create_collection_api_v1_knowledge_collections_post: {
         parameters: {
             query?: never;
             header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -868,7 +1016,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -877,58 +1025,134 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionOut"];
                 };
             };
-            400: components["responses"]["UnsafePath"];
-            409: components["responses"]["AlreadyExists"];
-            422: components["responses"]["ValidationFailed"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    readKnowledgeTree: {
+    curate_api_v1_knowledge_collections__uid__curate_post: {
         parameters: {
-            query: {
-                /**
-                 * @description A directory path relative to the knowledge root: a collection, or a
-                 *     folder nested inside one. Required — there is a dedicated route for the
-                 *     collection list, so this one always names a level.
-                 */
-                path: components["parameters"]["TreePath"];
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
             };
-            header?: never;
-            path?: never;
+            path: {
+                uid: string;
+            };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CurationRequest"] | null;
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TreeOut"];
+                    "application/json": components["schemas"]["CurationRunOut"];
                 };
             };
-            400: components["responses"]["UnsafePath"];
-            404: components["responses"]["CollectionNotFound"];
-            422: components["responses"]["ValidationFailed"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    readKnowledgeFile: {
+    describe_collection_api_v1_knowledge_collections__uid__description_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionDescribeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_file_api_v1_knowledge_file_get: {
         parameters: {
             query: {
-                /**
-                 * @description A document path relative to the knowledge root —
-                 *     `<collection>/…/<name>.md`. This is the document's identity; there is
-                 *     no id.
-                 */
-                path: components["parameters"]["FilePath"];
+                path: string;
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -937,21 +1161,32 @@ export interface operations {
                     "application/json": components["schemas"]["FileOut"];
                 };
             };
-            400: components["responses"]["UnsafePath"];
-            404: components["responses"]["FileNotFound"];
-            422: components["responses"]["ValidationFailed"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    saveKnowledgeFile: {
+    save_file_api_v1_knowledge_file_put: {
         parameters: {
             query?: never;
             header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -962,7 +1197,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Saved; the document as it now is, with its new fingerprint */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -971,110 +1206,299 @@ export interface operations {
                     "application/json": components["schemas"]["FileOut"];
                 };
             };
-            400: components["responses"]["UnsafePath"];
-            404: components["responses"]["FileNotFound"];
-            409: components["responses"]["FileConflict"];
-            422: components["responses"]["ValidationFailed"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteKnowledgeFile: {
+    delete_file_api_v1_knowledge_file_delete: {
         parameters: {
             query: {
-                /**
-                 * @description A document path relative to the knowledge root —
-                 *     `<collection>/…/<name>.md`. This is the document's identity; there is
-                 *     no id.
-                 */
-                path: components["parameters"]["FilePath"];
+                path: string;
             };
             header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
             };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            400: components["responses"]["UnsafePath"];
-            404: components["responses"]["FileNotFound"];
-            422: components["responses"]["ValidationFailed"];
-        };
-    };
-    submitKnowledgeMaterial: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaterialIn"];
-            };
-        };
-        responses: {
-            /** @description Submitted */
-            201: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SubmissionOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            400: components["responses"]["UnsafePath"];
-            404: components["responses"]["CollectionNotFound"];
-            422: components["responses"]["ValidationFailed"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    uploadKnowledgeDocument: {
+    document_history_api_v1_knowledge_history_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentHistoryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    version_diff_api_v1_knowledge_history_diff_get: {
+        parameters: {
+            query: {
+                path: string;
+                version: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDiffOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_version_api_v1_knowledge_history_restore_post: {
         parameters: {
             query?: never;
             header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
             };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description The document to convert. One per call.
-                     */
-                    file: string;
-                    /** @description The collection's directory name. Must already exist. */
-                    collection: string;
-                };
+                "application/json": components["schemas"]["VersionRestoreIn"];
             };
         };
         responses: {
-            /** @description Converted and submitted */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    version_body_api_v1_knowledge_history_version_get: {
+        parameters: {
+            query: {
+                path: string;
+                version: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionBodyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_tree_api_v1_knowledge_tree_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_api_v1_knowledge_upload_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_api_v1_knowledge_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1083,69 +1507,24 @@ export interface operations {
                     "application/json": components["schemas"]["IngestedDocumentOut"];
                 };
             };
-            400: components["responses"]["IngestRejected"];
-            404: components["responses"]["CollectionNotFound"];
-            413: components["responses"]["UploadTooLarge"];
-            422: components["responses"]["ValidationFailed"];
-            503: components["responses"]["EngineUnavailable"];
-        };
-    };
-    curateKnowledgeCollection: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
-            };
-            path: {
-                /**
-                 * @description The collection Resource's immutable uid. Not the collection's name:
-                 *     that name is also the top-level directory under
-                 *     `~/.coffer/knowledge/`, and renaming a collection moves the directory
-                 *     with it — so a name is precisely the thing that does not stay put. The
-                 *     uid does, and a pass started before a rename is a pass over the same
-                 *     collection after it.
-                 */
-                uid: components["parameters"]["CollectionUid"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CurationRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CurationOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /**
-             * @description `RESOURCE_NOT_FOUND` for a uid no resource answers to, the same as
-             *     every other uid-addressed route; `KNOWLEDGE_COLLECTION_NOT_FOUND`
-             *     for a uid naming a resource that is not a collection. An unknown uid is always an error — nothing is
-             *     conjured into existence by being asked for (see "Create
-             *     collections only deliberately").
-             */
-            404: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            409: components["responses"]["UpkeepAlreadyRunning"];
-            422: components["responses"]["ValidationFailed"];
         };
     };
 }

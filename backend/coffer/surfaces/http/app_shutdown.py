@@ -21,6 +21,7 @@ Four rules the order encodes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -28,12 +29,13 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.chat.turn_state import stop_all_turns
+from coffer.application.runtime.supervisor import tasks
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.curation_wiring import stop_curation_worker
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
-from coffer.surfaces.http.sync_wiring import stop_converge_worker
+from coffer.surfaces.http.sync_wiring import stop_sync_worker
 from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
 
 _logger = logging.getLogger(__name__)
@@ -53,6 +55,8 @@ class Running:
     channel_runtime: Any
     channel_runtime_task: asyncio.Task[None]
     reaper_task: asyncio.Task[Any]
+    reconciler_task: asyncio.Task[None]
+    attention_watch_task: asyncio.Task[None]
     kinds: Any
     engine: AsyncEngine
 
@@ -66,19 +70,38 @@ async def best_effort(step: str, awaitable: Any) -> None:
     """
     try:
         await awaitable
-    except (Exception, asyncio.CancelledError):
+    except asyncio.CancelledError:
+        # A step that was cancelled — the channel runtime and the session
+        # reaper are, deliberately, just above — has stopped; that is not a
+        # failure. If shutdown itself is being cancelled, say so upward.
+        task = asyncio.current_task()
+        if task is not None and task.cancelling():
+            raise
+    except Exception:
         _logger.exception("shutdown.step_failed", extra={"step": step})
 
 
 async def shutdown(running: Running) -> None:
     """Stop everything, in the order above."""
     daemon_routes.set_daemon_phase("draining")
+    # The unified reconciler first: a pass writes into agents' config files
+    # and records audit rows, so it must not start while the rest goes down.
+    running.reconciler_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await running.reconciler_task
+    # Its listener next: nothing is left to change what it watches.
+    running.attention_watch_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await running.attention_watch_task
     running.workers.retention_worker.stop()
-    await stop_converge_worker(running.workers.converge_worker)
+    await stop_sync_worker(running.workers.sync_worker)
     await stop_curation_worker(running.workers.curation_task)
     await stop_distil_worker(running.workers.distil_task)
     await stop_aggregate_worker(running.workers.aggregate_task)
     await stop_transcript_warm_worker(running.workers.warm_worker, running.workers.warm_task)
+    # The skill update check fetches over the network; stop it and remove
+    # every staged source (spec skill-manager "Add skills from an archive").
+    await best_effort("skill_sources", running.kinds.agent_skill.skill_sources.stop())
 
     # Channel adapters next, so no new turns start mid-teardown. Cancel the
     # reconciler BEFORE dispose() so an in-flight tick cannot resurrect what
@@ -110,6 +133,11 @@ async def shutdown(running: Running) -> None:
     await best_effort("mcp_session_reaper", running.reaper_task)
     # Drain the buffered invocation writer before tearing down sessions.
     await best_effort("invocation_repo", running.kinds.mcp.invocation_repo.stop())
+    # Stops supervising only: the proxy process outlives the daemon, so the
+    # agents' in-flight model streams survive a daemon restart or upgrade.
+    await best_effort("model_proxy", running.kinds.provider.proxy.stop())
+    await best_effort("price_refresh", running.kinds.provider.stop_price_refresh())
+    await best_effort("usage", running.kinds.usage.stop())
     # Dispose MCP supervisors (best-effort). The process-wide supervisor is IN
     # this registry now — it has to be, or the kind's delete and rename hooks
     # cannot reach the upstreams it holds — so the loop covers it and the
@@ -119,6 +147,10 @@ async def shutdown(running: Running) -> None:
     running.kinds.mcp.session_supervisors.clear()
     # Close per-/mcp/-session state in the protocol routes.
     await best_effort("mcp_sessions", shutdown_all_sessions())
+    # Last, the sweep: whatever background task its owner did not stop above
+    # (the loop-lag probe, an ingest still running, a restarting loop) is
+    # cancelled here, bounded, before the database it may be writing to goes.
+    await best_effort("supervised_tasks", tasks().shutdown())
     # The knowledge service holds no long-lived handles (the directory is
     # session-maker-bound + lazy), so only the shared engine needs disposal.
     await running.engine.dispose()

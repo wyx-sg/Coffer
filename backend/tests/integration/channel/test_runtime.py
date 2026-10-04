@@ -6,11 +6,13 @@ the websocket controller are the recording fakes from conftest.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from coffer.domain.errors import ResourceNotFound
 
-from .conftest import ChannelEnv
+from .conftest import ChannelEnv, uid_of
 
 _SEATALK_CONFIG = {
     "channel_type": "seatalk",
@@ -26,22 +28,22 @@ async def test_disable_stops_the_adapter_and_enable_restarts_it(env: ChannelEnv)
     resource = await env.register_channel("tg")
 
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     assert len(env.created_adapters) == 1
     first = env.created_adapters[0]
     assert first.started is True
     assert first.callbacks is not None  # inbound delivery wired to the processor
-    assert env.processor.binding("tg") is not None
+    assert env.processor.binding(uid_of("tg")) is not None
 
     await env.resources.set_enabled(resource.uid, False, actor="cli")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
     assert first.stopped is True
-    assert env.processor.binding("tg") is None
+    assert env.processor.binding(uid_of("tg")) is None
 
     await env.resources.set_enabled(resource.uid, True, actor="cli")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     assert len(env.created_adapters) == 2
     second = env.created_adapters[1]
     assert second is not first
@@ -57,20 +59,21 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     await env.runtime.reconcile_once()
     adapter = env.created_adapters[0]
     await env.pair(resource, chat_id="owner")
-    env.pairing.issue("tg")
-    assert (await env.peers.owner_peer(resource.id)) is not None
+    env.pairing.issue(resource.uid)
+    assert (await env.peers.owner_peer(resource.uid)) is not None
 
     await env.resources.delete(resource.uid, actor="cli")
 
     # on_delete → runtime.evict: adapter stopped, binding gone, pairing dropped.
     assert adapter.stopped is True
-    assert env.runtime.is_running("tg") is False
-    assert env.processor.binding("tg") is None
-    assert env.pairing.pending("tg") is False
-    # The resource row is gone and the peer row went with it (FK cascade).
+    assert env.runtime.is_running(uid_of("tg")) is False
+    assert env.processor.binding(uid_of("tg")) is None
+    assert env.pairing.pending(resource.uid) is False
+    # The resource row is gone and the peer row went with it (the pairings are a
+    # vault document that goes with the channel).
     with pytest.raises(ResourceNotFound):
         await env.resources.get(resource.uid)
-    assert await env.peers.owner_peer(resource.id) is None
+    assert await env.peers.owner_peer(resource.uid) is None
 
 
 async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> None:
@@ -80,10 +83,10 @@ async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv)
     )
 
     await env.runtime.reconcile_once()
-    # Held with the app's own materialized credentials, keyed by the channel's
+    # Held with the app's own materialized secrets, keyed by the channel's
     # UID — the register handshake is per key, and a label the owner may
     # rename is the wrong thing to hold one on.
-    assert env.runtime.is_running("st") is True
+    assert env.runtime.is_running(resource.uid) is True
     assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
     status = await env.service.status(resource.uid)
     assert status.inbound is not None
@@ -96,31 +99,6 @@ async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv)
 
     await env.resources.set_enabled(resource.uid, True, actor="cli")
     await env.runtime.reconcile_once()
-    assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
-
-
-async def test_a_document_still_carrying_webhook_keys_connects_the_same_way(
-    env: ChannelEnv,
-) -> None:
-    """A channel document from a machine on an older build may still carry the
-    webhook-era keys; they are ignored and the channel holds its websocket."""
-    env.keyring.set("channel/st/app", "app-secret-value")
-    resource = await env.resources.register(
-        kind="channel",
-        name="st",
-        config=await env.bound(
-            {
-                **_SEATALK_CONFIG,
-                "delivery": "webhook",
-                "signing_secret_ref": "channel/st/sign",
-                "tunnel_token_ref": "channel/st/tunnel",
-            }
-        ),
-        actor="cli",
-    )
-
-    await env.runtime.reconcile_once()
-
     assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
 
 
@@ -156,7 +134,26 @@ async def test_dispose_releases_every_held_connection(env: ChannelEnv) -> None:
 async def test_telegram_only_deployment_holds_no_websocket(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     assert env.websockets.started == {}
     status = await env.service.status(resource.uid)
     assert status.inbound is None
+
+
+async def test_a_channel_left_dormant_says_why_once_not_every_tick(
+    env: ChannelEnv, caplog: pytest.LogCaptureFixture
+) -> None:
+    env.keyring.set("channel/tg/bot-token", "secret")
+    await env.resources.register(
+        kind="channel",
+        name="tg",
+        config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-token"},
+        actor="test",
+    )  # bound to no agent, so it stays dark
+
+    with caplog.at_level(logging.INFO):
+        for _ in range(4):
+            await env.runtime.reconcile_once()
+
+    quiet = [r for r in caplog.records if r.message == "channel.not_started"]
+    assert len(quiet) == 1

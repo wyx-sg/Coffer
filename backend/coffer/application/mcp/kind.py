@@ -10,7 +10,7 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, Resource
 
 # Keys inside ``transport`` whose values may carry auth material (custom
-# headers, raw environment overlays). credential_refs (keychain ref strings
+# headers, raw environment overlays). secret_refs (keychain ref strings
 # only) survive audit; the raw maps are stripped.
 _AUDIT_STRIP_TRANSPORT_KEYS: frozenset[str] = frozenset({"env", "headers"})
 
@@ -23,7 +23,7 @@ def _mcp_audit_redactor(config: dict[str, Any]) -> dict[str, Any]:
     at spawn time from the keychain, but a careless user might paste the raw
     secret in instead — and we don't want it landing verbatim in
     audit_log.details_json. Stripping the structural maps keeps audit useful
-    (credential_refs survive; users still see *what* changed) without ever
+    (secret_refs survive; users still see *what* changed) without ever
     persisting the secret material itself.
     """
     transport = config.get("transport")
@@ -33,15 +33,25 @@ def _mcp_audit_redactor(config: dict[str, Any]) -> dict[str, Any]:
     return {**config, "transport": sanitised}
 
 
-def _mcp_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
-    """Pull ``transport.credential_refs`` out of a validated mcp_server config."""
+def _mcp_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """Pull ``transport.secret_refs`` out of a validated mcp_server config."""
     transport = config.get("transport")
     if not isinstance(transport, dict):
         return {}
-    refs = transport.get("credential_refs")
+    refs = transport.get("secret_refs")
     if not isinstance(refs, dict):
         return {}
     return {str(k): str(v) for k, v in refs.items()}
+
+
+#: The longest name a server may take (spec mcp-gateway "Manage MCP servers as
+#: resources"). ``mcp__coffer__`` (13) + the name + ``__`` (2) is the part of a
+#: client's 64-character tool-name budget the name spends, and 24 leaves 25
+#: characters for the upstream tool's own name.
+MCP_SERVER_NAME_MAX_LEN = 24
+
+#: The name Coffer's own gateway answers to; a registered server may not take it.
+RESERVED_MCP_SERVER_NAME = "coffer"
 
 
 def _validate_mcp_name(name: str) -> None:
@@ -51,28 +61,21 @@ def _validate_mcp_name(name: str) -> None:
     parsed back by splitting on the first ``__``. A server name containing
     ``__`` makes that parse ambiguous (it would route to the wrong server, so
     the tool lists but can never be invoked). Reserve the separator.
+
+    A name longer than :data:`MCP_SERVER_NAME_MAX_LEN` is refused too, so that
+    every tool's client-visible name fits the 64 characters model provider
+    APIs accept.
     """
+    if name == RESERVED_MCP_SERVER_NAME:
+        # A server called ``coffer`` would have its tools read as Coffer's own
+        # built-ins (tiering, ``coffer__search_tools``) and shadow the built-in
+        # ``write`` and ``search_tools`` (spec mcp-gateway "Forward tools, resources and prompts").
+        raise ValueError(f"mcp_server name {name!r} is reserved for Coffer's own MCP server")
     if "__" in name:
         raise ValueError(
             f"mcp_server name {name!r} may not contain '__' "
             "(reserved as the tool/prompt namespace separator)"
         )
-
-
-#: The longest name a NEW server may take (spec mcp-gateway "Manage MCP servers
-#: as resources"). ``mcp__coffer__`` (13) + the name + ``__`` (2) is the part of
-#: a client's 64-character tool-name budget the name spends, and 24 leaves 25
-#: characters for the upstream tool's own name.
-MCP_SERVER_NAME_MAX_LEN = 24
-
-
-def _cap_new_mcp_name(name: str) -> None:
-    """Refuse a new server name longer than :data:`MCP_SERVER_NAME_MAX_LEN`.
-
-    Registration only (``Kind.validate_new_name``): a server registered before
-    the cap keeps its longer name and keeps working, and one arriving from
-    another machine with its uid converges whatever its length.
-    """
     if len(name) > MCP_SERVER_NAME_MAX_LEN:
         raise ValueError(
             f"mcp_server name {name!r} is {len(name)} characters; the limit is "
@@ -154,16 +157,16 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         on_enabled_changed=on_enabled_changed,
         on_update_config=on_update_config,
         validate_name=_validate_mcp_name,
-        validate_new_name=_cap_new_mcp_name,
         # The name prefixes every tool name an agent sees
         # (``mcp__coffer__<server>__<tool>``), and agents' permission rules and
         # skills quote those names, so a registered server's name never changes
-        # (ADR names-visible-to-agents-are-fixed). A new display goes in the
-        # title; a new name means registering the server again.
+        # (ADR names-visible-to-agents-are-fixed). A new name means
+        # registering the server again; there is no display title beside it.
         name_fixed=True,
         name_fixed_resets="its capability toggles and its reach (enabled and scope)",
+        titled=False,
         audit_redactor=_mcp_audit_redactor,
-        credential_ref_extractor=_mcp_credential_ref_extractor,
+        secret_ref_extractor=_mcp_secret_ref_extractor,
         # Per-agent scope: the gateway filters a scoped server's tools by the
         # session's self-reported agent identity.
         supports_scope=True,

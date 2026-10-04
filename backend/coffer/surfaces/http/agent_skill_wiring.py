@@ -10,37 +10,50 @@ from __future__ import annotations
 
 import logging
 import pathlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from functools import cache
+from typing import TYPE_CHECKING
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
+from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
-from coffer.application.agent.mcp_home_migration import ClaudeHomeMcpEntryMigration
-from coffer.application.agent.mcp_service import AgentMcpService
+from coffer.application.agent.mcp_import import McpImportService
+from coffer.application.agent.mcp_import_plan import McpImportPlanner
+from coffer.application.agent.mcp_reconcile import McpEntryTarget
+from coffer.application.agent.mcp_service import AgentMcpService, default_shim_resolver
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
-from coffer.application.agent.plugin_sync_state import AgentPluginSyncState
 from coffer.application.agent.service import AgentService
-from coffer.application.agent.sync_reconcile import AgentImportGate, AgentSideEffectsReconcile
 from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.mcp.stdio_launchers import McpStdioLaunchers
+from coffer.application.platform_port import PlatformPort
+from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
-from coffer.application.skill.boot_reconcile import SkillDriftBootHeal
 from coffer.application.skill.builtin_seed import BuiltinSkillSeed
 from coffer.application.skill.kind import make_skill_kind
+from coffer.application.skill.link_reconcile import TARGET as SKILL_LINK_TARGET
+from coffer.application.skill.link_reconcile import SkillLinkTarget
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.scan import scan_locations
+from coffer.domain.reconcile import PassReport, Trigger
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import secret_ref
+from coffer.domain.skill.cli_status import ServerLauncher
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.platform.host import machine_label
+from coffer.infrastructure.platform.user_path import UserPath
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
@@ -50,9 +63,20 @@ from coffer.surfaces.http.agent_dependencies import (
     set_agent_service,
     set_auto_detect_service,
 )
-from coffer.surfaces.http.skill_dependencies import set_skill_service
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
+from coffer.surfaces.http.cli_wiring import wire_cli_requirements
+from coffer.surfaces.http.delivery_reports import register_delivery_reporter
+from coffer.surfaces.http.schemas import DeliveryResultOut
+from coffer.surfaces.http.skill_dependencies import (
+    set_skill_secret_presence,
+    set_skill_service,
+    set_skill_tool_states,
+)
+from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
+from coffer.surfaces.http.skill_tool_states import McpToolStates
+from coffer.surfaces.http.vault_composition import VaultStores
 from coffer.surfaces.http.workspace_dependencies import (
+    set_agent_hooks_service,
     set_agent_mcp_entry_service,
     set_agent_native_memory_service,
     set_agent_plugin_service,
@@ -61,20 +85,31 @@ from coffer.surfaces.http.workspace_dependencies import (
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 _log = logging.getLogger(__name__)
+
+
+class _CliServerLaunchers:
+    """The MCP kind's stdio launchers in the skill kind's shape, for the CLIs
+    page (the two kinds meet only here, at the composition root)."""
+
+    def __init__(self, source: McpStdioLaunchers) -> None:
+        self._source = source
+
+    async def stdio_launchers(self) -> Sequence[ServerLauncher]:
+        return [
+            ServerLauncher(s.server_uid, s.server_name, s.launcher)
+            for s in await self._source.stdio_launchers()
+        ]
 
 
 @dataclass(frozen=True)
 class AgentSkillWiring:
     """What the agent + skill kinds hand back to the lifespan: the two services
-    later kinds project into / deliver through, and the boot heal the lifespan
-    runs once every kind is wired."""
+    later kinds project into / deliver through, and the builtin skill seed."""
 
     agent_service: AgentService
     skill_service: SkillService
-    boot_heal: SkillDriftBootHeal
     #: Writes Coffer's own generated skill into the master store. Paired
     #: with a renderer by ``guide_wiring`` — the skill kind cannot reach the
     #: knowledge layer that produces the text, so the pairing is the
@@ -85,30 +120,24 @@ class AgentSkillWiring:
     #: second one would fill a second cache and leave the listing's as cold as
     #: it found it.
     transcript_reader: FileTranscriptReader
-    #: Moves a custom-dir Claude Code agent's MCP entry out of
-    #: ``~/.claude.json`` into its own file (see ``mcp_home_migration``).
-    mcp_home_migration: ClaudeHomeMcpEntryMigration
     #: Installs Coffer's gateway entry — the first part of an agent's Coffer
     #: connection, which ``agent_connection_wiring`` composes once the memory
     #: kind (the other part's owner) is wired too.
     mcp_service: AgentMcpService
-
-
-class _BootHeal(Protocol):
-    """The one call ``run_skill_drift_boot_heal`` makes — structural, so a
-    test can hand in a fake without building a ``SkillService``."""
-
-    async def heal(self) -> list[str]: ...
+    #: Archive and Git sources, and the six-hourly update check; stopped at shutdown.
+    skill_sources: SkillSources
 
 
 def wire_agent_and_skill_kinds(
     app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
-    sm: async_sessionmaker[AsyncSession],
+    vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
-    credential_store: EncryptedCredentialStore,
-    sync: SyncContributions,
+    secret_store: EncryptedSecretStore,
+    platform: PlatformPort,
+    agent_catalog: AgentCatalog,
+    reconciler: Reconciler,
 ) -> AgentSkillWiring:
     """Wire the agent + skill kinds (specs agent-registry and skill-manager) into a running app.
 
@@ -116,7 +145,7 @@ def wire_agent_and_skill_kinds(
     the cross-kind on_delete hook (deleting an agent cascades into skill
     binding cleanup) can reference both services.
     """
-    binding_repo = SkillBindingRepo(sm)
+    binding_repo = SkillBindingRepo(vault.derived_sm)
     master_store = MasterStore()
     master_store.ensure_root()
     sync_engine = SyncEngine()
@@ -136,6 +165,13 @@ def wire_agent_and_skill_kinds(
         cfg = AgentConfig.model_validate(r.config)
         return scan_locations(cfg.type, cfg.resolved_config_dir())
 
+    # Skill delivery is one reconcile target (ADR
+    # one-level-triggered-reconciler-compares-parameters): every front door that
+    # changes what an agent should hold asks for a pass over it, synchronously,
+    # so the link is in place when the user's write returns.
+    async def _deliver_skills() -> PassReport:
+        return await reconciler.run(targets=[SKILL_LINK_TARGET], trigger=Trigger.CHANGE)
+
     skill_svc = SkillService(
         resource_service=resource_svc,
         audit=audit,
@@ -145,37 +181,24 @@ def wire_agent_and_skill_kinds(
         agent_skill_dir_resolver=_agent_skill_dir,
         workspace_scan=WorkspaceScan(),
         agent_scan_locations_resolver=_agent_scan_locations,
+        reconcile_delivery=_deliver_skills,
     )
+    reconciler.register(SkillLinkTarget(service=skill_svc))
 
     # Agent kind (spec agent-registry). Detection is discovery-only (no
     # auto-registration): AutoDetectService reports installed-but-unregistered
     # agents as candidates the user confirms on the Agents page.
     #
-    # `on_config_dir_changed` re-delivers the agent's skills when its config
-    # dir moves (skill_svc is constructed above, so the callback is available).
-    async def _agent_on_config_dir_changed(agent_uid: str) -> None:
-        await skill_svc.relink_for_agent(agent_uid)
+    # Registering an agent, moving its config dir, switching it and editing a
+    # skill's ``enabled`` / ``scope`` each change what some agent should hold
+    # (spec skill-manager "Reconcile deliveries from state on every pass"):
+    # each asks for the same pass, which judges every agent at once.
+    async def _agent_delivery_changed(_agent_uid: str) -> None:
+        await _deliver_skills()
 
-    # A newly registered agent gets everything the delivery predicate grants
-    # it right now (spec skill-manager "Reconcile deliveries per agent on every
-    # trigger").
-    async def _agent_reconcile_skill_delivery(agent_uid: str) -> None:
-        await skill_svc.apply_scope_for_agent(agent_uid, actor="system")
-
-    # actor="sync": delivery failures surface in the run's errors (retried on
-    # every import) instead of growing the audit log unboundedly. Reused below
-    # by the sync post-import hook AND by both skill-kind hooks — one
-    # reconciliation, several triggers.
-    async def _sync_skill_reconcile(agent_uid: str) -> list[str]:
-        return await skill_svc.apply_scope_for_agent(agent_uid, actor="sync")
-
-    # The SKILL kind's two post-write hooks (ADR per-agent-resource-scope). The `agent` kind carries
-    # no scope of its own, so only a skill's own edit triggers these — and
-    # either half of the predicate (``enabled`` or ``scope``) can gain or lose
-    # any agent, so every registered agent's delivery is re-reconciled.
-    async def _skill_delivery_changed(_skill: Resource) -> None:
-        for row in await resource_svc.list(kind="agent"):
-            await _sync_skill_reconcile(row.uid)
+    async def _skill_delivery_changed(_resource: Resource) -> None:
+        # Kept on the service: the scope route reads what the pass did per agent.
+        await skill_svc.reconcile_delivery()
 
     # Config-file view/edit + one-click Coffer-MCP install (spec agent-registry).
     config_file_store = ConfigFileStore()
@@ -183,15 +206,31 @@ def wire_agent_and_skill_kinds(
     agent_svc = AgentService(
         resource_service=resource_svc,
         audit=audit,
-        on_config_dir_changed=_agent_on_config_dir_changed,
-        reconcile_skill_delivery=_agent_reconcile_skill_delivery,
+        platform=platform,
+        on_config_dir_changed=_agent_delivery_changed,
+        reconcile_skill_delivery=_agent_delivery_changed,
         config_file_store=config_file_store,
     )
-    auto_detect_svc = AutoDetectService(agent_service=agent_svc)
+    # Two-signal detection: the agents' dependency probe facets + the dirs.
+    # An agent whose program is not found is handed to an agent to install,
+    # with this machine and the PATH the probes look on (UserPath) as facts.
+    auto_detect_svc = AutoDetectService(
+        agent_service=agent_svc,
+        catalog=agent_catalog,
+        machine=cache(machine_label),
+        lookup_path=UserPath(),
+    )
     agent_config_file_svc = AgentConfigFileService(
         agent_service=agent_svc, audit=audit, store=config_file_store
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
+    # Coffer's own MCP entry, judged by its shim path and --agent-uid on every
+    # pass (ADR one-level-triggered-reconciler-compares-parameters).
+    reconciler.register(
+        McpEntryTarget(
+            agents=agent_svc, store=config_file_store, shim_resolver=default_shim_resolver
+        )
+    )
 
     # MCP entries + plugins in the agent's own config files (agent workspace).
     # The keyring is the same stateless adapter the rest of the app constructs
@@ -202,14 +241,41 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         resource_service=resource_svc,
-        credentials=credential_store,
+        secrets=secret_store,
+    )
+    # Import from your agents: a dry-run plan (with the reconciler's pending
+    # coffer-entry changes) and the apply that performs it.
+    import_planner = McpImportPlanner(
+        entries=agent_mcp_entry_svc,
+        store=config_file_store,
+        resources=resource_svc,
+        reconciler=reconciler,
+    )
+    set_mcp_import_service(
+        McpImportService(
+            planner=import_planner,
+            entries=agent_mcp_entry_svc,
+            resources=resource_svc,
+            reconciler=reconciler,
+        )
     )
     agent_plugin_svc = AgentPluginService(
         agent_service=agent_svc,
         audit=audit,
         store=config_file_store,
         detail_reader=FsPluginDetailReader(),
-        cli_runner=ClaudePluginCli(),
+        # Found on the same PATH detection finds `claude` on.
+        cli_runner=ClaudePluginCli(user_path=UserPath()),
+    )
+
+    # Read-only listing of every hook in the agent's native config, Coffer's
+    # own marked with its health (the delivery hook of the projection facet).
+    agent_hooks_svc = AgentHooksService(
+        agent_service=agent_svc,
+        store=config_file_store,
+        plugins=agent_plugin_svc,
+        audit=audit,
+        catalog=agent_catalog,
     )
 
     # Read-only listing of the agent's OWN native per-project memory stores
@@ -229,13 +295,6 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc,
     )
 
-    # The plugin inventory travels in an export bundle. Codex on a new machine
-    # cannot know which plugins the old one had — that list exists only where
-    # they are installed — so carrying it is a thing no single agent can do for
-    # itself. Import stores the list and writes no agent config (see
-    # ``plugin_sync_state``).
-    sync.state_providers.append(AgentPluginSyncState(resource_svc, agent_plugin_svc))
-
     async def _agent_on_delete(agent: Resource) -> None:
         # Awaited by ResourceService.delete BEFORE the agent row is removed,
         # so binding-row lookups inside ``cleanup_bindings_for_agent`` still
@@ -243,18 +302,22 @@ def wire_agent_and_skill_kinds(
         # implementation would race the row delete and find nothing to clean.
         await skill_svc.cleanup_bindings_for_agent(agent)
 
-    async def _agent_enabled_changed(agent: Resource) -> None:
-        # Disabling an agent reclaims its delivered skills; enabling it puts
-        # back whatever the skills' own ``enabled`` + ``scope`` grant. Same
-        # per-agent reconciliation both ways, so the reclaim is reversible.
-        await skill_svc.apply_scope_for_agent(agent_uid=agent.uid, actor="system")
-
     agent_kind = make_agent_kind(
         on_delete=_agent_on_delete,
-        on_enabled_changed=_agent_enabled_changed,
+        # Disabling an agent reclaims its delivered skills; enabling it puts
+        # back whatever the skills' own ``enabled`` + ``scope`` grant.
+        on_enabled_changed=_skill_delivery_changed,
     )
+    skill_sources = wire_skill_sources(skill_svc)
+
+    async def _skill_on_delete(skill: Resource) -> None:
+        await skill_svc.cleanup_bindings_for_skill(skill)
+        # The update-check record names the skill by uid in local state;
+        # nothing cascades from a file, so it goes with the skill here.
+        await skill_sources.service.status_repo.delete(skill.uid)
+
     skill_kind = make_skill_kind(
-        skill_svc.cleanup_bindings_for_skill,
+        _skill_on_delete,
         on_scope_changed=_skill_delivery_changed,
         on_enabled_changed=_skill_delivery_changed,
     )
@@ -262,74 +325,46 @@ def wire_agent_and_skill_kinds(
     app.state.kinds["agent"] = agent_kind
     app.state.kinds["skill"] = skill_kind
 
-    # Import reconciliation (spec vault-sync): an agent doc only imports where the
-    # agent is installed (gate → quarantine otherwise), and imported rows
-    # re-apply their on-disk side-effects (skill
-    # delivery) after every sync import. start_sync reads these registries.
-    sync.import_gates.append(AgentImportGate())
-    sync.post_import_hooks.append(
-        AgentSideEffectsReconcile(
-            agent_svc,
-            config_file_store,
-            reconcile_skill_delivery=_sync_skill_reconcile,
-        )
-    )
-
     set_agent_service(agent_svc)
     set_auto_detect_service(auto_detect_svc)
     set_agent_config_file_service(agent_config_file_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_plugin_service(agent_plugin_svc)
+    set_agent_hooks_service(agent_hooks_svc)
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
 
-    # Boot heal (see application/skill/boot_reconcile): repair_drift's re-link
-    # of a broken/tampered symlink previously only ran from an explicit
-    # click (CLI/REST) — nothing else ever inspects an already-delivered
-    # link's on-disk health, so it never self-healed while the daemon was
-    # simply not running. Returned rather than run here, so the lifespan owns
-    # the startup ordering (`run_skill_drift_boot_heal` runs after every kind).
-    return AgentSkillWiring(
-        agent_service=agent_svc,
-        skill_service=skill_svc,
-        boot_heal=SkillDriftBootHeal(skill_service=skill_svc),
-        builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),
-        transcript_reader=transcript_reader,
-        mcp_home_migration=ClaudeHomeMcpEntryMigration(
-            agent_service=agent_svc, audit=audit, store=config_file_store
-        ),
-        mcp_service=agent_mcp_svc,
+    async def _skill_delivery_report(skill: Resource) -> list[DeliveryResultOut]:
+        return [
+            DeliveryResultOut(
+                agent_uid=d.agent_uid, agent_name=d.agent_name, ok=d.ok, reason=d.reason
+            )
+            for d in await skill_svc.delivery_of(skill)
+        ]
+
+    register_delivery_reporter("skill", _skill_delivery_report)
+
+    def _secret_set(name: str) -> bool:
+        # A presence probe: it stats the ciphertext file, never decrypts.
+        return secret_store.exists(secret_ref(name))
+
+    set_skill_secret_presence(_secret_set)
+    tool_states = McpToolStates(resource_svc)
+    set_skill_tool_states(tool_states)
+    wire_cli_requirements(
+        skill_svc,
+        audit,
+        servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)),
+        secret_set=_secret_set,
+        tools=tool_states,
     )
 
-
-async def run_claude_mcp_home_migration(heal: _BootHeal) -> None:
-    """Boot hook: move an MCP entry an older Coffer put in ``~/.claude.json``
-    for a custom-dir Claude Code agent into that agent's own ``.claude.json``
-    (spec agent-registry/claude-code
-    "Install Coffer's MCP entry into Claude Code's .claude.json").
-    Idempotent; best-effort like the other boot heals."""
-    try:
-        notes = await heal.heal()
-    except Exception:
-        _log.exception("claude_mcp_home_migration.failed")
-        return
-    for note in notes:
-        _log.warning("claude_mcp_home_migration %s", note)
-
-
-async def run_skill_drift_boot_heal(heal: _BootHeal) -> None:
-    """Boot hook: re-deliver the skill drift ``repair_drift`` already knows how
-    to fix safely, instead of waiting for a click on a button nobody used.
-
-    See ``application/skill/boot_reconcile`` for which drift kinds that is and
-    why. Best-effort, like the provider projection sweep it mirrors: whatever
-    it finds is logged, and nothing here is allowed to fail boot.
-    """
-    try:
-        notes = await heal.heal()
-    except Exception:
-        _log.exception("skill_drift_boot_heal.failed")
-        return
-    for note in notes:
-        _log.warning("skill_drift_boot_heal %s", note)
+    return AgentSkillWiring(
+        skill_sources=skill_sources,
+        agent_service=agent_svc,
+        skill_service=skill_svc,
+        builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),
+        transcript_reader=transcript_reader,
+        mcp_service=agent_mcp_svc,
+    )

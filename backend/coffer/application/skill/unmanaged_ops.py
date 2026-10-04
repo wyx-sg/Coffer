@@ -15,11 +15,15 @@ from __future__ import annotations
 
 import logging
 import pathlib
+import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 from coffer.domain.skill.scan import UnmanagedSkill, classify
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
@@ -71,18 +75,16 @@ def _label(index: int) -> str:
 
 def _scan(service: SkillService, agent: Resource) -> list[tuple[str, UnmanagedSkill]]:
     """(location_label, UnmanagedSkill) pairs across the agent's locations."""
-    # Narrow the optional deps for the type checker; callers go through
-    # SkillService._require_unmanaged_deps first, so this never trips.
-    resolver = service._resolve_agent_scan_locations
     scanner = service._workspace_scan
-    if resolver is None or scanner is None:  # pragma: no cover — guarded upstream
-        raise RuntimeError("workspace scan dependencies are not wired")
-    locations = resolver(agent)
+    locations = service._resolve_agent_scan_locations(agent)
     master_root = service._store.root
+    # Coffer's own skill is derived output under the store's derived root; a
+    # link to it is as managed as a link into the master store.
+    derived = (service._store.derived_root,)
     out: list[tuple[str, UnmanagedSkill]] = []
     for i, loc in enumerate(locations):
         entries = scanner.scan_dir(loc)
-        for u in classify(entries, master_root=master_root):
+        for u in classify(entries, master_root=master_root, also_managed=derived):
             out.append((_label(i), u))
     return out
 
@@ -154,18 +156,28 @@ async def adopt_unmanaged(
     skill_name: str,
     location: str,
     actor: str,
+    name: str | None = None,
+    enabled: bool = True,
+    scope: Scope | None = None,
 ) -> Resource:
     """Adopt an unmanaged skill folder into the master store.
 
-    Copy into master + register + auto-bind (via ``register_from_validated``),
+    ``name`` registers it under another name than its SKILL.md front matter
+    carries (the front matter of the master copy is rewritten, the folder it
+    came from is untouched until the adoption has succeeded); ``enabled`` and
+    ``scope`` are the reach it starts with (default: every agent).
+
+    Copy into master + register + deliver (via ``register_from_validated``),
     then remove the original folder and deliver the managed link to the
     agent's canonical delivery location ``<config_dir>/skills/<name>`` —
     in-place replacement when adopting from there, consolidation when
     adopting from ``~/.agents/skills`` (the original is removed; Codex reads
     both locations, so the skill stays visible). See spec skill-manager "Adopt an unmanaged skill".
-    Auto-bind inside ``register_from_validated`` skips THIS agent with a
-    TargetConflict while the original folder still occupies the link path —
-    that is why the rmtree happens first and ``enable_for`` runs after it.
+    The delivery pass ``register_from_validated`` asks for leaves THIS agent
+    alone while the original folder still occupies the link path (foreign
+    content is never clobbered) — that is why the rmtree happens first and
+    the link is made after it, directly: adoption links in place even into a
+    disabled agent, which the reconciler would not.
     """
     from coffer.application.skill.lifecycle_ops import register_from_validated
 
@@ -181,14 +193,27 @@ async def adopt_unmanaged(
     if not isinstance(result, ValidationOk):
         raise UnmanagedSkillInvalid(skill_name, result.reason)
 
-    resource = await register_from_validated(
-        service=service,
-        src=entry.path,
-        validation=result,
-        source_meta=LocalImportSource(original_path=str(entry.path)),
-        event=AuditEventType.SKILL_ADOPTED,
-        actor=actor,
-    )
+    renamed = name is not None and name != result.frontmatter.name
+    with tempfile.TemporaryDirectory(prefix="coffer-adopt-") as tmp:
+        src = entry.path
+        validation = result
+        if renamed:
+            assert name is not None
+            src = pathlib.Path(tmp) / entry.path.name
+            shutil.copytree(entry.path, src, symlinks=True)
+            _rewrite_skill_name(src / "SKILL.md", name)
+            again = validate_skill_folder(src, size_limit_bytes=service._size_limit)
+            if not isinstance(again, ValidationOk):
+                raise UnmanagedSkillInvalid(skill_name, again.reason)
+            validation = again
+        resource = await register_from_validated(
+            service=service,
+            src=src,
+            validation=validation,
+            source_meta=LocalImportSource(original_path=str(entry.path)),
+            event=AuditEventType.SKILL_ADOPTED,
+            actor=actor,
+        )
 
     # Post-registration delivery. Failures past this point do NOT roll back
     # the resource — the master copy is good. If rmtree fails, the original
@@ -199,16 +224,41 @@ async def adopt_unmanaged(
     # folder (under its own name) is still removed — the folder name was
     # never the skill's identity.
     service._rmtree(entry.path)
-    from coffer.application.skill.binding_ops import enable_skill_for_agent
+    from coffer.application.skill.binding_ops import deliver
 
-    await enable_skill_for_agent(
-        service=service,
-        skill_uid=resource.uid,
-        agent_uid=agent.uid,
-        force=False,
-        actor=actor,
-    )
+    link = service._resolve_agent_skill_dir(agent) / resource.name
+    written = await deliver(service, skill=resource, agent=agent, link=link)
+    if written.created is not None:
+        # Adoption is the one delivery made outside the reconciler (it links
+        # in place even into a disabled agent), so it records its own event.
+        await service._audit.record(
+            AuditEventType.SKILL_BOUND.value,
+            resource=resource,
+            actor=actor,
+            details={
+                "agent": agent.name,
+                "link": str(link),
+                "mode": written.mode.value if written.mode else None,
+            },
+        )
+    # The reach the adopter chose; a freshly registered skill is already
+    # enabled for every agent, so the default writes nothing.
+    if scope is not None:
+        resource = await service._rs.update_scope(resource.uid, scope, actor=actor)
+    if not enabled:
+        resource = await service._rs.set_enabled(resource.uid, False, actor)
     return resource
+
+
+def _rewrite_skill_name(skill_md: pathlib.Path, name: str) -> None:
+    """Set ``name:`` in SKILL.md's front matter, leaving every other line as is."""
+    lines = skill_md.read_text(encoding="utf-8").splitlines(keepends=True)
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), len(lines))
+    for i in range(1, end):
+        if re.match(r"name\s*:", lines[i]):
+            lines[i] = f"name: {name}\n"
+            break
+    skill_md.write_text("".join(lines), encoding="utf-8")
 
 
 async def delete_unmanaged(

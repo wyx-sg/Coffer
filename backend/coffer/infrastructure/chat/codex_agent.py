@@ -32,6 +32,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message
+from coffer.domain.chat.reply_file import ReplyFile
 from coffer.infrastructure.chat.adapter_support import SessionSink, last_user_text
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
@@ -42,11 +43,14 @@ from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
 )
+from coffer.infrastructure.chat.codex_reply_files import CodexReplyFiles
+from coffer.infrastructure.chat.codex_stream import attachment_note, notifications_until_eof
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
     extract_document_attachments,
     prompt_with_document_text,
 )
+from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -93,6 +97,7 @@ class CodexAppServerAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
+        prompt_memory: PromptMemory | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -103,6 +108,18 @@ class CodexAppServerAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
+        # A channel turn's retrieval: the notes its prompt names.
+        self._prompt_memory = prompt_memory
+        #: The model the thread ran on, as the app-server reported it; filled in
+        #: while the turn streams. The turn runner reads it when it finalises the reply.
+        self.model_id: str | None = None
+        self._reply_files = CodexReplyFiles()
+
+    @property
+    def reply_files(self) -> list[ReplyFile]:
+        """What the reply changed in each file, from its file-change items; the
+        turn runner stores it when it finalises the reply."""
+        return self._reply_files.files()
 
     async def run_turn(
         self,
@@ -131,6 +148,13 @@ class CodexAppServerAdapter:
                 extra={"session_id": state.session_id},
                 exc_info=True,
             )
+
+    def _note_model(self, result: dict[str, Any], state: CodexParseState) -> None:
+        """Take the model a thread/start|resume result names (best effort)."""
+        model = result.get("model")
+        if isinstance(model, str) and model:
+            state.model = model
+            self.model_id = model
 
     async def _open_thread(self, rpc: CodexRpcClient, state: CodexParseState) -> str:
         """Resume the stored thread, or start one; return its id.
@@ -173,6 +197,7 @@ class CodexAppServerAdapter:
                 thread = await rpc.request(
                     "thread/resume", {**thread_params, "threadId": self._resume}
                 )
+                self._note_model(thread, state)
                 return (thread.get("thread") or {}).get("id") or self._resume
             except CodexRpcError:
                 _logger.warning(
@@ -184,6 +209,7 @@ class CodexAppServerAdapter:
                 # whatever the fresh thread reports replaces it.
                 state.session_id = None
         thread = await rpc.request("thread/start", thread_params)
+        self._note_model(thread, state)
         thread_id = (thread.get("thread") or {}).get("id") or ""
         if thread_id and not state.session_id:
             # Normally ``thread/started`` reports it too; the result is enough.
@@ -234,36 +260,34 @@ class CodexAppServerAdapter:
             attachments, self._document_extractor
         )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             # Codex is path-native (no inline image blocks over its app-server
             # RPC): hand it the on-disk paths so it can open them with its tools.
-            notes = "\n".join(
-                f"[The user attached a file '{a.filename}', saved at {a.path}.]"
-                for a in attachments
-            )
+            notes = "\n".join(attachment_note(a) for a in attachments)
             prompt = f"{prompt}\n\n{notes}".strip() if prompt else notes
         if not prompt:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return
 
-        state = CodexParseState(session_id=self._resume)
+        state = CodexParseState(session_id=self._resume, reply_files=self._reply_files)
         queue: asyncio.Queue[Any] = asyncio.Queue()
         yield TurnStarted()
 
-        session: CodexAppServerSession = self._session_factory(self._cwd, self._env)
-        await session.start()
-        rpc = session.rpc
+        session: CodexAppServerSession | None = None
 
-        async def pump() -> None:
+        async def pump(rpc: CodexRpcClient) -> None:
             # Map streamed notifications onto the queue. A sentinel after the
             # terminal event ends the drain. The iterator ends when the RPC
             # stream reaches EOF so a turn that never sends ``turn/completed``
             # still terminates (the ``_stream`` tail then synthesizes a
             # ``stream_ended`` error).
             try:
-                async for method, params in _notifications_until_eof(rpc):
-                    for event in map_codex_notification(method, params, state):
+                async for method, params in notifications_until_eof(rpc):
+                    events = map_codex_notification(method, params, state)
+                    self.model_id = state.model or self.model_id
+                    for event in events:
                         await queue.put(event)
                         if isinstance(event, (TurnDone, TurnError)):
                             await queue.put(_SENTINEL)
@@ -284,7 +308,17 @@ class CodexAppServerAdapter:
             # loop is already running (session.start spun it up), but the pump is
             # the only consumer of ``rpc.notifications()`` — start it first so it
             # is draining before any notification can be produced.
-            pump_task = asyncio.create_task(pump())
+            try:
+                session = self._session_factory(self._cwd, self._env)
+                await session.start()
+            except Exception as exc:
+                # A missing binary or a spawn that failed: the same connect error
+                # the handshake raises, not an unhandled RuntimeError.
+                state.terminal_emitted = True
+                yield TurnError(code="codex_connect_error", message=str(exc))
+                return
+            rpc = session.rpc
+            pump_task = asyncio.create_task(pump(rpc))
             try:
                 turn_id = await self._drive_handshake(rpc, prompt, state)
             except _ConnectError as exc:
@@ -315,8 +349,11 @@ class CodexAppServerAdapter:
                 pump_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await pump_task
-            with contextlib.suppress(Exception):
-                await session.close()
+            if session is not None:
+                # BaseException: a cancel that landed inside ``start()`` leaves a
+                # half-started child that only ``close()`` reaps.
+                with contextlib.suppress(BaseException):
+                    await asyncio.shield(session.close())
 
         if not state.terminal_emitted:
             # The stream ended without a turn/completed — the agent process went
@@ -326,47 +363,6 @@ class CodexAppServerAdapter:
             # ERROR so the orchestrator never hangs and the outcome is honest;
             # whatever text streamed before the cut is still delivered with it.
             yield TurnError(code=STREAM_ENDED, message=STREAM_ENDED_MESSAGE)
-
-
-async def _notifications_until_eof(
-    rpc: CodexRpcClient,
-) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-    """Yield notifications until the RPC read loop reaches EOF.
-
-    Race each fetch against the public ``rpc.eof`` signal; when the read loop
-    has finished AND no buffered notification remains, end cleanly so ``_stream``
-    can synthesize a terminal.  The ``finally`` block always cancels in-flight
-    futures to prevent "Task was destroyed but it is pending!" warnings when the
-    pump task is cancelled mid-wait.
-    """
-    stream = rpc.notifications()
-    eof_waiter: asyncio.Future[Any] = asyncio.ensure_future(rpc.eof.wait())
-    nxt: asyncio.Future[Any] | None = None
-    try:
-        while True:
-            nxt = asyncio.ensure_future(stream.__anext__())
-            await asyncio.wait({nxt, eof_waiter}, return_when=asyncio.FIRST_COMPLETED)
-            if nxt.done():
-                yield nxt.result()
-                nxt = None
-                continue
-            # EOF fired first — give any notification produced in the same tick
-            # a chance to land, then stop if none did.
-            await asyncio.sleep(0)
-            if nxt.done():
-                yield nxt.result()
-                nxt = None
-                continue
-            return  # EOF and no buffered notification
-    finally:
-        if not eof_waiter.done():
-            eof_waiter.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await eof_waiter
-        if nxt is not None and not nxt.done():
-            nxt.cancel()
-            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration, Exception):
-                await nxt
 
 
 __all__ = ["CodexAppServerAdapter"]

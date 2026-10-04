@@ -9,6 +9,7 @@ invocation-logging + result-wrapping live in ``gateway_builtin`` (DRY).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX
@@ -78,6 +79,7 @@ def _clamp_top_k(raw: Any) -> int:
 async def execute_tool_search(
     args: dict[str, Any],
     aggregated_tools: list[dict[str, Any]],
+    exposure: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Rank ``aggregated_tools`` against ``args['query']``; return the top-k.
 
@@ -86,6 +88,10 @@ async def execute_tool_search(
     BM25 ranker (ADR coffer-model-is-an-internal-engine); the alternative
     cosine-over-embeddings path was removed with every other use of embeddings
     in Coffer, and was never wired to a real embedder in any case.
+
+    ``exposure`` is the person's per-tool override: among equally scored tools,
+    one set to ``search`` (reachable only here) goes ahead of one pinned
+    ``listed``, which the agent already sees. Every tool stays searchable.
     """
     query = args.get("query")
     if not isinstance(query, str) or not query.strip():
@@ -97,7 +103,9 @@ async def execute_tool_search(
     ]
     catalogue = _search_corpus(candidates)
 
-    ranked = rank_tools(query, catalogue, top_k)
+    overrides = exposure or {}
+    prefer = [overrides.get(str(t.get("name", ""))) == "search" for t in candidates]
+    ranked = rank_tools(query, catalogue, top_k, prefer=prefer)
 
     tools = [
         {

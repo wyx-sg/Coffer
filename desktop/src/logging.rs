@@ -10,7 +10,7 @@
 //! Records land in `~/.coffer/logs/daemon.log`: the file this shell already
 //! redirects a spawned daemon's own stdout to (`spawn.rs`), the file every
 //! "check `~/.coffer/logs/daemon.log`" message in the CLI points at, and the
-//! file both the Activity page's daemon-log tab and `coffer__diagnose` read.
+//! file the Activity page's daemon-log tab reads.
 //! A separate `desktop.log` would be a second place to look that nothing tells
 //! anyone about.
 //!
@@ -20,13 +20,14 @@
 //! anything else whole into the message cell. The file is already several
 //! writers' worth of formats; this is the one it reads best.
 
-use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
+
+use crate::coffer_home;
 
 /// The `logger` field on every record this shell writes, so a reader can tell
 /// the shell's lines from the daemon's in a file both append to.
@@ -36,10 +37,7 @@ const LOGGER_NAME: &str = "coffer.desktop";
 /// appended to, given the user's home dir. Pure so it's unit-testable.
 /// Mirrors the CLI spawn (backend `_client.py`), which logs to this same file.
 pub fn daemon_log_path(home: &str) -> PathBuf {
-    PathBuf::from(home)
-        .join(".coffer")
-        .join("logs")
-        .join("daemon.log")
+    coffer_home::logs_dir(home).join("daemon.log")
 }
 
 /// Open `~/.coffer/logs/daemon.log` for appending, creating the logs directory
@@ -47,16 +45,51 @@ pub fn daemon_log_path(home: &str) -> PathBuf {
 /// callers degrade — `spawn.rs` to `/dev/null`, the logger to dropping the
 /// record — rather than failing the thing they were asked to do.
 pub fn open_daemon_log() -> Option<fs::File> {
-    let home = env::var("HOME")
-        .ok()
-        .or_else(|| env::var("USERPROFILE").ok())?;
-    let path = daemon_log_path(&home);
+    let path = daemon_log_path(&coffer_home::home_dir()?);
     fs::create_dir_all(path.parent()?).ok()?;
     fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)
         .ok()
+}
+
+/// The program and arguments that open `path` in the system's default viewer
+/// (macOS hands a `.log` to Console, or TextEdit). Pure so it's unit-testable.
+fn open_invocation(path: &std::path::Path) -> (&'static str, Vec<String>) {
+    let program = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    (program, vec![path.to_string_lossy().into_owned()])
+}
+
+/// Open the daemon log in the system's default viewer, without the daemon.
+///
+/// The offline screen's "Open daemon log" calls this: the Activity page's
+/// Daemon log tab needs the daemon to read the file, and the daemon is what is
+/// down. The file is created first, so a first-run shell opens an empty log
+/// rather than failing.
+#[tauri::command]
+pub fn show_daemon_log() -> Result<(), String> {
+    let home = coffer_home::home_dir().ok_or("the home directory is unknown")?;
+    let path = daemon_log_path(&home);
+    open_daemon_log().ok_or_else(|| format!("cannot open {}", path.display()))?;
+    let (program, args) = open_invocation(&path);
+    std::process::Command::new(program)
+        .args(args)
+        .status()
+        .map_err(|e| format!("{program}: {e}"))
+        .and_then(|st| {
+            if st.success() {
+                Ok(())
+            } else {
+                Err(format!("{program} exited with {st}"))
+            }
+        })
 }
 
 /// Install this logger as the process-wide `log` implementation.
@@ -198,6 +231,15 @@ mod tests {
             daemon_log_path("/Users/u"),
             PathBuf::from("/Users/u/.coffer/logs/daemon.log")
         );
+    }
+
+    // acceptance(spec = "web-ui", scenario = "the offline screen opens the daemon log without the daemon")
+    #[test]
+    fn the_log_opens_in_the_system_viewer_by_its_path() {
+        let path = daemon_log_path("/Users/u");
+        let (program, args) = open_invocation(&path);
+        assert!(["open", "explorer", "xdg-open"].contains(&program));
+        assert_eq!(args, vec!["/Users/u/.coffer/logs/daemon.log".to_string()]);
     }
 
     #[test]

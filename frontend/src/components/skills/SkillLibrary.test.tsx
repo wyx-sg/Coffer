@@ -1,0 +1,134 @@
+// src/components/skills/SkillLibrary.test.tsx — the Skills library column, laid out like the MCP servers list: groups, filter rows, hover checkboxes and the selection bar at the top.
+import { useState } from "react";
+import { describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
+
+import { ToastProvider } from "@/components/ui/toast";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import type { SkillOut } from "@/lib/api/skills";
+import { BUILTIN_SKILL, makeSkill } from "@/test/skillsPageKit";
+import { SkillLibrary } from "./SkillLibrary";
+
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
+vi.mock("@/lib/hooks/useClis", () => ({ useClis: () => ({ data: { items: [] } }) }));
+vi.mock("./SkillOrphanList", () => ({ SkillOrphanList: () => null }));
+
+const SKILLS: SkillOut[] = [
+  BUILTIN_SKILL,
+  makeSkill({ uid: "u-bad", name: "delta", master_missing: true }),
+  makeSkill({ uid: "u-on", name: "alpha" }),
+  makeSkill({ uid: "u-off", name: "beta", enabled: false }),
+  makeSkill({ uid: "u-none", name: "gamma", scope: { agents: [] } }),
+];
+
+function Harness({ skills = SKILLS }: { skills?: SkillOut[] }) {
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  return (
+    <SkillLibrary
+      skills={skills}
+      isLoading={false}
+      selectedName={null}
+      hrefFor={(n) => `/skills/${n}`}
+      onOpenSkill={() => {}}
+      onCheckCopies={() => {}}
+      checkingCopies={false}
+      drift={undefined}
+      picked={picked}
+      onPickedChange={setPicked}
+      selected={skills.filter((s) => !s.builtin && picked.has(s.uid))}
+      orphan={null}
+    />
+  );
+}
+
+function renderLibrary(skills?: SkillOut[]) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <TooltipProvider>
+        <ToastProvider>
+          <MemoryRouter>
+            <Harness skills={skills} />
+          </MemoryRouter>
+        </ToastProvider>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+}
+
+const group = (name: string) => screen.queryByRole("region", { name });
+const names = (el: HTMLElement) =>
+  within(el)
+    .getAllByRole("link")
+    .map((a) => a.textContent);
+
+describe("SkillLibrary", () => {
+  test("groups Needs attention, In use, Off, then Built-in, no count on the titles", () => {
+    renderLibrary();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Needs attention", "In use", "Off", "Built-in"]);
+    expect(names(group("Needs attention")!)[0]).toContain("delta");
+    expect(names(group("Needs attention")!)[0]).toContain("Master missing");
+    expect(names(group("In use")!)[0]).toContain("alpha");
+    expect(names(group("Off")!).join()).toMatch(/beta.*gamma|gamma.*beta/);
+    expect(names(group("Built-in")!)[0]).toContain("coffer-guide");
+    expect(within(group("Built-in")!).getByTestId("skill-builtin-badge")).toBeInTheDocument();
+  });
+
+  test("a row shows its description unless something needs saying, and Off rows carry no reach word", () => {
+    renderLibrary();
+    expect(within(group("In use")!).getByText("Say hello nicely.")).toBeInTheDocument();
+    expect(names(group("Off")!).every((n) => !n?.includes("Off"))).toBe(true);
+  });
+
+  test("there is no Reach filter or Kind filter; search applies to built-ins too", () => {
+    renderLibrary();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
+      target: { value: "zzz" },
+    });
+    expect(screen.getByText("No skill matches “zzz”")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
+      target: { value: "guide" },
+    });
+    expect(group("Built-in")).not.toBeNull();
+    expect(group("In use")).toBeNull();
+  });
+
+  test("a select-all row appears once a row is ticked and ticks every listed skill, not the built-in one", () => {
+    renderLibrary();
+    expect(screen.queryByRole("checkbox", { name: "Select all" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
+    const all = screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement;
+    expect(all.indeterminate).toBe(true);
+    fireEvent.click(all);
+    expect(screen.getByText("4 of 4 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(screen.queryByRole("region", { name: "Selected skills" })).toBeNull();
+  });
+
+  test("the built-in row has no checkbox and the bar counts the others only", () => {
+    renderLibrary();
+    expect(screen.queryByRole("checkbox", { name: /coffer-guide/ })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
+    const bar = screen.getByRole("region", { name: "Selected skills" });
+    expect(screen.queryByRole("textbox", { name: "Filter skills" })).toBeNull();
+    expect(within(bar).getByText("1 of 4 selected")).toBeInTheDocument();
+    expect(within(bar).queryByRole("checkbox")).toBeNull();
+    fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
+    expect(screen.queryByRole("region", { name: "Selected skills" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Filter skills" })).toBeInTheDocument();
+  });
+
+  test("a row's checkbox shows on hover or focus only, and on every row once any is ticked", () => {
+    renderLibrary();
+    const slot = (name: RegExp) =>
+      screen.getByRole("checkbox", { name }).parentElement?.parentElement as HTMLElement;
+    expect(slot(/Select row: alpha/).className).toContain("hidden");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
+    expect(slot(/Select row: beta/).className).not.toContain("hidden");
+  });
+});

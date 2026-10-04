@@ -25,6 +25,7 @@ from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import ConfigFileStale
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.surfaces.http.errors import _STATUS
+from tests.support.facets import agent_catalog
 
 _NOW = datetime(2026, 9, 14, tzinfo=UTC)
 
@@ -34,7 +35,6 @@ _CONNECTION_UID = "3c9a7b15d0e24f6688aa1b2c3d4e5f60"
 
 def _agent(config_dir: pathlib.Path) -> Resource:
     return Resource(
-        id=1,
         uid="f0e1d2c3b4a596877665544332211009",
         kind="agent",
         name="cc",
@@ -50,7 +50,7 @@ def _config() -> ProviderConfig:
     return ProviderConfig(
         protocol=Protocol.ANTHROPIC,
         base_url="https://gw.example",
-        credential_ref="provider/x/key",
+        secret_ref="provider/x/key",
     )
 
 
@@ -59,7 +59,6 @@ def _connection() -> Resource:
     name because the two halves of it go to different places: the uid into the
     ``apiKeyHelper``, the name into Codex's human-readable provider label."""
     return Resource(
-        id=2,
         uid=_CONNECTION_UID,
         kind="provider",
         name="x",
@@ -96,7 +95,7 @@ def test_projection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Pat
     store = _EditedUnderneath('{"theme": "dark"}')
 
     with pytest.raises(ConfigFileStale) as exc:
-        ProviderProjector(store).project_type(
+        ProviderProjector(store, agents=agent_catalog()).project_type(
             _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
         )
 
@@ -107,14 +106,16 @@ def test_projection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Pat
 
 def test_deprojection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Path) -> None:
     settings = tmp_path / "settings.json"
-    ProviderProjector(ConfigFileStore()).project_type(
+    ProviderProjector(ConfigFileStore(), agents=agent_catalog()).project_type(
         _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     projected = settings.read_text(encoding="utf-8")
     store = _EditedUnderneath(projected.replace("}", ', "theme": "dark"}', 1))
 
     with pytest.raises(ConfigFileStale):
-        ProviderProjector(store).deproject_type([_agent(tmp_path)], AgentType.CLAUDE_CODE)
+        ProviderProjector(store, agents=agent_catalog()).deproject_type(
+            [_agent(tmp_path)], AgentType.CLAUDE_CODE
+        )
 
     assert '"theme": "dark"' in settings.read_text(encoding="utf-8")
 
@@ -125,12 +126,12 @@ def test_unchanged_file_projects_normally_with_the_fingerprint_check(
     """The check is invisible when nobody edited the file: the projection lands."""
     settings = tmp_path / "settings.json"
     settings.write_text('{"theme": "light"}', encoding="utf-8")
-    projected = ProviderProjector(ConfigFileStore()).project_type(
+    projected = ProviderProjector(ConfigFileStore(), agents=agent_catalog()).project_type(
         _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     assert projected == ["cc"]
     text = settings.read_text(encoding="utf-8")
-    assert '"theme": "light"' in text and "gw.example" in text
+    assert '"theme": "light"' in text and "127.0.0.1:38471/anthropic" in text
 
 
 class _FakeAudit:
@@ -150,7 +151,7 @@ class _FakeService:
     """
 
     def __init__(self, store: ConfigFileStore) -> None:
-        self._projector = ProviderProjector(store)
+        self._projector = ProviderProjector(store, agents=agent_catalog())
         self._audit = _FakeAudit()
 
 
@@ -184,7 +185,7 @@ async def test_service_audits_a_refused_projection_then_reraises(tmp_path: pathl
 @pytest.mark.asyncio
 async def test_service_audits_a_refused_deprojection(tmp_path: pathlib.Path) -> None:
     settings = tmp_path / "settings.json"
-    ProviderProjector(ConfigFileStore()).project_type(
+    ProviderProjector(ConfigFileStore(), agents=agent_catalog()).project_type(
         _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     edited = settings.read_text(encoding="utf-8").replace("}", ', "theme": "dark"}', 1)

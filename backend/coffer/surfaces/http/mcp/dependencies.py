@@ -15,11 +15,12 @@ from collections.abc import Callable
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
+from coffer.application.mcp.server_requires import ServerRequirements
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
@@ -49,6 +50,21 @@ def get_mcp_session_factory() -> McpSessionFactory:
     return _mcp_session_factory
 
 
+_server_requirements: ServerRequirements | None = None
+
+
+def set_server_requirements(requirements: ServerRequirements | None) -> None:
+    """Called by the composition root once on startup."""
+    global _server_requirements
+    _server_requirements = requirements
+
+
+def get_server_requirements() -> ServerRequirements | None:
+    """FastAPI Depends() target; ``None`` before the composition root wires it
+    (a status read then lists no requirements)."""
+    return _server_requirements
+
+
 _capability_discovery: CapabilityDiscovery | None = None
 
 
@@ -65,16 +81,16 @@ def get_capability_discovery() -> CapabilityDiscovery:
     return _capability_discovery
 
 
-_preferences_repo: MCPCapabilityPreferenceRepo | None = None
+_preferences_repo: MCPCapabilityPreferenceStore | None = None
 
 
-def set_preferences_repo(repo: MCPCapabilityPreferenceRepo) -> None:
+def set_preferences_repo(repo: MCPCapabilityPreferenceStore) -> None:
     """Called by the composition root once on startup."""
     global _preferences_repo
     _preferences_repo = repo
 
 
-def get_preferences_repo() -> MCPCapabilityPreferenceRepo:
+def get_preferences_repo() -> MCPCapabilityPreferenceStore:
     """FastAPI Depends() target."""
     if _preferences_repo is None:
         raise RuntimeError("preferences repo not initialised")

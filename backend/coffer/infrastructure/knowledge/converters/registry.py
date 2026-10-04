@@ -24,10 +24,6 @@ class ConverterRegistry:
     def __init__(self, converters: list[Converter]) -> None:
         self._converters = converters
 
-    def supports(self, fmt: str) -> bool:
-        norm = fmt.lower().lstrip(".")
-        return any(c.can_handle(norm) for c in self._converters)
-
     def _resolve(self, fmt: str) -> Converter:
         norm = fmt.lower().lstrip(".")
         for converter in self._converters:

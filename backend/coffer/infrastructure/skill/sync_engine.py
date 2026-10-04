@@ -1,16 +1,13 @@
-"""Cross-platform directory link helper.
+"""Skill delivery links on disk: create, remove, classify drift.
 
-POSIX:  os.symlink(target, link, target_is_directory=True)
-Windows: try os.symlink first; on failure fall back to a directory junction
-         via `mklink /J` (which does not require admin/dev-mode for the
-         current user on NTFS).
+How a directory link is made per OS — a symlink on POSIX; on Windows a
+symlink, else an NTFS junction, else a copy of the tree — is
+``coffer.infrastructure.platform.links``'s business. This module adds what the
+skill kind means by a link: its refusal to overwrite, the copy-fallback safety
+gate on removal, and drift classification. Callers learn which way a link was
+realised from the returned ``LinkMode``.
 
-If both fail (FAT32 on Windows, networked drives without reparse support),
-fall back to copying the directory tree wholesale. Callers can detect this
-via the returned `LinkMode`.
-
-This module touches the OS heavily and lives in infrastructure. The DB
-sits one layer up (in application).
+The DB sits one layer up (in application).
 """
 
 from __future__ import annotations
@@ -18,12 +15,17 @@ from __future__ import annotations
 import os
 import pathlib
 import shutil
-import subprocess
-import sys
 from dataclasses import dataclass
 
 from coffer.domain.skill.binding import LinkMode
+from coffer.domain.skill.content_hash import folder_content_hash
 from coffer.domain.skill.drift import DriftKind
+from coffer.infrastructure.platform.links import (
+    infer_dir_link_kind,
+    is_junction,
+    link_directory,
+    remove_junction,
+)
 
 
 @dataclass(frozen=True)
@@ -48,28 +50,7 @@ def make_directory_link(*, target: pathlib.Path, link: pathlib.Path) -> LinkMode
     link.parent.mkdir(parents=True, exist_ok=True)
 
     target_resolved = target.resolve()
-
-    if sys.platform == "win32":
-        try:
-            os.symlink(target_resolved, link, target_is_directory=True)
-            return LinkMode.SYMLINK
-        except OSError:
-            # Fall back to a directory junction (no admin needed on NTFS).
-            try:
-                subprocess.run(
-                    ["cmd", "/c", "mklink", "/J", str(link), str(target_resolved)],
-                    check=True,
-                    capture_output=True,
-                )
-                return LinkMode.JUNCTION
-            except (FileNotFoundError, subprocess.CalledProcessError):
-                # Filesystem doesn't support reparse points (FAT32, some
-                # network shares) — fall back to a copy.
-                shutil.copytree(target_resolved, link)
-                return LinkMode.COPY_FALLBACK
-    else:
-        os.symlink(target_resolved, link, target_is_directory=True)
-        return LinkMode.SYMLINK
+    return LinkMode(link_directory(target=target_resolved, link=link).value)
 
 
 def remove_directory_link(link: pathlib.Path, *, link_mode: LinkMode | None = None) -> None:
@@ -88,14 +69,10 @@ def remove_directory_link(link: pathlib.Path, *, link_mode: LinkMode | None = No
     if link.is_symlink():
         link.unlink()
         return
-    if sys.platform == "win32" and link.is_dir():
-        # Could be a junction. Try rmdir first (works for junctions; only
-        # removes the link, not the target).
-        try:
-            os.rmdir(link)
-            return
-        except OSError:
-            pass
+    # Could be a junction (Windows). rmdir removes only the link, not the
+    # target; off Windows this is a no-op.
+    if remove_junction(link):
+        return
     if link.is_dir():
         # Real directory. Only ours to delete if it is a recorded copy-fallback.
         if link_mode is LinkMode.COPY_FALLBACK:
@@ -134,7 +111,7 @@ def classify_target(
             return TargetStatus(drift=None, target_path=str(link))
         return TargetStatus(drift=DriftKind.TAMPERED_LINK, target_path=str(link))
 
-    if sys.platform == "win32" and link.is_dir() and _looks_like_junction(link):
+    if is_junction(link):
         # Best-effort junction target inspection.
         try:
             resolved = pathlib.Path(os.readlink(link)).resolve()
@@ -145,29 +122,31 @@ def classify_target(
         return TargetStatus(drift=DriftKind.TAMPERED_LINK, target_path=str(link))
 
     if link_mode is LinkMode.COPY_FALLBACK and link.is_dir():
-        # Copy-fallback bindings are real directories by design. A plain
-        # directory carrying the skill's SKILL.md is the expected state.
-        if (link / "SKILL.md").is_file():
-            return TargetStatus(drift=None, target_path=str(link))
-        return TargetStatus(drift=DriftKind.TAMPERED_LINK, target_path=str(link))
+        # Copy-fallback bindings are real directories by design, but a copy
+        # does not follow the master: one whose content no longer matches it
+        # (master edited since, or the copy edited) is replaced from master by
+        # the tampered-link repair, the old copy kept in the backup folder.
+        in_step = (link / "SKILL.md").is_file() and folder_content_hash(
+            link
+        ) == folder_content_hash(expected_master)
+        return TargetStatus(
+            drift=None if in_step else DriftKind.TAMPERED_LINK, target_path=str(link)
+        )
 
     return TargetStatus(drift=DriftKind.REPLACED_WITH_REGULAR, target_path=str(link))
 
 
-def _looks_like_junction(path: pathlib.Path) -> bool:
-    if sys.platform != "win32":
-        return False
-    try:
-        st = os.lstat(path)
-    except OSError:
-        return False
-    # File attribute reparse point (0x400)
-    attr = getattr(st, "st_file_attributes", 0)
-    return bool(attr & 0x400)
+def infer_link_mode(link: pathlib.Path) -> LinkMode:
+    """Best-effort: what kind of link is actually on disk at ``link``?
+
+    Used when a target is already correctly linked but no prior binding row
+    recorded the mode, so a junction/copy-fallback isn't mislabelled SYMLINK.
+    """
+    return LinkMode(infer_dir_link_kind(link).value)
 
 
 class SyncEngine:
-    """Adapter bundling the three free sync-engine functions behind a single
+    """Adapter bundling the free sync-engine functions behind a single
     object so application code can inject it as a port (Contract 2).
     """
 
@@ -187,3 +166,6 @@ class SyncEngine:
         link_mode: LinkMode | None,
     ) -> TargetStatus:
         return classify_target(link=link, expected_master=expected_master, link_mode=link_mode)
+
+    def infer_link_mode(self, link: pathlib.Path) -> LinkMode:
+        return infer_link_mode(link)

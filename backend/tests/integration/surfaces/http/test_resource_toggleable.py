@@ -32,7 +32,7 @@ def test_a_collection_and_a_partition_refuse_to_be_disabled(client, tmp_path) ->
     assert r.status_code == 201, r.text
     collection_uid = r.json()["uid"]
 
-    _register_agent(client, "cc")
+    _register_agent(client)
     _seed(tmp_path, _repository(tmp_path), _default_files())
     _sync(client)
     partition_uid = _partition_uid(client, "coffer")
@@ -55,7 +55,7 @@ def test_a_collection_and_a_partition_refuse_to_be_disabled(client, tmp_path) ->
 
 def test_a_toggleable_kind_still_reads_toggleable(client) -> None:  # noqa: F811
     """The flag is the kind's answer, so an ordinary kind reads ``True``."""
-    uid = _register_agent(client, "cc")
+    uid = _register_agent(client)
     read = client.get(f"/api/v1/resources/{uid}")
     assert read.status_code == 200, read.text
     assert read.json()["toggleable"] is True

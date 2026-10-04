@@ -3,13 +3,14 @@
 **Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [stdio Shim Bridge](stdio-shim-bridge.md), [Capability State Model](capability-state-model.md), [Tool Overload: Tier the List, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), spec mcp-gateway "Present Coffer as one MCP server", spec mcp-gateway "Support stdio and HTTP upstreams", spec daemon "Own and reap the daemon's long-lived children"
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [stdio Shim Bridge](stdio-shim-bridge.md), [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md), [Tool Overload: Tier the List, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), spec mcp-gateway "Present Coffer as one MCP server", spec mcp-gateway "Support stdio and HTTP upstreams", spec daemon "Own and reap the daemon's long-lived children"
 
 ## Context
 
 Several MCP clients connect to Coffer's gateway at once — Claude Code and Codex
-through their shims, and Coffer's own internal engine through an in-process
-session. The gateway must decide how the upstream MCP servers behind it are
+through their shims, plus any client a user wires to `/mcp` by hand. Every one
+of them arrives as a `/mcp` session over HTTP; there is no in-process client.
+The gateway must decide how the upstream MCP servers behind it are
 run: one upstream connection shared by every client session, or an independent
 set per client session.
 
@@ -30,12 +31,16 @@ than 100 MB.
 ### Option A — One independent upstream set per client session, spawned lazily (chosen)
 
 A `MCPGatewaySession` is created per downstream session — one per `/mcp`
-session id, plus the long-lived `coffer-builtin-agent` session the internal
-engine uses (`surfaces/http/chat_wiring.py`). Each session owns a
+session id. Each session owns a
 `SubprocessSupervisor` (`application/mcp/supervisor.py`) that starts an upstream
 on first need (the first `tools/list` or the first call routed to it), not at
 session start, and closes every upstream the session started when the session
-is disposed. Sessions share no upstream state.
+is disposed. Sessions share no upstream state. The one other supervisor in the
+daemon is not a session: a process-wide supervisor and discovery serve the
+management routes (the capability tabs, a connection test), so the web UI never
+borrows an agent's session (`surfaces/http/app_mcp_composition.py`). It is
+registered beside the session supervisors so a delete or an enabled change
+evicts its connections too.
 
 Pros: MCP stays correct with no multiplexing layer — one upstream session per
 `(session, upstream)` pair, with plain request-id correlation; an upstream that
@@ -111,8 +116,6 @@ What one session forwards:
     (default 60 s) tune it. This is what reclaims the upstreams of a client that
     vanished without closing its session, on a daemon that otherwise never
     exits ([Daemon Is a Resident Login Service](daemon-is-a-resident-login-service.md)).
-    The internal engine's in-process session is not reaped; it is disposed at
-    shutdown.
   - **Cold starts are capped per session.** A listing fan-out over many servers
     would otherwise start them all at once and push every spawn past its
     timeout; a supervisor starts at most 4 upstreams concurrently
@@ -128,6 +131,6 @@ What one session forwards:
   daemon's startup sweep reaps what a crash left behind
   ([Detect-or-Spawn](daemon-detect-or-spawn.md)).
 - The capability discovery cache is per session, matching the lifetime of the
-  connections it describes ([Capability State Model](capability-state-model.md)).
+  connections it describes ([MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md)).
 - An upstream's stderr goes to its own file under `~/.coffer/logs/upstream/`,
   not to `daemon.log`.

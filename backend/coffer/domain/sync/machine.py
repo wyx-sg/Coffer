@@ -1,31 +1,36 @@
-"""What a machine is, in a vault that spans several (spec vault-sync).
+"""What a machine is, in a vault that spans several (spec vault-sync
+"Publish one descriptor per machine", "Keep machine identity across reinstalls").
 
-Identity and name are separate things, and keeping them separate is the whole
-point of this module:
+Identity and name are separate things, and keeping them separate is the point:
 
-* ``machine_id`` is **derived from the host** and never changes. It keys the
-  descriptor's filename and nothing else — no resource names a machine, because
-  a resource's reach is machine-local and therefore held by the machine rather
-  than written down about it. The id must still survive reinstalling and
-  uninstalling Coffer, for the reason that is left and that is the load-bearing
-  one: only a surviving id can tell a machine *returning* to a remote from one
-  joining it for the first time, and those two cases need opposite handling —
-  a returning machine that is mistaken for a new one republishes everything the
-  others deleted while it was away.
-* ``name`` is a label the user may change at any time, at no cost, because
+* ``machine_id`` is **derived from the host** and never changes. It names the
+  descriptor's file (``machines/<machine_id>.json``) and the ``Coffer-Machine``
+  trailer of every commit this machine makes. It must survive reinstalling
+  Coffer: only a surviving id tells a machine *returning* to a remote — whose
+  descriptor carries the commit it last converged at, the base of its join —
+  from one joining for the first time.
+* ``name`` is a label a person may change at any time, at no cost, because
   nothing references it.
 
-Pure domain: deriving the id from the host is infrastructure's job, and the
-hashing that turns a hardware identifier into something publishable lives here
-because it is part of what a machine id *is*.
+Each machine writes exactly one descriptor and no other machine's, so two
+machines never change the same file and descriptors never conflict (spec
+vault-sync "Write only this machine's descriptor"). The descriptor also
+carries each agent's plugin inventory: the one thing about a machine's agents
+no single agent can tell another machine — which plugins to install there,
+with the vendor's own CLI (spec vault-sync "Record plugins as an inventory,
+not a replicator").
+
+Pure domain: deriving the id from the host is infrastructure's job; the hash
+that turns a hardware identifier into something publishable is part of what a
+machine id *is*, so it lives here.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 from collections.abc import Mapping
-from datetime import date
 from typing import Any
 
 #: Domain-separates the digest, so a Coffer machine id can never collide with
@@ -33,14 +38,16 @@ from typing import Any
 _PREFIX = "coffer-machine:"
 #: Long enough that collision is not a concern, short enough to read in a UI.
 ID_LENGTH = 16
+#: The descriptor's own format version (ADR every-vault-file-carries-its-format-version).
+DESCRIPTOR_FORMAT = 1
 
 
 def derive_machine_id(raw: str) -> str:
     """Turn a platform identifier into the id that travels.
 
     The raw value is a hardware or install identifier — an ``IOPlatformUUID``,
-    a ``/etc/machine-id``. It MUST NOT be written into the user's repository,
-    so what travels is a digest of it. Stable for the life of the host, and
+    a ``/etc/machine-id``. It must not be written into the user's repository,
+    so what travels is a digest of it: stable for the life of the host, and
     not reversible into the identifier it came from.
     """
     raw = raw.strip()
@@ -50,89 +57,142 @@ def derive_machine_id(raw: str) -> str:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class MachineDescriptor:
-    """One machine's published self-description.
+class Plugin:
+    """One plugin an agent has on the machine, as its vendor names it."""
 
-    Each machine writes exactly one of these, at ``machines/<id>.yaml``, and
-    writes no other machine's. Disjoint ownership is why the registry needs no
-    convergence machinery of its own: two machines can never stage a change to
-    the same path, so git merges descriptors trivially and the registry is
-    simply whatever ``machines/*.yaml`` currently holds.
-    """
+    id: str
+    name: str = ""
+    marketplace: str | None = None
+    enabled: bool = True
+    version: str | None = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class AgentInventory:
+    """One agent on the machine: its type and the plugins it has."""
+
+    type: str
+    name: str = ""
+    plugins: tuple[Plugin, ...] = ()
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class MachineDescriptor:
+    """One machine's published self-description, ``machines/<id>.json``."""
 
     machine_id: str
     name: str
-    os: str
-    hostname: str
-    coffer_version: str
-    #: The day this machine last converged. A *day*, not an instant: restamping
-    #: every round would commit a heartbeat every interval, and the history is
-    #: meant to record changes rather than ticks.
-    last_converged_on: date | None = None
-    #: The pointer this machine reached, published so the remote can hand it
-    #: back. The local pointer is lost to a reinstall or a wiped ``~/.coffer``;
-    #: this copy is what lets a returning machine recover its base instead of
-    #: being mistaken for a new one and republishing everything the others
-    #: deleted while it was away.
+    os: str = ""
+    hostname: str = ""
+    coffer_version: str = ""
+    #: When this machine last finished a round that moved anything (ISO time).
+    last_round_at: str | None = None
+    #: The commit that round converged at — the base a returning machine's
+    #: join recovers when its own local state is gone.
     last_converged_commit: str | None = None
-    #: Short hash of the master key, so another machine can say "your
-    #: credentials will not decrypt here" instead of the user comparing
-    #: fingerprints by hand. Never the key.
+    #: Short hash of the master key, so another machine can say "your secrets
+    #: will not decrypt here". Never the key.
     key_fingerprint: str | None = None
-    #: Names of the agents registered on this machine.
-    agents: tuple[str, ...] = ()
+    agents: tuple[AgentInventory, ...] = ()
 
-    def to_doc(self) -> dict[str, Any]:
-        """The serialized form. Deterministic: the bundle sorts keys, and every
-        value here is a scalar or a list of scalars."""
+    def to_json(self) -> dict[str, Any]:
         return {
+            "format_version": DESCRIPTOR_FORMAT,
+            "machine_id": self.machine_id,
             "name": self.name,
             "os": self.os,
             "hostname": self.hostname,
             "coffer_version": self.coffer_version,
-            "last_converged_on": self.last_converged_on.isoformat()
-            if self.last_converged_on
-            else None,
+            "last_round_at": self.last_round_at,
             "last_converged_commit": self.last_converged_commit,
             "key_fingerprint": self.key_fingerprint,
-            "agents": list(self.agents),
+            "agents": [
+                {
+                    "type": a.type,
+                    "name": a.name,
+                    "plugins": [dataclasses.asdict(p) for p in a.plugins],
+                }
+                for a in self.agents
+            ],
         }
 
+    def to_bytes(self) -> bytes:
+        return (json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
     @classmethod
-    def from_doc(cls, machine_id: str, doc: Mapping[str, Any]) -> MachineDescriptor:
+    def from_json(cls, machine_id: str, doc: Mapping[str, Any]) -> MachineDescriptor:
         """Parse a descriptor another machine wrote.
 
-        Tolerant by design: a descriptor is written by a possibly-newer build
-        on someone else's machine, and a field this build does not understand
-        must not stop the registry from rendering. Missing fields become None.
+        Tolerant by design: a descriptor may come from a newer build on
+        someone else's machine, and a field this build does not know must not
+        stop the machines list from rendering. Missing fields read as empty.
         """
-        raw_day = doc.get("last_converged_on")
-        agents = doc.get("agents")
+        agents: list[AgentInventory] = []
+        for raw in doc.get("agents") or ():
+            if not isinstance(raw, Mapping) or not raw.get("type"):
+                continue
+            plugins = tuple(
+                Plugin(
+                    id=str(p.get("id")),
+                    name=str(p.get("name") or ""),
+                    marketplace=_opt_str(p.get("marketplace")),
+                    enabled=bool(p.get("enabled", True)),
+                    version=_opt_str(p.get("version")),
+                )
+                for p in raw.get("plugins") or ()
+                if isinstance(p, Mapping) and p.get("id")
+            )
+            agents.append(
+                AgentInventory(
+                    type=str(raw["type"]), name=str(raw.get("name") or ""), plugins=plugins
+                )
+            )
         return cls(
-            machine_id=machine_id,
+            machine_id=str(doc.get("machine_id") or machine_id),
             name=str(doc.get("name") or machine_id),
             os=str(doc.get("os") or ""),
             hostname=str(doc.get("hostname") or ""),
             coffer_version=str(doc.get("coffer_version") or ""),
-            last_converged_on=_parse_day(raw_day),
+            last_round_at=_opt_str(doc.get("last_round_at")),
             last_converged_commit=_opt_str(doc.get("last_converged_commit")),
             key_fingerprint=_opt_str(doc.get("key_fingerprint")),
-            agents=tuple(str(a) for a in agents) if isinstance(agents, list) else (),
+            agents=tuple(agents),
         )
 
-    def stamped_on(self, day: date, commit: str | None) -> MachineDescriptor:
-        """This descriptor with today's convergence recorded."""
-        return dataclasses.replace(self, last_converged_on=day, last_converged_commit=commit)
+    @classmethod
+    def parse(cls, machine_id: str, data: bytes) -> MachineDescriptor | None:
+        """A descriptor from its file's bytes, or ``None`` when they are not
+        a JSON object."""
+        try:
+            doc = json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            return None
+        return cls.from_json(machine_id, doc) if isinstance(doc, dict) else None
+
+
+def descriptor_path(machine_id: str) -> str:
+    """Where a machine's descriptor lives in the vault."""
+    return f"machines/{machine_id}.json"
+
+
+def machine_id_of(path: str) -> str | None:
+    """The machine a descriptor path names, or ``None`` for another path."""
+    if path.startswith("machines/") and path.endswith(".json") and path.count("/") == 1:
+        return path[len("machines/") : -len(".json")] or None
+    return None
 
 
 def _opt_str(value: Any) -> str | None:
     return str(value) if isinstance(value, str) and value else None
 
 
-def _parse_day(value: Any) -> date | None:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return None
+__all__ = [
+    "DESCRIPTOR_FORMAT",
+    "ID_LENGTH",
+    "AgentInventory",
+    "MachineDescriptor",
+    "Plugin",
+    "derive_machine_id",
+    "descriptor_path",
+    "machine_id_of",
+]

@@ -20,9 +20,15 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.platform.process import (
+    detached_popen_kwargs,
+    executable_name,
+    has_app_bundles,
+)
 
 #: Where the macOS desktop bundle stages its `coffer-daemon`: the .dmg ships
 #: `coffer-daemon` as a Tauri sidecar (`externalBin` in
@@ -59,14 +65,14 @@ def daemon_spawn_command() -> list[str]:
     if getattr(sys, "frozen", False):
         # PyInstaller sets sys.frozen = True and sys.executable to the
         # frozen binary's path.
-        name = "coffer-daemon.exe" if sys.platform == "win32" else "coffer-daemon"
+        name = executable_name("coffer-daemon")
         sibling = Path(sys.executable).resolve().parent / name
         if sibling.exists():
             return [str(sibling)]
         on_path = shutil.which(name)
         if on_path:
             return [on_path]
-        if sys.platform == "darwin" and _MACOS_APP_BUNDLE_DAEMON.is_file():
+        if has_app_bundles() and _MACOS_APP_BUNDLE_DAEMON.is_file():
             return [str(_MACOS_APP_BUNDLE_DAEMON)]
         return [str(sibling)]
 
@@ -78,7 +84,7 @@ def daemon_log_path() -> Path:
     return log_dir() / "daemon.log"
 
 
-def spawn_detached_daemon() -> subprocess.Popen[bytes]:
+def spawn_detached_daemon(env: Mapping[str, str] | None = None) -> subprocess.Popen[bytes]:
     """Spawn the daemon detached from the caller, stdio redirected to ``daemon.log``.
 
     The one spawn every auto-spawn surface shares — the CLI's detect-or-spawn,
@@ -88,6 +94,9 @@ def spawn_detached_daemon() -> subprocess.Popen[bytes]:
     shim once did) threw that away and could only report "did not come up
     within 10s". Appending both streams to ``daemon.log`` keeps the message
     where "check daemon.log" already points the user.
+
+    ``env`` replaces the inherited environment — the daemon's own restart
+    passes one naming the predecessor to wait for (``self_restart``).
 
     Raises ``OSError`` when the process cannot be started; the log handle is
     closed on that path and otherwise leaks into the child on purpose.
@@ -99,13 +108,10 @@ def spawn_detached_daemon() -> subprocess.Popen[bytes]:
         "stdout": log,
         "stderr": log,
         "stdin": subprocess.DEVNULL,
+        "env": dict(env) if env is not None else None,
+        # Windows: no console, detached; POSIX: a new session.
+        **detached_popen_kwargs(),
     }
-    if sys.platform == "win32":
-        kwargs["creationflags"] = (
-            subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-        )
-    else:
-        kwargs["start_new_session"] = True
     try:
         return subprocess.Popen(daemon_spawn_command(), **kwargs)  # type: ignore[call-overload,no-any-return]
     except OSError:

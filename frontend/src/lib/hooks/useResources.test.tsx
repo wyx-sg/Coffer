@@ -6,7 +6,8 @@ import type { PropsWithChildren } from "react";
 import { useKindReach, useResource, useResources } from "./useResources";
 import { mockApiClient } from "@/test/mockApiClient";
 
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
 }));
 

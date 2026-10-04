@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/channels/{uid}/pairing-code": {
+    "/api/v1/channels/validate-credentials": {
         parameters: {
             query?: never;
             header?: never;
@@ -13,25 +13,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Issue a single-use pairing code for a channel */
-        post: operations["issuePairingCode"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/channels/{uid}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Runtime, pairing, and inbound status of a channel */
-        get: operations["getChannelStatus"];
-        put?: never;
-        post?: never;
+        /**
+         * Validate Credentials
+         * @description Check credentials against the platform without storing anything (spec
+         *     channels "Check credentials before they are saved"). A refusal is a normal
+         *     answer (``ok: false`` with a reason), not an error response.
+         */
+        post: operations["validate_credentials_api_v1_channels_validate_credentials_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -47,8 +35,80 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Push a text message to the channel's paired peer */
-        post: operations["notifyChannel"];
+        /** Notify Channel */
+        post: operations["notify_channel_api_v1_channels__uid__notify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/{uid}/pairing-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue Pairing Code */
+        post: operations["issue_pairing_code_api_v1_channels__uid__pairing_code_post"];
+        /** Cancel Pairing Code */
+        delete: operations["cancel_pairing_code_api_v1_channels__uid__pairing_code_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/{uid}/people/{sender_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Person */
+        delete: operations["remove_person_api_v1_channels__uid__people__sender_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/{uid}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart Channel
+         * @description Stop and rebuild the channel's adapter, reading its secret afresh.
+         */
+        post: operations["restart_channel_api_v1_channels__uid__restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/{uid}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Channel Status */
+        get: operations["channel_status_api_v1_channels__uid__status_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -59,161 +119,399 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        PairingCodeOut: {
-            /** @description A link carrying the code, so the owner pairs by opening it rather than transcribing it. Empty when the platform has no such link or the bot's username is unknown; the typed code always works. */
-            pair_url?: string;
-            /** @description 8-character code from an unambiguous alphabet */
-            code: string;
-            /** Format: date-time */
-            expires_at: string;
-        };
-        ChannelStatusOut: {
-            /**
-             * @description The channel resource's immutable identity — the same value the path takes, echoed back so a client that reached this status from a list can key its state on it without re-deriving anything.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            /** @description A mutable label, unique among channels. For display only; anything that must keep pointing at this channel holds the uid. */
+        /**
+         * ChannelCommandOut
+         * @description One slash command the channel answers (spec channels "Answer the
+         *     conversation commands from any paired chat"), from the one roster that also
+         *     feeds the help text and the platform menus.
+         */
+        ChannelCommandOut: {
+            /** Args */
+            args: string;
+            /** Description */
+            description: string;
+            /** Description Zh */
+            description_zh: string;
+            /** Name */
             name: string;
-            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
-            title?: string | null;
-            /** @enum {string} */
-            channel_type: "telegram" | "seatalk";
-            enabled: boolean;
-            /** @description Whether the adapter task is currently live */
-            running: boolean;
-            /** @description Whether an unexpired pairing code is outstanding */
-            pending_pairing: boolean;
-            peer: components["schemas"]["ChannelPeerOut"] | null;
-            /** @description A SeaTalk channel's websocket connection. Null for a telegram channel, whose inbound is the adapter's own polling and is reported by `running`. */
-            inbound: components["schemas"]["InboundInfoOut"] | null;
-            /** @description Contradictions between the channel's configuration and what the platform actually permits. Empty is the healthy case. */
-            diagnostics?: components["schemas"]["ChannelDiagnosticOut"][];
-            /** @description The machine_id of the one machine whose daemon runs this channel's adapter. Null means unbound, which runs nowhere. */
-            runs_on?: string | null;
-            /** @description Whether the bound machine is the one answering this request. It separates the two facts `running: false` collapses — a channel that failed to start here, and a channel that was never this machine's to start. */
-            runs_here?: boolean;
         };
+        /** ChannelDiagnosticOut */
         ChannelDiagnosticOut: {
-            /** @description Stable identifier, so a UI can style or link the finding */
+            /** Code */
             code: string;
-            /** @description What is wrong and what to do about it */
+            /** Message */
             message: string;
         };
-        ChannelPeerOut: {
-            chat_id: string;
-            display_name: string;
-            /** Format: date-time */
-            paired_at: string;
+        /**
+         * ChannelPersonOut
+         * @description A person paired to the channel (spec channels "Gate inbound traffic on
+         *     sender identity"): every one is answered with identical rights.
+         */
+        ChannelPersonOut: {
+            /** Active Conversation Id */
             active_conversation_id: string | null;
+            /** Chat Id */
+            chat_id: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Paired At
+             * Format: date-time
+             */
+            paired_at: string;
+            /** Sender Id */
+            sender_id: string;
         };
-        /** @description How a SeaTalk channel's inbound is doing: the state of the one outbound websocket connection it receives every event on (spec channels/seatalk "Report the websocket connection as the channel's inbound state"). There is no listener, port, path, public URL or tunnel to report. */
+        /** ChannelStatusOut */
+        ChannelStatusOut: {
+            /**
+             * Channel Type
+             * @enum {string}
+             */
+            channel_type: "telegram" | "seatalk";
+            /**
+             * Commands
+             * @default []
+             */
+            commands: components["schemas"]["ChannelCommandOut"][];
+            /**
+             * Diagnostics
+             * @default []
+             */
+            diagnostics: components["schemas"]["ChannelDiagnosticOut"][];
+            /** Enabled */
+            enabled: boolean;
+            handoff: components["schemas"]["HandoffOut"] | null;
+            inbound: components["schemas"]["InboundInfoOut"] | null;
+            /** Name */
+            name: string;
+            /** Pending Pairing */
+            pending_pairing: boolean;
+            /** People */
+            people: components["schemas"]["ChannelPersonOut"][];
+            /** Running */
+            running: boolean;
+            /**
+             * Runs Here
+             * @default false
+             */
+            runs_here: boolean;
+            /** Runs On */
+            runs_on: string | null;
+            secret_approval: components["schemas"]["SecretApprovalOut"] | null;
+            /** Settings */
+            settings: (components["schemas"]["TelegramChannelConfig"] | components["schemas"]["SeaTalkChannelConfig"]) | null;
+            /** Title */
+            title: string | null;
+            /** Uid */
+            uid: string;
+        };
+        /** CredentialCheckOut */
+        CredentialCheckOut: {
+            /** Bot Handle */
+            bot_handle: string | null;
+            /** Bot Name */
+            bot_name: string | null;
+            /** Detail */
+            detail: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Reason */
+            reason: ("missing" | "rejected" | "unreachable" | "timeout") | null;
+            /** Same Bot */
+            same_bot: boolean | null;
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
+        /**
+         * InboundInfoOut
+         * @description A SeaTalk channel's websocket connection — the one road its events take.
+         *
+         *     Spec channels/seatalk "Report the websocket connection as the channel's
+         *     inbound state". There is no listener, port, path, public URL or tunnel to
+         *     report, so the connection state is the whole health answer.
+         */
         InboundInfoOut: {
-            /**
-             * @description State of the held WebSocket connection; null before the first connection attempt.
-             * @enum {string|null}
-             */
-            websocket_state: "connecting" | "connected" | "kicked" | "sdk_missing" | "error" | null;
-            /** @description The last connection error, verbatim, so the owner can act on it */
+            /** Websocket Error */
             websocket_error: string | null;
+            /** Websocket State */
+            websocket_state: ("connecting" | "connected" | "kicked" | "sdk_missing" | "error") | null;
         };
+        /** NotifyIn */
         NotifyIn: {
+            /** Chat Id */
+            chat_id?: string | null;
+            /** Text */
             text: string;
-            /**
-             * @description Which paired chat to push to. Omitted, the channel's owner chat — its earliest pairing, the owner's DM. A chat this channel is not paired to is refused, so a caller cannot address an arbitrary group.
-             * @default null
-             */
-            chat_id: string | null;
         };
+        /** NotifyOut */
         NotifyOut: {
+            /** Sent */
             sent: boolean;
         };
-        ErrorEnvelope: {
-            error: {
-                code: string;
-                message: string;
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
+        /** PairingCodeIn */
+        PairingCodeIn: {
+            /** Replaces */
+            replaces?: string | null;
+        };
+        /** PairingCodeOut */
+        PairingCodeOut: {
+            /** Code */
+            code: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Pair Url
+             * @default
+             */
+            pair_url: string;
+        };
+        /** RestartOut */
+        RestartOut: {
+            /** Running */
+            running: boolean;
+        };
+        /** SeaTalkChannelConfig */
+        SeaTalkChannelConfig: {
+            /** App Id */
+            app_id: string;
+            /** App Secret Ref */
+            app_secret_ref: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            channel_type: "seatalk";
+            /** Default Agent */
+            default_agent: string | null;
+            /** Default Agent Config */
+            default_agent_config: {
+                [key: string]: unknown;
+            } | null;
+            /** Directories */
+            directories: string[];
+            /**
+             * Ignore Other Mentions
+             * @default false
+             */
+            ignore_other_mentions: boolean;
+            /**
+             * New Conversation After Idle Hours
+             * @default 24
+             */
+            new_conversation_after_idle_hours: number;
+            /**
+             * Notify After Seconds
+             * @default 90
+             */
+            notify_after_seconds: number;
+            /**
+             * Require Mention
+             * @default true
+             */
+            require_mention: boolean;
+            /** Runs On */
+            runs_on: string | null;
+            /**
+             * Show Steps
+             * @default true
+             */
+            show_steps: boolean;
+            /**
+             * Wait After Forward Seconds
+             * @default 5
+             */
+            wait_after_forward_seconds: number;
+            /**
+             * Wait After Text Seconds
+             * @default 1.5
+             */
+            wait_after_text_seconds: number;
+        };
+        /**
+         * SecretApprovalOut
+         * @description Why a channel's adapter is not running when its secret is the cause.
+         *
+         *     ``pending`` waits for the owner's approval in the Coffer app; ``refused``
+         *     was declined and stays so until asked again from the Secrets page. Names the
+         *     secret by ref, never carries its value.
+         */
+        SecretApprovalOut: {
+            /** Secret Ref */
+            secret_ref: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "refused";
+        };
+        /** TelegramChannelConfig */
+        TelegramChannelConfig: {
+            /** Bot Token Ref */
+            bot_token_ref: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            channel_type: "telegram";
+            /** Default Agent */
+            default_agent: string | null;
+            /** Default Agent Config */
+            default_agent_config: {
+                [key: string]: unknown;
+            } | null;
+            /** Directories */
+            directories: string[];
+            /**
+             * Ignore Other Mentions
+             * @default false
+             */
+            ignore_other_mentions: boolean;
+            /**
+             * New Conversation After Idle Hours
+             * @default 24
+             */
+            new_conversation_after_idle_hours: number;
+            /**
+             * Notify After Seconds
+             * @default 90
+             */
+            notify_after_seconds: number;
+            /**
+             * Require Mention
+             * @default true
+             */
+            require_mention: boolean;
+            /** Runs On */
+            runs_on: string | null;
+            /**
+             * Show Steps
+             * @default true
+             */
+            show_steps: boolean;
+            /**
+             * Wait After Forward Seconds
+             * @default 5
+             */
+            wait_after_forward_seconds: number;
+            /**
+             * Wait After Text Seconds
+             * @default 1.5
+             */
+            wait_after_text_seconds: number;
+        };
+        /**
+         * ValidateCredentialsIn
+         * @description Credentials to check, as typed. Which fields apply depends on the platform.
+         */
+        ValidateCredentialsIn: {
+            /** App Id */
+            app_id?: string | null;
+            /** App Secret */
+            app_secret?: string | null;
+            /** Bot Token */
+            bot_token?: string | null;
+            /** Channel Uid */
+            channel_uid?: string | null;
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "telegram" | "seatalk";
         };
     };
-    responses: {
-        /** @description No channel with this uid */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-    };
-    parameters: {
-        /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
-        ChannelUid: string;
-    };
+    responses: never;
+    parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    issuePairingCode: {
+    validate_credentials_api_v1_channels_validate_credentials_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
-                uid: components["parameters"]["ChannelUid"];
+            header?: {
+                "x-coffer-token"?: string | null;
             };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateCredentialsIn"];
+            };
+        };
         responses: {
-            /** @description Code issued (replaces any previous pending code) */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PairingCodeOut"];
+                    "application/json": components["schemas"]["CredentialCheckOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getChannelStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
-                uid: components["parameters"]["ChannelUid"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChannelStatusOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    notifyChannel: {
+    notify_channel_api_v1_channels__uid__notify_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
-                uid: components["parameters"]["ChannelUid"];
+                uid: string;
             };
             cookie?: never;
         };
@@ -223,7 +521,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Delivered to the IM platform */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -232,23 +530,235 @@ export interface operations {
                     "application/json": components["schemas"]["NotifyOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
-            /** @description CHANNEL_NOT_PAIRED (the channel has no paired peer, or `chat_id` names a chat this channel is not paired to) or CHANNEL_NOT_RUNNING (the channel's adapter is not running here, e.g. it is disabled). Nothing is sent. */
-            409: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description CHANNEL_SEND_FAILED — the IM platform refused or failed the send */
-            502: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    issue_pairing_code_api_v1_channels__uid__pairing_code_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PairingCodeIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingCodeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_pairing_code_api_v1_channels__uid__pairing_code_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_person_api_v1_channels__uid__people__sender_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+                sender_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restart_channel_api_v1_channels__uid__restart_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestartOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    channel_status_api_v1_channels__uid__status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

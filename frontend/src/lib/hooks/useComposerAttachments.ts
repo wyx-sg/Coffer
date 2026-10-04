@@ -2,10 +2,13 @@
 // The composer's attached files: each is uploaded the moment it is added
 // (POST /chat/attachments) and tracked as uploading → ready | failed, so the
 // composer can show a chip per file and hold Send until every upload is done
-// (spec chat "Attach files from the Chat page composer").
+// (spec chat "Attach files from the Conversations page composer").
 //
-// Failures render inline on their chip, not as a toast: the chip is where the
-// owner looks, and it must stay until they remove it.
+// A file refused before it is sent — over the size limit, or past the
+// message's file count — never becomes a chip: it is dropped, and one line
+// under the reply box names it and the limits (`refusal`). An upload the
+// daemon fails renders inline on its chip, not as a toast: the chip is where
+// the owner looks, and it must stay until they remove it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -31,6 +34,7 @@ interface DraftAttachment {
   error?: string;
 }
 
+/** @ui-only hook result; never crosses the wire. */
 export interface ComposerAttachments {
   items: DraftAttachment[];
   add: (files: File[]) => void;
@@ -44,6 +48,9 @@ export interface ComposerAttachments {
   uploading: boolean;
   /** Some upload failed and is still attached. */
   failed: boolean;
+  /** Why the latest file refused before upload was not attached, translated;
+   *  null once a later add or a clear replaces it. */
+  refusal: string | null;
   /** The finished uploads, in attach order. */
   ready: ChatAttachment[];
   /** Chip keys of `ready`, in the same order. */
@@ -57,6 +64,7 @@ const holdsSlot = (it: DraftAttachment) => it.status === "uploading" || it.statu
 export function useComposerAttachments(): ComposerAttachments {
   const { t } = useTranslation();
   const [items, setItems] = useState<DraftAttachment[]>([]);
+  const [refusal, setRefusal] = useState<string | null>(null);
   // The latest items, readable inside `add` without waiting for a render
   // (several files arrive in one call). Kept in step by `update`.
   const itemsRef = useRef<DraftAttachment[]>([]);
@@ -78,6 +86,7 @@ export function useComposerAttachments(): ComposerAttachments {
   const add = useCallback(
     (files: File[]) => {
       const added: DraftAttachment[] = [];
+      let refused: string | null = null;
       // Only live uploads and finished ones hold one of the message's slots;
       // a refused or failed chip is just a note to its owner.
       let taken = itemsRef.current.filter(holdsSlot).length;
@@ -89,14 +98,14 @@ export function useComposerAttachments(): ComposerAttachments {
           size: file.size,
           mime: file.type,
         };
-        let error: string | undefined;
+        let reason: string | undefined;
         if (taken >= MAX_ATTACHMENTS_PER_MESSAGE) {
-          error = t("chat.attachments.tooMany");
+          reason = t("conversations.attachments.tooMany");
         } else if (file.size > MAX_ATTACHMENT_BYTES) {
-          error = t("chat.attachments.tooLarge");
+          reason = t("conversations.attachments.tooLarge");
         }
-        if (error) {
-          added.push({ ...base, status: "failed", error });
+        if (reason) {
+          refused = t("conversations.attachments.notAttached", { name: base.name, reason });
           continue;
         }
         taken += 1;
@@ -117,6 +126,7 @@ export function useComposerAttachments(): ComposerAttachments {
           },
         );
       }
+      setRefusal(refused);
       if (added.length === 0) return;
       update((prev) => [...prev, ...added]);
     },
@@ -141,6 +151,7 @@ export function useComposerAttachments(): ComposerAttachments {
       const drop = keys ? new Set(keys) : null;
       for (const it of itemsRef.current) if (!drop || drop.has(it.key)) cancel(it.key);
       update((prev) => (drop ? prev.filter((it) => !drop.has(it.key)) : []));
+      setRefusal(null);
     },
     [cancel, update],
   );
@@ -179,8 +190,9 @@ export function useComposerAttachments(): ComposerAttachments {
       restore,
       uploading: items.some((it) => it.status === "uploading"),
       failed: items.some((it) => it.status === "failed"),
+      refusal,
       ready: done.map((it) => it.uploaded!),
       readyKeys: done.map((it) => it.key),
     };
-  }, [items, add, remove, clear, restore]);
+  }, [items, refusal, add, remove, clear, restore]);
 }

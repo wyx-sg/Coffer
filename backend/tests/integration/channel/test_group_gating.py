@@ -71,7 +71,7 @@ async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
 
     assert adapter.sent == []
     assert await env.chat.list_conversations() == []
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(
@@ -102,11 +102,11 @@ async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert "Not authorized" in text
+    assert "owners can use it here" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     # No turn was started and no peer row was created for the unverified sender.
     assert await env.chat.list_conversations() == []
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a non-owner @mention in a group is refused")
@@ -130,11 +130,11 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert "Not authorized" in text
+    assert "owners can use it here" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     assert await env.chat.list_conversations() == []
     # No peer row was created for the intruder's turn attempt.
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(
@@ -168,7 +168,7 @@ async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     assert thread_id == "pm-1"
     assert chat_kind == "group"
 
-    peer = await env.peers.get_by_chat(resource.id, "grp-1")
+    peer = await env.peers.get_by_chat(resource.uid, "grp-1")
     assert peer is not None
     assert peer.sender_id == "owner-1"
 
@@ -329,12 +329,12 @@ async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:
     through ``get_by_chat`` instead of the legacy single-peer accessor."""
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
-    code, _expires = env.pairing.issue("tg")
+    code, _expires = env.pairing.issue(resource.uid)
 
     await env.processor.on_message(inbound("tg", "owner", code, sender_display="Owner"))
-    peer = await env.peers.get_by_chat(resource.id, "owner")
+    peer = await env.peers.get_by_chat(resource.uid, "owner")
     assert peer is not None
-    assert adapter.sent[0][1].startswith("✅ Paired.")
+    assert adapter.sent[0][1].startswith("✅ Paired — you own")
 
     await env.processor.on_message(inbound("tg", "owner", "hi"))
     await wait_until(lambda: "Hello world" in adapter.texts())
@@ -359,7 +359,7 @@ async def test_group_turn_types_into_the_group_thread_not_the_dm_endpoint(
     resource = await env.register_channel("st")
     adapter = env.bind(
         resource,
-        FakeChannelAdapter(supports_typing=True, supports_groups=True),
+        FakeChannelAdapter(supports_typing=True),
     )
     await env.pair(resource, "owner", sender_id="owner-1")
 
@@ -399,7 +399,6 @@ async def test_the_group_reply_mentions_the_sender_the_transport_named(env: Chan
         FakeChannelAdapter(
             supports_edit=False,
             supports_live_text=False,
-            supports_groups=True,
             mention_template='<mention-tag target="seatalk://user?id={user_id}"/>',
         ),
     )

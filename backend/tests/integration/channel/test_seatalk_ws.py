@@ -22,7 +22,7 @@ from coffer.infrastructure.channel.seatalk_sdk import SeaTalkSdkMissingError
 from coffer.infrastructure.channel.seatalk_ws import SeaTalkWebSocketConnector
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 
-from .conftest import wait_until
+from .conftest import ChannelEnv, wait_until
 from .fake_seatalk_sdk import (
     FakeSeaTalkSdk,
     build_fake_sdk,
@@ -229,6 +229,56 @@ async def test_one_chats_events_reach_ingest_in_arrival_order(
         await wait_until(lambda: len(ingest.order) == 2, message="events never reached ingest")
         assert ingest.order == ["record", "text"]
         await wait_until(lambda: not connector._chat_tails, message="an idle chat kept its tail")
+    finally:
+        await connector.stop()
+
+
+class _SlowRecordAdapter:
+    """An adapter whose handling of one event is slow — a file download."""
+
+    def __init__(self, *, slow: str) -> None:
+        self.handled: list[str] = []
+        self._slow = slow
+
+    async def handle_event(self, envelope: dict[str, Any]) -> None:
+        text = envelope["event"]["message"]["text"]["content"]
+        if text == self._slow:
+            await asyncio.sleep(0.2)
+        self.handled.append(text)
+
+
+class _OneAdapterRuntime:
+    def __init__(self, adapter: Any) -> None:
+        self._adapter = adapter
+
+    def adapter(self, name: str) -> Any:
+        return self._adapter
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="a slow forwarded record still precedes the text sent after it",
+)
+async def test_the_real_service_finishes_one_event_before_the_next_of_its_chat(
+    env: ChannelEnv,
+) -> None:
+    """ChannelService.ingest_event must return when the event is HANDLED: if it
+    only scheduled the work, the connector's per-chat ordering would order
+    nothing and the text would overtake the slow record."""
+    resource = await env.register_channel("st")
+    adapter = _SlowRecordAdapter(slow="record")
+    service = env.service_for(_OneAdapterRuntime(adapter))  # type: ignore[arg-type]
+    sdk = build_fake_sdk()
+    sdk.plan[:] = [_burst(_message("c-1", "record"), _message("c-1", "text")), hold()]
+
+    async def ingest(channel_uid: str, payload: dict[str, Any]) -> None:
+        await service.ingest_event(resource.uid, payload)
+
+    connector = _connector(sdk, ingest)
+    await connector.start()
+    try:
+        await wait_until(lambda: len(adapter.handled) == 2, message="events never handled")
+        assert adapter.handled == ["record", "text"]
     finally:
         await connector.stop()
 

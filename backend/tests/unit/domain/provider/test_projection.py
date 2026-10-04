@@ -8,11 +8,10 @@ import tomllib
 
 import pytest
 
-from coffer.domain.agent.types import AgentType
-from coffer.domain.connection import CODEX_ENV_KEY
+from coffer.domain.provider.api_key_helper import proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.projection import (
     CODEX_PROVIDER_ID,
-    anthropic_api_key_helper,
     apply_anthropic_settings,
     apply_codex_provider,
     codex_model_catalog_json,
@@ -20,20 +19,21 @@ from coffer.domain.provider.projection import (
     is_managed_api_key_helper,
     remove_anthropic_settings,
     remove_codex_provider,
-    target_for_agent,
 )
 
-#: ``apply_anthropic_settings`` takes no default helper any more (only the
-#: per-connection form may be written), so tests that do not care WHICH
-#: connection it names pass this one.
-_HELPER = "/opt/coffer/bin/coffer provider key --connection-uid 0123456789abcdef0123456789abcdef"
+#: ``apply_anthropic_settings`` takes no default helper, so tests that do not
+#: care WHICH agent's token it prints pass this one.
+_HELPER = "/opt/coffer/bin/coffer proxy token --agent-uid 0123456789abcdef0123456789abcdef"
 
 #: Where the caller resolved the ``coffer`` CLI to.
 _CLI = "/Users/me/.coffer/bin/coffer"
 
-#: A connection's uid — what the projected helper resolves. Opaque and, unlike
-#: the name it replaced, unchanged by anything the user does to the connection.
-_CONNECTION_UID = "7d4f1e2a3b4c5d6e7f8091a2b3c4d5e6"
+#: The ``auth`` command every Codex projection carries.
+_AUTH = CodexAuthCommand(_CLI, ("proxy", "token", "--agent-uid", "a1"))
+
+#: An agent's uid — whose proxy token the projected helper prints. Opaque and
+#: unchanged by anything the user does to the agent.
+_AGENT_UID = "7d4f1e2a3b4c5d6e7f8091a2b3c4d5e6"
 
 
 def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
@@ -41,37 +41,33 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
         '{"theme": "dark", "env": {"FOO": "1"}}',
         base_url="https://gw/anthropic",
         model="claude-opus-4-8",
-        fast_model="claude-haiku-4-5",
-        api_key_helper=anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI),
+        effort="high",
+        tier_models={"haiku": "claude-haiku-4-5", "opus": "claude-opus-4-8"},
+        api_key_helper=proxy_token_helper(_AGENT_UID, coffer_cli=_CLI),
     )
     d = json.loads(out)
-    assert d["apiKeyHelper"] == anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI)
+    assert d["apiKeyHelper"] == proxy_token_helper(_AGENT_UID, coffer_cli=_CLI)
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"]["FOO"] == "1"  # unrelated env preserved
     assert d["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
-    assert d["env"]["ANTHROPIC_MODEL"] == "claude-opus-4-8"
-    assert d["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "claude-haiku-4-5"
+    # The top-level keys /model and /effort save to — never env.ANTHROPIC_MODEL,
+    # which would outrank the user's own /model choice at every launch.
+    assert d["model"] == "claude-opus-4-8"
+    assert d["effortLevel"] == "high"
+    assert "ANTHROPIC_MODEL" not in d["env"]
+    assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "claude-haiku-4-5"
+    assert d["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "claude-opus-4-8"
+    assert "ANTHROPIC_DEFAULT_SONNET_MODEL" not in d["env"]
     assert "ANTHROPIC_API_KEY" not in d["env"]  # never write the raw key
-
-
-def test_anthropic_omits_fast_model_when_none() -> None:
-    out = apply_anthropic_settings(
-        '{"env": {"ANTHROPIC_SMALL_FAST_MODEL": "stale"}}',
-        base_url="u",
-        model="m",
-        fast_model=None,
-        api_key_helper=_HELPER,
-    )
-    assert "ANTHROPIC_SMALL_FAST_MODEL" not in json.loads(out)["env"]
 
 
 def test_anthropic_handles_empty_and_is_idempotent() -> None:
     first = apply_anthropic_settings(
-        "", base_url="u", model="m", fast_model="f", api_key_helper=_HELPER
+        "", base_url="u", model="m", tier_models={"haiku": "f"}, api_key_helper=_HELPER
     )
     assert json.loads(first)["env"]["ANTHROPIC_BASE_URL"] == "u"
     second = apply_anthropic_settings(
-        first, base_url="u", model="m", fast_model="f", api_key_helper=_HELPER
+        first, base_url="u", model="m", tier_models={"haiku": "f"}, api_key_helper=_HELPER
     )
     assert json.loads(first) == json.loads(second)
 
@@ -81,8 +77,8 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
         'approval_policy = "never"\n',
         base_url="https://gw/v1",
         model="gpt-x",
-        wire_api="responses",
         display_name="Coffer (acme)",
+        auth=_AUTH,
     )
     doc = tomllib.loads(out)
     assert doc["approval_policy"] == "never"  # unrelated key preserved
@@ -91,17 +87,14 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
     block = doc["model_providers"][CODEX_PROVIDER_ID]
     assert block["base_url"] == "https://gw/v1"
     assert block["wire_api"] == "responses"
-    assert block["env_key"] == CODEX_ENV_KEY
+    assert "env_key" not in block
+    assert block["auth"] == {"command": _CLI, "args": list(_AUTH.args)}
     assert block["name"] == "Coffer (acme)"
 
 
 def test_codex_handles_empty_and_is_idempotent() -> None:
-    first = apply_codex_provider(
-        "", base_url="u", model="m", wire_api="responses", display_name="x"
-    )
-    second = apply_codex_provider(
-        first, base_url="u", model="m", wire_api="responses", display_name="x"
-    )
+    first = apply_codex_provider("", base_url="u", model="m", display_name="x", auth=_AUTH)
+    second = apply_codex_provider(first, base_url="u", model="m", display_name="x", auth=_AUTH)
     assert tomllib.loads(first) == tomllib.loads(second)
 
 
@@ -113,15 +106,39 @@ def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
         '{"theme": "dark", "env": {"FOO": "1"}}',
         base_url="u",
         model="m",
-        fast_model="f",
+        effort="high",
+        tier_models={"opus": "m", "sonnet": "m", "haiku": "m"},
+        picker_models=("m",),
+        replace_builtin_picker=True,
+        local=True,
+        local_context_window=131072,
         api_key_helper=_HELPER,
     )
-    d = json.loads(remove_anthropic_settings(text))
+    d = json.loads(remove_anthropic_settings(text, managed_model="m", managed_effort="high"))
     assert "apiKeyHelper" not in d  # Coffer's managed helper removed
     assert d["theme"] == "dark"  # unrelated key preserved
-    assert d["env"]["FOO"] == "1"  # unrelated env preserved
-    for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"):
-        assert k not in d["env"]
+    assert d["env"] == {"FOO": "1"}  # unrelated env preserved, every Coffer key gone
+    for k in ("model", "effortLevel", "modelPicker"):
+        assert k not in d
+
+
+def test_remove_anthropic_keeps_a_model_the_user_picked_later() -> None:
+    text = apply_anthropic_settings(
+        "", base_url="u", model="m", effort="high", api_key_helper=_HELPER
+    )
+    doc = json.loads(text)
+    doc["model"] = "opus"  # the user's own /model choice since
+    d = json.loads(
+        remove_anthropic_settings(json.dumps(doc), managed_model="m", managed_effort="high")
+    )
+    assert d["model"] == "opus"
+    assert "effortLevel" not in d
+
+
+def test_remove_anthropic_keeps_a_user_owned_model_picker() -> None:
+    mine = {"options": [{"model": "opus", "label": "Opus"}], "replaceBuiltInOptions": False}
+    d = json.loads(remove_anthropic_settings(json.dumps({"modelPicker": mine})))
+    assert d["modelPicker"] == mine
 
 
 def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
@@ -131,15 +148,29 @@ def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
         )
     )
     assert d["apiKeyHelper"] == "my-own-helper"  # only Coffer's managed helper is cleared
-    assert "ANTHROPIC_BASE_URL" not in d["env"]
+    assert d["env"] == {"ANTHROPIC_BASE_URL": "u"}  # no Coffer marker: the env keys are theirs
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="switching back leaves the user's own gateway settings alone",
+)
+def test_a_users_own_gateway_settings_are_left_byte_identical_and_not_present() -> None:
+    from coffer.domain.provider.agent_projection import ClaudeCodeProviderProjection
+
+    text = (
+        '{"env": {"ANTHROPIC_BASE_URL": "https://gw.corp/anthropic", '
+        '"ANTHROPIC_DEFAULT_HAIKU_MODEL": "my-haiku", "NO_PROXY": "a.corp,127.0.0.1,localhost"},'
+        ' "theme": "dark"}'
+    )
+    assert json.loads(remove_anthropic_settings(text)) == json.loads(text)
+    assert ClaudeCodeProviderProjection().is_present(text) is False
 
 
 def test_remove_anthropic_empty_and_idempotent() -> None:
     assert json.loads(remove_anthropic_settings("")) == {}
     once = remove_anthropic_settings(
-        apply_anthropic_settings(
-            "", base_url="u", model="m", fast_model=None, api_key_helper=_HELPER
-        )
+        apply_anthropic_settings("", base_url="u", model="m", api_key_helper=_HELPER)
     )
     twice = remove_anthropic_settings(once)
     assert json.loads(once) == json.loads(twice)
@@ -150,8 +181,8 @@ def test_remove_codex_clears_managed_block_preserves_others() -> None:
         'approval_policy = "never"\n',
         base_url="u",
         model="gpt-x",
-        wire_api="responses",
         display_name="Coffer (acme)",
+        auth=_AUTH,
     )
     doc = tomllib.loads(remove_codex_provider(text))
     assert doc["approval_policy"] == "never"  # unrelated key preserved
@@ -175,7 +206,7 @@ def test_remove_codex_keeps_a_user_owned_provider() -> None:
 def test_remove_codex_empty_and_idempotent() -> None:
     assert remove_codex_provider("").strip() == ""
     once = remove_codex_provider(
-        apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
+        apply_codex_provider("", base_url="u", model="m", display_name="x", auth=_AUTH)
     )
     twice = remove_codex_provider(once)
     assert tomllib.loads(once) == tomllib.loads(twice)
@@ -188,84 +219,49 @@ def test_remove_codex_empty_and_idempotent() -> None:
     spec="provider-switching",
     scenario="the projected key is hidden from the agent's shell commands",
 )
-def test_codex_excludes_the_key_from_shell_commands() -> None:
-    doc = tomllib.loads(
-        apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
-    )
-    assert doc["shell_environment_policy"] == {"exclude": [CODEX_ENV_KEY]}
-
-
-def test_codex_exclude_keeps_the_users_policy_and_adds_the_key_once() -> None:
-    text = '[shell_environment_policy]\ninherit = "core"\nexclude = ["AWS_*"]\n'
-    once = apply_codex_provider(
-        text, base_url="u", model="m", wire_api="responses", display_name="x"
-    )
-    twice = apply_codex_provider(
-        once, base_url="u", model="m", wire_api="responses", display_name="x"
-    )
-    policy = tomllib.loads(twice)["shell_environment_policy"]
-    assert policy == {"inherit": "core", "exclude": ["AWS_*", CODEX_ENV_KEY]}
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="the projected key is hidden from the agent's shell commands",
-)
-def test_remove_codex_drops_only_its_own_exclude_entry() -> None:
-    projected = apply_codex_provider(
-        '[shell_environment_policy]\nexclude = ["AWS_*"]\n',
-        base_url="u",
+def test_the_proxy_form_names_no_key_in_the_environment() -> None:
+    """Codex fetches its local proxy token through the ``auth`` command, so no
+    key rides its environment; the user's shell policy is left as it was."""
+    user_policy = '[shell_environment_policy]\nexclude = ["AWS_*"]\n'
+    out = apply_codex_provider(
+        user_policy,
+        base_url="http://127.0.0.1:38471/openai/v1",
         model="m",
-        wire_api="responses",
         display_name="x",
+        auth=CodexAuthCommand("/opt/coffer", ("proxy", "token", "--agent-uid", "a1")),
     )
-    doc = tomllib.loads(remove_codex_provider(projected))
+    doc = tomllib.loads(out)
+    block = doc["model_providers"][CODEX_PROVIDER_ID]
+    assert "env_key" not in block
+    assert block["auth"] == {
+        "command": "/opt/coffer",
+        "args": ["proxy", "token", "--agent-uid", "a1"],
+    }
+    assert block["supports_websockets"] is False and block["requires_openai_auth"] is False
     assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}
-
-    bare = apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
-    assert "shell_environment_policy" not in tomllib.loads(remove_codex_provider(bare))
+    assert "COFFER_PROVIDER_KEY" not in out
 
 
-def test_target_for_agent_maps_agent_to_config() -> None:
-    # The projection writer is now chosen by AGENT type, not protocol — so an
-    # openai-wire connection routed to Claude Code writes settings.json.
-    cc = target_for_agent(AgentType.CLAUDE_CODE)
-    assert cc is not None and cc.config_key == "settings"
-    cx = target_for_agent(AgentType.CODEX)
-    assert cx is not None and cx.config_key == "config"
-
-
-def test_per_connection_api_key_helper_is_written_and_removed() -> None:
-    # The helper names the connection by UID, which is what makes a rename cost
-    # nothing: the line Coffer writes into somebody else's config file goes on
-    # resolving after the user relabels the connection, so there is no
-    # re-projection to perform and no window in which the agent shells out to a
-    # name that no longer exists.
-    helper = anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI)
-    assert helper == f"{_CLI} provider key --connection-uid {_CONNECTION_UID}"
-    out = apply_anthropic_settings(
-        "", base_url="https://agnes", model=None, fast_model=None, api_key_helper=helper
-    )
+def test_proxy_token_helper_is_written_and_removed() -> None:
+    # The helper names the agent by UID, so the line Coffer writes into somebody
+    # else's config file goes on resolving after the user renames the agent.
+    helper = proxy_token_helper(_AGENT_UID, coffer_cli=_CLI)
+    assert helper == f"{_CLI} proxy token --agent-uid {_AGENT_UID}"
+    out = apply_anthropic_settings("", base_url="https://agnes", model=None, api_key_helper=helper)
     assert json.loads(out)["apiKeyHelper"] == helper
-    # Removal strips ANY Coffer-managed helper, so use-builtin always reverts
-    # cleanly — including the forms Coffer no longer writes but did write into
-    # files that are still on this disk.
+    # Removal strips a Coffer-managed helper, bare or by path, so use-builtin
+    # always reverts cleanly.
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
-    for superseded in (
-        f"coffer provider key --connection-uid {_CONNECTION_UID}",
-        "coffer provider key --wire anthropic",
-        "coffer provider key --connection agnes",
-    ):
-        doc = json.dumps({"apiKeyHelper": superseded})
-        assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(doc))
+    bare = json.dumps({"apiKeyHelper": f"coffer proxy token --agent-uid {_AGENT_UID}"})
+    assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(bare))
 
 
 def test_api_key_helper_names_the_cli_by_absolute_path_and_quotes_spaces() -> None:
     """A Dock-launched Claude Code has no login-shell ``PATH``, so the CLI is
     named by path; Claude Code runs the line through a shell, so a space in
     that path must not split it."""
-    helper = anthropic_api_key_helper(_CONNECTION_UID, coffer_cli="/Users/me/My Apps/coffer")
-    assert helper == f"'/Users/me/My Apps/coffer' provider key --connection-uid {_CONNECTION_UID}"
+    helper = proxy_token_helper(_AGENT_UID, coffer_cli="/Users/me/My Apps/coffer")
+    assert helper == f"'/Users/me/My Apps/coffer' proxy token --agent-uid {_AGENT_UID}"
     assert is_managed_api_key_helper(helper)
     doc = json.dumps({"apiKeyHelper": helper, "theme": "dark"})
     assert json.loads(remove_anthropic_settings(doc)) == {"theme": "dark"}
@@ -277,7 +273,8 @@ def test_api_key_helper_names_the_cli_by_absolute_path_and_quotes_spaces() -> No
         "my-own-helper --token",
         "/usr/local/bin/op read op://vault/anthropic",
         "coffer-helper provider key",  # program is not the coffer CLI
-        "/opt/coffer/bin/coffer provider list",  # not the key command
+        "/opt/coffer/bin/coffer provider list",  # not the token command
+        f"coffer provider key --connection-uid {_AGENT_UID}",  # not the token command
         "coffer provider",  # too short to be ours
         "'/unbalanced/coffer provider key",  # not a line Coffer could write
         "",
@@ -287,18 +284,6 @@ def test_a_user_owned_helper_is_never_claimed(helper: str) -> None:
     assert not is_managed_api_key_helper(helper)
     doc = json.dumps({"apiKeyHelper": helper})
     assert json.loads(remove_anthropic_settings(doc)) == {"apiKeyHelper": helper}
-
-
-# --- supported-agent invariant -------------------------------------------------
-
-
-# Coffer supports exactly the agent types it can project a provider into: every
-# member of ``AgentType`` MUST have a native-config projection target. This locks
-# the invariant so a newly added agent type cannot silently ship without a
-# projection writer (and so a removed one cannot leave a dangling target).
-@pytest.mark.parametrize("agent_type", list(AgentType))
-def test_every_supported_agent_is_a_projection_target(agent_type: AgentType) -> None:
-    assert target_for_agent(agent_type) is not None
 
 
 # --- Codex model catalogue (``model_catalog_json``) -----------------------------
@@ -381,9 +366,9 @@ def test_codex_points_at_an_absolute_catalog_path() -> None:
         "",
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+        auth=_AUTH,
     )
     value = tomllib.loads(out)["model_catalog_json"]
     assert value == "/home/u/.codex/coffer-model-catalog.json"
@@ -398,9 +383,9 @@ def test_codex_rejects_a_relative_catalog_path() -> None:
             "",
             base_url="u",
             model="m",
-            wire_api="responses",
             display_name="x",
             catalog_path=pathlib.Path(".codex/coffer-model-catalog.json"),
+            auth=_AUTH,
         )
 
 
@@ -409,13 +394,11 @@ def test_codex_drops_a_stale_coffer_catalog_when_the_set_is_cleared() -> None:
         "",
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+        auth=_AUTH,
     )
-    cleared = apply_codex_provider(
-        projected, base_url="u", model="m", wire_api="responses", display_name="x"
-    )
+    cleared = apply_codex_provider(projected, base_url="u", model="m", display_name="x", auth=_AUTH)
     assert "model_catalog_json" not in tomllib.loads(cleared)
 
 
@@ -424,8 +407,8 @@ def test_codex_keeps_a_user_owned_catalog_when_it_curates_nothing() -> None:
         'model_catalog_json = "/home/u/my-models.json"\n',
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
+        auth=_AUTH,
     )
     assert tomllib.loads(out)["model_catalog_json"] == "/home/u/my-models.json"
 
@@ -435,9 +418,9 @@ def test_remove_codex_drops_the_coffer_catalog() -> None:
         "",
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+        auth=_AUTH,
     )
     # Gone → Codex's own model list is what its picker shows again.
     assert "model_catalog_json" not in tomllib.loads(remove_codex_provider(text))
@@ -459,9 +442,9 @@ def test_catalog_projection_preserves_comments_and_ordering() -> None:
         original,
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
+        auth=_AUTH,
     )
     assert out.startswith(
         '# my codex config\napproval_policy = "never"\nsandbox_mode = "read-only"'

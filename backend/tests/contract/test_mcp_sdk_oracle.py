@@ -14,7 +14,6 @@ the test fails — so the SDK's own validation is the oracle.
 
 from __future__ import annotations
 
-import os
 import re
 import socket
 import sys
@@ -27,7 +26,9 @@ import pytest
 import uvicorn
 from mcp import ClientSession
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
+from mcp.shared.exceptions import MCPError
 
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.fixtures.net import free_port
 
@@ -36,19 +37,19 @@ _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
 
-#: The gateway exposes EXACTLY ONE built-in knowledge tool. Upload is not among
-#: them — a document enters through a human surface, not an agent's tool call —
-#: and neither is any way to READ: an agent reads the files with its own tools
-#: at the paths its delivered skill carries (spec knowledge "Expose exactly one
+#: The gateway exposes NO built-in knowledge tool: an agent reads the files with
+#: its own tools at the paths its delivered skill carries, and adds knowledge by
+#: writing a file into a collection's inbox (spec knowledge "Expose no
 #: knowledge tool").
-_KNOWLEDGE_TOOLS = frozenset({"coffer__write"})
+_KNOWLEDGE_TOOLS: frozenset[str] = frozenset()
 
-#: The five that went with the retrieval surface. Asserted absent by name, so a
-#: revival reds this with the name in the message rather than as an anonymous
-#: set difference — and so the claim survives someone adding a sixth built-in
-#: to an unrelated slice.
+#: The six that went with the retrieval surface and the write tool. Asserted
+#: absent by name, so a revival reds this with the name in the message rather
+#: than as an anonymous set difference — and so the claim survives someone
+#: adding another built-in to an unrelated slice.
 _RETIRED_KNOWLEDGE_TOOLS = frozenset(
     {
+        "coffer__write",
         "coffer__list",
         "coffer__grep",
         "coffer__read",
@@ -93,14 +94,13 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     REST registration call from within the fixture body. ``root`` is the
     knowledge tree this daemon writes into — it comes back because the layer
     has no read tool any more, so confirming a write means looking at the
-    directory. It is read out of the environment rather than guessed from
-    ``HOME``: the suite-wide ``_isolated_knowledge_root`` fixture pins it, and
-    that is the value the daemon in this process resolves.
+    directory. It is resolved from ``HOME`` exactly as the daemon in this
+    process resolves it.
     """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    knowledge_root = Path(os.environ["COFFER_KNOWLEDGE_ROOT"])
+    knowledge_root = _knowledge_root()
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     # Port range must not clash with other parallel test processes
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59600")
@@ -111,7 +111,7 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     from coffer.surfaces.http.app import create_app
     from coffer.surfaces.http.auth import set_active_token
-    from coffer.surfaces.http.daemon_routes import set_port
+    from coffer.surfaces.http.daemon_port import set_port
 
     app = create_app()
     set_active_token(_TOKEN)
@@ -193,14 +193,14 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="register a stdio MCP server")
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="exactly one built-in knowledge tool appears in the client tool list",
+    scenario="no knowledge tool appears in the client tool list",
 )
 @pytest.mark.acceptance(
     spec="skill-manager",
     scenario="Coffer exposes no skill tools over MCP",
 )
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="the handshake names Coffer's tools and points at the skill"
+    spec="knowledge", scenario="name only the search tool in the handshake and point at the skill"
 )
 async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
     """Drive the /mcp endpoint via the mcp SDK; SDK validation is the oracle.
@@ -210,15 +210,6 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
     through its Pydantic models on parse).
     """
     port, token, knowledge_root = running_daemon
-
-    async def _create_collection(name: str) -> None:
-        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as http:
-            r = await http.post(
-                "/api/v1/knowledge/collections",
-                json={"name": name, "description": "oracle round-trip"},
-                headers={"X-Coffer-Token": token},
-            )
-            assert r.status_code in (201, 409), r.text
 
     mcp_url = f"http://127.0.0.1:{port}/mcp"
     headers = {"X-Coffer-Token": token}
@@ -274,26 +265,26 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
             f"the initialize instructions still name a skill tool: {instructions!r}"
         )
         # The handshake over the SDK with nothing hidden (two upstream tools fit
-        # the budget): within its cap, naming the two built-ins and neither
-        # removed one, pointing at the skill, and carrying no catalogue.
+        # the budget): within its cap, naming the one built-in and no removed
+        # one, pointing at the skill, and carrying no catalogue.
         assert 0 < len(instructions) <= 800
-        assert "coffer__write" in instructions
+        assert "coffer__write" not in instructions
         assert "coffer__search_tools" in instructions
         assert "coffer__recall" not in instructions
         assert "coffer__diagnose" not in instructions
         assert "coffer-guide" in instructions
         assert "What is in this developer's knowledge" not in instructions
         assert "unlisted" not in instructions
-        # Exactly the two built-ins, and no other ``coffer__`` name.
-        assert coffer_tools == {"coffer__search_tools", "coffer__write"}, coffer_tools
+        # Exactly the one built-in, and no other ``coffer__`` name.
+        assert coffer_tools == {"coffer__search_tools"}, coffer_tools
         knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
         assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
             f"the knowledge tools in tools/list are not exactly the one the spec "
             f"names; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - knowledge_on_the_wire)}"
         )
-        # The five retired names, asserted absent individually. The equality
-        # above already implies it; this says which five, so a revival reds
+        # The retired names, asserted absent individually. The equality
+        # above already implies it; this says which, so a revival reds
         # with the name rather than with a set difference a reader has to
         # decode.
         assert not (tool_names & _RETIRED_KNOWLEDGE_TOOLS), (
@@ -306,7 +297,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         declared = _tools_declared_under(_APPLICATION_ROOT / "knowledge")
         assert declared == set(_KNOWLEDGE_TOOLS), (
             f"backend/coffer/application/knowledge declares "
-            f"{len(declared)} built-in tool(s), not the one the spec allows; "
+            f"{len(declared)} built-in tool(s), not the none the spec allows; "
             f"unexpected={sorted(declared - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - declared)}"
         )
@@ -319,38 +310,12 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         # Reaching here means the SDK parsed the response without errors.
         assert call_result.content is not None, "expected non-empty content"
 
-        # 4. tools/call of the one coffer__ BUILT-IN end-to-end through the
-        # daemon (review gap: builtins were only ever listed, never called over
-        # the wire). The collection has to exist first — nothing
-        # auto-provisions one (spec knowledge "Create collections only
-        # deliberately").
-        #
-        # There is no read tool left to confirm the write with, which is the
-        # point of the redesign, so the confirmation is the file itself: the
-        # daemon runs in this process over an isolated HOME, so the collection
-        # can be read off disk exactly as the agent's own `Read` would. No
-        # internal model is configured here, so the material is promoted to a
-        # document on the spot rather than waiting in the inbox (see "Promote
-        # material directly when no model is configured").
-        await _create_collection("oracle")
-        write_result = await session.call_tool(
-            "coffer__write",
-            arguments={
-                "title": "Axolotls",
-                "description": "an oracle smoke fact",
-                "body": "oracle smoke fact about axolotls",
-                "collection": "oracle",
-            },
-        )
-        assert not write_result.is_error, write_result.content
-
-        assert "written" in str(write_result.content), write_result.content
-        landed = knowledge_root / "oracle" / "axolotls.md"
-        assert landed.is_file(), (
-            "coffer__write did not become a document in the collection: "
-            f"{sorted(p.name for p in landed.parent.iterdir()) if landed.parent.is_dir() else []}"
-        )
-        assert "oracle smoke fact about axolotls" in landed.read_text(encoding="utf-8")
-        # And nothing is left waiting in the inbox behind it.
-        inbox = knowledge_root / "oracle" / ".inbox"
-        assert not inbox.is_dir() or list(inbox.iterdir()) == []
+        # 4. The removed write tool is answered as an unknown tool end to end
+        # (spec knowledge "Expose no knowledge tool"), not served and not
+        # silently ignored.
+        with pytest.raises(MCPError):
+            await session.call_tool(
+                "coffer__write",
+                arguments={"title": "t", "description": "d", "collection": "oracle"},
+            )
+        assert not (knowledge_root / "oracle").exists()

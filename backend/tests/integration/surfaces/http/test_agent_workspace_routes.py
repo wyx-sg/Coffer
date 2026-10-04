@@ -1,7 +1,7 @@
 """HTTP coverage for /api/v1/agents/{uid}/mcp-entries and /plugins.
 
 The agent is addressed by its immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid), taken off the registration
+(ADR identity-is-the-uid-inside-the-file), taken off the registration
 response the helpers below already make. The ``{entry}`` and ``{plugin_id}``
 segments beside it deliberately stay names: they identify a stanza in the
 agent's OWN config file and an installed plugin, neither of which is a Coffer
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import time
 import tomllib
 import types
 
@@ -19,7 +20,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -68,6 +69,21 @@ def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
     return create_app()
 
 
+def _settled(path: pathlib.Path, *, quiet: float = 1.0, limit: float = 15.0) -> bytes:
+    """``path``'s bytes once they have not changed for ``quiet`` seconds."""
+    deadline = time.monotonic() + limit
+    last = path.read_bytes()
+    stable_since = time.monotonic()
+    while time.monotonic() < deadline:
+        time.sleep(0.1)
+        now = path.read_bytes()
+        if now != last:
+            last, stable_since = now, time.monotonic()
+        elif time.monotonic() - stable_since >= quiet:
+            break
+    return last
+
+
 def _client(app) -> TestClient:
     set_active_token(TOKEN)
     return TestClient(app, headers={"X-Coffer-Token": TOKEN})
@@ -78,7 +94,7 @@ def fake_keyring(monkeypatch) -> dict[str, str]:
     """Patch KeyringAdapter class-wide so no test ever touches the OS keychain.
 
     Affects both the adoption service's adapter (secret writes) and the
-    ResourceService's register-time credential probe (secret reads).
+    ResourceService's register-time secret probe (secret reads).
     """
     store: dict[str, str] = {}
     monkeypatch.setattr(KeyringAdapter, "get", lambda self, ref: store.get(ref))
@@ -274,18 +290,19 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         assert r.status_code == 200, r.text
         assert r.json()["name"] == "fetcher"
         transport = r.json()["config"]["transport"]
-        assert transport["credential_refs"] == {"API_TOKEN": ref}
+        assert transport["secret_refs"] == {"API_TOKEN": ref}
         assert SECRET_VALUE not in r.text
 
         # The entry is gone from the agent's own file.
         data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
         assert "fetcher" not in data["mcp_servers"]
 
-        # The secret value landed in the encrypted credential store under the
-        # ref (read back through the audited API — never via the keychain).
-        r = c.get(f"/api/v1/credentials/{ref}")
-        assert r.status_code == 200, r.text
-        assert r.json() == {"value": SECRET_VALUE}
+        # The secret value landed in the encrypted secret store under the
+        # ref. No route returns a value, so it is read from the daemon's own
+        # store — never via the keychain.
+        from coffer.surfaces.http.secret_composition import get_secret_store
+
+        assert get_secret_store().get(ref) == SECRET_VALUE
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="reject adoption on resource name conflict")
@@ -294,7 +311,10 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
     with _client(app) as c:
         uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
-        before = config.read_bytes()
+        # Registering the agent hints a reconcile pass that repairs Coffer's
+        # own entry in this file; wait it out, so "untouched" below is about
+        # the refused adoption and nothing else.
+        before = _settled(config)
 
         r = c.post(
             "/api/v1/resources",
@@ -315,11 +335,11 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
         assert err["code"] == "RESOURCE_ALREADY_EXISTS"
         assert err["details"]["suggested_name"] == "fetcher-codex"
         # Agent config untouched.
-        assert config.read_bytes() == before
+        assert _settled(config) == before
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="require a credential mapping for secret-like env values"
+    spec="agent-registry", scenario="require a secret mapping for secret-like env values"
 )
 def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59870)
@@ -536,7 +556,7 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
         installed_before, settings_before = installed.read_bytes(), settings.read_bytes()
 
         calls: list[list[str]] = []
-        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr("shutil.which", lambda _exe, path=None: "/usr/bin/claude")
         monkeypatch.setattr(
             "subprocess.run",
             lambda argv, **k: (
@@ -547,7 +567,7 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
 
         r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 204, r.text
-        assert calls == [["claude", "plugin", "uninstall", "q1@mk"]]
+        assert calls == [["/usr/bin/claude", "plugin", "uninstall", "q1@mk"]]
         assert installed.read_bytes() == installed_before
         assert settings.read_bytes() == settings_before
 
@@ -556,7 +576,7 @@ def test_claude_plugin_cli_failure_is_422(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59952)
     with _client(app) as c:
         uid = _register_claude(c, tmp_path)
-        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr("shutil.which", lambda _exe, path=None: "/usr/bin/claude")
         monkeypatch.setattr(
             "subprocess.run",
             lambda *a, **k: types.SimpleNamespace(returncode=1, stdout="", stderr="no such plugin"),
@@ -581,7 +601,7 @@ def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
         settings = tmp_path / ".claude" / "settings.json"
         before = settings.read_bytes()
 
-        monkeypatch.setattr("shutil.which", lambda _exe: None)
+        monkeypatch.setattr("shutil.which", lambda _exe, path=None: None)
 
         r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 422, r.text

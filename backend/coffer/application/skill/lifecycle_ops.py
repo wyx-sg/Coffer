@@ -1,4 +1,4 @@
-"""Import / auto-bind / relink helpers for SkillService.
+"""Import helpers for SkillService.
 
 Extracted to keep ``service.py`` under the file-size limit. Like
 ``binding_ops.py`` these are free functions that take the SkillService
@@ -8,48 +8,23 @@ private to the skill subpackage.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import pathlib
-import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from coffer.application.skill.builtin_seed import is_builtin
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import CofferError, ResourceAlreadyExists, ResourceProtected
+from coffer.domain.errors import ResourceAlreadyExists, ResourceProtected
 from coffer.domain.resource import Resource
-from coffer.domain.scope import is_active
-from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
-from coffer.domain.skill.source import LocalImportSource
+from coffer.domain.skill.source import ImportedSource
 from coffer.domain.skill.validator import ValidationOk
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
 
 logger = logging.getLogger(__name__)
-
-
-def infer_link_mode(link: pathlib.Path) -> LinkMode:
-    """Best-effort: what kind of link is actually on disk at `link`?
-
-    Used when a target is already correctly linked but no prior binding row
-    recorded the mode, so a junction/copy-fallback isn't mislabelled SYMLINK.
-    Stdlib-only (no infrastructure import — Contract 2).
-    """
-    if link.is_symlink():
-        return LinkMode.SYMLINK
-    if sys.platform == "win32" and link.is_dir():
-        import os
-
-        try:
-            attr = getattr(os.lstat(link), "st_file_attributes", 0)
-        except OSError:
-            attr = 0
-        # FILE_ATTRIBUTE_REPARSE_POINT (0x400) marks a junction.
-        return LinkMode.JUNCTION if attr & 0x400 else LinkMode.COPY_FALLBACK
-    return LinkMode.COPY_FALLBACK
 
 
 def _refuse_overwriting_a_builtin(existing: list[Resource], name: str) -> None:
@@ -76,10 +51,11 @@ async def register_from_validated(
     service: SkillService,
     src: pathlib.Path,
     validation: ValidationOk,
-    source_meta: LocalImportSource,
+    source_meta: ImportedSource,
     event: AuditEventType,
     actor: str,
     overwrite: bool = False,
+    audit_details: dict[str, object] | None = None,
 ) -> Resource:
     name = validation.frontmatter.name
     # Duplicate check before copying any bytes. A skill's name is a label, but
@@ -154,130 +130,15 @@ async def register_from_validated(
             service._store.delete(name)
             raise
         audit_event = event
-        # Deliver to every agent the new skill's own state grants (see "Deliver a skill
-        # only where it is enabled and in scope"). On overwrite the skill is already
-        # bound; skip auto-bind to avoid disturbing existing bindings.
-        await auto_bind_all(service=service, skill=r, actor=actor)
 
     await service._audit.record(
         audit_event.value,
         resource=r,
         actor=actor,
-        details={"version_hash": validation.skill_md_sha256},
+        details={"version_hash": validation.skill_md_sha256, **(audit_details or {})},
     )
+    # Deliver to every agent the skill's own state grants (spec skill-manager
+    # "Deliver a skill only where it is enabled and in scope"). An overwrite
+    # changes neither half of that rule, so its pass finds nothing to do.
+    await service.reconcile_delivery()
     return r
-
-
-async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -> None:
-    """Deliver a freshly imported skill to the agents its own state grants.
-
-    The delivery predicate (see "Deliver a skill only where it is enabled and in
-    scope"): a disabled skill goes nowhere, and an enabled one goes exactly to the
-    agents its scope names. A DISABLED AGENT is skipped regardless — the predicate
-    decides which agents a skill is *for*, not whether Coffer may write into an agent
-    the user has switched off.
-    """
-    if not skill.enabled:
-        return
-    for a in await service._rs.list(kind="agent"):
-        if not a.enabled or not is_active(skill.scope, a.uid):
-            continue
-        try:
-            await service.enable_for(skill_uid=skill.uid, agent_uid=a.uid, force=False, actor=actor)
-        except (CofferError, OSError) as e:
-            # A per-agent failure (TargetConflict, config validation, OSError)
-            # must not abort auto-bind for the rest — but it must not be silent
-            # either: log it so the user can re-enable later.
-            logger.warning("auto-bind of skill %r to agent %r skipped: %s", skill.name, a.name, e)
-
-
-async def relink_agent_skills(*, service: SkillService, agent_uid: str, actor: str) -> None:
-    """Re-deliver an agent's skills after its config_dir changed.
-
-    Wired as the agent kind's on-config-dir-changed hook. The agent resource
-    already carries the NEW config_dir when this runs, so the resolver gives
-    the new ``<config_dir>/skills``. For each binding we remove the old link
-    (``last_link_path``) and, if enabled, recreate it at the new location,
-    repointing the binding row. Without this, changing an agent's config_dir
-    orphaned the old links and left the new dir empty while verify reported
-    no drift.
-
-    ADR per-agent-resource-scope hard grant: a config_dir change must not resurrect a link the
-    delivery predicate no longer grants. A skill that has been disabled, or has
-    fallen out of this agent's scope, has its old link torn down like any
-    other, but the new-location link is NOT recreated — the binding row is left
-    untouched (not deleted); reclaim (spending the row) is
-    ``apply_scope_for_agent``'s job, not this hook's.
-    """
-    try:
-        agent = await service._rs.get(agent_uid)
-    except CofferError:
-        return
-    new_skill_dir = service._resolve_agent_skill_dir(agent)
-    skills_by_id = {s.id: s for s in await service._rs.list(kind="skill")}
-    for b in await service._bindings.list_for_agent(agent.id):
-        old_path = pathlib.Path(b.last_link_path) if b.last_link_path else None
-        skill = skills_by_id.get(b.skill_resource_id)
-        if skill is None:
-            continue
-        new_link = new_skill_dir / skill.name
-        if old_path is not None and old_path == new_link:
-            continue  # dir unchanged for this binding — nothing to move
-        if old_path is not None:
-            with contextlib.suppress(OSError):
-                service._sync.remove_directory_link(old_path, link_mode=b.link_mode)
-        if not b.enabled:
-            continue
-        if not (skill.enabled and is_active(skill.scope, agent.uid)):
-            # The predicate no longer grants this delivery — do not resurrect
-            # the link. The row keeps its (now stale) enabled/last_link_path
-            # until a reconciliation run reclaims it; we only refuse to
-            # recreate here.
-            continue
-        master = service._store.paths_for(skill.name).folder
-        try:
-            new_skill_dir.mkdir(parents=True, exist_ok=True)
-            if new_link.exists() or new_link.is_symlink():
-                status = service._sync.classify_target(
-                    link=new_link, expected_master=master, link_mode=b.link_mode
-                )
-                if status.drift is None:
-                    # A correct Coffer link already sits at the new path (e.g. a
-                    # prior partial run) — adopt it without re-linking, and
-                    # record the binding so verify doesn't report a false
-                    # MISSING_LINK against the now-removed old path.
-                    mode = b.link_mode or infer_link_mode(new_link)
-                else:
-                    # FOREIGN content occupies the new path. Never clobber it,
-                    # and never claim it as our link: recording a real link_mode
-                    # (esp. COPY_FALLBACK) would let teardown rmtree the user's
-                    # directory. link_mode=None makes teardown leave it intact
-                    # and lets verify surface the genuine drift.
-                    logger.warning(
-                        "relink: foreign content at %s (skill %r / agent %r) — left intact",
-                        new_link,
-                        skill.name,
-                        agent.name,
-                    )
-                    mode = None
-            else:
-                mode = service._sync.make_directory_link(target=master, link=new_link)
-            await service._bindings.upsert(
-                skill_id=b.skill_resource_id,
-                agent_id=agent.id,
-                enabled=True,
-                last_linked_at=datetime.now(tz=UTC),
-                last_link_path=str(new_link),
-                link_mode=mode,
-            )
-            if mode is not None:
-                with contextlib.suppress(Exception):
-                    await service._audit.record(
-                        AuditEventType.SKILL_RELINKED.value,
-                        resource=skill,
-                        actor=actor,
-                        details={"agent": agent.name, "link": str(new_link)},
-                    )
-        except (CofferError, OSError) as e:
-            logger.warning("relink of skill %r for agent %r skipped: %s", skill.name, agent.name, e)
-            continue

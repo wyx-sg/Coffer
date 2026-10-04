@@ -31,7 +31,7 @@ of each update and not the cost of access; the four problems above are what the
 following days without a shell showed. By then two of the old shell's largest
 jobs had moved somewhere better: deploying the frozen binaries into
 `~/.coffer/bin/` had become the daemon's frozen-start job (spec daemon "Deploy
-frozen sibling binaries and back up the vault before migrating"), and folder
+frozen sibling binaries and back up the history database before migrating"), and folder
 picking, open-in-editor and reveal-in-Finder had become daemon HTTP routes
 ([The Daemon Proxies OS File Actions](daemon-proxies-os-file-actions.md)), which
 a webview calls exactly as a browser tab does.
@@ -47,14 +47,12 @@ thing to drift.
 
 `desktop/tauri.conf.json` sets `frontendDist: ../frontend/dist`, and the window
 loads that build from the bundle, not from `http://127.0.0.1:<port>/`. The shell
-owns exactly four things:
+owns six things, four of which decided its shape and two it gained later:
 
 1. **A window with a Dock icon and a Cmd-Tab entry.** Closing it hides to the
    tray rather than exiting (`tray.rs`).
 2. **A resident tray** with Open Coffer, Restart daemon, Quit, and a Sync entry
-   that exists only while the `vault_sync` experimental feature is on
-   (`sync_gate.rs` reads `features.vault_sync` from the unauthenticated
-   `/api/v1/daemon/status`; `sync_watch.rs`, `sync_presentation.rs` and
+   (`sync_watch.rs`, `sync_presentation.rs` and
    `sync_alert.rs` badge the icon and raise the notification of spec vault-sync
    "Say a vault needs a human where the user already is").
 3. **Detect-or-spawn at launch** (`resolve.rs`), by a fixed chain: a live daemon
@@ -81,6 +79,16 @@ owns exactly four things:
    other suppliers write (`frontend/src/lib/auth.ts`). Readers never learn which
    host they are in, which is why this is a second *supplier* and not a second
    *code path*.
+
+5. **A presence check before plaintext leaves.** Revealing a secret, writing a
+   master key backup and approving a pending approval each run a fresh
+   LocalAuthentication check in the shell (`presence.rs`, `presence_macos.rs`,
+   `presence_grant.rs`) before they act, because only the signed bundle can ask
+   macOS for Touch ID and the daemon cannot stand in
+   ([The Master Key Lives in the macOS Keychain](master-key-lives-in-the-macos-keychain.md)).
+6. **Self-update.** The shell checks a signed release manifest on GitHub
+   Releases and installs a verified update (`updater.rs`), because replacing
+   the running application is something only the application can do.
 
 Because the page is local, two affordances become possible that a browser
 cannot have, both inside the offline banner and both reached through
@@ -146,8 +154,9 @@ bundled browser.
 ## Decision
 
 **Coffer ships a Tauri shell that hosts the one `frontend/dist` build as a local
-asset and owns exactly four things a browser cannot do for itself: a window, a
-tray, detect-or-spawn at launch, and the IPC credential handshake.** Rules a
+asset and owns only what a browser cannot do for itself: a window, a tray,
+detect-or-spawn at launch, the IPC credential handshake, the presence check
+before plaintext leaves, and self-update.** Rules a
 change must respect:
 
 - **No second frontend path.** Outside `lib/tauri.ts`, `lib/auth.ts`'s
@@ -157,10 +166,12 @@ change must respect:
   hosts — `lib/fsActions.ts`, `components/FileActions.tsx` and
   `components/FolderPicker.tsx` call the daemon, and `desktop/Cargo.toml`
   declares no `dialog` or `opener` plugin. A native plugin is admissible only
-  where the daemon cannot stand in; the one today is `tauri-plugin-notification`,
-  because no loopback route can post a notification as Coffer (spec desktop-app
+  where the daemon cannot stand in: `tauri-plugin-notification`, because no
+  loopback route can post a notification as Coffer, and `tauri-plugin-updater`,
+  because the daemon cannot replace the application (spec desktop-app
   "Reimplement no daemon route in the shell").
-- **The shell owns no state and deploys nothing.** It reads
+- **The shell owns no persistent state and deploys nothing.** Its update status
+  and presence grants are ephemeral. It reads
   `~/.coffer/daemon.json`, appends `coffer.desktop` records to
   `~/.coffer/logs/daemon.log` (`logging.rs`), and never writes
   `~/.coffer/bin/` — that is the daemon's job.

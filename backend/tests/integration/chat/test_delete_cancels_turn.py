@@ -22,7 +22,6 @@ from fastapi.testclient import TestClient
 from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
-    clear_active_turns,
 )
 from coffer.domain.chat.events import AgentEvent, TextDelta
 from coffer.surfaces.http import errors as err_handlers
@@ -35,6 +34,8 @@ from coffer.surfaces.http.chat.dependencies import (
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.turn_routes import router as turn_router
+from coffer.surfaces.http.dependencies import get_resource_service
+from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import (
     FakeAgentProvider,
     make_attachment_service,
@@ -57,6 +58,18 @@ class _BlockingAdapter:
         return gen()
 
 
+class _NoChannels:
+    """The resource service the conversation routes read channel names from.
+
+    Overridden rather than inherited: the module-level resource service is only
+    set when some earlier test in the same process happened to boot the full
+    app, so relying on it made these tests pass serially and fail alone (or on
+    an xdist worker that ran them first)."""
+
+    async def list(self, **_: object) -> list[Any]:
+        return []
+
+
 def _build_app(chat_svc: Any, orchestrator: Any, registry: Any) -> FastAPI:
     app = FastAPI()
     err_handlers.register(app)
@@ -66,14 +79,8 @@ def _build_app(chat_svc: Any, orchestrator: Any, registry: Any) -> FastAPI:
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: registry
     app.dependency_overrides[get_attachment_service] = lambda: make_attachment_service()
+    app.dependency_overrides[get_resource_service] = lambda: _NoChannels()
     return app
-
-
-@pytest.fixture(autouse=True)
-def _reset_turns():  # type: ignore[no-untyped-def]
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 def test_delete_conversation_route_passes_cancel_fn_to_service() -> None:
@@ -122,7 +129,7 @@ async def test_delete_discards_an_in_flight_turn() -> None:
     )
     conv = await chat_svc.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hello")
+    queue = await start_turn(orchestrator, conv.id, "hello")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(first, TextDelta)
     assert conv.id in active_turns()

@@ -14,7 +14,7 @@ The harness around this repo is a stack, and each layer has one home:
 | Feedback      | One command that says whether the tree is good                                                 | `make verify` and the test tiers ([`testing.md`](./testing.md)), pre-commit, the CI workflows                                                   |
 | Eval          | A regression net for non-deterministic behaviour that exact-match tests cannot pin             | `evals/`, `make eval`, `.github/workflows/evals.yml` — see [Eval harness](#eval-harness) below                                                  |
 
-A hook or gate must stay fast: a slow one trains people to bypass it.
+A hook or gate must stay fast: a slow one trains people to bypass it. That is why the backend test tiers run on xdist workers locally and the integration tier runs as four duration-balanced shards in CI ([`testing.md` "Running in Parallel"](./testing.md#running-in-parallel), [CI Jobs](./testing.md#ci-jobs)), and why a docs-only pull request skips the test jobs while the static gates still run.
 
 ## What is wired (`.claude/`)
 
@@ -23,8 +23,6 @@ A hook or gate must stay fast: a slow one trains people to bypass it.
 | `.claude/settings.json`                 | Permissions (allow safe commands, deny destructive ones) + hook wiring. Committed, team-shared.                                                                                                                                                                                                                                                                                                                                      |
 | `.claude/hooks/auto_format.py`          | PostToolUse on Edit/Write — formats the edited file. Python: `ruff check --fix` then `ruff format` (lint-fix first, formatter has the final say), repo-wide. Prettier (`.ts/.tsx/.js/.jsx/.css/.json/.md`): only under `frontend/`; the rest of the repo's prettier types are owned by the pinned pre-commit pass (different prettier version), so the hook leaves them alone to avoid CI-fighting churn. Best-effort, never blocks. |
 | `.claude/hooks/block_dangerous_bash.py` | PreToolUse on Bash — denies a narrow set of destructive commands (recursive root/home delete incl. reversed flags & quoted targets, force/direct push to protected branches, pipe-to-shell, `dd of=/dev/<disk>` and raw redirects to block devices incl. macOS `disk`/`rdisk` and `nvme`).                                                                                                                                           |
-| `.claude/hooks/verify_before_commit.py` | PreToolUse on Bash — when a `git commit` runs while `make verify` is stale (source changed since the last passing verify, per `scripts/verify_stamp.py`'s content fingerprint), asks for confirmation. Checks the working tree the commit runs in (resolved from the command's cwd), not `CLAUDE_PROJECT_DIR` — so a linked worktree is judged on its own stamp, not the main checkout's. Never hard-blocks; never breaks the agent. **Never asks in a session that turned prompts off** (`permission_mode` of `bypassPermissions` or `dontAsk`) — there it reports the staleness to the agent as a `systemMessage` instead, so the fact survives without overriding a choice the user made about their own session. A CLI old enough not to send the field keeps the prompt. |
-| `.claude/hooks/session_context.py`      | SessionStart — injects branch, worktree status, dirty-file count, a stale-`make verify` heads-up (only when a baseline exists and has gone stale), and the session protocol reminder.                                                                                                                                                                                                                                                |
 
 ## Commands and Skills
 
@@ -36,16 +34,60 @@ A hook or gate must stay fast: a slow one trains people to bypass it.
   hand-edit them. `backend/tests/integration/harness/test_skills.py` pins that
   exactly those six skills are checked in and carry the required frontmatter.
   Read [`openspec.md`](./openspec.md) for the change workflow they drive.
-- Whatever a change adds, a capability is **named, never numbered**:
-  `scripts/check_doc_numbering.py` (run by `make lint`) fails on a spec
-  directory starting with a digit and on any `spec <digits>` token, in any
-  case, so a numbered spec cannot be committed. A requirement is cited by
-  title, and `scripts/check_spec_citations.py` (also `make lint`) fails on a
-  citation whose capability or title does not exist in `openspec/specs/`.
+- Whatever a change adds, a capability is **named, never numbered**, and a
+  requirement is cited by its title — `scripts/check_spec_citations.py` fails
+  a citation whose capability or title does not exist in `openspec/specs/`.
+
+## Gates
+
+`make verify` is the single entry point. It runs `lint`, `verify-unit`,
+`verify-integration`, `verify-contract` and `verify-acceptance` in that order,
+prints how long each stage took, and keeps the times in
+`.coffer-verify.timings`. Each target is one job in
+`.github/workflows/verify.yml` (the header comment there holds the mapping);
+`ci.yml` runs `make verify` whole. The repository gates under `scripts/`, one
+line each:
+
+| Gate                                         | Runs in               | Fails when                                                                                                                  |
+| -------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/check_file_sizes.py`                | `make lint`           | A backend, desktop or frontend file is over its tier's line limit                                                           |
+| `scripts/gen_contracts.py --check`           | `make lint`           | A checked-in `api.openapi.yaml` is not what the Pydantic models produce, or a served route has no owning capability        |
+| `scripts/check_response_models.py`           | `make lint`           | A FastAPI route declares neither `response_model=` nor `response_class=`                                                    |
+| `scripts/check_adr_index.py`                 | `make lint`           | A link inside `docs/decisions/` is dead, or the ADR index does not list exactly the ADRs that exist                         |
+| `scripts/check_spec_citations.py`            | `make lint`           | A `spec <capability> "<Title>"` citation — or, inside `openspec/`, a relative `spec.md` link or a `see "<Title>"` of the file's own capability — names a capability or requirement title that does not exist; a title wrapped across lines is read joined |
+| `scripts/check_architecture_doc.py`          | `make lint`           | The code-layout tree or the built-in tool roster in `docs-site/architecture/` has drifted from the code                    |
+| `scripts/check_pyinstaller_specs.py`         | `make lint`           | A PyInstaller spec names a missing file or has lost the `-X utf8` runtime option                                            |
+| `scripts/check_cli_reference.py`             | `make lint`           | A generated CLI reference page (en or zh: the index or a command group's page) differs from the code, or is left over from a removed group (`make docs-reference` fixes it) |
+| `scripts/check_docs_locales.py`              | `make lint`           | A docs-site page, sidebar entry, heading anchor or link exists in English and not in `docs-site/zh/`, or the other way round  |
+| `scripts/check_error_codes_reference.py`     | `make lint`           | `docs-site/reference/error-codes.md` or its zh twin lacks a code `surfaces/http/errors.py` maps, lists it at another HTTP status, or lists a code the daemon does not map |
+| `scripts/check_removed_commands.py`          | `make lint`           | A doc (`docs-site/`, `docs/` except the ADRs, both READMEs), spec, shipped skill, web UI or desktop shell source file, or e2e spec quotes a removed `coffer` command, option or tool |
+| `scripts/check_platform_calls.py`            | `make lint`           | Code outside `infrastructure/platform/` asks which operating system it runs on                                              |
+| `scripts/check_coffer_paths.py`              | `make lint`           | A `~/.coffer` path is built outside `infrastructure/vault/home.py` (allowed: migrations, the tests' isolated homes and real-home guard) |
+| `scripts/check_agent_type_branches.py`       | `make lint`           | Code outside the agent descriptor and its facets branches on an agent type (tests: `test_agent_type_gate.py`)              |
+| `scripts/check_frontend_colors.py`           | `make lint`           | A colour literal appears in `frontend/src/` outside `index.css` (tests: `test_frontend_colors_gate.py`)                     |
+| `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |
+| `scripts/check_bare_tasks.py`                | `make lint`           | A module under `backend/coffer/` makes more `create_task` / `ensure_future` calls than its allowance in the script (background work goes through `application/runtime/supervisor`; tests: `test_bare_tasks_gate.py`) |
+| `scripts/dump_i18n_backend_keys.py --check`  | `make lint`           | A backend error code or audit event type is missing from the frontend's locale-coverage fixture                             |
+| `scripts/check_unit_purity.py`               | `make verify-unit`    | A test under `backend/tests/unit/` imports an I/O module                                                                    |
+| `openspec validate --all --strict`          | `make verify-acceptance` | A spec or change is malformed, or a requirement owns no scenario (runs first, before `audit_acceptance.py`)             |
+| `scripts/audit_acceptance.py`                | `make verify-acceptance` | A spec scenario has no test marker, or a marker names no scenario                                                        |
+| `scripts/ci_change_scope.py`                 | CI `changes` job      | (Not a gate.) Decides whether a pull request is prose-only, so the test jobs can be skipped                                |
+
+The rest of `scripts/` is build and release tooling, run by a Makefile target
+or `release.yml` and never by `make verify`: `build_binaries.sh`
+(`make bundle-binaries`), `smoke_test_bundle.sh`, `bump_version.py`,
+`stamp_channel.py`, `stamp_build_identity.py`, `release_plan.py`,
+`release_signing.sh`, `make_update_manifest.py`, `refresh_model_prices.py`
+(`make refresh-prices`) and `render_tray_icons.sh` (redraws the desktop tray
+icons from `desktop/icons/tray/tray.svg`).
+
+Where a gate has tests of its own they live in `backend/tests/integration/harness/`. `scripts/verify_lock.py` is run-time tooling, not a gate: `make verify-integration` runs the integration suite through it so a second run on one machine queues instead of competing.
 
 ## How it is tested
 
 The hooks and settings are pinned by `backend/tests/integration/harness/`, which subprocess the real scripts with synthetic stdin. They run under `make verify-integration`, so the harness tests itself.
+
+The test suite carries one guard of its own: `backend/tests/conftest.py` + `backend/tests/support/real_home_guard.py` — the real-home guard. It redirects `HOME`, strips inherited `COFFER_*` variables, and an audit hook fails any test that touches the real `~/.coffer` / `~/.claude` / `~/.codex`; proven by `backend/tests/integration/isolation/test_real_home_guard.py`. Rules in [`testing.md`](./testing.md) "The Real-Home Guard".
 
 ## Eval harness
 

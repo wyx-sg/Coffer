@@ -2,8 +2,8 @@
 
 Every test builds its own transcript tree under ``tmp_path``; the reader is
 never pointed at a real ``~/.claude`` or ``~/.codex``, and the root conftest
-pins ``$COFFER_AGENT_STATE_ROOT`` per test so the sidecar it writes is this
-test's own.
+gives every test its own ``HOME`` so the sidecar it writes (under
+``derived/cache/agent``) is this test's own.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ def _make_codex_tree(root: Path) -> Path:
 def test_missing_sessions_dir_is_empty_not_an_error(tmp_path: Path) -> None:
     r = FileTranscriptReader()
     total, page = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert (total, page) == (0, [])
 
@@ -112,7 +112,7 @@ def test_unknown_agent_type_is_rejected(tmp_path: Path) -> None:
     r = FileTranscriptReader()
     with pytest.raises(UnsupportedAgentTypeError):
         r.search_session_summaries(
-            agent_type_value="nonexistent", config_dir=str(tmp_path), limit=10, offset=0
+            agent_type_value="nonexistent", config_dir=str(tmp_path), limit=10
         )
 
 
@@ -120,7 +120,7 @@ def test_lists_every_session_with_summary_fields(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
     total, page = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert total == 3
     by_id = {s.session_id: s for s in page}
@@ -136,7 +136,7 @@ def test_non_jsonl_files_are_ignored(tmp_path: Path) -> None:
     (d / "notes.md").write_text("not a transcript", encoding="utf-8")
     r = FileTranscriptReader()
     total, _ = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert total == 3
 
@@ -145,7 +145,7 @@ def test_search_matches_title_or_project(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
     total, page = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), query="alpha", limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), query="alpha", limit=100
     )
     assert total == 2
     assert {s.session_id for s in page} == {"a", "c"}
@@ -155,7 +155,7 @@ def test_search_is_case_insensitive(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
     total, page = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), query="BETA", limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), query="BETA", limit=100
     )
     assert total == 1
     assert page[0].session_id == "b"
@@ -169,7 +169,6 @@ def test_filter_by_project_exact(tmp_path: Path) -> None:
         config_dir=str(tmp_path),
         project="/proj/alpha",
         limit=100,
-        offset=0,
     )
     assert total == 2
     assert {s.session_id for s in page} == {"a", "c"}
@@ -184,7 +183,6 @@ def test_sort_by_started_at_asc_and_desc(tmp_path: Path) -> None:
         sort="started_at",
         order="asc",
         limit=100,
-        offset=0,
     )
     assert [s.session_id for s in asc] == ["a", "b", "c"]
     _, desc = r.search_session_summaries(
@@ -193,7 +191,6 @@ def test_sort_by_started_at_asc_and_desc(tmp_path: Path) -> None:
         sort="started_at",
         order="desc",
         limit=100,
-        offset=0,
     )
     assert [s.session_id for s in desc] == ["c", "b", "a"]
 
@@ -223,7 +220,6 @@ def test_sort_by_message_count(tmp_path: Path) -> None:
         sort="message_count",
         order="desc",
         limit=100,
-        offset=0,
     )
     assert page[0].session_id == "b"
     assert page[0].message_count == 3
@@ -233,22 +229,29 @@ def test_default_sort_is_last_activity_desc(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
     _, page = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     # a ends 05-09 (latest), c ends 05-03, b ends 05-02
     assert [s.session_id for s in page] == ["a", "c", "b"]
 
 
-def test_pagination_limit_offset(tmp_path: Path) -> None:
+def test_pagination_limit_after(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
+    _, first = r.search_session_summaries(
+        agent_type_value="codex",
+        config_dir=str(tmp_path),
+        sort="started_at",
+        order="asc",
+        limit=1,
+    )
     total, page = r.search_session_summaries(
         agent_type_value="codex",
         config_dir=str(tmp_path),
         sort="started_at",
         order="asc",
         limit=1,
-        offset=1,
+        after=(first[0].started_at, first[0].session_id),
     )
     assert total == 3  # total is the MATCHED count, not the page length
     assert [s.session_id for s in page] == ["b"]
@@ -260,7 +263,7 @@ def test_unreadable_file_is_skipped_not_fatal(tmp_path: Path) -> None:
     broken.write_bytes(b"\x00\x01\x02")
     r = FileTranscriptReader()
     total, _ = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     # The binary file parses to an empty session rather than killing the listing.
     assert total == 4
@@ -270,22 +273,16 @@ def test_cache_reparses_only_changed_files(tmp_path: Path, monkeypatch: pytest.M
     d = _make_codex_tree(tmp_path)
     r, calls = _counting_reader(monkeypatch)
 
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert calls["n"] == 3  # all parsed on first call
 
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert calls["n"] == 3  # full cache hit; nothing re-parsed
 
     p = d / "rollout-b.jsonl"
     st = p.stat()
     os.utime(p, (st.st_atime, st.st_mtime + 10))  # bump mtime
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert calls["n"] == 4  # only the changed file re-parsed
 
 
@@ -297,9 +294,7 @@ def test_cache_reparses_when_size_changes_under_the_same_mtime(
     write that can land inside one tick."""
     d = _make_codex_tree(tmp_path)
     r, calls = _counting_reader(monkeypatch)
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert calls["n"] == 3
 
     p = d / "rollout-b.jsonl"
@@ -309,22 +304,18 @@ def test_cache_reparses_when_size_changes_under_the_same_mtime(
     os.utime(p, (before.st_atime, before.st_mtime))  # pin mtime; only size moved
     assert p.stat().st_mtime == before.st_mtime
 
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert calls["n"] == 4
 
 
 def test_cache_prunes_entries_for_deleted_files(tmp_path: Path) -> None:
     d = _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert len(r._cache) == 3
     (d / "rollout-b.jsonl").unlink()
     total, _ = r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert total == 2
     assert len(r._cache) == 2  # the deleted file's entry is gone, not leaked
@@ -342,13 +333,13 @@ def test_sidecar_survives_a_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     _make_codex_tree(tmp_path)
     first, first_calls = _counting_reader(monkeypatch)
     _, before = first.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert first_calls["n"] == 3
 
     second, second_calls = _counting_reader(monkeypatch)
     total, after = second.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert second_calls["n"] == 0
     assert total == 3
@@ -358,15 +349,11 @@ def test_sidecar_survives_a_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_second_pass_that_changed_nothing_does_not_rewrite_the_sidecar(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     sidecar = paths.transcript_summaries_path()
     stamp = sidecar.stat().st_mtime_ns
     os.utime(sidecar, ns=(stamp - 10**9, stamp - 10**9))  # detectably older
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     assert sidecar.stat().st_mtime_ns == stamp - 10**9
 
 
@@ -380,15 +367,11 @@ def test_a_hot_reader_writes_the_sidecar_back_after_it_is_deleted(tmp_path: Path
     """
     _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     sidecar = paths.transcript_summaries_path()
     sidecar.unlink()
 
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
 
     assert sidecar.is_file()
     assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
@@ -397,12 +380,12 @@ def test_a_hot_reader_writes_the_sidecar_back_after_it_is_deleted(tmp_path: Path
 def test_missing_sidecar_still_lists_correctly(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     baseline = FileTranscriptReader().search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     paths.transcript_summaries_path().unlink()
     assert (
         FileTranscriptReader().search_session_summaries(
-            agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+            agent_type_value="codex", config_dir=str(tmp_path), limit=100
         )
         == baseline
     )
@@ -424,12 +407,12 @@ def test_unusable_sidecar_still_lists_correctly(tmp_path: Path, content: str) ->
     """Never a wrong answer, only a slower one — the sidecar is disposable."""
     _make_codex_tree(tmp_path)
     baseline = FileTranscriptReader().search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     paths.transcript_summaries_path().write_text(content, encoding="utf-8")
     assert (
         FileTranscriptReader().search_session_summaries(
-            agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+            agent_type_value="codex", config_dir=str(tmp_path), limit=100
         )
         == baseline
     )
@@ -439,7 +422,7 @@ def test_sidecar_entry_is_dropped_when_the_file_changed_since(tmp_path: Path) ->
     """A stale stamp must re-parse, or a restart would serve yesterday's summary."""
     d = _make_codex_tree(tmp_path)
     FileTranscriptReader().search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     _codex_session(
         d / "rollout-b.jsonl",
@@ -450,7 +433,7 @@ def test_sidecar_entry_is_dropped_when_the_file_changed_since(tmp_path: Path) ->
         user_text="rewritten beta prompt",
     )
     _, page = FileTranscriptReader().search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100
     )
     assert {s.session_id: s.title for s in page}["b"] == "rewritten beta prompt"
 
@@ -469,9 +452,7 @@ def test_sidecar_keeps_another_agent_root_untouched(tmp_path: Path) -> None:
         user_text="zeta work",
     )
     r = FileTranscriptReader()
-    r.search_session_summaries(agent_type_value="codex", config_dir=str(other), limit=100, offset=0)
-    r.search_session_summaries(
-        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
-    )
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(other), limit=100)
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
     stored = json.loads(paths.transcript_summaries_path().read_text())
     assert len(stored) == 4  # three here, one under the other root

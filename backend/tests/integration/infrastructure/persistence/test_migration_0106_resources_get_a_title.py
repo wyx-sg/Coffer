@@ -48,8 +48,7 @@ def test_0106_adds_a_nullable_title_and_keeps_every_row(tmp_path, monkeypatch):
         row = conn.execute(
             "SELECT uid, name, description, title FROM resources WHERE uid = ?", (uid,)
         ).fetchone()
-    # The row — including a name longer than the new 24-character cap for a
-    # NEW server — is exactly as it was, with no title.
+    # The row is exactly as it was, with no title.
     assert row == (uid, "a-server-name-thirty-chars-xx", "desc", None)
 
     command.downgrade(cfg, "0105")

@@ -1,6 +1,6 @@
 """Unit tests for gateway_handlers helpers and the ``_invoke`` pipeline.
 
-Covers a contract adjacent to spec credentials "Hold plaintext only in memory
+Covers a contract adjacent to spec secret "Hold plaintext only in memory
 at the moment of use": arbitrary upstream exception text must
 not leak into the invocation log via str(e). Coffer-internal errors (whose
 text is authored by us) are still preserved for debuggability.
@@ -30,7 +30,7 @@ SENTINEL = "COFFER_LEAK_SENTINEL_abc123xyz"
 
 def test_arbitrary_exception_message_is_not_persisted() -> None:
     """A non-CofferError exception (e.g., bubbled up from the MCP SDK) might
-    carry upstream-controlled text — including credentials echoed back by a
+    carry upstream-controlled text — including secrets echoed back by a
     misbehaving server. _safe_error_summary must drop the message and keep
     only the class name so the invocation log stays clean.
     """
@@ -80,7 +80,6 @@ class _Resources:
     def __init__(self, *, enabled: bool = True) -> None:
         now = datetime.now(tz=UTC)
         self.row = Resource(
-            id=1,
             uid="0f1e2d3c4b5a69788796a5b4c3d2e1f0",
             kind="mcp_server",
             name="fs",

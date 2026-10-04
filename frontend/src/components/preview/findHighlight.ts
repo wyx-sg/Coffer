@@ -39,8 +39,8 @@ export const findField = StateField.define<DecorationSet>({
 
 /** Match highlight colors, scoped to the editor so they don't leak globally. */
 export const findTheme = EditorView.baseTheme({
-  ".cm-find-match": { backgroundColor: "rgba(253, 224, 71, 0.45)", borderRadius: "2px" },
-  ".cm-find-match-active": { backgroundColor: "rgba(251, 191, 36, 0.9)" },
+  ".cm-find-match": { backgroundColor: "rgb(var(--highlight) / 0.45)", borderRadius: "2px" },
+  ".cm-find-match-active": { backgroundColor: "rgb(var(--highlight-active) / 0.9)" },
 });
 
 /** All occurrences of `query` in `doc`, in document order (empty when blank). */

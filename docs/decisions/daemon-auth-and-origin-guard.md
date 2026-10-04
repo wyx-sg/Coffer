@@ -3,12 +3,12 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token from REST or the command line", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host is not loopback", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token over REST", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
 
 ## Context
 
-The daemon holds the user's MCP servers, decrypted credentials on demand, the
-agents' configuration and memory. It binds `127.0.0.1` only (spec daemon "Bind
+The daemon holds the user's MCP servers, the ciphertext of their secrets and
+the means to decrypt it on demand, the agents' configuration and memory. It binds `127.0.0.1` only (spec daemon "Bind
 every endpoint to loopback only"), which keeps other machines out but not other
 things on this machine: another local user, and — the harder case — any web
 page the user has open, since a browser will send requests to `127.0.0.1` on a
@@ -58,10 +58,14 @@ serves the page, so the response body is a channel too.
   read from `daemon.json`, and the page sets the globals before first render.
   The Vite dev server's plugin injects both globals from `daemon.json`
   (`frontend/vite.config.ts`).
-- Every request whose `Host` header is not a loopback authority (`127.0.0.1`,
-  `localhost`, `::1`, with or without a port) is refused with
-  `421 HOST_NOT_LOOPBACK` (`surfaces/http/host_guard.py`), before CORS and
-  before any route.
+- Every request whose `Host` header does not name `127.0.0.1`, `localhost` or
+  `[::1]` with the port the request arrived on is refused with
+  `403 HOST_NOT_ALLOWED` (`surfaces/http/host_guard.py`). So is every request
+  that carries an `Origin` that is not Coffer's own, with
+  `403 ORIGIN_NOT_ALLOWED`. Coffer's own origins are the daemon's web origins on
+  its port, the desktop shell's origins, and the dev origins when a developer
+  opts in. A request with no `Origin` (the CLI, the shim, agents' MCP clients)
+  goes on to the token check. Both checks run before CORS and before any route.
 - CORS allows only the desktop shell's origins by default, adds the Vite
   origins under `COFFER_DEV_CORS=1`, and never allows credentials
   (`surfaces/http/cors.py`).
@@ -102,13 +106,13 @@ two-mechanism cost and the cross-origin shell.
 
 Pros: nothing to hand anyone. Cons: loopback is not a boundary against the
 browser — any web page can send requests to `127.0.0.1`, and a "simple" POST
-needs no preflight — nor against other local users. With credentials and agent
+needs no preflight — nor against other local users. With secrets and agent
 configuration behind the API that is not acceptable. Loses.
 
 ### Option E — Persist one long-lived token across restarts
 
 Pros: the stored-token bug disappears; the page could keep it. Cons: a
-long-lived on-disk token that unlocks the credential endpoints is a worse trade
+long-lived on-disk token that unlocks the secret endpoints is a worse trade
 than a per-process one, and a token that never changes cannot be revoked by
 restarting. Loses.
 
@@ -142,14 +146,16 @@ The token is minted per start, lives only in the `0600` `daemon.json` and in
 process memory, and travels only in the `X-Coffer-Token` header. The UI gets it
 from whoever hosts its document — the daemon by injection, the desktop shell
 over IPC, the Vite dev server by its plugin — and never persists it. Every
-request must name a loopback `Host` or is refused with 421. CORS admits the
-shell's own origins and nothing else by default, with credentials off.
+request must name a loopback `Host` on the daemon's port, and any `Origin` it
+carries must be Coffer's own, or it is refused with 403. CORS admits the same
+cross-origin list the Origin check does — the shell's own origins by default —
+with credentials off.
 
 Rules a future change must respect:
 
 - The injected value and the accepted value come from the same variable
   (`auth.get_active_token`), read per request, so a rotation
-  (`POST /api/v1/daemon/rotate-token` or `coffer daemon rotate-token`) cannot
+  (`POST /api/v1/daemon/rotate-token`) cannot
   make them disagree.
 - Any document carrying the token is `no-store` with no validators. A cached or
   revalidated copy would hand a restarted daemon's browser the previous
@@ -159,26 +165,42 @@ Rules a future change must respect:
   a prefix test such as `startswith("mcp")` would claim the UI's `/mcp-servers`
   route.
 - The middleware order is fixed (`surfaces/http/middleware.py`): trace
-  outermost, then the host guard, then CORS, so a rebound request is refused
-  before CORS can bless it and the refusal still carries a trace id.
+  outermost, then the host and origin guard, then CORS, so a rebound or
+  cross-site request is refused before CORS can bless it and the refusal still
+  carries a trace id.
+- CORS and the Origin check read one list (`cors.cross_origin_allowlist`); a
+  new cross-origin host is added there, once.
 - A new host for the UI is a new *supplier* of the two globals, not a new code
   path in the frontend.
 
 ## Consequences
 
 - Restart the daemon and reload the page, even on a deep link, and it is
-  authenticated against the new daemon. `coffer open` carries no credential; it
-  reads the port from `daemon.json` (spawning a daemon if needed) and opens the
-  browser at that origin.
+  authenticated against the new daemon. The address you open
+  carries no credential; the token arrives only in the page body.
 - The fixed port ([Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md))
   and the injected token together make a bookmark a complete way in: the
   address does not move and the page does not need anything stored.
-- The daemon's loopback socket is the only socket Coffer listens on, so the host
-  guard covers every surface there is. A future listener on the same port
-  inherits it; one on a different port must bring its own.
-- `COFFER_ALLOWED_HOSTS` (comma-separated, or `*`) widens the guard. The backend
-  test suite sets `*` because it drives the ASGI app in-process; nothing in a
-  real deployment needs it.
+- The guard covers every surface on the daemon's port: REST, `/mcp`, the event
+  stream and the served UI. A future route on that port inherits it. The one
+  other listener Coffer runs, the local model proxy, is a separate process on
+  its own port and so brings its own copy of the rule: the same loopback `Host`
+  check without the `COFFER_ALLOWED_HOSTS` escape hatch, and a refusal of any
+  `Origin` at all, since no page has business with it
+  ([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)).
+  A listener added on yet another port must do the same.
+- The token and the guard are what keep a browser page and other local users
+  away from the management API. They are not what keeps a secret from an agent:
+  an agent runs as the user and can read `daemon.json`. That boundary is drawn
+  at the secret itself, by [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md),
+  which relies on this ADR's `Host` and `Origin` checks for its browser half.
+- `COFFER_ALLOWED_HOSTS` (comma-separated, or `*`) widens the Host check, never
+  the Origin check. The backend test suite sets `*` because it drives the ASGI
+  app in-process; nothing in a real deployment needs it.
+- The Origin check closes the cross-site *send* that CORS never governed (a form
+  post, an `EventSource`, a `no-cors` fetch), as the MCP specification requires
+  for its HTTP transport. The token already refused such a request; the check
+  means it no longer has to.
 - Allowing `tauri://localhost` widens nothing that matters: any Tauri app on the
   machine shares that origin, but it would still need the token, and any process
   running as the user can already read `daemon.json`. Whether the macOS WebView

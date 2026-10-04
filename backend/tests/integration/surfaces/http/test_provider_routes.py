@@ -1,7 +1,7 @@
 """End-to-end HTTP coverage for /api/v1/providers/* (spec provider-switching).
 
 Every route under this prefix addresses a connection by its immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid). The ``name`` beside it is a label:
+(ADR identity-is-the-uid-inside-the-file). The ``name`` beside it is a label:
 these tests assert on it, and resolve *through* it only via the one route that
 still finds a resource by label (``_uids_named`` below).
 """
@@ -15,16 +15,32 @@ import tomllib
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.domain.model_proxy.state import ProxyState
 from coffer.domain.provider.projection import is_managed_api_key_helper
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.proxy_dependencies import get_proxy_facade
 
 
-def _assert_helper_for(helper: str, uid: str) -> None:
-    """The projected helper runs the ``coffer`` CLI (named by absolute path when
-    this machine has one) to fetch exactly this connection's key."""
+def _assert_proxy_form(settings: dict) -> None:
+    """Claude Code is pointed at the local model proxy and fetches its own
+    local token: neither the connection's endpoint nor its key is in the file."""
+    helper = settings["apiKeyHelper"]
     assert is_managed_api_key_helper(helper), helper
-    assert helper.endswith(f" provider key --connection-uid {uid}"), helper
+    assert " proxy token --agent-uid " in helper, helper
+    assert settings["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:38471/anthropic"
+
+
+def _proxy_state(c: TestClient) -> ProxyState:
+    """What the supervisor would push the proxy right now."""
+    return c.portal.call(get_proxy_facade().state)  # type: ignore[union-attr]
+
+
+def _route_keys(c: TestClient) -> dict[str, list[tuple[str, str | None]]]:
+    """``agent_uid -> [(connection_uid, key)]`` for every route in the state."""
+    return {
+        r.agent_uid: [(m.connection_uid, m.key) for m in r.members] for r in _proxy_state(c).routes
+    }
 
 
 TOKEN = "test-token-011"
@@ -61,11 +77,11 @@ def _ref_of(c, uid: str) -> str:
     Read rather than spelled out: the ref is an ADDRESS the config holds, and
     deriving it from the connection's name is exactly what made the name a key.
     """
-    return c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
+    return c.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
 
 
 def _key_present(c, ref: str) -> bool:
-    return c.get(f"/api/v1/credentials/{ref}/exists").json()["present"] is True
+    return c.get(f"/api/v1/secrets/{ref}/exists").json()["present"] is True
 
 
 def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
@@ -87,8 +103,9 @@ def _agent_dir(tmp_path: pathlib.Path, name: str = "agent-cfg") -> pathlib.Path:
     return d
 
 
-def _register_agent(c: TestClient, *, agent_type: str, name: str, config_dir: pathlib.Path) -> str:
-    """Register an agent and return its uid — what a resource scope now holds.
+def _register_agent(c: TestClient, *, agent_type: str, config_dir: pathlib.Path) -> str:
+    """Register the one agent of ``agent_type`` (named by the type) and return
+    its uid — what a resource scope now holds.
 
     A scope's ``agents`` list names agent UIDS, not type values: a provider
     scope used to hold type values while other kinds' scopes held names, and
@@ -96,10 +113,20 @@ def _register_agent(c: TestClient, *, agent_type: str, name: str, config_dir: pa
     """
     r = c.post(
         "/api/v1/agents",
-        json={"type": agent_type, "name": name, "config_dir": str(config_dir)},
+        json={"type": agent_type, "config_dir": str(config_dir)},
     )
     assert r.status_code == 201, r.text
     return r.json()["uid"]
+
+
+def _activate(c: TestClient, uid: str, agent_type: str = "claude_code"):
+    """Switch the agent of ``agent_type`` onto connection ``uid``."""
+    return c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": agent_type})
+
+
+def _connection_of(c: TestClient, agent_type: str) -> str | None:
+    """The uid of the connection the agent of ``agent_type`` runs on."""
+    return c.get(f"/api/v1/agents/{agent_type}").json()["connection_uid"]
 
 
 def _anthropic_body(name: str = "acme", **over) -> dict:
@@ -131,10 +158,10 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
         assert body["uid"] != body["name"] and body["name"] == "acme"
         # The minted ref is opaque — the connection's name must not be
         # recoverable from it, or the name is a key again.
-        ref = body["credential_ref"]
+        ref = body["secret_ref"]
         assert ref.startswith("provider/") and "acme" not in ref
         # the secret landed in the vault under that ref
-        ex = c.get(f"/api/v1/credentials/{ref}/exists")
+        ex = c.get(f"/api/v1/secrets/{ref}/exists")
         assert ex.status_code == 200 and ex.json()["present"] is True
         # ...but never in the API response
         assert "sk-secret-value" not in r.text
@@ -142,23 +169,23 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="create a profile that reuses an existing credential ref",
+    scenario="create a profile that reuses an existing secret ref",
 )
-def test_create_reusing_credential_ref(tmp_path, monkeypatch):
+def test_create_reusing_secret_ref(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59720)
     with _client(app) as c:
-        c.post("/api/v1/credentials", json={"ref": "shared/key", "value": "sk-shared"})
+        c.post("/api/v1/secrets", json={"ref": "shared/key", "value": "sk-shared"})
         r = c.post(
             "/api/v1/providers",
             json={
                 "name": "reuse",
                 "protocol": "openai",
                 "base_url": "https://gw/v1",
-                "credential_ref": "shared/key",
+                "secret_ref": "shared/key",
             },
         )
         assert r.status_code == 201, r.text
-        assert r.json()["credential_ref"] == "shared/key"
+        assert r.json()["secret_ref"] == "shared/key"
 
 
 @pytest.mark.acceptance(
@@ -173,16 +200,16 @@ def test_reject_unknown_wire_format(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="reject a profile that supplies neither a secret nor a credential ref",
+    scenario="reject a profile that supplies neither a secret nor a secret ref",
 )
-def test_reject_no_credential_source(tmp_path, monkeypatch):
+def test_reject_no_secret_source(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59740)
     body = _anthropic_body()
     body.pop("secret_value")
     with _client(app) as c:
         r = c.post("/api/v1/providers", json=body)
         assert r.status_code == 422, r.text
-        assert "PROVIDER_CREDENTIAL_SOURCE_INVALID" in r.text
+        assert "PROVIDER_SECRET_SOURCE_INVALID" in r.text
 
 
 @pytest.mark.acceptance(spec="provider-switching", scenario="update a provider profile")
@@ -199,13 +226,12 @@ def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
     """The wire is a property of the endpoint, not the connection's identity.
 
     A probe that guessed wrong is corrected in place rather than by deleting the
-    connection and re-entering its key. ``credential_ref`` stays immutable: that
+    connection and re-entering its key. ``secret_ref`` stays immutable: that
     one IS an address.
 
     This connection was never switched on, which is the only state the edit is
     free in — a live one is refused (``test_protocol_edit_guard``), because the
-    wire decides which agents a connection can cover and which ``use-builtin``
-    reverts.
+    wire decides whether a connection can cover any agent at all.
     """
     app = _app(tmp_path, monkeypatch, 59755)
     with _client(app) as c:
@@ -238,9 +264,9 @@ def test_list_profiles(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="delete a provider profile cleans up its owned credential",
+    scenario="delete a provider profile cleans up its owned secret",
 )
-def test_delete_cleans_owned_credential(tmp_path, monkeypatch):
+def test_delete_cleans_owned_secret(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59770)
     with _client(app) as c:
         uid = _new(c, _anthropic_body())
@@ -259,19 +285,19 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59780)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
-        r = c.post(f"/api/v1/providers/{uid}/activate")
+        r = _activate(c, uid)
         assert r.status_code == 200, r.text
-        assert r.json()["projected"] == ["cc"]
+        assert r.json()["agent"] == "claude-code"
+        # The connection is recorded on the AGENT, not as a flag on itself.
+        assert _connection_of(c, "claude_code") == uid
         data = json.loads((cfg / "settings.json").read_text())
-        # apiKeyHelper cites THIS connection's uid (per-connection key
-        # resolution), so the projected agent always reads exactly the
-        # activated connection's key — and goes on reading it after the user
-        # relabels the connection, which is why this file no longer has to be
-        # rewritten on a rename.
-        _assert_helper_for(data["apiKeyHelper"], uid)
-        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
+        # Claude Code calls the local proxy with its own token; the
+        # connection's endpoint and key stay with the proxy, so this file
+        # never names the connection and a rename rewrites nothing.
+        _assert_proxy_form(data)
+        assert "gw/anthropic" not in json.dumps(data)
         # The agent is unbound (no per-agent model) → no model env is written, so
         # Claude Code runs on its OWN default model (spec provider-switching
         # "Take projected model keys from the agent's binding").
@@ -287,21 +313,29 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59783)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
         # Bind this agent to its own models; activating projects them (the model
         # lives on the binding, not the connection — spec provider-switching
         # "Take projected model keys from the agent's binding").
         rb = c.patch(
             f"/api/v1/agents/{cc}",
-            json={"model": "bound-opus", "fast_model": "bound-haiku"},
+            json={
+                "model": "bound-opus",
+                "effort": "high",
+                "tier_models": {"haiku": "bound-haiku", "opus": "bound-opus"},
+            },
         )
         assert rb.status_code == 200, rb.text
         assert rb.json()["model"] == "bound-opus"
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         data = json.loads((cfg / "settings.json").read_text())
-        assert data["env"]["ANTHROPIC_MODEL"] == "bound-opus"
-        assert data["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "bound-haiku"
+        assert data["model"] == "bound-opus"
+        assert data["effortLevel"] == "high"
+        assert data["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "bound-haiku"
+        assert data["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "bound-opus"
+        assert "ANTHROPIC_MODEL" not in data["env"]
+        assert "ANTHROPIC_SMALL_FAST_MODEL" not in data["env"]
 
 
 @pytest.mark.acceptance(
@@ -311,7 +345,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59790)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cx = _register_agent(c, agent_type="codex", name="cx", config_dir=cfg)
+        cx = _register_agent(c, agent_type="codex", config_dir=cfg)
         uid = _new(
             c,
             {
@@ -325,37 +359,48 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
         # model lives on the binding, not the connection — spec provider-switching
         # "Take projected model keys from the agent's binding").
         c.patch(f"/api/v1/agents/{cx}", json={"model": "gpt-x"})
-        r = c.post(f"/api/v1/providers/{uid}/activate")
+        r = _activate(c, uid, "codex")
         assert r.status_code == 200, r.text
-        assert r.json()["projected"] == ["cx"]
+        assert r.json()["agent"] == "codex"
+        assert _connection_of(c, "codex") == uid
         doc = tomllib.loads((cfg / "config.toml").read_text())
         assert doc["model"] == "gpt-x"
         assert doc["model_provider"] == "coffer"
         block = doc["model_providers"]["coffer"]
-        assert block["base_url"] == "https://gw/v1"
-        assert block["env_key"] == "COFFER_PROVIDER_KEY"
+        # Codex calls the local proxy and fetches its own local token; the
+        # upstream and its key stay with the proxy.
+        assert block["base_url"] == "http://127.0.0.1:38471/openai/v1"
+        assert block["wire_api"] == "responses"
+        assert block["supports_websockets"] is False
+        assert block["requires_openai_auth"] is False
+        assert block["auth"]["args"] == ["proxy", "token", "--agent-uid", cx]
+        assert "env_key" not in block
+        assert "sk-x" not in (cfg / "config.toml").read_text()
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="switch a wire back to the agent built-in login",
+    scenario="switch an agent back to its built-in login",
 )
 def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59785)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
+        assert _connection_of(c, "claude_code") == uid
         # sanity — the connection is projected into the agent config first
         assert json.loads((cfg / "settings.json").read_text())["env"]["ANTHROPIC_BASE_URL"]
 
-        # ``use-builtin`` is addressed by WIRE, not by a connection: it is the
-        # agent that is being put back on its own login, and which connection
-        # was covering it is what the route answers rather than what it takes.
-        r = c.post("/api/v1/providers/use-builtin/anthropic")
+        # ``use-builtin`` is addressed by AGENT type, not by a connection or a
+        # wire: it is the agent that is being put back on its own login, and
+        # which connection was covering it is what the route answers rather
+        # than what it takes.
+        r = c.post("/api/v1/providers/use-builtin/claude_code")
         assert r.status_code == 200, r.text
-        assert r.json()["deprojected"] == ["cc"]
+        assert r.json()["agent_type"] == "claude_code"
+        assert r.json()["deprojected"] == ["claude-code"]
         # ``previous`` is a LABEL — it is there for a human reading the result,
         # not for addressing anything.
         assert r.json()["previous"] == "acme"
@@ -364,16 +409,15 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
         data = json.loads((cfg / "settings.json").read_text())
         assert "apiKeyHelper" not in data
         assert "ANTHROPIC_BASE_URL" not in data.get("env", {})
-        # and the connection is no longer the active override
-        providers = c.get("/api/v1/providers").json()["providers"]
-        assert all(not p["is_active"] for p in providers)
+        # and the agent no longer names a connection
+        assert _connection_of(c, "claude_code") is None
 
 
 def test_use_builtin_is_idempotent_noop(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59786)
     with _client(app) as c:
-        # Nothing active for the wire → use-builtin is a clean no-op.
-        r = c.post("/api/v1/providers/use-builtin/openai")
+        # Nothing active for the agent type → use-builtin is a clean no-op.
+        r = c.post("/api/v1/providers/use-builtin/codex")
         assert r.status_code == 200, r.text
         assert r.json()["deprojected"] == []
         assert r.json()["previous"] is None
@@ -381,35 +425,73 @@ def test_use_builtin_is_idempotent_noop(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="activating a profile deactivates the previous active profile of the same wire format",
+    scenario="a wire no longer names an agent to revert",
 )
-def test_activate_deactivates_previous(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59800)
+def test_use_builtin_takes_an_agent_type_not_a_wire(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59787)
     with _client(app) as c:
-        first = _new(c, _anthropic_body(name="first"))
-        second = _new(c, _anthropic_body(name="second"))
-        c.post(f"/api/v1/providers/{first}/activate")
-        c.post(f"/api/v1/providers/{second}/activate")
-        actives = {p["uid"]: p["is_active"] for p in c.get("/api/v1/providers").json()["providers"]}
-        assert actives == {first: False, second: True}
+        assert c.post("/api/v1/providers/use-builtin/anthropic").status_code == 422
+        assert c.post("/api/v1/providers/use-builtin/gemini_cli").status_code == 422
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="activate a profile whose wire matches no registered agent records active but projects nothing",  # noqa: E501
+    scenario="switching one agent onto a connection moves only that agent",
 )
-def test_activate_without_matching_agent(tmp_path, monkeypatch):
+def test_switching_one_agent_moves_only_that_agent(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59800)
+    cc_dir, cx_dir = _agent_dir(tmp_path, "cc"), _agent_dir(tmp_path, "cx")
+    with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", config_dir=cc_dir)
+        _register_agent(c, agent_type="codex", config_dir=cx_dir)
+        both = _new(
+            c,
+            {
+                "name": "both",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "secret_value": "sk-both",
+            },
+        )
+        other = _new(c, _anthropic_body(name="other"))
+        assert _activate(c, both, "claude_code").status_code == 200
+        assert _activate(c, both, "codex").status_code == 200
+        codex_before = (cx_dir / "config.toml").read_text()
+
+        # Claude Code moves to another connection; Codex is on `both` still.
+        assert _activate(c, other, "claude_code").status_code == 200
+        assert _connection_of(c, "claude_code") == other
+        assert _connection_of(c, "codex") == both
+        assert (cx_dir / "config.toml").read_text() == codex_before
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a connection the agent is not reached by is refused",
+)
+def test_a_connection_that_does_not_reach_the_agent_is_refused(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59810)
+    cx_dir = _agent_dir(tmp_path, "cx")
+    with _client(app) as c:
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
+        _register_agent(c, agent_type="codex", config_dir=cx_dir)
+        uid = _new(c, _anthropic_body())
+        assert (
+            c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}}).status_code
+            == 200
+        )
+        r = _activate(c, uid, "codex")
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "PROVIDER_DOES_NOT_REACH_AGENT"
+        assert not (cx_dir / "config.toml").exists()
+        assert _connection_of(c, "codex") is None
+
+
+def test_an_unregistered_agent_cannot_be_switched(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59815)
     with _client(app) as c:
         uid = _new(c, _anthropic_body())
-        r = c.post(f"/api/v1/providers/{uid}/activate")
-        assert r.status_code == 200, r.text
-        assert r.json()["projected"] == []
-        # A credentialed wire defaults into both agents; neither is registered,
-        # so both are skipped. ``skipped`` names agent TYPES — it is telling the
-        # user which product received nothing, and a type is not a resource.
-        assert r.json()["skipped"] == ["claude_code", "codex"]
-        assert c.get(f"/api/v1/providers/{uid}").json()["is_active"] is True
+        assert _activate(c, uid, "codex").status_code == 404
 
 
 @pytest.mark.acceptance(
@@ -421,12 +503,12 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
     cfg = _agent_dir(tmp_path)
     (cfg / "settings.json").write_text(json.dumps({"theme": "dark"}))
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         data = json.loads((cfg / "settings.json").read_text())
         assert data["theme"] == "dark"  # unrelated key preserved
-        _assert_helper_for(data["apiKeyHelper"], uid)
+        _assert_proxy_form(data)
         assert (cfg / "settings.json.bak").exists()  # prior version backed up
 
 
@@ -436,8 +518,9 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
 def test_switch_is_audited(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59830)
     with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body())
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         r = c.get("/api/v1/audit", params={"event_type": "provider_switched"})
         assert r.status_code == 200
         assert "provider_switched" in r.text
@@ -448,36 +531,22 @@ def test_switch_is_audited(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching", scenario="resolve the active provider key for the apiKeyHelper"
-)
-def test_resolve_active_key(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59840)
-    with _client(app) as c:
-        uid = _new(c, _anthropic_body(secret_value="sk-the-key"))
-        # before activation: no active profile for the wire → 404
-        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
-        c.post(f"/api/v1/providers/{uid}/activate")
-        r = c.get("/api/v1/providers/active-key/anthropic")
-        assert r.status_code == 200, r.text
-        assert r.json()["value"] == "sk-the-key"
-
-
-@pytest.mark.acceptance(
     spec="provider-switching",
     scenario="route an openai-compatible connection to Claude Code with its scope",
 )
 def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
     # The agnes case: an openai-wire gateway the user routes to Claude Code. The
     # projection writer is chosen by AGENT type, so it writes Claude's settings.json
-    # (anthropic shape) with an apiKeyHelper that cites THIS connection's uid — the
-    # key is resolved per-connection, never by a wire+active guess. The routing is a
+    # (anthropic shape) with the proxy-token apiKeyHelper, and the model proxy
+    # routes the agent to THIS connection with its key — per connection, never by
+    # a wire+active guess. The routing is a
     # scope edit through the framework's shared surface (ADR per-agent-resource-scope),
     # not a field on the connection; the scope names the AGENT by uid, and
     # ``compatible_agents`` reports back the agent TYPES that resolves to.
     app = _app(tmp_path, monkeypatch, 59890)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         r = c.post(
             "/api/v1/providers",
             json={
@@ -499,29 +568,23 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         # ...and the reported effective set follows the scope.
         assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == ["claude_code"]
 
-        act = c.post(f"/api/v1/providers/{uid}/activate")
+        act = _activate(c, uid)
         assert act.status_code == 200, act.text
-        assert act.json()["projected"] == ["cc"]
+        assert act.json()["agent"] == "claude-code"
         data = json.loads((cfg / "settings.json").read_text())
-        _assert_helper_for(data["apiKeyHelper"], uid)
-        assert data["env"]["ANTHROPIC_BASE_URL"] == "https://agnes/v1"
-
-        # The projected helper fetches exactly agnes's key, by uid.
-        key = c.get(f"/api/v1/providers/{uid}/key")
-        assert key.status_code == 200, key.text
-        assert key.json()["value"] == "sk-agnes"
-        # A uid this vault does not hold is a 404.
-        assert c.get("/api/v1/providers/0123456789abcdef0123456789abcdef/key").status_code == 404
+        _assert_proxy_form(data)
+        # The proxy relays Claude Code's requests to agnes, with agnes's key.
+        assert _route_keys(c)[cc] == [(uid, "sk-agnes")]
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="create an ollama connection without a credential",
+    scenario="create an ollama connection without a secret",
 )
-def test_create_ollama_without_credential(tmp_path, monkeypatch):
+def test_create_ollama_without_secret(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59850)
     with _client(app) as c:
-        # ollama has no API key: supply NEITHER secret_value nor credential_ref.
+        # ollama has no API key: supply NEITHER secret_value nor secret_ref.
         r = c.post(
             "/api/v1/providers",
             json={
@@ -533,9 +596,9 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
         assert r.status_code == 201, r.text
         body = r.json()
         assert body["protocol"] == "ollama"
-        assert body["credential_ref"] is None
-        assert body["is_active"] is False  # ollama never projects to an agent
-        # Supplying a credential for ollama is rejected.
+        assert body["secret_ref"] is None
+        assert "is_active" not in body  # which agent runs on it is the agent's field
+        # Supplying a secret for ollama is rejected.
         r2 = c.post(
             "/api/v1/providers",
             json={
@@ -553,13 +616,13 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
 )
 def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path, monkeypatch):
     """An ollama connection is internal-only: even scoped to a registered
-    Claude Code agent, activating it writes no native config, never makes it
-    ``is_active``, and says so rather than reporting a switch that did not
-    happen."""
+    Claude Code agent, switching it on writes no native config, never becomes
+    the agent's connection, and says so rather than reporting a switch that did
+    not happen."""
     app = _app(tmp_path, monkeypatch, 59855)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(
             c,
             {"name": "local-llama", "protocol": "ollama", "base_url": "http://localhost:11434"},
@@ -567,13 +630,13 @@ def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path,
         scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}})
         assert scoped.status_code == 200, scoped.text
 
-        act = c.post(f"/api/v1/providers/{uid}/activate")
+        act = _activate(c, uid)
         assert act.status_code == 409, act.text
         assert act.json()["error"]["code"] == "PROVIDER_INTERNAL_ONLY"
         assert "local-llama" in act.json()["error"]["message"]
 
         row = c.get(f"/api/v1/providers/{uid}").json()
-        assert row["is_active"] is False
+        assert _connection_of(c, "claude_code") is None
         assert row["compatible_agents"] == []
         assert not (cfg / "settings.json").exists()
 
@@ -623,20 +686,19 @@ def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
 async def test_a_second_internal_default_cannot_be_written_behind_the_service(
     tmp_path, monkeypatch
 ):
-    """The single-internal-default invariant is enforced by the DATABASE, not
+    """The single-internal-default invariant is enforced by the vault, not
     only by ``set_internal_default``.
 
     A live vault was found with two connections flagged, because the flag is an
-    ordinary config field and the generic resource-update path writes it without
-    clearing anything. A partial unique index makes the second row
-    unrepresentable, whatever writes it.
-
-    The raw statements below still go by ``name``: this is reaching BEHIND every
-    surface into the table, and the name column is what makes the fixture
-    readable there. Nothing about the invariant depends on it — the index is on
-    the config flag.
+    ordinary config field and a write that goes round the service sets it
+    without clearing anything. The vault's validator refuses any commit that
+    would leave two, whatever writes it: here a hand edit of the second
+    connection's file, which stays uncommitted and flagged while ``HEAD`` keeps
+    one default.
     """
-    import sqlite3
+    from coffer.domain.vault.findings import FindingCode
+    from coffer.infrastructure.vault.home import vault_root
+    from coffer.infrastructure.vault.instance import vault_writer
 
     app = _app(tmp_path, monkeypatch, 59872)
     with _client(app) as c:
@@ -652,24 +714,19 @@ async def test_a_second_internal_default_cannot_be_written_behind_the_service(
         )
         c.post(f"/api/v1/providers/{first}/internal-default")
 
-    conn = sqlite3.connect(tmp_path / "c.db")
-    try:
-        with pytest.raises(sqlite3.IntegrityError):
-            conn.execute(
-                "UPDATE resources SET config_json = "
-                "json_set(config_json, '$.internal_default', json('true')) "
-                "WHERE kind = 'provider' AND name = 'second'"
-            )
-        flagged = [
-            r[0]
-            for r in conn.execute(
-                "SELECT name FROM resources WHERE kind = 'provider' "
-                "AND json_extract(config_json, '$.internal_default') = 1"
-            )
-        ]
+        path = "resources/provider/second.json"
+        doc = json.loads((vault_root() / path).read_text())
+        doc["config"]["internal_default"] = True
+        (vault_root() / path).write_text(json.dumps(doc, indent=2) + "\n")
+        vault_writer().settle([path])
+
+        codes = [f.code for f in vault_writer().problems()[path]]
+        assert codes == [FindingCode.CONFIG_INVALID]
+        head = json.loads(vault_writer().repo.read("HEAD", path) or b"{}")
+        assert head["config"].get("internal_default") is not True
+        listed = c.get("/api/v1/providers").json()["providers"]
+        flagged = [p["name"] for p in listed if p["internal_default"]]
         assert flagged == ["first"]
-    finally:
-        conn.close()
 
 
 @pytest.mark.asyncio
@@ -808,10 +865,16 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # Stored verbatim (opaque ids), deduped, in the order the user chose,
         # each keeping the kind it was sent as — an entry that named none is
         # ``text``, the kind every curated set held before modalities existed.
+        unknown = {
+            "context_window": None,
+            "effort_levels": None,
+            "default_effort": None,
+            "price": None,
+        }
         curated_set = [
-            {"id": "opus", "modality": "text"},
-            {"id": "sonnet", "modality": "text"},
-            {"id": "embed-1", "modality": "embedding"},
+            {"id": "opus", "modality": "text", **unknown},
+            {"id": "sonnet", "modality": "text", **unknown},
+            {"id": "embed-1", "modality": "embedding", **unknown},
         ]
         assert r.json()["models"] == curated_set
         # Survives a re-read and the list route.
@@ -822,11 +885,11 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # PATCH replaces the whole set (like compatible_agents) — no merging.
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": [{"id": "haiku"}]})
         assert r.status_code == 200, r.text
-        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text", **unknown}]
 
         # An unrelated PATCH leaves the curated set alone.
         r = c.patch(f"/api/v1/providers/{uid}", json={"base_url": "https://gw/anthropic/v2"})
-        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text", **unknown}]
 
         # The change rides the resource_updated event a provider update already
         # emits — no event of its own. Asked for by uid, which is what keeps the
@@ -856,7 +919,16 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
         # Curating then clearing with [] returns it to unrestricted.
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": [{"id": "opus"}]})
         assert r.status_code == 200, r.text
-        assert r.json()["models"] == [{"id": "opus", "modality": "text"}]
+        assert r.json()["models"] == [
+            {
+                "id": "opus",
+                "modality": "text",
+                "context_window": None,
+                "effort_levels": None,
+                "default_effort": None,
+                "price": None,
+            }
+        ]
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": []})
         assert r.status_code == 200, r.text
         assert r.json()["models"] == []
@@ -889,23 +961,23 @@ def test_reject_malformed_curated_models(tmp_path, monkeypatch):
 # was written into Claude Code's ``settings.json`` and had to be rewritten
 # there. The projected helper cites the uid now, so that route is DELETED and
 # renaming is a field on ``PATCH /api/v1/resources/{uid}``, the same one every
-# kind gets (ADR resource-identity-is-an-immutable-uid). The tests below are
+# kind gets (ADR identity-is-the-uid-inside-the-file). The tests below are
 # that route's coverage rewritten against the PATCH — what has to stay true is
 # everything the old route worked to preserve.
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="rename a connection and keep its credential, audit trail and projection",
+    scenario="rename a connection and keep its secret, audit trail and projection",
 )
-def test_rename_keeps_the_uid_credential_and_projection(tmp_path, monkeypatch):
+def test_rename_keeps_the_uid_secret_and_projection(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59920)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="acme"))
         ref_before = _ref_of(c, uid)
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _activate(c, uid).status_code == 200
         helper_before = json.loads((cfg / "settings.json").read_text())["apiKeyHelper"]
 
         r = c.patch(f"/api/v1/resources/{uid}", json={"name": "acme-prod"})
@@ -933,7 +1005,7 @@ def test_rename_keeps_the_uid_credential_and_projection(tmp_path, monkeypatch):
         # left for it to do, which is why the kind stopped needing one.
         data = json.loads((cfg / "settings.json").read_text())
         assert data["apiKeyHelper"] == helper_before
-        _assert_helper_for(data["apiKeyHelper"], uid)
+        _assert_proxy_form(data)
 
         # The trail follows the resource — asking by uid returns the whole
         # history, including the events from before the rename.
@@ -975,44 +1047,26 @@ def test_rename_onto_taken_name_is_rejected(tmp_path, monkeypatch):
         assert _uids_named(c, "second") == [second]
         assert _key_present(c, _ref_of(c, first))
         assert _key_present(c, _ref_of(c, second))
-        assert c.get(f"/api/v1/providers/{first}/key").json()["value"] == "sk-first"
-        assert c.get(f"/api/v1/providers/{second}/key").json()["value"] == "sk-second"
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="an agent bound to a renamed connection still resolves its key",
-)
-def test_renamed_connection_still_resolves_for_its_agent(tmp_path, monkeypatch):
+def test_renamed_connection_still_serves_its_agent(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59940)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="acme", secret_value="sk-the-key"))
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
+        before = (cfg / "settings.json").read_text()
 
         assert c.patch(f"/api/v1/resources/{uid}", json={"name": "acme-2"}).status_code == 200
 
-        # The key is still resolvable at the same address the agent asks at —
-        # the rename never touched it.
-        assert c.get(f"/api/v1/providers/{uid}/key").json()["value"] == "sk-the-key"
-
-        # And the command the agent actually shells out to still resolves: take
-        # the uid it cites straight out of the written settings.json rather than
-        # assuming it, because that file — not this test's variable — is what
-        # the agent reads.
-        helper = json.loads((cfg / "settings.json").read_text())["apiKeyHelper"]
-        cited = helper.rsplit("--connection-uid ", 1)[1].strip()
-        assert cited == uid
-        key = c.get(f"/api/v1/providers/{cited}/key")
-        assert key.status_code == 200, key.text
-        assert key.json()["value"] == "sk-the-key"
-
-        # The agent binding is untouched — it is is_active + compatible_agents,
-        # not a stored name, so the rename never had to move it.
+        # The proxy keeps routing the agent to the same connection and key, and
+        # the agent's file — which names only the proxy — did not move at all.
+        assert _route_keys(c)[cc] == [(uid, "sk-the-key")]
+        assert (cfg / "settings.json").read_text() == before
         body = c.get(f"/api/v1/providers/{uid}").json()
         assert body["name"] == "acme-2"
-        assert body["is_active"] is True
+        assert _connection_of(c, "claude_code") == uid
         assert "claude_code" in body["compatible_agents"]
 
 
@@ -1025,7 +1079,7 @@ def test_rename_to_the_same_name_is_a_noop(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         # Nothing moved — not the row (updated_at included), not the vault entry.
         assert c.get(f"/api/v1/providers/{uid}").json() == before
-        assert _key_present(c, before["credential_ref"])
+        assert _key_present(c, before["secret_ref"])
         # ...and nothing was recorded either. A client that PATCHes a whole
         # form back sends the label it already has; a trail littered with
         # renames that renamed nothing is worse than no trail.
@@ -1047,33 +1101,15 @@ def test_rename_unknown_connection_is_404(tmp_path, monkeypatch):
 # -- per-agent key routing reads the scope (ADR per-agent-resource-scope) ---------------------
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="per-agent key routing follows the connection's scope",
-)
-def test_the_key_a_wire_resolves_follows_the_scope(tmp_path, monkeypatch):
-    """Two connections, one per agent, told apart by their scope alone.
-
-    This is the routing the migration had to preserve bit-for-bit: before, the
-    axis was ``compatible_agents`` inside the config; now it is the resource's
-    framework scope, and the wrong answer here means an agent shelling out for
-    another agent's key.
-
-    Both agents are REGISTERED here, which they did not have to be before: a
-    scope names agents by uid, and only a registered row has one. Writing the
-    agent's TYPE value into the scope list was the provider kind's private
-    vocabulary — a provider scope then meant something different from a skill
-    scope while both were called ``scope.agents`` — and the uid is what
-    collapsed the two into one.
-    """
+def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
+    """Two connections, one per agent, told apart by their scope alone: the
+    proxy serves each agent the connection in its reach, with that
+    connection's key — the wrong answer would send one agent's traffic on
+    another's key."""
     app = _app(tmp_path, monkeypatch, 59920)
     with _client(app) as c:
-        cc = _register_agent(
-            c, agent_type="claude_code", name="cc", config_dir=_agent_dir(tmp_path, "cc")
-        )
-        cx = _register_agent(
-            c, agent_type="codex", name="cx", config_dir=_agent_dir(tmp_path, "cx")
-        )
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
+        cx = _register_agent(c, agent_type="codex", config_dir=_agent_dir(tmp_path, "cx"))
         for_claude = _new(c, _anthropic_body("for-claude", secret_value="sk-claude"))
         for_codex = _new(
             c,
@@ -1087,110 +1123,41 @@ def test_the_key_a_wire_resolves_follows_the_scope(tmp_path, monkeypatch):
         for uid, agent_uids in ((for_claude, [cc]), (for_codex, [cx])):
             r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": agent_uids}})
             assert r.status_code == 200, r.text
-        assert c.post(f"/api/v1/providers/{for_claude}/activate").status_code == 200
-        assert c.post(f"/api/v1/providers/{for_codex}/activate").status_code == 200
+        assert _activate(c, for_claude).status_code == 200
+        assert _activate(c, for_codex, "codex").status_code == 200
 
-        # The scope's uids resolve back to agent TYPES on the way out, because
-        # that is what a projection is keyed by — one native config file per
-        # agent product.
-        assert c.get(f"/api/v1/providers/{for_claude}").json()["compatible_agents"] == [
-            "claude_code"
-        ]
-        assert c.get(f"/api/v1/providers/{for_codex}").json()["compatible_agents"] == ["codex"]
-
-        # anthropic stands for Claude Code, openai for Codex.
-        assert c.get("/api/v1/providers/active-key/anthropic").json()["value"] == "sk-claude"
-        assert c.get("/api/v1/providers/active-key/openai").json()["value"] == "sk-codex"
+        routes = _route_keys(c)
+        assert routes[cc] == [(for_claude, "sk-claude")]
+        assert routes[cx] == [(for_codex, "sk-codex")]
 
 
-def test_a_disabled_connection_resolves_no_key_for_its_agent(tmp_path, monkeypatch):
-    """``enabled`` is honoured at the projection seam now, so switching a
-    connection off stops it answering for its agent even while ``is_active``
-    still records that it was the one projected."""
+def test_a_disabled_connection_serves_no_agent(tmp_path, monkeypatch):
+    """``enabled`` is honoured at the projection seam, so switching a
+    connection off takes its route out of the proxy even while the agent's
+    record still names it."""
     app = _app(tmp_path, monkeypatch, 59930)
     with _client(app) as c:
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body("acme"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
-        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 200
-
-        # The switch is the framework's, not this kind's — same route for every
-        # kind, addressed by the same uid.
-        r = c.post(f"/api/v1/resources/{uid}/disable")
-        assert r.status_code == 200, r.text
-
-        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
+        assert _activate(c, uid).status_code == 200
+        assert cc in _route_keys(c)
+        assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
+        assert cc not in _route_keys(c)
 
 
 def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatch):
-    """The dormant case for a connection: an empty agent axis reaches nobody, so
-    no agent resolves its key — the same "dormant" meaning every other scoped
-    kind has."""
+    """An empty agent axis reaches nobody, so the proxy serves nobody on it."""
     app = _app(tmp_path, monkeypatch, 59940)
     with _client(app) as c:
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body("acme"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
-
+        assert _activate(c, uid).status_code == 200
         assert (
             c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}}).status_code
             == 200
         )
-
-        assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
+        assert cc not in _route_keys(c)
         assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == []
-
-
-def test_the_uid_key_route_resolves_an_enabled_connection_in_reach(tmp_path, monkeypatch):
-    """The form Claude Code's projected ``apiKeyHelper`` calls
-    (``coffer provider key --connection-uid <uid>``) answers with the key while
-    the connection is switched on and reaches an agent."""
-    app = _app(tmp_path, monkeypatch, 59941)
-    with _client(app) as c:
-        uid = _new(c, _anthropic_body("acme", secret_value="sk-live"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
-
-        r = c.get(f"/api/v1/providers/{uid}/key")
-        assert r.status_code == 200, r.text
-        assert r.json() == {"value": "sk-live"}
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="a disabled or unreached connection's uid helper resolves no key",
-)
-def test_the_uid_key_route_resolves_no_key_for_a_disabled_connection(tmp_path, monkeypatch):
-    """Spec provider-switching "Resolve a key for exactly one connection": a disabled
-    connection resolves none — including by uid, the form the live helper line
-    calls, so disabling a connection stops a running Claude Code getting its key."""
-    app = _app(tmp_path, monkeypatch, 59942)
-    with _client(app) as c:
-        uid = _new(c, _anthropic_body("acme", secret_value="sk-live"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
-        assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
-
-        r = c.get(f"/api/v1/providers/{uid}/key")
-        assert r.status_code == 404, r.text
-        assert r.json()["error"]["code"] == "NO_ACTIVE_PROVIDER"
-        assert "sk-live" not in r.text
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="a disabled or unreached connection's uid helper resolves no key",
-)
-def test_the_uid_key_route_resolves_no_key_for_a_connection_scoped_to_no_agent(
-    tmp_path, monkeypatch
-):
-    app = _app(tmp_path, monkeypatch, 59943)
-    with _client(app) as c:
-        uid = _new(c, _anthropic_body("acme", secret_value="sk-live"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
-        scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}})
-        assert scoped.status_code == 200, scoped.text
-
-        r = c.get(f"/api/v1/providers/{uid}/key")
-        assert r.status_code == 404, r.text
-        assert r.json()["error"]["code"] == "NO_ACTIVE_PROVIDER"
-        assert "sk-live" not in r.text
 
 
 async def _flags(uid: str) -> tuple[bool, bool]:
@@ -1411,7 +1378,7 @@ async def test_the_two_default_flags_never_move_each_other(tmp_path, monkeypatch
 
 
 def test_provider_out_carries_the_resource_title(tmp_path, monkeypatch):
-    """spec resource-framework "Carry an optional editable title on every resource":
+    """spec resource-framework "Carry an optional editable title on the kinds that have one":
     the connection's own read carries the title set through the kind-agnostic
     update, and an empty one clears it back to null."""
     app = _app(tmp_path, monkeypatch, 59795)

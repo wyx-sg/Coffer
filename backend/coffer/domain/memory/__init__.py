@@ -1,1 +1,1 @@
-"""Memory domain: facts, partitions, budgets and the delivery marker — pure."""
+"""Memory domain: notes, partitions, budgets, hook entries and the delivery marker — pure."""

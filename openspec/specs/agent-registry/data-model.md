@@ -1,8 +1,11 @@
 # Data Model — Agent Registry
 
 Entities, fields, relationships, and storage notes for the agent registry.
-Builds on the kind-agnostic Resource framework from spec resource-framework — agents are rows
-in the generic `resources` table, so spec agent-registry adds no table of its own.
+Builds on the kind-agnostic Resource framework from spec resource-framework — an agent is a
+resource file, so spec agent-registry adds no table of its own. The `agent`
+kind's storage class is `local` (`Kind.storage`): an agent names a config
+directory on this disk, so its file is `~/.coffer/local/resources/agent/<name>.json`,
+never committed and never synced.
 
 ## Domain entities (`backend/coffer/domain/agent/`)
 
@@ -28,18 +31,42 @@ adapter only when the agent introduces a genuinely new shape).
 Skills are delivered to `<config_dir>/skills`. `claude_desktop` (the separate Claude chat app) remains out
 of scope.
 
-`AgentDescriptor` carries: `type`, `display_name`, `config_subpath`,
-`config_files` (allowlist builder), `mcp` (`McpInjectionSpec | None`),
-`mcp_source_keys`, `skill_subpath` and `plugins` (`PluginCapability | None`),
-plus `default_config_dir()` and `detect_marker()`. There is no per-type
-`enabled` flag: discovery scans every `AgentType`, and withdrawing a type means
-removing it from the enum and the manifest. Each enum value still exposes:
+`AgentDescriptor` carries the per-type values: `type`, `display_name`,
+`config_subpath`, `config_files` (allowlist builder), `mcp`
+(`McpInjectionSpec | None`), `mcp_source_keys`, `skill_subpath`, `home_env_var`,
+`plugins` (`PluginCapability | None`), `hook_source_keys` (the allowlist keys of
+the files that carry hooks: `settings` and `settings_local` for Claude Code,
+`hooks` for Codex) and `program` (the executable detection looks for: `claude`,
+`codex`), plus `default_config_dir()`. It also names four optional mechanism
+facets — `projection`, `driver`, `memory_reader`, `dependency_probe` — which are
+`None` in the pure table and bound to their implementations at the composition
+root into an `AgentCatalog` (`domain/agent/facets.py`; ADR
+agent-mechanisms-are-optional-facets-on-the-descriptor). The projection facet
+is a registry of `ProjectionEntry(asset, landing, config_key | subpath)` rows —
+assets `mcp_server`, `skill`, `provider`, `delivery_hook`; landings `user`,
+`project`, `shared` — and every entry of the two shipped agents lands at `user`.
+There is no per-type `enabled` flag: discovery looks at every `AgentType`, and
+withdrawing a type means removing it from the enum and the manifest. Each enum
+value still exposes:
 
 - `display_name: str`
-- `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
+- `default_name() -> str` (the name of the type's one agent — underscores become hyphens, e.g. `claude_code` → `claude-code`; there is no other name an agent may carry)
 - `config_dir() -> Path` (the type's standard config directory, computed per host platform — `~/.claude` / `~/.codex`; used when the user registers without an explicit `config_dir`)
 - `default_skill_dir() -> Path` (`<config_dir()>/skills`, the default skills-delivery directory a discovery candidate reports)
-- `detect_marker() -> Path` (the path checked during discovery; the standard config directory itself)
+
+### Detection (`domain/agent/detection.py`)
+
+`DetectionState` is `installed_active` | `installed_never_run` | `config_only` |
+`missing`, from `classify(ProgramInfo, config_dir_exists)`; `ProgramInfo` is
+`{path | None, version | None}`, what the dependency probe found. Neither is
+stored: candidates and the agent read model compute them per request.
+
+### Hooks (`domain/agent/hooks.py`)
+
+`HookRow {event, matcher, command, type, timeout, group_index, hook_index}` — the last two are where the hook sits in its file, `hooks.<event>[group_index].hooks[hook_index]` — parsed from the
+`{"hooks": {event: [{matcher, hooks: [{type, command, timeout}]}]}}` shape both
+agents use; `HookSource` is `user` | `plugin`; `HookHealth` is `current` |
+`stale` | `missing`. Read only; nothing stored.
 
 The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
@@ -52,11 +79,13 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | `type`              | `AgentType`    | required; enum value                                                                                                                |
 | `config_dir`        | `str \| None`  | optional absolute-path override, stored as a string (`~` expanded before the absolute-path check); `resolved_config_dir()` returns the `Path`, defaulting to `type.config_dir()` |
 | `model`             | `str \| None`  | the model this agent runs on; `None` = the agent's own default (see "Carry the model binding on the agent record")                                                              |
-| `fast_model`        | `str \| None`  | the binding's fast slot; an explicit null unbinds it                                                                       |
-| `wire_api`          | `str \| None`  | the binding's wire; only `responses` is accepted (agent-registry/codex "Accept only responses as Codex's wire_api")                                                       |
+| `effort`            | `str \| None`  | the binding's reasoning effort; an explicit null unbinds it                                                                |
+| `tier_models`       | `dict \| None` | Claude Code only: `opus` / `sonnet` / `haiku` / `fable` → model id; an explicit null unbinds it                            |
+| `connection_uid`    | `str \| None`  | the uid of the provider connection this agent runs on; `None` = the agent's own built-in login. Machine-local like the record (agents are filed under `local/`), so it never syncs. Written only by the provider switch operations, never by `PATCH /api/v1/agents/{uid}`; `AgentOut` reports it (see "Carry the connection an agent runs on on the agent record") |
 
 Those are the whole schema — the model is `extra="forbid"` and declares nothing
-else. The three model fields are the agent's own binding (see "Carry the model
+else (no `wire_api`: the one-time vault upgrade strips it from old records, and
+Codex's `responses` is a fixed value the projection writes). The three model fields are the agent's own binding (see "Carry the model
 binding on the agent record"): they live here because the model is chosen at the
 point of use. Projecting them into an agent's native config is [spec
 provider-switching](../provider-switching/spec.md)'s. A `models` curated-set
@@ -65,7 +94,7 @@ field existed briefly and is gone: migration `0060` backfilled it and migration
 
 Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`.
 
-Beside this schema the agent row carries the kind-agnostic Resource `enabled` flag (resource-framework), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
+Beside this schema the agent carries the kind-agnostic Resource `enabled` flag (resource-framework, kept in `local/reach.json`), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields it once carried are gone, stripped from stored configs by migration `0058`.
 
 Validators:
 
@@ -123,7 +152,7 @@ which is spec knowledge's domain):
 
 (Paths are shown for the default config dir. `global` is `~/.claude.json` for the default `~/.claude` and `<config_dir>/.claude.json` for any other `config_dir` — Claude Code run with `CLAUDE_CONFIG_DIR` keeps the file inside that directory and never reads the home one; spec agent-registry/claude-code "Allowlist exactly the files Claude Code reads".)
 
-`~/.codex/auth.json` is deliberately excluded (credential/state, not a
+`~/.codex/auth.json` is deliberately excluded (secret/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and
 protected by the rotated `.bak` backups on every write.
 
@@ -182,28 +211,36 @@ described under `AgentMcpService`; it can also be edited like any other
 allowlisted config file through `AgentConfigFileService.write_file`. Both paths
 share the same atomic-write + `.bak` machinery.
 
-## SQLite schema additions
+## Storage
 
-**None.** The `agent` kind needs no table of its own — agents are rows in the
-generic `resources` table (kind-agnostic Resource framework from spec resource-framework), and
-discovery is read-only with no suppression list to persist. Spec agent-registry
-creates no table and so introduces no Alembic revision of its own; the head
-revision is whatever the newest file under
-`backend/coffer/infrastructure/persistence/migrations/versions/` declares, and
-it moves with other specs. These revisions rewrite `kind='agent'` rows without
-changing any schema: `0031` and `0048` drop agents of removed types, `0056`
-strips config keys this spec removed, `0058` strips the skill-follow policy,
-`0060` backfills the curated-`models` key, `0061` flips `wire_api` from `chat`
-to `responses`, and `0063` strips the curated-`models` key again.
+**No table of its own.** An agent is one resource file,
+`~/.coffer/local/resources/agent/<name>.json` (spec resource-framework), with
+its reach in `local/reach.json`. Both are machine-local: another machine's
+agents are its own, discovered there. Discovery is read-only, with no
+suppression list to persist.
 
-**Config files and Coffer connection state are NOT persisted in SQLite** — the
+The Alembic data migrations that shaped stored agents ran while agents were
+rows of the pre-vault database — `0031` and `0048` dropped agents of removed
+types, `0056` stripped config keys this spec removed, `0058` the skill-follow
+policy, `0060` backfilled the curated-`models` key, and `0063` stripped the curated-`models` key again;
+the one-time upgrade to the vault layout carried their result into the files.
+
+**Config files and Coffer connection state are NOT persisted by Coffer** — the
 agent's on-disk config files are the source of truth. Connection status is
 derived by reading the relevant config files on demand.
 
-### Reuse of existing tables
+**The plugin inventory travels in the machine descriptor.** This machine's
+descriptor (`vault/machines/<machine id>.json`, spec vault-sync)
+lists every agent with the plugins `AgentPluginService.list_plugins` reported
+before the last round that moved anything
+(`{type, name, plugins: [{id, name, marketplace, enabled, version}]}`,
+`application/sync/inventory.py`). An inventory, not a replicator: nothing on
+any machine writes an agent's plugin configuration from it.
 
-- `resources`: new rows with `kind='agent'`. No schema change.
-- `audit_log`: new event types written (see below). No schema change.
+### Also written
+
+- resource files with `kind: agent`, under `local/`.
+- `audit_log` in `runs.db`: new event types (see below). No schema change.
 
 ## Audit event types added
 
@@ -225,35 +262,48 @@ The workspace amendment adds:
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
 | `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI               |
 
-The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer resource disable|enable agent <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
+The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 
 ### `AgentService`
 
 Every method is keyword-only and addresses an agent by its immutable `uid`
-([ADR resource-identity-is-an-immutable-uid](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
 
 | Method | Purpose |
 | ------ | ------- |
-| `register(*, agent_type, name, config_dir=None, description=None, actor) -> Resource` | Build and validate `AgentConfig`; reject a second agent on the same resolved config dir with `AgentConfigDirRegistered` (→ 409 `AGENT_CONFIG_DIR_REGISTERED`); auto-create `<config_dir>/skills` and validate it (`assert_skill_dir_usable`); then delegate to `ResourceService.register(kind='agent', ...)`. `name` is required here — the surfaces fill `agent_type.default_name()` (e.g. `claude_code` → `claude-code`) when the user gives none. |
+| `register(*, agent_type, config_dir=None, create_config_dir=False, actor) -> Resource` | Build and validate `AgentConfig`; reject a second agent of the type with `AgentTypeRegistered` (→ 409 `AGENT_TYPE_REGISTERED`) and a second agent on the same resolved config dir with `AgentConfigDirRegistered` (→ 409 `AGENT_CONFIG_DIR_REGISTERED`); when `create_config_dir` (the route's finding that the type is `installed_never_run` and the directory is its standard one) create the missing directory after the privileged-path check; auto-create `<config_dir>/skills` and validate it (`assert_skill_dir_usable`); then delegate to `ResourceService.register(kind='agent', name=agent_type.default_name(), ...)`. |
+| `find_by_type(agent_type) -> Resource \| None` | The type's one agent, found by its name. |
+| `resolve(ref) -> Resource` | The agent `ref` names: its type (`claude-code` or `claude_code`) or its uid; `ResourceNotFound` otherwise. The routers' `resolve_agent_path` dependency does the same for the `{uid}` path segment. |
 | `list() -> list[Resource]` | Delegate to `ResourceService.list(kind='agent')`. |
 | `get(uid) -> Resource` | Delegate to `ResourceService.get`. |
-| `update_config_dir(*, uid, new_config_dir, actor, description=None) -> Resource` | Re-validate the merged config; only when the effective dir changes, auto-create and check its `skills/`. Then `ResourceService.update_config` (`description` updated alongside) and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
-| `set_model_binding(*, uid, model=None, fast_model=None, clear_fast_model=False, wire_api=None, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_fast_model` unbinds the fast slot; the merged config is re-validated (a bad `wire_api` → 422). |
+| `update_config_dir(*, uid, new_config_dir, actor) -> Resource` | Re-validate the merged config; only when the effective dir changes, check it is free, auto-create and check its `skills/`. Then `ResourceService.update_config` and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
+| `set_model_binding(*, uid, model=None, effort=None, clear_effort=False, tier_models=None, clear_tiers=False, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_effort` / `clear_tiers` unbind; the merged config is re-validated. |
 | `remove(*, uid, actor) -> None` | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan. |
 
 ### `AutoDetectService`
 
-| Method                               | Purpose                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `discover() -> list[AgentCandidate]` | Read-only scan: check each `AgentType`'s install marker; for any type whose marker is present but which is not already registered in `resources`, emit an `AgentCandidate`. Registers nothing and writes nothing. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer agent detect`. |
+| Method | Purpose |
+| --- | --- |
+| `types() -> list[AgentTypeDetection]` | Read-only, one row per type in the bound catalogue: ask its dependency probe for the program and version, and look at its standard config directory plus the directory its environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment. A registered type reports its agent's directory; any other reports the standard one unless only the environment's exists, with the other existing directory as `other_config_dir`. Registers nothing and writes nothing. Served by `GET /api/v1/agents/types`. |
+| `discover() -> list[AgentTypeDetection]` | The rows of `types()` with no agent registered and either signal present — at most one candidate per type. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates`. |
+| `detect(agent_type, config_dir) -> AgentDetection` | The detection state and version of one agent at one directory — what the agent read model carries. |
 
-`AgentCandidate` is a derived value object (not a SQLite entity, never stored):
-an installed-but-unregistered agent the user can confirm to register. Fields:
-`type` (`AgentType`), `display_name`, `config_dir` (the type's default config
-directory, as a string), `default_skill_dir` (the type's default skill
-directory, as a string), and `suggested_name` (the type's `default_name()`).
+`AgentTypeDetection` is a derived value object (not a stored entity, never
+stored): what this machine holds of one supported type. Fields: `type`
+(`AgentType`), `display_name`, `config_dir` (as a string), `standard_config_dir`,
+`default_skill_dir` (`<config_dir>/skills`), `state` (`DetectionState`),
+`version`, `uid` (the registered agent's, or `None`) and `other_config_dir`;
+properties `name` (the type's `default_name()`), `addable` (not registered and
+the program installed — `installed_never_run` included, `config_only` not) and
+`is_candidate` (not registered and not `missing`).
+
+### `AgentHooksService`
+
+| Method | Purpose |
+| --- | --- |
+| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, Coffer's own marked, plus Coffer's hook health (`current` / `stale` / `missing`, by the delivery hook's marker-and-command comparison) and its last `memory_delivery_fired`. Writes nothing. |
 A removed agent re-appears as a candidate on the next scan — there is no
 suppression list.
 
@@ -310,21 +360,21 @@ Connects an agent to Coffer, or disconnects it, by installing or removing each
 **part** Coffer writes into the agent's own configuration ("Connect an agent to
 Coffer in one action", "Report an agent's Coffer connection part by part",
 "Disconnect an agent from Coffer"). A part is a `ConnectionPart` — a key,
-`supports(agent_type)`, `enabled()`, and `status` / `install` / `remove` by
+`supports(agent_type)`, and `status` / `install` / `remove` by
 agent uid — and owns its own atomic write, `.bak` and audit event; the service
 writes nothing itself and records no audit event of its own.
 
 | Part          | Owner                                         | Applies when                          | Audit events                                            |
 | ------------- | --------------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
 | `mcp`         | `AgentMcpService` (via `McpConnectionPart`)   | always (every type declares one)      | `agent_mcp_installed` / `agent_mcp_uninstalled`         |
-| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the `memory` feature is on | `memory_delivery_installed` / `memory_delivery_removed` |
+| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the type has a hook adapter | `memory_delivery_installed` / `memory_delivery_removed` |
 
 | Method                                   | Purpose |
 | ---------------------------------------- | ------- |
 | `status(uid) -> ConnectionStatus`        | Each applicable part's `PartStatus(key, installed, detail)`, and a `state`: `connected` (all installed), `partial`, or `disconnected` (none). Read on demand, never stored. |
 | `connect(uid, *, actor)`                 | (Re)install every applicable part, the `mcp` part first so a missing shim refuses before anything is written. |
-| `disconnect(uid, *, actor)`              | Remove every part the type supports, applicable now or not. |
-| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — where switching `memory` on installs the hook. |
+| `disconnect(uid, *, actor)`              | Remove every part the type supports. |
+| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — the ones the hook's reconcile pass treats as connected. |
 
 The memory kind's part is adapted at the composition root because the agent
 kind may not import the memory kind; the HTTP shape is `CofferConnectionOut`
@@ -362,7 +412,7 @@ removal step of an adoption), `secret_env_keys`
 (TOKEN/SECRET/PASSWORD/PASSWD/API_KEY/APIKEY/CREDENTIAL/AUTHORIZATION patterns,
 applied to the entry's env and HTTP headers alike on adoption), and
 `to_transport_config` (entry → `mcp_server` transport config with secret keys
-moved to `credential_refs` for adoption). Malformed files raise
+moved to `secret_refs` for adoption). Malformed files raise
 `AgentConfigParseError`, which the listing degrades to a `parse_errors` item
 instead of failing the view (see "Degrade a facet to a parse-error state when
 its config file is unparseable").
@@ -419,15 +469,16 @@ agent's installed plugins without writing anything").
 | Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_entries(uid)`                                                  | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                                                  |
-| `remove_entry(uid, entry, source=None, actor)`                       | Removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any credential refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
-| `adopt(uid, entry, source=None, new_name=None, secrets=None, actor)` | Adoption: secret-looking keys MUST map to credential refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
+| `remove_entry(uid, entry, source=None, actor)`                       | Removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any secret refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
+| `adopt(uid, entry, source=None, new_name=None, secrets=None, actor)` | Adoption: secret-looking keys MUST map to secret refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
 
 There is no `set_enabled`: a per-entry enable toggle was removed (see the note
 in spec "List the MCP entries in the agent's own config files") because
 claude_code's format has no such flag and codex's duplicates a switch its own UI
 owns. Removal and adoption stay, because each is a write Coffer alone has a
 reason to make. Both are exposed as `DELETE
-/api/v1/agents/{uid}/mcp-entries/{entry}` and `coffer agent mcp remove-entry`.
+/api/v1/agents/{uid}/mcp-entries/{entry}` and (adoption) `POST
+/api/v1/agents/{uid}/mcp-entries/{entry}/adopt`, and from the agent's page.
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
@@ -441,13 +492,13 @@ The listing writes nothing; the two writes above are the whole of what this
 service changes, and each goes through a documented surface. `PluginCliRunner`
 and `PluginDetailReader` are application-layer ports (`plugin_views.py`)
 satisfied at the composition root. The surfaces are
-`PATCH`/`DELETE /api/v1/agents/{uid}/plugins/{plugin_id}` and
-`coffer agent plugin enable|disable|uninstall`.
+`PATCH`/`DELETE /api/v1/agents/{uid}/plugins/{plugin_id}` and the
+agent's Plugins tab.
 
 ### `AgentModel` + `AgentModelCatalogueService` (`domain/agent/model_catalogue.py`, `application/agent/model_catalogue.py`)
 
 Derived, never stored. One `AgentModel` is one entry of what an installed agent
-can be put on (see "Serve each agent type's model catalogue"): `id` (passed to
+can be put on (see "Serve each agent type's model catalogue from its one agent"): `id` (passed to
 the agent verbatim), `label`, `description`, `efforts: tuple[str, ...]` and
 `default_effort`. The levels sit BESIDE the id rather than inside it (see "Carry
 reasoning-effort levels beside the model id"), so one model is one entry however
@@ -457,7 +508,7 @@ the levels that entry offers.
 | Method               | Purpose                                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `catalogue(agent_key)` | Ask each of that type's sources in picker order and concatenate what they answer. A source that raises, finds nothing, or no longer matches its anchor contributes nothing and the others still answer. Never raises. |
-| `offered(agent_key)` | What a picker offers: an active connection's curated ids when it curates any (keeping the levels of ids the agent also reports), else `catalogue(agent_key)` — spec provider-switching "Serve one model list to every surface". |
+| `offered(agent_key)` | What a picker offers: the curated ids of the connection the agent runs on when it curates any (keeping the levels of ids the agent also reports), else `catalogue(agent_key)` — spec provider-switching "Serve one model list to every surface". |
 | `efforts(agent_key, model)` | The reasoning levels of `model` within `offered()`; with no model pinned, the first offered entry's. Empty when the agent takes no such setting. |
 | `suggest(agent_key)` | The plain ids of `offered()` — the list a channel's `/model` card presents. |
 
@@ -468,9 +519,9 @@ The sources themselves live in `infrastructure/agent/` — one reader per source
 each named by the type's child spec (`claude_binary_models.py` and
 `claude_effort.py` for agent-registry/claude-code, `codex_rpc_models.py` for
 agent-registry/codex), behind `model_discovery.py`. Nothing here is written to
-SQLite, to the vault, or to the agent: the catalogue is re-derived on every
+a database, to the vault, or to the agent: the catalogue is re-derived on every
 request, which is the whole point of "Keep one source of truth for an agent's
-models". What a PICKER is offered — the narrowing an active connection applies —
+models". What a PICKER is offered — the narrowing the agent's connection applies —
 is spec provider-switching's read over this same service, not a second list.
 
 ### `ConfigFileStorePort` (Protocol, defined in application)
@@ -508,8 +559,9 @@ import infrastructure directly).
 - `display_name='Agent'`
 - `config_schema=AgentConfig`
 - `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — the callback is passed to `make_agent_kind` at the composition root).
-- `on_enabled_changed=...` — hook invoked when the row's `enabled` flag changes; the composition root passes one that re-runs skill delivery for that agent (`SkillService.apply_scope_for_agent`, actor `system`).
+- `on_enabled_changed=...` — hook invoked when the agent's `enabled` flag changes; the composition root passes one that runs the reconciler's skill-link pass (`Trigger.CHANGE`, actor `system`).
 - `generic_create_allowed=False` — the kind-agnostic `POST /api/v1/resources` refuses to create an agent; agents are registered only through `AgentService`, which validates the config directory.
+- `name_from_config=agent_name_for`, `name_fixed=True`, `titled=False` — the name is the type's (`claude-code`, `codex`), fixed, and there is no title (spec agent-registry "Keep one agent per type, named by it"). Migration 0109 collapsed a database's agents to one per type.
 
 ## Composition root wiring
 
@@ -536,12 +588,12 @@ Discovery is read-only and is **not** run on startup — no agent is ever
 auto-registered. The user runs discovery on demand and confirms which
 candidates to add.
 
-The `on_delete` hook is bound to a callable supplied by the skill module (spec skill-manager), so that removing an agent triggers the skill-side binding cleanup before the resource row is deleted. Spec agent-registry owns the seam; spec skill-manager owns what it calls.
+The `on_delete` hook is bound to a callable supplied by the skill module (spec skill-manager), so that removing an agent triggers the skill-side binding cleanup before the resource file is deleted. Spec agent-registry owns the seam; spec skill-manager owns what it calls.
 
 ## Constraints summary
 
 - All HTTP routes bind `127.0.0.1`, share `X-Coffer-Token` auth (per spec mcp-gateway).
-- No new credential-store entries — `agent` config has no credentials. Config-file
+- No new secret-store entries — `agent` config has no secrets. Config-file
   reads do not parse or extract secrets; each type's credential file is excluded
   from its allowlist (see agent-registry/codex "Never expose Codex's credential file").
 - Config files are editable through Coffer. All writes to an agent's own config

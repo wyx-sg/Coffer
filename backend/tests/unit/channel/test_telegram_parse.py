@@ -180,11 +180,9 @@ def test_prepend_context_flattens_forward_origin_user():
     assert "Alice: hello there" in out
 
 
-def test_prepend_context_flattens_legacy_forward_from():
+def test_the_pre_bot_api_7_forward_fields_are_not_read():
     message = _message(forward_from={"first_name": "Bob"})
-    out = prepend_context(message, "old style forward")
-    assert out.splitlines()[0] == "[Forwarded chat record]"
-    assert "Bob: old style forward" in out
+    assert prepend_context(message, "old style forward") == "old style forward"
 
 
 def test_prepend_context_no_forward_or_reply_is_unchanged():
@@ -206,7 +204,7 @@ def test_prepend_context_quotes_reply_text():
 
 def test_prepend_context_combines_forward_and_reply():
     message = _message(
-        forward_from={"first_name": "Bob"},
+        forward_origin={"type": "user", "sender_user": {"first_name": "Bob"}},
         reply_to_message={"from": {"first_name": "Sam"}, "text": "original message"},
     )
     out = prepend_context(message, "hi")
@@ -338,7 +336,7 @@ def test_a_note_alone_still_gives_the_turn_text() -> None:
 @pytest.mark.acceptance(
     spec="channels/telegram", scenario="a telegram group message carries from.id and the chat title"
 )
-def test_a_group_message_carries_from_id_and_title_and_no_mention_id():
+def test_a_group_message_carries_from_id_as_both_gate_and_mention_id():
     built = build_inbound_message(
         _message(
             chat={"id": -100123, "type": "supergroup", "title": "Ops room"},
@@ -353,5 +351,104 @@ def test_a_group_message_carries_from_id_and_title_and_no_mention_id():
     )
     assert built.sender_id == "4242"
     assert built.chat_title == "Ops room"
-    # Telegram spells a mention with a display name too, so the reply carries none.
-    assert built.sender_mention_id == ""
+    # Telegram addresses a member by one id for both; the mention adds the name.
+    assert built.sender_mention_id == "4242"
+
+
+# -- /cmd@botname (spec channels/telegram "Treat a command addressed to this bot
+# by name as the command") ------------------------------------------------------
+
+
+def _command(text: str, *, chat_type: str = "group", **overrides) -> dict:
+    head = text.split()[0]
+    return _message(
+        chat={"id": 555, "type": chat_type},
+        text=text,
+        entities=[
+            {"type": "bot_command", "offset": 0, "length": len(head.encode("utf-16-le")) // 2}
+        ],
+        **overrides,
+    )
+
+
+@pytest.mark.acceptance(spec="channels/telegram", scenario="/cmd@thisbot runs the command")
+def test_a_command_naming_this_bot_is_the_bare_command_and_addressed() -> None:
+    built = _build(_command("/model@MyBot opus"))
+    assert built.text == "/model opus"
+    # Addressed even with no @mention and no reply: require_mention does not drop it.
+    assert built.addressed is True
+    assert built.mentions_others is False
+
+
+def test_a_command_naming_this_bot_in_a_dm_is_the_bare_command() -> None:
+    built = _build(_command("/status@mybot", chat_type="private"))
+    assert (built.text, built.addressed) == ("/status", True)
+
+
+def test_the_bot_name_survives_an_emoji_after_the_command() -> None:
+    # Entity lengths are UTF-16 units; the text after the command keeps its emoji.
+    built = _build(_command("/new@mybot 🚀 go"))
+    assert built.text == "/new 🚀 go"
+
+
+@pytest.mark.acceptance(spec="channels/telegram", scenario="/cmd@otherbot is not for this bot")
+def test_a_command_naming_another_bot_is_not_addressed_to_us() -> None:
+    # A reply to our bot does not win it back: the command says who it is for.
+    built = _build(
+        _command(
+            "/model@otherbot opus",
+            reply_to_message={"from": {"id": BOT_ID, "is_bot": True, "username": "mybot"}},
+        )
+    )
+    assert built.addressed is False
+    assert built.text.endswith("/model@otherbot opus")
+
+
+def test_a_command_naming_another_bot_in_a_dm_is_left_alone() -> None:
+    built = _build(_command("/model@otherbot opus", chat_type="private"))
+    assert (built.text, built.addressed) == ("/model@otherbot opus", True)
+
+
+def test_a_plain_command_in_a_group_keeps_the_mention_rule() -> None:
+    assert _build(_command("/status")).addressed is False
+    assert _build(_command("/status")).text == "/status"
+
+
+def test_a_bot_command_later_in_the_text_is_not_a_command_target() -> None:
+    message = _message(
+        text="try /model@mybot",
+        entities=[{"type": "bot_command", "offset": 4, "length": 12}],
+    )
+    built = _build(message)
+    assert (built.text, built.addressed) == ("try /model@mybot", False)
+
+
+def test_an_unknown_own_username_never_claims_a_named_command() -> None:
+    built = build_inbound_message(
+        _command("/model@mybot"), (), channel="tg", bot_id=None, bot_username=None
+    )
+    assert built.addressed is False
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="a quote reaches the core as the reply pointer"
+)
+def test_a_reply_pointer_is_carried_as_the_replied_to_message_id():
+    message = _message(
+        message_id=7,
+        date=0,
+        text="/del",
+        reply_to_message={"message_id": 5, "from": {"id": BOT_ID}, "text": "answer"},
+    )
+    parsed = build_inbound_message(
+        message, (), channel="tg", bot_id=BOT_ID, bot_username=BOT_USERNAME
+    )
+    assert parsed.replies_to_message_id == "5"
+    plain = build_inbound_message(
+        _message(message_id=8, date=0, text="hi"),
+        (),
+        channel="tg",
+        bot_id=BOT_ID,
+        bot_username=BOT_USERNAME,
+    )
+    assert plain.replies_to_message_id == ""

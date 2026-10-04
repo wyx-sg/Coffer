@@ -1,8 +1,8 @@
-"""MCP server-health persistence: model + repo.
+"""MCP server-health persistence, in ``derived/derived.db``.
 
-Extracted from ``persistence.py`` to keep that module under the 400-line
-guideline. ``persistence.py`` re-exports the public names so existing
-imports continue to work.
+A health check is an observation this machine can make again, so its table
+is derived (``coffer.infrastructure.persistence.derived_db``). One row per
+mcp_server, keyed by the server's uid: a rename is not a new server.
 """
 
 from __future__ import annotations
@@ -10,32 +10,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import TIMESTAMP, String, select
+from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
-from coffer.infrastructure.persistence.base import Base
+from coffer.domain.mcp.probe import FailureReason
+from coffer.infrastructure.persistence.derived_db import MCPServerHealthModel
 
 # Write-side type alias for health status values.
 HealthStatus = Literal["healthy", "failing"]
-
-
-class MCPServerHealthModel(Base):
-    """Persisted health state written by the per-server "test connection" route.
-
-    One row per mcp_server, keyed by the server's **uid** (migration 0097). It
-    was keyed by the name, which made a rename look like a brand-new server that
-    had never been tested — the old row stayed behind as a permanent orphan
-    nothing would ever overwrite, and the status page went blank for a server
-    that was working a second earlier.
-    """
-
-    __tablename__ = "mcp_server_health"
-
-    resource_uid: Mapped[str] = mapped_column(String, primary_key=True)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
 def _tz(dt: datetime) -> datetime:
@@ -49,15 +32,31 @@ class MCPServerHealthRepo:
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
         self._sm = sm
 
-    async def upsert(self, resource_uid: str, status: HealthStatus, checked_at: datetime) -> None:
-        """Insert or update the health record for the given server uid."""
+    async def upsert(
+        self,
+        resource_uid: str,
+        status: HealthStatus,
+        checked_at: datetime,
+        failure_reason: FailureReason | None = None,
+    ) -> None:
+        """Insert or update the health record for the given server uid; a
+        failing check carries why it failed, a healthy one carries none."""
         async with self._sm() as session:
             stmt = (
                 sqlite_insert(MCPServerHealthModel)
-                .values(resource_uid=resource_uid, status=status, checked_at=checked_at)
+                .values(
+                    resource_uid=resource_uid,
+                    status=status,
+                    checked_at=checked_at,
+                    failure_reason=failure_reason,
+                )
                 .on_conflict_do_update(
                     index_elements=["resource_uid"],
-                    set_={"status": status, "checked_at": checked_at},
+                    set_={
+                        "status": status,
+                        "checked_at": checked_at,
+                        "failure_reason": failure_reason,
+                    },
                 )
             )
             await session.execute(stmt)
@@ -74,9 +73,18 @@ class MCPServerHealthRepo:
                 return None
             return row.status, _tz(row.checked_at)
 
+    async def get_reason(self, resource_uid: str) -> FailureReason | None:
+        """Why the last check failed, or None (healthy, no record, or unknown)."""
+        async with self._sm() as session:
+            row = await session.get(MCPServerHealthModel, resource_uid)
+            return row.failure_reason if row is not None else None
+
     async def list_all(self) -> list[tuple[str, HealthStatus]]:
         """Return all (resource_uid, status) pairs currently persisted."""
         async with self._sm() as session:
             stmt = select(MCPServerHealthModel)
             rows = (await session.execute(stmt)).scalars().all()
             return [(r.resource_uid, r.status) for r in rows]
+
+
+__all__ = ["HealthStatus", "MCPServerHealthModel", "MCPServerHealthRepo"]

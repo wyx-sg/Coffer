@@ -73,7 +73,7 @@ def test_host_guard_refusal_is_also_correlatable(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59740)
     with TestClient(app) as c:
         r = c.get("/api/v1/daemon/status", headers={"Host": "evil.com"})
-        assert r.status_code == 421
+        assert r.status_code == 403
         assert r.headers[TRACE_HEADER] != "-"
 
 

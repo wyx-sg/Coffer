@@ -1,288 +1,261 @@
-// frontend/src/components/agents/AgentPluginsTab.test.tsx
+// src/components/agents/AgentPluginsTab.test.tsx — the agent's Plugins tab, one list of every installed plugin.
 //
-// Tests for the agent Plugins tab:
-//   - Grouped rendering by marketplace
-//   - Toggle calls the API
-//   - Cache-missing badge rendered
-//   - codex agent shows Uninstall button + confirm dialog → api call
-//   - claude_code agent hides Uninstall + shows hint text
-//   - parse_errors surface as an Alert banner
-//   - a plugin's name links to its detail page; rows do not expand
-//   - en/zh key parity for agents.workspace.pluginsTab
-//
-// Toggle and uninstall are addressed to the agent's `uid`, so the fixtures
-// below carry a uid that is not the agent's name and the API assertions spell
-// the uid rather than reaching for `.name`.
+// Every plugin is the agent's own; a row shows description · version ·
+// marketplace, a state word only for a problem, an enabled switch and a ⋯ menu
+// holding Uninstall… (disabled with the reason while it cannot run), and its
+// name opens the info dialog — rows do not expand. Toggle and uninstall
+// are addressed to the agent's uid, which is not its type, so the assertions
+// spell the uid. Only the network boundary (`agentsApi`) is mocked.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentPluginsTab } from "./AgentPluginsTab";
+import type { AgentOut } from "@/lib/api/agents";
+import type { PluginOut, PluginsResponse } from "@/lib/api/agents-workspace";
 import { acceptance } from "@/test/acceptance";
-import type { AgentOut, PluginsResponse } from "@/lib/api/agents";
-import en from "@/i18n/locales/en.json";
-import zh from "@/i18n/locales/zh.json";
 
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     plugins: vi.fn(),
+    plugin: vi.fn(),
     togglePlugin: vi.fn(),
     uninstallPlugin: vi.fn(),
   },
 }));
-
+// No managed agent to ask: a hand-off offers Copy prompt only.
+vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
-const CODEX_AGENT: AgentOut = {
-  uid: "u-codex-agent",
-  name: "codex-agent",
-  type: "codex",
-  config_dir: "/home/u/.codex",
-  description: null,
-  created_at: "2026-05-22T00:00:00Z",
-  updated_at: "2026-05-22T00:00:00Z",
-};
+function agent(type: AgentOut["type"]): AgentOut {
+  return {
+    uid: `u-${type}-agent`,
+    name: type,
+    type,
+    config_dir: "/home/u/.claude",
+    display_name: type === "codex" ? "Codex" : "Claude Code",
+    model: null,
+    effort: null,
+    tier_models: null,
+    version: null,
+    install_handoff: null,
+    connection_uid: null,
+    state: "installed_active",
+    created_at: "2026-09-01T00:00:00Z",
+    updated_at: "2026-09-01T00:00:00Z",
+  };
+}
 
-const CLAUDE_AGENT: AgentOut = {
-  uid: "u-cc-agent",
-  name: "cc-agent",
-  type: "claude_code",
-  config_dir: "/home/u/.claude",
-  description: null,
-  created_at: "2026-05-22T00:00:00Z",
-  updated_at: "2026-05-22T00:00:00Z",
-};
+function plugin(over: Partial<PluginOut> & Pick<PluginOut, "id" | "name">): PluginOut {
+  return {
+    author: null,
+    commands: [],
+    description: null,
+    homepage: null,
+    mcp_servers: [],
+    skills: [],
+    version: null,
+    marketplace: "claude-plugins-official",
+    enabled: true,
+    cache_present: true,
+    ...over,
+  };
+}
 
-const PLUGIN_A = {
-  id: "npm:@scope/plugin-a",
-  name: "plugin-a",
-  marketplace: "npm",
-  enabled: true,
-  cache_present: true,
-};
-
-const PLUGIN_B = {
-  id: "gh:owner/plugin-b",
-  name: "plugin-b",
-  marketplace: "github",
-  enabled: false,
+const SUPERPOWERS = plugin({
+  id: "superpowers@superpowers-marketplace",
+  name: "superpowers",
+  marketplace: "superpowers-marketplace",
+  version: "5.2.0",
+  description: "Skills library: TDD, debugging, collaboration",
+  skills: ["tdd", "debugging", "brainstorming", "plans"],
+});
+const REVIEW = plugin({ id: "code-review@official", name: "code-review", enabled: false });
+const FRONTEND = plugin({
+  id: "frontend-design@official",
+  name: "frontend-design",
   cache_present: false,
-};
+});
 
-const MARKETPLACES = [
-  { name: "npm", source_type: "npm", source: "https://registry.npmjs.org" },
-  { name: "github", source_type: "github", source: "https://github.com" },
-];
+function Landed() {
+  const loc = useLocation();
+  return <div data-testid="landed">{`${loc.pathname}${loc.search}`}</div>;
+}
 
-function stub(overrides: Partial<PluginsResponse> = {}) {
+function renderTab(
+  data: Partial<PluginsResponse>,
+  type: AgentOut["type"] = "claude_code",
+  over: Partial<AgentOut> = {},
+) {
   api.plugins.mockResolvedValue({
-    items: [PLUGIN_A, PLUGIN_B],
-    marketplaces: MARKETPLACES,
+    items: [],
+    marketplaces: [],
     parse_errors: [],
-    can_uninstall: false,
-    ...overrides,
+    can_uninstall: true,
+    ...data,
   });
   api.togglePlugin.mockResolvedValue(undefined);
   api.uninstallPlugin.mockResolvedValue(undefined);
-}
-
-// Where a followed link landed, and the state it carried — the detail page
-// itself is covered by AgentPluginPage.test.tsx.
-function Landed() {
-  const loc = useLocation();
-  return (
-    <div data-testid="landed" data-state={JSON.stringify(loc.state)}>
-      {loc.pathname}
-    </div>
-  );
-}
-
-function renderTab(agent: AgentOut = CODEX_AGENT) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/agents/${agent.uid}?tab=plugins`]}>
+      <MemoryRouter initialEntries={[`/agents/${type}/plugins`]}>
         <Routes>
-          <Route path="/agents/:uid" element={children} />
-          <Route path="/agents/:uid/plugins/:pluginId" element={<Landed />} />
+          <Route path="/agents/:type/plugins" element={children} />
+          <Route path="/agents/:type/plugins/:pluginId" element={<Landed />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
-  return render(<AgentPluginsTab agent={agent} />, { wrapper: Wrapper });
+  return render(<AgentPluginsTab agent={{ ...agent(type), ...over }} />, { wrapper: Wrapper });
 }
+
+const rowOf = async (text: string) => (await screen.findByText(text)).closest("li") as HTMLElement;
 
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentPluginsTab", () => {
-  test("renders all plugins in one table with the marketplace shown per row", async () => {
-    stub();
-    renderTab();
-
-    // Both plugin names appear in the single table.
-    expect(await screen.findByText("plugin-a")).toBeInTheDocument();
-    expect(screen.getByText("plugin-b")).toBeInTheDocument();
-
-    // Marketplace is a COLUMN now, not a per-section header: one "Marketplace"
-    // column header plus each plugin's marketplace rendered as a cell value.
-    expect(screen.getByText(en.agents.workspace.pluginsTab.marketplace)).toBeInTheDocument();
-    expect(screen.getByText("npm")).toBeInTheDocument();
-    expect(screen.getByText("github")).toBeInTheDocument();
+  test("lists every plugin with description, version and marketplace; only a problem gets a state word", async () => {
+    renderTab({ items: [SUPERPOWERS, REVIEW, FRONTEND] });
+    const sp = await rowOf("superpowers");
+    expect(within(sp).getByText("5.2.0")).toBeInTheDocument();
+    expect(within(sp).getByText("superpowers-marketplace")).toBeInTheDocument();
+    expect(within(sp).getByText(SUPERPOWERS.description!)).toBeInTheDocument();
+    expect(within(sp).queryByText("Enabled")).toBeNull();
+    expect(within(await rowOf("code-review")).queryByText("Off")).toBeNull();
+    expect(within(await rowOf("frontend-design")).getByText("Cache missing")).toBeInTheDocument();
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 
-  test("marketplace source shown in the marketplace column when available", async () => {
-    stub();
-    renderTab();
-
-    await screen.findByText("plugin-a");
-    expect(screen.getByText(/registry\.npmjs\.org/)).toBeInTheDocument();
-  });
-
-  test("search filters rows by plugin name", async () => {
-    // Two plugins so the single search box has something to hide.
-    const PLUGIN_C = {
-      id: "npm:@scope/plugin-c",
-      name: "plugin-c",
-      marketplace: "npm",
-      enabled: true,
-      cache_present: true,
-    };
-    stub({ items: [PLUGIN_A, PLUGIN_C], marketplaces: [MARKETPLACES[0]] });
-    renderTab();
-
-    expect(await screen.findByText("plugin-a")).toBeInTheDocument();
-    expect(screen.getByText("plugin-c")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByPlaceholderText("Search plugins"), {
-      target: { value: "plugin-c" },
-    });
-
-    expect(screen.getByText("plugin-c")).toBeInTheDocument();
-    expect(screen.queryByText("plugin-a")).not.toBeInTheDocument();
-  });
-
-  test("toggle Switch calls the API with the plugin id and new enabled flag", async () => {
-    stub();
-    renderTab();
-
-    const switches = await screen.findAllByRole("switch");
-    // plugin-a is enabled (true) → toggling should flip to false.
-    fireEvent.click(switches[0]);
+  acceptance("agent-registry", "toggle a plugin's enabled state", async () => {
+    renderTab({ items: [SUPERPOWERS] });
+    fireEvent.click(await screen.findByRole("switch", { name: "Enabled: superpowers" }));
     await waitFor(() =>
-      expect(api.togglePlugin).toHaveBeenCalledWith(CODEX_AGENT.uid, PLUGIN_A.id, false),
+      expect(api.togglePlugin).toHaveBeenCalledWith("u-claude_code-agent", SUPERPOWERS.id, false),
     );
   });
 
-  test("cache-missing badge rendered for plugin with cache_present=false", async () => {
-    stub();
-    renderTab();
-
-    await screen.findByText("plugin-b");
-    expect(screen.getByText(/cache missing/i)).toBeInTheDocument();
-  });
-
-  test("no cache badge for plugin with cache_present=true", async () => {
-    stub({ items: [PLUGIN_A] });
-    renderTab();
-
-    await screen.findByText("plugin-a");
-    expect(screen.queryByText(/cache missing/i)).not.toBeInTheDocument();
-  });
-
-  test("Uninstall button shown when can_uninstall; confirm dialog calls the API", async () => {
-    // Button visibility is data-driven (can_uninstall), not agent type.
-    stub({ can_uninstall: true });
-    renderTab(CODEX_AGENT);
-
-    await screen.findByText("plugin-a");
-    const buttons = screen.getAllByRole("button", { name: /uninstall/i });
-    expect(buttons.length).toBeGreaterThan(0);
-
-    // Click the first Uninstall button.
-    fireEvent.click(buttons[0]);
+  test("⋯ › Uninstall… confirms with Claude Code's own command, then uninstalls", async () => {
+    renderTab({ items: [SUPERPOWERS] });
+    fireEvent.click(await screen.findByRole("button", { name: "More for superpowers" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Uninstall…"]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Uninstall…" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/config entry and the cache directory/i)).toBeInTheDocument();
-
+    expect(within(dialog).getByText("Uninstall superpowers?")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(
+      "Claude Code runs its own plugin uninstall command. The plugin’s entry and its cache are removed. Its 4 skills go with it.",
+    );
     expect(api.uninstallPlugin).not.toHaveBeenCalled();
-    // Confirm uninstall.
-    fireEvent.click(within(dialog).getByRole("button", { name: /uninstall/i }));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Uninstall" }));
     await waitFor(() =>
-      expect(api.uninstallPlugin).toHaveBeenCalledWith(CODEX_AGENT.uid, PLUGIN_A.id),
+      expect(api.uninstallPlugin).toHaveBeenCalledWith("u-claude_code-agent", SUPERPOWERS.id),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("Codex's uninstall says it drops the config.toml entry", async () => {
+    renderTab({ items: [SUPERPOWERS] }, "codex");
+    fireEvent.click(await screen.findByRole("button", { name: "More for superpowers" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Uninstall…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(
+      "Coffer removes the plugin’s entry from config.toml (a .bak is kept) and deletes its cache.",
     );
   });
 
-  test("Claude with the CLI present shows the Uninstall button", async () => {
-    // can_uninstall=true reflects `claude plugin` being on PATH.
-    stub({ can_uninstall: true });
-    renderTab(CLAUDE_AGENT);
+  acceptance(
+    "agent-registry",
+    "hide the uninstall affordance when the uninstall cannot run",
+    async () => {
+      // The listing reports can_uninstall=false; the menu item is shown disabled, with the reason.
+      renderTab({ items: [SUPERPOWERS], can_uninstall: false });
+      fireEvent.click(await screen.findByRole("button", { name: "More for superpowers" }));
+      const item = await screen.findByRole("menuitem", { name: /Uninstall…/ });
+      expect(item).toBeDisabled();
+      expect(item).toHaveTextContent("Claude Code isn’t on this Mac");
+    },
+  );
 
-    await screen.findByText("plugin-a");
-    expect(screen.getAllByRole("button", { name: /uninstall/i }).length).toBeGreaterThan(0);
-  });
-
-  test("no Uninstall button when can_uninstall is false; hint shown instead", async () => {
-    stub({ can_uninstall: false });
-    renderTab(CLAUDE_AGENT);
-
-    await screen.findByText("plugin-a");
-    expect(screen.queryByRole("button", { name: /uninstall/i })).not.toBeInTheDocument();
-    expect(screen.getAllByText(/claude plugin/i).length).toBeGreaterThan(0);
-  });
-
-  test("parse_errors renders the degraded-config banner", async () => {
-    stub({
-      parse_errors: [
-        { source: "plugins.toml", path: "/home/u/.codex/plugins.toml", error: "invalid toml" },
-      ],
+  test("with Claude Code's program gone, the list says so and offers the hand-off", async () => {
+    renderTab({ items: [SUPERPOWERS], can_uninstall: false }, "claude_code", {
+      state: "config_only",
+      install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
     });
-    renderTab();
     expect(
-      await screen.findByText(/failed to parse config — this file is read-only/i),
+      await screen.findByText(
+        "Claude Code isn’t on this Mac, so its plugins can’t be uninstalled here.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/plugins\.toml: invalid toml/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
   });
 
-  test("empty state shows the no-plugins message", async () => {
-    stub({ items: [], marketplaces: [] });
-    renderTab();
-    expect(await screen.findByText(/no plugins installed/i)).toBeInTheDocument();
+  test("Codex has no program notice even when it cannot uninstall", async () => {
+    renderTab({ items: [SUPERPOWERS], can_uninstall: false }, "codex");
+    await screen.findByText("superpowers");
+    expect(screen.queryByText(/isn’t on this Mac, so/)).toBeNull();
   });
 
   acceptance("agent-registry", "open a plugin's detail page from the Plugins tab", async () => {
-    // The Plugins-tab half of the scenario: rows no longer expand, and the
-    // plugin's name is the way to its detail page, carrying this tab as the
-    // page's return target. The page half is in AgentPluginPage.test.tsx.
-    stub({ items: [{ ...PLUGIN_A, description: "Does detailed things" }] });
-    renderTab();
-
-    const link = await screen.findByRole("link", { name: "plugin-a" });
-    // No row carries an expand state, and no inline detail is rendered.
+    // Rows do not expand; the plugin's name opens a dialog saying what it is and
+    // which skills, commands and MCP servers it provides, each section with its count.
+    api.plugin.mockResolvedValue({
+      plugin: SUPERPOWERS,
+      install_path: "/Users/me/.claude/plugins/cache/m/superpowers/1.0.0",
+      marketplace_source: null,
+      can_uninstall: true,
+      skills: [
+        { name: "brainstorming", description: "Turns a rough idea into a design" },
+        { name: "plans", description: null },
+      ],
+      commands: [],
+      agents: [],
+      hooks: ["SessionStart"],
+      mcp_servers: ["docs"],
+    } as never);
+    renderTab({ items: [SUPERPOWERS] });
+    const name = await screen.findByRole("button", { name: "superpowers" });
     expect(document.querySelector("tr[aria-expanded]")).toBeNull();
-    expect(screen.queryByText("Does detailed things")).not.toBeInTheDocument();
+    fireEvent.click(name);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.className).toContain("max-w-[640px]");
+    expect(await within(dialog).findByText("brainstorming")).toBeInTheDocument();
+    expect(within(dialog).getByText("Turns a rough idea into a design")).toBeInTheDocument();
+    expect(within(dialog).getByText("Skills")).toBeInTheDocument();
+    expect(within(dialog).getByText("2")).toBeInTheDocument();
+    expect(within(dialog).getByText("SessionStart")).toBeInTheDocument();
+    expect(within(dialog).getByText("docs")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("~/.claude/plugins/cache/m/superpowers/1.0.0"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: "Close" })).toHaveLength(2);
+  });
 
-    fireEvent.click(link);
-    const landed = await screen.findByTestId("landed");
-    expect(landed).toHaveTextContent(
-      `/agents/${CODEX_AGENT.uid}/plugins/${encodeURIComponent(PLUGIN_A.id)}`,
-    );
-    expect(JSON.parse(landed.dataset.state ?? "null")).toEqual({
-      backTo: `/agents/${CODEX_AGENT.uid}?tab=plugins`,
-      backLabel: en.agents.workspace.plugins,
+  test("search narrows by name", async () => {
+    renderTab({ items: [SUPERPOWERS, REVIEW] });
+    await screen.findByText("superpowers");
+    fireEvent.change(screen.getByLabelText("Search plugins"), { target: { value: "review" } });
+    expect(screen.queryByText("superpowers")).not.toBeInTheDocument();
+    expect(screen.getByText("code-review")).toBeInTheDocument();
+  });
+
+  test("a config that does not parse is a warning naming the file", async () => {
+    renderTab({
+      items: [SUPERPOWERS],
+      parse_errors: [{ source: "config.toml", path: "/home/u/.codex/config.toml", error: "bad" }],
     });
+    expect(
+      await screen.findByText("Couldn’t read /home/u/.codex/config.toml: bad"),
+    ).toBeInTheDocument();
   });
 
-  test("en and zh locales carry the same agents.workspace.pluginsTab keys", () => {
-    const enKeys = Object.keys(en.agents.workspace.pluginsTab).sort();
-    const zhKeys = Object.keys(zh.agents.workspace.pluginsTab).sort();
-    expect(enKeys.length).toBeGreaterThan(0);
-    expect(zhKeys).toEqual(enKeys);
-  });
-
-  test("en and zh locales both define agents.workspace.plugins as a string", () => {
-    expect(typeof en.agents.workspace.plugins).toBe("string");
-    expect(typeof zh.agents.workspace.plugins).toBe("string");
+  test("an agent with no plugins shows the shared empty box, search kept", async () => {
+    renderTab({ items: [] }, "codex");
+    expect(await screen.findByText("Codex has no plugins")).toBeInTheDocument();
+    expect(screen.getByText("Plugins you install in Codex show up here.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search plugins")).toBeInTheDocument();
   });
 });

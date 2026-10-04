@@ -23,7 +23,6 @@ _CONSUMERS = (
     "application/engine",
     "application/engine_ports.py",
     "application/engine_timeout.py",
-    "infrastructure/sync/conflict_resolver.py",
     "infrastructure/llm/transcription.py",
 )
 

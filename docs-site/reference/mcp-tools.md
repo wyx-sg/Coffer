@@ -16,22 +16,18 @@ integrations against Coffer. For how the gateway works internally, see
 
 | Tool | Purpose | Present when |
 | --- | --- | --- |
-| [`coffer__write`](#coffer-write) | File a durable fact into Coffer's knowledge. | The `knowledge` feature is on. |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
+| [`coffer__ask`](#coffer-ask) | Ask the owner a question and wait for the answer. | Only inside a turn Coffer runs. |
 
-Those two are the whole list. Coffer's memory notes and its own records have no tool:
-they are read with the agent's own file tools and with the `coffer` command line. See
-[Memory and logs without a tool](#memory-and-logs-without-a-tool).
-
-A tool whose [experimental feature](/guides/experimental-features) is switched off is
-absent from `tools/list`, is not named in the handshake instructions, and a call to it is
-answered exactly like a call to a tool that does not exist. Switching a feature takes effect
-on the next list or call, without a restart.
+Those two are the whole list. Coffer's knowledge, its memory notes and its own records have no
+tool: agents change and read knowledge and memory with their own file tools, and read the
+records with the `coffer` command line. See
+[Knowledge, memory and logs without a tool](#memory-and-logs-without-a-tool).
 
 ::: tip Names inside your agent
 Coffer is installed into an agent's config as an MCP server named `coffer`, so most clients
 show these tools with their own prefix in front. In Claude Code, for example,
-`coffer__write` appears as `mcp__coffer__coffer__write`.
+`coffer__search_tools` appears as `mcp__coffer__coffer__search_tools`.
 :::
 
 ## How built-in tools answer
@@ -55,79 +51,6 @@ The gateway also injects two arguments that are not in any public schema:
 | --- | --- |
 | `agent` | Always set by the gateway to the name of the agent that opened the session (from the shim's `--agent-uid`). A value the client sends is discarded. Used only to label audit entries. |
 | `cwd` | Filled from the session's launch directory for a tool whose schema declares a `cwd` property, when the client did not send one. |
-
-## coffer\_\_write {#coffer-write}
-
-Records something durable about the user's working environment into a knowledge
-collection: a fact about a service, a convention, a decision and its reason, a trap and how
-to avoid it. What you write is new material; Coffer's curation pass merges it into the
-collection's documents and deduplicates it against what is already there. It is not for
-anything in the repository in front of the agent, anything transient, or secrets. There is
-no read tool: agents read knowledge with their own file tools, at the paths the
-`coffer-guide` skill lists.
-
-Gated by the `knowledge` feature. Guide: [Knowledge](/guides/knowledge).
-
-### Input
-
-| Property | Type | Required | Description |
-| --- | --- | --- | --- |
-| `collection` | string | yes | Which collection to file it under. The `coffer-guide` skill names them all. |
-| `title` | string | yes | Human-readable title naming the subject. |
-| `description` | string | yes | One line saying what this answers. Curation reads it first when deciding where the material belongs. |
-| `body` | string | no | The Markdown content. |
-
-Every collection is writable by every agent. Empty or whitespace-only values for a
-required property fail with `ValueError: 'title' must be a non-empty string` (and so on).
-A collection that does not exist fails with a message that lists the collections you may
-write to.
-
-### Result
-
-When an internal model is configured, the material is queued for curation:
-
-```json
-{
-  "collection": "global",
-  "title": "Staging DB is read-only on Fridays",
-  "status": "pending",
-  "note": "Queued as new material. Coffer's curation pass merges it into this collection's documents shortly."
-}
-```
-
-With no internal model configured, the material is filed as a document of its own and the
-result names it:
-
-```json
-{
-  "path": "staging-db-read-only-on-fridays.md",
-  "title": "Staging DB is read-only on Fridays",
-  "description": "When staging writes fail at the end of the week",
-  "file_path": "/Users/you/.coffer/knowledge/global/staging-db-read-only-on-fridays.md",
-  "folder_path": "/Users/you/.coffer/knowledge/global",
-  "status": "written",
-  "note": "Filed as a document of its own: no internal model is configured to merge it."
-}
-```
-
-### Example call
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 7,
-  "method": "tools/call",
-  "params": {
-    "name": "coffer__write",
-    "arguments": {
-      "collection": "global",
-      "title": "Staging DB is read-only on Fridays",
-      "description": "When staging writes fail at the end of the week",
-      "body": "A freeze job flips the staging primary to read-only every Friday at 18:00 UTC."
-    }
-  }
-}
-```
 
 ## coffer\_\_search\_tools {#coffer-search-tools}
 
@@ -177,6 +100,58 @@ Always present. Background: [MCP gateway](/architecture/mcp-gateway).
 }
 ```
 
+## coffer\_\_ask {#coffer-ask}
+
+Asks the owner a question in the middle of a task and waits. The turn pauses; the
+question shows on the [Conversations](/guides/chat) page (and as a card in the chat, for a
+conversation a [channel](/guides/channels) drives); the call returns when the owner answers
+in either place, when they stop the task, or after 24 hours. It takes the shape of Claude
+Code's own `AskUserQuestion`, which Coffer turns into the same question inside a Coffer
+conversation.
+
+It is **turn-scoped**: Coffer starts every agent process it runs a turn on with a random
+`COFFER_TURN_TOKEN`; the shim sends it as the `X-Coffer-Turn` header, and the gateway lists
+`coffer__ask` only in a session whose header names a turn that is running now. An agent
+started in a terminal never sees it, and a direct call there is answered "coffer__ask works
+only inside a Coffer conversation" (`isError: true`). The tool is not named in the
+handshake instructions or on the built-in server's page for that reason. The `coffer` entry
+Coffer writes into Codex's `config.toml` passes the variable through (`env_vars`) and
+allows a tool call to run for a day (`tool_timeout_sec = 86400`).
+
+### Input
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| `context` | string | no | Markdown shown above the questions: a summary, a diff, a path. |
+| `questions` | array | yes | One to four questions. |
+
+Each question:
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| `header` | string | yes | A short label. |
+| `question` | string | yes | The question. |
+| `options` | array | yes | Two to four options, each `{label, description?}`. Labels differ within a question. |
+| `multi_select` | boolean | no | Let the owner pick several options. Default `false`. |
+
+The owner can always type their own answer instead of choosing an option.
+
+### Result
+
+```json
+{
+  "answered": true,
+  "answers": [
+    { "header": "Apply", "question": "Apply this change to staging?", "selected": ["Yes"], "text": null }
+  ]
+}
+```
+
+`selected` holds the chosen labels and `text` the owner's own words (either may be empty,
+not both). When no answer came (the owner stopped the task, or 24 hours passed) the result
+is `{"answered": false, "message": "…"}`. A malformed ask fails with `isError: true` and a
+message saying what to fix.
+
 ## Upstream names
 
 Coffer re-exposes the tools, resources and prompts of every enabled
@@ -195,9 +170,8 @@ never contains `__`, an upstream tool name may. The `coffer__` prefix is reserve
 Coffer's own tools.
 
 A server's name is fixed once it is registered, because it is the prefix of every tool
-name above and agents' permission rules and skills quote those names. To show a friendlier
-label in Coffer, set the server's `title`; to use a different name, remove the server and
-register it again. A new server's name is at most 24 characters. See
+name above and agents' permission rules and skills quote those names. A server has no
+separate display title; to use a different name, remove the server and register it again. A server's name is at most 24 characters. See
 [MCP servers](/guides/mcp-servers).
 
 ### Client-visible name length
@@ -205,14 +179,14 @@ register it again. A new server's name is at most 24 characters. See
 Clients add their own prefix, so an agent sees `mcp__coffer__<server>__<tool>`. Model
 provider APIs refuse tool names longer than 64 characters, and Cursor drops tools longer
 than 60. Coffer records that length for every discovered capability as
-`client_name_length`, and the server's **Tools** tab and `coffer mcp cap list <server>`
-flag each tool above 64. `mcp__coffer__` (13) plus a 24-character server name plus `__`
+`client_name_length`, and the server's **Tools** tab
+flags each tool above 64. `mcp__coffer__` (13) plus a 24-character server name plus `__`
 (2) leaves 25 characters for the upstream tool's own name.
 
 A call is refused, with JSON-RPC error code `-32000` and a message naming the reason, when:
 
 - the capability is switched off on its server (the **Tools** tab of the server's page
-  under **MCP servers**, or `coffer mcp cap disable <server> tool:<name>`), or
+  under **MCP servers**), or
 - the server's [reach](/architecture/resource-framework#reach) does not include the agent
   that opened the session.
 
@@ -238,47 +212,45 @@ environment variables on the daemon; see [Configuration](/reference/configuratio
 Coffer's `initialize` result declares protocol version `2025-06-18`, server name `coffer`,
 and the capabilities `tools`, `resources` and `prompts`, each with `listChanged: true`
 (resources without `subscribe`). Its `instructions` field, which clients place in the
-agent's system prompt, is at most 800 characters and names only the built-in tools the
-session's list carries. With every feature on, it reads (the memory root is the
-vault's own, here `/Users/you/.coffer/memory`):
+agent's system prompt, is at most 800 characters. It reads (the memory root is
+`~/.coffer/derived/memory`, outside the vault, here `/Users/you/.coffer/derived/memory`):
 
 ```text
 Coffer is this machine's local vault: it aggregates the user's MCP servers behind one
-endpoint, holds what this developer wrote down, and adds its own tools: coffer__write
-(file a durable fact), coffer__search_tools (describe an upstream tool you need; results
-are callable by name). Its knowledge is markdown you read with your own file tools. Its
-memory notes are Markdown under /Users/you/.coffer/memory/*/notes/; grep them with your
+endpoint, holds what this developer wrote down, and adds its own tool:
+coffer__search_tools (describe an upstream tool you need; results are callable by name).
+Its knowledge is markdown you read with your own file tools. Its
+memory notes are Markdown under /Users/you/.coffer/derived/memory/*/notes/; grep them with your
 own tools. Its own logs: coffer log audit|mcp|daemon (files: coffer path logs). The
 coffer-guide skill is the manual: load it for the catalogue, with paths, before asking
 the developer something they may have written down.
 ```
 
-(Line breaks added here; the text is one paragraph.) When the `memory` feature is off, the
-memory sentence is left out. When a memory root is too long for the 800-character cap, the
-sentence names the directory `coffer path memory` prints instead of the path itself. When
-the `knowledge` feature is off, `coffer__write` and the knowledge sentence are left out and
-the text ends with "The coffer-guide skill is the manual: load it before relying on these
-tools." When tiering hid tools in this session's last `tools/list`, one sentence is
+(Line breaks added here; the text is one paragraph.) When a memory root is too long for
+the 800-character cap, the sentence is shortened to fit. When tiering hid tools in this session's last `tools/list`, one sentence is
 appended:
 
 ```text
 Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all callable.
 ```
 
-## Memory and logs without a tool {#memory-and-logs-without-a-tool}
+## Knowledge, memory and logs without a tool {#memory-and-logs-without-a-tool}
 
-Coffer has no tool for reading its memory notes or its own records, because an agent can
-already do both with what it has:
+Coffer has no tool for knowledge, memory notes or its own records, because an agent can
+already do all of them with what it has. To add knowledge, write a Markdown file into a
+collection's `.inbox/` folder; Coffer's sweep fills in any missing frontmatter and curates it.
+To change a document or a memory note, edit the file in place.
 
 | To find | Do this |
 | --- | --- |
-| A memory note | Grep the memory root the handshake and the session-start delivery name (every partition's notes are `<root>/<partition>/notes/*.md`), then read the file. `coffer path memory [<partition>]` prints the root or one partition's folder. |
-| What changed in Coffer (registrations, deletions, credential reads, config writes) | `coffer log audit --since 1h` |
+| A knowledge document | Read the file under the collection folders the `coffer-guide` skill lists. |
+| A memory note | Grep the memory root the handshake, the session-start delivery and the `coffer-guide` skill name (every partition's notes are `<root>/<partition>/notes/*.md`), then read the file. |
+| What changed in Coffer (registrations, deletions, secret reads, config writes) | `coffer log audit --since 1h` |
 | Which MCP calls failed | `coffer log mcp --status error --since 1h`, or `--server <name>` for one server |
 | What the daemon logged, including tracebacks | `coffer log daemon --errors --since 1h`, or grep the file `coffer path logs` names |
 
 Every `coffer log` reader takes `--json` for scripts. See
-[Activity and audit](/guides/activity) and [Memory](/guides/memory).
+[Activity and audit](/guides/activity), [Knowledge](/guides/knowledge) and [Memory](/guides/memory).
 
 ## Related
 

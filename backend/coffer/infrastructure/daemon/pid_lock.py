@@ -33,6 +33,9 @@ def pid_is_coffer_daemon(pid: int) -> bool:
         cmdline = psutil.Process(pid).cmdline()
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
         return False
+    if len(cmdline) > 1 and cmdline[1] == "proxy":
+        # ``coffer-daemon proxy`` is the model proxy, not a daemon (same binary).
+        return False
     joined = " ".join(cmdline)
     return any(marker in joined for marker in DAEMON_CMDLINE_MARKERS)
 

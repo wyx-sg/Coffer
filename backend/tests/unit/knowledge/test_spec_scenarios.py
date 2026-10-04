@@ -1,8 +1,8 @@
 """Acceptance scenarios of the knowledge spec that the filesystem layer, the
 curation tools and the worker can observe on their own.
 
-Every test pins ``COFFER_KNOWLEDGE_ROOT`` into ``tmp_path``: an unset root
-falls back to the developer's real ``~/.coffer/knowledge``.
+The knowledge root resolves from the fresh ``HOME`` every test gets
+(``backend/tests/conftest.py``), never the developer's real vault.
 """
 
 from __future__ import annotations
@@ -14,13 +14,12 @@ from typing import Any
 
 import pytest
 
-from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.curate import pending_items
 from coffer.application.knowledge.curate_tools import Counters, build_tools
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.guide_render import render_catalogue
 from coffer.application.knowledge.ingest import IngestService
+from coffer.application.knowledge.intake import adopt_dropped_files
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
@@ -29,6 +28,7 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 class _Resources:
@@ -38,7 +38,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 uid=f"uid-{i}",
                 kind=KIND_KNOWLEDGE,
                 name=name,
@@ -72,8 +71,7 @@ class _Audit:
 
 @pytest.fixture
 def root(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
-    knowledge = tmp_path / "knowledge"
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(knowledge))
+    knowledge = _knowledge_root()
     fs.create_collection_dir("shopee")
     return knowledge
 
@@ -179,19 +177,25 @@ def test_the_catalogue_says_read_the_files_with_your_own_tool(root: pathlib.Path
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="refuse a write to a scope name instead of resolving it"
+    spec="knowledge",
+    scenario="leave a file under a scope name uncatalogued instead of resolving it",
 )
 @pytest.mark.anyio
-async def test_a_write_to_global_is_refused_and_provisions_nothing(root: pathlib.Path) -> None:
-    registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(registry, knowledge_service=_service("shopee"))
-    write = {t.name: t for t in registry.list()}["write"].handler
+async def test_a_file_under_global_is_left_alone_and_provisions_nothing(
+    root: pathlib.Path,
+) -> None:
+    note = root / "global" / ".inbox" / "note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("an agent's note\n", encoding="utf-8")
+    service = _service("shopee")
 
-    with pytest.raises(ValueError) as raised:
-        await write({"agent": "codex", "collection": "global", "title": "t", "description": "d"})
+    assert await adopt_dropped_files(service) == []
 
-    assert "shopee" in str(raised.value)
-    assert sorted(p.name for p in root.iterdir()) == ["shopee"]
+    # Left exactly where it is, with no frontmatter added, and not a collection.
+    assert note.read_text(encoding="utf-8") == "an agent's note\n"
+    assert [c.name for c in await service.list_collections()] == ["shopee"]
+    assert await service.collection_names() == ["shopee"]
+    assert not (root / "project-1").exists()
 
 
 # ----- converted material --------------------------------------------------
@@ -281,22 +285,34 @@ async def test_the_sweep_waits_for_a_converge_round_to_release_the_lock(
     root: pathlib.Path,
 ) -> None:
     inbox.submit_material("shopee", title="Waiting", description="d", body="b", actor="agent")
-    lock = asyncio.Lock()
+    asking = asyncio.Event()
+
+    class _WatchedLock(asyncio.Lock):
+        async def acquire(self) -> bool:
+            # Set only when the sweep has reached the lock, so "it waited" is
+            # observed rather than assumed from a sleep (the work before the
+            # lock runs in threads and takes as long as the machine is busy).
+            asking.set()
+            return await super().acquire()
+
+    lock = _WatchedLock()
     curated: list[Any] = []
     worker = _held_worker(lock, curated)
 
-    await lock.acquire()  # a converge round is writing the vault
+    await super(_WatchedLock, lock).acquire()  # a converge round is writing the vault
     tick = asyncio.create_task(worker.run_once())
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(asking.wait(), timeout=60)
+    await asyncio.sleep(0)
     assert curated == []
     assert not tick.done()
 
     lock.release()
-    await asyncio.wait_for(tick, timeout=5)
+    await asyncio.wait_for(tick, timeout=60)
     assert len(curated) == 1
     assert curated[0].material == "waiting.md"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="curation runs only on its owner machine")
 @pytest.mark.acceptance(
     spec="knowledge", scenario="curate only where the owner machine is this one"
 )

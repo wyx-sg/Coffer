@@ -44,34 +44,39 @@ PR #386 replaced all three. This ADR records the shape it settled on.
 `surfaces/http/app.py`'s lifespan is the composition root, split into per-area
 modules for the 400-line cap (`kind_wiring.py`, `*_wiring.py`,
 `*_composition.py`). Every step is a plain function that takes what it needs as
-parameters and **returns what it built** as a small frozen dataclass
-(`AgentSkillWiring`, `ProviderWiring`, `KnowledgeWiring`, `MemoryWiring`,
-`McpWiring`, `ChatWiring`, …). `wire_resource_kinds` calls the kind steps in
+parameters and **returns what it built** as a small frozen record
+(`AgentSkillWiring`, `ProviderWiring`, `UsageWiring`, `KnowledgeWiring`,
+`MemoryWiring`, `McpWiring`, …). `wire_resource_kinds` calls the kind steps in
 dependency order — agent and skill, then provider (it projects into agents),
-then knowledge, then memory (so the gateway's handshake names the memory
-root), then MCP last of the kinds (so it picks up every built-in tool), then Coffer's own
-guide skill — and returns them bundled in `KindWirings`. Chat, curation and
-channels are wired after that from those results. Sync contributions travel
-the same way: one mutable `SyncContributions` collector is created by the
-lifespan, passed to each step that has something to contribute, and handed to
-`start_sync` at the end.
+then usage metering, then knowledge, then memory (so the gateway's handshake
+names the memory root), then MCP last of the kinds (so it picks up every
+built-in tool), then Coffer's own guide skill — and returns them bundled in
+`KindWirings`. Chat, curation, channels and the agent connection are wired
+after that from those results, and the background workers last. Sync takes
+part the same way and needs no contribution list: it is a round over the vault
+that the kind-agnostic vault writer already admits every kind's files through,
+so `start_sync` is one more step that takes the resource service, the audit
+service, the master key and the secret store as parameters.
 
 FastAPI providers follow the same split. `surfaces/http/dependencies.py` holds
 only the kind-agnostic core (actor, resource, audit, retention, internal-engine
 config). Each kind publishes its own concretely-typed `set_*`/`get_*` pairs
 from its own module (`surfaces/http/mcp/dependencies.py`,
-`skill_dependencies.py`, `provider_dependencies.py`, …); the lifespan calls
-each setter once, routes name the getter in `Depends()`, and a getter called
-before its setter raises instead of handing a route `None`.
+`surfaces/http/skill_dependencies.py`, `surfaces/http/provider_dependencies.py`,
+…); the lifespan calls each setter once, routes name the getter in
+`Depends()`, and a getter called before its setter raises instead of handing a
+route `None`. These pairs are module-level singletons, so they are a service
+locator for routes. They stay at that boundary: only the route layer reads
+them, and wiring steps pass services as parameters.
 
 - **Pros.** The order the lifespan reads in *is* the dependency order, and the
   argument list is the dependency: a step cannot be called before its inputs
-  exist, and a type checker sees every edge. Forgetting to pass a contribution
-  is a missing argument, not a silent no-op. No `Any` is needed anywhere,
+  exist, and a type checker sees every edge. Forgetting to pass a dependency is
+  a missing argument, not a silent no-op. No `Any` is needed anywhere,
   because each provider module is allowed to import its own kind. Tests build
   exactly the pieces they need by calling the same functions.
 - **Cons.** Adding a kind means editing the composition root by hand: a wiring
-  step, a line in `kind_wiring.py`, router inclusion in `routing.py`, a Typer
+  step, a line in `kind_wiring.py`, router inclusion in `surfaces/http/routing.py`, a Typer
   group in `surfaces/cli/main.py`. The root is long and has to be kept readable
   on purpose. The CLI's group list is static.
 - **Why it wins.** Everything the review found was a consequence of implicit
@@ -104,7 +109,7 @@ discovered at startup.
   a release to gain one.
 - **Cons.** All of Option B's ordering and lookup problems, plus a public,
   versioned plugin API and third-party code running in the process that holds
-  the credential store. PyInstaller builds need entry-point metadata bundled
+  the secret store. PyInstaller builds need entry-point metadata bundled
   explicitly, a class of "works from source, missing in the frozen app" bug.
 - **Why it loses.** There are no out-of-tree kinds to discover; see
   [The Resource Framework Is Core Domain](resource-framework-upfront.md),
@@ -139,9 +144,7 @@ read it from there; one untyped provider hub serves routes.
 ## Decision
 
 One composition root, explicit wiring. Every wiring step returns a frozen
-record of what it built, and the next step takes it as a parameter; sync
-contributions flow through one `SyncContributions` collector passed as a
-parameter. FastAPI providers are split into the kind-agnostic hub and one
+record of what it built, and the next step takes it as a parameter. FastAPI providers are split into the kind-agnostic hub and one
 concretely-typed module per kind. There is no carrier object, no global
 registry, no import-time registration, no entry-point discovery and no DI
 container.
@@ -156,13 +159,29 @@ container.
   visible to it.
 - `app.state.feature_service` — built in `create_app` rather than in the
   lifespan, because `/daemon/status` reports feature switches and must answer
-  before the lifespan runs. The lifespan and two wiring steps
+  before the lifespan runs. The lifespan, `kind_wiring.py` and two wiring steps
   (`channel_wiring.py`, `knowledge_wiring.py`) read it from there; this is the
   one place a wiring step reads `app.state` for an input.
-- `app.state.mcp_session_supervisors`, `app.state.background_workers`,
-  `app.state.sync_contributions` — published as seams for tests that assert the
-  lifespan really registered or started something, never read by production
-  code.
+- `app.state.mcp_session_supervisors` and `app.state.background_workers` —
+  published as seams for tests that assert the lifespan really registered or
+  started something, never read by production code.
+
+Two things are resolved at call time rather than passed, and are recorded here
+so they are not mistaken for the pattern. Both exist because the callee is
+built after the caller needs a handle to it:
+
+- `surfaces/http/secret_boundary_wiring.py` keeps a module-level registry of
+  secret destinations that wiring steps add to (`register_resource_destination`,
+  `register_destination_source`, `remember_destination_sources`). The secret
+  boundary lists what every kind sends where, and no kind may import it or be
+  imported by it, so the registry is the one process-global that wiring
+  populates by calling a function, as Option B would have it. It is
+  populated only from the composition root, in wiring order, and the lifespan
+  calls `remember_destination_sources` once every kind has registered.
+- A closure that must see a later result reads it when called: the knowledge
+  catalogue hook in `kind_wiring.py` reads `guide` after the guide skill is
+  built, and `sync_wiring.py` reads the agent plugin service and the
+  reconciler through their getters when a round needs them.
 
 The CLI (`surfaces/cli/main.py`) is a daemon client: it mounts each kind's
 Typer group statically and holds no `Kind`.
@@ -177,11 +196,12 @@ Typer group statically and holds no `Kind`.
   `*_composition.py`, `surfaces/cli/main.py`) may import two kinds; the
   cross-kind import-linter contracts name it as the exception, and everything
   else crosses through ports the consuming kind declares.
-- An area that needs to take part in sync must accept the `SyncContributions`
-  parameter; registering anywhere else does nothing, and the test seam on
-  `app.state.sync_contributions` is what catches an area that forgot.
+- An area takes part in sync by keeping its state in vault files, which the one
+  vault writer and the sync round already carry; no wiring step registers it.
 - Adding to the `app.state` list above is a design change and should be
   argued, not a convenience; the `feature_service` read inside two wiring
   steps is the recorded exception, justified by the pre-lifespan status route.
-- The `app.py` module docstring still describes `app.state` as carrying only
-  `kinds` and `mcp_session_supervisors`; the list above is the accurate one.
+- The registry in `secret_boundary_wiring.py` is a named exception to Option A's
+  rule that nothing is looked up by registration. It is small and written to
+  only during wiring. Not decided: whether to replace it with a parameter that
+  hands the destination readers to the boundary.

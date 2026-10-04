@@ -22,11 +22,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from coffer.application.channel.bot_label import bot_name
 from coffer.application.channel.commands import ChannelCommands, SafeSend
+from coffer.application.channel.inbound_burst import InboundBurst
 from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.question_card import parse_callback
+from coffer.application.channel.question_flow import QuestionPort, handle_tap
+from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
-from coffer.domain.channel.envelopes import InboundCallback, InboundLifecycle, InboundStop
+from coffer.domain.channel.commands import command_name
+from coffer.domain.channel.envelopes import (
+    InboundCallback,
+    InboundLifecycle,
+    InboundStop,
+)
 
 __all__ = ["EXTERNAL_GROUP_WARNING", "InboundEvents"]
 
@@ -37,9 +47,14 @@ _logger = logging.getLogger(__name__)
 #: what Coffer will keep doing, and the one lever the owner has.
 EXTERNAL_GROUP_WARNING = (
     "⚠️ This group is now an external group — people from other organisations "
-    "may be in it. Coffer keeps answering here; unbind the channel if that is "
-    "not what you want."
+    "may be in it. Coffer keeps answering here; remove the bot from the "
+    "group if that is not what you want."
 )
+
+
+#: The callback namespace the retired ``NEEDS YOU:`` buttons used; old cards in a
+#: chat may still carry it, and a tap on one does nothing.
+_OLD_REPLY_PREFIX = "reply:"
 
 
 @dataclass(frozen=True)
@@ -55,9 +70,16 @@ class InboundEvents:
     stop_chat_sessions: Callable[[str, str], None]
     #: Looks up (creating if absent) the session for one ``(channel, chat, thread)`` —
     #: the same registry ``InboundProcessor``/``TurnDriver`` share. A card tap needs it
-    #: only for a ``collection:`` choice (spec channels "Save a sent document into a
-    #: collection"): the pending document a `/save` tap saves lives there.
+    #: for the running turn a tapped command acts on.
     session: SessionAccessor
+    #: The processor's burst buffer: a command button runs exactly what typing the
+    #: command runs, which settles whatever the chat is still holding first
+    #: (``inbound_commands.route_slash``).
+    burst: InboundBurst
+    #: The chat platform's questions: a tap on a question's button answers it
+    #: (see "Ask the owner in the chat and take the answer back to the agent").
+    #: ``None`` ignores such taps.
+    questions: QuestionPort | None = None
 
     async def on_callback(
         self, binding: ChannelBinding, cb: InboundCallback, *, conversation_thread_id: str
@@ -75,33 +97,64 @@ class InboundEvents:
             # sender_id) and route the refusal back into the group/thread, not a
             # DM. A tap never bootstraps a group peer row — only the owner's
             # first @mention does — so an unrecorded group is ignored silently.
-            owner = await self.peers.owner_sender_id(binding.resource.id)
-            if owner is None:
+            paired = await self.peers.sender_ids(binding.resource.uid)
+            if not paired:
                 return
-            if not cb.sender_id or cb.sender_id != owner:
+            if not cb.sender_id or cb.sender_id not in paired:
+                if cb.data.startswith(f"{WITHDRAW_KIND}:"):
+                    # Anyone may tap a reply's 🗑; for anyone but the owner it does
+                    # nothing and says nothing (spec channels "Withdraw a bot reply
+                    # on the owner's command").
+                    return
                 await self.safe_send(
                     binding,
                     cb.chat_id,
-                    "🚫 Not authorized — only this channel's owner can use me here.",
+                    f"🚫 Only {bot_name(binding)}\u2019s owners can use it here.",
                     thread_id=cb.thread_id,
                     chat_kind="group",
                 )
                 return
-            peer = await self.peers.get_by_chat(binding.resource.id, cb.chat_id)
+            peer = await self.peers.get_by_chat(binding.resource.uid, cb.chat_id)
             if peer is None:
                 return
         else:
-            peer = await self.peers.get_by_chat(binding.resource.id, cb.chat_id)
+            peer = await self.peers.get_by_chat(binding.resource.uid, cb.chat_id)
             if peer is None:
                 return
-            if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
+            if not cb.sender_id or peer.sender_id != cb.sender_id:
                 return
+        if cb.data.startswith(_OLD_REPLY_PREFIX):
+            return  # a button of the retired NEEDS YOU: sentinel — nothing to answer
+        tap = parse_callback(cb.data)
+        if tap is not None:
+            if self.questions is not None:
+                await handle_tap(
+                    self.questions,
+                    tap,
+                    adapter=binding.adapter,
+                    chat_id=cb.chat_id,
+                    chat_kind=cb.chat_kind,
+                    message_id=cb.platform_message_id,
+                    via=binding.resource.uid,
+                    by=cb.sender_display or "owner",
+                )
+            return
+        kind, _, value = cb.data.partition(":")
+        name = command_name(f"/{value}") if kind == "cmd" and value else None
+        if name is not None:
+            # A tap on a command button is that command typed: held messages are
+            # released ahead of it, or — for Stop — discarded.
+            key = (binding.resource.uid, cb.chat_id, cb.thread_id)
+            if name == "stop":
+                await self.burst.drop(key)
+            else:
+                await self.burst.flush(key)
         await self.commands.dispatch_callback(
             binding,
             peer,
             cb.data,
             self.safe_send,
-            session=self.session(binding.resource.name, cb.chat_id, conversation_thread_id),
+            session=self.session(binding.resource.uid, cb.chat_id, conversation_thread_id),
             chat_kind=cb.chat_kind,
             thread_id=cb.thread_id,
             conversation_thread_id=conversation_thread_id,
@@ -118,7 +171,7 @@ class InboundEvents:
         paired, so there is nothing to tear down or warn about), are both
         ignored in silence.
         """
-        peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
+        peer = await self.peers.get_by_chat(binding.resource.uid, event.chat_id)
         if peer is None:
             return
         if event.kind == "removed_from_group":
@@ -133,7 +186,7 @@ class InboundEvents:
         # way ``unbind`` stops a whole channel's. Deliberately silent on the
         # platform: a goodbye message would just be a failed send into a group
         # the bot has already left. The owner sees it in the daemon log.
-        self.stop_chat_sessions(binding.resource.name, event.chat_id)
+        self.stop_chat_sessions(binding.resource.uid, event.chat_id)
         _logger.warning(
             "channel.group.removed",
             extra={
@@ -178,7 +231,7 @@ class InboundEvents:
         press from a chat that was never paired is ignored in silence rather than
         answered, which would confirm to a stranger that this channel exists.
         """
-        peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
+        peer = await self.peers.get_by_chat(binding.resource.uid, event.chat_id)
         if peer is None:
             return
         await self.commands.interrupt(

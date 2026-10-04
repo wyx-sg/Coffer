@@ -1,159 +1,224 @@
-// frontend/src/components/skills/SkillAddDialog.tsx
-// "Add skill" dialog: imports a local AgentSkills-standard folder from disk.
-// The path is picked with Browse or typed/pasted; a pasted path is trimmed of
-// surrounding whitespace and quotes before it is sent.
-// On success the skills query is invalidated and the dialog closes.
-// On 409 (RESOURCE_ALREADY_EXISTS) the UI surfaces an inline confirm to
-// retry with overwrite: true — the explicit confirm IS the flag.
-import { useState } from "react";
+// src/components/skills/SkillAddDialog.tsx
+// The Add skill dialog: a folder, an archive or a Git repository is staged, what it holds is shown, and only the confirm adds anything.
+//
+// Spec skill-manager "Cover skill management on REST and the web" (the
+// dialog), "Import a skill from a local path", "Add skills from an archive" and
+// "Add skills from a Git repository". The stage (useSkillAddStage) is cancelled whenever it leaves the screen.
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
-import { FolderPickerField } from "@/components/FolderPickerField";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ApiError, translateApiError } from "@/lib/api/errors";
-import { useImportSkill } from "@/lib/hooks/useSkills";
+import { translateApiError } from "@/lib/api/errors";
+import { useApplySkillReach } from "@/lib/hooks/useSkillCopies";
+import { EVERY_AGENT, type SkillReachDraft } from "@/lib/skills/reach";
+import { SkillAddReach } from "./SkillAddReach";
+import { SkillAddSourceBody } from "./SkillAddSourceBody";
+import { type GitLocation } from "./SkillAddSourceFields";
+import { SkillAddSourceSwitch, type SkillAddSource } from "./SkillAddSourceSwitch";
+import { useSkillAddStage } from "./SkillAddStage";
+import { cleanPath, isArchiveFile } from "./skillSourceHelpers";
 
-/** A pasted path often carries quotes (a shell's "Copy as path") or a trailing newline. */
-function cleanPath(raw: string): string {
-  const trimmed = raw.trim();
-  const m = /^(["'])(.*)\1$/.exec(trimmed);
-  return (m ? m[2] : trimmed).trim();
-}
+export type { SkillAddSource } from "./SkillAddSourceSwitch";
 
-export function SkillAddDialog({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
+const NO_GIT: GitLocation = { url: "", ref: "", path: "" };
+
+interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: () => void;
-}) {
-  const { t } = useTranslation();
-
-  const close = () => {
-    onCreated();
-    onOpenChange(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t("skills.add")}</DialogTitle>
-          <DialogDescription>{t("skills.addSubtitle")}</DialogDescription>
-        </DialogHeader>
-        <LocalImportTab onSuccess={close} onCancel={() => onOpenChange(false)} />
-      </DialogContent>
-    </Dialog>
-  );
+  /** The source the dialog opens on; Folder when omitted. */
+  initialSource?: SkillAddSource;
 }
 
-function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
+export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
   const { t } = useTranslation();
-  const importSkill = useImportSkill();
-  const [rawPath, setRawPath] = useState("");
-  // When a 409 conflict is returned, we store the conflicting skill name here
-  // to surface the replace-confirm UI. Cleared whenever the path changes.
-  const [conflictName, setConflictName] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const s = useSkillAddStage();
+  const { discard } = s;
 
-  const handlePathChange = (value: string) => {
-    setRawPath(value);
-    setConflictName(null);
-    importSkill.reset();
-  };
+  const [source, setSource] = useState<SkillAddSource>(initialSource ?? "folder");
+  const [folder, setFolder] = useState("");
+  const [archive, setArchive] = useState<File | null>(null);
+  const [git, setGit] = useState<GitLocation>(NO_GIT);
+  const [reach, setReach] = useState<SkillReachDraft>(EVERY_AGENT);
+  const applyReach = useApplySkillReach();
+  // The folder last looked at, so leaving the field after a pick does not look twice.
+  const lookedFolder = useRef<string | null>(null);
 
-  const runImport = async (overwrite?: boolean) => {
-    const path = cleanPath(rawPath);
-    if (!path) return;
-    try {
-      await importSkill.mutateAsync({ path, ...(overwrite ? { overwrite: true } : {}) });
-      onSuccess();
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "RESOURCE_ALREADY_EXISTS") {
-        // Derive skill name from the last path segment (best-effort for the UI label).
-        const name = path.split(/[/\\]/).filter(Boolean).pop() ?? path;
-        setConflictName(name);
-      }
-      // Other errors are surfaced inline via importSkill.error below.
+  // A fresh dialog each time it opens; closing cancels what was staged.
+  useEffect(() => {
+    if (open) {
+      setSource(initialSource ?? "folder");
+      setFolder("");
+      setArchive(null);
+      setGit(NO_GIT);
+      setReach(EVERY_AGENT);
+      lookedFolder.current = null;
+    } else {
+      discard();
     }
+  }, [open, initialSource, discard]);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) discard();
+    onOpenChange(next);
   };
+
+  const shown = !!(s.stage || s.stageError);
+
+  const lookAtFolder = (path: string) => {
+    if (lookedFolder.current === path && (shown || s.looking)) return;
+    lookedFolder.current = path;
+    void s.look({ kind: "folder", path });
+  };
+
+  // "Use that folder": the folder one level down is the one to look at.
+  const useFolder = (path: string) => {
+    setFolder(path);
+    lookedFolder.current = path;
+    void s.look({ kind: "folder", path });
+  };
+
+  const changeFolder = (text: string) => {
+    // A stage answers for the folder it looked at, not the one now typed.
+    if (shown && cleanPath(text) !== lookedFolder.current) discard();
+    setFolder(text);
+  };
+
+  const pickArchive = (file: File) => {
+    setArchive(file);
+    void s.look({ kind: "archive", file });
+  };
+
+  const changeGit = (next: GitLocation) => {
+    if (shown) discard();
+    setGit(next);
+  };
+
+  const cloneGit = () => {
+    const url = git.url.trim();
+    if (!url) return;
+    void s.look({ kind: "git", url, ref: git.ref.trim() || null, path: git.path.trim() || null });
+  };
+
+  const switchSource = (next: SkillAddSource) => {
+    discard();
+    setSource(next);
+  };
+
+  const confirm = async () => {
+    const added = await s.confirm();
+    if (!added) return;
+    if (reach.mode !== "everywhere") {
+      await applyReach
+        .mutateAsync({ uids: added.map((a) => a.uid), mode: reach.mode, scope: reach.scope })
+        .catch(() => undefined);
+    }
+    handleOpenChange(false);
+    if (added[0]) navigate(`/skills/${encodeURIComponent(added[0].name)}`);
+  };
+
+  const onDrop = (e: DragEvent) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (!file || !isArchiveFile(file)) return;
+    e.preventDefault();
+    if (source !== "archive") switchSource("archive");
+    pickArchive(file);
+  };
+
+  const single = s.stage?.skills.length === 1 ? s.chosen[0] : undefined;
+  const primaryLabel = s.confirming
+    ? t("skillSources.add.adding")
+    : s.confirmError
+      ? t("skillSources.git.retry")
+      : single?.taken
+        ? t("skillSources.add.replaceOne", { name: single.name })
+        : s.chosen.length > 1
+          ? t("skillSources.add.addMany", { count: s.chosen.length })
+          : t("skillSources.add.addOne");
+  const gitNeedsClone = source === "git" && !s.stage;
+  const cloning = source === "git" && s.looking;
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void runImport();
-      }}
-      className="space-y-3"
-    >
-      <div className="space-y-1">
-        <Label htmlFor="skill-import-path" required>
-          {t("skills.path")}
-        </Label>
-        <FolderPickerField
-          inputId="skill-import-path"
-          ariaLabel={t("skills.path")}
-          value={rawPath || null}
-          onChange={(p) => handlePathChange(p ?? "")}
-          placeholder="/Users/me/.claude/skills/my-skill"
-          typeable
-        />
-      </div>
-      {conflictName ? (
-        <div
-          className="rounded-md border border-status-warn/40 bg-status-warn/10 px-3 py-2 text-sm"
-          role="alert"
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="max-h-[calc(100vh-4rem)] max-w-[640px] overflow-y-auto"
+        onDragOver={(e) => {
+          if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+        }}
+        onDrop={onDrop}
+      >
+        <DialogHeader>
+          <DialogTitle>{t("skillSources.add.title")}</DialogTitle>
+          <DialogDescription>
+            {source === "archive" && (s.stage?.skills.length ?? 0) > 1
+              ? t("skillSources.add.subtitle.archiveMany")
+              : t(`skillSources.add.subtitle.${source}`)}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (gitNeedsClone) cloneGit();
+            else void confirm();
+          }}
         >
-          <p className="font-medium text-status-warn">
-            {t("skills.importConflictTitle", { name: conflictName })}
-          </p>
-          <div className="mt-2 flex justify-end gap-2">
+          <SkillAddSourceSwitch value={source} onChange={switchSource} />
+          <SkillAddSourceBody
+            source={source}
+            stage={s}
+            folder={folder}
+            onFolder={changeFolder}
+            onLookFolder={lookAtFolder}
+            onUseFolder={useFolder}
+            archive={archive}
+            onArchive={pickArchive}
+            git={git}
+            onGit={changeGit}
+          />
+          <SkillAddReach value={reach} onChange={setReach} busy={s.confirming} />
+          {s.confirmError ? (
+            <p role="alert" className="text-xs text-danger">
+              {translateApiError(t, s.confirmError)}
+            </p>
+          ) : null}
+          <DialogFooter>
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setConflictName(null);
-                importSkill.reset();
-              }}
+              variant="ghost"
+              disabled={s.confirming}
+              onClick={() => handleOpenChange(false)}
             >
               {t("common.cancel")}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setConflictName(null);
-                void runImport(true);
-              }}
-              disabled={importSkill.isPending}
-            >
-              {importSkill.isPending ? t("common.saving") : t("skills.importReplace")}
-            </Button>
-          </div>
-        </div>
-      ) : importSkill.error ? (
-        <p className="text-sm text-destructive">{translateApiError(t, importSkill.error)}</p>
-      ) : null}
-      {!conflictName && (
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            {t("common.cancel")}
-          </Button>
-          <Button type="submit" disabled={importSkill.isPending || !cleanPath(rawPath)}>
-            {importSkill.isPending ? t("common.saving") : t("skills.import")}
-          </Button>
-        </div>
-      )}
-    </form>
+            {gitNeedsClone ? (
+              <Button type="submit" disabled={cloning || !git.url.trim()}>
+                {cloning ? <Loader2 aria-hidden className="animate-spin" /> : null}
+                {cloning
+                  ? t("skillSources.git.cloning")
+                  : s.stageError
+                    ? t("skillSources.git.retry")
+                    : t("skillSources.git.clone")}
+              </Button>
+            ) : (
+              <Button type="submit" disabled={s.chosen.length === 0 || s.confirming}>
+                {s.confirming ? <Loader2 aria-hidden className="animate-spin" /> : null}
+                {primaryLabel}
+              </Button>
+            )}
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
