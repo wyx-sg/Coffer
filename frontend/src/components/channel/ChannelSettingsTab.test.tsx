@@ -175,43 +175,62 @@ describe("conversations", () => {
 });
 
 describe("working directories", () => {
-  const defaultField = () => screen.getByLabelText(/^default$/i);
+  acceptance("channels", "the channel's directories are edited on the Channels page", async () => {
+    const api = installApi();
+    renderSettings(makeChannel({ config: { directories: ["/srv/app", "/srv/lib"] } }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove /srv/app" }));
 
-  acceptance(
-    "channels",
-    "the channel's directories are edited on the Channels page",
-    async () => {
-      const api = installApi();
-      renderSettings(makeChannel({ config: { directories: ["/srv/app", "/srv/lib"] } }));
-      fireEvent.click(screen.getByRole("button", { name: "Remove /srv/app" }));
-
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-      expect(patched(api).directories).toEqual(["/srv/lib"]);
-    },
-  );
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    expect(patched(api).directories).toEqual(["/srv/lib"]);
+  });
 
   acceptance(
     "channels",
     "the channel's default directory is edited on the Channels page",
     async () => {
       const api = installApi();
-      renderSettings(makeChannel({ config: { directories: ["/srv/app"] } }));
-      fireEvent.change(defaultField(), { target: { value: "/srv/app/" } });
+      renderSettings(makeChannel({ config: { directories: ["/srv/app", "/srv/lib"] } }));
+      fireEvent.click(screen.getByRole("button", { name: "Set /srv/lib as the default" }));
 
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1), SLOW);
-      expect(patched(api).default_agent_config).toEqual({ cwd: "/srv/app" });
-      // The listed default is marked as such.
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      expect(patched(api).default_agent_config).toEqual({ cwd: "/srv/lib" });
+      // The listed default is marked as such, and can be unset.
       expect(screen.getByTestId("channel-directories")).toHaveTextContent(/default/);
+      expect(
+        screen.getByRole("button", { name: "Stop starting new conversations in /srv/lib" }),
+      ).toBeInTheDocument();
     },
   );
 
-  test("a relative default shows an inline error and saves nothing", async () => {
+  test("removing the default directory also clears the default", async () => {
     const api = installApi();
-    renderSettings();
-    fireEvent.change(defaultField(), { target: { value: "projects" } });
-    expect(screen.getByRole("alert")).toHaveTextContent(/"projects" is not an absolute path/);
-    await new Promise((r) => setTimeout(r, 900));
-    expect(api.PATCH).not.toHaveBeenCalled();
+    renderSettings(
+      makeChannel({
+        config: { directories: ["/srv/app"], default_agent_config: { cwd: "/srv/app" } },
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove /srv/app" }));
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    expect(patched(api).directories).toEqual([]);
+    expect(patched(api).default_agent_config ?? {}).not.toHaveProperty("cwd");
+  });
+
+  test("a default set outside the list is shown in it", () => {
+    installApi();
+    renderSettings(makeChannel({ config: { default_agent_config: { cwd: "/srv/old" } } }));
+    const list = screen.getByRole("list", { name: "Directories" });
+    expect(list).toHaveTextContent("/srv/old");
+    expect(list).toHaveTextContent(/default/);
+  });
+
+  test("a long list scrolls inside its box", () => {
+    installApi();
+    const directories = Array.from({ length: 20 }, (_, i) => `/srv/d${i}`);
+    renderSettings(makeChannel({ config: { directories } }));
+    expect(screen.getByRole("list", { name: "Directories" })).toHaveClass(
+      "max-h-64",
+      "overflow-y-auto",
+    );
   });
 });
 

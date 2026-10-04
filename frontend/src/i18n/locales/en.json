@@ -3964,7 +3964,7 @@
         "title": "Replies and conversations"
       },
       "directories": {
-        "description": "Where new conversations start, and what /dir may switch to. With none allowed, /dir is off."
+        "description": "/dir may switch to these and the folders under them; new conversations start in the default. With no default they start in Coffer's workspace; with no directories /dir is off."
       },
       "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct the channel's file under `~/.coffer/vault/resources/channel/`, or delete the channel and add it again.",
       "machine": {
@@ -4155,16 +4155,15 @@
       },
       "directories": {
         "title": "Working directories",
-        "default": "Default",
-        "defaultHint": "Where new conversations start.",
-        "defaultPlaceholder": "Coffer workspace (~/.coffer/content/workspace)",
-        "allowed": "Allowed for /dir",
-        "allowedHint": "/dir offers only these and the folders under them.",
+        "list": "Directories",
         "defaultTag": "default",
+        "setDefault": "Set as default",
+        "setDefaultAria": "Set {{path}} as the default",
+        "unsetDefault": "Unset default",
+        "unsetDefaultAria": "Stop starting new conversations in {{path}}",
         "remove": "Remove",
         "removeAria": "Remove {{path}}",
         "add": "Add directory…",
-        "notAbsolute": "\"{{path}}\" is not an absolute path — start it with /.",
         "tooMany": "At most {{max}} directories."
       }
     },

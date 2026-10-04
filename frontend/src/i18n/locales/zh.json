@@ -3961,7 +3961,7 @@
         "description": "机器人如何在群里收听，并把连发的消息合成一个回合。"
       },
       "directories": {
-        "description": "新对话从哪里开始，以及 /dir 可以切换到哪里。一个都没有时 /dir 关闭。"
+        "description": "/dir 可以切换到这些目录及其子目录，新对话从默认目录开始。没有默认时从 Coffer 工作区开始；一个目录都没有时 /dir 关闭。"
       },
       "replying": {
         "title": "回复与会话"
@@ -4155,16 +4155,15 @@
       },
       "directories": {
         "title": "工作目录",
-        "default": "默认",
-        "defaultHint": "新对话从哪里开始。",
-        "defaultPlaceholder": "Coffer 工作区（~/.coffer/content/workspace）",
-        "allowed": "/dir 可用的目录",
-        "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
+        "list": "目录",
         "defaultTag": "默认",
+        "setDefault": "设为默认",
+        "setDefaultAria": "把 {{path}} 设为默认",
+        "unsetDefault": "取消默认",
+        "unsetDefaultAria": "新对话不再从 {{path}} 开始",
         "remove": "移除",
         "removeAria": "移除 {{path}}",
         "add": "添加目录…",
-        "notAbsolute": "“{{path}}”不是绝对路径——请以 / 开头。",
         "tooMany": "最多 {{max}} 个目录。"
       }
     },

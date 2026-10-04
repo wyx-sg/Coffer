@@ -16,7 +16,6 @@ import type { ChannelSettings } from "@/lib/api/channels";
 import { parseBurstWait, parseIdleHours, parseNotifyAfter } from "./channelTurnSettings";
 import {
   honoursRequireMention,
-  normaliseDirectory,
   storedDefaultDirectory,
   type ChannelEditValues,
 } from "@/lib/channels/editChannel";
@@ -28,14 +27,6 @@ import { EditChannelReplyFields } from "./EditChannelReplyFields";
 import { useSettingDraft } from "./useSettingDraft";
 
 type Save = (values: Partial<ChannelEditValues>) => void;
-
-/** A typed default folder: blank clears it, an absolute path sets it, anything
- *  else is invalid (`null`) and is not saved. */
-const parseDefault = (text: string): { path: string | null } | null => {
-  if (text.trim() === "") return { path: null };
-  const path = normaliseDirectory(text);
-  return path === null ? null : { path };
-};
 
 export function ChannelReceivingFields({
   settings,
@@ -123,22 +114,25 @@ export function ChannelDirectoryFields({
   settings: ChannelSettings;
   save: Save;
 }) {
-  const [directories, setDirectories] = useState(() => settings.directories);
-  const defaultDir = useSettingDraft(storedDefaultDirectory(settings) ?? "", parseDefault, (v) =>
-    save({ default_directory: v.path }),
-  );
+  // A default the list does not hold yet (set before the two were one list) is
+  // shown in it, and joins it with the next change.
+  const stored = storedDefaultDirectory(settings);
+  const [dirs, setDirs] = useState(() => ({
+    directories:
+      stored && !settings.directories.includes(stored)
+        ? [...settings.directories, stored]
+        : settings.directories,
+    defaultDirectory: stored,
+  }));
 
   return (
-    <div onBlur={defaultDir.flush}>
-      <EditChannelDirectoriesField
-        defaultText={defaultDir.text}
-        onDefaultChange={defaultDir.change}
-        directories={directories}
-        onDirectoriesChange={(next) => {
-          setDirectories(next);
-          save({ directories: next });
-        }}
-      />
-    </div>
+    <EditChannelDirectoriesField
+      directories={dirs.directories}
+      defaultDirectory={dirs.defaultDirectory}
+      onChange={(directories, defaultDirectory) => {
+        setDirs({ directories, defaultDirectory });
+        save({ directories, default_directory: defaultDirectory });
+      }}
+    />
   );
 }
