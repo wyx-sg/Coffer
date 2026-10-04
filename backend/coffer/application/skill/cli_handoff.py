@@ -29,6 +29,12 @@ _COFFER_USES: dict[CofferUse, str] = {
 }
 
 
+def coffer_uses(row: RequiredCommand) -> str:
+    """What Coffer itself runs the command for, as a phrase after "to"
+    ("keep the vault's history and to sync the vault")."""
+    return " and to ".join(_COFFER_USES[u] for u in row.needed_by_coffer)
+
+
 def _named(row: RequiredCommand) -> str:
     return f"`{row.command}` ({row.title})" if row.title else f"`{row.command}`"
 
@@ -43,8 +49,7 @@ def _needed_by(row: RequiredCommand) -> tuple[str, ...]:
 
     facts: list[str] = []
     if row.needed_by_coffer:
-        uses = " and to ".join(_COFFER_USES[u] for u in row.needed_by_coffer)
-        facts.append(f"Coffer itself uses it to {uses}.")
+        facts.append(f"Coffer itself uses it to {coffer_uses(row)}.")
     if row.needed_by:
         facts.append(
             "Needed by the Coffer skills: " + ", ".join(one(n) for n in row.needed_by) + "."
