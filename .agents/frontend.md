@@ -106,11 +106,8 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
     offline phase with its backoff, and every reader (`DaemonOfflineBanner`'s
     bar and offline state, the Settings › Daemon status) calls
     `useDaemonConnection` — no second timer; `paletteRequest.ts` for a page that opens the palette;
-    `AttentionDot` (a count badge in `danger-strong`, capped at "9+", a dot on the
-    rail; ignored items are not counted), fed by
-    `lib/hooks/useAttentionSignals.ts` — a kind that declares an attention
-    signal adds it to that map, keyed by its entry's route; informational
-    counts never become badges.
+    the sidebar carries no attention marks — no badges, dots or tooltip text;
+    what needs the person is on Overview's Needs you and the menu bar's count.
   - `components/SplitView` / `SplitDivider` + `lib/hooks/useResizableWidth.ts`
     for every resizable split; widths are per-browser conveniences.
   - `lib/events/eventStream.ts` + `lib/hooks/useDaemonEvents.ts` — the one reader of
@@ -414,8 +411,8 @@ return useMutation({
   same off state, Not connected. The visible button is only ever the fix Coffer
   can make — Connect, Repair or Turn on — and a healthy row has none; Disconnect
   and Turn off live in ⋯. The detail header never turns into a fix button: its
-  fix sits in the Overview's Connection section. The sidebar's Agents badge
-  counts only agents that need you (repair, config left behind, Coffer hook not
+  fix sits in the Overview's Connection section. Overview's Needs you
+  lists only agents that need you (repair, config left behind, Coffer hook not
   approved or never fired), never Not connected.
 - **A write to an agent's own files goes through Review changes → Apply**
   (`components/change-preview/ChangePreview`, 1060 wide): Connect, Repair,
@@ -442,7 +439,7 @@ return useMutation({
   change: …"). No Save buttons. Only **document editors** — `SKILL.md`,
   knowledge documents, raw agent config files — keep an explicit **Save** and
   the unsaved-changes guard.
-- **Count badges** — sidebar, tab and list counts that mean "needs you" are all
+- **Count badges** — tab and list counts that mean "needs you" are all
   `danger-strong`, capped at `9+`.
 - **Dialogs** — Cancel is a `ghost` button beside the primary action.
 - **Shortcuts** — ⌘\ sidebar toggle, ⌘[ / ⌘] history back / forward, ⌘, Settings,

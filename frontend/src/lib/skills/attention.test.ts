@@ -1,6 +1,6 @@
 // frontend/src/lib/skills/attention.test.ts
 // What a skill needs the reader to know: the problems that file it under
-// "Needs attention", tint its header pill and count toward the sidebar badge —
+// "Needs attention", tint its header pill —
 // and the update that is waiting, which is none of those.
 import { describe, expect, test } from "vitest";
 
@@ -78,7 +78,7 @@ describe("problems and the count", () => {
     expect(skillProblems(builtin, [], undefined)).toEqual([]);
   });
 
-  test("skillsNeedingAttention lists the skills with a problem — the library group and the sidebar badge", () => {
+  test("skillsNeedingAttention lists the skills with a problem — the library group", () => {
     const missing = makeSkill({
       uid: "d",
       name: "needs-jq",

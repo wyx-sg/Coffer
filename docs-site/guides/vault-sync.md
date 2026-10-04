@@ -142,7 +142,7 @@ On the web, the **Sync** page's header says in one word where this Mac stands: *
 - **Machines** lists the machines (see [Manage the machines](#manage-the-machines)).
 - **Remote** holds the remote's settings.
 
-When a round needs you, the **Sync** entry in the sidebar is marked, and the desktop app raises a notification.
+When a round needs you, **Overview** lists it under **Needs you**, and the desktop app raises a notification.
 
 ## Resolve a conflict
 

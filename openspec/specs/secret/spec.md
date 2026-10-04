@@ -844,7 +844,7 @@ order-independent fingerprint of the set's members (the refs, the approval ids),
 so its attention key identifies exactly that set: ignoring the item ignores that
 set, and a secret going missing, a value being added, or an approval arriving or
 being decided changes the key and brings the item back. Both count toward the
-per-kind counts the sidebar badges and the menu bar read, and neither is listed
+per-kind counts the menu bar reads, and neither is listed
 when its set is empty.
 
 #### Scenario: secrets with no value on this Mac are listed on Overview

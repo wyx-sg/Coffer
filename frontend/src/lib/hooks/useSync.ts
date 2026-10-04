@@ -35,9 +35,8 @@ import {
 } from "@/lib/api/queryKeys";
 
 /**
- * The status. Polled, because the sidebar dot mounts this on every page and a
- * round that needs a person can start needing one while the user sits on some
- * other page. Slowly: rounds run on the order of minutes, so a minute's lag
+ * The status. Polled, because a round that needs a person can start needing
+ * one while the user sits on the page. Slowly: rounds run on the order of minutes, so a minute's lag
  * costs nothing and a background tab wakes the daemon for nothing.
  */
 export function useSyncStatus(enabled = true) {

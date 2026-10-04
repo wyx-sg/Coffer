@@ -1,7 +1,7 @@
 // src/lib/hooks/useAttentionIgnore.ts — ignore a "needs you" item on this machine.
 //
-// The daemon keeps the choice (PUT /attention/ignored/{key}), so the Overview,
-// the sidebar's badges and the menu bar all read the same list: an ignored
+// The daemon keeps the choice (PUT /attention/ignored/{key}), so the Overview
+// and the menu bar both read the same list: an ignored
 // item leaves `items` and `counts_by_kind` and is listed under `ignored` (spec
 // web-ui "Let the user ignore any item on Overview"). It refetches the
 // attention list; a failure is a toast. `useUnignoreAttention` puts one back

@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { chatApi, type Question, type QuestionAnswerIn } from "@/lib/api/chat";
 import { ApiError, translateApiError } from "@/lib/api/errors";
-import { conversationHeadsKey, messagesKey, needsYouCountKey } from "@/lib/api/queryKeys";
+import { conversationHeadsKey, messagesKey } from "@/lib/api/queryKeys";
 import { currentIndex } from "@/lib/chat/questions";
 import { useToast } from "@/components/ui/toast";
 
@@ -22,7 +22,6 @@ export function useQuestionAnswer(conversationId: string) {
     async (question: Question, answer: QuestionAnswerIn): Promise<boolean> => {
       const refresh = () => {
         void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
-        void qc.invalidateQueries({ queryKey: needsYouCountKey });
         void qc.invalidateQueries({ queryKey: conversationHeadsKey });
       };
       try {

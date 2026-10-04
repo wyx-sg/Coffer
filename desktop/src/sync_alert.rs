@@ -23,7 +23,7 @@
 /// arrangement `daemon.json`'s fields are already in (spec desktop-app "Read the
 /// daemon's credentials from its discovery file"):
 /// a change on either side is made on both — and on the CLI's
-/// `_NEEDS_ATTENTION` and the web's `useSyncAttention.ts`, which list the same five.
+/// `_NEEDS_ATTENTION` and the attention list, which list the same five.
 pub const ATTENTION_STATUSES: [&str; 5] = [
     "conflict",
     "awaiting_confirmation",
@@ -219,7 +219,7 @@ mod tests {
     // acceptance(spec = "vault-sync", scenario = "a machine that has not joined says so everywhere")
     #[test]
     fn a_machine_that_has_not_joined_needs_a_human() {
-        // The CLI (`_NEEDS_ATTENTION`) and the web (`useSyncAttention.ts`) both
+        // The CLI (`_NEEDS_ATTENTION`) and the attention list both
         // count it: every round converges nothing until someone runs adopt.
         assert_eq!(
             attention_status(&snapshot(true, Some("awaiting_join"))),
@@ -281,6 +281,7 @@ mod tests {
     /// The load-bearing one. A user who has been told and has not acted must
     /// not be told again on the next tick — however many ticks later — or the
     /// poll becomes an hourly nag and the notification stops meaning anything.
+    // acceptance(spec = "vault-sync", scenario = "a held vault says so where the user already is")
     #[test]
     fn the_same_condition_on_the_next_poll_does_nothing() {
         let held = snapshot(true, Some("awaiting_confirmation"));

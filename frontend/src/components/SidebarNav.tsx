@@ -6,8 +6,6 @@ import { useTranslation } from "react-i18next";
 import { Link, matchPath } from "react-router-dom";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { AttentionDot } from "@/components/shell/AttentionDot";
-import { useAttentionSignals, type AttentionSignal } from "@/lib/hooks/useAttentionSignals";
 import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_GROUPS, type NavEntry } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -16,11 +14,9 @@ interface RowProps {
   entry: NavEntry;
   collapsed: boolean;
   active: boolean;
-  /** Set while the entry's kind has something that needs the user. */
-  signal: AttentionSignal | undefined;
 }
 
-function NavRow({ entry, collapsed, active, signal }: RowProps) {
+function NavRow({ entry, collapsed, active }: RowProps) {
   const { t } = useTranslation();
   const label = t(entry.labelKey);
   // An experimental feature's entry says so in the rail tooltip (the row
@@ -33,7 +29,7 @@ function NavRow({ entry, collapsed, active, signal }: RowProps) {
       aria-current={active ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
-        "relative flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
+        "flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
         collapsed ? "mx-auto w-8 justify-center" : "gap-[9px] px-2.5",
         active
           ? "bg-surface-selected font-label text-text"
@@ -46,15 +42,14 @@ function NavRow({ entry, collapsed, active, signal }: RowProps) {
         aria-hidden
       />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
-      {signal ? <AttentionDot entry={entry.to} collapsed={collapsed} count={signal.count} /> : null}
     </Link>
   );
   if (!collapsed) return link;
-  // The rail has no room for the count or the Experimental tag, so the tooltip
-  // carries both after the name ("MCP servers · 3 need you", "Knowledge ·
-  // Experimental"; boards 1.1.01 and 1.1.04).
-  const name = experimental ? t("nav.experimentalLabel", { label }) : label;
-  const tip = signal ? `${name} · ${t("nav.attentionCount", { count: signal.count })}` : name;
+  // The rail has no room for the Experimental tag, so the tooltip carries it
+  // after the name ("Knowledge · Experimental"; board 1.1.04). Otherwise the
+  // tooltip is just the name: the sidebar carries no attention marks —
+  // everything that needs the person is on Overview.
+  const tip = experimental ? t("nav.experimentalLabel", { label }) : label;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
@@ -72,7 +67,6 @@ interface Props {
 
 export function SidebarNav({ collapsed, pathname }: Props) {
   const { t } = useTranslation();
-  const signals = useAttentionSignals();
   // An entry whose feature is off — or not known yet — is left out rather
   // than flashed in and taken away again.
   const features = useFeatureMap();
@@ -111,7 +105,6 @@ export function SidebarNav({ collapsed, pathname }: Props) {
               entry={entry}
               collapsed={collapsed}
               active={isActive(entry)}
-              signal={signals[entry.to]}
             />
           ))}
         </div>

@@ -643,9 +643,9 @@ A vault whose round needs a human — stopped on conflicts, held by the breaker,
 waiting on an edit, waiting for a join or for a join's differing files, unable
 to sign in, paused in a synchronised folder, or refused for its layout — MUST
 say so where the user already is, not only on the page built for it.
-`GET /api/v1/sync/status` MUST report the problem, the web UI MUST mark its **navigation
-entry** for the sync page, the attention list MUST carry an item naming what to
-do, and the desktop shell MUST raise it as a notification and mark its icon. A
+`GET /api/v1/sync/status` MUST report the problem, the attention list MUST carry
+an item naming what to do (which Overview lists under Needs you), and the desktop
+shell MUST raise it as a notification and mark its icon. A
 vault that needs a human converges no further, so a question nobody sees is an
 outage that looks like silence.
 
@@ -654,11 +654,11 @@ beside this machine, the last round, what waits to push and anything waiting for
 settings are the URL, the branch, the interval, whether secret ciphertext travels, the push
 secret's ref, the username and whether the remote is on.
 
-The web UI's mark MUST be cleared by **visiting the page**, not by the situation
-changing, and MUST NOT return for the same situation. The rounds are
-timer-driven, so a notice that re-raised itself on each would cover every page
-hourly with something the user read the first time. A mark keyed on what is
-wrong asks once, and asks again only when the answer would be different.
+The desktop shell's notification MUST be raised once for a condition, not once per
+poll, and MUST NOT return for the same situation. The rounds are timer-driven, so
+a notice that re-raised itself on each would interrupt the user hourly with
+something they read the first time. A mark keyed on what is wrong asks once, and
+asks again only when the answer would be different.
 
 The attention list's sync items MUST be named by their situation, so ignoring one — on the Overview
 or from the Sync page, which share the key — hides that situation and no other: the conflicts item
@@ -678,13 +678,13 @@ The status MUST also say how far this vault and the remote (as last fetched) hav
 #### Scenario: a held vault says so where the user already is
 - **GIVEN** a round held at the deletion guard, so nothing converges and nothing is backed up until someone answers it,
 - **WHEN** the user is anywhere other than the sync page — on another page of the web UI, or with only the desktop shell in front of them,
-- **THEN** the sync status reports the problem, the web UI's navigation entry for sync is marked, and the shell has marked its icon and raised one notification — once for that condition, not once per poll,
-- **AND** opening the sync page clears the web UI's mark, which does not return while the same thing is wrong, however many rounds re-raise it.
+- **THEN** the sync status reports the problem, the attention list carries an item for it, and the shell has marked its icon and raised one notification — once for that condition, not once per poll,
+- **AND** the notification does not return while the same thing is wrong, however many rounds re-raise it.
 
 #### Scenario: a machine that has not joined says so everywhere
 - **GIVEN** a machine with a remote configured that it has not joined, so its round ends `join_required` and converges nothing
 - **WHEN** the user is anywhere other than the sync page
-- **THEN** the sync status names the join, the web UI's navigation entry for sync is marked, and the desktop shell marks its icon and raises one notification
+- **THEN** the sync status names the join, the attention list carries an item for it, and the desktop shell marks its icon and raises one notification
 
 #### Scenario: the attention list names what a round waits for
 - **GIVEN** a round stopped on a conflict
