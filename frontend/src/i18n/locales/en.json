@@ -2610,6 +2610,7 @@
       "disconnecting": "Disconnecting…"
     },
     "rowMenu": {
+      "column": "More actions",
       "label": "More actions for {{name}}",
       "configDir": "Use a different config directory…",
       "reveal": "Reveal config directory",

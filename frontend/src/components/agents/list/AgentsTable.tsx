@@ -2,7 +2,11 @@
 //
 // Always one row per supported type, in a fixed order, added or not: what it
 // is and where its config lives, what reaches it through Coffer, its Coffer
-// state with the one action that state calls for, and the ⋯ menu. The list
+// state with the one action that state calls for, and the ⋯ menu. The columns
+// are the Agents boards' fixed template (Agent takes the rest; Config 80,
+// Provider 120, Model 112, counts 40/32/44, Coffer 172, Actions 140, ⋯ 26 with
+// a 10px gap and 12px side padding): a fixed-layout table whose cells carry
+// 5px each side, so every width below is the content width plus 10. The list
 // has two rows, so there is no search, no selection and no bulk bar. An added
 // row opens the agent; a row not added has no page to open.
 import { useNavigate } from "react-router-dom";
@@ -14,6 +18,7 @@ import type { AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import {
   ActionsCell,
+  RowMenuCell,
   AgentNameCell,
   CofferCell,
   ConfigDirCell,
@@ -41,56 +46,62 @@ export function AgentsTable({ rows, isLoading }: Props) {
       header: t("agents.list.col.agent"),
       // Bounded: in an auto-layout table the one column without a width takes
       // the slack, and that is the config directory, not the name.
-      className: "w-[240px] max-w-[260px]",
+      className: "pl-3 pr-[5px]",
       cell: ({ row }) => <AgentNameCell row={row} />,
     },
     {
       key: "config",
       header: t("agents.list.col.configDir"),
-      className: "min-w-[140px]",
+      className: "px-[5px] w-[90px]",
       cell: ({ row }) => <ConfigDirCell row={row} />,
     },
     {
       key: "provider",
       header: t("agents.list.col.provider"),
-      className: "w-[180px] max-w-[200px]",
+      className: "px-[5px] w-[130px]",
       cell: ({ row }) => <ProviderCell uid={row.uid} />,
     },
     {
       key: "model",
       header: t("agents.list.col.model"),
-      className: "w-[160px]",
+      className: "px-[5px] w-[122px]",
       cell: ({ row }) => <ModelCell uid={row.uid} type={row.type} />,
     },
     {
       key: "skills",
       header: t("agents.list.col.skills"),
-      className: "w-[44px]",
+      className: "px-[5px] w-[50px]",
       cell: ({ row }) => <CountCell row={row} kind="skills" />,
     },
     {
       key: "mcp",
       header: t("agents.list.col.mcp"),
-      className: "w-[44px]",
+      className: "px-[5px] w-[42px]",
       cell: ({ row }) => <CountCell row={row} kind="mcp" />,
     },
     {
       key: "plugins",
       header: t("agents.list.col.plugins"),
-      className: "w-[44px]",
+      className: "px-[5px] w-[54px]",
       cell: ({ row }) => <CountCell row={row} kind="plugins" />,
     },
     {
       key: "coffer",
       header: t("agents.list.col.coffer"),
-      className: "w-[172px]",
+      className: "px-[5px] w-[182px]",
       cell: ({ row, state }) => <CofferCell row={row} state={state} />,
     },
     {
       key: "actions",
       header: <span className="sr-only">{t("agents.list.col.actions")}</span>,
-      className: "w-[176px] text-right",
+      className: "px-[5px] w-[150px] text-right",
       cell: ({ row }) => <ActionsCell row={row} />,
+    },
+    {
+      key: "menu",
+      header: <span className="sr-only">{t("agents.rowMenu.column")}</span>,
+      className: "pl-[5px] pr-3 w-[43px] text-right",
+      cell: ({ row }) => <RowMenuCell row={row} />,
     },
   ];
   return (
@@ -104,6 +115,7 @@ export function AgentsTable({ rows, isLoading }: Props) {
         isRowClickable={({ row }) => !!row.uid}
         emptyMessage={t("agents.list.empty")}
         footer={false}
+        fixed
       />
       {/* What the three counts mean, under the table rather than behind a "?" on one column. */}
       <p className="text-xs text-text-muted">{t("agents.list.countsHelp")}</p>

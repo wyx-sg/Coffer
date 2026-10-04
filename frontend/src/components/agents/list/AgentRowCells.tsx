@@ -49,7 +49,10 @@ export function AgentNameCell({ row }: { row: AgentTypeOut }) {
 
 export function ConfigDirCell({ row }: { row: AgentTypeOut }) {
   return (
-    <span className="break-all font-mono text-xs text-text">
+    <span
+      className="block truncate whitespace-nowrap font-mono text-xs text-text"
+      title={abbreviateHomePath(row.config_dir)}
+    >
       {abbreviateHomePath(row.config_dir)}
     </span>
   );
@@ -64,7 +67,11 @@ function ProviderLabel({ agent }: { agent: AgentOut }) {
   const label = useProviderLabel(agent);
   const text = label ?? (models ? null : t(`agents.overviewTab.model.builtin.${agent.type}`));
   if (!text) return <span className="text-xs text-text-subtle">{DASH}</span>;
-  return <span className="block truncate whitespace-nowrap text-xs text-text">{text}</span>;
+  return (
+    <span className="block truncate whitespace-nowrap text-xs text-text" title={text}>
+      {text}
+    </span>
+  );
 }
 
 function RegisteredProvider({ uid }: { uid: string }) {
@@ -90,7 +97,9 @@ export function ModelCell({ uid, type }: { uid: string | null; type: AgentTypeOu
   const model = onConnection ? agent.model : own;
   if (model)
     return (
-      <span className="block truncate whitespace-nowrap font-mono text-xs text-text">{model}</span>
+      <span className="block truncate whitespace-nowrap font-mono text-xs text-text" title={model}>
+        {model}
+      </span>
     );
   return (
     <span className="whitespace-nowrap text-xs text-text-subtle">
@@ -203,11 +212,7 @@ export function CofferCell({
 }
 
 export function ActionsCell({ row }: { row: AgentTypeOut }) {
-  const { t } = useTranslation();
-  const { primary, handoff, actions, dialogs, pending } = useAgentRowActions(row, {
-    inList: true,
-  });
-  const name = agentTypeLabel(row.type);
+  const { primary, handoff, pending, dialogs } = useAgentRowActions(row, { inList: true });
   return (
     <div className="flex items-center justify-end gap-1">
       {primary ? (
@@ -219,14 +224,26 @@ export function ActionsCell({ row }: { row: AgentTypeOut }) {
           <AgentHandoff prompt={handoff} size="sm" help={false} />
         </span>
       ) : null}
-      {actions.length > 0 ? (
-        <ActionMenu label={t("agents.rowMenu.label", { name })} actions={actions} />
-      ) : null}
-      {/* A dialog is portalled but its clicks still bubble through React to
-          the row, which would open the agent under it. */}
+      {/* The dialogs of the button and of the ⋯ menu (their state is shared, see
+          useRowDialogState) are drawn once, here. A dialog is portalled but its
+          clicks still bubble through React to the row, which would open the
+          agent under it. */}
       <span className="contents" onClick={(event) => event.stopPropagation()}>
         {dialogs}
       </span>
+    </div>
+  );
+}
+
+/** The ⋯ column: the row menu alone. */
+export function RowMenuCell({ row }: { row: AgentTypeOut }) {
+  const { t } = useTranslation();
+  const { actions } = useAgentRowActions(row, { inList: true });
+  const name = agentTypeLabel(row.type);
+  if (actions.length === 0) return null;
+  return (
+    <div className="flex items-center justify-end">
+      <ActionMenu label={t("agents.rowMenu.label", { name })} actions={actions} />
     </div>
   );
 }

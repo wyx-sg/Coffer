@@ -2610,6 +2610,7 @@
       "disconnecting": "正在断开连接…"
     },
     "rowMenu": {
+      "column": "更多操作",
       "label": "{{name}} 的更多操作",
       "configDir": "使用其他配置目录…",
       "reveal": "在访达中显示配置目录",
