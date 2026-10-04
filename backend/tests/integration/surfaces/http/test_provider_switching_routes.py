@@ -89,12 +89,13 @@ def test_a_rename_keeps_the_uid_and_a_taken_name_is_refused(tmp_path, monkeypatc
     with _client(app) as c:
         uid = _new(c, _anthropic_body("acme"))
         _new(c, _anthropic_body("taken"))
-        ref = c.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
 
         renamed = c.patch(f"/api/v1/resources/{uid}", json={"name": "acme-eu"})
         assert renamed.status_code == 200, renamed.text
         assert renamed.json()["uid"] == uid and renamed.json()["name"] == "acme-eu"
-        assert c.get(f"/api/v1/providers/{uid}").json()["secret_ref"] == ref
+        # The key it owns follows the name (spec secret "Name a resource's secret
+        # after the resource and its slot").
+        assert c.get(f"/api/v1/providers/{uid}").json()["secret_ref"] == "provider/acme-eu/key"
         assert [
             (e["details"]["from"], e["details"]["to"]) for e in _audit(c, "resource_renamed")
         ] == [("acme", "acme-eu")]

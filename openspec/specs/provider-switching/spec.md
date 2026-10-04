@@ -553,12 +553,14 @@ the `resource_updated` audit event provider updates already emit.
 - **WHEN** it is read back, then curated with `models: ["opus"]`, then patched with `models: []`,
 - **THEN** it reports `[]` — no restriction, the endpoint's whole catalogue — both at creation and after the `[]` patch, which clears the curated set.
 
-### Requirement: Rename a connection without moving anything else
+### Requirement: Rename a connection without moving anything but its own secret
 A connection MUST be renamable through the framework's own kind-agnostic route — the `name` field on
 `PATCH /api/v1/resources/{uid}` — and from the connection's edit dialog, which calls that
 route; this kind MUST NOT serve a rename route of its own. The
-operation MUST change the label and NOTHING else: the resource keeps its `uid`, its `secret_ref`
-MUST be left where it is (the ref is an opaque address, never derived from the name), the
+operation MUST change the label and nothing else the label names: the resource keeps its `uid`, a
+`secret_ref` the connection owns moves to the ref named for the new name (`provider/<new name>/key`,
+spec [secret](../secret/spec.md) "Name a resource's secret after the resource and its slot") with
+the secret readable there and nothing left at the old ref, a shared ref stays where it is, the
 `audit_log` rows MUST NOT be repointed — they follow the resource by uid and go on spelling the name
 each event carried when it happened — and a connection an agent runs on MUST NOT be re-projected, because the
 projected `apiKeyHelper` cites the agent's uid. Codex's provider label (`Coffer (<name>)`) is cosmetic and
@@ -574,7 +576,7 @@ is the uid.
 #### Scenario: rename a connection and keep its secret, audit trail and projection
 - **GIVEN** a connection `acme` with an inline secret, which a registered Claude Code agent runs on,
 - **WHEN** `PATCH /api/v1/resources/<uid> {"name": "acme-eu"}` is called,
-- **THEN** the connection keeps the same `uid` and answers there under the label `acme-eu`, its `secret_ref` is unchanged with the secret still readable at it, the agent's projected `apiKeyHelper` is byte-for-byte what it was (it names the uid), and the whole history — including the rows recorded before the rename, which still spell the old name — comes back when querying the audit log by uid.
+- **THEN** the connection keeps the same `uid` and answers there under the label `acme-eu`, its `secret_ref` is `provider/acme-eu/key` with the secret readable there and nothing at `provider/acme/key`, the agent's projected `apiKeyHelper` is byte-for-byte what it was (it names the uid), and the whole history — including the rows recorded before the rename, which still spell the old name — comes back when querying the audit log by uid.
 #### Scenario: reject a rename onto a name another connection already uses
 - **GIVEN** two connections `acme` and `taken`,
 - **WHEN** `acme` is renamed to `taken`,
