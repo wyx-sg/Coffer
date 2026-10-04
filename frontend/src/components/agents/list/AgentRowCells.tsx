@@ -13,14 +13,15 @@ import { AgentBadge } from "@/components/agent/AgentBadge";
 import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
 import { agentTabPath, type AgentTab } from "@/lib/agents/routes";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
-import type { AgentTypeOut } from "@/lib/api/agents";
+import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
 import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
 import { useAgentPending } from "@/lib/hooks/useAgentPending";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { cn } from "@/lib/utils";
+import { useProviderLabel } from "../overview/useProviderLabel";
 import { AgentPendingStatus } from "./AgentPendingStatus";
-import { formatRelativeTime } from "./relativeTime";
 import { useAgentRowActions } from "./useAgentRowActions";
 
 const DASH = "—";
@@ -53,9 +54,32 @@ export function ConfigDirCell({ row }: { row: AgentTypeOut }) {
   );
 }
 
+/** Which provider the agent's turns go to: the Coffer connection it runs on, or its own built-in
+ *  login — the Overview tab's Provider line. With the Models feature off no connection can be
+ *  active, so it is the built-in login. */
+function ProviderLabel({ agent }: { agent: AgentOut }) {
+  const { t } = useTranslation();
+  const models = useFeatureEnabled("models") === true;
+  const label = useProviderLabel(agent);
+  const text = label ?? (models ? null : t(`agents.overviewTab.model.builtin.${agent.type}`));
+  if (!text) return <span className="text-xs text-text-subtle">{DASH}</span>;
+  return <span className="block truncate whitespace-nowrap text-xs text-text">{text}</span>;
+}
+
+function RegisteredProvider({ uid }: { uid: string }) {
+  const agent = useAgent(uid).data;
+  if (!agent) return <span className="text-xs text-text">{DASH}</span>;
+  return <ProviderLabel agent={agent} />;
+}
+
+export function ProviderCell({ uid }: { uid: string | null }) {
+  if (!uid) return <span className="text-xs text-text">{DASH}</span>;
+  return <RegisteredProvider uid={uid} />;
+}
+
 /** The agent's default model. On a Coffer connection that is the agent's binding; on its own
- *  login it is what the agent's own config names — and when that names none, the agent chooses
- *  for itself, which is said in words rather than guessed from the first catalogue entry. */
+ *  login it is what the agent's own config names — and when that names none, the agent runs its
+ *  built-in default, which is said in words rather than guessed from the first catalogue entry. */
 export function ModelCell({ uid, type }: { uid: string | null; type: AgentTypeOut["type"] }) {
   const { t } = useTranslation();
   const agent = useAgent(uid ?? "").data;
@@ -63,10 +87,13 @@ export function ModelCell({ uid, type }: { uid: string | null; type: AgentTypeOu
   const own = useAgentDefaultModel(onConnection ? "" : type).data ?? null;
   if (!uid || !agent) return <span className="font-mono text-xs text-text">{DASH}</span>;
   const model = onConnection ? agent.model : own;
-  if (model) return <span className="block truncate whitespace-nowrap font-mono text-xs text-text">{model}</span>;
+  if (model)
+    return (
+      <span className="block truncate whitespace-nowrap font-mono text-xs text-text">{model}</span>
+    );
   return (
     <span className="whitespace-nowrap text-xs text-text-subtle">
-      {onConnection ? DASH : t("agents.list.autoModel")}
+      {onConnection ? DASH : t("agents.list.builtinDefault")}
     </span>
   );
 }
@@ -108,19 +135,15 @@ export function CountCell({ row, kind }: { row: AgentTypeOut; kind: CountKind })
 
 /** The muted line under the state word: what the state means for this agent. */
 function CofferDetail({ row, state }: { row: AgentTypeOut; state: AgentRowState }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const uid = row.uid ?? "";
   const parts = useAgentConnection(uid).data?.parts;
   const hook = useAgentHooks(uid).data?.coffer_hook;
   const dir = abbreviateHomePath(row.config_dir);
   switch (state) {
+    // The word says it all; when the hook last fired is on the agent's Hooks tab.
     case "connected":
-      if (!parts?.some((p) => p.key === "memory_hook")) return null;
-      return hook?.last_fired_at
-        ? t("agents.list.detail.lastDelivery", {
-            when: formatRelativeTime(hook.last_fired_at, i18n.language),
-          })
-        : t("agents.list.detail.noDelivery");
+      return null;
     case "needs_repair": {
       const missing = (parts ?? []).filter((p) => !p.installed).map((p) => p.key);
       return missing

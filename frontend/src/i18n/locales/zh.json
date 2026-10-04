@@ -2219,10 +2219,7 @@
           "mcpIn": "<code>coffer</code>，位于 <path>{{file}}</path>",
           "notIn": "不在 <path>{{file}}</path> 中",
           "hookIn_one": "{{count}} 个事件，位于 <path>{{file}}</path>",
-          "hookIn_other": "{{count}} 个事件，位于 <path>{{file}}</path>",
-          "lastFired": " · {{age}}前触发过",
-          "lastFiredNow": " · 刚刚触发过",
-          "neverFired": " · 从未触发"
+          "hookIn_other": "{{count}} 个事件，位于 <path>{{file}}</path>"
         },
         "health": {
           "current": "最新",
@@ -2486,14 +2483,14 @@
     "list": {
       "subtitle": "这台 Mac 上的 Claude Code 和 Codex，以及通过 Coffer 送达各自的内容。",
       "connectBoth": "全部连接",
-      "countsLabel": "数量是什么意思",
       "countsHelp": "数量是通过 Coffer 实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面（MCP 服务器、技能）。",
       "empty": "没有可显示的智能体。",
       "col": {
         "plugins": "插件",
         "agent": "智能体",
         "configDir": "配置目录",
-        "model": "模型",
+        "provider": "提供商",
+        "model": "默认模型",
         "skills": "技能",
         "mcp": "MCP",
         "coffer": "Coffer",
@@ -2502,10 +2499,8 @@
       "sub": {
         "version": "v{{version}}"
       },
-      "autoModel": "由智能体自动选择",
+      "builtinDefault": "内置默认",
       "detail": {
-        "lastDelivery": "上次投递 {{when}}",
-        "noDelivery": "尚未投递",
         "mcpMissing": "缺少 MCP 条目",
         "hookStale": "记忆钩子已过期",
         "hookMissing": "记忆钩子未写入",

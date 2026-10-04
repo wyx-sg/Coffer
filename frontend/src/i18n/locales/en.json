@@ -2219,10 +2219,7 @@
           "mcpIn": "<code>coffer</code> in <path>{{file}}</path>",
           "notIn": "Not in <path>{{file}}</path>",
           "hookIn_one": "{{count}} event in <path>{{file}}</path>",
-          "hookIn_other": "{{count}} events in <path>{{file}}</path>",
-          "lastFired": " · fired {{age}} ago",
-          "lastFiredNow": " · fired just now",
-          "neverFired": " · never fired"
+          "hookIn_other": "{{count}} events in <path>{{file}}</path>"
         },
         "health": {
           "current": "Current",
@@ -2486,14 +2483,14 @@
     "list": {
       "subtitle": "Claude Code and Codex on this Mac, and what reaches each through Coffer.",
       "connectBoth": "Connect both",
-      "countsLabel": "What the counts mean",
       "countsHelp": "Counts are what reaches each agent through Coffer. Choose who gets a resource on its own page (MCP servers, Skills).",
       "empty": "No agents to show.",
       "col": {
         "plugins": "Plugins",
         "agent": "Agent",
         "configDir": "Config directory",
-        "model": "Model",
+        "provider": "Provider",
+        "model": "Default model",
         "skills": "Skills",
         "mcp": "MCP",
         "coffer": "Coffer",
@@ -2502,10 +2499,8 @@
       "sub": {
         "version": "v{{version}}"
       },
-      "autoModel": "Chosen by the agent",
+      "builtinDefault": "Built-in default",
       "detail": {
-        "lastDelivery": "Last delivery {{when}}",
-        "noDelivery": "No delivery yet",
         "mcpMissing": "MCP entry missing",
         "hookStale": "Memory hook is out of date",
         "hookMissing": "Memory hook not written",

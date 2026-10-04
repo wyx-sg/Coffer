@@ -200,7 +200,7 @@ describe("AgentOverviewTab — connection card", () => {
     expect(screen.getByText("MCP entry")).toBeInTheDocument();
     expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
     expect(screen.getByText("Memory hook")).toBeInTheDocument();
-    expect(screen.getByText(/fired 2h ago/)).toBeInTheDocument();
+    expect(screen.queryByText(/fired/)).toBeNull();
     expect(screen.getAllByText("Current")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /Connect|Repair|Turn on|Disconnect/ })).toBeNull();
   });

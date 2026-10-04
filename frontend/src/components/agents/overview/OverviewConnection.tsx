@@ -19,7 +19,6 @@ import type { AgentRowState } from "@/lib/agents/rowState";
 import type { AgentOut, AgentTypeOut, CofferConnection, CofferHook } from "@/lib/api/agents";
 
 import type { OverviewActions } from "../AgentOverviewTab";
-import { formatLastFired } from "./age";
 import {
   connectionBodyKey,
   hookAwaitsApproval,
@@ -126,22 +125,19 @@ function HookWhere({
   file: string;
   installed: boolean;
 }) {
-  const { t } = useTranslation();
   if (!installed || !hook) {
     return (
       <Trans i18nKey={`${K}.part.notIn`} values={{ file }} components={{ path: <InlinePath /> }} />
     );
   }
+  // When it last fired is the Hooks tab's to say; this row says where the hook is.
   return (
-    <>
-      <Trans
-        i18nKey={`${K}.part.hookIn`}
-        count={hookEventCount(hook)}
-        values={{ file }}
-        components={{ path: <InlinePath /> }}
-      />
-      {formatLastFired(t, hook.last_fired_at)}
-    </>
+    <Trans
+      i18nKey={`${K}.part.hookIn`}
+      count={hookEventCount(hook)}
+      values={{ file }}
+      components={{ path: <InlinePath /> }}
+    />
   );
 }
 
