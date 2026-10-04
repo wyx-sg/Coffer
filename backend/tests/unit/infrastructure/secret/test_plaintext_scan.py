@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.infrastructure.secret.plaintext_scan import find_in_text
+from coffer.infrastructure.secret.plaintext_scan import find_in_text, mask_line
 
 
 @pytest.mark.acceptance(
@@ -36,3 +36,16 @@ def test_assigned_literals_are_still_reported() -> None:
 def test_a_quoted_literal_with_punctuation_is_still_reported() -> None:
     value = "a(b)c,d;" + "e[f]g"
     assert find_in_text(f'secret: "{value}"') == [(1, "secret")]
+
+
+TOKEN = "ghp_" + "Ab3" * 12
+
+
+def test_a_line_keeps_its_length_and_masks_every_value() -> None:
+    raw = f'API_KEY="{FAKE}"  # and {TOKEN}'
+    text, values = mask_line(raw)
+    assert len(text) == len(raw)
+    assert FAKE not in text and TOKEN[4:] not in text
+    assert [v.key for v in values] == ["API_KEY", "token"]
+    assert text[values[0].start : values[0].end] == "•" * len(FAKE)
+    assert text.startswith('API_KEY="') and "# and ghp_" in text

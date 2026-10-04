@@ -197,6 +197,57 @@ class RollbackPlanOut(BaseModel):
     kept: list[str]
 
 
+class ValueShapeOut(BaseModel):
+    """What a masked value looks like, never what it is."""
+
+    length: int
+    classes: list[Literal["lower", "upper", "digit", "symbol"]]
+    #: A well-known token format's public prefix (``ghp_``, ``sk-``) or a
+    #: URL's scheme; the masked text keeps it.
+    prefix: str | None = None
+    #: ``reference``: names joined by dots, such as an environment-variable
+    #: read; ``placeholder``: holds a placeholder ``word``; ``repeated``: one
+    #: or two characters over and over.
+    hint: Literal["reference", "placeholder", "repeated"] | None = None
+    word: str | None = None
+
+
+class MaskedValueOut(BaseModel):
+    """One masked value on a line, ``[start, end)`` in the masked text."""
+
+    start: int
+    end: int
+    key: str
+    shape: ValueShapeOut
+
+
+class MaskedLineOut(BaseModel):
+    number: int
+    #: The line with every plaintext value replaced by ``•`` (same length).
+    text: str
+    values: list[MaskedValueOut] = []
+
+
+class PlaintextContextOut(BaseModel):
+    """A place the last round found a plaintext secret, in its file: the lines
+    around it with every value masked, whether the remote holds the file
+    (``added`` / ``modified``) and the flagged line already, and for a
+    modified file its masked change against the remote's copy. Never a
+    value."""
+
+    path: str
+    line: int
+    key: str
+    change: Literal["added", "modified"]
+    on_remote: bool
+    lines: list[MaskedLineOut]
+    #: Unified diff against the remote's copy, masked; ``None`` for an added
+    #: file or one too large to show line by line.
+    diff: str | None = None
+    added: int = 0
+    removed: int = 0
+
+
 __all__ = [
     "AgentHandoffOut",
     "AreaCountOut",
@@ -213,7 +264,11 @@ __all__ = [
     "JoinChoicesIn",
     "JoinChoicesOut",
     "JoinPreviewOut",
+    "MaskedLineOut",
+    "MaskedValueOut",
+    "PlaintextContextOut",
     "RollbackPlanOut",
     "StopStateOut",
     "StoppedRoundOut",
+    "ValueShapeOut",
 ]

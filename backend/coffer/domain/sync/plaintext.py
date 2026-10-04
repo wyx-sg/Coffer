@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from coffer.domain.plaintext_shape import MaskedValue
+
 
 @dataclass(frozen=True)
 class PlaintextFinding:
@@ -34,4 +36,32 @@ class PlaintextFinding:
     current: bool = True
 
 
-__all__ = ["PlaintextFinding"]
+@dataclass(frozen=True)
+class MaskedLine:
+    """One line of a file as the person may see it: every plaintext value on
+    it masked (spec vault-sync "Show a plaintext finding in its file")."""
+
+    number: int
+    text: str
+    values: tuple[MaskedValue, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlaintextContext:
+    """A finding in its file, computed when asked and never stored.
+
+    ``change`` is ``added`` when the remote does not hold the file and
+    ``modified`` when it does; ``on_remote`` says the flagged line is already
+    in the remote's copy. ``diff`` is the file's change against the remote's
+    copy, masked line by line, for a ``modified`` file small enough to show."""
+
+    finding: PlaintextFinding
+    change: str
+    on_remote: bool
+    lines: tuple[MaskedLine, ...]
+    diff: str | None = None
+    added: int = 0
+    removed: int = 0
+
+
+__all__ = ["MaskedLine", "PlaintextContext", "PlaintextFinding"]

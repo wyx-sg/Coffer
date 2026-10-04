@@ -14,9 +14,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coffer.application.sync import round_plaintext_context
 from coffer.domain.audit import AuditEventType
 from coffer.domain.sync.errors import SyncNoPlaintextFound
 from coffer.domain.sync.handoffs import plaintext_handoff
+from coffer.domain.sync.plaintext import PlaintextContext
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -39,12 +41,25 @@ class PlaintextMixin:
     def plaintext_handoff(self, last: RoundRecord) -> str | None:
         return plaintext_handoff(vault=str(self._vault_path()), findings=last.plaintext)
 
-    async def push_anyway(self, *, actor: str) -> RoundRecord:
-        """Allow what the last round found, audit it, and run a round."""
+    async def _last_plaintext(self) -> RoundRecord:
         found = await self._history.recent(1)
         last = found[0] if found else None
         if last is None or last.status is not RoundStatus.PLAINTEXT_FOUND or not last.plaintext:
             raise SyncNoPlaintextFound()
+        return last
+
+    async def plaintext_context(self, path: str, line: int) -> PlaintextContext:
+        """One place the last round found, in its file with every value masked
+        (spec vault-sync "Show a plaintext finding in its file"); nothing is
+        stored, logged or audited."""
+        last = await self._last_plaintext()
+        return await asyncio.to_thread(
+            round_plaintext_context.context, self._engine.d, last, path, line
+        )
+
+    async def push_anyway(self, *, actor: str) -> RoundRecord:
+        """Allow what the last round found, audit it, and run a round."""
+        last = await self._last_plaintext()
         state = self._engine.d.state
         await asyncio.to_thread(state.allow_plaintext, [f.blob for f in last.plaintext])
         await self._audit.record(

@@ -73,6 +73,17 @@ class SyncRoundDiffUnavailable(CofferError):  # noqa: N818
         super().__init__("this round's file versions are no longer available")
 
 
+class SyncPlaintextNotListed(CofferError):  # noqa: N818
+    """A plaintext finding's context asked for a place the last round did not
+    find in a current file. Maps to 404."""
+
+    code = "SYNC_PLAINTEXT_NOT_LISTED"
+
+    def __init__(self, path: str, line: int) -> None:
+        super().__init__(f"the last round found no plaintext secret at {path}, line {line}")
+        self.path = path
+
+
 class SyncNoPlaintextFound(CofferError):  # noqa: N818
     """ "Push anyway" when the last round found no plaintext secret. Maps to 409."""
 
@@ -174,6 +185,7 @@ __all__ = [
     "SyncNoPlaintextFound",
     "SyncNoRemote",
     "SyncNothingToRestore",
+    "SyncPlaintextNotListed",
     "SyncRemoteExists",
     "SyncRoundDiffUnavailable",
     "SyncRoundFileNotListed",

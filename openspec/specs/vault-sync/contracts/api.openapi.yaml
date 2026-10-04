@@ -669,6 +669,64 @@ paths:
       summary: Restore Machine
       tags:
       - sync
+  /api/v1/sync/plaintext/context:
+    get:
+      description: |-
+        One place the last round found, in its file: the lines around it with
+        every plaintext value masked and its shape in its place, and the file's
+        masked change against the remote's copy. Computed when asked, never
+        stored, logged or audited. 409 ``SYNC_NO_PLAINTEXT_FOUND`` unless the last
+        round is ``plaintext_found``; 404 ``SYNC_PLAINTEXT_NOT_LISTED`` for a place
+        it did not find.
+      operationId: plaintext_context_api_v1_sync_plaintext_context_get
+      parameters:
+      - description: A file the last round found a plaintext secret in.
+        in: query
+        name: path
+        required: true
+        schema:
+          description: A file the last round found a plaintext secret in.
+          title: Path
+          type: string
+      - description: The line it was found on.
+        in: query
+        name: line
+        required: true
+        schema:
+          description: The line it was found on.
+          minimum: 1
+          title: Line
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaintextContextOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Plaintext Context
+      tags:
+      - sync
   /api/v1/sync/plaintext/push-anyway:
     post:
       description: |-
@@ -2242,6 +2300,103 @@ components:
       - name
       title: MachineRenameIn
       type: object
+    MaskedLineOut:
+      properties:
+        number:
+          title: Number
+          type: integer
+        text:
+          title: Text
+          type: string
+        values:
+          default: []
+          items:
+            $ref: '#/components/schemas/MaskedValueOut'
+          title: Values
+          type: array
+      required:
+      - number
+      - text
+      - values
+      title: MaskedLineOut
+      type: object
+    MaskedValueOut:
+      description: One masked value on a line, ``[start, end)`` in the masked text.
+      properties:
+        end:
+          title: End
+          type: integer
+        key:
+          title: Key
+          type: string
+        shape:
+          $ref: '#/components/schemas/ValueShapeOut'
+        start:
+          title: Start
+          type: integer
+      required:
+      - start
+      - end
+      - key
+      - shape
+      title: MaskedValueOut
+      type: object
+    PlaintextContextOut:
+      description: |-
+        A place the last round found a plaintext secret, in its file: the lines
+        around it with every value masked, whether the remote holds the file
+        (``added`` / ``modified``) and the flagged line already, and for a
+        modified file its masked change against the remote's copy. Never a
+        value.
+      properties:
+        added:
+          default: 0
+          title: Added
+          type: integer
+        change:
+          enum:
+          - added
+          - modified
+          title: Change
+          type: string
+        diff:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Diff
+        key:
+          title: Key
+          type: string
+        line:
+          title: Line
+          type: integer
+        lines:
+          items:
+            $ref: '#/components/schemas/MaskedLineOut'
+          title: Lines
+          type: array
+        on_remote:
+          title: On Remote
+          type: boolean
+        path:
+          title: Path
+          type: string
+        removed:
+          default: 0
+          title: Removed
+          type: integer
+      required:
+      - path
+      - line
+      - key
+      - change
+      - on_remote
+      - lines
+      - diff
+      - added
+      - removed
+      title: PlaintextContextOut
+      type: object
     PlaintextFindingOut:
       description: |-
         Where a round found a plaintext secret: the file, the line and the name
@@ -2936,6 +3091,49 @@ components:
       - vault_real_path
       - default_vault_path
       title: SyncStatusOut
+      type: object
+    ValueShapeOut:
+      description: What a masked value looks like, never what it is.
+      properties:
+        classes:
+          items:
+            enum:
+            - lower
+            - upper
+            - digit
+            - symbol
+            type: string
+          title: Classes
+          type: array
+        hint:
+          anyOf:
+          - enum:
+            - reference
+            - placeholder
+            - repeated
+            type: string
+          - type: 'null'
+          title: Hint
+        length:
+          title: Length
+          type: integer
+        prefix:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prefix
+        word:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Word
+      required:
+      - length
+      - classes
+      - prefix
+      - hint
+      - word
+      title: ValueShapeOut
       type: object
     VaultMoveIn:
       properties:

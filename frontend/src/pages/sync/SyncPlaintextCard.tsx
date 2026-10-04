@@ -3,9 +3,11 @@
 // A round pushed nothing because a file it would publish holds a plaintext
 // secret (spec vault-sync "Refuse to push a plaintext secret"). The card names
 // each place — file, line, and the key the value is assigned to, never the
-// value — and offers the way out: the agent hand-off that moves each value into
-// a secret, and one more way out the detection needs, because it can be wrong:
-// "Push anyway…", confirmed first and audited.
+// value — each opening to its masked lines so the person can judge it (spec
+// vault-sync "Show a plaintext finding in its file") — and offers the way out:
+// the agent hand-off that moves each value into a secret, and one more way out
+// the detection needs, because it can be wrong: "Push anyway…", confirmed first
+// and audited.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeySquare, Upload } from "lucide-react";
@@ -15,6 +17,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { SyncProblem } from "@/lib/api/sync";
 import { usePushAnyway } from "@/lib/hooks/useSync";
 import { SyncBannerCard } from "./SyncBanner";
+import { PlaintextPlace } from "./SyncPlaintextPlace";
 import { Actions, Body, Handoff } from "./SyncProblemParts";
 
 /** How many places the card lists; the hand-off prompt carries the rest. */
@@ -26,23 +29,13 @@ interface Props {
 }
 
 function Places({ places }: { places: NonNullable<SyncProblem["plaintext"]> }) {
-  const { t } = useTranslation();
   return (
     <ul
       className="mt-1 flex flex-col gap-1 rounded-md border border-border-subtle bg-surface-raised/70 px-2.5 py-2 text-xs"
       data-testid="sync-plaintext-places"
     >
       {places.slice(0, MAX_PLACES).map((f) => (
-        <li key={`${f.path}:${f.line}:${f.key}`} className="flex flex-wrap gap-x-2">
-          <code className="font-mono text-xs text-text-muted">
-            {t("sync.problem.plaintext_found.where", { path: f.path, line: f.line })}
-          </code>
-          <span className="text-text-muted">
-            {f.key === "token"
-              ? t("sync.problem.plaintext_found.token")
-              : t("sync.problem.plaintext_found.key", { key: f.key })}
-          </span>
-        </li>
+        <PlaintextPlace key={`${f.path}:${f.line}:${f.key}`} finding={f} />
       ))}
       {places.length > MAX_PLACES ? (
         <li className="text-text-subtle">+{places.length - MAX_PLACES}</li>

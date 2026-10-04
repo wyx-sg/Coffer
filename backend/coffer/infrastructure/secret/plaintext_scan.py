@@ -4,6 +4,9 @@ Spec vault-sync "Refuse to push a plaintext secret" reads a file's text for an
 assignment whose name says secret (``DB_PASSWORD=…``, ``api_key: …``) or a
 well-known token shape. A finding names where the value is, **never the value**.
 
+``mask_line`` shows a line with every such value masked, and each value's
+shape in its place (spec vault-sync "Show a plaintext finding in its file").
+
 ``skills_citing_secrets`` is a literal search of the skill master store for
 ``coffer://secret/<name>`` references.
 """
@@ -13,6 +16,7 @@ from __future__ import annotations
 import pathlib
 import re
 
+from coffer.domain.plaintext_shape import MaskedValue, mask, shape_of
 from coffer.domain.secrets import SECRET_URI_PREFIX, cited_secret_names
 
 _SECRET_KEY = re.compile(
@@ -77,6 +81,20 @@ def find_in_text(text: str) -> list[tuple[int, str]]:
         for n, raw in enumerate(text.splitlines(), start=1)
         for key, _value, _s, _e in _line_hits(raw)
     ]
+
+
+def mask_line(raw: str) -> tuple[str, tuple[MaskedValue, ...]]:
+    """``raw`` with each plaintext value on it masked, and where each one is
+    with its shape. The masked text keeps ``raw``'s length; the value itself
+    is not returned."""
+    hits = sorted(_line_hits(raw), key=lambda h: h[2])
+    out: list[MaskedValue] = []
+    text = raw
+    for key, value, start, end in hits:
+        shape = shape_of(value)
+        text = text[:start] + mask(value, shape) + text[end:]
+        out.append(MaskedValue(start, end, key or "token", shape))
+    return text, tuple(out)
 
 
 def skills_citing_secrets(skills_root: pathlib.Path) -> dict[str, set[str]]:
