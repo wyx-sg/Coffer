@@ -99,7 +99,7 @@ describe("the collection tree and the document pane", () => {
     fireEvent.click(within(nav).getByRole("button", { name: "account" }));
     expect(await within(nav).findByRole("button", { name: "session.md" })).toBeInTheDocument();
     // The inbox is its own node, holding the waiting item.
-    expect(within(nav).getByRole("button", { name: /Inbox/ })).toHaveTextContent("1");
+    expect(within(nav).getByRole("button", { name: /^Inbox/ })).toHaveTextContent("1");
 
     // A document offers Edit, open-in-editor, reveal and delete.
     fireEvent.click(within(nav).getByRole("button", { name: "gateway.md" }));
@@ -111,11 +111,38 @@ describe("the collection tree and the document pane", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
     // The inbox item offers neither Edit nor delete.
-    fireEvent.click(within(nav).getByRole("button", { name: /Inbox/ }));
+    fireEvent.click(within(nav).getByRole("button", { name: /^Inbox/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Login retry/ }));
     expect(await screen.findByText("Retries back off after three failures.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("button", { name: /More actions/ })).toBeNull();
+  });
+
+  test("a collection opened from Recent changes stays open when a document in it is opened", async () => {
+    renderKnowledge("/knowledge");
+    fireEvent.click(await within(tree()).findByRole("button", { name: `Expand ${NAME}` }));
+    fireEvent.click(await within(tree()).findByRole("button", { name: "gateway.md" }));
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(within(tree()).getByRole("button", { name: "gateway.md" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    // Its chevron still closes it.
+    fireEvent.click(within(tree()).getByRole("button", { name: `Collapse ${NAME}` }));
+    expect(within(tree()).queryByRole("button", { name: "gateway.md" })).toBeNull();
+  });
+
+  test("the Inbox list closes on its chevron and the collection stays open", async () => {
+    renderKnowledge(`/knowledge/${UID}/inbox`);
+    const item = await within(tree()).findByRole("button", { name: ITEM.path.split("/").pop() });
+    expect(item).toBeInTheDocument();
+    fireEvent.click(within(tree()).getByRole("button", { name: "Collapse Inbox" }));
+    expect(within(tree()).queryByRole("button", { name: ITEM.path.split("/").pop() })).toBeNull();
+    expect(within(tree()).getByRole("button", { name: "gateway.md" })).toBeInTheDocument();
+    fireEvent.click(within(tree()).getByRole("button", { name: "Expand Inbox" }));
+    expect(
+      await within(tree()).findByRole("button", { name: ITEM.path.split("/").pop() }),
+    ).toBeInTheDocument();
   });
 
   test("a deep link opens the folders on the way to its document", async () => {
@@ -134,7 +161,7 @@ describe("the collection tree and the document pane", () => {
       withCurateSchedule("claude-haiku");
       renderKnowledge(`/knowledge/${UID}`);
       const stats = await screen.findByTestId("knowledge-stats");
-      expect(within(tree()).getByRole("button", { name: /Inbox/ })).toHaveTextContent("1");
+      expect(within(tree()).getByRole("button", { name: /^Inbox/ })).toHaveTextContent("1");
       expect(await screen.findByTestId("knowledge-automatic")).toBeInTheDocument();
       // The collection page's properties: documents, what waits, when it last ran.
       expect(within(stats).getByText("1 waiting")).toBeInTheDocument();
@@ -186,7 +213,7 @@ describe("with Coffer's model not set", () => {
       screen.getByText("Documents you and your agents write together. Every agent can read them."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
-    expect(within(tree()).queryByRole("button", { name: /Inbox/ })).toBeNull();
+    expect(within(tree()).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
     expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
     expect(screen.getByTestId("knowledge-stats")).not.toHaveTextContent("waiting");

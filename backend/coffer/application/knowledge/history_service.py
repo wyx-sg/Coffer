@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import dataclasses
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge import collection_writes
@@ -73,6 +74,15 @@ _INBOX_SEGMENT = f"/{paths.INBOX_DIR_NAME}/"
 #: The pass outcomes that promoted the item as it stood instead of merging it
 #: (spec knowledge "Report every pass outcome as a status").
 _PROMOTING_STATUSES = frozenset({"no_model", "too_large", "truncated"})
+
+
+def _instant(stamp: str) -> float:
+    """An item's ``created_at`` as a sortable number; unreadable sorts oldest."""
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return 0.0
+    return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).timestamp()
 
 
 def _is_document(path: str) -> bool:
@@ -275,6 +285,9 @@ class KnowledgeHistoryService:
                             submitted_at=found.created_at,
                         )
                     )
+        # Newest submitted first across every collection, like the timeline beside
+        # it; the inbox's own oldest-first order is curation's, not the reader's.
+        out.sort(key=lambda w: _instant(w.submitted_at), reverse=True)
         return out
 
     async def _authors(self, row: Resource) -> dict[str, str]:

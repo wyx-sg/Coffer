@@ -508,7 +508,9 @@ async def test_a_save_over_a_change_it_did_not_see_is_refused(world: _World) -> 
     spec="knowledge",
     scenario="recent changes lists passes and edits across collections with the waiting items",
 )
-async def test_recent_changes_across_collections_with_the_waiting_items(world: _World) -> None:
+async def test_recent_changes_across_collections_with_the_waiting_items(
+    world: _World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
     await world.knowledge.create_collection("personal", actor=ACTOR_USER)
     note = fs.write_file(
@@ -538,6 +540,8 @@ async def test_recent_changes_across_collections_with_the_waiting_items(world: _
         ],
     )
     await _save(world, note, "one\ntwo\nthree")
+    stamps = iter(["2026-09-01T10:00:00+00:00", "2026-09-02T10:00:00+00:00"])
+    monkeypatch.setattr(inbox, "timestamp", lambda: next(stamps))
     for title in ("First waiting", "Second waiting"):
         await world.knowledge.submit(
             collection="shopee",
@@ -567,9 +571,10 @@ async def test_recent_changes_across_collections_with_the_waiting_items(world: _
     assert (changed.status, changed.added, changed.removed) == ("modified", 2, 0)
     # Submissions still waiting are not changes; they are the waiting items.
     assert all(c.meta.operation != "submit" for c in feed.changes)
-    assert sorted((w.title, w.submitted_by) for w in feed.waiting) == [
-        ("First waiting", "claude-code"),
+    # Newest submitted first, like the timeline.
+    assert [(w.title, w.submitted_by) for w in feed.waiting] == [
         ("Second waiting", "claude-code"),
+        ("First waiting", "claude-code"),
     ]
 
     shopee = await world.histories.changes(collection="shopee")

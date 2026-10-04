@@ -15,6 +15,10 @@ switch is logged once so a slow search has a visible cause.
 because a user's ``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on
 underneath us and start answering with material still waiting in a
 collection's ``.inbox/`` (see "Hide dot-prefixed entries except the inbox").
+``--no-hidden`` alone is not enough: the vault's ``.git/info/exclude`` carries
+``!/knowledge/**/.inbox`` so the inbox is tracked, and ripgrep lets a gitignore
+whitelist re-admit a hidden directory. The ``!.*`` glob is an override, which
+outranks every ignore file, so it is what actually keeps dot-entries out.
 """
 
 from __future__ import annotations
@@ -77,6 +81,8 @@ class RipgrepSearch:
             rg,
             "--json",
             "--no-hidden",
+            "--glob",
+            "!.*",
             "--max-count",
             # One past the cap per file, so "more exist" is visible.
             str(cap + 1),
