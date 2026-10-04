@@ -10,14 +10,11 @@ a round. A file changed since is a new blob and is read again.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coffer.application.sync import round_plaintext_context
 from coffer.domain.audit import AuditEventType
 from coffer.domain.sync.errors import SyncNoPlaintextFound
-from coffer.domain.sync.handoffs import plaintext_handoff
 from coffer.domain.sync.plaintext import PlaintextContext
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
 
@@ -33,13 +30,9 @@ class PlaintextMixin:
     _engine: RoundEngine
     _history: RoundHistoryPort
     _audit: AuditService
-    _vault_path: Callable[[], Path]
 
     async def run(self, *, trigger: str = "manual") -> RoundRecord:  # pragma: no cover
         raise NotImplementedError
-
-    def plaintext_handoff(self, last: RoundRecord) -> str | None:
-        return plaintext_handoff(vault=str(self._vault_path()), findings=last.plaintext)
 
     async def _last_plaintext(self) -> RoundRecord:
         found = await self._history.recent(1)

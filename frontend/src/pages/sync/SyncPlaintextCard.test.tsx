@@ -1,8 +1,8 @@
 // frontend/src/pages/sync/SyncPlaintextCard.test.tsx
 //
 // A round that found a plaintext secret: the card names each place (never a
-// value), carries the agent hand-off, and pushes anyway only after the
-// confirmation.
+// value), opens the Secrets page's move scoped to the flagged files, carries
+// no agent hand-off, and pushes anyway only after the confirmation.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -18,7 +18,15 @@ vi.mock("@/lib/hooks/useSync", () => ({
   usePlaintextContext: vi.fn(),
 }));
 vi.mock("@/components/handoff/AgentHandoff", () => ({
-  AgentHandoff: ({ prompt }: { prompt: string }) => <button title={prompt}>Ask an agent</button>,
+  AgentHandoff: () => <button>Ask an agent</button>,
+}));
+vi.mock("@/components/secret/ScanSecretsDialog", () => ({
+  ScanSecretsDialog: ({ open, only }: { open: boolean; only?: readonly string[] }) =>
+    open ? (
+      <div role="dialog" aria-label="Find plaintext keys">
+        {(only ?? []).join(" ")}
+      </div>
+    ) : null,
 }));
 vi.mock("./useSyncIgnore", async (orig) => ({
   ...(await orig<typeof import("./useSyncIgnore")>()),
@@ -67,7 +75,7 @@ const STATUS = makeStatus({
     message: "a plaintext secret in knowledge/team/db.md; nothing was pushed",
     secret_ref: null,
     since: null,
-    handoff: { prompt: "move each value into a Coffer secret" },
+    handoff: null,
     plaintext: [
       { path: "knowledge/team/db.md", line: 4, key: "DB_PASSWORD", current: true },
       { path: "resources/mcp/x.json", line: 7, key: "token", current: true },
@@ -99,7 +107,7 @@ function renderCard(mutate = vi.fn()) {
 describe("SyncPlaintextCard", () => {
   acceptance(
     "vault-sync",
-    "the Sync page names each place and offers the hand-off and push anyway",
+    "the Sync page names each place and offers Move into secrets and push anyway",
     () => {
       const { mutate, card } = renderCard();
       expect(card).toHaveTextContent("Nothing was pushed: 2 files hold a plaintext secret");
@@ -111,16 +119,17 @@ describe("SyncPlaintextCard", () => {
       expect(places).not.toHaveTextContent("knowledge/old.md");
       expect(within(card).queryByRole("button", { name: /retry/i })).toBeNull();
 
-      // The hand-off asks an agent to move the values; the card has no scan of its own.
-      expect(within(card).getByRole("button", { name: "Ask an agent" })).toHaveAttribute(
-        "title",
-        "move each value into a Coffer secret",
-      );
-      expect(within(card).queryByRole("button", { name: "Move into secrets…" })).toBeNull();
+      // A secret is never handed to an agent: the card moves it into secrets itself.
+      expect(within(card).queryByRole("button", { name: "Ask an agent" })).toBeNull();
+      expect(within(card).queryByRole("button", { name: /copy prompt/i })).toBeNull();
+      fireEvent.click(within(card).getByRole("button", { name: "Move into secrets…" }));
+      const move = screen.getByRole("dialog", { name: "Find plaintext keys" });
+      expect(move).toHaveTextContent("knowledge/team/db.md resources/mcp/x.json");
+      expect(move).not.toHaveTextContent("knowledge/old.md");
 
       fireEvent.click(within(card).getByRole("button", { name: "Push anyway…" }));
       expect(mutate).not.toHaveBeenCalled();
-      const dialog = screen.getByRole("dialog");
+      const dialog = screen.getByRole("dialog", { name: "Push these files anyway?" });
       expect(dialog).toHaveTextContent("records that you did in the audit log");
       fireEvent.click(within(dialog).getByRole("button", { name: "I checked it, push anyway" }));
       expect(mutate).toHaveBeenCalledTimes(1);

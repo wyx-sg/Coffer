@@ -30,16 +30,17 @@ for as long as it is the same situation, and comes back as a new item when the
 situation changes (principle: an ignored item is not a hidden one).
 
 Read off the round state and the last recorded round, only while a remote is
-configured. A conflict an agent can merge, a refused sign-in, a refused push
-and a plaintext secret carry the hand-off prompt the Sync page offers (spec
-vault-sync "Hand conflicting files to an agent", "Hand a remote's failure to
-an agent", "Refuse to push a plaintext secret").
+configured. A conflict an agent can merge, a refused sign-in and a refused
+push carry the hand-off prompt the Sync page offers (spec vault-sync "Hand
+conflicting files to an agent", "Hand a remote's failure to an agent"). A
+plaintext secret carries none (spec vault-sync "Refuse to push a plaintext
+secret"): the person moves it into secrets on the Sync page.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -60,7 +61,6 @@ class SyncStatePort(Protocol):
     async def join_choices(self) -> tuple[ConflictFile, ...]: ...
     async def last_round(self) -> RoundRecord | None: ...
     async def conflict_handoff(self) -> str | None: ...
-    def plaintext_handoff(self, last: RoundRecord) -> str | None: ...
     def git_missing_handoff(self) -> str | None: ...
 
 
@@ -158,7 +158,7 @@ class SyncAttentionSource:
         # vault's history too); the last round's problem would only repeat it.
         last = await self._sync.last_round()
         if last is not None and self._sync.git_missing_handoff() is None:
-            found = _problem_item(last, remote, self._sync.plaintext_handoff)
+            found = _problem_item(last, remote)
             if found is not None:
                 out.append(found)
         return out
@@ -175,9 +175,7 @@ def _handoff(kind: str, detail: str, remote: SyncRemote) -> str | None:
     )
 
 
-def _problem_item(
-    last: RoundRecord, remote: SyncRemote, plaintext: Callable[[RoundRecord], str | None]
-) -> AttentionItem | None:
+def _problem_item(last: RoundRecord, remote: SyncRemote) -> AttentionItem | None:
     detail = scrub_git_text(last.detail or "")
     # The same failing remote is one situation however many rounds repeat it.
     uid = fingerprint(remote.url, remote.branch)
@@ -188,11 +186,10 @@ def _problem_item(
             "Sync pushed nothing: a plaintext secret is in "
             + (", ".join(files[:3]) or "a file the round would push")
             + (f" and {len(files) - 3} more" if len(files) > 3 else "")
-            + ". Move it into a secret, or push anyway.",
+            + ". Move it into secrets, or push anyway.",
             Severity.ERROR,
             "/api/v1/sync/status",
             last.finished_at,
-            handoff=plaintext(last),
             uid=fingerprint(f"{f.path}:{f.line}:{f.key}" for f in last.plaintext if f.current),
         )
     if last.status is RoundStatus.AUTH_FAILED and APPROVAL_WAIT in detail:

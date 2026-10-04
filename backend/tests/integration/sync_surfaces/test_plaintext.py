@@ -58,16 +58,15 @@ def test_a_plaintext_secret_stops_the_round_and_is_named_without_its_value(
 
     problem = mac.run(mac.service.status()).problem
     assert problem is not None and problem.kind == "plaintext_found"
-    prompt = problem.handoff or ""
-    assert DOC in prompt and "line 4" in prompt and "DB_PASSWORD" in prompt
-    assert "coffer secret set" in prompt and "Push anyway" in prompt
-    assert VALUE not in prompt and VALUE not in problem.message
+    # A plaintext secret is never handed to an agent: no surface carries a prompt.
+    assert problem.handoff is None and VALUE not in problem.message
     items = mac.run(SyncAttentionSource(sync=mac.service).items())
     (item,) = [i for i in items if i.reason_code == "sync_plaintext_found"]
-    assert f"{DOC}:4" in item.reason and item.handoff == prompt
+    assert f"{DOC}:4" in item.reason and item.handoff is None
+    assert "Move it into secrets, or push anyway" in item.reason
     with client_for(mac) as c:
         body = c.get("/sync/status").json()["problem"]
-        assert body["kind"] == "plaintext_found" and body["handoff"]["prompt"] == prompt
+        assert body["kind"] == "plaintext_found" and body["handoff"] is None
         assert body["plaintext"] == [
             {"path": DOC, "line": 4, "key": "DB_PASSWORD", "current": True}
         ]
