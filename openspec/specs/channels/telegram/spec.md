@@ -203,7 +203,7 @@ card stays an ordinary message.
 
 #### Scenario: a group command answer is sent as an ephemeral message to the asker
 - **GIVEN** a telegram group on a Bot API server that offers ephemeral messages
-- **WHEN** the owner's `/status` answer is delivered in that group
+- **WHEN** the owner's `/help` answer is delivered in that group
 - **THEN** it is sent as an ephemeral message addressed to the owner's user id
 - **AND** a selection card in the same group is sent as an ordinary message
 
@@ -386,9 +386,11 @@ draft and keep the silent status message.
 ### Requirement: Register command menus per chat scope and language
 The transport MUST register its command menus with `setMyCommands` per chat
 scope: every command for private chats (`all_private_chats`, and the default
-scope for clients that predate scopes), and only `new`, `stop`, `model`,
-`status`, `resume` and `help` for groups (`all_group_chats`) — a group's menu
-offers what is useful to tap in front of other people. Each scope is registered
+scope for clients that predate scopes), and only `new`, `stop` and `help` for
+groups (`all_group_chats`) — the commands that control a group's own
+conversation; `model`, `dir`, `status`, `resume` and `thread` work only in a
+direct chat (see [channels](../spec.md) "Answer the conversation commands from
+any paired chat"). Each scope is registered
 twice, once with no `language_code` (the English descriptions) and once with
 `zh` (the Chinese ones), so a Chinese Telegram client shows Chinese
 descriptions. The hidden `/start` is never
@@ -397,6 +399,6 @@ listed.
 #### Scenario: private chats get every command and groups the group set, in English and Chinese
 - **GIVEN** a Telegram channel starting
 - **WHEN** it registers its menus
-- **THEN** the private-chat scope lists all nine commands and the group scope
-  lists new, stop, model, status, resume and help, each once in English and once
+- **THEN** the private-chat scope lists all eight commands and the group scope
+  lists new, stop and help, each once in English and once
   with `language_code` `zh`

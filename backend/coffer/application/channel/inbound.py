@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.bot_label import bot_handle
@@ -36,7 +36,6 @@ from coffer.application.channel.ports import (
     ModelSuggestionPort,
 )
 from coffer.application.channel.question_flow import QuestionPort, answer_message
-from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
@@ -80,9 +79,6 @@ class InboundProcessor:
         audit: AuditService,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
-        collections: CollectionCatalogPort,
-        ingest: IngestPort,
-        knowledge_enabled: Callable[[], bool] = lambda: True,
         questions: QuestionPort | None = None,
     ) -> None:
         self._peers = peers
@@ -103,9 +99,6 @@ class InboundProcessor:
             turns=turns,
             agents=agents,
             model_suggestions=model_suggestions,
-            collections=collections,
-            ingest=ingest,
-            knowledge_enabled=knowledge_enabled,
             running_in=self._running_in,
             running_in_chat=self._running_in_chat,
         )
@@ -220,13 +213,6 @@ class InboundProcessor:
         # person's own message is still intact — before the context blocks below fold
         # in, and from this message's own files.
         title_hint = conversation_title_hint(text, attachments)
-        if attachments:
-            # Remember it (owner-gated already) for a `/kb` that follows (spec channels
-            # "Save a sent document into a collection") — never the thread-history files
-            # folded in below. One slot, first file only: the ingest service takes one
-            # file per call (spec knowledge "Bound uploads and leave nothing behind on failure").
-            session = self._session(binding.resource.uid, peer.chat_id, conv_thread)
-            session.pending_document = attachments[0]
         # A command (or a near miss of one) is decided on the message's OWN text,
         # before any thread history is folded in (see ``inbound_commands``).
         if await route_slash(
@@ -362,6 +348,19 @@ class InboundProcessor:
             f"✅ Paired — you own {bot_handle(binding)}.\n"
             "Only you can use it. To use it in a group, add it there and @mention it.\n"
             f"Try a question, or {hint}.",
+        )
+        # The help card follows the confirmation (spec channels "Offer the
+        # commands as a help card"): a paired chat starts with the commands in
+        # front of it. Pairing is a direct chat, so it is the full list.
+        await self._commands.handle(
+            binding,
+            peer,
+            "/help",
+            self._session(binding.resource.uid, msg.chat_id, ""),
+            safe_send,
+            chat_kind=msg.chat_kind,
+            thread_id=msg.thread_id,
+            conversation_thread_id="",
         )
 
     # -- helpers ---------------------------------------------------------------

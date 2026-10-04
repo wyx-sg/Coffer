@@ -128,7 +128,7 @@ Each turn tells the agent it is on a chat channel: keep replies concise but quot
 
 ## Commands
 
-Nine words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
+Eight words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
 
 | Command | What it does |
 | --- | --- |
@@ -139,8 +139,9 @@ Nine words are Coffer's commands. Everything else you type — including other t
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
-| `/kb [collection]` | Save the document you just sent into a [knowledge](/guides/knowledge) collection. |
 | `/help` | List the commands, with New, Stop, Model, Status and Resume buttons. |
+
+In a group only `/new`, `/stop` and `/help` work, because they control the group's own conversation. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
 
 The full reference, with where each command works, is at [Channel commands](/reference/channel-commands).
 

@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.command_text import GROUP_DEFAULT_SUFFIX, default_cwd
+from coffer.application.channel.command_text import default_cwd
 from coffer.application.channel.new_conversation import open_fresh
 from coffer.application.channel.selection_cards import SelectionCard, dir_card, path_label
 
@@ -97,9 +97,6 @@ async def apply_dir(ctx: CommandContext, path: str | None) -> None:
         ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, cwd=path
     )
     shown = path_label(path or default_cwd(ctx.binding))
-    if ctx.group_main:
-        await ctx.say(f"📁 Directory set to {shown}{GROUP_DEFAULT_SUFFIX}.")
-        return
     if await open_fresh(ctx):
         await ctx.say(f"📁 Now in {shown} — started a fresh conversation.")
 
@@ -117,7 +114,7 @@ async def current_dir_card(ctx: CommandContext, *, page: int | None = None) -> S
 async def _show(ctx: CommandContext) -> None:
     settings = await ctx.settings()
     directories = ctx.binding.directories
-    if directories and not ctx.group_main and await ctx.show(await current_dir_card(ctx)):
+    if directories and await ctx.show(await current_dir_card(ctx)):
         return
     lines = [f"📁 Working directory: {path_label(settings.cwd)}"]
     if directories:

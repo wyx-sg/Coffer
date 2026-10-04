@@ -22,7 +22,6 @@ from coffer.application.channel.selection_cards import (
     MAX_CARD_BUTTONS,
     PAGE_SIZE,
     SelectionCard,
-    collection_card,
     dir_card,
     effort_card,
     is_page_turn,
@@ -144,34 +143,6 @@ class TestPaging:
 
         assert _choices(card) == [f"resume:c{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
         assert _nav(card) == ["page:resume:0", "page:resume:2"]
-
-    def test_the_collection_card_pages_by_the_same_rule_too(self):
-        # spec channels "Save a sent document into a collection": a `/kb`
-        # card is a third instance of the same rule, not a special case —
-        # including its own navigation namespace.
-        choices = [f"c{i}" for i in range(20)]
-
-        card = collection_card(choices=choices, page=1)
-
-        assert _choices(card) == [f"collection:c{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
-        assert _nav(card) == ["page:collection:0", "page:collection:2"]
-
-
-class TestTheCollectionCardHasNoCurrentChoice:
-    def test_a_short_list_carries_no_navigation_and_no_tick(self):
-        # Every save is a fresh decision — nothing is ever pre-ticked.
-        card = collection_card(choices=["research", "recipes"])
-
-        assert _values(card) == ["collection:research", "collection:recipes"]
-        assert not any(b.label.startswith("✓") for b in card.buttons)
-        assert card.pages == 1
-
-    def test_a_single_collection_still_renders_as_a_card_not_a_default(self):
-        # Confirm, never guess — a lone collection is still a tap (spec
-        # channels "Save a sent document into a collection").
-        card = collection_card(choices=["only-one"])
-
-        assert _values(card) == ["collection:only-one"]
 
 
 class TestTheTickStaysHonest:

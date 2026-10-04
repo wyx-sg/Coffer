@@ -191,10 +191,9 @@ async def test_a_channel_turn_reads_memory_only_while_the_memory_feature_is_on()
 
 
 def test_the_channel_gates_follow_their_own_feature_and_no_other() -> None:
-    """Memory off leaves ``/kb`` on, and knowledge off leaves the memory index
-    on: each gate asks for its own key only."""
+    """Knowledge off leaves the memory index on, and memory off turns it off:
+    each gate asks for its own key only."""
     from coffer.application.features import FeatureService
-    from coffer.domain.channel.commands import help_text
 
     class _Settings:
         def __init__(self, stored: dict[str, bool]) -> None:
@@ -211,9 +210,6 @@ def test_the_channel_gates_follow_their_own_feature_and_no_other() -> None:
 
     memory_off = FeatureService(settings=_Settings({KNOWLEDGE: True, MEMORY: False}))
     knowledge_off = FeatureService(settings=_Settings({KNOWLEDGE: False, MEMORY: True}))
-
-    assert "/kb" in help_text(knowledge=memory_off.is_enabled(KNOWLEDGE))
-    assert "/kb" not in help_text(knowledge=knowledge_off.is_enabled(KNOWLEDGE))
 
     class _Turns:
         async def index_for_turn(self, **_: Any) -> str:

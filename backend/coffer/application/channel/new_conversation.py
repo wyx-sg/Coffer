@@ -58,7 +58,7 @@ async def cmd_new(ctx: CommandContext, text: str) -> None:
         line = await settings_line(ctx.commands, await ctx.settings())
         await ctx.say(
             f"Defaults for new threads in this group: {line}\n"
-            "Send /new <agent>, /model … or /dir … here to change them."
+            "Send /new <agent> here to change the agent."
         )
         return
     await _open_and_announce(ctx)
@@ -93,7 +93,9 @@ async def _open_and_announce(ctx: CommandContext) -> None:
     """Open the fresh conversation and answer with the one-line `/new` card."""
     if await open_fresh(ctx):
         line = await settings_line(ctx.commands, await ctx.settings())
-        await ctx.show_or_say(new_card(line=line), f"🆕 New conversation · {line}")
+        await ctx.show_or_say(
+            new_card(line=line, group=ctx.chat_kind == "group"), f"🆕 New conversation · {line}"
+        )
 
 
 async def open_fresh(ctx: CommandContext) -> bool:

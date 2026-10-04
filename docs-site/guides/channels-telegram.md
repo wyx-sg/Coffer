@@ -70,8 +70,8 @@ Telegram replies are built from the agent's Markdown.
 - **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Where the server supports rich drafts, the status header sits in the draft's collapsible thinking block. In a group, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent; it is sent silently, so it does not buzz the group. A quick reply opens no status message at all.
 - **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
 - **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
-- **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help` are shown only to you.
-- **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs), `/help` **New**, **Stop**, **Model**, **Status** and **Resume**, and `/new` **Agent**, **Model** and **Dir**. The card's title is a heading or a bold first line.
+- **Private command answers** — in a group, where the server supports ephemeral messages, the answer to `/help`, and the one-line notice that a private-chat command was sent in a group, are shown only to you.
+- **Cards** — in a private chat a bare `/model`, `/dir` or `/resume` answers with an inline keyboard, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs). `/help` carries **New**, **Stop**, **Model**, **Status** and **Resume** in a private chat and only **New** and **Stop** in a group. `/new` carries **Agent**, **Model** and **Dir** in a private chat and only **Agent** in a group. The card's title is a heading or a bold first line.
 
 Coffer probes each newer Bot API surface (rich messages, drafts, rich drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
 
@@ -81,8 +81,8 @@ Coffer registers the bot's command menus with Telegram every time the channel st
 
 | Where | Commands in the menu |
 | --- | --- |
-| Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/kb`, `/help` |
-| Groups | `/new`, `/stop`, `/model`, `/status`, `/resume`, `/help` |
+| Private chats | All eight: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/help` |
+| Groups | `/new`, `/stop`, `/help` |
 
 Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
 

@@ -273,70 +273,6 @@ class FakeModelSuggestions:
         return list(self._efforts.get((agent_key, model), []))
 
 
-@dataclass
-class FakeIngestedDocument:
-    """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels "Save a
-    sent document into a collection") — only the two
-    attributes `/kb`'s confirmation message reads. ``path`` is ``None`` while
-    the upload waits in the collection's inbox to be merged (spec knowledge
-    "Submit every entrance's input as material")."""
-
-    path: str | None
-    title: str
-
-
-class FakeCollectionCatalog:
-    """In-memory ``CollectionCatalogPort``: a fixed collection list, exactly
-    like the real ``KnowledgeService.collection_names`` but with no
-    knowledge kind behind it (the channel core never imports one — import-linter
-    contract 5f)."""
-
-    def __init__(self, names: Sequence[str] = ()) -> None:
-        self.names = list(names)
-        #: How many times `/kb` asked. It takes no agent and the answer does
-        #: not vary, so the count is all there is to observe.
-        self.calls = 0
-
-    async def collection_names(self) -> list[str]:
-        self.calls += 1
-        return list(self.names)
-
-
-class FakeIngestService:
-    """In-memory ``IngestPort``: records every call, and can be scripted to
-    raise — the one-line-message contract `/kb` relies on (never a stack
-    trace to the chat) — or to return a scripted document."""
-
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-        #: Set by a test to make the next ``ingest`` raise instead of succeed.
-        self.fails_with: Exception | None = None
-        #: Set by a test to answer as a knowledge layer with a model would: the
-        #: upload waits in the inbox, so there is no document path yet.
-        self.pending = False
-
-    async def ingest(
-        self,
-        *,
-        collection: str,
-        filename: str,
-        data: bytes,
-        actor: str,
-    ) -> FakeIngestedDocument:
-        self.calls.append(
-            {
-                "collection": collection,
-                "filename": filename,
-                "data": data,
-                "actor": actor,
-            }
-        )
-        if self.fails_with is not None:
-            raise self.fails_with
-        path = None if self.pending else f"{collection}/{filename}.md"
-        return FakeIngestedDocument(path=path, title=filename)
-
-
 class StubWebSocketController:
     """Recording ``WebSocketControllerPort`` (no SDK, no socket, no thread).
 
@@ -437,8 +373,6 @@ class ChannelEnv:
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
     model_suggestions: FakeModelSuggestions
-    collections: FakeCollectionCatalog
-    ingest: FakeIngestService
     chat: ChatService
     orchestrator: TurnOrchestrator
     processor: InboundProcessor
@@ -675,8 +609,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
     model_suggestions = FakeModelSuggestions()
-    collections = FakeCollectionCatalog()
-    ingest = FakeIngestService()
     processor = InboundProcessor(
         peers=peers,
         threads=threads,
@@ -686,8 +618,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
         agents=registry,
         model_suggestions=model_suggestions,
-        collections=collections,
-        ingest=ingest,
         questions=ChatQuestions(),
     )
 
@@ -752,8 +682,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         provider=provider,
         registry=registry,
         model_suggestions=model_suggestions,
-        collections=collections,
-        ingest=ingest,
         chat=chat,
         orchestrator=orchestrator,
         processor=processor,

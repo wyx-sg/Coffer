@@ -26,7 +26,7 @@ No feature needs another. When one is off, the others keep working:
 
 | When this is off | What happens |
 | --- | --- |
-| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, curation skips, and a channel's `/kb` answers that Knowledge is switched off. Memory is unaffected. |
+| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, curation skips. Memory is unaffected. |
 | `memory` | The Memory page and its API are gone, the handshake does not name the memory root, the memory hook is taken out of your agents (and put back when you switch it on), distil and aggregate skip, and channel turns carry no memory. Knowledge is unaffected. |
 | `sync` | The vault is single-machine for curation. |
 | `models` | The local proxy and Usage are gone, and Coffer's keys are taken out of your agents' own configs, so agents use their own login. Knowledge and memory keep working on the model connection already chosen for Coffer's engine. |

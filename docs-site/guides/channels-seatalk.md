@@ -121,7 +121,7 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-Because a main-chat @mention always roots a new thread, a command sent in the main chat sets the **group's defaults** instead: `@bot /model …`, `@bot /dir …` and `@bot /new <agent>` choose what every new thread in the group starts on, `@bot /status` shows those defaults and the running threads, and `@bot /stop` stops every turn running in the group. Inside a thread, commands apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
+Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
 
 To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
@@ -141,7 +141,7 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 
 ## Cards
 
-A bare `/model`, `/dir`, `/resume` or `/kb` answers with an interactive card, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs), `/help` **New**, **Stop**, **Model**, **Status** and **Resume**, and `/new` **Agent**, **Model** and **Dir**. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
+In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactive card, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs). `/help` carries **New**, **Stop**, **Model**, **Status** and **Resume** there, and only **New** and **Stop** in a group; `/new` carries **Agent**, **Model** and **Dir** in a direct chat and only **Agent** in a group. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
 
 - Buttons are laid out in up to three rows. Short labels share a row; a long one such as "Claude Code" gets its own.
 - A card has at most six buttons; longer lists page with **← Prev** and **Next →**.

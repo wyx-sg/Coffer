@@ -1,7 +1,7 @@
 """A card's life in the chat after it is sent: route a tap, keep it honest.
 
 Why the tap half exists: a card offers choices (``model:``, ``effort:``,
-``dir:``, ``resume:``, ``collection:``, ``agent:``) and actions (``cmd:<name>``, which runs
+``dir:``, ``resume:``, ``agent:``) and actions (``cmd:<name>``, which runs
 exactly what typing ``/<name>`` would). Each tap is owner-gated by the
 processor and routed here to the same function the typed command calls (spec
 channels "Offer choices and actions as owner-gated cards").
@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from coffer.application.channel import document_save, model_switch, new_conversation
+from coffer.application.channel import model_switch, new_conversation
 from coffer.application.channel.agent_routing import routable_choices
 from coffer.application.channel.command_cards import PICK_AGENT
 from coffer.application.channel.command_context import deliver_card
@@ -34,11 +34,10 @@ from coffer.application.channel.resume_switch import apply_resume, current_resum
 from coffer.application.channel.selection_cards import (
     KEEP_EFFORT,
     SelectionCard,
-    collection_card,
     is_page_turn,
     parse_page_turn,
 )
-from coffer.domain.channel.commands import command_name
+from coffer.domain.channel.commands import DM_ONLY_NOTICE, command_name
 
 if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
@@ -54,7 +53,9 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 
 #: The command that summons a fresh card of each kind.
-_COMMAND_FOR = {"collection": "kb", "effort": "model", "agent": "new"}
+#: The choice kinds that belong to the direct-chat commands.
+_DM_ONLY_CHOICES = frozenset({"model", "effort", "dir", "resume"})
+_COMMAND_FOR = {"effort": "model", "agent": "new"}
 
 
 async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
@@ -73,6 +74,11 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
     kind, _, value = data.partition(":")
     if not value:
         return
+    if ctx.chat_kind == "group" and kind in _DM_ONLY_CHOICES:
+        # A card of a direct-chat command still on screen in a group (spec
+        # channels "Answer the conversation commands from any paired chat").
+        await ctx.say(DM_ONLY_NOTICE)
+        return
     if kind == "cmd":
         # Exactly what typing it would do — a name not on the roster is ignored.
         if command_name(f"/{value}") is not None:
@@ -81,10 +87,6 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
     if kind in DETAILS_KINDS:
         # A reply's details, behind its summary card: one-shot, nothing to re-tick.
         await apply_details_tap(ctx, kind, value)
-        return
-    if kind == "collection":
-        # A save is one-shot, not a toggle: nothing to re-tick.
-        await document_save.apply_save_collection(ctx, value)
         return
     if kind == "agent" and value == PICK_AGENT:
         # The `/new` card's Agent button: offer the agents, change nothing yet.
@@ -226,11 +228,6 @@ async def _current_card(
     is what the card must reflect, and only the store knows whether it landed.
     ``page`` is ``None`` for "the page holding the current choice".
     """
-    if kind == "collection":
-        # Nothing agent-specific to ask — the same whole-catalogue question
-        # `/kb` itself asks (spec channels "Save a sent document into a collection").
-        known = await ctx.commands._collections.collection_names()
-        return collection_card(choices=known, page=page) if known else None
     if kind == "model":
         return await model_switch.current_model_card(ctx, page=page)
     if kind == "effort":

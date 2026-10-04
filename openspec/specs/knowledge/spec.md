@@ -165,14 +165,6 @@ The submitted Markdown MUST carry the frontmatter of "Carry title, description a
 - **THEN** the resulting file's frontmatter `title` is derived from the name `release-notes`
 - **AND** its `description` is drawn from the text's opening prose rather than left empty
 
-### Requirement: Ingest documents sent to a channel
-A document sent to a Coffer channel MUST be ingestible into a collection through the same path, so the phone and the Knowledge page are two ends of one entrance ([channels](../channels/spec.md)). The channel MUST confirm the collection with the owner before storing, and MUST NOT store anything from a non-owner.
-
-#### Scenario: a document forwarded to a channel lands in a collection
-- **GIVEN** a paired channel whose owner has just sent `note.txt` as an attachment, and one existing collection named `research`
-- **WHEN** the owner follows it with the plain text `/kb research`
-- **THEN** the ingest service is called exactly once — that collection, that file name, those bytes, `actor` `user` and the channel's own default agent — and the channel replies with a confirmation naming both the file and the collection
-
 ### Requirement: Bound uploads and leave nothing behind on failure
 Upload MUST be bounded: one file per call, a size ceiling, and a refusal that names the limit. A conversion failure MUST leave nothing behind — no inbox item, no document.
 
@@ -286,7 +278,7 @@ An item MUST be settled only after its pass completes: merged material is delete
 - **AND** the pass's own write is not handed back by the next sweep as an edit
 
 ### Requirement: Promote material directly when no model is configured
-With no internal model connection configured, material MUST NOT wait: a submission Coffer receives — an upload, a channel's `/kb` — MUST be **promoted** on the spot into a document at the collection root, as it stands and recorded as settled, and a pass MUST promote every item already in the inbox the same way — a file an agent wrote there included — and report `no_model` with the documents it promoted. Nothing is merged — merging is the model's job — but nothing sits in a hidden directory waiting for a connection nobody configured, where no agent can read it. An edited document needs nothing without a model: it is readable as it stands.
+With no internal model connection configured, material MUST NOT wait: a submission Coffer receives — an upload — MUST be **promoted** on the spot into a document at the collection root, as it stands and recorded as settled, and a pass MUST promote every item already in the inbox the same way — a file an agent wrote there included — and report `no_model` with the documents it promoted. Nothing is merged — merging is the model's job — but nothing sits in a hidden directory waiting for a connection nobody configured, where no agent can read it. An edited document needs nothing without a model: it is readable as it stands.
 
 #### Scenario: with no internal model, pending material becomes documents as it stands
 - **GIVEN** a collection whose inbox holds two items and no internal model connection at all

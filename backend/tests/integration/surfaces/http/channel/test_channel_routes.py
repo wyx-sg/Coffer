@@ -241,8 +241,8 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
     # with its argument hint and both descriptions (the Overview lists them).
     commands = body.pop("commands")
     assert [c["name"] for c in commands][:3] == ["new", "stop", "model"]
-    assert {"name", "args", "description", "description_zh", "needs_knowledge"} <= set(commands[0])
-    assert next(c for c in commands if c["name"] == "kb")["needs_knowledge"] is True
+    assert {"name", "args", "description", "description_zh"} == set(commands[0])
+    assert "kb" not in {c["name"] for c in commands}
     assert body == {
         # Both travel: the uid is what a surface addresses the channel by, the
         # name is what it shows. A status that carried only the label would

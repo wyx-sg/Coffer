@@ -97,8 +97,8 @@ async def test_a_non_dict_get_me_degrades_to_an_empty_identity() -> None:
 # -- register_profile ---------------------------------------------------------
 
 
-_PRIVATE = {"new", "stop", "model", "dir", "status", "resume", "thread", "kb", "help"}
-_GROUP = {"new", "stop", "model", "status", "resume", "help"}
+_PRIVATE = {"new", "stop", "model", "dir", "status", "resume", "thread", "help"}
+_GROUP = {"new", "stop", "help"}
 
 
 @pytest.mark.acceptance(
@@ -134,21 +134,7 @@ async def test_asker_only_commands_stay_ephemeral_in_every_menu() -> None:
     for name, params in call.made:
         if name == "setMyCommands":
             flags = {c["command"]: c["is_ephemeral"] for c in params["commands"]}
-            assert flags["status"] is True and flags["new"] is False
-
-
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="knowledge off answers /kb as switched off",
-)
-@pytest.mark.asyncio
-async def test_kb_is_left_out_of_every_menu_while_knowledge_is_off() -> None:
-    call = _Calls({"getMyDescription": {"description": "x"}})
-    await register_profile(call, knowledge_enabled=False)
-    menus = call.menus()
-    assert len(menus) == 6
-    assert all("kb" not in menu for menu in menus.values())
-    assert set(menus[("all_private_chats", "zh")]) == _PRIVATE - {"kb"}
+            assert flags["help"] is True and flags["new"] is False
 
 
 @pytest.mark.asyncio

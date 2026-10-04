@@ -69,8 +69,7 @@ class InboundEvents:
     stop_chat_sessions: Callable[[str, str], None]
     #: Looks up (creating if absent) the session for one ``(channel, chat, thread)`` —
     #: the same registry ``InboundProcessor``/``TurnDriver`` share. A card tap needs it
-    #: only for a ``collection:`` choice (spec channels "Save a sent document into a
-    #: collection"): the pending document a `/kb` tap saves lives there.
+    #: for the running turn a tapped command acts on.
     session: SessionAccessor
     #: The processor's burst buffer: a command button runs exactly what typing the
     #: command runs, which settles whatever the chat is still holding first

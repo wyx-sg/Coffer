@@ -83,16 +83,12 @@ class ChannelRuntime:
         materialize: MaterializeFn | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
-        knowledge_enabled: Callable[[], bool] = lambda: True,
         on_tick: Callable[[ChannelBinding], Awaitable[None]] | None = None,
         secret_revision: SecretRevision | None = None,
     ) -> None:
         # Handed each running channel's binding after every tick: the outbox
         # flush of spec chat "Mirror a web reply into the channel it came from".
         self._on_tick = on_tick
-        # `knowledge` is in every binding's hash (the menu offers `/kb` only
-        # while on).
-        self._knowledge_enabled = knowledge_enabled
         self._resources = resources
         self._factory = adapter_factory
         self._processor = processor
@@ -378,7 +374,6 @@ class ChannelRuntime:
             {
                 "config": resource.config,
                 "routing": routing.to_json() if routing else None,
-                "knowledge": self._knowledge_enabled(),
                 # A rotated secret keeps its ref, so the config above does not
                 # move; the adapter read the value once when it was built.
                 "secrets": secret_stamps(resource.config, self._secret_revision),

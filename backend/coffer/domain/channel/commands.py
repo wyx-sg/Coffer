@@ -6,7 +6,7 @@ not a design choice (spec channels "Register the bot's command menu and
 profile from one roster"). Everything is derived from :data:`COMMAND_ROSTER`
 here, so nothing can disagree; a new command is one entry plus its handler.
 
-Nine words are reserved and nothing else (spec channels "Pass unreserved slash
+Eight words are reserved and nothing else (spec channels "Pass unreserved slash
 text to the agent"): a text is a command only when its first word names an
 entry here, a near-miss of one answers "Did you mean", and anything else that
 starts with ``/`` — a path, an agent's own ``/compact`` — is a message for the
@@ -23,11 +23,13 @@ from dataclasses import dataclass
 
 __all__ = [
     "COMMAND_ROSTER",
+    "DM_ONLY_NOTICE",
     "EFFORT_LEVELS",
     "HIDDEN_ALIASES",
     "ChannelCommand",
     "command_name",
     "help_text",
+    "is_dm_only",
     "is_group_private",
     "menu_entries",
     "names",
@@ -50,13 +52,15 @@ class ChannelCommand:
     description_zh: str
     #: "Keep non-answer chatter private in a group": the answer is for the
     #: asker alone, so in a group it is delivered privately where the transport
-    #: can. ``/new``, ``/stop``, ``/thread`` and ``/kb`` stay visible.
+    #: can. ``/new`` and ``/stop`` stay visible. A ``dm_only`` command's notice
+    #: in a group is always private (see :func:`is_group_private`).
     group_private: bool = False
-    #: Whether the command is offered in a group's menu (spec channels/telegram
-    #: "Register command menus per chat scope and language").
-    in_group_menu: bool = False
-    #: Offered only while the ``knowledge`` feature is on.
-    needs_knowledge: bool = False
+    #: The command works only in a direct chat (spec channels "Answer the
+    #: conversation commands from any paired chat"): in a group it is answered
+    #: with :data:`DM_ONLY_NOTICE` and does nothing, and a group's menu and help
+    #: leave it out (spec channels/telegram "Register command menus per chat
+    #: scope and language").
+    dm_only: bool = False
 
 
 COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
@@ -65,57 +69,50 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
         "[agent]",
         "Start a fresh conversation [agent]",
         "开始新对话 [agent]",
-        in_group_menu=True,
     ),
-    ChannelCommand(
-        "stop", "", "Stop what\u2019s running", "停止正在运行的任务", in_group_menu=True
-    ),
+    ChannelCommand("stop", "", "Stop what\u2019s running", "停止正在运行的任务"),
     ChannelCommand(
         "model",
         "[name] [level]",
         "Pick model, then effort",
         "先选模型、再选推理强度",
-        group_private=True,
-        in_group_menu=True,
+        dm_only=True,
     ),
     ChannelCommand(
         "dir",
         "[path|name]",
         "Pick the working directory",
         "选择工作目录",
-        group_private=True,
+        dm_only=True,
     ),
     ChannelCommand(
         "status",
         "",
         "What is running, threads",
         "正在运行的内容与线程",
-        group_private=True,
-        in_group_menu=True,
+        dm_only=True,
     ),
     ChannelCommand(
         "resume",
         "[n]",
         "Go back to a conversation",
         "回到某个历史对话",
-        group_private=True,
-        in_group_menu=True,
+        dm_only=True,
     ),
     ChannelCommand(
         "thread",
         "[title]",
         "Open a parallel thread",
         "开启并行线程",
+        dm_only=True,
     ),
-    ChannelCommand(
-        "kb",
-        "[collection]",
-        "Save a document to Knowledge",
-        "把文档存入知识库",
-        needs_knowledge=True,
-    ),
-    ChannelCommand("help", "", "Commands", "命令列表", group_private=True, in_group_menu=True),
+    ChannelCommand("help", "", "Commands", "命令列表", group_private=True),
 )
+
+#: The one line a group gets when it sends a direct-chat-only command, in English
+#: and Chinese (spec channels "Answer the conversation commands from any paired
+#: chat"). Delivered privately to the sender; the command itself does nothing.
+DM_ONLY_NOTICE = "This command works in a private chat with me. / 此命令请在与我的私聊中使用。"
 
 #: Typed forms that run a roster command but are never listed: ``/start`` is
 #: what Telegram's start button and pairing link send.
@@ -128,13 +125,9 @@ EFFORT_LEVELS: frozenset[str] = frozenset({"minimal", "low", "medium", "high", "
 _HEAD = re.compile(r"^/([A-Za-z0-9_]+)$")
 
 
-def _entries(*, knowledge: bool) -> tuple[ChannelCommand, ...]:
-    return tuple(c for c in COMMAND_ROSTER if knowledge or not c.needs_knowledge)
-
-
-def names(*, knowledge: bool = True) -> frozenset[str]:
+def names() -> frozenset[str]:
     """Every handled command as its typed form (``"/help"``)."""
-    return frozenset(f"/{c.name}" for c in _entries(knowledge=knowledge))
+    return frozenset(f"/{c.name}" for c in COMMAND_ROSTER)
 
 
 def command_name(text: str) -> str | None:
@@ -203,20 +196,26 @@ def is_group_private(command: str) -> bool:
     name = command_name(command)
     for entry in COMMAND_ROSTER:
         if entry.name == name:
-            return entry.group_private
+            return entry.group_private or entry.dm_only
     return True
 
 
-def menu_entries(*, group: bool, knowledge: bool) -> tuple[ChannelCommand, ...]:
-    """The commands a menu offers: every one in a private chat, the group subset
-    in a group; ``/kb`` only while knowledge is on."""
-    entries = _entries(knowledge=knowledge)
-    return tuple(c for c in entries if c.in_group_menu) if group else entries
+def is_dm_only(command: str) -> bool:
+    """Whether ``command`` (typed form) works only in a direct chat."""
+    name = command_name(command)
+    return any(entry.name == name and entry.dm_only for entry in COMMAND_ROSTER)
 
 
-def help_text(*, knowledge: bool = True) -> str:
+def menu_entries(*, group: bool) -> tuple[ChannelCommand, ...]:
+    """The commands a menu offers: every one in a private chat, only the group
+    commands (``/new``, ``/stop``, ``/help``) in a group."""
+    return tuple(c for c in COMMAND_ROSTER if not c.dm_only) if group else COMMAND_ROSTER
+
+
+def help_text(*, group: bool = False) -> str:
     """The ``/help`` body, rendered from the roster: every command with its
-    arguments on one line, then what anything else is. The one-line
-    descriptions live in the platform's own command menu (Telegram)."""
-    heads = [f"/{c.name} {c.args}".rstrip() for c in _entries(knowledge=knowledge)]
+    arguments on one line (a group's help lists only the group commands), then
+    what anything else is. The one-line descriptions live in the platform's own
+    command menu (Telegram)."""
+    heads = [f"/{c.name} {c.args}".rstrip() for c in menu_entries(group=group)]
     return " · ".join(heads) + "\nAnything else is a message to the agent."

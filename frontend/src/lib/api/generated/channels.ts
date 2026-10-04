@@ -134,11 +134,6 @@ export interface components {
             description_zh: string;
             /** Name */
             name: string;
-            /**
-             * Needs Knowledge
-             * @default false
-             */
-            needs_knowledge: boolean;
         };
         /** ChannelDiagnosticOut */
         ChannelDiagnosticOut: {

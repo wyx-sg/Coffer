@@ -19,6 +19,7 @@ from coffer.application.channel.selection_cards import (
     PAGE_SIZE,
     is_page_turn,
 )
+from coffer.domain.channel.commands import DM_ONLY_NOTICE
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.channel.errors import ChannelSendFailed
 
@@ -242,29 +243,36 @@ async def _group_card_channel(
 @pytest.mark.acceptance(
     spec="channels", scenario="a group selection-card tap replies in the group/thread"
 )
-async def test_owner_group_model_card_tap_replies_in_the_thread(env: ChannelEnv) -> None:
-    """The owner tapping a /model card in a group thread sets the model for THAT
-    thread, and the confirmation is routed back into the group thread the tap
-    came from — never a DM."""
+async def test_owner_group_new_tap_replies_in_the_thread(env: ChannelEnv) -> None:
+    """The owner tapping New in a group thread opens a conversation for THAT
+    thread, and the answer is routed back into the group thread the tap came
+    from — never a DM."""
     resource, adapter = await _group_card_channel(env)
 
     await env.processor.on_callback(
         tap_event(
-            "tg",
-            "grp-1",
-            "model:claude-opus-4-8",
-            sender_id="owner-1",
-            chat_kind="group",
-            thread_id="th-1",
+            "tg", "grp-1", "cmd:new", sender_id="owner-1", chat_kind="group", thread_id="th-1"
         )
     )
-    await wait_until(lambda: any("from your next message" in t for t in adapter.texts()))
 
-    cfg = await env.chat.get_agent_config(await env.active_conversation(resource, "grp-1", "th-1"))
-    assert cfg.model == "claude-opus-4-8"
-    match = next(r for r in adapter.sent_routed if "from your next message" in r[1])
-    chat_id, _text, thread_id, chat_kind = match
+    assert await env.active_conversation(resource, "grp-1", "th-1") is not None
+    assert adapter.sent_routed
+    chat_id, _text, thread_id, chat_kind = adapter.sent_routed[-1]
     assert (chat_id, thread_id, chat_kind) == ("grp-1", "th-1", "group")
+
+
+async def test_a_direct_chat_card_tap_in_a_group_is_declined(env: ChannelEnv) -> None:
+    """A stale model card tapped in a group sets nothing and says where it works."""
+    resource, adapter = await _group_card_channel(env)
+
+    await env.processor.on_callback(
+        tap_event(
+            "tg", "grp-1", "model:opus", sender_id="owner-1", chat_kind="group", thread_id="th-1"
+        )
+    )
+
+    assert await env.active_conversation(resource, "grp-1", "th-1") is None
+    assert adapter.texts() == [DM_ONLY_NOTICE]
 
 
 async def test_non_owner_group_card_tap_is_refused_and_routed(env: ChannelEnv) -> None:

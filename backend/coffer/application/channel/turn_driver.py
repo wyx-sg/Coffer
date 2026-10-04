@@ -149,14 +149,6 @@ class Session:
     running_conversation_id: str | None = None
     # The renderer draining that turn's events into the chat.
     render_task: asyncio.Task[None] | None = None
-    # The most recently received document/attachment for this (channel, chat, thread),
-    # held for a `/kb` that follows (spec channels "Save a sent document into a
-    # collection"). It rides alongside the ordinary turn — an attachment still reaches
-    # the agent exactly as before; this is ONLY the channel's own memory of what a later
-    # `/kb` acts on. Replaced by the next attachment that arrives here, and cleared
-    # once a save is attempted (succeeding or not — retrying the same bytes against the
-    # same failure is never useful).
-    pending_document: Attachment | None = None
 
 
 class TurnDriver:
