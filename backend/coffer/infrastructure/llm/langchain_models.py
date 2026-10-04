@@ -22,6 +22,7 @@ from collections.abc import Callable
 from typing import Any
 
 from coffer.domain.provider.config import Protocol, ResolvedConnection
+from coffer.infrastructure.net.redirects import stop_following_redirects
 
 
 def build_chat_model(
@@ -109,12 +110,18 @@ def _build_anthropic(
     api_key = _api_key(resolved, secret_resolver, "anthropic")
     # base_url is the connection's endpoint (honoured for proxies / relays like
     # Kimi or DeepSeek); ``base_url`` is ChatAnthropic's populate-by-alias name.
-    return ChatAnthropic(  # type: ignore[call-arg]
+    model = ChatAnthropic(  # type: ignore[call-arg]
         model=resolved.model,
         api_key=api_key,  # type: ignore[arg-type]
         base_url=config.base_url,
         timeout=timeout,
     )
+    # The SDK's own client follows redirects and sends the key as ``x-api-key``,
+    # which httpx does not strip across origins (spec secret "Send a secret only
+    # to the origin it was approved for").
+    for sdk in (model._client, model._async_client):
+        stop_following_redirects(sdk._client)
+    return model
 
 
 def _build_openai(
@@ -130,6 +137,8 @@ def _build_openai(
             "Install it with: pip install langchain-openai"
         ) from exc
 
+    from openai import DefaultAsyncHttpxClient, DefaultHttpxClient
+
     config = resolved.config
     api_key = _api_key(resolved, secret_resolver, "openai")
     # ``base_url`` lets an OpenAI-COMPATIBLE endpoint (Azure/OpenRouter/aggregators)
@@ -140,6 +149,10 @@ def _build_openai(
         api_key=api_key,  # type: ignore[arg-type]
         base_url=config.base_url or None,
         timeout=timeout,
+        # The SDK's default client follows redirects; the key must not (spec
+        # secret "Send a secret only to the origin it was approved for").
+        http_client=DefaultHttpxClient(follow_redirects=False),
+        http_async_client=DefaultAsyncHttpxClient(follow_redirects=False),
     )
 
 
@@ -155,7 +168,9 @@ def _build_ollama(resolved: ResolvedConnection, timeout: float | None = None) ->
     # ``ChatOllama`` takes no ``timeout`` of its own; the bound goes to the
     # underlying httpx client it builds, which is the same place the other two
     # integrations put theirs. ``None`` leaves the client's own default.
-    client_kwargs = {"timeout": timeout} if timeout is not None else {}
+    client_kwargs: dict[str, Any] = {"follow_redirects": False}
+    if timeout is not None:
+        client_kwargs["timeout"] = timeout
     return ChatOllama(
         model=resolved.model,
         base_url=resolved.config.base_url,

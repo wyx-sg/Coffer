@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from coffer.domain.error_base import CofferError
 from coffer.domain.git_handoff import git_missing_details
@@ -43,9 +44,17 @@ _USERNAME_ENV = "COFFER_GIT_USERNAME"
 #: GitLab ignore it for a token (GitLab: any non-blank value); Bitbucket and
 #: Azure DevOps need a real one, which the remote settings carry.
 DEFAULT_USERNAME = "coffer"
+#: The remote's own origin, which the helper compares with what git asks about:
+#: a redirect to another host is never handed the credential (spec secret
+#: "Send a secret only to the origin it was approved for").
+_PROTOCOL_ENV = "COFFER_GIT_PROTOCOL"
+_HOST_ENV = "COFFER_GIT_HOST"
 _CREDENTIAL_HELPER = (
-    '!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" '
-    '"$COFFER_GIT_USERNAME" "$COFFER_GIT_TOKEN"; }; f'
+    '!f() { test "$1" = get || return 0; p=; h=; '
+    'while IFS== read -r k v; do case "$k" in protocol) p=$v;; host) h=$v;; esac; done; '
+    'test -n "$COFFER_GIT_HOST" && test "$p" = "$COFFER_GIT_PROTOCOL" '
+    '&& test "$h" = "$COFFER_GIT_HOST" '
+    '&& printf "username=%s\\npassword=%s\\n" "$COFFER_GIT_USERNAME" "$COFFER_GIT_TOKEN"; }; f'
 )
 _PINNED = (
     "-c",
@@ -139,6 +148,8 @@ def _env(
         "SSH_ASKPASS_REQUIRE",
         _TOKEN_ENV,
         _USERNAME_ENV,
+        _PROTOCOL_ENV,
+        _HOST_ENV,
         "GIT_INDEX_FILE",
     ):
         env.pop(leftover, None)
@@ -157,6 +168,28 @@ def _env(
         env[_TOKEN_ENV] = token
         env[_USERNAME_ENV] = username or DEFAULT_USERNAME
     return env
+
+
+def _origin_of(url: str) -> tuple[str, str] | None:
+    """``(protocol, host[:port])`` as git's credential protocol spells them, for
+    an http(s) remote URL; ``None`` for anything else (an ssh or local path)."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    host = parsed.hostname if ":" not in parsed.hostname else f"[{parsed.hostname}]"
+    port = parsed.port
+    default = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme, host if port in (None, default) else f"{host}:{port}"
+
+
+def _remote_origin(root: Path, args: tuple[str, ...]) -> tuple[str, str] | None:
+    """The origin of the remote this call talks to: a URL it names, else the
+    one the configured remote holds."""
+    for arg in args:
+        if "://" in arg and not arg.startswith("-"):
+            return _origin_of(arg)
+    configured = run(root, "config", "--get", "remote.origin.url", check=False)
+    return _origin_of(text(configured).strip()) if configured.returncode == 0 else None
 
 
 def run(
@@ -183,6 +216,10 @@ def run(
         argv.append("--literal-pathspecs")
     argv += list(args)
     env = _env(root, writer, token, username)
+    if token:
+        origin = _remote_origin(root, args)
+        if origin is not None:
+            env[_PROTOCOL_ENV], env[_HOST_ENV] = origin
     if extra_env:
         env.update(extra_env)
     try:

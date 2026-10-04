@@ -154,6 +154,31 @@ def test_refresh_supersedes_an_approval_nothing_asks_for() -> None:
 
 
 @pytest.mark.acceptance(
+    spec="secret", scenario="an unsigned build starts with the protection off and says nothing"
+)
+def test_a_build_that_cannot_protect_its_key_defaults_the_protection_off() -> None:
+    store, values = InMemoryBoundaryStore(), FakeSealedValues()
+    gate = SecretBoundary(store, values, default_on=False)
+    values.put("gh/token", "v", created=_OLD)
+
+    assert not gate.protections_on()
+    assert not gate.off_by_choice()  # nothing to tell anyone: it was never on
+    gate.require(_dest("a", "stdio anything"), {"TOKEN": "gh/token"})
+
+    gate.enable_protections()  # a stored choice wins over the default
+    assert gate.protections_on()
+    with pytest.raises(SecretBindingPending):
+        gate.require(_dest("b", "stdio other"), {"TOKEN": "gh/token"})
+
+
+def test_off_by_choice_is_only_a_build_that_defaults_on_and_was_turned_off() -> None:
+    gate, store, _values = _gate()
+    assert not gate.off_by_choice()
+    store.set_setting("require_approval", "false")
+    assert gate.off_by_choice()
+
+
+@pytest.mark.acceptance(
     spec="secret", scenario="switching the protection off waits for the desktop app"
 )
 def test_switching_protection_off_takes_an_approval() -> None:

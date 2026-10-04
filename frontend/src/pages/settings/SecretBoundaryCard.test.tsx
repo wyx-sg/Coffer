@@ -34,10 +34,11 @@ function renderCard() {
   );
 }
 
-function state(requireApproval: boolean) {
+function state(requireApproval: boolean, defaultOn = true) {
   vi.mocked(secretsApi.secretBoundary).mockResolvedValue({
     require_approval: requireApproval,
     pending_approval_id: null,
+    default_on: defaultOn,
   });
   vi.mocked(secretsApi.pendingApprovals).mockResolvedValue({ approvals: [] });
 }
@@ -48,6 +49,21 @@ afterEach(() => {
 });
 
 describe("SecretBoundaryCard", () => {
+  test("says approvals are off by default only in a build that defaults them off", async () => {
+    state(false, false);
+    renderCard();
+    expect(await screen.findByTestId("approvals-off-by-build")).toHaveTextContent(
+      "Approvals are off by default in this build.",
+    );
+  });
+
+  test("says nothing extra where a person turned approvals off in a signed build", async () => {
+    state(false, true);
+    renderCard();
+    await screen.findByText(/Off: new destinations/);
+    expect(screen.queryByTestId("approvals-off-by-build")).toBeNull();
+  });
+
   test("says the protection is on and offers a way back to what waits", async () => {
     state(true);
     vi.mocked(secretsApi.pendingApprovals).mockResolvedValue({

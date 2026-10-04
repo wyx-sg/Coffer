@@ -81,6 +81,7 @@ async def get_secret_boundary_settings() -> SecretBoundarySettingsOut:
     return SecretBoundarySettingsOut(
         require_approval=await asyncio.to_thread(boundary.protections_on),
         pending_approval_id=waiting,
+        default_on=boundary.default_on,
     )
 
 
@@ -107,9 +108,9 @@ async def put_secret_boundary_settings(
             await audit.record(
                 AuditEventType.SECRET_PROTECTION_ENABLED.value, actor=actor, details={}
             )
-        return SecretBoundarySettingsOut(require_approval=True)
+        return SecretBoundarySettingsOut(require_approval=True, default_on=boundary.default_on)
     if not await asyncio.to_thread(boundary.protections_on):
-        return SecretBoundarySettingsOut(require_approval=False)
+        return SecretBoundarySettingsOut(require_approval=False, default_on=boundary.default_on)
     approval = await asyncio.to_thread(boundary.request_disable, actor)
     await audit.record(
         AuditEventType.SECRET_APPROVAL_REQUESTED.value,
@@ -119,6 +120,6 @@ async def put_secret_boundary_settings(
     return JSONResponse(
         status_code=202,
         content=SecretBoundarySettingsOut(
-            require_approval=True, pending_approval_id=approval.id
+            require_approval=True, pending_approval_id=approval.id, default_on=boundary.default_on
         ).model_dump(),
     )

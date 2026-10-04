@@ -513,11 +513,95 @@ command approves.
 - **WHEN** the user stores a new value for each ref with `coffer secret set`
 - **THEN** each command prints `stored: <ref>` and exits `0`, the store holds the new value, and no approval waits
 
+### Requirement: Send a secret only to the origin it was approved for
+A secret is approved for a target, so a request that carries one MUST NOT
+deliver it to any other origin (scheme, host and port) by following a redirect.
+Every outbound path that injects a stored secret — an HTTP custom tool's request,
+an HTTP MCP upstream's headers, the engine's and the probe's provider calls,
+the model proxy's relay, a channel adapter's platform calls and the sync
+remote's git credential — MUST follow one rule: it does not follow a redirect
+to another origin. An HTTP client that injects a secret MUST NOT follow
+redirects at all, so the 3xx is the answer (a custom tool reports it as "Location:
+… (not followed)"), except the SeaTalk media download, which carries only a
+short-lived `Authorization` bearer that the client drops on a cross-origin hop; the MCP transport follows only within the endpoint's own
+origin, which keeps its headers on the origin they were configured for; and
+git's credential helper MUST answer only for the origin of the remote the call
+is about, so the redirect target a remote names is never offered the token.
+The rule covers every header Coffer injects, not only `Authorization`, and a
+secret placed in a query.
+
+#### Scenario: a redirect to another origin is never sent the secret
+- **GIVEN** an origin that redirects every request to a second origin on another port, and a secret injected into a request to the first as `X-API-Key`, as `x-api-key`, as a bearer token or as git's Basic credential
+- **WHEN** a custom tool, an HTTP MCP upstream, the engine's model client, the provider probe or a sync remote call is made against the first origin
+- **THEN** the first origin receives the secret as approved and the second origin receives no request carrying it (for a custom tool, an engine client and the probe, no request at all)
+- **AND** a sync remote that needs the credential at its own origin still receives it there
+
+### Requirement: Fix a secret's placement by its destination's definition
+Where a secret is placed in a request is part of what a person approved, and
+only a destination's own definition decides it. A secret's binding is keyed by
+its ref, its destination and its **slot** — the header name of an HTTP MCP
+server or custom-tool group, the environment variable of a stdio server — and
+pinned to its target; moving an approved ref to another slot of the same
+destination, or into another destination, MUST record a pending approval like a
+target change and inject nothing in the new place until it is approved. A
+provider connection's target MUST include the protocol that decides which header
+carries its key (`model api <base URL> as <protocol>`), so changing the protocol
+asks again. The only fields that receive a stored secret are the headers a
+destination's definition names: an argument hole in a custom tool's path, query,
+headers or body is filled only from the calling agent's own arguments and MUST
+NEVER be filled from a stored secret, a tool header spelled like a secret header
+MUST NOT replace the injected value, and the secret is never placed in a URL, a
+query or a body.
+
+#### Scenario: a secret moved to another placement of its destination waits
+- **GIVEN** a secret approved for an HTTP MCP server's `X-API-Key` header, a custom-tool group's header, a stdio server's environment variable, and a provider connection's key presented as `openai`
+- **WHEN** each is changed so the same ref rides in another header or variable, or the provider's protocol becomes `anthropic`, at an unchanged URL
+- **THEN** each answers `SECRET_BINDING_PENDING` for the new placement while the approved one keeps working
+
+#### Scenario: a template cannot pull in a stored secret
+- **GIVEN** a custom-tool group with a secret header and a tool whose path, query, headers and body templates name arguments after that header and after "secret"
+- **WHEN** the request is built
+- **THEN** the stored value appears only in the group's own header, and in no URL, query, body or other header
+
+### Requirement: Default the approval protection by the build
+`secrets.require_approval` MUST default by how the build was made, with the
+same fact that chooses where the master key lives ("Keep the master key behind a
+storage port chosen by the build"): a signed release, whose master key only its
+signed binaries can read, defaults it **on**; a development build, whose master
+key is a file any process of the same user can read and whose approvals
+therefore protect nothing against a same-user agent, defaults it **off**. Only
+the default depends on the build: a setting stored by a person MUST win in both,
+turning it on MUST still need nobody, and turning it off once on MUST still wait
+for the desktop app. `GET /api/v1/settings/secret-boundary` MUST report
+`default_on` (whether the build defaults it on) beside `require_approval`, and
+Settings and the Secrets page MUST say, in one line with the detail behind a
+help tip, that in this build approvals are off by default because an unsigned
+build cannot protect the master key. The Overview's `secret_approval_off` item
+MUST be listed only when the build defaults it on and it is off, which is a
+person's choice; an unsigned build's default off MUST NOT raise it.
+
+#### Scenario: a signed build starts with the protection on
+- **GIVEN** a signed build and no stored setting
+- **WHEN** the setting is read and the attention list is read
+- **THEN** `require_approval` is true with `default_on` true, a destination citing a secret that went elsewhere waits, and no `secret_approval_off` item is listed
+
+#### Scenario: an unsigned build starts with the protection off and says nothing
+- **GIVEN** a development build and no stored setting
+- **WHEN** the setting is read, a second destination cites a secret already sent elsewhere, and the attention list is read
+- **THEN** `require_approval` is false with `default_on` false, the second destination is approved without asking, and no `secret_approval_off` item is listed
+
+#### Scenario: a stored setting wins over the build's default
+- **GIVEN** a development build where a person turned the protection on
+- **WHEN** a second destination cites a secret already sent elsewhere, and the protection is then turned off
+- **THEN** the destination waits for approval, and turning it off answers a pending `disable_protection` approval
+
 ### Requirement: Turn the protection off only through the desktop app
 `secrets.require_approval` (`GET|PUT /api/v1/settings/secret-boundary`) MUST
 switch on at once and MUST switch off only through a pending
 `disable_protection` approval applied with a presence grant; no environment
-variable, config file or CLI flag switches it off.
+variable, config file or CLI flag switches it off. (Where it is off because the
+build defaults it off, "Default the approval protection by the build", there is
+nothing to switch off.)
 
 #### Scenario: switching the protection off waits for the desktop app
 - **GIVEN** the protection is on

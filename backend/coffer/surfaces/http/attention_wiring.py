@@ -134,7 +134,9 @@ def lifespan_attention_sources(
         health_repo=get_health_repo_optional(),
         cli_service=get_cli_requirement_service_optional(),
         agent_hooks=get_agent_hooks_service(),
-        protections_on=lambda: get_secret_boundary().protections_on(),
+        # The "approval is off" item is for a signed build someone turned it off
+        # in; an unsigned build defaults it off and does not nag.
+        protections_on=lambda: not get_secret_boundary().off_by_choice(),
         memory_on=memory_on,
         approvals=_LiveApprovals(),
     )

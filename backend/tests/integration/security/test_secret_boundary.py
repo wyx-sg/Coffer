@@ -533,7 +533,7 @@ def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
     with pytest.raises(SecretBindingPending):
         key_now()
     [waiting] = d.pending(destination_uid=uid)
-    assert waiting["target"] == "model api https://attacker.example.net/v1"
+    assert waiting["target"] == "model api https://attacker.example.net/v1 as anthropic"
     d.approve(waiting["id"])
     assert key_now() == "sk-provider-key-1"
 

@@ -83,7 +83,7 @@ consulted from the synchronous resolve path.
 | ---- | ----- |
 | `bindings.json` | `{"bindings": [binding, ...]}` — a ref approved for one slot of one destination, unique on `(ref, destination_kind, destination_uid, slot)` |
 | `approvals.json` | `{"approvals": [approval, ...]}` — what waits for the desktop app |
-| `settings.json` | `{key: value}` — `require_approval` |
+| `settings.json` | `{key: value}` — `require_approval`; absent means the build's default (on in a signed release, off in a development build) |
 | `times.json` | `{ref: iso time}` — when this machine first stored each ref (the ciphertext's `created_at`, above) |
 | `last-used.json` | `{ref: iso time}` — when a consumer last had each ref decrypted here (`last_used_at`, above) |
 

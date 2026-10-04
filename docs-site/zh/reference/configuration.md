@@ -236,7 +236,7 @@ COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 | 设置 | 默认值 | 作用 |
 | --- | --- | --- |
 | **将主密钥存入系统钥匙串** | 关（文件） | 在 `~/.coffer/master.key` 和系统钥匙串（服务 `coffer`，条目 `master-key`）之间移动密钥的主密钥。主密钥本身不变，所以已存的密钥仍然可读。这次移动会被审计。仅限开发构建：签名的发布版把主密钥保存在自己的钥匙串访问组中，拒绝移动。 |
-| 新密钥去处需审批（`secrets.require_approval`） | 开 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批。关闭时，新去处无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
+| 新密钥去处需审批（`secrets.require_approval`） | 签名发布版开，开发构建关 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批。关闭时，新去处无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
 
 ## 相关内容 {#related}
 

@@ -18,6 +18,7 @@ import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
 import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
 import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
+import { ApprovalsOffNote } from "@/components/secret/ApprovalsOffNote";
 import { SecretsBanners } from "@/components/secret/SecretsBanners";
 import { SecretsBrowser } from "@/components/secret/SecretsBrowser";
 import { isMissingHere } from "@/components/secret/secretRows";
@@ -74,6 +75,8 @@ export function SecretsPage() {
           )
         }
       />
+
+      <ApprovalsOffNote />
 
       <SecretsBanners
         rows={rows}

@@ -217,6 +217,9 @@ class SecretBoundarySettingsOut(BaseModel):
     require_approval: bool
     #: The approval that would turn it off, while one waits.
     pending_approval_id: str | None = None
+    #: Whether this build defaults it on (a signed release) or off (an unsigned
+    #: build, whose master key a same-user process can read).
+    default_on: bool = True
 
 
 class SecretBoundarySettingsIn(BaseModel):

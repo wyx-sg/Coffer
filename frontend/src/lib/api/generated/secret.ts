@@ -673,6 +673,11 @@ export interface components {
         };
         /** SecretBoundarySettingsOut */
         SecretBoundarySettingsOut: {
+            /**
+             * Default On
+             * @default true
+             */
+            default_on: boolean;
             /** Pending Approval Id */
             pending_approval_id: string | null;
             /** Require Approval */
