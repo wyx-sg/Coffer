@@ -47,11 +47,18 @@ import { describeSince } from "@/lib/overview/time";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { cn } from "@/lib/utils";
 
-/** Dot · name 168 · reason · since 96 · action 340, 14 apart (board 1.2.09). */
+/** Dot · name 168 · reason · since 96 · action 364, 14 apart (board 1.2.09).
+ *  364 holds the longest action ("Review held changes") beside Ask an agent ▾
+ *  and the ⋯, so the ⋯ lines up on every row; a longer label truncates in its
+ *  button rather than widening the cell. */
 const ROW_GRID =
-  "grid min-h-[54px] grid-cols-[8px_minmax(0,1fr)] items-center gap-x-[14px] gap-y-1 px-4 py-2 transition-colors duration-fast hover:bg-surface-hover md:grid-cols-[8px_168px_minmax(0,1fr)_96px_340px]";
+  "grid min-h-[54px] grid-cols-[8px_minmax(0,1fr)] items-center gap-x-[14px] gap-y-1 px-4 py-2 transition-colors duration-fast hover:bg-surface-hover md:grid-cols-[8px_168px_minmax(0,1fr)_96px_364px]";
 // On a phone everything after the dot stacks in the second column.
 const CELL = "col-start-2 md:col-start-auto";
+
+// The row action gives way first: it shrinks and truncates its label, so the
+// hand-off and the ⋯ keep their place.
+const ACTION = "min-w-0 shrink";
 
 export const NEEDS_YOU_ROW_GRID = ROW_GRID;
 export const NEEDS_YOU_CELL = CELL;
@@ -120,19 +127,21 @@ export function NeedsYouRow({ item, agentType, onIgnore, onRun, running = false 
       <p className={cn(CELL, "whitespace-nowrap text-xs text-text-subtle")}>
         {since ? <SinceText since={since} iso={item.since ?? ""} /> : null}
       </p>
-      <div className={cn(CELL, "flex items-center gap-1.5 md:justify-self-end")}>
+      <div className={cn(CELL, "flex min-w-0 max-w-full items-center gap-1.5 md:justify-self-end")}>
         {opensApprovals(item) ? (
           <Button
             variant="outline"
+            className={ACTION}
             onClick={openApprovalsSheet}
             aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
           >
             {ActionIcon ? <ActionIcon aria-hidden /> : null}
-            {action}
+            <span className="truncate">{action}</span>
           </Button>
         ) : verb && onRun ? (
           <Button
             variant="outline"
+            className={ACTION}
             loading={running}
             onClick={onRun}
             aria-label={t("overview.needsYou.actionFor", {
@@ -141,21 +150,29 @@ export function NeedsYouRow({ item, agentType, onIgnore, onRun, running = false 
             })}
           >
             {ActionIcon ? <ActionIcon aria-hidden /> : null}
-            {running ? t(`overview.needsYou.pending.${verb}`) : action}
+            <span className="truncate">
+              {running ? t(`overview.needsYou.pending.${verb}`) : action}
+            </span>
           </Button>
         ) : (
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className={ACTION}>
             <Link
               to={actionPage(item, agentType)}
               aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
             >
               {ActionIcon ? <ActionIcon aria-hidden /> : null}
-              {action}
+              <span className="truncate">{action}</span>
             </Link>
           </Button>
         )}
-        <AgentHandoff prompt={item.handoff.prompt} help={false} />
-        <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
+        <div className="shrink-0">
+          <AgentHandoff prompt={item.handoff.prompt} help={false} />
+        </div>
+        <ActionMenu
+          label={t("overview.needsYou.moreFor", { name: item.title })}
+          actions={menu}
+          className="shrink-0"
+        />
       </div>
     </li>
   );
