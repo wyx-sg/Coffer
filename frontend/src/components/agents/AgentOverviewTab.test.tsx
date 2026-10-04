@@ -343,6 +343,8 @@ describe("AgentOverviewTab — problem states replace the tab", () => {
     expect(screen.getByText("Install Codex")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    // The "?" sits beside the hand-off, the only explanation of why an agent does it.
+    expect(screen.getAllByRole("button", { name: "More info" })).toHaveLength(1);
     expect(document.body).not.toHaveTextContent(/npm|install -g/);
     expect(screen.queryByText("Connection")).not.toBeInTheDocument();
     expect(screen.getByText("Left in ~/.codex")).toBeInTheDocument();

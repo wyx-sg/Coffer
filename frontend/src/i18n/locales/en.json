@@ -2410,8 +2410,7 @@
           "line": "{{dir}} is still here but there is no {{program}} on PATH. Install it and Coffer picks up your existing config."
         },
         "install": {
-          "title": "Install {{name}}",
-          "help": "Coffer doesn’t run this itself: hand it to your agent, which picks the right way for this machine."
+          "title": "Install {{name}}"
         },
         "leftIn": "Left in {{dir}}",
         "files": "Files",

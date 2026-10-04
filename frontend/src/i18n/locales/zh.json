@@ -2410,8 +2410,7 @@
           "line": "{{dir}} 还在，但 PATH 上没有 {{program}}。安装之后 Coffer 会找到你现有的配置。"
         },
         "install": {
-          "title": "安装 {{name}}",
-          "help": "Coffer 自己不执行这件事：交给你的智能体，它会按这台机器的情况选合适的做法。"
+          "title": "安装 {{name}}"
         },
         "leftIn": "{{dir}} 中留下的内容",
         "files": "文件",
