@@ -1,26 +1,16 @@
-"""The tables chat is stored in: ``conversations``, ``chat_messages`` and
-``chat_reply_files``.
+"""The table chat is stored in: ``conversations`` — the index of the channel
+conversations (the text of a conversation lives in the agent's own session).
 
-Beside the repos rather than inside them, because a table's shape is read far
-more often than the queries over it — a migration, a retention policy and a
-projection all want the columns and none of them wants the repo — and because
-keeping both here is what lets ``persistence.py`` be about the reads and
-writes alone.
+Beside the repo rather than inside it, because a table's shape is read far
+more often than the queries over it — a migration and a projection all want the
+columns and none of them wants the repo.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import (
-    TIMESTAMP,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import TIMESTAMP, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.infrastructure.persistence.base import Base
@@ -44,7 +34,6 @@ class ConversationModel(Base):
     agent_config: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     # Optional channel binding (return address, spec channels) for a conversation the
     # owner also drives from an IM channel; "has a binding" iff channel_uid set.
     #
@@ -57,58 +46,4 @@ class ConversationModel(Base):
     channel_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    __table_args__ = (
-        Index("idx_conversations_updated", "updated_at"),
-        Index("idx_conversations_archived", "archived_at"),
-    )
-
-
-class MessageModel(Base):
-    """Row in the ``chat_messages`` table."""
-
-    __tablename__ = "chat_messages"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    conversation_id: Mapped[str] = mapped_column(String, nullable=False)
-    seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    role: Mapped[str] = mapped_column(String, nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)  # JSON list of content blocks
-    status: Mapped[str] = mapped_column(String, nullable=False, default="complete")
-    model_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint("conversation_id", "seq", name="uq_chat_messages_conv_seq"),
-        Index("idx_chat_messages_conv", "conversation_id", "seq"),
-    )
-
-
-class ReplyFileModel(Base):
-    """Row in the ``chat_reply_files`` table: one file one assistant reply changed.
-
-    Deleted with the reply (``ON DELETE CASCADE``), so a conversation's delete and
-    retention's prune, which both delete message rows, take these with them."""
-
-    __tablename__ = "chat_reply_files"
-
-    message_id: Mapped[str] = mapped_column(
-        String, ForeignKey("chat_messages.id", ondelete="CASCADE"), primary_key=True
-    )
-    path: Mapped[str] = mapped_column(String, primary_key=True)
-    seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    added: Mapped[int] = mapped_column(Integer, nullable=False)
-    removed: Mapped[int] = mapped_column(Integer, nullable=False)
-    # The unified diff; NULL when it is left out (see ``diff_omitted``).
-    diff: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # "binary" | "too_large" when the diff is left out; NULL otherwise.
-    diff_omitted: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (Index("idx_chat_reply_files_message", "message_id", "seq"),)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    __table_args__ = (Index("idx_conversations_updated", "updated_at"),)

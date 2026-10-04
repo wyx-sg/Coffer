@@ -56,14 +56,6 @@ ALLOWED: dict[str, tuple[int, str]] = {
         "the shim is its own short-lived process; its pumps are awaited by asyncio.wait "
         "and its envelope tasks are drained when the process ends",
     ),
-    "application/chat/turn_persistence.py": (
-        1,
-        "the in-flight partial write is shielded, awaited here and by close()",
-    ),
-    "application/chat/turn_runner.py": (
-        1,
-        "the placeholder write is shielded and awaited in place",
-    ),
     "infrastructure/model_proxy/relay.py": (
         4,
         "per-request disconnect watcher, send/gone race and pump, each cancelled in finally",

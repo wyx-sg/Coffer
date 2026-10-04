@@ -11,13 +11,12 @@ single conversation ("a turn is already running").
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 
 import pytest
 
 from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
-from coffer.domain.chat.message import Message, TextBlock
 
 from .conftest import ChannelEnv, inbound, turn_body, wait_until
 
@@ -32,11 +31,8 @@ class GatedAdapter:
         self.release = asyncio.Event()
         self.runs: list[str] = []
 
-    async def run_turn(
-        self, *, history: Sequence[Message], **_: object
-    ) -> AsyncIterator[AgentEvent]:
-        last = history[-1]
-        text = turn_body("".join(b.text for b in last.content if isinstance(b, TextBlock)))
+    async def run_turn(self, prompt: str, attachments: object = ()) -> AsyncIterator[AgentEvent]:
+        text = turn_body(prompt)
 
         async def gen() -> AsyncIterator[AgentEvent]:
             self.runs.append(text)

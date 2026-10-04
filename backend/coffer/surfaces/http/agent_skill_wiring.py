@@ -25,9 +25,9 @@ from coffer.application.agent.mcp_import_plan import McpImportPlanner
 from coffer.application.agent.mcp_reconcile import McpEntryTarget
 from coffer.application.agent.mcp_service import AgentMcpService, default_shim_resolver
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
+from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.service import AgentService
-from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.mcp.stdio_launchers import McpStdioLaunchers
@@ -48,9 +48,10 @@ from coffer.domain.secrets import secret_ref
 from coffer.domain.skill.cli_status import ServerLauncher
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
+from coffer.infrastructure.agent.native_session_sources import native_session_sources
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
-from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
+from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.platform.host import machine_label
 from coffer.infrastructure.platform.user_path import UserPath
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
@@ -80,7 +81,7 @@ from coffer.surfaces.http.workspace_dependencies import (
     set_agent_mcp_entry_service,
     set_agent_native_memory_service,
     set_agent_plugin_service,
-    set_agent_transcript_service,
+    set_native_session_service,
 )
 
 if TYPE_CHECKING:
@@ -119,7 +120,6 @@ class AgentSkillWiring:
     #: kept here, because the boot-time warm pass must warm THIS instance — a
     #: second one would fill a second cache and leave the listing's as cold as
     #: it found it.
-    transcript_reader: FileTranscriptReader
     #: Installs Coffer's gateway entry — the first part of an agent's Coffer
     #: connection, which ``agent_connection_wiring`` composes once the memory
     #: kind (the other part's owner) is wired too.
@@ -286,13 +286,13 @@ def wire_agent_and_skill_kinds(
         scanner=FileNativeMemoryScanner(),
     )
 
-    # Read-only browse over the agent's own conversation transcripts. The reader
-    # is a singleton on purpose: its mtime-aware cache is what keeps listing an
-    # agent with thousands of past sessions responsive.
-    transcript_reader = FileTranscriptReader()
-    agent_transcript_svc = AgentTranscriptService(
-        reader=transcript_reader,
+    # The agent's own sessions, listed / renamed / deleted through the agent
+    # itself (Agent SDK for Claude Code, a short-lived app-server for Codex).
+    # Surfaces may import both kinds, so the chat package's app-server
+    # transport is handed to the agent adapter here.
+    native_session_svc = NativeSessionService(
         agent_service=agent_svc,
+        sources=native_session_sources(default_app_server_session),
     )
 
     async def _agent_on_delete(agent: Resource) -> None:
@@ -327,7 +327,7 @@ def wire_agent_and_skill_kinds(
     set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_plugin_service(agent_plugin_svc)
     set_agent_hooks_service(agent_hooks_svc)
-    set_agent_transcript_service(agent_transcript_svc)
+    set_native_session_service(native_session_svc)
     set_skill_service(skill_svc)
 
     async def _skill_delivery_report(skill: Resource) -> list[DeliveryResultOut]:
@@ -360,6 +360,5 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc,
         skill_service=skill_svc,
         builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),
-        transcript_reader=transcript_reader,
         mcp_service=agent_mcp_svc,
     )

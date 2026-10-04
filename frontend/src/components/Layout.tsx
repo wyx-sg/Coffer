@@ -39,7 +39,6 @@ import { useResizableWidth } from "@/lib/hooks/useResizableWidth";
 import { isSettingsPath } from "@/lib/navigation";
 import { overlayTitleBar } from "@/lib/windowChrome";
 import { SidebarBrandRow } from "./shell/SidebarBrandRow";
-import { TitleBarSlotContext } from "./shell/titleBarSlot";
 import { WindowTitleStrip } from "./shell/WindowTitleStrip";
 import { useOpenSettings, usePageLocation } from "@/lib/settingsModal";
 import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
@@ -98,7 +97,6 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const overlay = overlayTitleBar();
-  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   const { toast } = useToast();
   const daemon = useDaemonConnectionDriver(() => toast.success(t("daemon.reconnect.reconnected")));
   const phase = daemon.connection.phase;
@@ -163,7 +161,6 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
             sidebarWidth={sidebar.width}
             onBack={history.goBack}
             onForward={history.goForward}
-            onSlot={setTitleSlot}
           />
         ) : null}
         {/* Once for the whole app: a secret change waiting for a present
@@ -228,9 +225,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
                   phase === "reconnecting" && "pointer-events-none select-none opacity-[.55]",
                 )}
               >
-                <TitleBarSlotContext.Provider value={titleSlot}>
-                  {page}
-                </TitleBarSlotContext.Provider>
+                {page}
               </div>
             )}
           </div>

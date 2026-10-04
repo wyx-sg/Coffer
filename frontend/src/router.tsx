@@ -87,11 +87,7 @@ const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "
 // uid where a name can be renamed (ADR identity-is-the-uid-inside-the-file).
 const pageRoutes: RouteObject[] = gateRoutes([
   { index: true, element: <OverviewPage /> },
-  // One element for both addresses, so opening a conversation from the list —
-  // or the draft's first send landing on the conversation it created — keeps
-  // the page mounted and its state (the draft's pending first message) alive.
   { path: "conversations", element: conversationsPage },
-  { path: "conversations/:id", element: conversationsPage },
   { path: "mcp-servers", element: <ResourcesPage /> },
   { path: "mcp-servers/:name", element: <ResourcesPage /> },
   { path: "mcp-servers/:name/:tab", element: <ResourcesPage /> },

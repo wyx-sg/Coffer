@@ -9,14 +9,12 @@ import dataclasses
 import pytest
 
 from coffer.application.channel import inbound_burst
-from coffer.domain.chat.message import Role, TextBlock
 
 from .conftest import (
     ChannelEnv,
     FakeChannelAdapter,
     inbound,
     tap_event,
-    turn_body,
     uid_of,
     wait_until,
 )
@@ -39,12 +37,7 @@ def _with_windows(env: ChannelEnv, *, text: float, forward: float) -> None:
 
 
 async def _user_turns(env: ChannelEnv, conversation_id: str) -> list[str]:
-    messages = await env.chat.list_messages(conversation_id)
-    return [
-        turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
-        for m in messages
-        if m.role == Role.USER
-    ]
+    return env.user_texts(conversation_id)
 
 
 @pytest.mark.acceptance(

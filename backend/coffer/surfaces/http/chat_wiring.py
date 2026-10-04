@@ -1,6 +1,6 @@
 """Chat wiring for the FastAPI composition root.
 
-Builds the conversation/message repos, the registry of agent providers the
+Builds the conversation repo, the registry of agent providers the
 chat surface drives, the turn orchestrator, and the model-catalogue and
 introspection services that tell the surface which models each agent offers.
 
@@ -12,12 +12,10 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
-from coffer.application.chat.attachments import ChatAttachmentService
 from coffer.application.chat.question_agents import QuestionService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
@@ -26,7 +24,6 @@ from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECOND
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import connection_for_agent
 from coffer.application.resource_service import ResourceService
-from coffer.application.runtime.supervisor import spawn
 from coffer.application.turn_ask import set_turn_ask
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
@@ -42,9 +39,9 @@ from coffer.infrastructure.agent.model_discovery import (
     NativeDefaultModel,
 )
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
-from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
-from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
+from coffer.infrastructure.chat.persistence import ConversationRepo
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
+from coffer.infrastructure.chat.session_in_use import ProcessSessionInUse
 from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS, ProviderIntrospector
 from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
@@ -52,7 +49,6 @@ from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
 from coffer.surfaces.http.chat.dependencies import (
     get_channel_note_reader,
     set_agent_registry,
-    set_attachment_service,
     set_chat_service,
     set_model_catalog,
     set_turn_orchestrator,
@@ -180,9 +176,8 @@ def wire_chat(
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
     former ``builtin`` chat persona is retired (ADR chat-single-owner-live-mirror).
     """
-    # 1. Persistence repos.
+    # 1. Persistence repo.
     conv_repo = ConversationRepo(sm)
-    msg_repo = MessageRepo(sm)
 
     # 2. Secret resolver: resolve a secret ref → raw API key from the
     #    encrypted secret store.
@@ -228,30 +223,14 @@ def wire_chat(
     # 4. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(
         conversations=conv_repo,
-        messages=msg_repo,
         registry=registry,
     )
     orchestrator = TurnOrchestrator(
-        chat_service=chat_svc, registry=registry, idle_timeout=_turn_idle_timeout()
+        chat_service=chat_svc,
+        registry=registry,
+        idle_timeout=_turn_idle_timeout(),
+        session_in_use=ProcessSessionInUse(),
     )
-
-    # 5. Startup sweep: flip any lingering ``status='streaming'`` rows to
-    #    ``'failed'`` (recover from a prior daemon crash).
-
-    # It runs as a background task, so a turn can begin before it does: it only
-    # touches rows older than this daemon (spec chat "Sweep streaming rows left by
-    # a crashed daemon").
-    daemon_started = datetime.now(tz=UTC)
-
-    async def _sweep() -> None:
-        try:
-            n = await TurnOrchestrator.sweep_streaming_messages(msg_repo, before=daemon_started)
-            if n:
-                _log.info("chat.startup_sweep: flipped %d streaming rows to failed", n)
-        except Exception:
-            _log.exception("chat.startup_sweep.failed")
-
-    spawn(_sweep(), name="chat-startup-sweep")
 
     # 6. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the
@@ -306,10 +285,6 @@ def wire_chat(
     # ``coffer__ask``: the gateway offers it to a session whose X-Coffer-Turn token
     # names a live turn, and serves it through this port.
     set_turn_ask(QuestionService())
-    # The web composer's uploads live in ``~/.coffer/content/chat-media`` (spec chat
-    # "Upload a file for a web message"); the retention sweep over the same
-    # directory is bound in ``build_retention_service``.
-    set_attachment_service(ChatAttachmentService(FileChatMediaStore(default_chat_media_dir())))
     set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)
     set_agent_registry(registry)

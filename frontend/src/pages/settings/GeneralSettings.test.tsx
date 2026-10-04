@@ -24,7 +24,28 @@ vi.mock("@/lib/hooks/useEditors", () => ({
   }),
 }));
 
+// Likewise the terminals the daemon detected, and the managed agents the hand-off agent is chosen among.
+vi.mock("@/lib/hooks/useTerminals", () => ({
+  useDetectedTerminals: () => ({
+    data: [
+      { label: "Terminal", value: "terminal" },
+      { label: "iTerm", value: "iterm" },
+    ],
+  }),
+}));
+const providers = vi.hoisted(() => ({
+  agents: [] as { agent_key: string; display_name: string; available: boolean }[],
+}));
+vi.mock("@/lib/hooks/useAgentProviders", () => ({
+  useAgentProviders: () => ({ data: providers.agents }),
+}));
+const BOTH_AGENTS = [
+  { agent_key: "claude_code", display_name: "Claude Code", available: true },
+  { agent_key: "codex", display_name: "Codex", available: true },
+];
+
 afterEach(() => {
+  providers.agents = [];
   localStorage.clear();
   delete document.documentElement.dataset.theme;
 });
@@ -50,7 +71,7 @@ describe("GeneralSettings", () => {
   test("pickers are the shared Select and choices are segmented — no native <select>", () => {
     render(<GeneralSettings />);
     expect(document.querySelectorAll("select")).toHaveLength(0);
-    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+    expect(screen.getAllByRole("combobox")).toHaveLength(3);
     expect(screen.getByRole("group", { name: /^language$/i })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: /^theme$/i })).toBeInTheDocument();
   });
@@ -173,4 +194,100 @@ acceptance("web-ui", "the General tab offers the theme choice", () => {
     "true",
   );
   expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
+});
+
+const TERMINAL_KEY = "coffer.preferredTerminal";
+const terminalSelect = () => screen.getByRole("combobox", { name: /preferred terminal/i });
+const openTerminalPicker = () => fireEvent.keyDown(terminalSelect(), { key: "ArrowDown" });
+const templateInput = () =>
+  screen.getByRole("textbox", { name: /custom terminal command/i }) as HTMLInputElement;
+
+describe("GeneralSettings preferred terminal", () => {
+  test("picking a detected terminal stores its launcher value", () => {
+    render(<GeneralSettings />);
+    expect(terminalSelect()).toHaveTextContent("System terminal");
+    openTerminalPicker();
+    pickOption("iTerm");
+    expect(localStorage.getItem(TERMINAL_KEY)).toBe("iterm");
+    expect(terminalSelect()).toHaveTextContent("iTerm");
+    expect(screen.queryByRole("textbox", { name: /custom terminal command/i })).toBeNull();
+  });
+
+  acceptance("web-ui", "general tab persists the preferred terminal", () => {
+    const { unmount } = render(<GeneralSettings />);
+
+    // A detected terminal persists across a reload.
+    openTerminalPicker();
+    pickOption("iTerm");
+    unmount();
+    const second = render(<GeneralSettings />);
+    expect(terminalSelect()).toHaveTextContent("iTerm");
+
+    // So does a custom template.
+    openTerminalPicker();
+    pickOption(/custom/i);
+    fireEvent.change(templateInput(), { target: { value: "kitty sh -lc {command}" } });
+    fireEvent.blur(templateInput());
+    expect(localStorage.getItem(TERMINAL_KEY)).toBe("kitty sh -lc {command}");
+    second.unmount();
+    render(<GeneralSettings />);
+    expect(terminalSelect()).toHaveTextContent(/custom/i);
+    expect(templateInput().value).toBe("kitty sh -lc {command}");
+
+    // Clearing the override restores the system terminal (empty store).
+    openTerminalPicker();
+    pickOption(/system terminal/i);
+    expect(localStorage.getItem(TERMINAL_KEY)).toBeNull();
+    expect(terminalSelect()).toHaveTextContent("System terminal");
+  });
+
+  acceptance("web-ui", "a custom terminal template must hold the command", () => {
+    localStorage.setItem(TERMINAL_KEY, "iterm");
+    render(<GeneralSettings />);
+    openTerminalPicker();
+    pickOption(/custom/i);
+    // The hint names both placeholders.
+    expect(screen.getByText(/\{cwd\}.*\{command\}/)).toBeInTheDocument();
+    fireEvent.change(templateInput(), { target: { value: "kitty --directory {cwd}" } });
+    fireEvent.blur(templateInput());
+    expect(screen.getByRole("alert")).toHaveTextContent("The template needs {command}.");
+    // Not saved: the previous value stands.
+    expect(localStorage.getItem(TERMINAL_KEY)).toBe("iterm");
+
+    fireEvent.change(templateInput(), { target: { value: "kitty --directory {cwd} {command}" } });
+    fireEvent.blur(templateInput());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(localStorage.getItem(TERMINAL_KEY)).toBe("kitty --directory {cwd} {command}");
+  });
+});
+
+describe("GeneralSettings hand-off agent", () => {
+  const agentSelect = () => screen.getByRole("combobox", { name: /hand-off agent/i });
+
+  acceptance("web-ui", "general tab persists the hand-off agent", () => {
+    providers.agents = BOTH_AGENTS;
+    const { unmount } = render(<GeneralSettings />);
+    // With none stored, the first managed agent is the hand-off agent.
+    expect(agentSelect()).toHaveTextContent("Claude Code");
+    fireEvent.keyDown(agentSelect(), { key: "ArrowDown" });
+    pickOption("Codex");
+    expect(localStorage.getItem("coffer.handoffAgent")).toBe("codex");
+
+    unmount();
+    render(<GeneralSettings />);
+    expect(agentSelect()).toHaveTextContent("Codex");
+  });
+
+  test("a stored agent that is not managed reads as the first managed one", () => {
+    providers.agents = [BOTH_AGENTS[0]];
+    localStorage.setItem("coffer.handoffAgent", "codex");
+    render(<GeneralSettings />);
+    expect(agentSelect()).toHaveTextContent("Claude Code");
+  });
+
+  test("with no managed agent the setting offers nothing and says why", () => {
+    render(<GeneralSettings />);
+    expect(screen.queryByRole("combobox", { name: /hand-off agent/i })).toBeNull();
+    expect(screen.getByText(/Install Claude Code or Codex to hand work off/)).toBeInTheDocument();
+  });
 });

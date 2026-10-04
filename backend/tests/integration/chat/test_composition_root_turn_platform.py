@@ -53,7 +53,7 @@ def test_agent_provider_router_mounted(app) -> None:  # type: ignore[no-untyped-
 
 
 def test_chat_db_tables_created_on_startup(app, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Alembic migration creates the chat tables on startup."""
+    """Alembic migration creates the conversation index on startup."""
     db_path = tmp_path / "c.db"
 
     with TestClient(app):
@@ -65,7 +65,8 @@ def test_chat_db_tables_created_on_startup(app, tmp_path) -> None:  # type: igno
     conn.close()
     table_names = {r[0] for r in rows}
     assert "conversations" in table_names, f"tables: {table_names}"
-    assert "chat_messages" in table_names, f"tables: {table_names}"
+    # Coffer keeps no conversation text: the message store is gone (migration 0149).
+    assert not {"chat_messages", "chat_reply_files"} & table_names, f"tables: {table_names}"
     # The former chat_models registry table is retired (migration 0036): models
     # are now provider connections in the generic ``resources`` table.
     assert "chat_models" not in table_names, f"tables: {table_names}"
@@ -140,7 +141,7 @@ async def test_create_conversation_rejects_unknown_agent_and_bad_config(app) -> 
                 agent_key="claude_code", agent_config={"cwd": "/no/such/dir/xyz"}
             )
 
-        assert await svc.list_conversations() == []
+        assert (await svc.page_conversations()).items == []
 
 
 @pytest.mark.acceptance(spec="memory", scenario="a channel turn carries the index without a hook")

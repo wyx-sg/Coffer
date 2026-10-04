@@ -98,7 +98,7 @@ Channels included, is owned by no feature and is always there:
   Agents           /agents            — the consumers (Bot icon)
   Model providers  /model-providers   — the endpoints agents' models are served from, and what requests through Coffer cost (tabs Providers | Usage)
  RUN
-  Conversations    /conversations     — every conversation Coffer runs, from channels and from Coffer itself
+  Conversations    /conversations     — the conversations the IM bots started, each opened in the agent's own terminal
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
@@ -184,11 +184,7 @@ persist across sessions (`localStorage`). The sidebar toggle's shortcut is ⌘\
 The desktop shell on macOS MUST draw its own 38px title strip across the top of
 the window, in the sidebar's colour and with no rule beneath it. Besides the
 traffic lights the strip MUST hold only the sidebar toggle and back and forward
-arrows through the app's own history, to the right of the toggle — with one
-exception: an open conversation's title row (its title, its channel source and
-its ⋯ menu) sits in the strip, 32px right of the sidebar's edge, because that page
-has no header of its own; no other page puts anything there, and a page's title
-stays in the page. The controls
+arrows through the app's own history, to the right of the toggle; no page puts anything there, and a page's title stays in the page. The controls
 start just right of the traffic lights, or at the left edge in full screen,
 where the lights are hidden, and the lights and the controls share the strip's
 centre line. Under the strip every page's title MUST start at the same place,
@@ -198,8 +194,7 @@ draggable. While the sidebar is expanded its right edge MUST run up through the
 strip; collapsed, the strip MUST run across. An arrow MUST be greyed out and
 inert when the app's history has nowhere to go that way, and ⌘[ and ⌘] (Ctrl
 off macOS) MUST do what the arrows do, except while the user types in a text
-field. A browser tab has no strip and no arrows; its sidebar toggle sits beside
-the logo, and an open conversation's title row is a 44px bar at the top of the content.
+field. A browser tab has no strip and no arrows; its sidebar toggle sits beside the logo.
 
 #### Scenario: the arrows in the title bar go back and forward through the app's history
 - **GIVEN** the desktop shell with no history behind or ahead of the current page
@@ -995,7 +990,7 @@ MUST carry six tabs, in this order, in every build, grouped by what they manage
 rather than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences (the interface language
-  and the theme, the default page size and the preferred external editor), and a
+  and the theme, the default page size, the preferred external editor, the preferred terminal and the hand-off agent), and a
   **Speech-to-text** section: the connection and model that transcribe voice
   messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
   It carries no experimental-features card; the switches are on the Features
@@ -1090,7 +1085,7 @@ machine only is a setting shown on the tab it belongs to:
   a remote or is this machine's only copy, and **Open folder**, whose tooltip
   names the folder (no separate location row).
 - **Local content** — what is not synced and the user must back up themselves:
-  chat and channel attachments and media only, with their size and **Open
+  channel attachments and media only, with their size and **Open
   folder**, and one short line saying how they are kept: "Include this folder in
   your own backups." under keep forever, or that attachments are deleted
   automatically after N days. Its **Attachments** row is the retention of those
@@ -1098,7 +1093,7 @@ machine only is a setting shown on the tab it belongs to:
   every History row, and shortening it asks first, counting the files the shorter
   window deletes.
 - **History** — the retention of each record kind — changes, tool calls,
-  conversations, **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
+  **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
@@ -1107,8 +1102,8 @@ machine only is a setting shown on the tab it belongs to:
   how many the table holds now and would hold after, counted by the daemon
   without deleting anything. **Clear expired now** also removes attachments past their window and reports them, and skill working files and config backups past theirs, as files. A refused save MUST say so above the blocks with
   **Try again**, name the window still in place, and mark the row "Not saved".
-- **Rebuildable cache** — Coffer's memory tree and the transcript summary cache,
-  both under `~/.coffer/derived/`, which Coffer rebuilds on its own: one **Clear** action,
+- **Rebuildable cache** — Coffer's memory tree under `~/.coffer/derived/`,
+  which Coffer rebuilds on its own: one **Clear** action,
   behind a confirmation saying that memory is rebuilt from the agents' own
   memory on the next update, each entry becoming a note as it stands, and that
   notes whose sources are gone do not come back.
@@ -1121,9 +1116,9 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **THEN** reloading the page shows the same retention-days value that was saved
 
 #### Scenario: the data tab shows four blocks and no this-mac block
-- **GIVEN** a vault with versions, chat media on disk, and memory partitions
+- **GIVEN** a vault with versions, channel media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, conversations, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
@@ -1134,7 +1129,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: skill working files are kept for a chosen window
 - **GIVEN** the `skill_data` policy at 30 days
 - **WHEN** the user opens `/settings/data`
-- **THEN** History has a Skill working files row at 30 days, after Conversations
+- **THEN** History has a Skill working files row at 30 days, after Tool calls
 - **AND** shortening it asks first and the confirmation counts files, not records
 
 #### Scenario: shortening a retention window counts what it deletes
@@ -1153,7 +1148,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **GIVEN** memory partitions with notes
 - **WHEN** the user chooses Clear in Rebuildable cache
 - **THEN** a confirmation says the next memory update rebuilds memory from the agents' own memory and that notes whose sources are gone do not come back, and nothing is cleared until the user confirms
-- **AND** once confirmed only the memory tree and the transcript summary cache are cleared, with no vault or local content touched
+- **AND** once confirmed only the memory tree is cleared, with no vault or local content touched
 
 #### Scenario: config backups are kept for a chosen window
 - **GIVEN** the `config_backups` policy at 30 days
@@ -1698,9 +1693,9 @@ Wherever the web UI shows an agent type whose program is not found — its Agent
 Overview tab's problem states (config left behind, not found) — it MUST offer the daemon's
 `install_handoff` prompt for that type (agent-registry "Hand installing an agent's program to an
 agent") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split
-button", whose Ask an agent is offered only while another managed agent is available to run the
-conversation: the missing agent itself cannot. On a list row the split button sits before the row's ⋯
-menu, which holds neither Copy prompt nor Ask an agent, and the detail page's header ⋯ holds
+button", whose main part, **Hand off to <Agent>**, is offered only for a managed agent other than the missing one: the missing agent
+itself cannot run the prompt. On a list row the split button sits before the row's ⋯
+menu, which holds neither Copy prompt nor a hand-off, and the detail page's header ⋯ holds
 neither. None
 of these surfaces MUST show an install command or tell the person to restart Coffer. The
 Plugins tab of a Claude Code agent whose program is not found, where Uninstall cannot run, MUST
@@ -1712,12 +1707,12 @@ action").
 - **GIVEN** Codex not installed and no managed agent available
 - **WHEN** the user presses Copy prompt on the Codex row
 - **THEN** the daemon's prompt is copied as given and no install command is shown anywhere
-- **AND** the row offers no Ask an agent, and its ⋯ menu offers no Copy prompt
+- **AND** the row offers no Hand off to <Agent>, and its ⋯ menu offers no Copy prompt
 
 #### Scenario: ask an agent is offered only while another managed agent is available
 - **GIVEN** Claude Code's config left behind with its program gone, and Codex available as a managed agent
-- **WHEN** the user presses Ask an agent on the Claude Code row's split button
-- **THEN** New conversation opens, and nothing is written or sent
+- **WHEN** the user presses Hand off to Codex on the Claude Code row's split button
+- **THEN** Codex is started in the preferred terminal with the install prompt, and nothing is written to either agent's configuration
 - **AND** with only Claude Code itself managed, the row offers Copy prompt alone
 
 #### Scenario: a connect refused for a missing shim offers the daemon's prompt
@@ -1788,7 +1783,7 @@ groups, under headings in this order:
 - **AGENTS** — set up the agents and the models they run on: Agents, then Model
   providers. Agents come first because they are the subject of the product; a
   provider is the endpoint and key each agent's model is served from.
-- **RUN** — put an agent to work, directly or through an IM bot: Conversations,
+- **RUN** — see what the IM bots put agents to work on, and set the bots up: Conversations,
   then Channels.
 - **CAPABILITIES** — give agents things they can do: MCP servers, Custom tools,
   Skills, then CLIs.
@@ -1835,10 +1830,10 @@ word a user navigates by:
   agent in that agent's Change model dialog (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation over REST and in the web UI").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
-  Conversations is where a person reads and continues every conversation, a
+  Conversations is where a person finds every conversation a channel started and opens it in the terminal, a
   channel is an IM bot set up once and revisited rarely, and the conversations a
   channel carries are listed on the Conversations page with its badge (spec
-  [chat](../chat/spec.md) "Show every conversation on the Conversations page");
+  [chat](../chat/spec.md) "Show channel conversations on the Conversations page");
   the Channels page holds setup, status and settings only.
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.
@@ -2087,7 +2082,7 @@ It lists two kinds of entry, filtered together by what the user types:
 - **Pages** — every sidebar entry and every Settings tab, by the names the
   sidebar and the tabs use (see "Call a surface by one name everywhere"). A
   Settings tab opens in the Settings modal over the current page.
-- **Objects** — the agents, the conversations, the resources of every kind
+- **Objects** — the agents, the resources of every kind
   with a list surface (custom tools included), the CLIs and the stored secrets
   (by ref, never a value), matched by name — and also by title on the kinds
   that carry one ([resource-framework](../resource-framework/spec.md)
@@ -2366,11 +2361,9 @@ login command, a "run it in a terminal" instruction, or run any of them: a CLI
 that needs the user says what it costs in a plain sentence — which servers can't
 start and which skills fail — and its detail page and the skill's Requires tab
 MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
-command to an agent with a prompt") through **Copy prompt** and **Ask an agent**
-— the latter opens a new conversation with a Coffer-managed agent chosen in the
-New conversation dialog, with the prompt in the composer and nothing sent until
-the user presses Send; with no managed agent available only Copy prompt is
-offered. The page's **Check again** probes every command afresh, and the banner that
+command to an agent with a prompt") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
+— **Hand off to <Agent>** starts the hand-off agent in the preferred terminal with the prompt sent, and **Copy prompt** copies it;
+with no managed agent available only Copy prompt is offered. The page's **Check again** probes every command afresh, and the banner that
 states a problem re-checks that one tool. A CLI a person added keeps **Edit** and a
 **⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
 installed on this machine); a CLI a skill or MCP server requires has neither, so
@@ -2393,8 +2386,8 @@ is probed are specified by skill-manager; this page shows what they report.
 
 #### Scenario: a CLI that needs the user offers a prompt for an agent
 - **GIVEN** a required CLI that is missing and a Coffer-managed agent
-- **WHEN** the user opens its detail page and chooses Ask an agent, then that agent
-- **THEN** a new conversation opens with the prompt in the composer, and nothing is sent until the user presses Send
+- **WHEN** the user opens its detail page and presses Hand off to <Agent>
+- **THEN** the hand-off agent starts in the preferred terminal with the prompt sent
 - **AND** the page offers Copy prompt, shows no install command, and with no managed agent available offers only Copy prompt
 
 #### Scenario: check again after logging in
@@ -2436,8 +2429,7 @@ is probed are specified by skill-manager; this page shows what they report.
 - **AND** once the daemon's list no longer reports it — every required CLI present, current and logged in — the item is gone
 
 ### Requirement: Resize every split view by its divider
-Every split view — a list beside its detail, a file tree beside its file, a
-conversation list beside its thread, and the sidebar beside the workspace — MUST
+Every split view — a list beside its detail, a file tree beside its file, and the sidebar beside the workspace — MUST
 be resizable by dragging the divider between its panes. Each pane MUST keep a
 minimum width: a list pane at least 240px and a detail pane at least 480px, and
 a list pane at most half the window; the expanded sidebar between 200px and
@@ -2489,7 +2481,7 @@ version** on every version but the current one, which writes a new version rathe
 past, and the diff. A history that cannot be read
 MUST say so in one **Load error** row inside the tab — *Couldn't load the history*, the reason,
 **Retry** and **Open Activity** — leaving the Document tab working; without git the row is *History
-needs git* (see "Offer a knowledge refusal's hand-off as one Ask an agent control").
+needs git* (see "Offer a knowledge refusal's hand-off as one hand-off control").
 
 #### Scenario: the history tab lists versions with their writers
 - **GIVEN** a document the user created, that an agent then changed
@@ -2584,7 +2576,7 @@ returns to its button, and a failed call returns it at once with the error as
 a toast. Every other action — connecting an agent or repairing its config
 (writes into the agent's own files, previewed on their page), adding a secret,
 turning approval on, and every read-only review — keeps opening its page. Every row MUST also
-carry the hand-off split button, Ask an agent ▾ with Copy prompt behind it, and a ⋯ menu
+carry the hand-off split button, Hand off to <Agent> ▾ with Copy prompt behind it, and a ⋯ menu
 holding Ignore — the daemon's prompt as given (every item carries one, the
 kind's own where it has one); the list scrolls inside a frame of about six
 rows, under its title, which shows how many items it holds. An attention source that failed MUST be named
@@ -2643,8 +2635,8 @@ for what agents share follows.
 
 #### Scenario: a needs-you row offers the item's hand-off in its menu
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
-- **WHEN** the user opens the split button's menu and chooses Copy prompt, then presses Ask an agent
-- **THEN** the daemon's prompt is copied as given, and Ask an agent opens New conversation and then the draft with the prompt in its composer, unsent
+- **WHEN** the user opens the split button's menu and chooses Copy prompt, then presses Hand off to <Agent>
+- **THEN** the daemon's prompt is copied as given, and Hand off to <Agent> starts the hand-off agent in the preferred terminal with the prompt sent
 - **AND** with no managed agent available the row offers a Copy prompt button only, and every row's ⋯ menu ends with Ignore
 
 #### Scenario: overview shows a calm card when nothing needs the user
@@ -2681,21 +2673,32 @@ for what agents share follows.
 ### Requirement: Hand a machine-dependent problem to an agent with one split button
 Installing, setting up, logging in and troubleshooting depend on the machine, so a problem whose fix
 is outside Coffer and for which the backend wrote a concrete prompt MUST be handed over with one split
-button, **Ask an agent ▾**, never two buttons: pressing the button opens a draft conversation with
-the prompt typed in and sends nothing until the person presses Send; the menu's one item, **Copy
-prompt**, copies the daemon's prompt as given for an agent outside Coffer and answers with a
-"Prompt copied" toast. With no Coffer-managed agent installed only **Copy prompt** is offered, with
-the one-sentence help beside it. The split button sits after the state's own buttons (Check again,
+button, **Hand off to <Agent> ▾**, never two buttons, where <Agent> is the display name of the hand-off
+agent ("Let the user choose the hand-off agent"). Its tooltip reads "Start <Agent> in <terminal> to handle
+this". Pressing the main part MUST start that agent in the preferred terminal ("Let the user choose a
+terminal") with the prompt sent, through the daemon ([daemon](../daemon/spec.md) "Open an agent session in a terminal"),
+with no confirmation; a toast says the terminal opened, and a refusal or a launcher that fails shows its reason
+with **Copy prompt** as the way out. The menu holds **Hand off to <other agent>** when the other supported
+agent is also managed, then **Copy prompt**, which copies the daemon's prompt as given for an agent
+outside Coffer and answers with a "Prompt copied" toast. With one managed agent the menu holds Copy prompt
+alone. With no Coffer-managed agent installed only **Copy prompt** is offered as a button, with the
+one-sentence help beside it. The split button sits after the state's own buttons (Check again,
 Retry, View log), appears once per problem, never on a healthy, success or empty state, and never for
 a missing secret or an approval, which only the person can give. Wherever another requirement names
-Copy prompt and Ask an agent together, they are this button's menu item and button. On a Needs you
-row the same split button sits beside the row's action, and the ⋯ menu holds Ignore.
+Copy prompt and **Ask an agent** together — the button's former name — they are this button's menu item
+and main part. On a Needs you row the same split button sits beside the row's action, and the ⋯ menu holds Ignore.
 
 #### Scenario: the split button hands a prompt over or copies it
 - **GIVEN** a problem with a prompt and a managed agent installed
-- **WHEN** the person presses Ask an agent, and separately opens its menu and chooses Copy prompt
-- **THEN** a draft conversation opens with the prompt typed in and nothing sent, and the prompt is copied as given with a "Prompt copied" toast
-- **AND** with no managed agent installed only Copy prompt is offered
+- **WHEN** the person presses Hand off to <Agent>, and separately opens its menu and chooses Copy prompt
+- **THEN** the daemon is asked to start the hand-off agent in the preferred terminal with the prompt sent and no confirmation, and the prompt is copied as given with a "Prompt copied" toast
+- **AND** with only one managed agent the menu holds Copy prompt alone, and with no managed agent installed only Copy prompt is offered
+- **AND** a terminal that fails to open is reported in a toast beside Copy prompt
+
+#### Scenario: the menu offers the other managed agent
+- **GIVEN** a problem with a prompt, Claude Code as the hand-off agent and Codex also managed
+- **WHEN** the person opens the split button's menu
+- **THEN** it holds Hand off to Codex and then Copy prompt, and choosing the first starts Codex in the preferred terminal with the prompt sent
 
 ### Requirement: Keep Activity's filters in the address
 The Activity page MUST keep its tab and every filter in the address, so a link
@@ -3008,10 +3011,10 @@ restarted daemon answers, with no manual reload.
 - **THEN** the page asks the daemon to look again, and on `ready: true` restarts the daemon
 - **AND** when git is still missing the screen stays and says it checked again
 
-### Requirement: Offer a knowledge refusal's hand-off as one Ask an agent control
+### Requirement: Offer a knowledge refusal's hand-off as one hand-off control
 When the daemon refuses a knowledge operation with a hand-off in the error's details
-(`details.handoff.prompt`), the Knowledge page MUST offer that prompt as one **Ask an agent ▾**
-control — Ask an agent opens a draft conversation with the prompt, and its menu holds Copy prompt,
+(`details.handoff.prompt`), the Knowledge page MUST offer that prompt through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
+— its main part starts the hand-off agent in the preferred terminal with the prompt, and its menu holds Copy prompt,
 which is the only action when no managed agent is available — passing the prompt on as served and
 never assembling it. A History tab or Recent changes that cannot be read because git is not
 installed MUST say so in one neutral row — **History needs git** or **Recent changes needs git**,
@@ -3022,13 +3025,13 @@ show an install command.
 #### Scenario: a history that needs git offers the prompt for installing it
 - **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
 - **WHEN** a document's History tab opens
-- **THEN** it shows the row *History needs git* with Check again and Ask an agent ▾, whose menu copies the served prompt, and names no install command
+- **THEN** it shows the row *History needs git* with Check again and the hand-off split button, whose menu copies the served prompt, and names no install command
 - **AND** it offers no Retry and no Open Activity
 
 #### Scenario: recent changes that need git offer the same row
 - **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
 - **WHEN** Recent changes opens
-- **THEN** it shows the row *Recent changes needs git* with Check again and Ask an agent ▾
+- **THEN** it shows the row *Recent changes needs git* with Check again and the hand-off split button
 
 ### Requirement: List recent knowledge changes across collections
 The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
@@ -3036,7 +3039,7 @@ first, of documents people and agents wrote or deleted. A version an earlier cur
 keeps its curation label. It MUST be filtered with **Collection** and **Author** filter pills and a
 **Clear filters** control, the choice kept in the URL. A delete carries **Restore**. The view has no
 waiting items and no pass to inspect or undo; a refusal because git is not installed is handled as in
-"Offer a knowledge refusal's hand-off as one Ask an agent control".
+"Offer a knowledge refusal's hand-off as one hand-off control".
 
 #### Scenario: recent changes shows a cross-collection timeline
 - **GIVEN** an agent's write in one collection and a person's edit in another
@@ -3047,3 +3050,49 @@ waiting items and no pass to inspect or undo; a refusal because git is not insta
 - **GIVEN** changes in two collections by the user and by an agent
 - **WHEN** the user picks one collection in the Collection pill and the agent in the Author pill, then chooses Clear filters
 - **THEN** the timeline lists only that collection's changes by that agent and the URL carries both choices, and Clear filters empties both and the URL
+
+### Requirement: Let the user choose a terminal
+The General tab MUST also expose a **preferred terminal**: the terminal Coffer
+opens when the user resumes a conversation or session from a row, or presses a hand-off
+button. The default is the operating system's default terminal (Terminal.app on macOS);
+the user MAY override it by picking a terminal the daemon detected as installed
+(enumerated via `GET /api/v1/fs/terminals`, [daemon](../daemon/spec.md) "List the terminals installed on this host";
+a browser cannot list installed applications) or by entering a custom command template that holds
+`{cwd}` and `{command}`. Like the preferred editor the value is persisted in `localStorage`
+(`coffer.preferredTerminal`; empty means the system terminal), is read when the user clicks, and is never sent to the
+daemon, except transiently as the `terminal` of an open ([daemon](../daemon/spec.md) "Open an agent session in a terminal").
+
+#### Scenario: general tab persists the preferred terminal
+- **GIVEN** the user opens the General settings tab
+- **WHEN** they set a preferred terminal (by picking a detected terminal or entering a custom template)
+- **THEN** reloading the page shows the same preferred-terminal value
+- **AND** clearing the override restores the operating-system default terminal
+
+#### Scenario: a custom terminal template must hold the command
+- **GIVEN** the custom template field
+- **WHEN** the user enters a template without `{command}`
+- **THEN** the field says the template needs `{command}` and the value is not saved
+
+#### Scenario: the preferred terminal is sent only when a session opens
+- **GIVEN** a preferred terminal set and no session opened
+- **WHEN** the user opens a session from a row
+- **THEN** the open request carries that terminal as its `terminal`, and no other request to the daemon carried it
+
+### Requirement: Let the user choose the hand-off agent
+The General tab MUST also expose a **hand-off agent**: Claude Code or Codex, the agent
+Coffer starts when the user presses a hand-off button ("Hand a machine-dependent problem
+to an agent with one split button"). The choices are the managed agents. The value is persisted in
+`localStorage` (`coffer.handoffAgent`: `claude_code` or `codex`) and read when the user clicks. With none
+stored, or when the stored agent is not managed, the hand-off agent is the first managed agent
+(Claude Code before Codex). With no managed agent the setting offers nothing and says
+why.
+
+#### Scenario: general tab persists the hand-off agent
+- **GIVEN** Claude Code and Codex both managed
+- **WHEN** the user chooses Codex as the hand-off agent and reloads the page
+- **THEN** the setting still reads Codex and every hand-off button reads Hand off to Codex
+
+#### Scenario: an unavailable hand-off agent falls back to the first managed one
+- **GIVEN** Codex stored as the hand-off agent and only Claude Code managed
+- **WHEN** a hand-off button renders
+- **THEN** it reads Hand off to Claude Code

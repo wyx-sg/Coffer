@@ -90,7 +90,7 @@ export function fileState(t: TFunction, file: ConflictFile, editing: boolean): s
   return file.secret ? t("sync.resolve.state.secret") : t("sync.resolve.state.open");
 }
 
-/** Whether "Ask an agent" is offered for a file: only a merge, and only while it has no answer. */
+/** Whether "Hand off to <Agent>" is offered for a file: only a merge, and only while it has no answer. */
 export function canAskAgent(file: ConflictFile): boolean {
   return file.agent_mergeable && !file.secret && file.answer === null;
 }

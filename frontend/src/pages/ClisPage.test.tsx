@@ -8,7 +8,6 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Cli } from "@/lib/api/clis";
-import { readHandoffState } from "@/lib/conversations/handoff";
 import { acceptance } from "@/test/acceptance";
 import {
   GCLOUD_LOGGED_OUT,
@@ -34,9 +33,13 @@ vi.mock("@/lib/api/clis", () => ({
   },
 }));
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: { listTerminals: vi.fn().mockResolvedValue([]), openTerminal: vi.fn() },
+}));
 const { clisApi } = await import("@/lib/api/clis");
 const api = vi.mocked(clisApi);
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
+const { fsApi } = await import("@/lib/api/fs");
 const listAgents = vi.mocked(agentProvidersApi.list);
 
 function listOf(items: Cli[]) {
@@ -48,11 +51,6 @@ function Where() {
   return <div data-testid="where">{pathname}</div>;
 }
 
-function Draft() {
-  const handoff = readHandoffState(useLocation().state);
-  return <div data-testid="draft">{handoff?.prompt}</div>;
-}
-
 function renderPage(path = "/clis") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -62,7 +60,6 @@ function renderPage(path = "/clis") {
           <Routes>
             <Route path="/clis" element={<ClisPage />} />
             <Route path="/clis/:command" element={<ClisPage />} />
-            <Route path="/conversations/new" element={<Draft />} />
             <Route path="*" element={null} />
           </Routes>
           <Where />
@@ -167,12 +164,18 @@ describe("ClisPage", () => {
     // Copy prompt lives in the ▾ menu of the split button.
     fireEvent.click(await screen.findByRole("button", { name: "More options" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /Copy prompt/ }));
-    expect(writeText).toHaveBeenCalledWith(JQ_MISSING.handoff?.prompt);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(JQ_MISSING.handoff?.prompt));
 
-    // Ask an agent: the draft opens at once with the prompt, unsent.
-    fireEvent.click(await screen.findByRole("button", { name: "Ask an agent" }));
+    // Hand off to Claude Code starts the agent in the preferred terminal with the prompt, unasked.
+    fireEvent.click(await screen.findByRole("button", { name: "Hand off to Claude Code" }));
+    await waitFor(() =>
+      expect(fsApi.openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        prompt: JQ_MISSING.handoff?.prompt,
+        terminal: null,
+      }),
+    );
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await screen.findByTestId("draft")).toHaveTextContent(JQ_MISSING.handoff?.prompt ?? "");
     unmount();
 
     // With no managed agent available only Copy prompt is offered.
@@ -183,7 +186,7 @@ describe("ClisPage", () => {
     expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
     await waitFor(() => expect(listAgents).toHaveBeenCalledTimes(2));
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
 
   acceptance("web-ui", "check again after logging in", async () => {
@@ -203,7 +206,9 @@ describe("ClisPage", () => {
     // Coffer never runs the login and shows no command for it: the banner
     // hands it to an agent.
     expect(screen.queryByText("gcloud auth login")).toBeNull();
-    expect(await within(banner).findByRole("button", { name: "Ask an agent" })).toBeInTheDocument();
+    expect(
+      await within(banner).findByRole("button", { name: "Hand off to Claude Code" }),
+    ).toBeInTheDocument();
 
     // The banner's Check again re-checks this one command, not all of them.
     fireEvent.click(within(banner).getByRole("button", { name: "Check again" }));
@@ -213,7 +218,7 @@ describe("ClisPage", () => {
     expect(screen.getByText("Logged in")).toBeInTheDocument();
     expect(rowOf("gcloud")).toHaveTextContent("480.0.0 · logged in");
     // Ready: no hand-off.
-    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
 
   test("the header's Check again re-checks every command and is the primary button", async () => {
@@ -256,7 +261,9 @@ describe("ClisPage", () => {
       "/skills/data-profiling/requires",
     );
     expect(screen.getByText("No login needed")).toBeInTheDocument();
-    expect(await within(banner).findByRole("button", { name: "Ask an agent" })).toBeInTheDocument();
+    expect(
+      await within(banner).findByRole("button", { name: "Hand off to Claude Code" }),
+    ).toBeInTheDocument();
   });
 
   acceptance("web-ui", "git shows Coffer under Needed by", async () => {

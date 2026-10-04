@@ -133,7 +133,7 @@ acceptance(
       "/mcp-servers/github",
     );
     // Turning a tool on is the person's choice: no hand-off in the banner.
-    expect(within(banner).queryByRole("button", { name: /Copy prompt|Ask an agent/ })).toBeNull();
+    expect(within(banner).queryByRole("button", { name: /Copy prompt|Hand off to/ })).toBeNull();
     const header = screen
       .getByRole("heading", { name: "hello", level: 2 })
       .closest("header") as HTMLElement;
@@ -184,7 +184,7 @@ test("the commands banner carries one hand-off for every command that needs the 
   renderSkillsPage("/skills/hello");
   const banner = await screen.findByTestId("skill-banner-requires");
   expect(
-    within(banner).getAllByRole("button", { name: /Ask an agent|Copy prompt/ }).length,
+    within(banner).getAllByRole("button", { name: /Hand off to|Copy prompt/ }).length,
   ).toBeGreaterThan(0);
 });
 

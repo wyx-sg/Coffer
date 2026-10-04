@@ -26,8 +26,8 @@ from fastapi import FastAPI
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
-from coffer.application.channel.mirror import ChannelMirror
 from coffer.application.channel.pairing import PairingManager
+from coffer.application.channel.places import ChannelPlaces
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
@@ -54,7 +54,7 @@ from coffer.surfaces.http.channel_routes import (
     set_channel_service,
     set_credential_check,
 )
-from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
+from coffer.surfaces.http.chat.dependencies import set_channel_note_reader, set_channel_places
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
 from coffer.surfaces.http.secret_composition import boundary_resolver
@@ -153,7 +153,7 @@ def wire_channel_kind(
         # channels "Withdraw a bot reply on the owner's command").
         replies=replies,
         # Questions an agent asks the owner (spec channels "Ask the owner in the
-        # chat and take the answer back to the agent").
+        # chat and take the chat's answer back to the agent").
         questions=ChatQuestions(),
     )
 
@@ -185,17 +185,9 @@ def wire_channel_kind(
             return None
         return hashlib.sha256(data).hexdigest()[:16]
 
-    # A reply typed on the Chat page into a channel's conversation also goes to
-    # that chat (spec chat "Mirror a web reply into the channel it came from").
-    # Chat reaches it only through its own ``ChannelMirrorPort``, published here.
-    mirror = ChannelMirror(
-        resources=resource_svc,
-        threads=threads,
-        peers=peers,
-        outbox=outbox,
-        processor=processor,
-    )
-    set_channel_mirror(mirror)
+    # Where each conversation of the Conversations list lives in its channel.
+    # Chat reaches it only through its own ``ChannelPlacesPort``, published here.
+    set_channel_places(ChannelPlaces(threads=threads))
     # The facts the channel note of a channel-driven turn is written from (spec
     # channels "Tell a channel-driven agent it is on a chat channel"): chat
     # composes the note, only the channel kind knows platform, chat kind and
@@ -217,8 +209,6 @@ def wire_channel_kind(
         materialize=materialize,
         secret_revision=secret_revision,
         machine_id=local_machine_id,
-        # Each tick delivers what a running channel still owes its chats.
-        on_tick=mirror.flush,
     )
 
     async def on_delete(channel: Resource) -> None:

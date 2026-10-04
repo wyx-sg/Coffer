@@ -26,7 +26,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.surfaces.http.chat.conversation_routes import _Channel, _conv_out, _Extras
+from coffer.surfaces.http.chat.conversation_routes import _conv_out
+from coffer.surfaces.http.chat.conversation_views import Channel, Extras
 
 #: The channel resource this thread is bridged to, by uid.
 _STANDUP_UID = "7f2b6e0c9a1d4f8e5b3c2a6d0e9f1b47"
@@ -34,9 +35,7 @@ _STANDUP_UID = "7f2b6e0c9a1d4f8e5b3c2a6d0e9f1b47"
 #: once per request from the channel registry (``_extras``); here it is written
 #: out, because what this test is about is the mapper's own join and not the
 #: read that feeds it.
-_EXTRAS = _Extras(
-    channels={_STANDUP_UID: _Channel("team-standup", "telegram")}, places={}, previews={}
-)
+_EXTRAS = Extras(channels={_STANDUP_UID: Channel("team-standup", "telegram")}, places={})
 
 
 @pytest.mark.acceptance(
@@ -63,10 +62,10 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
             peer_chat_id="peer-42",
         )
     )
-    # A plain desktop draft (no channel binding).
+    # A conversation no channel owns is not listed.
     await repo.create(
         Conversation(
-            id="c-web",
+            id="c-orphan",
             agent_key="claude_code",
             title="draft",
             created_at=now,
@@ -89,8 +88,7 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
         assert channel_out.channel_binding.channel == "team-standup"
         assert channel_out.channel_binding.chat_id == "peer-42"
 
-        # A desktop-only conversation has no channel binding.
-        web_out = by_id["c-web"]
-        assert web_out.channel_binding is None
+        # Only the channel's conversation is listed.
+        assert set(by_id) == {"c-channel"}
     finally:
         await engine.dispose()

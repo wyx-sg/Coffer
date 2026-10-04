@@ -1,9 +1,11 @@
 # Managed Agents Run With Full Permissions; Owner Pairing Is the Gate
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The web Chat page this ADR mentions as a second place agents ran from, and its interrupt button, are gone; turns now start only from channels (a row opened from the Conversations or Sessions list runs in the person's own terminal, under the agent's own permissions). The decision (no per-tool approval, owner pairing is the gate) is unchanged.
+
 **Status**: Accepted
 **Date**: 2026-06-18
 **Deciders**: Yuxing Wu
-**Related**: [Channel Owner Gate](channel-owner-gate.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md), spec channels "Pair exactly one owner with a single-use code", spec channels "Gate inbound traffic on sender identity", spec chat "Interrupt the watched turn from the page", [principles](../../docs-site/architecture/principles.md) ("Not a firewall or a sandbox"), research note [IM agent bridges](../research/im-agent-bridges.md), PR #77, PR #82, PR #101, PR #398, PR #410, PR #431
+**Related**: [Channel Owner Gate](channel-owner-gate.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md), spec channels "Pair exactly one owner with a single-use code", spec channels "Gate inbound traffic on sender identity", spec chat "Pause the pending queue on interrupt", [principles](../../docs-site/architecture/principles.md) ("Not a firewall or a sandbox"), research note [IM agent bridges](../research/im-agent-bridges.md), PR #77, PR #82, PR #101, PR #398, PR #410, PR #431
 
 ## Context
 

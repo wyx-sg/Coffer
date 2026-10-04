@@ -14,8 +14,8 @@ from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 
 def attachment_note(att: Attachment) -> str:
     """The prompt line naming one attachment; a pruned file degrades to a note that
-    it could not be read (spec chat "Re-materialise attachments from persisted
-    history"), as the Claude adapter does."""
+    it could not be read (spec channels "Hand inbound attachments to the turn as
+    references"), as the Claude adapter does."""
     if not pathlib.Path(att.path).is_file():
         return f"[Attached file '{att.filename}' could not be read]"
     return f"[The user attached a file '{att.filename}', saved at {att.path}.]"

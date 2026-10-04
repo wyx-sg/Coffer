@@ -41,7 +41,7 @@ openspec/
 | `agent-registry/claude-code`、`agent-registry/codex` | 每种智能体类型如何实现这些切面 |
 | [`channels`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) | 通往智能体的消息渠道，与具体平台无关 |
 | `channels/telegram`、`channels/seatalk` | 各平台的具体机制 |
-| [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | 轮次平台（智能体适配器、对话、事件流）和 Web 版对话页面 |
+| [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | 轮次平台（智能体适配器、对话、事件流）和在终端里打开会话的对话列表 |
 | [`secret`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md) | 加密的密钥存储，以及「其他一切只持有引用」这条规则 |
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | Coffer 进程：每个保险库一个、发现机制、回环 HTTP 防护、提供界面、日志、终端安装 |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | macOS 桌面壳：窗口、托盘、握手、检测或启动守护进程、`.dmg` |

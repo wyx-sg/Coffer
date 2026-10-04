@@ -84,7 +84,7 @@ export function useDiscardCopy({ join = false } = {}) {
 
 /**
  * Hand files to an agent. Not a mutation hook: `AgentHandoff` calls it when the
- * person picks Ask an agent or Copy prompt, and the files then read as handed
+ * person picks Hand off to <Agent> or Copy prompt, and the files then read as handed
  * over, so the sync tree is refetched. Omit `paths` for every file an agent may merge.
  */
 export function useHandoffRequest({ join = false } = {}) {

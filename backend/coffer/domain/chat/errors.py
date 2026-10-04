@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
 
+#: What the chat is told when a session is open in a terminal (spec chat "Run a
+#: session in one place at a time"), word for word.
+SESSION_IN_USE_MESSAGE = (
+    "This session is open in a terminal — continue there, or send /thread to start a new one."
+)
+
 
 class ConversationNotFound(CofferError):  # noqa: N818
     code = "CONVERSATION_NOT_FOUND"
@@ -16,6 +22,18 @@ class ConversationNotFound(CofferError):  # noqa: N818
     def __init__(self, conversation_id: str) -> None:
         super().__init__(f"conversation not found: {conversation_id!r}")
         self.conversation_id = conversation_id
+
+
+class SessionInUse(CofferError):  # noqa: N818
+    """A turn would resume a native session that is open outside the daemon (a
+    terminal); it is refused rather than forked (spec chat "Run a session in one
+    place at a time"). Raised only to a caller that has no chat to tell."""
+
+    code = "SESSION_IN_USE"
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(SESSION_IN_USE_MESSAGE)
+        self.session_id = session_id
 
 
 class UnknownAgent(CofferError):  # noqa: N818
@@ -37,99 +55,6 @@ class AgentConfigRejected(CofferError):  # noqa: N818
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
-
-
-class AttachmentTooLarge(CofferError):  # noqa: N818
-    """An upload from the web composer is over the per-file ceiling; the message
-    names the limit so the refusal is actionable (spec chat "Upload a file for a
-    web message")."""
-
-    code = "ATTACHMENT_TOO_LARGE"
-
-    def __init__(self, size: int, limit: int) -> None:
-        super().__init__(
-            f"attachment is {size} bytes; the limit is {limit} bytes ({limit // (1024 * 1024)} MB)"
-        )
-        self.size = size
-        self.limit = limit
-
-
-class AttachmentTypeUnsupported(CofferError):  # noqa: N818
-    """An upload whose type no agent can use from a turn (video, archives,
-    executables, other binaries)."""
-
-    code = "ATTACHMENT_TYPE_UNSUPPORTED"
-
-    def __init__(self, filename: str, mime: str | None) -> None:
-        super().__init__(
-            f"unsupported attachment type for {filename!r} ({mime or 'unknown'}): "
-            "attach an image, a document, audio, or a text file"
-        )
-        self.filename = filename
-
-
-class AttachmentNotFound(CofferError):  # noqa: N818
-    """A message names an attachment id no upload stored — never uploaded, or
-    its file was pruned. Nothing is persisted or queued for that message."""
-
-    code = "ATTACHMENT_NOT_FOUND"
-
-    def __init__(self, attachment_id: str) -> None:
-        super().__init__(f"attachment not found: {attachment_id!r}; upload the file again")
-        self.attachment_id = attachment_id
-
-
-class MessageNotFound(CofferError):  # noqa: N818
-    """A route names no such message in that conversation — a resend of anything
-    but one of its user messages, or the files of anything but one of its
-    replies; never there, or deleted with its conversation."""
-
-    code = "MESSAGE_NOT_FOUND"
-
-    def __init__(self, conversation_id: str, message_id: str) -> None:
-        super().__init__(f"no such message {message_id!r} in conversation {conversation_id!r}")
-        self.conversation_id = conversation_id
-        self.message_id = message_id
-
-
-class ReplyFileNotFound(CofferError):  # noqa: N818
-    """A reply's changed-file diff was asked for under a path the reply did not
-    record (spec chat "Record what each reply changed in each file")."""
-
-    code = "REPLY_FILE_NOT_FOUND"
-
-    def __init__(self, message_id: str, path: str) -> None:
-        super().__init__(f"reply {message_id!r} recorded no changes to {path!r}")
-        self.message_id = message_id
-        self.path = path
-
-
-class AttachmentExpired(CofferError):  # noqa: N818
-    """A message being sent again references a file that is no longer on disk —
-    the 30-day media sweep deleted it. The resend is refused rather than sent
-    without the file (spec chat "Show a failed turn as one inline banner with
-    Retry")."""
-
-    code = "ATTACHMENT_EXPIRED"
-
-    def __init__(self, filename: str) -> None:
-        super().__init__(
-            f"attachment {filename!r} is no longer stored (uploads are kept for 30 days); "
-            "attach it again"
-        )
-        self.filename = filename
-
-
-class AttachmentUnavailable(CofferError):  # noqa: N818
-    """A thread asked for the bytes of a file no message of that conversation
-    references, or one the media sweep has since deleted (spec chat "Show a
-    message's attachments in the thread"). The chip stays a plain chip."""
-
-    code = "ATTACHMENT_UNAVAILABLE"
-
-    def __init__(self, attachment_id: str) -> None:
-        super().__init__(f"attachment not available: {attachment_id!r}")
-        self.attachment_id = attachment_id
 
 
 class QuestionClosed(CofferError):  # noqa: N818

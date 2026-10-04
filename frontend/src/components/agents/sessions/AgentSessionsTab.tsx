@@ -1,65 +1,76 @@
 // src/components/agents/sessions/AgentSessionsTab.tsx — spec agent-registry
-// "Read one transcript session in bounded windows".
-// The agent detail page's Sessions tab (boards 2.1.52–2.1.54): the agent's own
-// CLI session history (Claude Code's ~/.claude/projects, Codex's
-// ~/.codex/sessions), read-only. ONE bordered surface — the session list on
-// the left (SessionList, newest first, search and a Project filter) and the
-// open session on the right (SessionReader). The open session is in the URL as
-// `?session=<source_path>` — the file, because `session_id` repeats across
-// subagent sidechain files — so a reload or a link opens it again; none is
-// opened until one is picked. Coffer never writes these files.
-//
-// No Refresh button: the lists read again when the window gets focus, and a
-// session that moved after the list was read offers "Refresh list" itself.
-import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
+// "Open an agent's sessions from its Sessions tab".
+// The agent detail page's Sessions tab: the agent's own sessions, asked of the
+// agent itself, as the same rows the Conversations page uses — title, working
+// directory and last activity, plus the channel, Running / Needs you and an
+// inline Stop when the session is a channel conversation's. A search box over
+// title and working directory filters in the server; the list pages by cursor
+// as it is scrolled and reads again when the window gets focus. Pressing a row, or
+// the main part of its split button, opens the session in the preferred terminal
+// (asking first when it is busy); ⋯ holds Rename and Delete…. Coffer shows no
+// session text.
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SessionList } from "@/components/agents/sessions/SessionList";
-import { SessionReader } from "@/components/agents/sessions/SessionReader";
-import { FileBrowserFrame } from "@/components/files/FileBrowserFrame";
+import { DeleteSessionDialog } from "@/components/sessions/DeleteSessionDialog";
+import { SessionList } from "@/components/sessions/SessionList";
+import { useOpenSession } from "@/components/sessions/useOpenSession";
 import { LoadErrorRow } from "@/components/LoadErrorRow";
+import { SearchInput } from "@/components/SearchInput";
+import { LoadMoreFooter } from "@/components/ui/load-more";
 import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
-import { useAgentTranscripts, useRefreshTranscripts } from "@/lib/hooks/useAgentTranscripts";
-
-// One session is enough to know whether there are any at all.
-const EXISTENCE_PROBE = 1;
+import {
+  useAgentSessions,
+  useDeleteAgentSession,
+  useRenameAgentSession,
+} from "@/lib/hooks/useAgentSessions";
+import { useInterruptConversation } from "@/lib/hooks/useConversations";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { sessionRow, type SessionRowData } from "@/lib/sessions/rows";
 
 export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const [params, setParams] = useSearchParams();
-  const selected = params.get("session");
-  const recent = useAgentTranscripts(agent.uid, { limit: EXISTENCE_PROBE });
-  const refresh = useRefreshTranscripts(agent.uid);
-  const agentName = agentTypeLabel(agent.type);
+  const [search, setSearch] = useState("");
+  const q = useDebouncedValue(search.trim());
+  const list = useAgentSessions(agent.uid, q);
+  const rename = useRenameAgentSession(agent.uid);
+  const remove = useDeleteAgentSession(agent.uid);
+  const stop = useInterruptConversation();
+  const [deleting, setDeleting] = useState<SessionRowData | null>(null);
+  const opener = useOpenSession(agent.type);
+  const rows = useMemo(() => list.items.map(sessionRow), [list.items]);
 
-  const open = (sourcePath: string) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("session", sourcePath);
-      return next;
-    });
+  const onRename = useCallback(
+    (row: SessionRowData, title: string) => rename.mutateAsync({ sessionId: row.id, title }),
+    [rename],
+  );
+  const onStop = useCallback(
+    (row: SessionRowData) => {
+      if (row.conversationId) stop.mutate(row.conversationId);
+    },
+    [stop],
+  );
 
-  if (recent.isPending) {
-    return <p className="text-sm text-text-muted">{t("common.loading")}</p>;
-  }
-  if (recent.error) {
+  const searching = q !== "";
+  const drained = rows.length === 0;
+  if (list.error && drained) {
     return (
       <LoadErrorRow
         title={t("agents.sessionsTab.listFailed")}
-        error={recent.error}
-        onRetry={() => void refresh()}
+        error={list.error}
+        onRetry={list.refetch}
       />
     );
   }
-  if ((recent.data?.total ?? 0) === 0) {
+  if (!list.isLoading && drained && !searching) {
     const dir = `${abbreviateHomePath(agent.config_dir)}/${agent.type === "codex" ? "sessions" : "projects"}`;
     return (
       <div className="rounded-xl border border-border px-6 py-8 text-center">
         <p className="text-sm font-semibold text-text">{t("agents.sessionsTab.emptyTitle")}</p>
         <p className="mt-1.5 text-xs text-text-muted">
           {t("agents.sessionsTab.emptyBody", {
-            agent: agentName,
+            agent: agentTypeLabel(agent.type),
             dir,
             program: agentProgramName(agent.type),
           })}
@@ -69,31 +80,55 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
   }
 
   return (
-    <FileBrowserFrame
-      sideWidth={320}
-      resizable={{
-        storageKey: "agent-sessions",
-        label: t("splitView.resizeList"),
-        listMinWidth: 240,
-        detailMinWidth: 480,
-      }}
-      side={<SessionList uid={agent.uid} selected={selected} onOpen={open} />}
-      main={
-        selected ? (
-          <SessionReader
-            key={selected}
-            uid={agent.uid}
-            sourcePath={selected}
-            agentName={agentName}
-            agentType={agent.type}
-            onRefreshList={() => void refresh()}
-          />
-        ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-text-muted">
-            {t("agents.sessionsTab.pick")}
+    <div className="space-y-4">
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder={t("agents.sessionsTab.search")}
+        ariaLabel={t("agents.sessionsTab.search")}
+        shortcut="/"
+        className="w-72"
+      />
+      {!list.isLoading && drained ? (
+        <p className="rounded-xl border border-border px-6 py-8 text-center text-sm text-text-muted">
+          {t("agents.sessionsTab.noMatch")}
+        </p>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <SessionList
+              rows={rows}
+              ariaLabel={t("agents.sessionsTab.ariaLabel")}
+              isLoading={list.isLoading}
+              loadingMore={list.isLoadingMore}
+              stoppingId={
+                stop.isPending ? rows.find((r) => r.conversationId === stop.variables)?.id : null
+              }
+              onPrimaryAction={opener.open}
+              onCopyCommand={opener.copyCommand}
+              canOpen={opener.canOpen}
+              onRename={onRename}
+              onDelete={setDeleting}
+              onStop={onStop}
+            />
           </div>
-        )
-      }
-    />
+          <LoadMoreFooter
+            loaded={rows.length}
+            hasMore={list.hasMore}
+            loading={list.isLoadingMore}
+            onMore={list.loadMore}
+            autoLoad
+          />
+        </>
+      )}
+      {opener.dialog}
+      <DeleteSessionDialog
+        row={deleting}
+        kind="session"
+        pending={remove.isPending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={(row) => remove.mutateAsync(row.id)}
+      />
+    </div>
   );
 }

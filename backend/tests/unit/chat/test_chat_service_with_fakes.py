@@ -7,13 +7,12 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.application.chat.service import ChatService
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound, UnknownAgent
-from coffer.domain.chat.message import Role, TextBlock, ToolUseBlock
 
 from .conftest import (
     FakeAgentProvider,
     FakeConversationRepo,
-    FakeMessageRepo,
     make_registry,
 )
 
@@ -22,16 +21,11 @@ from .conftest import (
 # ---------------------------------------------------------------------------
 
 
-def make_service() -> tuple[ChatService, FakeConversationRepo, FakeMessageRepo, FakeAgentProvider]:
+def make_service() -> tuple[ChatService, FakeConversationRepo, FakeAgentProvider]:
     conv_repo = FakeConversationRepo()
-    msg_repo = FakeMessageRepo()
     registry, provider = make_registry(adapter=None)
-    svc = ChatService(
-        conversations=conv_repo,
-        messages=msg_repo,
-        registry=registry,
-    )
-    return svc, conv_repo, msg_repo, provider
+    svc = ChatService(conversations=conv_repo, registry=registry)
+    return svc, conv_repo, provider
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +35,7 @@ def make_service() -> tuple[ChatService, FakeConversationRepo, FakeMessageRepo, 
 
 @pytest.mark.asyncio
 async def test_create_conversation_returns_placeholder_title() -> None:
-    svc, _conv_repo, _, _ = make_service()
+    svc, _conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
     assert conv.title == "New conversation"
     assert conv.agent_key == "builtin"
@@ -49,14 +43,14 @@ async def test_create_conversation_returns_placeholder_title() -> None:
 
 @pytest.mark.asyncio
 async def test_create_conversation_calls_provider_init_conversation() -> None:
-    svc, _, _, provider = make_service()
+    svc, _, provider = make_service()
     conv = await svc.create_conversation(agent_key="builtin", agent_config={"model_id": "m-1"})
     assert provider.init_calls == [(conv.id, {"model_id": "m-1"})]
 
 
 @pytest.mark.asyncio
 async def test_create_conversation_unknown_agent_raises_and_persists_nothing() -> None:
-    svc, conv_repo, _, _ = make_service()
+    svc, conv_repo, _ = make_service()
     with pytest.raises(UnknownAgent):
         await svc.create_conversation(agent_key="no-such-agent")
     assert await conv_repo.list() == []
@@ -65,17 +59,12 @@ async def test_create_conversation_unknown_agent_raises_and_persists_nothing() -
 @pytest.mark.asyncio
 async def test_create_conversation_rolls_back_when_init_rejects_config() -> None:
     conv_repo = FakeConversationRepo()
-    msg_repo = FakeMessageRepo()
     provider = FakeAgentProvider(
         adapter=None,
         init_error=AgentConfigRejected(reason="model_not_found", message="no such model"),
     )
     registry, _ = make_registry(provider=provider)
-    svc = ChatService(
-        conversations=conv_repo,
-        messages=msg_repo,
-        registry=registry,
-    )
+    svc = ChatService(conversations=conv_repo, registry=registry)
 
     with pytest.raises(AgentConfigRejected):
         await svc.create_conversation(agent_key="builtin", agent_config={"model_id": "ghost"})
@@ -91,25 +80,48 @@ async def test_create_conversation_rolls_back_when_init_rejects_config() -> None
 
 @pytest.mark.asyncio
 async def test_get_conversation_raises_not_found() -> None:
-    svc, _, _, _ = make_service()
+    svc, _, _ = make_service()
     with pytest.raises(ConversationNotFound):
         await svc.get_conversation("missing-id")
 
 
 @pytest.mark.asyncio
-async def test_list_conversations_newest_first() -> None:
-    svc, conv_repo, _msg_repo, _ = make_service()
-    c1 = await svc.create_conversation(agent_key="builtin")
-    c2 = await svc.create_conversation(agent_key="builtin")
+async def test_the_listing_is_channel_conversations_newest_first() -> None:
+    svc, conv_repo, _ = make_service()
+    c1 = await svc.create_conversation(agent_key="builtin", channel_uid="ch-1", peer_chat_id="p")
+    c2 = await svc.create_conversation(agent_key="builtin", channel_uid="ch-1", peer_chat_id="p")
+    unowned = await svc.create_conversation(agent_key="builtin")
     await conv_repo.touch(c1.id, datetime(2030, 1, 2, tzinfo=UTC))
     await conv_repo.touch(c2.id, datetime(2030, 1, 1, tzinfo=UTC))
-    result = await svc.list_conversations()
-    assert result[0].id == c1.id
+    page = await svc.page_conversations()
+    assert [c.id for c in page.items] == [c1.id, c2.id]
+    assert unowned.id not in {c.id for c in page.items}
+    assert await svc.count_conversations() == 2
+
+
+@pytest.mark.asyncio
+async def test_the_search_matches_the_title_or_the_directory_not_a_message() -> None:
+    svc, _, _ = make_service()
+    by_title = await svc.create_conversation(
+        agent_key="builtin", channel_uid="ch-1", peer_chat_id="p"
+    )
+    await svc.rename_conversation(by_title.id, new_title="Deploy Notes")
+    by_cwd = await svc.create_conversation(
+        agent_key="builtin", channel_uid="ch-1", peer_chat_id="p"
+    )
+    await svc.set_agent_config(by_cwd.id, AgentConfig(cwd="/work/Deploy-tool"))
+    other = await svc.create_conversation(agent_key="builtin", channel_uid="ch-1", peer_chat_id="p")
+    await svc.rename_conversation(other.id, new_title="Lunch")
+
+    page = await svc.page_conversations(q="deploy")
+
+    assert {c.id for c in page.items} == {by_title.id, by_cwd.id}
+    assert await svc.count_conversations(q="  deploy ") == 2
 
 
 @pytest.mark.asyncio
 async def test_rename_conversation() -> None:
-    svc, _, _, _ = make_service()
+    svc, _, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
     updated = await svc.rename_conversation(conv.id, new_title="My Chat")
     assert updated.title == "My Chat"
@@ -117,7 +129,7 @@ async def test_rename_conversation() -> None:
 
 @pytest.mark.asyncio
 async def test_rename_conversation_not_found() -> None:
-    svc, _, _, _ = make_service()
+    svc, _, _ = make_service()
     with pytest.raises(ConversationNotFound):
         await svc.rename_conversation("bad-id", new_title="Title")
 
@@ -128,19 +140,17 @@ async def test_rename_conversation_not_found() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_conversation_removes_messages() -> None:
-    svc, conv_repo, msg_repo, _ = make_service()
+async def test_delete_conversation_removes_the_row() -> None:
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="hi")])
     await svc.delete_conversation(conv.id)
 
     assert await conv_repo.get(conv.id) is None
-    assert await msg_repo.list_by_conversation(conv.id) == []
 
 
 @pytest.mark.asyncio
 async def test_delete_conversation_calls_provider_on_conversation_deleted() -> None:
-    svc, _, _, provider = make_service()
+    svc, _, provider = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
     await svc.delete_conversation(conv.id)
     assert provider.deleted == [conv.id]
@@ -148,14 +158,14 @@ async def test_delete_conversation_calls_provider_on_conversation_deleted() -> N
 
 @pytest.mark.asyncio
 async def test_delete_conversation_not_found() -> None:
-    svc, _, _, _ = make_service()
+    svc, _, _ = make_service()
     with pytest.raises(ConversationNotFound):
         await svc.delete_conversation("no-such-id")
 
 
 @pytest.mark.asyncio
 async def test_delete_conversation_calls_cancel_fn() -> None:
-    svc, _, _, _ = make_service()
+    svc, _, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
     cancelled: list[str] = []
     await svc.delete_conversation(conv.id, cancel_turn_fn=lambda cid: cancelled.append(cid))
@@ -163,30 +173,19 @@ async def test_delete_conversation_calls_cancel_fn() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Message operations
+# Turn bookkeeping: naming and touching
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_append_message_basic() -> None:
-    svc, _, _msg_repo, _ = make_service()
+async def test_the_first_turn_sets_the_title() -> None:
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    msg = await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="hello")])
-    assert msg.role == Role.USER
-    assert msg.seq == 0
-    assert msg.status == "complete"
-
-
-@pytest.mark.asyncio
-async def test_first_user_message_sets_title() -> None:
-    svc, conv_repo, _, _ = make_service()
-    conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(
-        conv.id, role=Role.USER, content=[TextBlock(text="Tell me about Python")]
-    )
+    await svc.begin_turn(conv.id, text="Tell me about Python")
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert updated.title == "Tell me about Python"
+    assert updated.updated_at > conv.updated_at
 
 
 @pytest.mark.acceptance(
@@ -194,35 +193,33 @@ async def test_first_user_message_sets_title() -> None:
     scenario="a conversation the owner named keeps its name",
 )
 @pytest.mark.asyncio
-async def test_first_user_message_keeps_a_title_the_owner_set() -> None:
+async def test_the_first_turn_keeps_a_title_the_owner_set() -> None:
     """A rename outranks the auto-title: the first message must not undo it."""
-    svc, conv_repo, _, _ = make_service()
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
     await svc.rename_conversation(conv.id, new_title="Tax questions")
-    await svc.append_message(
-        conv.id, role=Role.USER, content=[TextBlock(text="Tell me about Python")]
-    )
+    await svc.begin_turn(conv.id, text="Tell me about Python")
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert updated.title == "Tax questions"
 
 
 @pytest.mark.asyncio
-async def test_first_user_message_title_truncated_at_60_chars() -> None:
-    svc, conv_repo, _, _ = make_service()
+async def test_the_title_is_truncated_at_60_chars() -> None:
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="A" * 100)])
+    await svc.begin_turn(conv.id, text="A" * 100)
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert len(updated.title) == 60
 
 
 @pytest.mark.asyncio
-async def test_second_user_message_does_not_change_title() -> None:
-    svc, conv_repo, _, _ = make_service()
+async def test_a_second_turn_does_not_change_the_title() -> None:
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="First message")])
-    await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="Second message")])
+    await svc.begin_turn(conv.id, text="First message")
+    await svc.begin_turn(conv.id, text="Second message")
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert updated.title == "First message"
@@ -236,12 +233,11 @@ async def test_title_hint_names_the_conversation_instead_of_the_message_text() -
     history) that are identical on every turn; naming from the raw text gave
     every channel conversation the same name.
     """
-    svc, conv_repo, _, _ = make_service()
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(
+    await svc.begin_turn(
         conv.id,
-        role=Role.USER,
-        content=[TextBlock(text="[Message origin]\nplatform: seatalk\n\nwhy is the job stuck?")],
+        text="[Message origin]\nplatform: seatalk\n\nwhy is the job stuck?",
         title_hint="why is the job stuck?",
     )
     updated = await conv_repo.get(conv.id)
@@ -251,15 +247,10 @@ async def test_title_hint_names_the_conversation_instead_of_the_message_text() -
 
 @pytest.mark.asyncio
 async def test_title_hint_does_not_outrank_a_title_the_owner_set() -> None:
-    svc, conv_repo, _, _ = make_service()
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
     await svc.rename_conversation(conv.id, new_title="Tax questions")
-    await svc.append_message(
-        conv.id,
-        role=Role.USER,
-        content=[TextBlock(text="[Message origin]\n\nhello")],
-        title_hint="hello",
-    )
+    await svc.begin_turn(conv.id, text="[Message origin]\n\nhello", title_hint="hello")
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert updated.title == "Tax questions"
@@ -268,14 +259,9 @@ async def test_title_hint_does_not_outrank_a_title_the_owner_set() -> None:
 @pytest.mark.asyncio
 async def test_an_empty_title_hint_keeps_the_placeholder_rather_than_boilerplate() -> None:
     """Nothing nameable in the message ⇒ say so, don't name it after a header."""
-    svc, conv_repo, _, _ = make_service()
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(
-        conv.id,
-        role=Role.USER,
-        content=[TextBlock(text="[Message origin]\nplatform: seatalk")],
-        title_hint="",
-    )
+    await svc.begin_turn(conv.id, text="[Message origin]\nplatform: seatalk", title_hint="")
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert updated.title == "New conversation"
@@ -283,54 +269,16 @@ async def test_an_empty_title_hint_keeps_the_placeholder_rather_than_boilerplate
 
 @pytest.mark.asyncio
 async def test_title_hint_is_truncated_like_any_other_title() -> None:
-    svc, conv_repo, _, _ = make_service()
+    svc, conv_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(
-        conv.id,
-        role=Role.USER,
-        content=[TextBlock(text="header\n\n" + "A" * 100)],
-        title_hint="A" * 100,
-    )
+    await svc.begin_turn(conv.id, text="header\n\n" + "A" * 100, title_hint="A" * 100)
     updated = await conv_repo.get(conv.id)
     assert updated is not None
     assert len(updated.title) == 60
 
 
 @pytest.mark.asyncio
-async def test_append_message_increments_seq() -> None:
-    svc, _, _msg_repo, _ = make_service()
-    conv = await svc.create_conversation(agent_key="builtin")
-    m0 = await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="q")])
-    m1 = await svc.append_message(
-        conv.id, role=Role.ASSISTANT, content=[TextBlock(text="a")], status="complete"
-    )
-    assert m0.seq == 0
-    assert m1.seq == 1
-
-
-@pytest.mark.asyncio
-async def test_list_messages_ordered_by_seq() -> None:
-    svc, _, _, _ = make_service()
-    conv = await svc.create_conversation(agent_key="builtin")
-    await svc.append_message(conv.id, role=Role.USER, content=[TextBlock(text="q")])
-    await svc.append_message(conv.id, role=Role.ASSISTANT, content=[TextBlock(text="a")])
-    msgs = await svc.list_messages(conv.id)
-    assert [m.seq for m in msgs] == [0, 1]
-
-
-@pytest.mark.asyncio
-async def test_list_messages_conversation_not_found() -> None:
-    svc, _, _, _ = make_service()
+async def test_begin_turn_on_a_missing_conversation_raises() -> None:
+    svc, _, _ = make_service()
     with pytest.raises(ConversationNotFound):
-        await svc.list_messages("no-such-id")
-
-
-@pytest.mark.asyncio
-async def test_append_with_non_text_content() -> None:
-    svc, _, _msg_repo, _ = make_service()
-    conv = await svc.create_conversation(agent_key="builtin")
-    tool_use = ToolUseBlock(tool_use_id="t1", tool_name="coffer__list_skills", tool_input={})
-    msg = await svc.append_message(
-        conv.id, role=Role.ASSISTANT, content=[tool_use], status="complete"
-    )
-    assert msg.content[0] == tool_use
+        await svc.begin_turn("no-such-id", text="hi")

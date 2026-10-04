@@ -18,6 +18,12 @@ export type FsBrowseOut = Schemas["FsBrowseOut"];
 /** A GUI editor detected as installed (preferred-editor picker, spec web-ui "Let the user choose an external editor"). */
 export type EditorOption = Schemas["EditorOptionOut"];
 
+/** A terminal detected as installed (preferred-terminal picker, spec web-ui "Let the user choose a terminal"). */
+export type TerminalOption = Schemas["TerminalOptionOut"];
+
+/** What starts an agent in a terminal: a session to resume, or a prompt to send (daemon "Open an agent session in a terminal"). */
+export type OpenTerminalBody = Schemas["FsTerminalRequest"];
+
 export const fsApi = {
   browse: (path?: string | null): Promise<FsBrowseOut> =>
     unwrap(getApiClient().GET("/fs/browse", { params: { query: path ? { path } : {} } })),
@@ -46,4 +52,14 @@ export const fsApi = {
     const out = await unwrap(getApiClient().GET("/fs/editors"));
     return out.editors;
   },
+
+  /** List terminals detected as installed, for the preferred-terminal picker. */
+  listTerminals: async (): Promise<TerminalOption[]> => {
+    const out = await unwrap(getApiClient().GET("/fs/terminals"));
+    return out.terminals;
+  },
+
+  /** Start an agent's session in a terminal window on this host. */
+  openTerminal: (body: OpenTerminalBody): Promise<void> =>
+    unwrapVoid(getApiClient().POST("/fs/terminal", { body })),
 };

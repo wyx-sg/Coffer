@@ -84,8 +84,6 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
   - `lib/agents/display.ts` — the human-readable forms of agent wire values
     (product name for a registry key, home-relative path), shared by the
     table, the add form and the detail header.
-  - `lib/chat/turnErrors.ts` — copy for a failed chat turn: pure mapping from
-    error shape to actionable text, unit-tested without a component.
 - **The app shell** (docs-site `architecture/app-shell.md`) has one home per concern:
   - `lib/navigation.ts` — the one list of sidebar entries (`NAV_GROUPS`) and
     Settings tabs (`SETTINGS_TABS`); the sidebar, the palette's Pages group and
@@ -124,7 +122,7 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 | Server data (anything from the daemon)                          | TanStack Query, via a `useX` hook                       |
 | Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
 | User preference that must survive reload                        | `localStorage`, every read and write wrapped in try/catch (`src/lib/preferences.ts` holds the page size and editor; other modules own their key) |
-| **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState`              |
+| **Addressable** app state (which resource is open) | the **URL** (router param), not `useState`              |
 | Detail-page tab                                                 | the **path** (`/<kind>/<id>/<tab>`) via `useDetailTab` (`lib/detailTabs.ts`) |
 | Selected file; tab on a list page (Sync, Activity)              | the **URL search param** (`?file=`, `?tab=`) via `useSearchParams` |
 
@@ -133,7 +131,7 @@ The API token is deliberately not in that table: it is read from
 (`src/lib/auth.ts`). Persisting it would outlive the daemon that minted it.
 
 The URL rows matter: anything a user would expect to survive a refresh, deep-link,
-or back-button MUST be a route param (`/conversations/:id`, `/agents/:type`), not local
+or back-button MUST be a route param (`/agents/:type`, `/skills/:name`), not local
 state. "Which item is selected" is navigation, not UI state. The same holds one
 level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
 default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
@@ -176,9 +174,8 @@ whole subtree:
 Every request leaves through one module, `src/lib/api/client.ts`, which resolves base URL +
 token through `src/lib/auth.ts` (`getCofferBaseUrl`, `getCofferToken`) and send
 `X-Coffer-Token` + `X-Coffer-Actor: "ui"`. **The actor is always `"ui"`** from
-the web surface. Nothing else in `src` calls `fetch` — the only exceptions are
-the two SSE readers: the chat stream (below) and the daemon's change feed
-(`lib/events/eventStream.ts`).
+the web surface. Nothing else in `src` calls `fetch` — the one exception is
+the daemon's change feed (`lib/events/eventStream.ts`), an SSE reader.
 
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
@@ -217,11 +214,9 @@ All errors converge on `ApiError(code, message)` (`src/lib/api/errors.ts`).
 Surface them with `translateApiError(t, error)`, which maps `errors.<CODE>`
 i18n keys with the server message as fallback. Never show a raw error string.
 
-Streaming (chat SSE) is the one path outside TanStack Query: a typed
-async-generator in `src/lib/chat/streamClient.ts`. Keep wire-event parsing
-there; accumulate into view state in a hook (`useChatTurn` + the reducer in
-`lib/hooks/chatTurnEvents.ts`), not in components — the optimistic echo of a
-sent prompt included, so the thread has one source of truth.
+The daemon's change feed (`lib/events/eventStream.ts` + `useDaemonEvents`) is
+the one stream outside TanStack Query; it only invalidates query keys. The web
+has no chat stream: a conversation or session opens in the person's terminal.
 
 ## 5. Mutations & Cache Invalidation
 
@@ -273,9 +268,7 @@ return useMutation({
   - `PageHeader` is the one page header, list and detail alike: the title (18/650), `badges` beside it, `actions` on the
     right and one `subtitle` line under the row (there is no title icon: the sidebar entry already carries it, and no `back`:
     pages carry no back button or "← list" link — the title bar's global ← → (⌘[ / ⌘]) are the only back/forward). Detail-page actions keep one fixed order: reach → test/refresh →
-    edit → delete. The title bar holds only window controls, with one exception: an open conversation's
-    title row goes through `InTitleBar` (`components/shell/titleBarSlot.tsx`), portalled into the desktop strip or
-    rendered as a 44px bar in a browser. No other page uses it.
+    edit → delete. The title bar holds only window controls.
   - `DataTable` is the one list table. Pass `isLoading` so the header stays
     mounted over skeleton rows (never a "Loading…" card in the table's place)
     and `emptyAction` for the call-to-action under the empty message. The reach
@@ -464,22 +457,26 @@ merge and repair flows.
 - **The prompt comes from the backend**, as a `handoff: {prompt}` field on the
   response (`HandoffOut`, built by `backend/coffer/domain/handoff.py`). The
   frontend never assembles or edits the text; it only shows or passes it on.
-- **`AgentHandoff` is one split control, Ask an agent ▾**: the main half
-  opens the draft, the ▾ menu holds Copy prompt (toast "Prompt copied"); with
-  no managed agent it is a plain Copy prompt. `help={false}` drops the "?" in a
+- **`AgentHandoff` is one split control, Hand off to <Agent> ▾**: the main
+  half starts the default hand-off agent (Settings › General › Hand-off agent)
+  in the preferred terminal (Settings › General › Preferred terminal) with the
+  prompt as the first message, through `POST /api/v1/fs/terminal`, with no
+  confirmation. The ▾ menu holds Hand off to <other agent> (when it is
+  available) and Copy prompt (toast "Prompt copied"); with no managed agent it
+  is a plain Copy prompt. `help={false}` drops the "?" in a
   row that already says what the problem is (Knowledge and Memory failures,
   after their own Retry / Check again). `prompt` may be a request the control
   makes when picked, for a hand-off the daemon records (Sync conflicts).
-- **Ask an agent** opens the New conversation dialog, then the draft through
-  `openHandoffDraft` (`lib/conversations/handoff.ts`): the agent, folder and
-  prompt ride in router location state (never the URL), `useChatController`
-  applies them once and clears the state. The prompt lands in the draft's
-  composer and is **never sent automatically** — managed agents run with full
-  permissions, so the person reads it and presses Send.
+- **The prompt never travels on a command line.** The daemon writes it to a
+  private temporary file and the agent reads it from there, so it stays out of
+  shell history and process listings. The frontend sends the prompt (or the
+  session id) to the daemon and never builds a terminal command itself;
+  Tidy / Tidy all on Knowledge and Memory use the same path. There are no draft
+  conversations, composer or Send step in the web.
 - **A surface with room for one button** (an Overview Needs you row, whose
   attention item carries `handoff`) uses `useAgentHandoff` and puts Copy
-  prompt / Ask an agent in its ⋯ menu instead (every Needs-you row gets one
-  primary button plus a ⋯ menu: Copy prompt · Ask an agent · Ignore). An
+  prompt / Hand off to <Agent> in its ⋯ menu instead (every Needs-you row gets one
+  primary button plus a ⋯ menu: Copy prompt · Hand off to <Agent> · Ignore). An
   Agents-list row whose program is not on this Mac does the same: no button,
   the install prompt heads its ⋯ menu above a separator.
 
@@ -494,7 +491,7 @@ merge and repair flows.
 - **Every user-facing string goes through `t(...)`.** No hardcoded copy, no
   hardcoded aria-labels.
 - Keys are nested camelCase dotted paths under a feature namespace
-  (`chat.composer.placeholder`). **en and zh stay at exact key parity** — add to
+  (`handoff.promptCopied`). **en and zh stay at exact key parity** — add to
   both in the same change; `src/i18n/locales.test.ts` guards it.
 
 ### en/zh glossary
@@ -539,7 +536,7 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | Test again | Test again | 重新测试 | 再测一次, 再次测试 |
 | Swap a value for another | Replace | 替换 | 更换, 换成 |
 | Who gets a resource (three modes) | Reach: Off / All agents / Chosen agents | 生效范围：关闭 / 所有智能体 / 指定智能体 | Disabled, Every agent, Only selected agents, 已停用, 只限选中的 |
-| Hand a machine-bound chore to an agent | Ask an agent ▾ (menu: Copy prompt, toast "Prompt copied") | 交给智能体 ▾（菜单：复制提示词，提示“已复制提示词”） | Two separate buttons, 询问智能体 |
+| Hand a machine-bound chore to an agent | Hand off to <Agent> ▾ (menu: Hand off to <other agent>, Copy prompt, toast "Prompt copied") | 交给 <Agent> ▾（菜单：交给 <另一个智能体>，复制提示词，提示“已复制提示词”） | Two separate buttons, Ask an agent, 询问智能体 |
 | Pick another source/machine/directory | Change | 更改 | 更换 |
 | A change (noun) | change | 改动 | 变更, 更改 |
 | Drop unsaved edits | Discard | 放弃 | 丢弃 |
@@ -558,7 +555,7 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 - **Vitest + Testing Library**, `*.test.tsx` colocated next to the unit.
 - Test **behaviour through the component/hook**, not implementation. Render with
   a real `QueryClientProvider`; mock only the network boundary (the `api`
-  module or `streamClient`).
+  module).
 - A new component or hook ships with its test in the same commit. Acceptance-
   scenario coverage follows [`testing.md`](./testing.md) markers.
 - Run `cd frontend && npx vitest run <file>` for a focused check; `make verify`
@@ -569,8 +566,7 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 When you work near these, migrate toward the target; don't extend the debt:
 
 1. **Per-hook polling.** The daemon-wide change feed
-   (`GET /api/v1/events`, fetch-read with the token header like the chat
-   stream) is the replacement for per-hook `refetchInterval` polling: a
+   (`GET /api/v1/events`, fetch-read with the token header) is the replacement for per-hook `refetchInterval` polling: a
    rebuilt page mounts `useDaemonEvents()`, which invalidates the query keys an
    envelope's `kind` names. The audit and MCP call logs are not on it (they are
    not resources), so Activity re-reads their newest page on a short poll.

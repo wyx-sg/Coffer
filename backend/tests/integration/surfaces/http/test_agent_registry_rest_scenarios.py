@@ -303,7 +303,7 @@ def test_adopt_a_direct_mcp_entry_under_a_new_name(home: pathlib.Path) -> None:
         assert "agent_mcp_entry_adopted" in _audit_types(c, uid)
 
 
-# --- files, transcripts, models -----------------------------------------------
+# --- files, models -----------------------------------------------
 
 
 @pytest.mark.acceptance(
@@ -313,69 +313,18 @@ def test_report_the_absolute_locations_of_an_agents_files(home: pathlib.Path) ->
     project = home / ".claude" / "projects" / "-work-repo"
     (project / "memory").mkdir(parents=True)
     (project / "memory" / "fact.md").write_text("a fact", encoding="utf-8")
-    session = project / "s1.jsonl"
-    session.write_text(
-        json.dumps(
-            {
-                "type": "user",
-                "cwd": "/work/repo",
-                "sessionId": "s1",
-                "timestamp": "2026-06-01T00:00:00Z",
-                "message": {"role": "user", "content": "set up auth"},
-            }
-        ),
-        encoding="utf-8",
-    )
     with _client() as c:
         uid = _register(c)
         before = _audit_types(c, uid)
 
         files = c.get(f"/api/v1/agents/{uid}/config-files").json()["items"]
         stores = c.get(f"/api/v1/agents/{uid}/native-memory").json()["items"]
-        sessions = c.get(f"/api/v1/agents/{uid}/transcripts").json()["sessions"]
 
         settings = next(f for f in files if f["key"] == "settings")
         assert settings["path"] == str(home / ".claude" / "settings.json")
         assert stores[0]["memory_dir"] == str(project / "memory")
-        assert [s["source_path"] for s in sessions] == [str(session)]
         assert not (home / ".claude" / "settings.json").exists()
         assert _audit_types(c, uid) == before
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="read one transcript session over REST")
-def test_read_one_transcript_session_over_rest(home: pathlib.Path) -> None:
-    project = home / ".claude" / "projects" / "-work-repo"
-    project.mkdir(parents=True)
-    session = project / "s1.jsonl"
-    session.write_text(
-        json.dumps(
-            {
-                "type": "user",
-                "cwd": "/work/repo",
-                "sessionId": "s1",
-                "timestamp": "2026-06-01T00:00:00Z",
-                "message": {"role": "user", "content": "deploy with sk-abcdefghijklmnopqrstuvwx"},
-            }
-        ),
-        encoding="utf-8",
-    )
-    with _client() as c:
-        uid = _register(c)
-        listed = c.get(f"/api/v1/agents/{uid}/transcripts").json()["sessions"]
-        assert [s["source_path"] for s in listed] == [str(session)]
-
-        r = c.get(
-            f"/api/v1/agents/{uid}/transcripts/session", params={"path": listed[0]["source_path"]}
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["message_count"] == 1
-        assert "sk-abcdefghijklmnopqrstuvwx" not in body["messages"][0]["text"]
-
-        outsider = home / "elsewhere.jsonl"
-        outsider.write_text("{}\n", encoding="utf-8")
-        missing = c.get(f"/api/v1/agents/{uid}/transcripts/session", params={"path": str(outsider)})
-        assert missing.status_code == 404, missing.text
 
 
 class _NoAgents:

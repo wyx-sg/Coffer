@@ -5,17 +5,12 @@ from __future__ import annotations
 
 import pytest
 
-from .conftest import ChannelEnv, inbound, turn_body, wait_until
+from .conftest import ChannelEnv, inbound, wait_until
 
 
 async def _turn_texts(env: ChannelEnv) -> list[str]:
-    [conversation] = await env.chat.list_conversations()
-    messages = await env.chat.list_messages(conversation.id)
-    return [
-        turn_body("".join(getattr(b, "text", "") for b in m.content))
-        for m in messages
-        if m.role == "user"
-    ]
+    [conversation] = await env.conversations()
+    return env.user_texts(conversation.id)
 
 
 @pytest.mark.acceptance(spec="channels", scenario="an unreserved slash word reaches the agent")
@@ -51,7 +46,7 @@ async def test_a_near_miss_is_corrected_not_sent(env: ChannelEnv) -> None:
         "Unknown command /stpo. Did you mean /stop? Send /help for all commands.",
         "Unknown command /threads. Did you mean /thread? Send /help for all commands.",
     ]
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a removed command reaches the agent as text")

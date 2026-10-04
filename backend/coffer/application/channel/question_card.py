@@ -1,5 +1,5 @@
-"""A question for the owner, as a card (spec channels "Ask the owner in the chat
-and take the answer back to the agent").
+"""A question for the owner, as a card (spec channels
+"Ask the owner in the chat and take the chat's answer back to the agent").
 
 Pure: the text and the buttons of one question's card, the callback payload its
 buttons carry, and the line the card is rewritten to once the question closes.

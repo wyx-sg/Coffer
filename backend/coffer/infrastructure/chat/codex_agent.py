@@ -24,6 +24,8 @@ from typing import Any
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    SESSION_IN_USE,
+    SESSION_IN_USE_MESSAGE,
     STREAM_ENDED,
     STREAM_ENDED_MESSAGE,
     AgentEvent,
@@ -31,9 +33,7 @@ from coffer.domain.chat.events import (
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Message
-from coffer.domain.chat.reply_file import ReplyFile
-from coffer.infrastructure.chat.adapter_support import SessionSink, last_user_text
+from coffer.infrastructure.chat.adapter_support import SessionSink
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
     CodexAppServerSession,
@@ -43,7 +43,6 @@ from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
 )
-from coffer.infrastructure.chat.codex_reply_files import CodexReplyFiles
 from coffer.infrastructure.chat.codex_stream import attachment_note, notifications_until_eof
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
@@ -68,6 +67,20 @@ _CLIENT_INFO = {"name": "coffer", "title": None, "version": "0"}
 
 class _ConnectError(Exception):
     """The app-server could not open a thread for this turn."""
+
+
+class _SessionBusyError(Exception):
+    """Another process holds the thread (``-32600`` "active writer")."""
+
+
+def _is_active_writer(exc: BaseException) -> bool:
+    """The app-server's refusal of a thread another process is writing to: JSON-RPC
+    error ``-32600`` whose message names the active writer."""
+    return (
+        isinstance(exc, CodexRpcError)
+        and exc.code == -32600
+        and "active writer" in exc.rpc_message.lower()
+    )
 
 
 class CodexAppServerAdapter:
@@ -111,26 +124,18 @@ class CodexAppServerAdapter:
         # A channel turn's retrieval: the notes its prompt names.
         self._prompt_memory = prompt_memory
         #: The model the thread ran on, as the app-server reported it; filled in
-        #: while the turn streams. The turn runner reads it when it finalises the reply.
+        #: while the turn streams.
         self.model_id: str | None = None
-        self._reply_files = CodexReplyFiles()
-
-    @property
-    def reply_files(self) -> list[ReplyFile]:
-        """What the reply changed in each file, from its file-change items; the
-        turn runner stores it when it finalises the reply."""
-        return self._reply_files.files()
 
     async def run_turn(
         self,
-        *,
-        history: Sequence[Message],
+        prompt: str,
         attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
         # at the ``await run_turn(...)`` call site (the SDK adapter does the same).
-        return self._stream(history, attachments)
+        return self._stream(prompt, attachments)
 
     async def _persist_session(self, state: CodexParseState) -> None:
         """Write a newly-discovered thread id back for the next ``resume``.
@@ -199,7 +204,10 @@ class CodexAppServerAdapter:
                 )
                 self._note_model(thread, state)
                 return (thread.get("thread") or {}).get("id") or self._resume
-            except CodexRpcError:
+            except CodexRpcError as exc:
+                if _is_active_writer(exc):
+                    # Another process holds the thread: a fresh one would fork it.
+                    raise
                 _logger.warning(
                     "codex_agent.resume_failed_retrying_fresh",
                     extra={"resume": self._resume},
@@ -230,17 +238,24 @@ class CodexAppServerAdapter:
             await rpc.notify("initialized")
             thread_id = await self._open_thread(rpc, state)
         except Exception as exc:
+            if _is_active_writer(exc):
+                raise _SessionBusyError from exc
             raise _ConnectError(str(exc)) from exc
 
         turn_params: dict[str, Any] = {
             "threadId": thread_id,
             "input": [{"type": "text", "text": prompt, "text_elements": []}],
         }
-        turn = await rpc.request("turn/start", turn_params)
+        try:
+            turn = await rpc.request("turn/start", turn_params)
+        except CodexRpcError as exc:
+            if _is_active_writer(exc):
+                raise _SessionBusyError from exc
+            raise
         return (turn.get("turn") or {}).get("id") or ""
 
     async def _stream(
-        self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
+        self, prompt: str, attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
         # Codex cannot hear audio: transcribe voice to text; extract documents
         # to text (see "Extract document attachments to text" — Codex is
@@ -252,7 +267,7 @@ class CodexAppServerAdapter:
         attachments, extracts = await extract_document_attachments(
             attachments, self._document_extractor
         )
-        prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_transcripts(prompt.strip(), transcripts)
         prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
@@ -264,7 +279,7 @@ class CodexAppServerAdapter:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return
 
-        state = CodexParseState(session_id=self._resume, reply_files=self._reply_files)
+        state = CodexParseState(session_id=self._resume)
         queue: asyncio.Queue[Any] = asyncio.Queue()
         yield TurnStarted()
 
@@ -314,6 +329,12 @@ class CodexAppServerAdapter:
             pump_task = asyncio.create_task(pump(rpc))
             try:
                 turn_id = await self._drive_handshake(rpc, prompt, state)
+            except _SessionBusyError:
+                # Codex's own writer lock (spec chat "Run a session in one place
+                # at a time"): the same refusal as a session open in a terminal.
+                state.terminal_emitted = True
+                yield TurnError(code=SESSION_IN_USE, message=SESSION_IN_USE_MESSAGE)
+                return
             except _ConnectError as exc:
                 # No thread could be opened (a forgotten resume already had its
                 # one fresh retry): a turn error, not an unhandled raise.

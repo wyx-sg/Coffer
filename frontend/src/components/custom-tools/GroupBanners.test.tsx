@@ -60,7 +60,7 @@ describe("group banners", () => {
       "href",
       "/custom-tools/status-page/invocations",
     );
-    expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Hand off to|Copy prompt/ })).toBeInTheDocument();
   });
 
   test("an Off group says no agent can use it and turns on from the banner", async () => {
@@ -94,7 +94,7 @@ describe("group banners", () => {
     expect(screen.getByRole("button", { name: "Add secret" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Choose another" }));
     expect(onChoose).toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Hand off to|Copy prompt/ })).toBeNull();
   });
 
   test("a secret waiting for approval has one button, Open approvals", () => {

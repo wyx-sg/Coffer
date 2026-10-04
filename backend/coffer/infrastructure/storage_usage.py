@@ -9,7 +9,7 @@ through ``infrastructure.vault.home`` like every other reader of them:
   its commit count is the number of versions (ADR
   every-vault-write-is-a-validated-commit-naming-its-writer); its size is
   the working tree and ``.git`` together;
-- **local content** — chat uploads and channel media under ``content/``,
+- **local content** — channel media under ``content/``,
   which never sync;
 - **history** — ``runs.db`` (with its WAL), or the database ``COFFER_DB_URL``
   names, together with the log directory (``COFFER_LOG_DIR`` honoured): logs
@@ -19,8 +19,8 @@ through ``infrastructure.vault.home`` like every other reader of them:
   agents' config files Coffer kept before rewriting them (``config-backups/``;
   the ``config_backups`` retention policy);
 - **rebuildable cache** — the memory tree (fully derived from the agents' own
-  memory; spec memory "Keep the memory tree derived and local") and the
-  transcript summary cache, both under ``derived/``. Clearing it deletes the
+  memory; spec memory "Keep the memory tree derived and local") under
+  ``derived/``. Clearing it deletes the
   files and leaves every partition's record, so the next memory update refills
   the folders. The rest of ``derived/`` (the uid index, ``derived.db``, a
   stopped sync round's hand-merge copies) is not the cache this clears.
@@ -36,9 +36,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 
-from coffer.infrastructure.agent.paths import agent_state_root
 from coffer.infrastructure.channel.media_root import default_media_dir
-from coffer.infrastructure.chat.media_store import default_chat_media_dir
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.vault.home import (
@@ -129,7 +127,7 @@ class StorageUsage:
 
 
 def cache_roots() -> list[pathlib.Path]:
-    return [memory_root(), agent_state_root()]
+    return [memory_root()]
 
 
 def measure() -> StorageUsage:
@@ -140,7 +138,7 @@ def measure() -> StorageUsage:
         bytes=tree_bytes(vault_dir),
         versions=git_version_count(vault_dir),
     )
-    media = [default_chat_media_dir(), default_media_dir()]
+    media = [default_media_dir()]
     parents = {str(p.parent) for p in media}
     local = LocalContentUsage(
         folder=parents.pop() if len(parents) == 1 else str(content_root()),

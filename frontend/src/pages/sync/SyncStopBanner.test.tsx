@@ -1,7 +1,7 @@
 // frontend/src/pages/sync/SyncStopBanner.test.tsx
 //
 // The danger banner of a round stopped on conflicts (6.4.05): Resolve conflicts
-// as a secondary button, one Ask an agent for every conflict, and × as Ignore —
+// as a secondary button, one Hand off to Claude Code for every conflict, and × as Ignore —
 // the same item as on Overview, found in the attention list by its reason.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -26,7 +26,7 @@ vi.mock("@/components/handoff/AgentHandoff", () => ({
       type="button"
       onClick={() => typeof prompt !== "string" && void prompt({ agent: "Claude Code" })}
     >
-      Ask an agent
+      Hand off to Claude Code
     </button>
   ),
 }));
@@ -76,7 +76,7 @@ describe("SyncStopBanner", () => {
       "href",
       "/sync/conflicts",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hand off to Claude Code" }));
     // No paths: the daemon hands over every file an agent may merge.
     expect(handoff).toHaveBeenCalledWith({ agent: "Claude Code" });
   });
@@ -96,6 +96,6 @@ describe("SyncStopBanner", () => {
   test("conflicts that are all decisions offer no hand-off", () => {
     seed([makeConflict("skills/a/SKILL.md")]);
     show();
-    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
   });
 });

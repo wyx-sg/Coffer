@@ -30,7 +30,7 @@ from coffer.surfaces.http.agent_native_memory_routes import (
 )
 from coffer.surfaces.http.agent_plugin_part_routes import router as agent_plugin_part_router
 from coffer.surfaces.http.agent_routes import router as agent_router
-from coffer.surfaces.http.agent_transcript_routes import router as agent_transcript_router
+from coffer.surfaces.http.agent_session_routes import router as agent_session_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
     router as agent_unmanaged_skill_router,
 )
@@ -38,12 +38,7 @@ from coffer.surfaces.http.agent_workspace_routes import router as agent_workspac
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
-from coffer.surfaces.http.chat.attachment_bytes_routes import router as chat_attachment_bytes_router
-from coffer.surfaces.http.chat.attachment_routes import router as chat_attachment_router
-from coffer.surfaces.http.chat.conversation_batch_routes import router as chat_batch_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
-from coffer.surfaces.http.chat.question_routes import router as chat_question_router
-from coffer.surfaces.http.chat.reply_file_routes import router as chat_reply_file_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
@@ -53,6 +48,7 @@ from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
 from coffer.surfaces.http.feature_routes import router as feature_router
 from coffer.surfaces.http.fs_routes import router as fs_router
+from coffer.surfaces.http.fs_terminal_routes import router as fs_terminal_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge import history_router as knowledge_history_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
@@ -128,9 +124,10 @@ def include_all_routers(app: FastAPI) -> None:
         agent_workspace_router,
         agent_plugin_part_router,
         agent_native_memory_router,
-        agent_transcript_router,
+        agent_session_router,
         agent_unmanaged_skill_router,
         fs_router,
+        fs_terminal_router,
         skill_copy_router,  # before skill_router: /skills/orphans is not a uid
         skill_delete_router,  # DELETE /skills/{uid} and the bulk delete
         skill_router,
@@ -153,13 +150,8 @@ def include_all_routers(app: FastAPI) -> None:
         # the turn platform's own surfaces (spec chat; spec channels's agents run on it)
         agent_provider_router,
         model_router,
-        chat_question_router,  # answering a question; before the routes that read ``{id}``
-        chat_conversation_router,  # the web Chat page's own REST surface
-        chat_batch_router,  # archive / unarchive / delete several at once
-        chat_turn_router,  # … and its turn/SSE half
-        chat_attachment_router,  # … and the composer's file uploads
-        chat_attachment_bytes_router,  # … and a thread thumbnail's bytes
-        chat_reply_file_router,  # … and what a reply changed in each file
+        chat_conversation_router,  # the Conversations page's REST surface
+        chat_turn_router,  # … and stopping a turn
         channel_router,  # spec channels
         price_list_router,  # spec provider-switching (before /providers/{uid})
         model_switch_router,  # spec provider-switching: review + apply a model change

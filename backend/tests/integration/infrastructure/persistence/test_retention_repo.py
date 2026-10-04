@@ -9,9 +9,6 @@ from coffer.application.retention_registry import (
     PrunableTable,
     UnknownPrunableTable,
 )
-from coffer.infrastructure.chat import (
-    persistence as _chat_persistence,  # noqa: F401 (registers chat tables on Base.metadata)
-)
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -24,8 +21,7 @@ from coffer.infrastructure.persistence.retention_repo import (
 )
 
 #: What this module's repo is allowed to sweep, registered the way the
-#: composition root registers the real thing: audit_log by its timestamp, and
-#: the conversations archive/delete pair over updated_at and archived_at.
+#: composition root registers the real thing: audit_log by its timestamp.
 _TABLES = (
     PrunableTable(
         name="audit_log",
@@ -35,21 +31,11 @@ _TABLES = (
         description="Resource lifecycle events.",
     ),
     PrunableTable(
-        name="conversations_archive",
-        timestamp_column="updated_at",
-        default_retention_days=7,
-        display_name="Idle threads",
-        description="Idle chat threads get archived.",
-        action="archive",
-        target_table="conversations",
-        archive_set_column="archived_at",
-    ),
-    PrunableTable(
-        name="conversations",
-        timestamp_column="updated_at",
-        default_retention_days=30,
-        display_name="Conversations",
-        description="Archived chat threads and their messages.",
+        name="sync_runs",
+        timestamp_column="finished_at",
+        default_retention_days=90,
+        display_name="Sync Rounds",
+        description="History of converge rounds.",
     ),
 )
 
@@ -170,96 +156,13 @@ async def test_delete_older_than_basic(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_delete_older_than_conversations_cascades_to_messages(tmp_path):
-    """Pruning old conversations also removes their messages (no orphan rows)."""
-    from sqlalchemy import text
-
+async def test_remove_forgets_a_policy_row(tmp_path):
     repo, engine = await _repo(tmp_path)
-    sm = session_maker(engine)
-    now = datetime(2026, 5, 20, tzinfo=UTC)
-    old = now - timedelta(days=40)
-    recent = now - timedelta(days=1)
-
-    async with sm() as s:
-        # One stale thread (2 messages) and one recent thread (1 message).
-        conv_sql = (
-            "INSERT INTO conversations "
-            "(id, agent_key, title, created_at, updated_at) "
-            "VALUES (:id, 'builtin', 't', :ts, :ts)"
-        )
-        msg_sql = (
-            "INSERT INTO chat_messages "
-            "(id, conversation_id, seq, role, content, status, created_at) "
-            "VALUES (:id, :cid, :seq, 'user', '[]', 'complete', :ts)"
-        )
-        for cid, ts, nmsg in [("old", old, 2), ("new", recent, 1)]:
-            await s.execute(text(conv_sql), {"id": cid, "ts": ts})
-            for seq in range(nmsg):
-                await s.execute(
-                    text(msg_sql),
-                    {"id": f"{cid}-{seq}", "cid": cid, "seq": seq, "ts": ts},
-                )
-        await s.commit()
-
-    cutoff = now - timedelta(days=7)
-    deleted = await repo.delete_older_than("conversations", "updated_at", cutoff)
-    assert deleted == 1  # only the stale conversation
-
-    async with sm() as s:
-        convs = (await s.execute(text("SELECT id FROM conversations"))).scalars().all()
-        msgs = (await s.execute(text("SELECT conversation_id FROM chat_messages"))).scalars().all()
-    assert set(convs) == {"new"}
-    # The stale thread's messages are gone; the recent thread's remain.
-    assert set(msgs) == {"new"}
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_archive_older_than_stamps_idle_threads_only(tmp_path):
-    """archive_older_than sets archived_at on idle, not-yet-archived rows only."""
-    from sqlalchemy import text
-
-    repo, engine = await _repo(tmp_path)
-    sm = session_maker(engine)
-    now = datetime(2026, 5, 20, tzinfo=UTC)
-    idle = now - timedelta(days=10)
-    active = now - timedelta(days=1)
-
-    conv_sql = (
-        "INSERT INTO conversations "
-        "(id, agent_key, title, created_at, updated_at, archived_at) "
-        "VALUES (:id, 'builtin', 't', :ts, :ts, :arch)"
-    )
-    async with sm() as s:
-        await s.execute(text(conv_sql), {"id": "idle", "ts": idle, "arch": None})
-        await s.execute(text(conv_sql), {"id": "active", "ts": active, "arch": None})
-        # Already archived long ago — must not be re-stamped.
-        await s.execute(text(conv_sql), {"id": "done", "ts": idle, "arch": idle})
-        await s.commit()
-
-    cutoff = now - timedelta(days=7)
-    affected = await repo.archive_older_than(
-        "conversations", "updated_at", "archived_at", cutoff, now
-    )
-    assert affected == 1  # only the idle, not-yet-archived thread
-
-    async with sm() as s:
-        rows = dict((await s.execute(text("SELECT id, archived_at FROM conversations"))).all())
-    assert rows["idle"] is not None  # newly archived
-    assert rows["active"] is None  # too recent, untouched
-    # Pre-existing archived_at preserved (its original date, not re-stamped to now).
-    # Raw text() reads the column back as a string, so compare on the date prefix.
-    assert str(rows["done"]).startswith("2026-05-10")
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_archive_older_than_rejects_unlisted_columns(tmp_path):
-    repo, engine = await _repo(tmp_path)
-    with pytest.raises(UnknownPrunableTable):
-        await repo.archive_older_than(
-            "conversations", "updated_at", "title", datetime.now(tz=UTC), datetime.now(tz=UTC)
-        )
+    await repo.upsert("audit_log", 365)
+    await repo.upsert("conversations", 30)
+    await repo.remove("conversations")
+    await repo.remove("never_added")  # a no-op, not an error
+    assert [r.table_name for r in await repo.list()] == ["audit_log"]
     await engine.dispose()
 
 

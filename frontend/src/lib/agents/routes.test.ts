@@ -4,7 +4,6 @@ import { describe, expect, test } from "vitest";
 import {
   AGENT_TABS,
   agentMemoryStorePath,
-  agentSessionPath,
   agentTabPath,
   isAgentType,
   unmanagedSkillPath,
@@ -37,9 +36,6 @@ describe("agent addresses", () => {
     );
     expect(agentMemoryStorePath("codex", "/h/.codex/memories", "Global")).toBe(
       "/agents/codex/memory/store?dir=%2Fh%2F.codex%2Fmemories&project=Global",
-    );
-    expect(agentSessionPath("codex", "/h/s.jsonl")).toBe(
-      "/agents/codex/sessions?session=%2Fh%2Fs.jsonl",
     );
   });
 

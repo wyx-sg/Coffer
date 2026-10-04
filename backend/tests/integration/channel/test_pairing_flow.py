@@ -64,7 +64,7 @@ async def test_message_from_a_different_chat_is_silently_ignored(env: ChannelEnv
     await env.processor.on_message(inbound("tg", "stranger", "hello bot"))
 
     assert adapter.sent == []
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
     peer = await env.peers.owner_peer(resource.uid)
     assert peer is not None
     assert peer.chat_id == "owner"
@@ -128,11 +128,11 @@ async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) 
     assert await env.peers.sender_ids(resource.uid) == {"new-1"}
 
     # (1) The old owner's DM no longer passes the owner gate: no reply, no turn.
-    conversations_before = len(await env.chat.list_conversations())
+    conversations_before = len(await env.conversations())
     sent_before = len(adapter.sent)
     await env.processor.on_message(inbound("tg", "old-dm", "still mine?", sender_id="old-1"))
     assert len(adapter.sent) == sent_before
-    assert len(await env.chat.list_conversations()) == conversations_before
+    assert len(await env.conversations()) == conversations_before
 
     # (2) The new owner's DM drives a turn.
     await env.processor.on_message(inbound("tg", "new-dm", "hello", sender_id="new-1"))

@@ -128,7 +128,7 @@ describe("useAgentRowActions", () => {
       // No managed agent is available, so the hand-off is a visible Copy prompt
       // button; the ⋯ menu holds only the agent's own actions.
       const copyButton = await screen.findByRole("button", { name: "Copy prompt" });
-      expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "menu" }));
       const menu = await screen.findByRole("menu");
       expect(
@@ -155,7 +155,7 @@ describe("useAgentRowActions", () => {
         version: null,
         install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
       });
-      // The missing agent itself cannot run a turn; Codex can.
+      // The missing agent itself cannot run its install prompt; Codex can.
       const d = use(
         fakeDaemon({
           types: [row],
@@ -167,14 +167,27 @@ describe("useAgentRowActions", () => {
       );
       renderWithDaemon(<Harness row={row} />);
       // The split button, beside the ⋯, never inside it.
-      fireEvent.click(await screen.findByRole("button", { name: "Ask an agent" }));
-      // Straight to the draft: no dialog, and nothing written.
+      fireEvent.click(await screen.findByRole("button", { name: "Hand off to Codex" }));
+      // Codex starts in the preferred terminal with the install prompt: no dialog, and
+      // nothing written to either agent's configuration.
+      await waitFor(() =>
+        expect(d.calls).toContainEqual({
+          method: "POST",
+          path: "/fs/terminal",
+          body: {
+            agent: "codex",
+            prompt: "Please reinstall Claude Code on this machine.",
+            terminal: null,
+          },
+        }),
+      );
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(writes(d)).toEqual([]);
+      expect(writes(d)).toEqual(["POST /fs/terminal"]);
+      expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
     },
   );
 
-  test("with only the missing agent itself managed, Ask an agent is not offered", async () => {
+  test("with only the missing agent itself managed, the row offers Copy prompt alone", async () => {
     const row = typeRow({
       type: "claude_code",
       state: "config_only",
@@ -190,6 +203,6 @@ describe("useAgentRowActions", () => {
     );
     renderWithDaemon(<Harness row={row} />);
     expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
 });

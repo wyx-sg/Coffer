@@ -108,23 +108,12 @@ class RetentionRepo(Protocol):
         table: str,
         timestamp_column: str,
         cutoff: datetime,
-        *,
-        also_older_column: str | None = None,
-    ) -> int: ...
-    async def archive_older_than(
-        self,
-        target_table: str,
-        match_column: str,
-        set_column: str,
-        cutoff: datetime,
-        now: datetime,
     ) -> int: ...
     async def count_rows(
         self,
         table: str,
         timestamp_column: str,
         cutoff: datetime,
-        *,
-        also_older_column: str | None = None,
     ) -> tuple[int, int]: ...
     async def exists(self, table_name: str) -> bool: ...
+    async def remove(self, table_name: str) -> None: ...

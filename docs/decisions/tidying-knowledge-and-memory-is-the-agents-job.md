@@ -1,5 +1,7 @@
 # Tidying Knowledge and Memory Is the Agent's Job
 
+> **Amended (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web conversation, so Tidy starts the agent in the person's preferred terminal instead of opening a conversation in Coffer. The decision (the agent tidies, the person presses the button) is unchanged.
+
 **Status**: Accepted
 **Date**: 2026-10-04
 **Deciders**: Yuxing Wu
@@ -45,8 +47,8 @@ name another knowledge file, give every document frontmatter), how to tidy a
 collection (merge, split, correct), and how to tidy a memory partition (merge
 notes while keeping their `origins`, mark a note `retired:`). A **Tidy** button
 on each collection and each memory partition, and **Tidy all** on each list
-page, opens a new conversation with the default managed agent and sends a
-prompt Coffer renders, naming the path and the count. With no managed agent
+page, starts the default hand-off agent in the person's preferred terminal
+with a prompt Coffer renders as its first message, naming the path and the count. With no managed agent
 the button offers Copy prompt only.
 
 Coffer keeps only the mechanical work: each raw memory entry becomes a note as

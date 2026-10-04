@@ -101,14 +101,6 @@ The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own na
 - **WHEN** the user scans the agent's native memory
 - **THEN** Coffer parses the single global document into one store row per distinct routed cwd — `project`/`path` the cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store — read-only and emitting no audit event; with no `memories/MEMORY.md` the list is empty
 
-### Requirement: Read Codex transcripts from the sessions directory
-The transcript location of [agent-registry](../spec.md) "List an agent's transcript sessions read-only" for this type MUST be `<config_dir>/sessions/**/*.jsonl`.
-
-#### Scenario: list Codex sessions from the sessions directory
-- **GIVEN** a registered `codex` agent with a session `.jsonl` nested under `<config_dir>/sessions/`
-- **WHEN** the user lists the agent's transcripts
-- **THEN** that session is listed with its file's absolute path as `source_path`
-
 ### Requirement: Leave Codex's internal-state tables untouched
 The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` — are the Codex side of the parent's "internal state files are read as inputs and never written". They MUST be read where a facet needs them ("Read Codex plugins from config.toml and the cache directory" reads the marketplaces) and MUST be byte-identical before and after every write Coffer makes to that file; every such write also preserves the user's comments and key ordering.
 
@@ -142,3 +134,27 @@ Reading it MUST NOT write `config.toml`. Coffer MUST NOT record an approval of i
 - **WHEN** the user lists its hooks, then approves every entry in Codex, then a later build changes the command
 - **THEN** Coffer's hook reads `untrusted`, then `trusted`, then `modified`, and the attention item for the unapproved hook tells the user to run `/hooks` in Codex while it is not trusted
 - **AND** `config.toml` is exactly as Codex left it after every read
+
+### Requirement: List Codex sessions through the app-server
+The native sessions of [agent-registry](../spec.md) "List an agent's native sessions through the agent" for this type
+MUST be asked of a short-lived `codex app-server` — the transport the turns use — over JSON-RPC: `thread/list` for the listing,
+`thread/name/set` for a rename and `thread/delete` for a delete. The listing MUST ask for every source kind, so sessions
+Coffer's channels ran are listed beside the ones the person started in the Codex app or the terminal, and pages with the server's
+own cursor, passing the search to the server as its `searchTerm`. Like every Codex process Coffer starts for an agent whose config
+directory is not `~/.codex`, the app-server MUST carry `CODEX_HOME=<config_dir>`; for the default directory the
+environment is left as the daemon's own.
+
+#### Scenario: list Codex sessions through thread/list
+- **GIVEN** a registered `codex` agent with sessions started by the Codex app and by a channel
+- **WHEN** the user lists the agent's sessions
+- **THEN** both are listed, each with its title, working directory and times, the channel's with its conversation
+
+#### Scenario: ask the app-server of the agent's own Codex home
+- **GIVEN** a `codex` agent registered with a `config_dir` other than `~/.codex`
+- **WHEN** its sessions are listed
+- **THEN** the app-server is started with `CODEX_HOME` set to that `config_dir`, and a listing for the default `~/.codex` starts with the environment untouched
+
+#### Scenario: rename and delete go through the app-server
+- **GIVEN** a registered `codex` agent with a session
+- **WHEN** the session is renamed and then deleted
+- **THEN** `thread/name/set` and `thread/delete` are called with the thread id, and no file under `sessions/` is edited by Coffer

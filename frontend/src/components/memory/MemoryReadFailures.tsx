@@ -3,7 +3,7 @@
 // The banner the Memory overview shows when the last read left an agent's
 // memory unread (design 5.2.03, spec memory "Report the last read of the
 // agents' memory"): which agent, which path and why, that its memories stay as
-// its last full read left them, with Retry (Update memory) and [Ask an agent]
+// its last full read left them, with Retry (Update memory) and [Hand off to <Agent>]
 // carrying a prompt to fix the read permission.
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";

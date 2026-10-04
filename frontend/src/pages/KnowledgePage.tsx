@@ -98,11 +98,7 @@ export function KnowledgePage() {
         actions={
           list.length > 0 ? (
             <>
-              <AgentHandoff
-                prompt={tidyAllPrompt}
-                autoSend={{ label: t("knowledge.tidy.all") }}
-                help={false}
-              />
+              <AgentHandoff prompt={tidyAllPrompt} label={t("knowledge.tidy.all")} help={false} />
               <Button variant={editing ? "outline" : "default"} onClick={() => setDialog("upload")}>
                 <Upload aria-hidden /> {t("knowledge.upload.button")}
               </Button>

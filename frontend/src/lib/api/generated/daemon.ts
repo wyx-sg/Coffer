@@ -342,6 +342,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fs/terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Terminal
+         * @description Start an agent's session in a terminal window on this host.
+         */
+        post: operations["open_terminal_api_v1_fs_terminal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fs/terminals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Terminals
+         * @description List the terminals detected on this machine for the preferred-terminal setting.
+         */
+        get: operations["list_terminals_api_v1_fs_terminals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storage": {
         parameters: {
             query?: never;
@@ -671,6 +711,24 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** FsTerminalRequest */
+        FsTerminalRequest: {
+            /** Agent */
+            agent: string;
+            /** Cwd */
+            cwd?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /** Resume */
+            resume?: string | null;
+            /** Terminal */
+            terminal?: string | null;
+        };
+        /** FsTerminalsOut */
+        FsTerminalsOut: {
+            /** Terminals */
+            terminals: components["schemas"]["TerminalOptionOut"][];
+        };
         /**
          * HandoffOut
          * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
@@ -745,6 +803,13 @@ export interface components {
             restarting: boolean;
             /** Task */
             task: string;
+        };
+        /** TerminalOptionOut */
+        TerminalOptionOut: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
         };
         /** TokenRotationOut */
         TokenRotationOut: {
@@ -1551,6 +1616,88 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    open_terminal_api_v1_fs_terminal_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FsTerminalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_terminals_api_v1_fs_terminals_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FsTerminalsOut"];
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

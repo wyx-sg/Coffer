@@ -10,14 +10,9 @@ from __future__ import annotations
 import pytest
 
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnError, TurnStarted
-from coffer.domain.chat.message import Role, TextBlock
 from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, inbound, turn_body, uid_of, wait_until
-
-
-def _text(message) -> str:  # type: ignore[no-untyped-def]
-    return "".join(b.text for b in message.content if isinstance(b, TextBlock))
+from .conftest import ChannelEnv, inbound, uid_of, wait_until
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a paired message gets an agent reply")
@@ -38,16 +33,13 @@ async def test_paired_message_runs_a_turn_and_delivers_the_reply(env: ChannelEnv
     assert ("owner", "Hello world") in adapter.sent
     assert set(adapter.typing) == {"owner"}  # typing ack on arrival and at turn start
 
-    conversations = await env.chat.list_conversations()
+    conversations = await env.conversations()
     assert len(conversations) == 1
     assert await env.active_conversation(resource) == conversations[0].id
 
-    messages = await env.chat.list_messages(conversations[0].id)
-    assert [(m.role, turn_body(_text(m))) for m in messages] == [
-        (Role.USER, "hi"),
-        (Role.ASSISTANT, "Hello world"),
-    ]
-    assert all(m.status == "complete" for m in messages)
+    # Coffer keeps no copy of the exchange: the agent was asked "hi" and the
+    # chat was sent the reply.
+    assert env.user_texts(conversations[0].id) == ["hi"]
 
 
 @pytest.mark.acceptance(
@@ -65,16 +57,12 @@ async def test_channel_conversation_appears_in_the_chat_platform_apis(env: Chann
     await env.processor.on_message(inbound("tg", "owner", "meaning of life?"))
     await wait_until(lambda: "42" in adapter.texts())
 
-    # The conversation is listed and readable like any web-UI conversation.
-    conversations = await env.chat.list_conversations()
+    # The conversation is listed in the chat platform's index.
+    conversations = await env.conversations()
     assert len(conversations) == 1
     conversation = await env.chat.get_conversation(conversations[0].id)
     assert conversation.agent_key == "builtin"
-
-    messages = await env.chat.list_messages(conversation.id)
-    assert [m.role for m in messages] == [Role.USER, Role.ASSISTANT]
-    assert turn_body(_text(messages[0])) == "meaning of life?"
-    assert _text(messages[1]) == "42"
+    assert env.user_texts(conversation.id) == ["meaning of life?"]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a turn error is reported to the IM chat")
@@ -105,7 +93,7 @@ async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(
     await env.processor.on_message(inbound("tg", "owner", "   "))
 
     assert adapter.texts() == ["⚠️ Unsupported message — send text, a photo, or a file."]
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
 
 
 async def test_help_lists_the_channel_commands(env: ChannelEnv) -> None:
@@ -155,5 +143,4 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     fresh = await env.active_conversation(resource)
     assert fresh is not None
     assert fresh != old_conversation
-    messages = await env.chat.list_messages(fresh)
-    assert turn_body(_text(messages[0])) == "second"
+    assert env.user_texts(fresh) == ["second"]

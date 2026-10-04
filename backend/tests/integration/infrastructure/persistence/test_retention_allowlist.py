@@ -26,30 +26,28 @@ from coffer.infrastructure.persistence.retention_repo import (
 )
 
 
-def test_archive_entry_permits_both_its_columns_on_the_target_table() -> None:
+def test_entries_sharing_a_table_merge_into_one_allowlist_entry() -> None:
     registry = PrunableRegistry()
     registry.register(
         PrunableTable(
-            name="threads_archive",
+            name="threads_by_update",
             timestamp_column="updated_at",
             default_retention_days=7,
             display_name="x",
             description="x",
-            action="archive",
             target_table="threads",
-            archive_set_column="archived_at",
         )
     )
     registry.register(
         PrunableTable(
             name="threads",
-            timestamp_column="archived_at",
+            timestamp_column="created_at",
             default_retention_days=30,
             display_name="x",
             description="x",
         )
     )
-    assert allowlist_from_registry(registry.all()) == {"threads": {"updated_at", "archived_at"}}
+    assert allowlist_from_registry(registry.all()) == {"threads": {"updated_at", "created_at"}}
 
 
 async def _repo(tmp_path, allowlist):

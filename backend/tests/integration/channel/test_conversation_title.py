@@ -1,6 +1,6 @@
 """A channel conversation is named after what the person typed.
 
-See spec chat "Persist conversations and messages in SQLite".
+See spec chat "Keep the conversation index without its text".
 
 Every turn's text opens with context blocks the channel folds in — the
 origin block, and a thread's fetched history — which are the same on every turn
@@ -22,7 +22,7 @@ from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 
 
 async def _title(env: ChannelEnv) -> str:
-    conversations = await env.chat.list_conversations()
+    conversations = await env.conversations()
     assert len(conversations) == 1
     return conversations[0].title
 
@@ -49,7 +49,7 @@ async def test_two_channel_conversations_are_told_apart(env: ChannelEnv) -> None
     await env.processor.on_message(inbound("tg", "owner-2", "who owns account-service?"))
     await wait_until(lambda: len(adapter.texts()) == 2)
 
-    titles = {c.title for c in await env.chat.list_conversations()}
+    titles = {c.title for c in await env.conversations()}
     assert titles == {"deploy status please", "who owns account-service?"}
 
 
@@ -95,7 +95,9 @@ async def test_an_image_only_message_is_named_by_its_filename(
 
 async def test_a_name_the_owner_gave_outranks_the_message(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
-    conv = await env.chat.create_conversation(agent_key="builtin")
+    conv = await env.chat.create_conversation(
+        agent_key="builtin", channel_uid=resource.uid, peer_chat_id="owner"
+    )
     await env.chat.rename_conversation(conv.id, new_title="Tax questions")
     await env.threads.set_active_conversation(resource.uid, "owner", "", conv.id)
 

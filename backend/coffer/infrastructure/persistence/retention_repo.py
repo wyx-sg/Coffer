@@ -30,20 +30,15 @@ def retention_path() -> Path:
 def allowlist_from_registry(tables: Iterable[PrunableTable]) -> dict[str, set[str]]:
     """The ``{sql_table: {columns}}`` allowlist a set of registrations implies.
 
-    A ``delete`` entry permits its timestamp column on its table; an ``archive``
-    entry additionally permits the column it stamps. Two entries sharing a table
-    (the conversations archive/delete pair) merge into one set. Only ever fed
-    from the composition root's registry, so the identifiers that reach the SQL
-    below are exactly the ones the code registered.
+    An entry permits its timestamp column on its table; two entries sharing a
+    table merge into one set. Only ever fed from the composition root's
+    registry, so the identifiers that reach the SQL below are exactly the ones
+    the code registered.
     """
     allow: dict[str, set[str]] = {}
     for table in tables:
         columns = allow.setdefault(table.sql_table, set())
         columns.add(table.timestamp_column)
-        if table.archive_set_column is not None:
-            columns.add(table.archive_set_column)
-        if table.also_older_column is not None:
-            columns.add(table.also_older_column)
     return allow
 
 
@@ -73,7 +68,7 @@ class FileRetentionRepo:
     """Concrete RetentionRepo: policies in ``local/retention.json``, the sweep
     against the history database.
 
-    `delete_older_than` / `archive_older_than` validate table+column against
+    `delete_older_than` / `count_rows` validate table+column against
     ``allowlist`` before constructing any SQL, and never accept a user-supplied
     table name. The allowlist is required and has no default, so the identifiers
     that can reach the SQL below are always the ones some caller registered:
@@ -139,40 +134,22 @@ class FileRetentionRepo:
             {"last_pruned_at": datetime.now(tz=UTC).isoformat(), "last_pruned_rows": rows},
         )
 
-    def _older_than(self, table: str, column: str, also_column: str | None) -> str:
-        """The ``WHERE`` condition (against ``:cutoff``) of rows past the window:
-        ``column`` older than it and, when given, ``also_column`` too. Both names
-        are checked against the allowlist before they reach any SQL."""
+    def _older_than(self, table: str, column: str) -> str:
+        """The ``WHERE`` condition (against ``:cutoff``) of rows past the window.
+        Both names are checked against the allowlist before they reach any SQL."""
         allowed = self._allowlist.get(table)
-        for name in (column, also_column):
-            if name is not None and (allowed is None or name not in allowed):
-                raise UnknownPrunableTable(f"table/column not in allowlist: ({table!r}, {name!r})")
-        condition = f"{column} < :cutoff"
-        if also_column is not None:
-            condition += f" AND {also_column} < :cutoff"
-        return condition
+        if allowed is None or column not in allowed:
+            raise UnknownPrunableTable(f"table/column not in allowlist: ({table!r}, {column!r})")
+        return f"{column} < :cutoff"
 
     async def delete_older_than(
         self,
         table: str,
         timestamp_column: str,
         cutoff: datetime,
-        *,
-        also_older_column: str | None = None,
     ) -> int:
-        where = self._older_than(table, timestamp_column, also_older_column)
+        where = self._older_than(table, timestamp_column)
         async with self._sm() as session:
-            if table == "conversations":
-                # A conversation owns its messages; pruning a thread must take
-                # them with it (chat_messages has no DB-level cascade), so delete
-                # the messages of the to-be-pruned threads first, in the same txn.
-                await session.execute(
-                    text(
-                        "DELETE FROM chat_messages WHERE conversation_id IN "
-                        f"(SELECT id FROM conversations WHERE {where})"
-                    ),
-                    {"cutoff": cutoff},
-                )
             stmt = text(f"DELETE FROM {table} WHERE {where}")
             result = await session.execute(stmt, {"cutoff": cutoff})
             await session.commit()
@@ -183,11 +160,9 @@ class FileRetentionRepo:
         table: str,
         timestamp_column: str,
         cutoff: datetime,
-        *,
-        also_older_column: str | None = None,
     ) -> tuple[int, int]:
         """``(all rows, rows older than cutoff)``: what a prune at ``cutoff`` would delete."""
-        where = self._older_than(table, timestamp_column, also_older_column)
+        where = self._older_than(table, timestamp_column)
         async with self._sm() as session:
             stmt = text(
                 f"SELECT COUNT(*), COALESCE(SUM(CASE WHEN {where} "
@@ -196,37 +171,16 @@ class FileRetentionRepo:
             total, older = (await session.execute(stmt, {"cutoff": cutoff})).one()
             return int(total or 0), int(older or 0)
 
-    async def archive_older_than(
-        self,
-        target_table: str,
-        match_column: str,
-        set_column: str,
-        cutoff: datetime,
-        now: datetime,
-    ) -> int:
-        allowed_columns = self._allowlist.get(target_table)
-        if (
-            allowed_columns is None
-            or match_column not in allowed_columns
-            or set_column not in allowed_columns
-        ):
-            raise UnknownPrunableTable(
-                f"table/columns not in allowlist: "
-                f"({target_table!r}, {match_column!r}, {set_column!r})"
-            )
-        async with self._sm() as session:
-            # Stamp only rows not already stamped, so a thread's original
-            # archive time survives re-sweeps (and stays the delete clock).
-            stmt = text(
-                f"UPDATE {target_table} SET {set_column} = :now "
-                f"WHERE {set_column} IS NULL AND {match_column} < :cutoff"
-            )
-            result = await session.execute(stmt, {"now": now, "cutoff": cutoff})
-            await session.commit()
-            return int(result.rowcount or 0)
-
     async def exists(self, table_name: str) -> bool:
         return table_name in self._policies()
+
+    async def remove(self, table_name: str) -> None:
+        """Forget a policy row (one no registered policy owns any more)."""
+
+        def change(doc: dict[str, Any]) -> None:
+            doc.pop(table_name, None)
+
+        self._store.update(change)
 
 
 __all__ = ["FileRetentionRepo", "allowlist_from_registry", "retention_path"]

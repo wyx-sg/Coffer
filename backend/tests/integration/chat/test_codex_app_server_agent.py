@@ -12,22 +12,21 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    SESSION_IN_USE,
+    SESSION_IN_USE_MESSAGE,
     STREAM_ENDED_MESSAGE,
     TextDelta,
     TurnDone,
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Message, Role, TextBlock
 from coffer.infrastructure.chat.codex_agent import CodexAppServerAdapter
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 
@@ -90,6 +89,7 @@ class FakeCodexAppServer:
         turn_id: str = "turn-1",
         frames: list[_Frame] | None = None,
         fail_methods: set[str] | None = None,
+        fail_messages: dict[str, str] | None = None,
         die_on_methods: set[str] | None = None,
         model: str | None = None,
     ) -> None:
@@ -103,6 +103,8 @@ class FakeCodexAppServer:
         # Requests answered with a JSON-RPC error instead of a result (e.g. a
         # ``thread/resume`` naming a thread this app-server has forgotten).
         self._fail_methods = fail_methods or set()
+        # Overrides the default error message of a failing request.
+        self._fail_messages = fail_messages or {}
         # Requests on which the peer process "dies": its stdout closes with no
         # reply, the transport failure a crashed app-server produces.
         self._die_on_methods = die_on_methods or set()
@@ -168,7 +170,12 @@ class FakeCodexAppServer:
                 {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "error": {"code": -32600, "message": f"{method} failed: no such thread"},
+                    "error": {
+                        "code": -32600,
+                        "message": self._fail_messages.get(
+                            method, f"{method} failed: no such thread"
+                        ),
+                    },
                 }
             )
             return
@@ -252,21 +259,8 @@ class _Factory:
 # ---------------------------------------------------------------------------
 
 
-def _user_turn(text: str) -> list[Message]:
-    return [
-        Message(
-            id=uuid.uuid4().hex,
-            conversation_id="c1",
-            seq=0,
-            role=Role.USER,
-            content=[TextBlock(text=text)],
-            status="complete",
-            model_id=None,
-            prompt_tokens=None,
-            completion_tokens=None,
-            created_at=datetime.now(tz=UTC),
-        )
-    ]
+def _user_turn(text: str) -> str:
+    return text
 
 
 async def _dummy_sink(sid: str) -> None:
@@ -305,8 +299,8 @@ def _adapter(
     )
 
 
-async def _collect(adapter: CodexAppServerAdapter, history: list[Message]) -> list[Any]:
-    stream = await adapter.run_turn(history=history)
+async def _collect(adapter: CodexAppServerAdapter, prompt: str) -> list[Any]:
+    stream = await adapter.run_turn(prompt)
     return [ev async for ev in stream]
 
 
@@ -370,7 +364,6 @@ async def test_adapter_streams_events_and_persists_thread_id():
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 async def test_adapter_reports_the_model_the_thread_runs_on():
     server = FakeCodexAppServer(frames=_basic_frames(), model="gpt-test-5")
     adapter = _adapter(_Factory(server))
@@ -418,7 +411,7 @@ async def test_cancel_while_the_app_server_starts_closes_the_session():
         session_factory=factory,
         on_session=_dummy_sink,
     )
-    stream = await adapter.run_turn(history=_user_turn("go"))
+    stream = await adapter.run_turn(_user_turn("go"))
 
     async def consume() -> None:
         async for _ in stream:
@@ -442,7 +435,7 @@ async def test_a_pruned_attachment_degrades_to_a_could_not_be_read_note(tmp_path
     server = FakeCodexAppServer(frames=_basic_frames())
     adapter = _adapter(_Factory(server))
 
-    stream = await adapter.run_turn(history=_user_turn("look"), attachments=[gone, kept])
+    stream = await adapter.run_turn(_user_turn("look"), attachments=[gone, kept])
     await asyncio.wait_for(_collect_stream(stream), timeout=5)
 
     text = next(p for m, p in server.requests if m == "turn/start")["input"][0]["text"]
@@ -455,7 +448,7 @@ async def test_adapter_empty_prompt_is_rejected():
     server = FakeCodexAppServer(frames=[])
     factory = _Factory(server)
     adapter = _adapter(factory)
-    events = await _collect(adapter, [])
+    events = await _collect(adapter, "")
     assert len(events) == 1
     assert isinstance(events[0], TurnError)
     assert events[0].code == "empty_prompt"
@@ -484,6 +477,7 @@ async def test_resume_uses_thread_resume_with_thread_id():
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a cleaned-up session resumes as a fresh one")
 @pytest.mark.acceptance(
     spec="chat",
     scenario="a resume id the agent has forgotten retries once as a fresh session",
@@ -681,7 +675,7 @@ async def test_cancel_interrupts_and_closes_and_persists_thread():
     factory = _Factory(server)
     adapter = _adapter(factory, on_session=on_session)
 
-    stream = await adapter.run_turn(history=_user_turn("go"))
+    stream = await adapter.run_turn(_user_turn("go"))
 
     async def consume() -> None:
         async for _ in stream:
@@ -721,7 +715,7 @@ async def test_stream_end_without_terminal_is_a_stream_ended_error():
     factory = _Factory(server)
     adapter = _adapter(factory)
 
-    stream = await adapter.run_turn(history=_user_turn("hi"))
+    stream = await adapter.run_turn(_user_turn("hi"))
     out: list[Any] = []
 
     async def drive() -> None:
@@ -761,7 +755,7 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
     factory = _Factory(server)
     adapter = _adapter(factory)
 
-    stream = await adapter.run_turn(history=_user_turn("hi"))
+    stream = await adapter.run_turn(_user_turn("hi"))
     out: list[Any] = []
 
     with warnings.catch_warnings(record=True) as caught:
@@ -809,7 +803,7 @@ async def test_pdf_reaches_codex_as_extracted_text() -> None:
     adapter = _adapter(factory, document_extractor=extractor)
     pdf = Attachment(path="/tmp/report.pdf", mime="application/pdf", filename="report.pdf")
 
-    stream = await adapter.run_turn(history=_user_turn("summarise this"), attachments=(pdf,))
+    stream = await adapter.run_turn(_user_turn("summarise this"), attachments=(pdf,))
     events = await asyncio.wait_for(_collect_stream(stream), timeout=5)
 
     assert isinstance(events[-1], TurnDone)
@@ -833,7 +827,7 @@ async def test_document_without_extractor_degrades_to_a_path_note(tmp_path: Any)
     report.write_bytes(b"%PDF-1.4")
     pdf = Attachment(path=str(report), mime="application/pdf", filename="report.pdf")
 
-    stream = await adapter.run_turn(history=_user_turn("look"), attachments=(pdf,))
+    stream = await adapter.run_turn(_user_turn("look"), attachments=(pdf,))
     await asyncio.wait_for(_collect_stream(stream), timeout=5)
 
     # Degrades gracefully: the document is handed over as a file path, turn intact.
@@ -846,3 +840,31 @@ async def test_document_without_extractor_degrades_to_a_path_note(tmp_path: Any)
 
 async def _collect_stream(stream: Any) -> list[Any]:
     return [ev async for ev in stream]
+
+
+_ACTIVE_WRITER = "thread t-1 already has an active writer"
+
+
+@pytest.mark.acceptance(spec="chat", scenario="Codex's active-writer error is the same refusal")
+@pytest.mark.parametrize("failing", ["thread/resume", "turn/start"])
+@pytest.mark.asyncio
+async def test_an_active_writer_error_is_the_session_in_use_refusal(failing: str):
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(
+        frames=_basic_frames(),
+        fail_methods={failing},
+        fail_messages={failing: _ACTIVE_WRITER},
+    )
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="t-1")
+
+    events = await _collect(adapter, "hi")
+
+    assert events[-1] == TurnError(code=SESSION_IN_USE, message=SESSION_IN_USE_MESSAGE)
+    assert [e for e in events if isinstance(e, TurnError)] == [events[-1]]
+    # The busy thread is not forked into a fresh one, and its id is kept.
+    assert "thread/start" not in [m for m, _ in server.requests]
+    assert saved == []

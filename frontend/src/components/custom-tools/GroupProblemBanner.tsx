@@ -1,5 +1,5 @@
 // src/components/custom-tools/GroupProblemBanner.tsx — the banners a group shows for calls that fail (4.2.21: View
-// calls, the group's own Invocations tab · Ask an agent ▾ · ?) and for a group that is off (4.2.22: Turn on).
+// calls, the group's own Invocations tab · Hand off to <Agent> ▾ · ?) and for a group that is off (4.2.22: Turn on).
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { CircleAlert, Power } from "lucide-react";

@@ -820,6 +820,78 @@ paths:
       summary: Reveal Path
       tags:
       - fs
+  /api/v1/fs/terminal:
+    post:
+      description: Start an agent's session in a terminal window on this host.
+      operationId: open_terminal_api_v1_fs_terminal_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FsTerminalRequest'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Open Terminal
+      tags:
+      - fs
+  /api/v1/fs/terminals:
+    get:
+      description: List the terminals detected on this machine for the preferred-terminal setting.
+      operationId: list_terminals_api_v1_fs_terminals_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FsTerminalsOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Terminals
+      tags:
+      - fs
   /api/v1/storage:
     get:
       operationId: storage_summary_api_v1_storage_get
@@ -1400,6 +1472,47 @@ components:
       - path
       title: FsRevealRequest
       type: object
+    FsTerminalRequest:
+      additionalProperties: false
+      properties:
+        agent:
+          title: Agent
+          type: string
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
+        resume:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resume
+        terminal:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Terminal
+      required:
+      - agent
+      title: FsTerminalRequest
+      type: object
+    FsTerminalsOut:
+      properties:
+        terminals:
+          items:
+            $ref: '#/components/schemas/TerminalOptionOut'
+          title: Terminals
+          type: array
+      required:
+      - terminals
+      title: FsTerminalsOut
+      type: object
     HandoffOut:
       description: |-
         A chore for the person's agent. ``prompt`` is the whole text to copy or
@@ -1528,6 +1641,19 @@ components:
       - at
       - restarting
       title: TaskCrashOut
+      type: object
+    TerminalOptionOut:
+      properties:
+        label:
+          title: Label
+          type: string
+        value:
+          title: Value
+          type: string
+      required:
+      - label
+      - value
+      title: TerminalOptionOut
       type: object
     TokenRotationOut:
       properties:

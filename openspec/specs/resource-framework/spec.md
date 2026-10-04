@@ -363,30 +363,27 @@ prune uses, and deletes and changes nothing. It is a read that serves a confirma
 
 ### Requirement: Retain attachments on an adjustable policy
 Attachment files MUST NOT accumulate without bound, and how long they are kept MUST be the
-user's to choose. One retention policy named `attachments` covers both directories that hold
-them — `~/.coffer/content/channel-media` (what a channel downloaded) and
-`~/.coffer/content/chat-media` (what the Conversations page uploaded). It is listed by
+user's to choose. One retention policy named `attachments` covers the directory that holds
+them — `~/.coffer/content/channel-media` (what a channel downloaded). It is listed by
 `GET /api/v1/retention/policies` and set by `PATCH /api/v1/retention/policies/attachments`
 like any table policy (a whole number of days, or `forever`; the change is audited), and
 its default is 30 days, so a user who never chose keeps today's behaviour. The policy
 is seeded at daemon start with the other policies and stored beside them. A file is past the
 window when its mtime is older than the window; there is no size cap and no reference
 check. On the retention cadence and on a full prune, files past the window are deleted
-from both directories and the prune answers how many files it removed under `attachments`;
+from that directory and the prune answers how many files it removed under `attachments`;
 under `forever` nothing is deleted. A prune naming `attachments` sweeps only attachments.
-`GET /api/v1/retention/policies/attachments/preview?days=<n>` counts the files held now and how
-many are older than `n` days across both directories and deletes nothing. A sweep that
-fails is logged and skipped, never stopping the table prune or the other directory's
-sweep.
+`GET /api/v1/retention/policies/attachments/preview?days=<n>` counts the files held now and how many are older than `n` days and deletes nothing. A sweep that
+fails is logged and skipped, never stopping the table prune.
 
 #### Scenario: attachments are kept for thirty days unless the user chose otherwise
-- **GIVEN** a fresh daemon and attachment files in both media directories, one of them 31 days old
+- **GIVEN** a fresh daemon and attachment files in the channel media directory, one of them 31 days old
 - **WHEN** a full retention prune runs
 - **THEN** `GET /api/v1/retention/policies` lists `attachments` at 30 days
 - **AND** the 31-day-old file is deleted, the rest are kept, and the prune answers one file under `attachments`
 
 #### Scenario: a changed attachments window decides what is deleted
-- **GIVEN** an uploaded file 10 days old and the `attachments` policy at 30 days
+- **GIVEN** a channel-downloaded file 10 days old and the `attachments` policy at 30 days
 - **WHEN** a client sets the policy to 7 days
 - **THEN** the preview for 7 days counts the file as one to delete before and nothing is deleted by the preview
 - **AND** a prune naming `attachments` deletes the file
@@ -830,8 +827,8 @@ client to refetch everything. While nothing changes the stream MUST send a
 
 ### Requirement: Page growing lists by an opaque cursor
 A list that can grow while it is being read — the audit log, the MCP
-invocation log, an agent's transcript sessions and the chat conversation
-listings — MUST page by an opaque cursor rather than by `offset`. A request
+invocation log, an agent's native sessions and the chat conversation
+listing — MUST page by an opaque cursor rather than by `offset`. A request
 MUST take `limit` and an optional `cursor`; the answer MUST carry
 `next_cursor`, which is `null` exactly when no row follows the page. The list
 MUST have a stable order with a unique tie-break, and the page read with a

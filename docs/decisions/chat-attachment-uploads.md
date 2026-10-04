@@ -1,5 +1,7 @@
 # The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. Superseded: web uploads, the `chat-media` directory and the upload routes are removed with the Conversations page composer. Channel attachments (`channel-media`) are unchanged. Read this ADR as history; the requirement titles it cites no longer exist.
+
 **Status**: Accepted
 **Date**: 2026-09-25
 **Deciders**: Yuxing Wu

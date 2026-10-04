@@ -68,11 +68,7 @@ export function MemoryPage() {
             <>
               <MemoryHeaderStatus />
               <MemoryAutomaticPopover />
-              <AgentHandoff
-                prompt={tidyAllPrompt}
-                autoSend={{ label: t("memory.tidy.all") }}
-                help={false}
-              />
+              <AgentHandoff prompt={tidyAllPrompt} label={t("memory.tidy.all")} help={false} />
               <MemoryUpdateButton running={updating} />
             </>
           )

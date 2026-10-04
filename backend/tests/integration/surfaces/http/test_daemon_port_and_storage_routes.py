@@ -181,14 +181,12 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
         (vault / path).write_text("x" * (100 + i))
         subprocess.run(["git", "-C", str(vault), "add", "."], check=True, env=env)
         subprocess.run(["git", "-C", str(vault), "commit", "-qm", f"c{i}"], check=True, env=env)
-    _write(coffer / "content" / "chat-media" / "m1", 300)
     _write(coffer / "content" / "channel-media" / "m2", 200)
     _write(coffer / "runs.db", 1000)
     _write(coffer / "runs.db-wal", 24)
     _write(coffer / "logs" / "daemon.log", 76)
     _write(coffer / "skill-data" / "my-skill" / "journal.log", 40)
     _write(coffer / "derived" / "memory" / "p1" / "MEMORY.md", 70)
-    _write(coffer / "derived" / "cache" / "agent" / "summaries.json", 30)
     async with client:
         r = await client.get("/api/v1/storage")
     assert r.status_code == 200
@@ -196,14 +194,11 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
     assert body["vault"]["path"] == str(vault)
     assert body["vault"]["versions"] == 3
     assert body["vault"]["bytes"] > 150
-    assert body["local_content"]["bytes"] == 500
+    assert body["local_content"]["bytes"] == 200
     assert body["local_content"]["folder"] == str(coffer / "content")
-    assert sorted(body["local_content"]["locations"]) == [
-        str(coffer / "content" / "channel-media"),
-        str(coffer / "content" / "chat-media"),
-    ]
+    assert body["local_content"]["locations"] == [str(coffer / "content" / "channel-media")]
     assert body["history"] == {"path": str(coffer / "runs.db"), "bytes": 1140}
-    assert body["cache"] == {"bytes": 100}
+    assert body["cache"] == {"bytes": 70}
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the four kinds")
@@ -219,7 +214,7 @@ async def test_a_vault_not_yet_created_reports_no_versions(client, home):
 
 
 # web-ui "clearing the cache is confirmed and rebuilt" has its backend half here
-# (only the memory tree and the transcript cache go); DataSettings.test.tsx the page's.
+# (only the memory tree goes); DataSettings.test.tsx the page's.
 @pytest.mark.acceptance(spec="web-ui", scenario="clearing the cache is confirmed and rebuilt")
 @pytest.mark.acceptance(spec="daemon", scenario="clearing the cache leaves everything else")
 @pytest.mark.asyncio
@@ -229,27 +224,25 @@ async def test_clearing_the_cache_touches_nothing_else(client, home, audit):
     _write(memory / "p1" / "MEMORY.md", 70)
     _write(memory / "p1" / "notes" / "n.md", 30)
     _write(memory / ".source_state.json", 10)
-    _write(coffer / "derived" / "cache" / "agent" / "summaries.json", 40)
     _write(coffer / "vault" / "knowledge" / "a.md", 5)
-    _write(coffer / "content" / "chat-media" / "m1", 5)
+    _write(coffer / "content" / "channel-media" / "m1", 5)
     _write(coffer / "vault" / "memory-triggers" / "t.md", 5)
     _write(coffer / "derived" / "sync-conflicts" / "a.md", 5)
     _write(coffer / "runs.db", 5)
     async with client:
         r = await client.post("/api/v1/storage/cache/clear")
     assert r.status_code == 200
-    assert r.json() == {"cleared_bytes": 150}
+    assert r.json() == {"cleared_bytes": 110}
     assert memory.is_dir() and list(memory.iterdir()) == []
-    assert list((coffer / "derived" / "cache" / "agent").iterdir()) == []
     for kept in (
         "vault/knowledge/a.md",
-        "content/chat-media/m1",
+        "content/channel-media/m1",
         "vault/memory-triggers/t.md",
         "derived/sync-conflicts/a.md",
         "runs.db",
     ):
         assert (coffer / kept).exists(), kept
-    assert audit.events == [("storage_cache_cleared", {"cleared_bytes": 150})]
+    assert audit.events == [("storage_cache_cleared", {"cleared_bytes": 110})]
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="clearing the cache leaves everything else")

@@ -235,23 +235,18 @@ Every table the retention worker sweeps is described declaratively: its policy k
 | `audit_log` | `audit_log` | `timestamp` | 365 days | delete |
 | `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 days | delete |
 | `sync_runs` | `sync_runs` | `finished_at` | 90 days | delete |
-| `conversations_archive` | `conversations` | `updated_at` | 7 days | archive (sets `archived_at`) |
-| `conversations` | `conversations` | `archived_at` | 30 days | delete (with messages) |
-
-Chat conversations use the two-stage form: idle threads are archived first, and archived threads are deleted later.
 
 ```mermaid
 flowchart LR
     W["Retention worker (every 6 h)"] --> S["Prune"]
     S --> R["Registered prunable tables"]
     R --> T1["delete rows older than window"]
-    R --> T2["archive idle conversations"]
     S --> M["sweep channel media dir"]
     W --> F["Log-file pruning: shim and upstream logs older than 7 days"]
     S --> P["local/retention.json: last_pruned_at, rows"]
 ```
 
-- At startup the retention service seeds a policy for each registered table in `~/.coffer/local/retention.json` and never overwrites one you changed.
+- At startup the retention service seeds a policy for each registered table in `~/.coffer/local/retention.json` and never overwrites one you changed. An entry in the file for a policy that is no longer registered, such as the removed conversation policies, is dropped at startup.
 - The retention worker runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
 - A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
 - A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.

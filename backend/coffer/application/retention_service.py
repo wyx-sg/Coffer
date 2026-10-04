@@ -59,11 +59,17 @@ class RetentionService:
         return self._file_policies.get(name)
 
     async def initialize_defaults(self) -> None:
-        """Seed missing retention rows from registry defaults.
+        """Seed missing retention rows from registry defaults and forget the
+        rows no registered policy owns any more (a retired policy leaves its
+        row behind otherwise — the conversation archive/delete pair did).
 
-        Idempotent — rows already in the DB are left alone (so user-set
+        Idempotent — rows of live policies are left alone (so user-set
         values survive daemon restarts).
         """
+        known = {t.name for t in self._registry.policies()} | set(self._file_policies)
+        for stale in await self._repo.list():
+            if stale.table_name not in known:
+                await self._repo.remove(stale.table_name)
         for table in self._registry.policies():
             if not await self._repo.exists(table.name):
                 await self._repo.upsert(table.name, table.default_retention_days)
@@ -147,7 +153,6 @@ class RetentionService:
             table.sql_table,
             table.timestamp_column,
             cutoff,
-            also_older_column=table.also_older_column,
         )
 
     async def prune(
@@ -175,22 +180,9 @@ class RetentionService:
                 result[table.name] = 0
                 continue
             cutoff = clock_now - timedelta(days=policy.retention_days)
-            if table.action == "archive":
-                assert table.archive_set_column is not None  # registry invariant
-                affected = await self._repo.archive_older_than(
-                    table.sql_table,
-                    table.timestamp_column,
-                    table.archive_set_column,
-                    cutoff,
-                    clock_now,
-                )
-            else:
-                affected = await self._repo.delete_older_than(
-                    table.sql_table,
-                    table.timestamp_column,
-                    cutoff,
-                    also_older_column=table.also_older_column,
-                )
+            affected = await self._repo.delete_older_than(
+                table.sql_table, table.timestamp_column, cutoff
+            )
             if table.owns_policy:
                 # A follower's rows are not its leader's: leave the leader's
                 # "last pruned" count to the leader's own table.

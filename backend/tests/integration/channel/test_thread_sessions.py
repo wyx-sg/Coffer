@@ -17,9 +17,8 @@ import pytest
 from coffer.application.channel.conversation_ops import ensure_conversation
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.rich_content import ForwardedItem
-from coffer.domain.chat.message import Role, TextBlock
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, uid_of, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, uid_of, wait_until
 
 
 async def test_dm_reply_defaults_to_direct_chat_kind_and_empty_thread(env: ChannelEnv) -> None:
@@ -118,17 +117,8 @@ async def test_dm_message_inside_a_thread_fetches_that_thread_s_context(
 
     assert adapter.fetch_thread_calls == [("owner", "th-1")]
     assert adapter.fetch_thread_kinds == ["direct"]
-    conversations = await env.chat.list_conversations()
-    messages = await env.chat.list_messages(conversations[0].id)
-    user_text = turn_body(
-        "".join(
-            b.text
-            for m in messages
-            if m.role == Role.USER
-            for b in m.content
-            if isinstance(b, TextBlock)
-        )
-    )
+    conversations = await env.conversations()
+    user_text = "".join(env.user_texts(conversations[0].id))
     assert "Owner: what did we decide?" in user_text
     assert user_text.endswith("remind me")
 

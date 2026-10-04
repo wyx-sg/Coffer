@@ -1,13 +1,12 @@
 """The age sweep for Coffer's attachment media directories (kind-agnostic).
 
-Two kinds keep attachment bytes on disk: a channel downloads into
-``~/.coffer/content/channel-media`` (spec channels "Persist inbound attachments as
-references") and the web composer uploads into ``~/.coffer/content/chat-media`` (spec
-chat "Prune uploaded chat media on the retention cadence"). Both are pruned by
-one rule, so the I/O lives here once rather than inside either kind: stat every
+A channel downloads attachment bytes into ``~/.coffer/content/channel-media``
+(spec channels "Hand inbound attachments to the turn as references"), where they
+accumulate, so they are pruned on the retention cadence. The I/O lives here
+once, apart from the application ``RetentionService``: stat every
 file, ask the pure ``coffer.domain.retention.files_to_prune`` which are too
-old, unlink them. The composition root binds one sweep per directory into the
-application ``RetentionService``, which stays free of infrastructure imports.
+old, unlink them. The composition root binds the sweep into the application
+``RetentionService``, which stays free of infrastructure imports.
 """
 
 from __future__ import annotations

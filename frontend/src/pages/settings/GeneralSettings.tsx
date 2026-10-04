@@ -15,16 +15,24 @@
 // any other app name or launch command. An empty value means the OS default.
 // Only the chosen value is stored — it is never sent to the daemon except
 // transiently as the target when opening a file.
-import { useState } from "react";
+//
+// The Agents and terminal section is built the same way for the preferred
+// terminal (spec web-ui "Let the user choose a terminal"): "System terminal",
+// the terminals the daemon detected, and "Custom…", a command template that
+// must hold `{command}` (and may hold `{cwd}`) or it is not saved. Beside it the
+// hand-off agent (spec web-ui "Let the user choose the hand-off agent"): Claude
+// Code or Codex, among the managed ones.
 import { useTranslation } from "react-i18next";
 
+import { EditorPicker } from "@/components/settings/general/EditorPicker";
+import { HandoffAgentPicker } from "@/components/settings/general/HandoffAgentPicker";
+import { TerminalPicker } from "@/components/settings/general/TerminalPicker";
 import {
   SETTINGS_STACK,
   SettingRow,
   SettingsSection,
   SettingsTabHeader,
 } from "@/components/settings/SettingsLayout";
-import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
@@ -33,14 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useDetectedEditors } from "@/lib/hooks/useEditors";
-import {
-  getPreferredEditor,
-  PAGE_SIZE_OPTIONS,
-  useDefaultPageSize,
-  useSetDefaultPageSize,
-  useSetPreferredEditor,
-} from "@/lib/preferences";
+import { PAGE_SIZE_OPTIONS, useDefaultPageSize, useSetDefaultPageSize } from "@/lib/preferences";
 import { useSetThemePreference, useThemePreference, type ThemePreference } from "@/lib/theme";
 import { EngineSettings } from "./EngineSettings";
 
@@ -53,73 +54,6 @@ const THEME_LABEL_KEYS: Record<ThemePreference, string> = {
 };
 
 type Language = "en" | "zh";
-
-/** Sentinel option values — never stored; the stored value is the launcher. */
-const DEFAULT_OPTION = "__default__";
-const CUSTOM_OPTION = "__custom__";
-
-function EditorPicker() {
-  const { t } = useTranslation();
-  const setPreferredEditor = useSetPreferredEditor();
-  const { data: detected = [] } = useDetectedEditors();
-  const [editor, setEditor] = useState(getPreferredEditor);
-  // True once the user picks "Custom…" — keeps the text field open while it
-  // is still empty. A stored value no detected editor matches is custom too.
-  const [customChosen, setCustomChosen] = useState(false);
-
-  const isDetected = detected.some((d) => d.value === editor);
-  const isCustom = customChosen || (editor !== "" && !isDetected);
-  const selected = isCustom ? CUSTOM_OPTION : editor === "" ? DEFAULT_OPTION : editor;
-
-  const commitEditor = (value: string) => {
-    setEditor(value);
-    setPreferredEditor(value);
-  };
-
-  const pick = (value: string) => {
-    if (value === CUSTOM_OPTION) {
-      setCustomChosen(true);
-      return;
-    }
-    setCustomChosen(false);
-    commitEditor(value === DEFAULT_OPTION ? "" : value);
-  };
-
-  return (
-    <div className="flex w-56 flex-col gap-2">
-      <Select value={selected} onValueChange={pick}>
-        <SelectTrigger aria-label={t("settings.general.preferredEditor")}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={DEFAULT_OPTION}>
-            {t("settings.general.preferredEditorSystemDefault")}
-          </SelectItem>
-          {detected.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-          <SelectItem value={CUSTOM_OPTION}>
-            {t("settings.general.preferredEditorCustom")}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      {isCustom ? (
-        <Input
-          value={editor}
-          placeholder={t("settings.general.preferredEditorCustomPlaceholder")}
-          onChange={(e) => setEditor(e.target.value)}
-          onBlur={(e) => commitEditor(e.target.value.trim())}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-          }}
-          aria-label={t("settings.general.preferredEditorCustomCommand")}
-        />
-      ) : null}
-    </div>
-  );
-}
 
 export function GeneralSettings() {
   const { t, i18n } = useTranslation();
@@ -186,6 +120,21 @@ export function GeneralSettings() {
             description={t("settings.general.preferredEditorHelp")}
           >
             <EditorPicker />
+          </SettingRow>
+        </SettingsSection>
+
+        <SettingsSection title={t("settings.general.agentsAndTerminal")}>
+          <SettingRow
+            label={t("settings.general.preferredTerminal")}
+            description={t("settings.general.preferredTerminalHelp")}
+          >
+            <TerminalPicker />
+          </SettingRow>
+          <SettingRow
+            label={t("settings.general.handoffAgent")}
+            description={t("settings.general.handoffAgentHelp")}
+          >
+            <HandoffAgentPicker />
           </SettingRow>
         </SettingsSection>
       </div>

@@ -1,8 +1,9 @@
-"""A turn's record is its conversation — never the audit log (spec chat "Keep a
-turn's record in its conversation, not the audit log").
+"""A turn leaves no audit-log row, and Coffer keeps no copy of it (spec chat
+"Leave a turn's record to the agent's own session, not the audit log" — the record is now the
+agent's own session).
 
-Runs a real turn through the orchestrator against real SQLite repositories on a
-database that also carries the audit table, then reads both back.
+Runs a real turn through the orchestrator against the real SQLite conversation
+repository on a database that also carries the audit table, then reads back.
 """
 
 from __future__ import annotations
@@ -20,8 +21,7 @@ from coffer.domain.chat.events import (
     TurnDone,
     TurnStarted,
 )
-from coffer.domain.chat.message import Role, TextBlock, ToolResultBlock, ToolUseBlock
-from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
+from coffer.infrastructure.chat.persistence import ConversationRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -34,10 +34,9 @@ from tests.unit.chat.conftest import FakeAgentAdapter, FakeAgentProvider
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.acceptance(
-    spec="chat", scenario="a turn is recorded in its conversation and not in the audit log"
-)
-async def test_a_turn_is_recorded_in_its_conversation_and_not_in_the_audit_log(tmp_path) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(spec="chat", scenario="a turn leaves no audit row and no stored text")
+@pytest.mark.acceptance(spec="chat", scenario="a conversation row holds no message text")
+async def test_a_turn_is_not_recorded_in_the_audit_log_or_kept_as_text(tmp_path) -> None:  # type: ignore[no-untyped-def]
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -58,31 +57,41 @@ async def test_a_turn_is_recorded_in_its_conversation_and_not_in_the_audit_log(t
         )
         registry = AgentProviderRegistry()
         registry.register(FakeAgentProvider(adapter, agent_key="agent"), display_name="Agent")
-        chat = ChatService(
-            conversations=ConversationRepo(sm), messages=MessageRepo(sm), registry=registry
-        )
+        chat = ChatService(conversations=ConversationRepo(sm), registry=registry)
         orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
 
-        conv = await chat.create_conversation(agent_key="agent")
+        conv = await chat.create_conversation(
+            agent_key="agent", channel_uid="chan", peer_chat_id="peer"
+        )
         queue = await start_turn(orchestrator, conv.id, "read /a")
         while await queue.get() is not None:
             pass
 
-        messages = await chat.list_messages(conv.id)
-        assert [m.role for m in messages] == [Role.USER, Role.ASSISTANT]
-        reply = messages[1]
-        assert reply.status == "complete"
-        assert reply.model_id == "model-x"
-        assert (reply.prompt_tokens, reply.completion_tokens) == (12, 4)
-        kinds = [type(b) for b in reply.content]
-        assert ToolUseBlock in kinds and ToolResultBlock in kinds and TextBlock in kinds
-        tool_use = next(b for b in reply.content if isinstance(b, ToolUseBlock))
-        assert tool_use.tool_name == "read_file"
-
+        # The index row is named and bumped; the text itself is nowhere in Coffer.
+        row = await chat.get_conversation(conv.id)
+        assert row.title == "read /a"
+        assert row.updated_at > conv.updated_at
         async with sm() as session:
+            tables = {
+                r[0]
+                for r in await session.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table'")
+                )
+            }
             audit_rows = (
                 await session.execute(text(f"SELECT COUNT(*) FROM {AuditLogModel.__tablename__}"))
             ).scalar_one()
+        assert "chat_messages" not in tables
         assert audit_rows == 0
+
+        # The index row carries title, agent, channel, chat and agent config ...
+        assert (row.agent_key, row.channel_uid, row.peer_chat_id) == ("agent", "chan", "peer")
+        # ... and no table of the database holds any of the turn's text.
+        async with sm() as session:
+            for table in sorted(tables):
+                dump = (await session.execute(text(f'SELECT * FROM "{table}"'))).fetchall()
+                cells = " ".join(str(v) for r in dump for v in r)
+                assert "Checking." not in cells and "Done." not in cells, table
+                assert "read_file" not in cells, table
     finally:
         await engine.dispose()

@@ -1824,18 +1824,10 @@ paths:
       summary: Read Plugin Skill File
       tags:
       - agents
-  /api/v1/agents/{uid}/transcripts:
+  /api/v1/agents/{uid}/sessions:
     get:
-      description: |-
-        List an agent's transcript sessions with search, filter, and sort.
-
-        Searches title + project path (``q``), filters by exact ``project``, and
-        sorts by ``sort``/``order`` with ``session_id`` as the tie-break. Backed by
-        the reader's mtime-aware cache, so an agent with thousands of past sessions
-        stays responsive. Paged by ``limit`` and the answer's ``next_cursor``
-        alongside the matched total — a cursor, not an offset, because the agent
-        keeps writing sessions while a reader pages.
-      operationId: list_transcripts_api_v1_agents__uid__transcripts_get
+      description: The agent's sessions, most recent activity first.
+      operationId: list_agent_sessions_api_v1_agents__uid__sessions_get
       parameters:
       - in: path
         name: uid
@@ -1843,26 +1835,7 @@ paths:
         schema:
           title: Uid
           type: string
-      - in: query
-        name: limit
-        required: false
-        schema:
-          default: 100
-          maximum: 500
-          minimum: 1
-          title: Limit
-          type: integer
-      - description: The previous page's next_cursor. Bound to the search, filter and sort it was issued with; any other value is 400 CURSOR_INVALID.
-        in: query
-        name: cursor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The previous page's next_cursor. Bound to the search, filter and sort it was issued with; any other value is 400 CURSOR_INVALID.
-          title: Cursor
-      - description: Search title or project path.
+      - description: 'Case-insensitive search (Codex: title only).'
         in: query
         name: q
         required: false
@@ -1870,39 +1843,27 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
-          description: Search title or project path.
+          description: 'Case-insensitive search (Codex: title only).'
           title: Q
-      - description: Filter to this exact project_path.
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - description: The previous page's next_cursor. Bound to the agent and search it was issued with; any other value is 400 CURSOR_INVALID.
         in: query
-        name: project
+        name: cursor
         required: false
         schema:
           anyOf:
           - type: string
           - type: 'null'
-          description: Filter to this exact project_path.
-          title: Project
-      - in: query
-        name: sort
-        required: false
-        schema:
-          default: last_activity_at
-          enum:
-          - started_at
-          - last_activity_at
-          - message_count
-          title: Sort
-          type: string
-      - in: query
-        name: order
-        required: false
-        schema:
-          default: desc
-          enum:
-          - asc
-          - desc
-          title: Order
-          type: string
+          description: The previous page's next_cursor. Bound to the agent and search it was issued with; any other value is 400 CURSOR_INVALID.
+          title: Cursor
       - in: header
         name: x-coffer-token
         required: false
@@ -1916,7 +1877,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TranscriptSessionListResponse'
+                $ref: '#/components/schemas/AgentSessionListResponse'
           description: Successful Response
         '422':
           content:
@@ -1930,21 +1891,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: List Transcripts
+      summary: List Agent Sessions
       tags:
       - agents
-  /api/v1/agents/{uid}/transcripts/session:
-    get:
-      description: |-
-        Render one of the agent's conversations: its summary and a page of turns.
-
-        Bounded twice over, because a single transcript can be tens of megabytes:
-        at most ``limit`` turns come back (500 ceiling), and each turn's text is cut
-        at the domain's per-turn cap with ``truncated`` set. Every turn is
-        secret-scrubbed before it leaves the parser — a prompt is where a pasted key
-        would be. ``path`` must resolve inside this agent's own sessions directory;
-        anything else is 404 rather than a file read.
-      operationId: read_transcript_session_api_v1_agents__uid__transcripts_session_get
+  /api/v1/agents/{uid}/sessions/{session_id}:
+    delete:
+      description: Delete the session from the agent's own store (permanent).
+      operationId: delete_agent_session_api_v1_agents__uid__sessions__session_id__delete
       parameters:
       - in: path
         name: uid
@@ -1952,31 +1905,12 @@ paths:
         schema:
           title: Uid
           type: string
-      - description: Absolute source_path of a session, as the listing gave it.
-        in: query
-        name: path
+      - in: path
+        name: session_id
         required: true
         schema:
-          description: Absolute source_path of a session, as the listing gave it.
-          title: Path
+          title: Session Id
           type: string
-      - in: query
-        name: limit
-        required: false
-        schema:
-          default: 200
-          maximum: 500
-          minimum: 1
-          title: Limit
-          type: integer
-      - in: query
-        name: offset
-        required: false
-        schema:
-          default: 0
-          minimum: 0
-          title: Offset
-          type: integer
       - in: header
         name: x-coffer-token
         required: false
@@ -1986,11 +1920,7 @@ paths:
           - type: 'null'
           title: X-Coffer-Token
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TranscriptSessionDetailResponse'
+        '204':
           description: Successful Response
         '422':
           content:
@@ -2004,7 +1934,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Read Transcript Session
+      summary: Delete Agent Session
+      tags:
+      - agents
+    patch:
+      description: Rename the session in the agent's own store.
+      operationId: rename_agent_session_api_v1_agents__uid__sessions__session_id__patch
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentSessionRename'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Rename Agent Session
       tags:
       - agents
 components:
@@ -2214,6 +2192,97 @@ components:
           - type: 'null'
           title: Tier Models
       title: AgentPatch
+      type: object
+    AgentSessionListResponse:
+      description: Response for GET /api/v1/agents/{uid}/sessions.
+      properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+        sessions:
+          items:
+            $ref: '#/components/schemas/AgentSessionOut'
+          title: Sessions
+          type: array
+        total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total
+      required:
+      - sessions
+      - next_cursor
+      - total
+      title: AgentSessionListResponse
+      type: object
+    AgentSessionOut:
+      description: One of the agent's sessions as the list shows it.
+      properties:
+        channel_binding:
+          anyOf:
+          - $ref: '#/components/schemas/SessionChannelOut'
+          - type: 'null'
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        created_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Created At
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        last_activity_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Activity At
+        needs_you:
+          default: false
+          title: Needs You
+          type: boolean
+        running:
+          default: false
+          title: Running
+          type: boolean
+        session_id:
+          title: Session Id
+          type: string
+        title:
+          title: Title
+          type: string
+      required:
+      - session_id
+      - title
+      - cwd
+      - created_at
+      - last_activity_at
+      - conversation_id
+      - running
+      - needs_you
+      - channel_binding
+      title: AgentSessionOut
+      type: object
+    AgentSessionRename:
+      description: Body of PATCH /api/v1/agents/{uid}/sessions/{session_id}.
+      properties:
+        title:
+          maxLength: 500
+          minLength: 1
+          title: Title
+          type: string
+      required:
+      - title
+      title: AgentSessionRename
       type: object
     AgentType:
       description: Supported agent products.
@@ -3853,6 +3922,72 @@ components:
       - title
       title: ReconcileSubjectOut
       type: object
+    SessionChannelOut:
+      description: The IM channel a session's conversation is driven from.
+      properties:
+        channel:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Channel
+        channel_uid:
+          title: Channel Uid
+          type: string
+        chat_id:
+          title: Chat Id
+          type: string
+        place:
+          anyOf:
+          - $ref: '#/components/schemas/SessionPlaceOut'
+          - type: 'null'
+        platform:
+          anyOf:
+          - enum:
+            - telegram
+            - seatalk
+            type: string
+          - type: 'null'
+          title: Platform
+      required:
+      - channel_uid
+      - channel
+      - chat_id
+      - platform
+      - place
+      title: SessionChannelOut
+      type: object
+    SessionPlaceOut:
+      description: Which chat and thread of its channel a conversation lives in.
+      properties:
+        chat_kind:
+          anyOf:
+          - enum:
+            - direct
+            - group
+            type: string
+          - type: 'null'
+          title: Chat Kind
+        chat_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chat Name
+        parallel_mark:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parallel Mark
+        thread:
+          default: false
+          title: Thread
+          type: boolean
+      required:
+      - chat_kind
+      - thread
+      - parallel_mark
+      - chat_name
+      title: SessionPlaceOut
+      type: object
     SkillFileContentOut:
       properties:
         abs_path:
@@ -3942,169 +4077,4 @@ components:
       required:
       - root
       title: SkillFileTreeOut
-      type: object
-    TranscriptMessageOut:
-      description: One conversational turn, as the session page renders it.
-      properties:
-        role:
-          title: Role
-          type: string
-        text:
-          title: Text
-          type: string
-        timestamp:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Timestamp
-        truncated:
-          default: false
-          title: Truncated
-          type: boolean
-      required:
-      - role
-      - text
-      - timestamp
-      - truncated
-      title: TranscriptMessageOut
-      type: object
-    TranscriptSessionDetailResponse:
-      description: |-
-        Response for GET /api/v1/agents/{uid}/transcripts/session.
-
-        The summary fields are the listing's, so a page reached by deep link shows
-        the same title and project the row did. ``message_count`` is the WHOLE
-        file's turn count while ``messages`` is the ``limit`` turns from
-        ``offset`` — a reader must be able to tell "200 of 812" from "all 200".
-      properties:
-        last_activity_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Last Activity At
-        limit:
-          title: Limit
-          type: integer
-        message_count:
-          title: Message Count
-          type: integer
-        messages:
-          items:
-            $ref: '#/components/schemas/TranscriptMessageOut'
-          title: Messages
-          type: array
-        offset:
-          title: Offset
-          type: integer
-        project_path:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Project Path
-        session_id:
-          title: Session Id
-          type: string
-        source_path:
-          title: Source Path
-          type: string
-        started_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Started At
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-      required:
-      - session_id
-      - title
-      - project_path
-      - message_count
-      - started_at
-      - last_activity_at
-      - source_path
-      - messages
-      - limit
-      - offset
-      title: TranscriptSessionDetailResponse
-      type: object
-    TranscriptSessionListResponse:
-      description: |-
-        Response for GET /api/v1/agents/{uid}/transcripts.
-
-        ``sessions`` is one page; ``total`` is the number of sessions matching the
-        search/filter, so the UI can show "N of total". ``next_cursor`` reads the
-        page after this one and is null on the last page.
-      properties:
-        limit:
-          title: Limit
-          type: integer
-        next_cursor:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Next Cursor
-        sessions:
-          items:
-            $ref: '#/components/schemas/TranscriptSessionSummary'
-          title: Sessions
-          type: array
-        total:
-          title: Total
-          type: integer
-      required:
-      - sessions
-      - total
-      - limit
-      - next_cursor
-      title: TranscriptSessionListResponse
-      type: object
-    TranscriptSessionSummary:
-      description: One transcript session as the list shows it.
-      properties:
-        last_activity_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Last Activity At
-        message_count:
-          title: Message Count
-          type: integer
-        project_path:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Project Path
-        session_id:
-          title: Session Id
-          type: string
-        source_path:
-          title: Source Path
-          type: string
-        started_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Started At
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
-      required:
-      - session_id
-      - title
-      - project_path
-      - message_count
-      - started_at
-      - last_activity_at
-      - source_path
-      title: TranscriptSessionSummary
       type: object

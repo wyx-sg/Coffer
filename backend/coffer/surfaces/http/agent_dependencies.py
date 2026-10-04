@@ -2,7 +2,7 @@
 
 Same ``set_*`` / ``get_*`` singleton shape as ``surfaces.http.dependencies``,
 typed concretely. The agent-workspace facets (MCP entries, plugins, native
-memory, transcripts) live in ``workspace_dependencies`` for the file-size
+memory, sessions) live in ``workspace_dependencies`` for the file-size
 budget.
 """
 

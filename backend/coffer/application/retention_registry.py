@@ -27,26 +27,16 @@ class UnknownPrunableTable(CofferError):  # noqa: N818
 
 @dataclass(frozen=True)
 class PrunableTable:
-    """Declarative registration of a table the retention worker sweeps.
+    """Declarative registration of a table the retention worker sweeps: rows whose
+    ``timestamp_column`` is older than the policy window are deleted.
 
-    Most entries ``delete`` rows older than the policy window. A few model a
-    two-stage lifecycle instead: an ``archive`` action stamps ``archive_set_column``
-    with the current time on rows older than the window (e.g. auto-archiving idle
-    chat threads), and a sibling ``delete`` entry keyed on that stamp removes them
-    later. ``name`` is the policy key (one ``retention_policies`` row); ``target_table``
-    is the SQL table acted on, which differs from ``name`` only for an archive entry
-    that shares a table with its delete sibling.
+    ``name`` is the policy key (one ``retention_policies`` row) and, unless
+    ``target_table`` says otherwise, the SQL table acted on.
 
     ``policy_name`` makes a table a FOLLOWER of another entry's policy: it has no
     ``retention_policies`` row of its own (never seeded, never listed, never
     set), and it is pruned with the named policy's window whenever that policy
     is — the per-request usage detail follows the MCP-calls window this way.
-
-    ``also_older_column`` is a safety net on a ``delete`` entry: a row is removed
-    only when that second timestamp is ALSO past the window. The delete sibling of
-    a two-stage lifecycle keys on the archive stamp, but an archived row can still
-    be written to (a chat thread resumed from a phone); without the second check it
-    would be deleted mid-use, ``archive_set_column`` days after it was stamped.
     """
 
     name: str
@@ -54,11 +44,8 @@ class PrunableTable:
     default_retention_days: int | None
     display_name: str
     description: str
-    action: str = "delete"  # "delete" | "archive"
     target_table: str | None = None
-    archive_set_column: str | None = None
     policy_name: str | None = None
-    also_older_column: str | None = None
 
     @property
     def policy_key(self) -> str:

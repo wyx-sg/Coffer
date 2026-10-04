@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.mirror_target import platform_label
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import ChannelThreadConversationRepoPort
 from coffer.domain.chat.channel_note import ChannelNote
@@ -21,7 +20,13 @@ from coffer.domain.errors import CofferError
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
 
-__all__ = ["ChannelNoteReader"]
+__all__ = ["ChannelNoteReader", "platform_label"]
+
+_PLATFORMS = {"seatalk": "SeaTalk", "telegram": "Telegram"}
+
+
+def platform_label(channel_type: str) -> str:
+    return _PLATFORMS.get(channel_type, channel_type.title() if channel_type else "")
 
 
 class ChannelNoteReader:

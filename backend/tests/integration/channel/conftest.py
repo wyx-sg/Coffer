@@ -49,6 +49,7 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
 )
 from coffer.domain.chat.agent_config import AgentConfig
+from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
@@ -57,7 +58,7 @@ from coffer.infrastructure.channel.persistence import (
     ChannelReplyRepo,
     ChannelThreadConversationRepo,
 )
-from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
+from coffer.infrastructure.chat.persistence import ConversationRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -306,8 +307,27 @@ class StubWebSocketController:
             await self.ensure_stopped(name)
 
 
+class _RecordingAdapter:
+    """Wraps the scripted adapter of one turn and notes what it was asked."""
+
+    def __init__(self, inner: Any, provider: ScriptedAgentProvider, conversation_id: str) -> None:
+        self._inner = inner
+        self._provider = provider
+        self._conversation_id = conversation_id
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> Any:
+        self._provider.turns.append((self._conversation_id, prompt))
+        return await self._inner.run_turn(prompt, attachments)
+
+
 class ScriptedAgentProvider:
-    """``AgentProvider`` whose adapter a test swaps in before sending."""
+    """``AgentProvider`` whose adapter a test swaps in before sending.
+
+    Coffer keeps no message text, so what a turn was asked is read back from
+    ``turns``: one ``(conversation_id, prompt)`` per ``run_turn``, in order."""
 
     def __init__(self, adapter: Any, agent_key: str = "builtin", store: Any = None) -> None:
         self.adapter = adapter
@@ -316,6 +336,7 @@ class ScriptedAgentProvider:
         #: The conversation store, when set: the config a conversation opens
         #: with is persisted there, exactly as the real providers do.
         self.store = store
+        self.turns: list[tuple[str, str]] = []
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         self.last_agent_config = agent_config
@@ -323,7 +344,7 @@ class ScriptedAgentProvider:
             await self.store.set_agent_config(conversation_id, AgentConfig.from_json(agent_config))
 
     async def build_adapter(self, conversation_id: str) -> Any:
-        return self.adapter
+        return _RecordingAdapter(self.adapter, self, conversation_id)
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
         return None
@@ -374,6 +395,20 @@ class ChannelEnv:
     #: resource table and only one of them starts anything.
     adapter_factory: Any
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
+
+    async def conversations(self) -> list[Conversation]:
+        """Every conversation the channels opened, newest activity first."""
+        return (await self.chat.page_conversations(limit=500)).items
+
+    def user_texts(self, conversation_id: str) -> list[str]:
+        """The prompts the conversation's turns were run with, in order, each
+        without its message-origin block (what the person wrote, plus any thread
+        or quote context the channel folded in)."""
+        return [turn_body(p) for cid, p in self.provider.turns if cid == conversation_id]
+
+    def raw_prompts(self, conversation_id: str) -> list[str]:
+        """The prompts exactly as the adapter received them (origin block included)."""
+        return [p for cid, p in self.provider.turns if cid == conversation_id]
 
     async def send(self, msg: InboundMessage) -> None:
         """Deliver ``msg`` and wait until its burst has been released into the
@@ -593,7 +628,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     registry.register(provider, display_name="Coffer Assistant")
     chat = ChatService(
         conversations=conversation_repo,
-        messages=MessageRepo(sm),
         registry=registry,
     )
     orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)

@@ -31,6 +31,7 @@ from fastapi.testclient import TestClient
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.selection_cards import model_card
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.service import ProviderService
@@ -320,3 +321,73 @@ async def test_a_connection_curating_no_text_model_offers_no_chat_model(env: _En
     assert await env.catalogue.suggest("claude_code") == []
     # The login's own catalogue is still the full truth, just not offered.
     assert [m.id for m in await env.catalogue.catalogue("claude_code")] == _CLI_MODELS
+
+
+def _models_route(env: _Env) -> list[dict[str, object]]:
+    """What every picker reads: ``GET /agent-providers/claude_code/models``."""
+    registry = AgentProviderRegistry()
+    registry.register(FakeAgentProvider(None, agent_key="claude_code"), display_name="Claude Code")
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(agent_provider_router)
+    app.dependency_overrides[get_agent_registry] = lambda: registry
+    app.dependency_overrides[get_model_catalog] = lambda: env.catalogue
+    token = "test-token-fixed-list"
+    set_active_token(token)
+    with TestClient(app) as client:
+        resp = client.get(
+            "/api/v1/agent-providers/claude_code/models", headers={"X-Coffer-Token": token}
+        )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["models"]
+
+
+async def _card_options(env: _Env) -> list[str]:
+    """The model ids the channel ``/model`` card offers as buttons, from the same
+    answer the card is built over (``suggest``)."""
+    card = model_card(current=None, picks=await env.catalogue.suggest("claude_code"))
+    return [b.value.removeprefix("model:") for b in card.buttons if b.value.startswith("model:")]
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the agent's model picker offers a fixed list without free-form entry",
+)
+async def test_the_model_picker_offers_a_fixed_list_without_free_form_entry(env: _Env) -> None:
+    """On the built-in login the picker offers the agent's own catalogue; once a
+    connection overrides it, that connection's curated ``text`` ids — both served
+    by the one route, and the channel ``/model`` card's buttons are exactly that
+    list. Neither carries a free-text or "Custom…" entry, and the connection
+    stores no model field of its own."""
+    # Built-in login: the agent's own catalogue.
+    assert [m["id"] for m in _models_route(env)] == _CLI_MODELS
+    assert await _card_options(env) == _CLI_MODELS
+
+    # A connection overrides it: its curated text ids, and not the non-text one.
+    connection = await env.providers.create(
+        "agnes",
+        protocol=Protocol.OPENAI,
+        base_url="https://agnes.example.test/v1",
+        secret_value="sk-test",
+        models=[
+            CuratedModel(id="agnes-2.5-pro-beta"),
+            CuratedModel(id="agnes-canvas-1", modality=Modality.IMAGE),
+            CuratedModel(id="agnes-mini"),
+        ],
+    )
+    await env.resources.update_scope(
+        connection.uid, Scope(agents=[env.agent_uids[AgentType.CLAUDE_CODE]]), actor="test"
+    )
+    await env.providers.activate(connection.uid, AgentType.CLAUDE_CODE)
+
+    models = _models_route(env)
+    assert [m["id"] for m in models] == ["agnes-2.5-pro-beta", "agnes-mini"]
+    assert await _card_options(env) == ["agnes-2.5-pro-beta", "agnes-mini"]
+    # Each entry is an id with its label: nothing to type a model into.
+    assert all(set(m) == {"id", "label", "description"} for m in models), models
+    card = model_card(current=None, picks=await env.catalogue.suggest("claude_code"))
+    assert all(b.value.startswith("model:") for b in card.buttons)
+    assert not any("custom" in b.label.lower() for b in card.buttons)
+    # The model lives on the agent's binding, never on the connection.
+    stored = await env.resources.get(connection.uid)
+    assert "model" not in stored.config

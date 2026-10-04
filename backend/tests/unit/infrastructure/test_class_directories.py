@@ -18,12 +18,10 @@ import pathlib
 import pytest
 
 from coffer.application.binary_deploy import user_bin_dir
-from coffer.infrastructure.agent.paths import agent_state_root, transcript_summaries_path
 from coffer.infrastructure.channel import seatalk_media, telegram_media
 from coffer.infrastructure.channel.media_root import default_media_dir
 from coffer.infrastructure.channel.seatalk_sdk import sdk_dir
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
-from coffer.infrastructure.chat.media_store import default_chat_media_dir
 from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.knowledge.paths import knowledge_root
@@ -55,7 +53,6 @@ def test_vault_trees_are_inside_the_vault_repository(home: pathlib.Path) -> None
 
 
 def test_content_trees_are_under_content(home: pathlib.Path) -> None:
-    assert default_chat_media_dir() == home / "content" / "chat-media"
     assert default_media_dir() == home / "content" / "channel-media"
     # One helper names the channel media directory for every channel.
     assert telegram_media.default_media_dir is default_media_dir
@@ -67,8 +64,6 @@ def test_content_trees_are_under_content(home: pathlib.Path) -> None:
 
 def test_derived_trees_are_under_derived(home: pathlib.Path) -> None:
     assert memory_root() == home / "derived" / "memory"
-    assert agent_state_root() == home / "derived" / "cache" / "agent"
-    assert transcript_summaries_path().parent == agent_state_root()
     store = MasterStore()
     assert store.paths_for("coffer-guide").folder == (home / "derived" / "skills" / "coffer-guide")
     assert store.paths_for("my-skill").folder == (home / "vault" / "skills" / "my-skill")
@@ -76,9 +71,9 @@ def test_derived_trees_are_under_derived(home: pathlib.Path) -> None:
 
 def test_every_root_follows_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "one"))
-    first = (knowledge_root(), memory_root(), default_media_dir(), agent_state_root())
+    first = (knowledge_root(), memory_root(), default_media_dir())
     monkeypatch.setenv("HOME", str(tmp_path / "two"))
-    second = (knowledge_root(), memory_root(), default_media_dir(), agent_state_root())
+    second = (knowledge_root(), memory_root(), default_media_dir())
     for a, b in zip(first, second, strict=True):
         assert a.relative_to(tmp_path / "one") == b.relative_to(tmp_path / "two")
 
@@ -92,7 +87,6 @@ def test_a_retired_override_moves_nothing(
         knowledge_root(),
         default_master_root(),
         memory_root(),
-        agent_state_root(),
     )
     assert all(str(root).startswith(str(home)) for root in roots), roots
     assert os.environ[name] == "/elsewhere"

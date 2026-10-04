@@ -6,7 +6,7 @@
 // Retry, Open Secrets, Run it here, Generate pairing code. A missing SeaTalk
 // SDK is the one with two ways forward: the person downloads it (it sits
 // behind their SeaTalk login) and hands the rest to an agent (`status.handoff`),
-// offered as an "Ask an agent ▾" split button beside Retry.
+// offered as a "Hand off to <Agent> ▾" split button beside Retry.
 // Two states are not problems and get a quiet grey box instead: the channel is
 // off, or another Mac runs it. A healthy channel shows nothing. The daemon's
 // diagnostics (a setting the platform will not honour) follow as their own

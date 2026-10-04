@@ -129,7 +129,7 @@ describe("MemoryPage", () => {
     expect(banner).toHaveTextContent(/Couldn't read Codex's memory:/);
     expect(banner).toHaveTextContent("~/.codex/memories");
     expect(within(banner).getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    // Ask an agent hands the fix to an agent; Open Activity is gone.
+    // Hand off to <Agent> hands the fix to an agent; Open Activity is gone.
     expect(
       within(banner).getByRole("button", { name: /copy prompt|ask an agent/i }),
     ).toBeInTheDocument();

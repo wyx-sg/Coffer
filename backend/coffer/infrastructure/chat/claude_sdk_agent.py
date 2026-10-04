@@ -37,9 +37,7 @@ from coffer.domain.chat.events import (
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Message
-from coffer.domain.chat.reply_file import ReplyFile
-from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
+from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink
 from coffer.infrastructure.chat.claude_sdk_attachments import attachment_block
 from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
 from coffer.infrastructure.chat.claude_sdk_questions import permission_for
@@ -49,10 +47,6 @@ from coffer.infrastructure.chat.document_extract import (
     prompt_with_document_text,
 )
 from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
-from coffer.infrastructure.chat.reply_file_diffs import (
-    ReplyFileRecorder,
-    write_hooks,
-)
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -166,27 +160,18 @@ class ClaudeSdkAgentAdapter:
         # turn Coffer registered, leaving the CLI's own handling of the tool.
         self._ask_owner = ask_owner
         #: The model the turn ran on, as the CLI reported it; filled in while the
-        #: turn streams. The turn runner reads it when it finalises the reply.
+        #: turn streams.
         self.model_id: str | None = None
-        self._reply_files = ReplyFileRecorder(cwd)
-
-    @property
-    def reply_files(self) -> list[ReplyFile]:
-        """What the reply changed in each file: the content snapshotted before its
-        first write to each path against the content now. The turn runner stores
-        it when it finalises the reply (complete, failed or stopped)."""
-        return self._reply_files.files()
 
     async def run_turn(
         self,
-        *,
-        history: Sequence[Message],
+        prompt: str,
         attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
         # Match the platform's ``async def -> AsyncIterator`` seam: delegate to
         # ``_stream`` so the coroutine machinery runs at yield points rather than
         # at the ``await run_turn(...)`` call site (the codex adapter does the same).
-        return self._stream(history, attachments)
+        return self._stream(prompt, attachments)
 
     async def _persist_session(self, state: ParseState) -> None:
         """Write a newly-discovered SDK session id back for the next ``resume``.
@@ -232,10 +217,6 @@ class ClaudeSdkAgentAdapter:
             include_partial_messages=True,
             # Only ever consulted for ``AskUserQuestion`` (see ``_can_use_tool``).
             can_use_tool=self._can_use_tool if self._ask_owner is not None else None,
-            # The file each write tool is about to touch is read first, so the
-            # reply's own diff per file can be made when it ends (spec chat
-            # "Record what each reply changed in each file").
-            hooks=write_hooks(self._reply_files),
         )
         if self._env is not None:
             opts.env = self._env
@@ -283,7 +264,7 @@ class ClaudeSdkAgentAdapter:
         return session
 
     async def _stream(
-        self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
+        self, prompt: str, attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
         # Claude cannot hear audio: transcribe any voice attachment to text and
         # fold it into the prompt. A document is text-extracted and folded in
@@ -295,7 +276,7 @@ class ClaudeSdkAgentAdapter:
         attachments, extracts = await extract_document_attachments(
             attachments, self._document_extractor
         )
-        prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = prompt_with_transcripts(prompt.strip(), transcripts)
         prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         content = self._build_content(prompt, attachments)

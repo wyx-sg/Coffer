@@ -215,7 +215,7 @@ class InboundProcessor:
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
-        # spec chat "Persist conversations and messages in SQLite": taken where the
+        # spec chat "Keep the conversation index without its text": taken where the
         # person's own message is still intact — before the context blocks below fold
         # in, and from this message's own files.
         title_hint = conversation_title_hint(text, attachments)
