@@ -18,7 +18,7 @@ Rules:
 
 - Kebab-case throughout.
 - The short name typically mirrors (or describes) the affected spec folder (`openspec/specs/mcp-gateway/` → `feature/mcp-gateway-...`).
-- Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`. Work for the 1.0 rework branches from the integration branch `feature/rearch` instead, until it merges into `main`.
+- Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`.
 - Squash merge is the convention (the repository also permits merge commits and rebase merges, and does not delete merged branches). Delete the branch as you merge — `gh pr merge --squash --delete-branch` — or right afterwards.
 
 ## Commits
@@ -103,7 +103,7 @@ When NOT to use:
 
 ### Standard Flow
 
-1. Open PR from feature branch to `main` (to `feature/rearch` for 1.0 rework work).
+1. Open PR from feature branch to `main`.
 2. PR title follows Conventional Commits, under the same limits as a commit subject (≤ 120 chars of subject, ≤ 150 for the whole header) — no case constraint. The `pr-title` workflow lints it with the very same `.commitlintrc.yaml`, so the two can't drift.
 3. PR description:
    - **What** changed.

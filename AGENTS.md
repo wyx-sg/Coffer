@@ -44,7 +44,6 @@ If sources disagree: **principles win.** Flag inconsistency to the user.
 7. open PR — STOP at PR-opened, wait for explicit user merge instruction
 ```
 
-Until the 1.0 release merges, work for the 1.0 rework branches from and targets the integration branch `feature/rearch` instead of `main` (see `CONTRIBUTING.md`).
 
 **Hard stops within a session:**
 

@@ -38,10 +38,6 @@ its own. Once the feature is ready, remove it from the registry, delete its
 gates and add a migration that strips its stored switch, in the same PR. Do not keep a long-lived side branch for it (see
 [Experimental Features Instead of a Release Branch](./docs/decisions/experimental-features-instead-of-a-release-branch.md)).
 
-The one exception is the 1.0 rework, which is built on the integration branch
-`feature/rearch`. CI runs on it as it does on `main`, and it merges into `main`
-for the 1.0 release.
-
 ## Testing
 
 Four tiers, see [`.agents/testing.md`](./.agents/testing.md):

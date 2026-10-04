@@ -247,11 +247,11 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 
 | Workflow | 触发条件 | 运行什么 |
 | --- | --- | --- |
-| `verify.yml` | 指向 `main` 和 `feature/rearch` 的 pull request、推送到 `main` | 并行的多个 job，每个运行一个 Makefile 目标：`lint`（`make lint`）、`test-unit`、`test-integration`、`test-contract`、`test-benchmark`、`test-e2e`、`test-visual`（`make verify-<tier>`；视觉 job 只报告不阻塞，`continue-on-error`，直到基线提交为止）、`audit-acceptance`（`make verify-acceptance`）和 `secrets-scan`（用 gitleaks 扫描完整历史，和本地 `make verify-secrets` 一样）。集成层级被拆成四个并排运行的分片，按每个测试上次测得的耗时做均衡，最后有一个检查只在所有分片都通过时才通过。只改动了没有测试读取的文档的 pull request 会跳过测试 job；检查文档的门禁仍然运行，被跳过的检查计为通过 |
+| `verify.yml` | 指向 `main` 的 pull request、推送到 `main` | 并行的多个 job，每个运行一个 Makefile 目标：`lint`（`make lint`）、`test-unit`、`test-integration`、`test-contract`、`test-benchmark`、`test-e2e`、`test-visual`（`make verify-<tier>`；视觉 job 只报告不阻塞，`continue-on-error`，直到基线提交为止）、`audit-acceptance`（`make verify-acceptance`）和 `secrets-scan`（用 gitleaks 扫描完整历史，和本地 `make verify-secrets` 一样）。集成层级被拆成四个并排运行的分片，按每个测试上次测得的耗时做均衡，最后有一个检查只在所有分片都通过时才通过。只改动了没有测试读取的文档的 pull request 会跳过测试 job；检查文档的门禁仍然运行，被跳过的检查计为通过 |
 | `ci.yml` | 推送到 `main` 和 `feature/**`、手动触发（`workflow_dispatch`）、每周定时 | 一个 `make verify` job。定时运行的是**最新依赖金丝雀**：它用 `uv sync --upgrade` 而不是锁文件安装，所以破坏 Coffer 的上游发布会按计划暴露出来 |
 | `pr-title.yml` | pull request 被创建或编辑 | 按 `.commitlintrc.yaml` 检查标题 |
-| `desktop.yml` | `main` 和 `feature/rearch` 上 `desktop/**` 或 `Makefile` 有改动 | `make desktop-lint` 和 `make desktop-test` |
-| `evals.yml` | `main` 和 `feature/rearch` 上 `evals/`、MCP 领域代码（`backend/coffer/domain/mcp/`）或锁文件有改动 | `make eval`：确定性评测套件，以相对已提交基线的回归作为门禁 |
+| `desktop.yml` | `main` 上 `desktop/**` 或 `Makefile` 有改动 | `make desktop-lint` 和 `make desktop-test` |
+| `evals.yml` | `main` 上 `evals/`、MCP 领域代码（`backend/coffer/domain/mcp/`）或锁文件有改动 | `make eval`：确定性评测套件，以相对已提交基线的回归作为门禁 |
 | `pages.yml` | `docs-site/**` 有改动 | 构建本站，并从 `main` 部署 |
 | `release.yml` | 一个 `v*` 标签 | 面向 Apple 芯片 macOS 的冻结二进制、CLI 压缩包和桌面 `.dmg`，然后创建 GitHub Release |
 

@@ -360,7 +360,7 @@ up here as an image diff.
 
 ## CI Jobs
 
-`.github/workflows/verify.yml` runs on every push to `main` and every pull request into `main` or `feature/rearch`, with its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`). Every job but `changes` runs exactly one Makefile target, so a red check names the command that reproduces it locally:
+`.github/workflows/verify.yml` runs on every push to `main` and every pull request into `main`, with its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`). Every job but `changes` runs exactly one Makefile target, so a red check names the command that reproduces it locally:
 
 | Job                               | What                                                                                                                       |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |

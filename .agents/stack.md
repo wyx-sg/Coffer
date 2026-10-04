@@ -141,7 +141,7 @@ Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md);
   them without a Tauri runtime or a socket.
 - `cargo test` is **not** part of `make verify`: the desktop crate has its own
   CI job (`.github/workflows/desktop.yml`, on pushes to `main` and pull requests into
-  `main` or `feature/rearch` that touch `desktop/`, the `Makefile` or the workflow), which
+  `main` that touch `desktop/`, the `Makefile` or the workflow), which
   runs `make desktop-lint` and `make desktop-test`. Run the same locally; build
   the app with `make desktop` (which runs PyInstaller for the three bundled
   binaries — `coffer`, `coffer-daemon` and `coffer-mcp-shim` — first, so it is
