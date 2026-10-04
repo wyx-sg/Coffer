@@ -19,7 +19,7 @@
 
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_notification::NotificationExt;
 
 use crate::daemon_http::fetch_ok as fetch_json;
@@ -108,6 +108,7 @@ fn apply(app: &AppHandle, action: &AlertAction) {
 /// this at all, so the other builds — the Linux `cargo check` CI leg among them — get a no-op.
 #[cfg(target_os = "macos")]
 fn set_dock_badge(app: &AppHandle, label: Option<&str>) {
+    use tauri::Manager;
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_badge_label(label.map(str::to_owned));
     }

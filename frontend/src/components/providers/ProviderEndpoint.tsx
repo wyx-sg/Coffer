@@ -1,7 +1,7 @@
 // src/components/providers/ProviderEndpoint.tsx — the Endpoint section: protocol, runtime, base URL and the API key's secret.
 //
 // The key is never shown — only the secret reference it is stored under
-// (`coffer://secret/<ref>`), write-only, with Replace key — which a rejected
+// (its reference, as the Secrets page shows it), write-only, with Replace key — which a rejected
 // key moves into the problem box above the rows. The
 // protocol is locked while an agent runs on the provider (spec
 // provider-switching "Refuse to move the wire of a live connection"). Route
@@ -29,6 +29,7 @@ import { Section } from "@/components/Section";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { ProblemBox } from "./ProblemBox";
 import { useLockedBy } from "./useLockedBy";
+import { secretReferenceOf } from "@/lib/secretValue";
 
 const LINK = "font-label text-accent-text no-underline hover:underline";
 
@@ -162,7 +163,7 @@ export function ProviderEndpoint({
           {provider.secret_ref ? (
             <>
               <TruncatedText
-                text={`coffer://secret/${provider.secret_ref}`}
+                text={secretReferenceOf(provider.secret_ref)}
                 mono
                 className="max-w-[260px] text-xs"
               />

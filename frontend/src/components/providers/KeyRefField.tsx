@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { KeyRound } from "lucide-react";
+import { secretReferenceOf } from "@/lib/secretValue";
 
 export function KeyRefField({ secretRef }: { secretRef: string | null }) {
   const { t } = useTranslation();
@@ -15,8 +16,9 @@ export function KeyRefField({ secretRef }: { secretRef: string | null }) {
             className="flex h-control-md items-center gap-1.5 rounded-md border border-border bg-surface-sunken px-2.5"
           >
             <KeyRound className="size-3.5 text-text-muted" aria-hidden />
-            <span className="text-xs text-text-muted">{t("providers.key.secretPrefix")}</span>
-            <span className="min-w-0 flex-1 truncate font-mono text-xs">{secretRef}</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-xs">
+              {secretReferenceOf(secretRef)}
+            </span>
             <span className="inline-flex h-[18px] items-center rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted">
               {t("providers.key.storedChip")}
             </span>

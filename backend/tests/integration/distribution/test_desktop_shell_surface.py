@@ -257,7 +257,7 @@ def _release_notes() -> str:
     spec="desktop-app",
     scenario="the install instructions carry the quarantine-clearing step for the app",
 )
-def test_release_notes_and_readme_carry_the_app_quarantine_step() -> None:
+def test_release_notes_and_install_guide_carry_the_app_quarantine_step() -> None:
     """An unsigned, browser-downloaded `.dmg` is refused on double-click as
     "damaged"; the one command that fixes it must be where the user looks."""
     notes = _release_notes()
@@ -271,8 +271,9 @@ def test_release_notes_and_readme_carry_the_app_quarantine_step() -> None:
         "the terminal tier's step must be in that same notice"
     )
 
-    readme = (_REPO / "README.md").read_text(encoding="utf-8")
-    assert _APP_QUARANTINE_STEP in readme, "the README must carry the app's xattr step"
-    assert "xattr -dr com.apple.quarantine ~/.coffer/bin" in readme, (
-        "the README carries the terminal tier's step; the app's must sit beside it"
-    )
+    for guide in ("docs-site/start/install.md", "docs-site/zh/start/install.md"):
+        text = (_REPO / guide).read_text(encoding="utf-8")
+        assert _APP_QUARANTINE_STEP in text, f"{guide} must carry the app's xattr step"
+        assert "xattr -dr com.apple.quarantine ~/.coffer/bin" in text, (
+            f"{guide} carries the terminal tier's step; the app's must sit beside it"
+        )

@@ -177,10 +177,10 @@ The release pipeline MUST produce, per `v*` tag, a **macOS arm64** `.dmg` contai
 - **AND** no other platform is built.
 
 ### Requirement: Document clearing the quarantine attribute
-A release built without a Developer ID is neither signed nor notarised (see "Sign and notarise a release when its credentials are present"), so a browser-downloaded `.dmg` from it carries macOS's quarantine attribute and the app is refused on double-click. Such a `.dmg` MUST say so in its name (`Coffer-unsigned-…`), and the release notes and the README MUST carry the quarantine-clearing step as prominently as they carry it for the terminal tier, for as long as an unsigned build can be published.
+A release built without a Developer ID is neither signed nor notarised (see "Sign and notarise a release when its credentials are present"), so a browser-downloaded `.dmg` from it carries macOS's quarantine attribute and the app is refused on double-click. Such a `.dmg` MUST say so in its name (`Coffer-unsigned-…`), and the release notes and the install guide on the docs site (the README links to it) MUST carry the quarantine-clearing step as prominently as they carry it for the terminal tier, for as long as an unsigned build can be published.
 
 #### Scenario: the install instructions carry the quarantine-clearing step for the app
-- **GIVEN** the release notes the release workflow publishes and the README,
+- **GIVEN** the release notes the release workflow publishes and the docs site's install guide,
 - **WHEN** a user reads how to install the `.dmg`,
 - **THEN** each carries the exact command that clears the quarantine attribute from `/Applications/Coffer.app`,
 - **AND** the release notes carry it in the same notice as the terminal tier's quarantine step.

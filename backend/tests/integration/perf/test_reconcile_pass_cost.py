@@ -53,7 +53,7 @@ def machine(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path / "logs"))
-    monkeypatch.setenv("COFFER_FEATURES", "context=on,sync=off")
+    monkeypatch.setenv("COFFER_FEATURES", "knowledge=on,memory=on,models=on,sync=off")
     shim = tmp_path / "bin" / "coffer-mcp-shim"
     shim.parent.mkdir()
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -88,7 +88,13 @@ def machine(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
                 },
             )
             assert r.status_code == 201, r.text
-            assert c.post(f"/api/v1/providers/{r.json()['uid']}/activate").status_code == 200
+            assert (
+                c.post(
+                    f"/api/v1/providers/{r.json()['uid']}/activate",
+                    json={"agent_type": "claude_code"},
+                ).status_code
+                == 200
+            )
             yield c
     finally:
         set_active_token(None)

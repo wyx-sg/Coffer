@@ -6201,7 +6201,6 @@
       "never": "Never"
     },
     "key": {
-      "secretPrefix": "secret:",
       "secretLabel": "API key secret",
       "stored": "Write-only, kept in this Mac’s keychain-encrypted store.",
       "storedChip": "Stored",

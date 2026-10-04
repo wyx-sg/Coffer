@@ -404,7 +404,7 @@ Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist
 Removing a skill deletes `~/.coffer/vault/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, disable it or set its reach to no agent instead.
 :::
 
-If an agent's copy is no longer Coffer's link (it is a regular folder now), Coffer will not remove it. The delete stops with "Nothing was deleted" and names the folder; the dialog then offers **Delete, keep <agent>'s folder**, which deletes the skill and leaves that folder to the agent, or you cancel and review the edit first (see [Resolve a folder in the way](#resolve-a-folder-in-the-way)). Selecting several skills and choosing **Delete…** reports each one: the dialog says "Deleted N of M" and names those it refused, with **Delete N skills, keep their folders** for the rest.
+If an agent's copy is no longer Coffer's link (it is a regular folder now), Coffer will not remove it. The delete stops with "Nothing was deleted" and names the folder; the dialog then offers **Delete, keep &lt;agent&gt;'s folder**, which deletes the skill and leaves that folder to the agent, or you cancel and review the edit first (see [Resolve a folder in the way](#resolve-a-folder-in-the-way)). Selecting several skills and choosing **Delete…** reports each one: the dialog says "Deleted N of M" and names those it refused, with **Delete N skills, keep their folders** for the rest.
 
 Removing an agent from Coffer also removes that agent's skill links. The master folders stay.
 

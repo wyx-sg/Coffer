@@ -46,6 +46,13 @@ export function secretNameOf(ref: string): string | null {
   return isValidSecretName(name) ? name : null;
 }
 
+/** How a ref is shown and cited: a standalone secret's `coffer://secret/<name>`,
+ *  any other ref as itself (the Secrets page's rule). */
+export function secretReferenceOf(ref: string): string {
+  const name = secretNameOf(ref);
+  return name === null ? ref : `coffer://secret/${name}`;
+}
+
 /** A secret name from the thing being configured ("OpenAI" → "openai-key"):
  *  lower-case, runs of anything else become one dash; a taken name gets `-2`, `-3`… */
 export function defaultSecretName(base: string, taken: ReadonlySet<string> = new Set()): string {
