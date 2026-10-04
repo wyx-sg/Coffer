@@ -71,7 +71,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
             {t("agents.pluginsTab.programMissing", { agent: agentName })}
           </span>
           {agent.install_handoff ? (
-            <AgentHandoff size="sm" help={false} prompt={agent.install_handoff.prompt} />
+            <AgentHandoff size="sm" prompt={agent.install_handoff.prompt} />
           ) : null}
         </div>
       ) : null}

@@ -190,6 +190,7 @@ describe("AgentPluginsTab", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More info" })).toBeInTheDocument();
   });
 
   test("Codex has no program notice even when it cannot uninstall", async () => {

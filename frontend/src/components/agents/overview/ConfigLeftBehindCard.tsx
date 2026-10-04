@@ -47,7 +47,6 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
       <Section
         title={t(`${K}.install.title`, { name })}
         as="h2"
-        help={<p className="text-xs">{t(`${K}.install.help`)}</p>}
         actions={
           <>
             <Button variant="outline" size="sm" onClick={check} disabled={checking}>
@@ -55,7 +54,7 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
               {t(`${K}.checkAgain`)}
             </Button>
             {agent.install_handoff ? (
-              <AgentHandoff size="sm" help={false} prompt={agent.install_handoff.prompt} />
+              <AgentHandoff size="sm" prompt={agent.install_handoff.prompt} />
             ) : null}
           </>
         }
