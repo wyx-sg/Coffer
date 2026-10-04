@@ -15,9 +15,6 @@ type AuditListOut = components["schemas"]["AuditListOut"];
 type InvocationListOut = components["schemas"]["InvocationListOut"];
 type DaemonLogListOut = components["schemas"]["DaemonLogListOut"];
 
-/** The most rows one request may ask any of the three routes for. */
-export const MAX_PAGE = 500;
-
 /** @ui-only The server-side filters the audit route takes. */
 export interface AuditParams {
   since?: string;

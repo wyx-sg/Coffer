@@ -841,7 +841,7 @@ which agent's session made it) and the daemon log (what Coffer itself did,
 including what broke) — MUST reach a person through one page at `/activity`,
 under System. The header carries the title, a **Live** mark (a dot and the word,
 **Reconnecting…** while the daemon's change feed is closed), the line "Every
-change, tool call and daemon record, newest first." and a ghost **Export** menu.
+change, tool call and daemon record, newest first."
 Four tabs follow, without counts: **Everything**, the default, merging the
 changes, the calls and the daemon's warnings and errors into one newest-first
 stream, then one tab per record — **Changes**, **MCP calls**, **Daemon log** —
@@ -852,10 +852,7 @@ time, agent, `server.` (muted) and tool, how long it took (right-aligned,
 sortable over the loaded rows) and the status as a dot and its word; Daemon log —
 time with milliseconds, level, logger and message. The day a run of rows falls
 on is a sunken heading row inside the box ("Today · Sep 29"); no summary line
-sits above the table. A tab whose log failed to load shows a warning icon. On the
-Daemon log a line above the box names the file the tail is read from, "newest
-first", "following" while the change feed is open, and **Open in Finder**, which
-reveals the file through the daemon. Each tab pages older records on request:
+sits above the table. A tab whose log failed to load shows a warning icon. Each tab pages older records on request:
 the box's last row says "Showing 30 of 1,204 · next 50 from before 13:58" with
 **Load 50 more**, and only once everything kept is shown does it say so, with how
 long MCP calls are kept and a link to Settings › Data.
@@ -902,15 +899,15 @@ back); a tab opens on the last hour, the Daemon log on the last 24 hours, until
 the user picks one. A record passes when it matches any chosen value.
 
 Selecting a row on Everything, Changes or MCP calls MUST open it in the shared
-right-hand drawer (640 wide, the page dimmed behind it; Esc, a click outside or
+right-hand drawer (640 wide until its left edge is dragged, the page dimmed behind it; Esc, a click outside or
 its ✕ closes it, ↑ ↓ step to the previous or next record, focus returns to the
 row), answer first — a failed call's error and how its server has been doing
 (since when it has been failing, and its errors in the last 24 hours), a
 change's who and what, then its configuration before and after as a diff, a
 daemon record's message and traceback — then the records written within five
 minutes of it, ending in its raw underlying record, pretty-printed in a
-monospace, scrollable block that stays folded until asked for. The footer holds
-the next step: **Open** the resource beside **Copy details**. A call's drawer
+monospace, scrollable block, open and foldable. The footer holds
+the next step: **Open** the resource's own detail page beside **Copy details**. A call's drawer
 shows its metadata only, since Coffer stores no call's arguments or results. A
 change whose event the page has no sentence for reads through the same facts and
 diff. On the Daemon log a row opens in place under its own line instead, with its
@@ -920,7 +917,7 @@ the MCP call**, which opens the MCP calls tab looking for that call.
 #### Scenario: activity row expands to its raw record
 - **GIVEN** an Activity tab has at least one row
 - **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or MCP calls
-- **THEN** the shared drawer opens over the page and offers its raw underlying record — the full JSON, pretty-printed in a monospace, scrollable block — once Raw log is unfolded
+- **THEN** the shared drawer opens over the page with its raw underlying record open — the full JSON, pretty-printed in a monospace, scrollable block
 
 #### Scenario: a daemon log row opens in place
 - **GIVEN** the Daemon log tab with an error record carrying a traceback and naming `server=github tool=search_issues`
@@ -2615,18 +2612,6 @@ neither inserted nor counted.
 - **THEN** the rows on screen do not move and a 3 new control appears
 - **AND** choosing it scrolls to the top and inserts the three entries
 
-### Requirement: Export the filtered Activity records from the header
-The Activity page's header MUST carry a ghost **Export** menu offering **JSON**
-and **CSV**, which save the records of the visible tab that match its current
-filters — free text, time range and the tab's own filter — and nothing else, not
-including a record's hand-off prompt. With no records at all there is no menu.
-
-#### Scenario: export from the menu honours the filters
-- **GIVEN** the MCP calls tab filtered by a search and to failed calls
-- **WHEN** the user chooses CSV from the header's Export menu
-- **THEN** the file holds exactly the calls that match those filters, one per row
-- **AND** JSON saves the same records as JSON
-
 ### Requirement: Show what needs the user and each area's health on Overview
 Overview MUST answer "is everything OK, and what needs me?" at a glance, from
 the capabilities' own reads and never a route of its own. **Needs you** comes
@@ -2779,16 +2764,16 @@ the filters only the old tab had.
 
 ### Requirement: Show the first run with nothing to filter
 When Coffer has recorded nothing at all — no change, no call and no daemon
-warning — the Activity page MUST hide the filter row and Export, keep its tabs,
+warning — the Activity page MUST hide the filter row, keep its tabs,
 and say "Changes you make in Coffer and the tools agents call through it show up
 here." with **Connect an agent** and **Add an MCP server**. An empty time range
 while older records exist is not the first run: it says so and keeps the filters.
 
-#### Scenario: nothing recorded hides the filter row and Export
+#### Scenario: nothing recorded hides the filter row
 - **GIVEN** no audit entry, call or daemon record exists
 - **WHEN** the user opens `/activity`
-- **THEN** the page shows the empty state with its two actions and neither the filter row nor Export
-- **AND** with a record older than the time range the filter row and Export stay
+- **THEN** the page shows the empty state with its two actions and no filter row
+- **AND** with a record older than the time range the filter row stays
 
 ### Requirement: Hand an environment failure on Activity to an agent
 Activity MUST offer the hand-off ([Ask an agent ▾]) only for a failure that depends

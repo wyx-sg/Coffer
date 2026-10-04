@@ -26,20 +26,10 @@ interface Props {
   active: boolean;
   /** Reset every filter and the search. */
   onClear: () => void;
-  /** A page action at the far right, after "Clear filters" (Usage's Export CSV). */
-  trailing?: ReactNode;
   className?: string;
 }
 
-export function FilterRow({
-  segmented,
-  search,
-  children,
-  active,
-  onClear,
-  trailing,
-  className,
-}: Props) {
+export function FilterRow({ segmented, search, children, active, onClear, className }: Props) {
   const { t } = useTranslation();
   return (
     <div className={cn("flex min-h-[30px] flex-wrap items-center gap-2", className)}>
@@ -60,7 +50,6 @@ export function FilterRow({
           {t("filters.clearAll")}
         </Button>
       ) : null}
-      {trailing ? <div className={cn(!active && "ml-auto")}>{trailing}</div> : null}
     </div>
   );
 }

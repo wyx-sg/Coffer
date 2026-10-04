@@ -146,7 +146,7 @@ Switch between **English** and **简体中文** in **Settings → General → La
 - **Long lists** show a few rows and say "Showing 5 of 23 · Show all"; pages that load more as you go say how many are shown of how many and offer a button for the next page.
 - **Times** read relative while they are recent ("3 h ago") and as a date ("Aug 12") after that.
 - **Selecting** rows uses the header checkbox for the whole list. A bar over the table reads "N of M selected" with the actions that apply, there is no select-all inside it, and **Esc** clears the selection.
-- **Details** that open beside a list open in one right-hand drawer, 640 pixels wide over a dimmed page; **Esc**, a click outside or its ✕ closes it and focus returns to the row.
+- **Details** that open beside a list open in one right-hand drawer over a dimmed page, 640 pixels wide until you drag its left edge (double-click the edge to reset); **Esc**, a click outside or its ✕ closes it and focus returns to the row.
 
 **Handing a problem to an agent.** Installing, setting up, logging in and troubleshooting depend on the machine, so Coffer hands them to an agent instead of printing commands. The hand-off is one split button, **Ask an agent ▾**: the button opens a draft conversation with the prompt typed in (nothing is sent until you press Send), and the ▾ menu holds **Copy prompt** for an agent outside Coffer, which answers with a "Prompt copied" toast. With no Coffer-managed agent installed only **Copy prompt** is offered. What Coffer can do itself stays a button (**Retry**, **Check again**, **Test**).
 

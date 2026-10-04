@@ -45,7 +45,6 @@ interface Props {
   listRef: RefObject<HTMLDivElement>;
   onKeyDown: (e: KeyboardEvent) => void;
   onToggle: (value: string) => void;
-  onOnly: (value: string) => void;
 }
 
 export function FilterList({
@@ -57,7 +56,6 @@ export function FilterList({
   listRef,
   onKeyDown,
   onToggle,
-  onOnly,
 }: Props) {
   const { t } = useTranslation();
   return (
@@ -82,7 +80,7 @@ export function FilterList({
           {section.rows.map((o) => {
             const checked = selected.includes(o.value);
             return (
-              <div key={o.value} className="group relative">
+              <div key={o.value}>
                 <button
                   type="button"
                   role="option"
@@ -96,16 +94,6 @@ export function FilterList({
                   {single ? <Radio checked={checked} /> : <Box checked={checked} />}
                   <span className="min-w-0 flex-1 truncate">{o.label}</span>
                 </button>
-                {single ? null : (
-                  <button
-                    type="button"
-                    onClick={() => onOnly(o.value)}
-                    aria-label={`${t("filters.only")}: ${o.label}`}
-                    className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded-sm px-1 text-xs text-accent-text hover:underline focus-visible:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring group-focus-within:block group-hover:block"
-                  >
-                    {t("filters.only")}
-                  </button>
-                )}
               </div>
             );
           })}

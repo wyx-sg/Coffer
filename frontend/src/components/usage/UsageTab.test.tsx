@@ -1,4 +1,4 @@
-// src/components/usage/UsageTab.test.tsx — Model providers › Usage: metered API-key usage over a range, filters, export, first run.
+// src/components/usage/UsageTab.test.tsx — Model providers › Usage: metered API-key usage over a range, filters, first run.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,7 +16,6 @@ vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
 }));
-vi.mock("@/lib/activity/export", () => ({ saveFile: vi.fn() }));
 const providerList = vi.hoisted(() => ({ current: [] as Array<Record<string, unknown>> }));
 const agentList = vi.hoisted(() => ({ current: [] as Array<Record<string, unknown>> }));
 vi.mock("@/lib/hooks/useProviders", () => ({
@@ -27,7 +26,6 @@ vi.mock("@/lib/hooks/useAgents", () => ({
 }));
 
 const { getApiClient } = await import("@/lib/api/client");
-const { saveFile } = await import("@/lib/activity/export");
 
 function totals(over: Partial<UsageTotals> = {}): UsageTotals {
   return {
@@ -133,8 +131,6 @@ function install(setup: Setup = {}) {
         const byGroup = { model: BY_MODEL, day: BY_DAY, agent: BY_AGENT } as const;
         return Promise.resolve({ data: byGroup[q.group_by as keyof typeof byGroup] });
       }
-      case "/usage/export.csv":
-        return Promise.resolve({ data: "model,requests\r\nclaude-sonnet-4-5,3045\r\n" });
       default:
         return Promise.resolve({ data: undefined });
     }
@@ -283,16 +279,6 @@ describe("API-key usage", () => {
         connection_uid: "conn-1",
       }),
     );
-    // Export CSV is a button on the filter row, after "Clear filters".
-    await user.click(screen.getByRole("button", { name: "Export CSV" }));
-    await waitFor(() =>
-      expect(get).toHaveBeenCalledWith("/usage/export.csv", {
-        params: {
-          query: { range: "7d", group_by: "model", agent_type: "codex", connection_uid: "conn-1" },
-        },
-        parseAs: "text",
-      }),
-    );
   });
 
   test("by day lists the newest day first with its top agent, seven days before Show all", async () => {
@@ -340,23 +326,6 @@ describe("API-key usage", () => {
     );
     expect(await screen.findByRole("button", { name: /Sep 1.* – Sep 3/ })).toBeInTheDocument();
   });
-
-  test("export writes the current range and grouping as CSV", async () => {
-    const { get } = install();
-    renderTab("/model-providers?tab=usage&range=month&by=day");
-    await screen.findByRole("table");
-    await user.click(screen.getByRole("button", { name: "Export CSV" }));
-    await waitFor(() => expect(saveFile).toHaveBeenCalled());
-    expect(get).toHaveBeenCalledWith("/usage/export.csv", {
-      params: { query: { range: "month", group_by: "day" } },
-      parseAs: "text",
-    });
-    expect(vi.mocked(saveFile).mock.calls[0]).toEqual([
-      "coffer-usage-month-day.csv",
-      "text/csv",
-      "model,requests\r\nclaude-sonnet-4-5,3045\r\n",
-    ]);
-  });
 });
 
 describe("first run", () => {
@@ -374,7 +343,6 @@ describe("first run", () => {
       ).toBeInTheDocument();
       expect(screen.queryByRole("table")).toBeNull();
       expect(screen.queryByRole("button", { name: /Last 7 days/ })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Export CSV" })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Open Providers" }));
       expect(onOpenProviders).toHaveBeenCalled();
     },

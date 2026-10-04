@@ -41,6 +41,9 @@ export interface SplitDividerProps {
   onReset: () => void;
   /** Accessible name — what the divider resizes, e.g. "Resize the list". */
   label: string;
+  /** The pane sits to the divider's right (a right-hand drawer's left edge):
+   *  dragging left and ← widen it. */
+  growsLeft?: boolean;
   className?: string;
 }
 
@@ -52,8 +55,10 @@ export function SplitDivider({
   onPreview,
   onReset,
   label,
+  growsLeft = false,
   className,
 }: SplitDividerProps) {
+  const sign = growsLeft ? -1 : 1;
   const drag = useRef<{
     pointerId: number;
     startX: number;
@@ -99,7 +104,7 @@ export function SplitDivider({
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
-    const raw = d.startValue + (e.clientX - d.startX);
+    const raw = d.startValue + sign * (e.clientX - d.startX);
     const next = clampWidth(raw, min, max);
     if (onPreview) {
       d.last = next;
@@ -113,8 +118,8 @@ export function SplitDivider({
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     let next: number | null = null;
-    if (e.key === "ArrowLeft") next = value - KEYBOARD_STEP;
-    else if (e.key === "ArrowRight") next = value + KEYBOARD_STEP;
+    if (e.key === "ArrowLeft") next = value - sign * KEYBOARD_STEP;
+    else if (e.key === "ArrowRight") next = value + sign * KEYBOARD_STEP;
     else if (e.key === "Home") next = min;
     else if (e.key === "End" && Number.isFinite(max)) next = max;
     if (next === null) return;

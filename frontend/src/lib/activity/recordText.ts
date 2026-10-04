@@ -3,6 +3,8 @@
 // Pure functions shared by the list, the drawer and their tests.
 import type { TFunction } from "i18next";
 
+import { agentBasePath } from "@/lib/agents/routes";
+
 import {
   callServerLabel,
   recordTimeMs,
@@ -58,24 +60,39 @@ export function dayLabel(t: TFunction, at: string | null, now: Date, locale: str
 }
 
 /** The route a change's resource lives at, when it has a page of its own. */
-export function changeLink(entry: AuditEntry): { to: string; name: string } | null {
+/** The kinds whose detail page is addressed by uid, which an audit entry does not carry. */
+export const UID_ADDRESSED_KINDS: readonly string[] = [
+  "provider",
+  "channel",
+  "knowledge",
+  "memory",
+];
+
+/**
+ * Where a change's "Open X" goes: the resource's own detail page. A kind whose
+ * page is addressed by uid needs `uid` (looked up from its name by the caller);
+ * without it the link falls back to the kind's list.
+ */
+export function changeLink(entry: AuditEntry, uid?: string): { to: string; name: string } | null {
   const name = entry.resource_name;
   if (!name) return null;
+  const byUid = (base: string) => (uid ? `${base}/${encodeURIComponent(uid)}` : base);
   switch (entry.resource_kind) {
     case "mcp_server":
       return { to: `/mcp-servers/${encodeURIComponent(name)}`, name };
     case "skill":
       return { to: `/skills/${encodeURIComponent(name)}`, name };
     case "agent":
-      return { to: "/agents", name };
+      // An agent is named by its type in resource style (`claude-code`); its page by the type.
+      return { to: agentBasePath(name.replace(/-/g, "_")), name };
     case "provider":
-      return { to: "/model-providers", name };
+      return { to: byUid("/model-providers"), name };
     case "channel":
-      return { to: "/channels", name };
+      return { to: byUid("/channels"), name };
     case "knowledge":
-      return { to: "/knowledge", name };
+      return { to: byUid("/knowledge"), name };
     case "memory":
-      return { to: "/memory", name };
+      return { to: byUid("/memory"), name };
     default:
       return null;
   }
