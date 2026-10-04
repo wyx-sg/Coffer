@@ -54,7 +54,6 @@ class AuditEventType(StrEnum):
     SECRET_APPROVAL_APPROVED = "secret_approval_approved"
     SECRET_APPROVAL_REJECTED = "secret_approval_rejected"
     SECRET_PROTECTION_ENABLED = "secret_protection_enabled"
-    SECRET_IMPORTED = "secret_imported"
     # spec agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"

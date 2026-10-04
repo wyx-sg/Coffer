@@ -1,9 +1,8 @@
-"""The secret boundary's routes: approvals, presence grants, `coffer run`, the scan.
+"""The secret boundary's routes: approvals, presence grants, `coffer run`.
 
 Spec secret "Release plaintext only to a present human in the desktop
 app", "Hold a secret for a new destination until a person approves it",
-"Resolve standalone secrets into one child with coffer run" and "Move
-plaintext secret files into the store"; ADR
+and "Resolve standalone secrets into one child with coffer run"; ADR
 only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.
 
 Three kinds of route live here:
@@ -14,8 +13,7 @@ Three kinds of route live here:
   its target (``/presence/challenge`` issues it). These are the only routes
   that let plaintext out or widen where a secret goes, and they have no CLI
   counterpart on purpose: the CLI and the browser get "open the Coffer app".
-* **Open** — listing and refusing approvals, the scan and the move of
-  plaintext files into the store. None of them returns a value.
+* **Open** — listing and refusing approvals. Neither returns a value.
 * **`coffer run`'s resolve** — answers standalone ``secret/<name>`` values
   only, each audited as ``secret_resolved``. The value is handed to the child
   the CLI starts, which is readable by the agent that ran the command; the docs
@@ -32,9 +30,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from coffer.application.audit_service import AuditService
-from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.application.secret.presence import CHALLENGE_TTL_SECONDS
-from coffer.application.secret.scan_handoff import mentions_handoff
 from coffer.domain.audit import AuditEventType
 from coffer.domain.secret_errors import (
     PresenceGrantInvalid,
@@ -42,14 +38,11 @@ from coffer.domain.secret_errors import (
     SecretNameInvalid,
     SecretNotFound,
 )
-from coffer.domain.secrets import is_valid_secret_name, secret_ref, secret_uri
+from coffer.domain.secrets import is_valid_secret_name, secret_ref
 from coffer.domain.sync.errors import MasterKeyPassphraseTooShort
-from coffer.infrastructure.secret import key_backup, plaintext_scan
-from coffer.infrastructure.skill.master_store import default_master_root as skills_root
-from coffer.infrastructure.vault.home import legacy_secrets_dir
+from coffer.infrastructure.secret import key_backup
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
-from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.secret_approval_routes import router as approval_router
 from coffer.surfaces.http.secret_boundary_wiring import (
     get_presence_grants,
@@ -68,13 +61,6 @@ from coffer.surfaces.http.secret_schemas import (
     ResolveSecretsIn,
     RevealedSecretOut,
     RevealIn,
-    SecretImportIn,
-    SecretImportMovedOut,
-    SecretImportOut,
-    SecretImportSkippedOut,
-    SecretScanFindingOut,
-    SecretScanMentionOut,
-    SecretScanOut,
 )
 
 router = APIRouter(
@@ -83,14 +69,6 @@ router = APIRouter(
     dependencies=[Depends(require_token)],
 )
 router.include_router(approval_router)
-
-
-#: Skills Coffer renders itself: its guide quotes `coffer run --secret …` on purpose.
-_COFFERS_OWN_SKILLS = frozenset({GUIDE_SKILL_NAME})
-
-
-def _secrets_dir() -> pathlib.Path:
-    return legacy_secrets_dir()
 
 
 # --- presence ------------------------------------------------------------------
@@ -213,92 +191,3 @@ async def resolve_for_run(
             details={"name": name, "argv0": body.argv0, "cwd": body.cwd},
         )
     return ResolvedSecretsOut(values=values)
-
-
-# --- plaintext files --------------------------------------------------------------
-
-
-@router.post("/scan", response_model=SecretScanOut)
-async def scan_plaintext() -> SecretScanOut:
-    """Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store."""
-    result = await asyncio.to_thread(
-        plaintext_scan.scan, _secrets_dir(), skills_root(), _COFFERS_OWN_SKILLS
-    )
-    return SecretScanOut(
-        findings=[
-            SecretScanFindingOut(
-                id=f.id,
-                path=f.path,
-                source=f.source,  # type: ignore[arg-type]
-                key=f.key,
-                line=f.line,
-                proposed_name=f.proposed_name,
-            )
-            for f in result.findings
-        ],
-        mentions=[
-            SecretScanMentionOut(skill=m.skill, path=m.path, line=m.line, mention=m.mention)
-            for m in result.mentions
-        ],
-        files_checked=result.files_checked,
-        handoff=handoff_out(
-            mentions_handoff(
-                result.mentions, [f for f in result.findings if f.source == "secrets_file"]
-            )
-        ),
-    )
-
-
-@router.post("/import", response_model=SecretImportOut)
-async def import_plaintext(
-    body: SecretImportIn,
-    store: Any = Depends(get_secret_store),  # noqa: B008
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> SecretImportOut:
-    """Move plaintext findings into the store, replacing each with its reference."""
-
-    def put(name: str, value: str) -> bool | str:
-        ref = secret_ref(name)
-        existing = store.peek(ref)
-        if existing is not None:
-            return bool(existing == value)
-        store.set(ref, value)
-        # Read back and compare: the file is rewritten only once the store
-        # provably holds the same bytes.
-        return bool(store.peek(ref) == value)
-
-    result = await asyncio.to_thread(
-        plaintext_scan.move,
-        _secrets_dir(),
-        skills_root(),
-        body.ids,
-        store=put,
-        dry_run=body.dry_run,
-        skip=_COFFERS_OWN_SKILLS,
-    )
-    if not result.dry_run:
-        # A value stored while its file could not be rewritten is in the store
-        # all the same, so it is audited like a move.
-        stored = [(m.name, m.path) for m in result.moved] + [
-            (s.name, s.path) for s in result.skipped if s.stored
-        ]
-        for name, path in stored:
-            await audit.record(
-                AuditEventType.SECRET_IMPORTED.value,
-                actor=actor,
-                details={"name": name, "path": path},
-            )
-    return SecretImportOut(
-        moved=[
-            SecretImportMovedOut(id=m.id, path=m.path, name=m.name, uri=secret_uri(m.name))
-            for m in result.moved
-        ],
-        skipped=[
-            SecretImportSkippedOut(
-                id=s.id, path=s.path, reason=s.reason, name=s.name or None, stored=s.stored
-            )
-            for s in result.skipped
-        ],
-        dry_run=result.dry_run,
-    )

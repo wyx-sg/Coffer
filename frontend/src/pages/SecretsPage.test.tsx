@@ -19,8 +19,6 @@ vi.mock("@/lib/api/secret", () => ({
     list: vi.fn(),
     set: vi.fn(),
     remove: vi.fn(),
-    scan: vi.fn(),
-    importFindings: vi.fn(),
     pendingApprovals: vi.fn(),
     secretBoundary: vi.fn(),
     rejectApproval: vi.fn(),
@@ -357,12 +355,12 @@ describe("SecretsPage", () => {
     expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new");
   });
 
-  test("first run shows the empty state with both ways in", async () => {
+  test("first run shows the empty state with its way in", async () => {
     api.list.mockResolvedValue({ refs: [] });
     renderPage();
     expect(await screen.findByText("No secrets yet")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add secret" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Find plaintext keys" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Find plaintext keys" })).toBeNull();
   });
 
   test("a failed list says so with a retry", async () => {

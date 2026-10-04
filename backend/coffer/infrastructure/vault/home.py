@@ -102,11 +102,6 @@ def master_key_path(home: Path | None = None) -> Path:
     return coffer_home(home) / "master.key"
 
 
-def legacy_secrets_dir(home: Path | None = None) -> Path:
-    """The plain key files skills read before ``coffer run --secret``."""
-    return coffer_home(home) / "secrets"
-
-
 def upstream_pids_dir(home: Path | None = None) -> Path:
     """One pid file per spawned upstream MCP server, for the orphan sweep."""
     return coffer_home(home) / "upstream-pids"
@@ -144,7 +139,6 @@ __all__ = [
     "daemon_lock_path",
     "derived_root",
     "eval_capture_path",
-    "legacy_secrets_dir",
     "local_root",
     "logs_dir",
     "master_key_path",

@@ -165,26 +165,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/secrets/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Plaintext
-         * @description Move plaintext findings into the store, replacing each with its reference.
-         */
-        post: operations["import_plaintext_api_v1_secrets_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/secrets/presence/challenge": {
         parameters: {
             query?: never;
@@ -286,26 +266,6 @@ export interface paths {
          *     destination it was approved for.
          */
         post: operations["resolve_for_run_api_v1_secrets_resolve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/secrets/scan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Scan Plaintext
-         * @description Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store.
-         */
-        post: operations["scan_plaintext_api_v1_secrets_scan_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -537,15 +497,6 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
-        /**
-         * HandoffOut
-         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
-         *     to pre-fill a new conversation with; Coffer never sends it itself.
-         */
-        HandoffOut: {
-            /** Prompt */
-            prompt: string;
-        };
         /** MasterKeyExportIn */
         MasterKeyExportIn: {
             /** Directory */
@@ -706,52 +657,6 @@ export interface components {
              */
             present: boolean;
         };
-        /** SecretImportIn */
-        SecretImportIn: {
-            /**
-             * Dry Run
-             * @default false
-             */
-            dry_run?: boolean;
-            /** Ids */
-            ids?: string[] | null;
-        };
-        /** SecretImportMovedOut */
-        SecretImportMovedOut: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Path */
-            path: string;
-            /** Uri */
-            uri: string;
-        };
-        /** SecretImportOut */
-        SecretImportOut: {
-            /** Dry Run */
-            dry_run: boolean;
-            /** Moved */
-            moved: components["schemas"]["SecretImportMovedOut"][];
-            /** Skipped */
-            skipped: components["schemas"]["SecretImportSkippedOut"][];
-        };
-        /** SecretImportSkippedOut */
-        SecretImportSkippedOut: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string | null;
-            /** Path */
-            path: string;
-            /** Reason */
-            reason: string;
-            /**
-             * Stored
-             * @default false
-             */
-            stored: boolean;
-        };
         /**
          * SecretListOut
          * @description Every stored ref and every ref a registered resource cites, sorted by ref.
@@ -799,51 +704,6 @@ export interface components {
             unreferenced: boolean;
             /** Uri */
             uri: string | null;
-        };
-        /** SecretScanFindingOut */
-        SecretScanFindingOut: {
-            /** Id */
-            id: string;
-            /** Key */
-            key: string;
-            /** Line */
-            line: number;
-            /** Path */
-            path: string;
-            /** Proposed Name */
-            proposed_name: string;
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "secrets_file" | "skill";
-        };
-        /** SecretScanMentionOut */
-        SecretScanMentionOut: {
-            /** Line */
-            line: number;
-            /** Mention */
-            mention: string;
-            /** Path */
-            path: string;
-            /** Skill */
-            skill: string;
-        };
-        /**
-         * SecretScanOut
-         * @description Plaintext secrets found in files — where they are, never what they are.
-         */
-        SecretScanOut: {
-            /**
-             * Files Checked
-             * @default 0
-             */
-            files_checked: number;
-            /** Findings */
-            findings: components["schemas"]["SecretScanFindingOut"][];
-            handoff: components["schemas"]["HandoffOut"] | null;
-            /** Mentions */
-            mentions: components["schemas"]["SecretScanMentionOut"][];
         };
         /**
          * SecretSetIn
@@ -1242,51 +1102,6 @@ export interface operations {
             };
         };
     };
-    import_plaintext_api_v1_secrets_import_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SecretImportIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SecretImportOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     presence_challenge_api_v1_secrets_presence_challenge_post: {
         parameters: {
             query?: never;
@@ -1482,46 +1297,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolvedSecretsOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    scan_plaintext_api_v1_secrets_scan_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SecretScanOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

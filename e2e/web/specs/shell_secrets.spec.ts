@@ -8,10 +8,9 @@
 // touched, and each test removes it.
 //
 // Reveal and Approve need the desktop app's presence check, so a browser only
-// shows them disabled; the reveal itself, the missing-on-this-Mac state and the
-// plaintext-key migration are covered in frontend/src/pages/SecretsPage.test.tsx
-// and frontend/src/components/secret/ScanSecretsDialog.test.tsx, where the
-// daemon's answers can be fixed.
+// shows them disabled; the reveal itself and the missing-on-this-Mac state are
+// covered in frontend/src/pages/SecretsPage.test.tsx, where the daemon's
+// answers can be fixed.
 
 import { expect, test } from "@playwright/test";
 import * as path from "node:path";

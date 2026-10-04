@@ -322,7 +322,7 @@ or invocation record.
 
 ### Requirement: Keep secret values out of secret audit events
 The events `secret_set`, `secret_revealed`, `secret_deleted`,
-`master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the
+`master_key_relocated`, `master_key_exported`, `secret_resolved` and the
 `secret_approval_*` events MUST carry the ref, the name or the destination only. An audit payload
 MUST NOT carry a secret value, and a new secret event that does MUST NOT be added.
 
@@ -648,8 +648,7 @@ agent that runs the command.
 store holds and every ref a registered resource cites, each with whether the
 store holds it, whether this Mac's key can open it (`locked`), when it was
 stored (`created_at`) and when a consumer last had it decrypted on this Mac
-(`last_used_at`, stamped at most once a minute and not by a reveal or an
-import's read-back), the resources that cite it, for a standalone secret its
+(`last_used_at`, stamped at most once a minute and not by a reveal), the resources that cite it, for a standalone secret its
 `coffer://secret/<name>` and the skills whose files cite that URI, whether
 nothing references it (`unreferenced`), the destinations it is approved for or
 waits on, and whether another process of this user can read the value where
@@ -676,64 +675,6 @@ MUST forget its approved destinations.
 - **WHEN** the secrets are listed, then `coffer run` resolves it, then they are listed again
 - **THEN** the first listing carries its `created_at` and no `last_used_at`
 - **AND** the second carries a `last_used_at` no later than now
-
-### Requirement: Move plaintext secret files into the store
-`POST /api/v1/secrets/scan` MUST report every
-plaintext secret in `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json`
-(a flat map of strings) and in the skill master store (assignments whose name
-says password, secret, token or key, and well-known token shapes) by file,
-line, key and proposed name, every skill that still mentions
-`~/.coffer/secrets/`, and how many files it read (`files_checked`); it MUST NOT
-return a value. When a skill still mentions `~/.coffer/secrets/`, the scan MUST
-also carry `handoff`, a prompt (Principle IV, AI-Native) that asks the person's
-agent to rewrite each such command to get its value through
-`coffer run --secret ENV=NAME -- …` or `coffer run --env-file` with
-`coffer://secret/<name>` references, to show the person the diff, and never to
-print, copy or read a value; the prompt names only each mention's skill, file,
-line and the path it reads, and the secret name each key of a secrets file
-becomes — never a value and never a file's contents. With no mention the scan
-carries a `null` `handoff`. The Find plaintext keys dialog keeps listing the
-mentions for the person to update by hand and offers Copy prompt and, where a
-managed agent is available, Ask an agent beside them.
-`POST /api/v1/secrets/import` (the dialog's Import button, taking the chosen
-finding ids and an optional dry run) MUST store each chosen value as `secret/<proposed name>`,
-confirm the store reads back the same value, and only then replace the value in
-its file with the reference, atomically and keeping the file's mode; a name that
-is new MUST be stored at once; a name already holding a different
-value MUST be skipped with its file untouched; a
-file that cannot be rewritten MUST leave its findings skipped as `stored` —
-naming the secret the value is now stored as, the file still holding it — while
-the other files are rewritten, and importing the same findings again MUST retry
-the file; a dry run writes nothing. Each value stored MUST be audited as
-`secret_imported` without the value.
-
-#### Scenario: a scan names plaintext secrets without their values
-- **GIVEN** a `~/.coffer/secrets/db.env` holding a password and a skill whose script assigns a token
-- **WHEN** the scan runs
-- **THEN** both are reported with their file, key and proposed name, and the response contains neither value
-
-#### Scenario: a skill still reading a secrets file is handed to an agent
-- **GIVEN** a `~/.coffer/secrets/db.env` holding a password and a skill whose script sources that file
-- **WHEN** the scan runs
-- **THEN** its hand-off names the skill, the script's path and line and the file it reads, the secret names the file's keys become and how `coffer run` hands a secret to one command, and asks for the diff
-- **AND** the prompt contains no value from either file, the dialog's Copy prompt carries the same text, and nothing on disk has changed
-
-#### Scenario: importing moves a value and leaves a reference
-- **GIVEN** those findings
-- **WHEN** they are imported
-- **THEN** a dry run changed nothing, and a real import stores each value under its standalone name with no approval to answer
-- **AND** each value reads back from the store and each file cites `coffer://secret/<name>` in place of the value with its mode unchanged
-
-#### Scenario: a file that cannot be rewritten keeps its key and says so
-- **GIVEN** a plaintext secrets file in a folder Coffer cannot write
-- **WHEN** its finding is imported
-- **THEN** nothing is reported moved, the finding is skipped as `stored` naming its secret and why, the file is unchanged, the store holds the value and one `secret_imported` entry names it
-- **AND** importing the same finding again once the folder is writable moves it and rewrites the file
-
-#### Scenario: a scan that finds nothing says how many files it read
-- **GIVEN** a secrets folder whose only file holds no secret
-- **WHEN** the scan runs
-- **THEN** it reports no findings and at least one file read
 
 ### Requirement: Keep the master key behind a storage port chosen by the build
 Where the master key lives MUST be decided by how the build was made, never by

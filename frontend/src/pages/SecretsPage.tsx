@@ -2,13 +2,12 @@
 //
 // One filterable, sortable list (status and search; Last used and Created sort) under up to two
 // banners: no value on this Mac (Add value(s)), then changes waiting for approval (Review) — each
-// closable with × = Ignore, shared with Overview. Add secret stores a standalone secret; Find
-// plaintext keys moves values out of files into the store. Each row's ⋯ menu replaces, reveals
+// closable with × = Ignore, shared with Overview. Add secret stores a standalone secret. Each row's ⋯ menu replaces, reveals
 // (in the desktop app only), copies its reference, opens Activity, or deletes — which, for a
 // secret something still uses, says what does instead. No value is ever on this page until
 // Reveal is chosen.
 import { useState } from "react";
-import { IdCard, Plus, RotateCcw, ScanSearch } from "lucide-react";
+import { IdCard, Plus, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AddSecretDialog } from "@/components/secret/AddSecretDialog";
@@ -16,7 +15,6 @@ import { AddValuesDialog } from "@/components/secret/AddValuesDialog";
 import { DeleteSecretDialog } from "@/components/secret/DeleteSecretDialog";
 import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
-import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
 import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
 import { ApprovalsOffNote } from "@/components/secret/ApprovalsOffNote";
 import { SecretsBanners } from "@/components/secret/SecretsBanners";
@@ -30,10 +28,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { usePendingApprovals } from "@/lib/hooks/useApprovals";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 
-type Open =
-  | { dialog: "add" | "scan" | "values" }
-  | { dialog: SecretRowAction; row: SecretRef }
-  | null;
+type Open = { dialog: "add" | "values" } | { dialog: SecretRowAction; row: SecretRef } | null;
 
 export function SecretsPage() {
   const { t } = useTranslation();
@@ -55,25 +50,13 @@ export function SecretsPage() {
       <Plus aria-hidden /> {t("secrets.add.open")}
     </Button>
   );
-  const scanButton = (
-    <Button variant="outline" onClick={() => setOpen({ dialog: "scan" })}>
-      <ScanSearch aria-hidden /> {t("secrets.scan.open")}
-    </Button>
-  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={t("secrets.title")}
         subtitle={t("secrets.subtitle")}
-        actions={
-          firstRun ? null : (
-            <div className="flex flex-wrap items-center gap-2">
-              {scanButton}
-              {addButton}
-            </div>
-          )
-        }
+        actions={firstRun ? null : addButton}
       />
 
       <ApprovalsOffNote />
@@ -101,7 +84,6 @@ export function SecretsPage() {
           title={t("secrets.empty.title")}
           description={t("secrets.empty.body")}
           action={addButton}
-          secondaryAction={scanButton}
         />
       ) : (
         <SecretsBrowser
@@ -118,7 +100,6 @@ export function SecretsPage() {
         onReplaceInstead={(row) => setOpen({ dialog: "replace", row })}
       />
       <AddValuesDialog open={open?.dialog === "values"} onOpenChange={closeTo} rows={missing} />
-      <ScanSecretsDialog open={open?.dialog === "scan"} onOpenChange={closeTo} />
       <ReplaceSecretDialog row={rowFor("replace")} onOpenChange={closeTo} />
       <RevealSecretDialog row={rowFor("reveal")} onOpenChange={closeTo} />
       <DeleteSecretDialog row={rowFor("delete")} onOpenChange={closeTo} />
