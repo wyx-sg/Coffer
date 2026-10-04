@@ -125,7 +125,9 @@ test("Used by names speech to text and links Settings › General; Delete names 
     const usedBy = page.locator("section").filter({
       has: page.getByRole("heading", { name: "Used by" }),
     });
-    await expect(usedBy.getByText("Speech to text")).toBeVisible();
+    await expect(
+      usedBy.getByText("Speech to text", { exact: true }),
+    ).toBeVisible();
     const settings = usedBy.getByRole("button", { name: "Settings › General" });
     await expect(settings).toBeVisible();
     await expect(
