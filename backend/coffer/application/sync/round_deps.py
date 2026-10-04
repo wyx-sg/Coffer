@@ -16,6 +16,7 @@ from coffer.application.sync.round_ports import (
 )
 from coffer.application.sync.round_trees import TreeReader
 from coffer.application.vault.ports import VaultWriterPort
+from coffer.domain.plaintext_shape import MaskedValue
 from coffer.domain.sync.rounds import AppliedChange, PulledCommit
 from coffer.domain.vault.history import Commit
 from coffer.domain.vault.layout import MACHINES, MANIFEST
@@ -55,6 +56,10 @@ class RoundDeps:
     #: detection the Secrets page's scan uses. ``None`` reads nothing before a
     #: push (spec vault-sync "Refuse to push a plaintext secret").
     find_plaintext: Callable[[str], Sequence[tuple[int, str]]] | None = None
+    #: A line with every plaintext value on it masked, and each value's place
+    #: and shape (spec vault-sync "Show a plaintext finding in its file").
+    #: ``None`` shows no line.
+    mask_plaintext: Callable[[str], tuple[str, tuple[MaskedValue, ...]]] | None = None
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC)
     #: The layout this build writes. A remote above it is a newer Coffer's and
     #: is refused; one below it is replaced by this vault (never converted in

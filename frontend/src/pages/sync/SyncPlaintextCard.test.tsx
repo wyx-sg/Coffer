@@ -7,12 +7,16 @@ import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
+import type { PlaintextContext } from "@/lib/api/sync";
 import { acceptance } from "@/test/acceptance";
 import { SyncProblemBanner } from "./SyncProblemBanner";
 import { syncState, primaryAction } from "./syncPageState";
 import { idleMutation, makeRound, makeStatus } from "./syncTestKit";
 
-vi.mock("@/lib/hooks/useSync", () => ({ usePushAnyway: vi.fn() }));
+vi.mock("@/lib/hooks/useSync", () => ({
+  usePushAnyway: vi.fn(),
+  usePlaintextContext: vi.fn(),
+}));
 vi.mock("@/components/handoff/AgentHandoff", () => ({
   AgentHandoff: ({ prompt }: { prompt: string }) => <button title={prompt}>Ask an agent</button>,
 }));
@@ -21,7 +25,40 @@ vi.mock("./useSyncIgnore", async (orig) => ({
   useSyncIgnore: () => ({ isIgnored: () => false, ignorer: () => undefined }),
 }));
 
-const { usePushAnyway } = await import("@/lib/hooks/useSync");
+const { usePushAnyway, usePlaintextContext } = await import("@/lib/hooks/useSync");
+
+const MASK = "•".repeat(16);
+const CONTEXT: PlaintextContext = {
+  path: "knowledge/team/db.md",
+  line: 4,
+  key: "DB_PASSWORD",
+  change: "modified",
+  on_remote: false,
+  lines: [
+    { number: 3, text: "Host: db.internal", values: [] },
+    {
+      number: 4,
+      text: `DB_PASSWORD=${MASK}`,
+      values: [
+        {
+          start: 12,
+          end: 28,
+          key: "DB_PASSWORD",
+          shape: {
+            length: 16,
+            classes: ["lower", "digit"],
+            prefix: null,
+            hint: "placeholder",
+            word: "example",
+          },
+        },
+      ],
+    },
+  ],
+  diff: `--- remote/x\n+++ local/x\n@@ -1,1 +1,2 @@\n Host: db.internal\n+DB_PASSWORD=${MASK}\n`,
+  added: 1,
+  removed: 0,
+};
 
 const STATUS = makeStatus({
   last_round: makeRound({ status: "plaintext_found" }),
@@ -42,6 +79,14 @@ const STATUS = makeStatus({
 function renderCard(mutate = vi.fn()) {
   vi.mocked(usePushAnyway).mockReturnValue(
     idleMutation({ mutate }) as unknown as ReturnType<typeof usePushAnyway>,
+  );
+  vi.mocked(usePlaintextContext).mockImplementation(
+    (_path, _line, enabled) =>
+      ({
+        data: enabled ? CONTEXT : undefined,
+        isLoading: false,
+        error: null,
+      }) as unknown as ReturnType<typeof usePlaintextContext>,
   );
   render(
     <MemoryRouter>
@@ -81,6 +126,28 @@ describe("SyncPlaintextCard", () => {
       expect(mutate).toHaveBeenCalledTimes(1);
     },
   );
+
+  acceptance("vault-sync", "the Sync page opens each place to its masked lines", () => {
+    const { card } = renderCard();
+    expect(within(card).queryByTestId("sync-plaintext-context")).toBeNull();
+    fireEvent.click(
+      within(card).getByRole("button", { name: "Show knowledge/team/db.md, line 4 in its file" }),
+    );
+    const context = within(card).getByTestId("sync-plaintext-context");
+    expect(context).toHaveTextContent("Changed file");
+    expect(context).toHaveTextContent("Host: db.internal");
+    const flagged = context.querySelector("[data-flagged]");
+    expect(flagged).toHaveTextContent(`DB_PASSWORD=${MASK}`);
+    expect(flagged?.querySelector("mark")).toHaveTextContent(MASK);
+    expect(context).toHaveTextContent("16 characters: lowercase, digits");
+    expect(context).toHaveTextContent("contains “example”, often an example or placeholder");
+
+    expect(within(card).queryByTestId("sync-plaintext-diff")).toBeNull();
+    fireEvent.click(within(context).getByRole("button", { name: "Show changes" }));
+    expect(within(card).getByTestId("sync-plaintext-diff")).toHaveTextContent(
+      `DB_PASSWORD=${MASK}`,
+    );
+  });
 
   test("the page reads it as its own state, with Sync now as the round action", () => {
     const state = syncState(STATUS);

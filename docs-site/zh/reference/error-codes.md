@@ -233,6 +233,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `SYNC_NO_REMOTE` | 409 | 没有配置同步远端。 | 在**同步**页面（**远端**标签页）设置一个。见[保险库同步](/zh/guides/vault-sync)。 |
 | `SYNC_NO_PLAINTEXT_FOUND` | 409 | 请求了仍然推送，但上一轮并没有因明文密钥停下。 | 没有需要跳过的内容；运行**立即同步**。见[保险库同步](/zh/guides/vault-sync#when-a-round-finds-a-plaintext-secret)。 |
+| `SYNC_PLAINTEXT_NOT_LISTED` | 404 | 请求查看某处明文密钥的上下文，但上一轮并没有在那个位置发现它。 | 从同步页面自己的列表里打开位置。 |
 | `SYNC_REMOTE_INVALID` | 422 | URL 或分支会被 git 当作选项解析，或者不是 git 接受的名字。 | 修正 URL 或分支。 |
 | `SYNC_REMOTE_FAILED` | 502 | 针对远端的某个 git 操作失败。消息已脱敏。 | 检查网络访问、远端 URL 和令牌的权限。 |
 | `SYNC_NOTHING_STOPPED` | 409 | 你回答了一个冲突、暂停或加入选择，但没有任何同步轮次在等这个回答。 | 无需操作。 |

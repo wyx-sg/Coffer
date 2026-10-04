@@ -184,6 +184,17 @@ export function useRollbackRound() {
   return useRoundMutation<number>((runId) => syncApi.rollback(runId), { toastErrors: false });
 }
 
+/** A plaintext finding in its file, fetched when its place is opened. The
+ * answer follows the last round, so it is refetched with the status. */
+export function usePlaintextContext(path: string, line: number, enabled: boolean) {
+  return useQuery({
+    queryKey: [...syncKey, "plaintext", path, line],
+    queryFn: () => syncApi.plaintextContext(path, line),
+    enabled,
+    retry: false,
+  });
+}
+
 /** A round's file as a diff, fetched when its row is opened. A round's commits
  * never change, so the answer is kept. */
 export function useRoundFileDiff(

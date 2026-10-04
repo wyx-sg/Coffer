@@ -6,9 +6,10 @@ from collections.abc import Sequence
 from typing import Any, Literal, cast
 
 from coffer.application.sync.views import MachineView, StoppedFile, StoppedRound, SyncStatus
+from coffer.domain.plaintext_shape import MaskedValue
 from coffer.domain.sync.handoffs import is_secret_file
 from coffer.domain.sync.joins import JoinPreview
-from coffer.domain.sync.plaintext import PlaintextFinding
+from coffer.domain.sync.plaintext import PlaintextContext, PlaintextFinding
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord
 from coffer.surfaces.http.handoff_schemas import handoff_out
@@ -33,7 +34,11 @@ from coffer.surfaces.http.sync_stop_schemas import (
     HoldGroupOut,
     HoldOut,
     JoinPreviewOut,
+    MaskedLineOut,
+    MaskedValueOut,
+    PlaintextContextOut,
     StoppedRoundOut,
+    ValueShapeOut,
 )
 
 _Change = Literal["added", "modified", "removed"]
@@ -70,6 +75,41 @@ def round_out(r: RoundRecord) -> RoundOut:
         pushed_files=r.pushed_files,
         plaintext=plaintext_out(r.plaintext),
         folded=r.folded,
+    )
+
+
+def _masked_value_out(v: MaskedValue) -> MaskedValueOut:
+    s = v.shape
+    return MaskedValueOut(
+        start=v.start,
+        end=v.end,
+        key=v.key,
+        shape=ValueShapeOut(
+            length=s.length,
+            classes=cast(Any, list(s.classes)),
+            prefix=s.prefix,
+            hint=cast(Any, s.hint),
+            word=s.word,
+        ),
+    )
+
+
+def plaintext_context_out(c: PlaintextContext) -> PlaintextContextOut:
+    return PlaintextContextOut(
+        path=c.finding.path,
+        line=c.finding.line,
+        key=c.finding.key,
+        change=cast(Any, c.change),
+        on_remote=c.on_remote,
+        lines=[
+            MaskedLineOut(
+                number=row.number, text=row.text, values=[_masked_value_out(v) for v in row.values]
+            )
+            for row in c.lines
+        ],
+        diff=c.diff,
+        added=c.added,
+        removed=c.removed,
     )
 
 

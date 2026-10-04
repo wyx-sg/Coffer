@@ -35,6 +35,8 @@ export type SyncChange = Schemas["SyncChangeOut"];
 
 /** One file a round applied or pushed, line by line (`GET /sync/runs/{id}/diff`). */
 export type RoundFileDiff = Schemas["RoundFileDiffOut"];
+/** A place the last round found a plaintext secret, in its file, every value masked. */
+export type PlaintextContext = Schemas["PlaintextContextOut"];
 
 /** `GET /sync/runs` — rounds, newest first. */
 export type SyncRunList = Schemas["SyncRunListOut"];
@@ -176,6 +178,9 @@ export const syncApi = {
   restoreHold: (): Promise<SyncRound> => unwrap(api().POST("/sync/hold/restore")),
   /** "I checked it, push anyway" for a round that found a plaintext secret. */
   pushAnyway: (): Promise<SyncRound> => unwrap(api().POST("/sync/plaintext/push-anyway")),
+  /** One place the last round found, in its file: masked lines, shape, masked diff. */
+  plaintextContext: (path: string, line: number): Promise<PlaintextContext> =>
+    unwrap(api().GET("/sync/plaintext/context", { params: { query: { path, line } } })),
 
   /** The line-by-line diff of a file the round listed; computed from history, nothing stored. */
   runDiff: (runId: number, path: string, side: "applied" | "pushed"): Promise<RoundFileDiff> =>

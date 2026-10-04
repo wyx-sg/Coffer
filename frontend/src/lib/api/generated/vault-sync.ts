@@ -329,6 +329,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/plaintext/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plaintext Context
+         * @description One place the last round found, in its file: the lines around it with
+         *     every plaintext value masked and its shape in its place, and the file's
+         *     masked change against the remote's copy. Computed when asked, never
+         *     stored, logged or audited. 409 ``SYNC_NO_PLAINTEXT_FOUND`` unless the last
+         *     round is ``plaintext_found``; 404 ``SYNC_PLAINTEXT_NOT_LISTED`` for a place
+         *     it did not find.
+         */
+        get: operations["plaintext_context_api_v1_sync_plaintext_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/plaintext/push-anyway": {
         parameters: {
             query?: never;
@@ -1058,6 +1083,68 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** MaskedLineOut */
+        MaskedLineOut: {
+            /** Number */
+            number: number;
+            /** Text */
+            text: string;
+            /**
+             * Values
+             * @default []
+             */
+            values: components["schemas"]["MaskedValueOut"][];
+        };
+        /**
+         * MaskedValueOut
+         * @description One masked value on a line, ``[start, end)`` in the masked text.
+         */
+        MaskedValueOut: {
+            /** End */
+            end: number;
+            /** Key */
+            key: string;
+            shape: components["schemas"]["ValueShapeOut"];
+            /** Start */
+            start: number;
+        };
+        /**
+         * PlaintextContextOut
+         * @description A place the last round found a plaintext secret, in its file: the lines
+         *     around it with every value masked, whether the remote holds the file
+         *     (``added`` / ``modified``) and the flagged line already, and for a
+         *     modified file its masked change against the remote's copy. Never a
+         *     value.
+         */
+        PlaintextContextOut: {
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "added" | "modified";
+            /** Diff */
+            diff: string | null;
+            /** Key */
+            key: string;
+            /** Line */
+            line: number;
+            /** Lines */
+            lines: components["schemas"]["MaskedLineOut"][];
+            /** On Remote */
+            on_remote: boolean;
+            /** Path */
+            path: string;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+        };
         /**
          * PlaintextFindingOut
          * @description Where a round found a plaintext secret: the file, the line and the name
@@ -1410,6 +1497,22 @@ export interface components {
             vault_real_path: string | null;
             /** Waiting */
             waiting: components["schemas"]["WaitingCommitOut"][];
+        };
+        /**
+         * ValueShapeOut
+         * @description What a masked value looks like, never what it is.
+         */
+        ValueShapeOut: {
+            /** Classes */
+            classes: ("lower" | "upper" | "digit" | "symbol")[];
+            /** Hint */
+            hint: ("reference" | "placeholder" | "repeated") | null;
+            /** Length */
+            length: number;
+            /** Prefix */
+            prefix: string | null;
+            /** Word */
+            word: string | null;
         };
         /** VaultMoveIn */
         VaultMoveIn: {
@@ -2138,6 +2241,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MachineOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    plaintext_context_api_v1_sync_plaintext_context_get: {
+        parameters: {
+            query: {
+                /** @description A file the last round found a plaintext secret in. */
+                path: string;
+                /** @description The line it was found on. */
+                line: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaintextContextOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
