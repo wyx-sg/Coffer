@@ -72,7 +72,7 @@ async def test_the_launcher_hand_off_names_launcher_server_and_redacted_command(
     ctx: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client, rsvc, _health = ctx
-    monkeypatch.setattr(runner_detect.shutil, "which", lambda _c: None)
+    monkeypatch.setattr(runner_detect.shutil, "which", lambda *_a, **_k: None)
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     server = await rsvc.register(
         kind="mcp_server",
@@ -113,7 +113,7 @@ async def test_the_missing_launcher_item_carries_the_status_hand_off(
         config={"transport": {"type": "stdio", "command": "uvx", "args": ["mcp-server-duckdb"]}},
         actor="test",
     )
-    monkeypatch.setattr(runner_detect.shutil, "which", lambda _c: None)
+    monkeypatch.setattr(runner_detect.shutil, "which", lambda *_a, **_k: None)
     status = (await client.get(f"/api/v1/resources/mcp_server/{server.uid}/status")).json()
     items = [i for i in await _attention(rsvc, health).items() if i.uid == server.uid]
     [item] = items
@@ -202,7 +202,7 @@ async def test_a_status_carries_a_hand_off_only_when_there_is_one(
         config={"transport": {"type": "stdio", "command": "uvx", "args": ["mcp-server-duckdb"]}},
         actor="test",
     )
-    monkeypatch.setattr(runner_detect.shutil, "which", lambda _c: None)
+    monkeypatch.setattr(runner_detect.shutil, "which", lambda *_a, **_k: None)
 
     with_one = (await client.get(f"/api/v1/resources/mcp_server/{stuck.uid}/status")).json()
     without = (await client.get(f"/api/v1/resources/mcp_server/{healthy.uid}/status")).json()
