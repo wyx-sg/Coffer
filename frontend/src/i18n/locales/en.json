@@ -3967,11 +3967,6 @@
         "description": "Where new conversations start, and what /dir may switch to. With none allowed, /dir is off."
       },
       "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct the channel's file under `~/.coffer/vault/resources/channel/`, or delete the channel and add it again.",
-      "saveState": {
-        "saving": "Saving…",
-        "saved": "Saved",
-        "error": "Couldn't save"
-      },
       "machine": {
         "runsOn": "Runs on",
         "hint": "Exactly one Mac holds the bot's connection."

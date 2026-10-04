@@ -104,7 +104,6 @@ describe("message batching", () => {
     // Every ref and platform field goes back as it was.
     expect(config.app_secret_ref).toBe("channel/0f/app-secret");
     expect(config.runs_on).toBe(HERE);
-    expect(await screen.findByTestId("channel-save-state")).toHaveTextContent(/saved/i);
   });
 
   test("an out-of-range value shows its error and is not saved", async () => {

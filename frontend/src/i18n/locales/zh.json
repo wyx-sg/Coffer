@@ -3967,11 +3967,6 @@
         "title": "回复与会话"
       },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
-      "saveState": {
-        "saving": "正在保存…",
-        "saved": "已保存",
-        "error": "保存失败"
-      },
       "machine": {
         "runsOn": "运行在",
         "hint": "只有一台 Mac 持有机器人的连接。"
