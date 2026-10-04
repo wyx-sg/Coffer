@@ -9,8 +9,17 @@ import pytest
 
 from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService, SkillDocument
+from coffer.domain.skill.cli_declared import DeclaredTool
 from coffer.domain.skill.cli_errors import CliNotKnown
-from coffer.domain.skill.cli_status import ServerLauncher, launcher_cli
+from coffer.domain.skill.cli_status import (
+    COFFER_NEEDS,
+    CofferUse,
+    ServerLauncher,
+    SkillRequirements,
+    aggregate,
+    launcher_cli,
+)
+from coffer.domain.skill.requirements import CommandRequirement
 from tests.support.cli_requirements import FAKE_MACHINE, FakeCommand, FakeCommandProbe
 
 
@@ -243,3 +252,14 @@ def test_launcher_cli_maps_provided_launchers_and_skips_paths() -> None:
         None,
         None,
     ]
+
+
+def test_coffer_needs_join_the_skills_that_need_the_same_command() -> None:
+    skill = SkillRequirements("u1", "history", (CommandRequirement("git", min_version="2.30"),))
+    (alone,) = aggregate([], coffer=COFFER_NEEDS)
+    assert (alone.command, alone.title) == ("git", "Git")
+    assert alone.needed_by_coffer == (CofferUse.VAULT_HISTORY, CofferUse.SYNC)
+    mine = DeclaredTool("git", title="Mine")
+    (joined,) = aggregate([skill], declared=[mine], coffer=COFFER_NEEDS)
+    assert joined.title == "Mine" and joined.min_version == "2.30" and joined.added
+    assert joined.needed_by_coffer and joined.needed_by[0].skill_name == "history"

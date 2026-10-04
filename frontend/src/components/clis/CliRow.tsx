@@ -8,7 +8,7 @@
 import { useTranslation } from "react-i18next";
 
 import type { Cli } from "@/lib/api/clis";
-import { neededByCount, serverNames } from "@/lib/clis/format";
+import { neededByCount, neededTotal, serverNames } from "@/lib/clis/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
 function useStatusLine(cli: Cli): string {
   const { t } = useTranslation();
   const version = cli.version ?? t("clis.unknownVersion");
-  const count = cli.needed_by.length + cli.needed_by_servers.length;
+  const count = neededTotal(cli);
   const who = neededByCount(t, cli, "list");
   const needIt = (lead: string) => t("clis.list.needLine", { lead, who, count });
   switch (cli.status) {

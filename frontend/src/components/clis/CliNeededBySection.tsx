@@ -1,6 +1,7 @@
-// src/components/clis/CliNeededBySection.tsx — "Needed by": the skills and MCP servers that call the command, one row each (Name · Kind · Needs · →).
+// src/components/clis/CliNeededBySection.tsx — "Needed by": Coffer itself, the skills and MCP servers that call the command, one row each (Name · Kind · Needs · →).
 //
-// A row opens that skill's Requires tab or that server's page. A tool added by
+// A row opens that skill's Requires tab or that server's page; Coffer's own row
+// (git, for the vault's history and sync) opens nothing. A tool added by
 // hand that nothing needs says so instead of showing an empty table.
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -14,7 +15,8 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_110px_150px_16px] items-center gap-2
 interface Row {
   key: string;
   name: string;
-  to: string;
+  /** Where the row opens; Coffer itself has no page to open. */
+  to: string | null;
   kind: string;
   needs: string;
 }
@@ -23,6 +25,17 @@ export function CliNeededBySection({ cli }: { cli: Cli }) {
   const { t } = useTranslation();
   const outdated = cli.status === "outdated";
   const rows: Row[] = [
+    ...(cli.needed_by_coffer.length > 0
+      ? [
+          {
+            key: "coffer",
+            name: "Coffer",
+            to: null,
+            kind: t("clis.detail.kind.coffer"),
+            needs: cli.needed_by_coffer.map((u) => t(`clis.cofferUseShort.${u}`)).join(" · "),
+          },
+        ]
+      : []),
     ...cli.needed_by_servers.map((s) => ({
       key: `server-${s.server_uid}`,
       name: s.server_name,
@@ -54,22 +67,34 @@ export function CliNeededBySection({ cli }: { cli: Cli }) {
             <span>{t("clis.detail.cols.needs")}</span>
             <span />
           </div>
-          {rows.map((r) => (
-            <Link
-              key={r.key}
-              to={r.to}
-              className={`${GRID} h-9 border-t border-border-subtle text-text hover:bg-surface-hover`}
-            >
-              <span className="truncate font-mono text-xs font-label">{r.name}</span>
-              <span className="text-xs text-text-muted">{r.kind}</span>
-              <span
-                className={`truncate text-xs ${outdated && r.needs.startsWith("≥") ? "text-warning" : "text-text-muted"}`}
+          {rows.map((r) => {
+            const cells = (
+              <>
+                <span className="truncate font-mono text-xs font-label">{r.name}</span>
+                <span className="text-xs text-text-muted">{r.kind}</span>
+                <span
+                  className={`truncate text-xs ${outdated && r.needs.startsWith("≥") ? "text-warning" : "text-text-muted"}`}
+                >
+                  {r.needs}
+                </span>
+              </>
+            );
+            return r.to === null ? (
+              <div key={r.key} className={`${GRID} h-9 border-t border-border-subtle text-text`}>
+                {cells}
+                <span />
+              </div>
+            ) : (
+              <Link
+                key={r.key}
+                to={r.to}
+                className={`${GRID} h-9 border-t border-border-subtle text-text hover:bg-surface-hover`}
               >
-                {r.needs}
-              </span>
-              <ArrowRight className="size-[13px] text-text-subtle" aria-hidden />
-            </Link>
-          ))}
+                {cells}
+                <ArrowRight className="size-[13px] text-text-subtle" aria-hidden />
+              </Link>
+            );
+          })}
         </>
       )}
     </CliSection>

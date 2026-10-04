@@ -5582,7 +5582,7 @@
       "version": "Version",
       "login": "Login",
       "checkedWith": "· checked with",
-      "neededByNote": "The skills and MCP servers that call it. Open one to see why.",
+      "neededByNote": "What calls it: Coffer itself, skills and MCP servers. Open a skill or server to see why.",
       "neededByNothing": "No skill or MCP server requires it — you added it by hand, so it stays listed until you remove it.",
       "cols": {
         "name": "Name",
@@ -5591,7 +5591,8 @@
       },
       "kind": {
         "server": "MCP server",
-        "skill": "Skill"
+        "skill": "Skill",
+        "coffer": "Coffer"
       },
       "startsWith": "starts with {{launcher}}",
       "neededBy": "needed by {{needed}}",
@@ -5651,7 +5652,8 @@
         "missing": "Hand the install to an agent, then check again.",
         "outdated": "Hand the update to an agent, then check again.",
         "logged_out": "Hand the login to an agent, then check again."
-      }
+      },
+      "cofferBody": "Coffer can’t {{uses}}."
     },
     "list": {
       "needsYou": "Needs you",
@@ -5668,7 +5670,17 @@
     "mcpServerCount_one": "{{count}} MCP server",
     "mcpServerCount_other": "{{count}} MCP servers",
     "listPair": "{{servers}}, {{skills}}",
-    "neededPair": "{{servers}} and {{skills}}"
+    "neededPair": "{{servers}} and {{skills}}",
+    "withCofferList": "Coffer, {{rest}}",
+    "withCofferSentence": "Coffer and {{rest}}",
+    "cofferUse": {
+      "vault_history": "keep the vault’s history",
+      "sync": "sync the vault"
+    },
+    "cofferUseShort": {
+      "vault_history": "Vault history",
+      "sync": "Sync"
+    }
   },
   "secretField": {
     "placeholder": "Choose a secret, or paste a new value",

@@ -42,6 +42,10 @@ requires:
 
 Coffer 每次检查时都从技能文件夹读取 `requires:`，所以你在编辑器里改完，下一次 **重新检查** 就能读到，无需重新导入技能。这个顶层的 `requires:` 列的是命令；它和 `metadata.requires` 无关，后者是技能库用来声明[一个领域依赖哪些技能](/zh/guides/writing-skill-libraries#declared-dependencies)的。
 
+## Coffer 自己运行的命令 {#commands-coffer-runs-itself}
+
+Coffer 自己需要一个命令：`git`，用来保存保险库的历史并同步它。它始终会列出，标题为 Git，**依赖方** 里有一行 **Coffer**，写明它的用途（保险库历史 · 同步），不论是否还有技能或服务器需要它。`git` 缺失时，它的横幅会说明 Coffer 因此做不了什么，并提供与其他命令相同的交接。总览不会再把它作为命令行工具重复列出：同步自己的“未安装 git”事项已经报告了它。
+
 ## MCP 服务器启动所用的启动器 {#launchers-your-mcp-servers-start-with}
 
 每个已开启、以命令方式（stdio）启动的 MCP 服务器都需要它的启动器。Coffer 把启动器列在提供它的那个命令下——`uvx` 列在 `uv` 下，`npx` 列在 `node`（Node.js）下，`bunx` 列在 `bun` 下，其他启动器（比如 `docker`）就列它自己。无需任何声明：服务器自己的命令就够了。启动器没有最低版本，也没有登录检查；从路径启动的服务器（`./run.sh`）是一个文件而不是命令，不会列出；已关闭或通过 HTTP 访问的服务器什么都不需要。
