@@ -103,9 +103,15 @@ export function UsageTiles({ totals, priceNote, unpriced }: Props) {
         value={formatTokens(totals.cache_read_tokens, lang)}
       />
       <Tile
-        label={t("usage.tiles.cacheWrite")}
-        value={formatTokens(cacheWrite, lang)}
-        note={t("usage.tiles.cacheWriteNote")}
+        label={
+          <>
+            {t("usage.tiles.cacheWrite")}
+            <HelpTip label={t("usage.tiles.cacheWriteHelp")}>
+              <p>{t("usage.tiles.cacheWriteTip")}</p>
+            </HelpTip>
+          </>
+        }
+        value={cacheWrite ? formatTokens(cacheWrite, lang) : "—"}
       />
     </div>
   );

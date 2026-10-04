@@ -66,6 +66,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 
 - **同一种协议进，同一种协议出。** Anthropic 路由只转发到 Anthropic 形状的接入地址（`/v1/messages`、`/v1/messages/count_tokens`、`/v1/models`），Responses 路由只转发到 Responses 接入地址（`/v1/responses`）。没有协议转换。转换正是其他网关的 bug 藏身之处：工具调用的 delta 被弄乱、thinking 签名被丢掉、用量被清零。
 - **请求体逐字节转发。** 代理只解析一份*副本*，用来读 `model` 和 `stream`。没有白名单过滤、没有重排、没有重新序列化，所以 `anthropic-beta` 的值和 Coffer 从没听说过的请求体字段都原封不动地到达，prompt caching 和 thinking 签名照常工作。
+- **唯一的例外：连接不提供的模型。** 有些客户端会无视 Coffer 写进它配置里的模型。Codex 桌面 App 在 ChatGPT 工作区的模型策略下，每个新线程都从策略指定的模型开始，DeepSeek 这类接入地址会直接拒绝它。当连接配置了模型集合、而请求里的 `model` 不在其中时，代理只把这一个值替换为该智能体的默认模型（它绑定的模型，否则是连接里第一个文本模型），其余字节一概不动。对 Claude Code，若请求的模型名带有档位（`haiku`、`sonnet`、`opus`、`fable`），且连接提供 Coffer 为该档位写入的模型，则改用该档位的模型。属于集合的模型、没有配置模型集合的连接、以及没有 `model` 的请求体都不会被改动。每次替换写一行守护进程日志（`model_proxy.model_replaced`，记录请求的和实际使用的模型，不含请求体），用量按实际发出的模型记录。
 - **请求头除一小份清单外都透传。** 除了逐跳头、`host`、`content-length`、客户端的凭据（`authorization`、`x-api-key`、cookie）和 `accept-encoding` 之外，全部转发。代理要求不压缩的流，好让它的用量读取器看到纯 SSE。然后注入连接的 key：Anthropic 协议上是 `x-api-key` 加 `Authorization: Bearer`，Responses 协议上是 `Authorization: Bearer`，不需要 key 的本地运行时则什么都不加。
 - **响应按收到的样子返回。** 状态码、响应头和响应体分块都不经缓冲地转发，包括 ping 和 SSE 注释。Claude Code 会中止 300 秒没有动静的流，以转发的字节计。错误响应体原样转发，因为两个智能体的恢复逻辑都匹配上游的措辞。
 - **超时。** 连接 10 秒，没有总超时，读空闲至少 300 秒，与两个智能体自己的看门狗一致。
@@ -95,7 +96,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 - **谁：** 智能体（从它的令牌得知）、智能体发送时附带的会话和请求类别，以及连接。
 - **什么：** 接入地址和所请求的模型。
 - **结果如何：** 状态码、结局（`completed`、`error_event`、`truncated`、`client_cancel`、`upstream_error`、`connect_error`）、首 token 时间和持续时间。
-- **Token：** 按互不重叠的类别计数：未缓存的输入、5 分钟和 1 小时的缓存写入、缓存读取，以及输出（其中包含推理）。它们按各协议自己的规则读取。在 Anthropic 协议上，`message_delta` 覆盖 `message_start`，因为服务端工具会重述并扩展总数。在 Responses 协议上，终止事件 `response.completed` / `incomplete` / `failed` 携带这些数字，缓存 token 从 `input_tokens` 里拆出来。
+- **Token：** 按互不重叠的类别计数：未缓存的输入、5 分钟和 1 小时的缓存写入、缓存读取，以及输出（其中包含推理）。它们按各协议自己的规则读取。在 Anthropic 协议上，`message_delta` 覆盖 `message_start`，因为服务端工具会重述并扩展总数。在 Responses 协议上，终止事件 `response.completed` / `incomplete` / `failed` 携带这些数字，缓存 token 和缓存写入（GPT-5.6 起才会上报，按 5 分钟写入计）从 `input_tokens` 里拆出来。
 
 在终止事件之前被切断的流，用量记为**未知**。它从不被丢弃，也从不被猜测。
 

@@ -103,3 +103,60 @@ def test_error_bodies_follow_each_wire() -> None:
     assert json.loads(w.error_body(Wire.OPENAI, "nope")) == {
         "error": {"message": "nope", "type": "api_error"}
     }
+
+
+def test_replace_unserved_model_splices_only_the_model_value() -> None:
+    body = '{ "zz":{"a":[1, 2.50,"é"]},"model" : "gpt-6-luna",  "stream":true }'.encode()
+    out = w.replace_unserved_model(body, ["deepseek-flash"], "deepseek-flash")
+    assert out is not None
+    new, requested, used = out
+    assert (requested, used) == ("gpt-6-luna", "deepseek-flash")
+    assert new == '{ "zz":{"a":[1, 2.50,"é"]},"model" : "deepseek-flash",  "stream":true }'.encode()
+
+
+def test_replace_unserved_model_leaves_everything_else_alone() -> None:
+    served = ["a", "b"]
+    for body in (
+        b'{"model":"a"}',  # served
+        b'{"model":7}',  # not a string
+        b'{"stream":true}',  # no model
+        b'{"input":{"model":"x"}}',  # nested, not top level
+        b"not json",
+        b"[1]",
+        b"",
+        b'{"model":"x"',  # truncated
+    ):
+        assert w.replace_unserved_model(body, served, "a") is None
+    assert w.replace_unserved_model(b'{"model":"x"}', [], "a") is None  # no curated set
+    assert w.replace_unserved_model(b'{"model":"x"}', served, None) is None  # no fallback
+
+
+_TIERS = {"haiku": "ds-flash", "sonnet": "ds-pro", "opus": "ds-pro"}
+_SERVED = ["ds-flash", "ds-pro", "ds-default"]
+
+
+def test_pick_replacement_prefers_the_requested_tier_model() -> None:
+    assert w.pick_replacement("claude-haiku-4-5", _SERVED, "ds-default", _TIERS) == "ds-flash"
+    assert w.pick_replacement("Claude-SONNET-5", _SERVED, "ds-default", _TIERS) == "ds-pro"
+
+
+def test_pick_replacement_falls_back_when_the_tier_model_is_not_served() -> None:
+    tiers = {"haiku": "not-curated"}
+    assert w.pick_replacement("claude-haiku-4-5", _SERVED, "ds-default", tiers) == "ds-default"
+
+
+def test_pick_replacement_without_a_tier_keyword_takes_the_default() -> None:
+    assert w.pick_replacement("gpt-6-luna", _SERVED, "ds-default", _TIERS) == "ds-default"
+    assert w.pick_replacement("claude-opus-5", _SERVED, "ds-default", {}) == "ds-default"
+    assert w.pick_replacement("claude-opus-5", _SERVED, "ds-default", None) == "ds-default"
+
+
+def test_pick_replacement_leaves_a_served_model_alone() -> None:
+    assert w.pick_replacement("ds-pro", _SERVED, "ds-default", _TIERS) is None
+
+
+def test_replace_unserved_model_applies_the_tier_model_to_the_body() -> None:
+    out = w.replace_unserved_model(
+        b'{"model":"claude-haiku-4-5","x":1}', _SERVED, "ds-default", _TIERS
+    )
+    assert out == (b'{"model":"ds-flash","x":1}', "claude-haiku-4-5", "ds-flash")

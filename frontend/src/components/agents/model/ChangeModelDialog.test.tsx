@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
+import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
@@ -94,7 +95,9 @@ function renderDialog(agent: AgentOut = AGENT) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children}</MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>{children}</MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
   render(<ChangeModelDialog agent={agent} open onOpenChange={() => {}} />, { wrapper: Wrapper });
@@ -141,6 +144,21 @@ describe("ChangeModelDialog", () => {
       fireEvent.click(await screen.findByRole("button", { name: "Apply 1 change" }));
       expect(await screen.findByText("settings.json changed on disk")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Reload preview" })).toBeInTheDocument();
+    },
+  );
+
+  acceptance(
+    "provider-switching",
+    "applying a model change says the agent must be restarted",
+    async () => {
+      renderDialog();
+      await reviewChange();
+      fireEvent.click(await screen.findByRole("button", { name: "Apply 1 change" }));
+      expect(
+        await screen.findByText(
+          "Restart Claude Code to use this change — sessions already open keep the old setting.",
+        ),
+      ).toBeInTheDocument();
     },
   );
 

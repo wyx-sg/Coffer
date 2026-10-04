@@ -1,6 +1,6 @@
 ---
 title: Usage
-description: What your agents spent on API-key and local providers, by model, agent or day — the Usage tab of Model providers.
+description: What your agents spent on API-key and local providers, by model, provider, agent or day — the Usage tab of Model providers.
 ---
 
 # Usage
@@ -12,9 +12,9 @@ Usage is the second tab of **Model providers**, at `/model-providers?tab=usage`.
 Open **Model providers** and choose **Usage** beside **Providers**. The page header — the title, the **Experimental** tag and **Add provider** — is the same one the Providers tab has. There is no Usage entry in the sidebar.
 
 - The filter row starts with the **time range** — **Today**, **Last 7 days** (the default), **Last 30 days**, **This month** or **Custom range…**, picked as dates on a calendar that reaches up to 90 days back; the picker notes the first day that still has per-request detail, since older days keep only their daily totals, which the page still reports. Next come **Agent** and **Provider**, which narrow everything below to one agent and one provider. The range, the filters and the breakdown are part of the page's address, so a refresh, a bookmark or Back keeps them. There is no Refresh button: the numbers are Coffer's own.
-- Five figures sum up the range: **Cost (estimated)** — its help tip says how the estimate is worked out — with the request count, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports). If some models have no price, **1 model unpriced** appears once, in the Cost figure, as a link to that model on its provider, where you set one; nothing else on the page repeats it.
+- Five figures sum up the range: **Cost (estimated)** — its help tip says how the estimate is worked out — with the request count, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (**—** when none was reported; its help tip says writes are counted only where the provider reports them: Anthropic Messages and OpenAI Responses on GPT-5.6 and later). If some models have no price, **1 model unpriced** appears once, in the Cost figure, as a link to that model on its provider, where you set one; nothing else on the page repeats it.
 - **Cost per day** draws one bar per day of the range; hover a bar for its day and cost. Today's bar is lighter because the day is not over.
-- The table breaks the range down **By model** (with the provider that served it, and the agents that used it), **By agent** or **By day** (newest first; the latest week shows first and **Show all** lists the rest), and ends with a Total row — the cost of the priced models. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
+- The table breaks the range down **By model** (with the provider that served it, and the agents that used it), **By provider** (one row per provider, with the agents that used it), **By agent** or **By day** (newest first; the latest week shows first and **Show all** lists the rest), and ends with a Total row — the cost of the priced models. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
 
 On a machine where nothing has gone through the proxy yet, the tab is only its empty state — **No API-key usage yet**, with **Open Providers** and no range or filters to narrow: switching an agent onto an API-key provider is what starts the counting. With the Models [experimental feature](/guides/experimental-features) off, the tab and the page are absent like the rest of the feature.
 
@@ -35,7 +35,7 @@ Only traffic through the proxy is counted. Requests another tool made with the s
 
 ## Ranges and REST
 
-Ranges are local days: **today**, **7d** and **30d** (both including today), **month** (this calendar month) and **custom** (both ends inclusive), the same choices as the time-range picker. A row per model names the provider that served it; every row lists the agents that sent its requests, most first. Over REST, the agent and provider filters are the `agent_type` and `connection_uid` query parameters of the summary. The REST routes are `GET /api/v1/usage/summary` and `GET /api/v1/usage/requests`.
+Ranges are local days: **today**, **7d** and **30d** (both including today), **month** (this calendar month) and **custom** (both ends inclusive), the same choices as the time-range picker. A row per model names the provider that served it; every row lists the agents that sent its requests, most first. Grouping by provider (`group_by=provider`) gives one row per connection. Over REST, the agent and provider filters are the `agent_type` and `connection_uid` query parameters of the summary. The REST routes are `GET /api/v1/usage/summary` and `GET /api/v1/usage/requests`.
 
 ## Cost
 

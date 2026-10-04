@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import pathlib
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol as _Protocol
 
@@ -118,9 +119,17 @@ def claude_tiers(req: ProviderProjectionRequest) -> dict[str, str]:
     """The tier pins a projection writes: the binding's own, or — when the
     agent has none stored — Coffer's suggestion for its model, so no tier ever
     sends a Claude id to an endpoint that does not serve one."""
-    if req.binding.tier_models:
-        return dict(req.binding.tier_models)
-    return suggest_tier_models(req.binding.model, req.model_ids, local=req.local)
+    return tier_models_for(req.binding, req.model_ids, local=req.local)
+
+
+def tier_models_for(
+    binding: ModelBinding, model_ids: Sequence[str], *, local: bool = False
+) -> dict[str, str]:
+    """:func:`claude_tiers` without a full projection request: the binding's
+    own tier pins, else Coffer's suggestion for its model."""
+    if binding.tier_models:
+        return dict(binding.tier_models)
+    return suggest_tier_models(binding.model, model_ids, local=local)
 
 
 @dataclass(frozen=True)

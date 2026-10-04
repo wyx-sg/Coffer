@@ -65,7 +65,7 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 3. Pick a **Model**; for Claude Code also the **Model per tier**. The first model the endpoint returns is pre-selected, and the tiers are prefilled with suggestions.
 4. Wait for the line under **Model**: Coffer tests the provider with the chosen model by itself, and it reads **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** stays off until the test passes; the built-in login needs none.
 5. Click **Review changes**. Coffer lists, file by file, the lines it will write — `settings.json` for Claude Code; `config.toml` and Coffer's model list file for Codex.
-6. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**.
+6. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**. After a successful apply a notice says the change takes effect once you restart that agent; sessions already open keep the old setting.
 
 Picking the **Built-in login** puts the agent back on its own login; the form asks for nothing else. The details of the form are in [Change an agent's model](/guides/agents#change-an-agent-s-model).
 
@@ -167,7 +167,7 @@ The line under the **Models** title says once where most prices come from — "b
 - **Local · no cost** — a model runtime on this Mac.
 - **—** — nothing prices it, with **Set price…**. [Usage](/guides/usage) shows `—` for it until you set one.
 
-An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer.
+An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer. The one exception is a connection with a selection: if a client asks it for a model outside that selection (the Codex desktop app under a workspace model policy does this on every new thread), Coffer's proxy substitutes the agent's default model for that request and logs the swap.
 
 What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, and a channel's `/model` card:
 

@@ -16,7 +16,7 @@ import {
 } from "@/lib/filters/timeRangeValue";
 
 export const PRESET_RANGES = ["today", "7d", "30d", "month"] as const;
-export const GROUPINGS: readonly UsageGroupBy[] = ["model", "agent", "day"];
+export const GROUPINGS: readonly UsageGroupBy[] = ["model", "provider", "agent", "day"];
 
 /** The tab's own URL params; `writeUsageQuery` owns exactly these. */
 const QUERY_KEYS = ["range", "by", "agent", "provider"] as const;

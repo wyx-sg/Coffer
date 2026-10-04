@@ -1,7 +1,7 @@
 """/api/v1/usage — metered API-key usage (ADR
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
-* ``GET /summary`` — the daily rollup summed over a range, grouped by model,
+* ``GET /summary`` — the daily rollup summed over a range, grouped by model, provider,
   agent or day, optionally narrowed to one agent type and one connection.
   Costs are estimates and say so.
 * ``GET /requests`` — the per-request detail, newest first, paged by the
@@ -45,7 +45,7 @@ _RANGE = Query(
 )
 _FROM = Query(default=None, alias="from", description="First local day (custom range)")
 _TO = Query(default=None, alias="to", description="Last local day, inclusive (custom range)")
-_GROUP = Query(default=GroupBy.MODEL, description="model | agent | day")
+_GROUP = Query(default=GroupBy.MODEL, description="model | provider | agent | day")
 _AGENT = Query(default=None, description="Only requests this agent type sent")
 _CONNECTION = Query(default=None, description="Only requests this connection served")
 

@@ -57,7 +57,7 @@ def test_responses_stream_records_cached_and_reasoning_tokens(proxy: Proxy, upst
         90,
         40,
     )
-    assert rec.cache_write_5m_tokens is None and rec.usage_known
+    assert rec.cache_write_5m_tokens == 0 and rec.usage_known
     assert (rec.dedupe_key, rec.upstream_request_id) == ("req_oai_1", "req_oai_1")
     assert (rec.agent_uid, rec.agent_type, rec.session_id) == ("agent-codex", "codex", "cx")
     assert (rec.wire.value, rec.endpoint, rec.model, rec.member) == (

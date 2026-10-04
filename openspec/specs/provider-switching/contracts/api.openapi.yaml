@@ -1121,14 +1121,14 @@ paths:
           - type: 'null'
           description: Last local day, inclusive (custom range)
           title: To
-      - description: model | agent | day
+      - description: model | provider | agent | day
         in: query
         name: group_by
         required: false
         schema:
           $ref: '#/components/schemas/GroupBy'
           default: model
-          description: model | agent | day
+          description: model | provider | agent | day
       - description: Only requests this agent type sent
         in: query
         name: agent_type
@@ -1422,6 +1422,7 @@ components:
     GroupBy:
       enum:
       - model
+      - provider
       - agent
       - day
       title: GroupBy

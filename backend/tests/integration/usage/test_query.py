@@ -81,6 +81,25 @@ async def test_summary_by_model_carries_the_connection_name(sm, tmp_path: Path) 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
+    scenario="usage by provider",
+)
+async def test_summary_by_provider_names_the_connection(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    svc = await _seed(sm, tmp_path)
+    summary = await svc.summary("today", group_by=GroupBy.PROVIDER)
+    rows = {r.connection_uid: r for r in summary.rows}
+    assert set(rows) == {"conn-anthropic", "conn-openai"}
+    anthropic = rows["conn-anthropic"]
+    assert anthropic.connection_name == "Anthropic"
+    assert anthropic.model is None
+    assert anthropic.totals.requests == 3  # records 1, 3 and the unknown-usage 5
+    assert rows["conn-openai"].connection_name is None  # connection gone: uid only
+    assert rows["conn-openai"].agent_types == ("codex",)
+    assert summary.rows[0].key == "conn-anthropic"  # cost first
+    assert summary.totals.requests == 4
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
     scenario="usage by agent and by day",
 )
 async def test_summary_by_agent_and_by_day(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

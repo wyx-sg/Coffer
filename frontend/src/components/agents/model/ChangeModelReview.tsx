@@ -5,6 +5,7 @@
 // list file. The connection test already passed in the form. Apply
 // sends the fingerprints the preview read; a file edited since refuses the
 // write inside this dialog, with Reload preview.
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCw } from "lucide-react";
 
@@ -14,6 +15,7 @@ import {
   type ChangePreviewState,
 } from "@/components/change-preview/ChangePreview";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
@@ -56,6 +58,15 @@ export function ChangeModelReview({ agent, draft, open, onOpenChange, onApplied 
   const r = useModelSwitchReview(draft.request, open);
   const files = r.preview.data?.files ?? [];
   const name = agentTypeLabel(agent.type);
+  const { toast } = useToast();
+  // The agent reads its config at start (Codex: config.toml; Claude Code: the
+  // repo does not establish that a running one re-reads settings.json), so say
+  // at the moment of the change that it applies after a restart.
+  const applied = r.apply.isSuccess;
+  useEffect(() => {
+    if (applied) toast.info(t("agents.changeModel.restartNotice", { agent: name }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per successful apply
+  }, [applied]);
   const target = draft.draftConnObj ? displayName(draft.draftConnObj) : null;
 
   let state: ChangePreviewState;

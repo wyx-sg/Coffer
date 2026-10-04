@@ -6,6 +6,10 @@ import { daysBetween, localDay, rangeOf, readUsageQuery, writeUsageQuery } from 
 const sp = (s: string) => new URLSearchParams(s);
 
 describe("readUsageQuery", () => {
+  test("reads the provider grouping", () => {
+    expect(readUsageQuery(sp("by=provider"))).toEqual({ range: "7d", group_by: "provider" });
+  });
+
   test("defaults to the last 7 days by model", () => {
     expect(readUsageQuery(sp(""))).toEqual({ range: "7d", group_by: "model" });
   });
