@@ -4,8 +4,7 @@
 // `secret/<name>`, a new one is written to Secrets before the PATCH (and removed
 // again when the PATCH fails), a secret Coffer minted for the server keeps its
 // ref while it is still chosen, and which no-longer-cited refs may be deleted.
-// The server is renamed out from under its own minted refs, the state reachable
-// since rename became a field on `PATCH /resources/{uid}` for every kind.
+// A ref is "its own" when it is named for this server (`mcp_server/<name>/…`).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { getApiClient } from "@/lib/api/client";
@@ -21,7 +20,7 @@ vi.mock("@/lib/api/client", async (orig) => ({
 const t = ((key: string) => key) as never;
 
 /** A ref as `lib/secretRef.ts` mints one. */
-const MINTED = "mcp_server/0123456789abcdef0123456789abcdef/GITHUB_TOKEN";
+const MINTED = "mcp_server/github/GITHUB_TOKEN";
 /** One the user typed, or pasted in to share a secret with another server. */
 const HAND_WRITTEN = "shared/github-token";
 
@@ -29,9 +28,7 @@ function resource(overrides: Record<string, unknown> = {}) {
   return {
     uid: "u-github",
     kind: "mcp_server",
-    // The label has MOVED since the refs below were minted. Every assertion in
-    // this file has to hold regardless of what it says.
-    name: "github-renamed",
+    name: "github",
     description: null,
     config: {
       transport: {
@@ -135,9 +132,7 @@ describe("which address a secret is cited by", () => {
 });
 
 describe("which no-longer-cited refs may be deleted", () => {
-  test("a minted ref this server dropped is deleted after a rename", async () => {
-    // With the old `<name>.` prefix test a renamed server owned none of its own
-    // refs and the cleanup silently did nothing.
+  test("a minted ref this server dropped is deleted", async () => {
     await save([]);
 
     expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {

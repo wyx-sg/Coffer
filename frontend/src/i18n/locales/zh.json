@@ -822,6 +822,7 @@
       "secret_approval_approved": "批准了一项密钥改动",
       "secret_approval_rejected": "拒绝了一项密钥改动",
       "secret_imported": "导入了密钥",
+      "secret_renamed": "重命名了密钥",
       "secret_protection_enabled": "重新开启了密钥审批",
       "storage_cache_cleared": "清除了可重建的缓存",
       "vault_file_edited": "在磁盘上编辑了一个保险库文件",

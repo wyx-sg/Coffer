@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Kind Plugin Contract](kind-plugin-contract.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [principles](../../docs-site/architecture/principles.md) (Secrets), spec secret, spec vault-sync, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #406
+**Related**: [A Resource's Secret Is Named After the Resource and Its Slot, and Moves When the Resource Is Renamed](a-resources-secret-is-named-after-the-resource-and-its-slot.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Kind Plugin Contract](kind-plugin-contract.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [principles](../../docs-site/architecture/principles.md) (Secrets), spec secret, spec vault-sync, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #406
 
 ## Context
 
@@ -23,7 +23,7 @@ Two further forces:
 - **Rename.** Since [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md)
   (PR #406) a resource can be renamed on every kind except the two whose name
   agents see ([MCP servers and skills](names-visible-to-agents-are-fixed.md)),
-  so anything keyed on a resource's name breaks on rename.
+  so anything keyed on a resource's name must move when it is renamed.
 - **Sync has no handshake.** Ciphertext travels as `secret/<ref>.enc` in the
   vault, so a ref is also a file path two machines must agree on without talking
   ([Secrets Cross Machines Only as Ciphertext](secrets-cross-machines-only-as-ciphertext.md));
@@ -79,21 +79,19 @@ The lifecycle is kept whole around the ref:
   and citing a ref from a new destination waits for an approval
   ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 
-Refs are **minted opaque**: `provider/<uuid4 hex>/key` in the backend
-(`application/provider/service.py`), `<kind>/<uuid4 hex>/<logical key>` for
-`channel` and `mcp_server` in the frontend (`lib/secretRef.ts`), one per
-secret. A rotation re-encrypts under the same ref, so nothing that cites it
-changes. A ref is a file name in the vault (`secret/<ref>.enc`, or
-`local/secret/<ref>.enc` for a ref true of one machine), which is why it must
-be stable and free of the resource's name.
+Refs mean nothing to the store, but a resource's own ref is named after it:
+`<kind>/<name>/<slot>` (`mcp_server/confluence/CONFLUENCE_PERSONAL_TOKEN`,
+`provider/agnes/key`), and moves when a channel or provider is renamed
+([A Resource's Secret Is Named After the Resource and Its Slot](a-resources-secret-is-named-after-the-resource-and-its-slot.md)).
+A rotation re-encrypts under the same ref, so nothing that cites it changes. A
+ref is a file name in the vault (`secret/<ref>.enc`, or `local/secret/<ref>.enc`
+for a ref true of one machine).
 
 Pros: the config is safe to show, export, diff and sync; one store and one
-resolver for every kind; rotation touches only the store; rename touches no
-secret.
+resolver for every kind; rotation touches only the store.
 
 Cons: two things to keep consistent (the citation and the row), which is why
-delete is guarded from both sides; a ref is not self-describing beyond its
-trailing logical key; a resource can be registered citing a ref the store does
+delete is guarded from both sides; a resource can be registered citing a ref the store does
 not yet hold, which `coffer secret list` reports as missing.
 
 It wins because it makes "no plaintext outside the store" one claim about one
@@ -160,31 +158,14 @@ per-kind hook to carry each.
 
 Lost: one store is one thing to verify.
 
-### Option F — Refs derived from the resource's name (the earlier convention)
-
-Mint `channel/<name>/<secret>` or `<name>.<ENV>` so a ref is readable at a
-glance.
-
-Pros: human-readable; no minting step.
-
-Cons: the name becomes a key. Renaming must move the secret in the store in an
-order that never lets a live agent see it missing; a user-typed ref like
-`smart.TOKEN` is indistinguishable from a minted one, so cleanup could delete a
-secret the user shared deliberately; and on sync a move is a delete plus an
-unrelated add over files neither side can read to compare.
-
-Lost once rename became universal: refs that earlier builds derived from a
-name were rewritten to `<kind>/<uuid5(old ref)>/<logical key>`, derived rather
-than random so two machines migrating independently computed the same new ref
-and the move crossed the remote as one change on each side.
-
 ## Decision
 
 Resource configuration carries opaque secret references and never secret
 values; each kind declares where its refs live; the encrypted store is the only
 holder of a secret; resolution happens only at spawn, header injection or
-adapter start, and only into a destination a person has approved. Refs are
-minted opaque, per secret, and never derived from a mutable name. A secret
+adapter start, and only into a destination a person has approved. A
+resource's own ref is named after the resource and its slot, and moves with a
+rename. A secret
 cannot be deleted while cited, and a deleted resource releases what nothing
 else cites.
 

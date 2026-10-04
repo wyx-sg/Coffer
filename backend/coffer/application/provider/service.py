@@ -20,7 +20,6 @@ import asyncio
 import contextlib
 from collections.abc import Callable
 from typing import Protocol as _Protocol
-from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.delete_ops import delete as _delete_op
@@ -53,6 +52,7 @@ from coffer.domain.provider.errors import ProviderSecretSourceInvalid
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretMissing
+from coffer.domain.secrets import resource_secret_ref
 
 KIND = "provider"
 
@@ -66,6 +66,7 @@ _Rows = list[Resource]
 
 class _SecretStore(_Protocol):
     def get(self, ref: str) -> str | None: ...
+    def exists(self, ref: str) -> bool: ...
     def set(self, ref: str, value: str) -> None: ...
     def delete(self, ref: str) -> None: ...
 
@@ -128,16 +129,20 @@ class ProviderService:
 
     # --- helpers -------------------------------------------------------------
 
-    @staticmethod
-    def _mint_ref() -> str:
-        """A fresh vault address for a profile created with an inline secret.
-
-        Deliberately opaque: a ref is an ADDRESS, and one derived from the
-        connection's name would make the name a key, so a rename would have to
-        move the secret. Nothing reads the ref's shape; ownership is decided by
-        citation (``release_orphaned_secrets``).
-        """
-        return f"provider/{uuid4().hex}/key"
+    async def _mint_ref(self, name: str) -> str:
+        """A fresh vault address for a profile created with an inline secret:
+        ``provider/<name>/key``, with ``-2``, ``-3``… on the name while the
+        ref is stored or cited by something (spec secret "Name a resource's
+        secret after the resource and its slot"). Renaming the connection
+        moves it (``application.secret.ref_names``); ownership is decided by
+        citation (``release_orphaned_secrets``)."""
+        cited = set(await self._resources.cited_secret_refs())
+        n = 1
+        while True:
+            ref = resource_secret_ref(KIND, name if n == 1 else f"{name}-{n}", "key")
+            if ref not in cited and not await asyncio.to_thread(self._secrets.exists, ref):
+                return ref
+            n += 1
 
     @staticmethod
     def _cfg(resource: Resource) -> ProviderConfig:
@@ -161,7 +166,7 @@ class ProviderService:
         """Create a connection. A local runtime (``local_runtime``, what
         detection found at a loopback endpoint) may carry a key or none.
         Otherwise, for anthropic/openai/unknown supply EXACTLY one
-        of ``secret_value`` (stored to the vault at a freshly minted opaque ref
+        of ``secret_value`` (stored to the vault at a ref named for the connection
         — see :meth:`_mint_ref`) or ``secret_ref`` (reuse an existing vault
         entry). An ``ollama``
         connection has no key — supply neither. WHICH agents the connection
@@ -185,7 +190,7 @@ class ProviderService:
                 raise ProviderSecretSourceInvalid()
             ref = secret_ref
             if secret_value is not None:
-                ref = self._mint_ref()
+                ref = await self._mint_ref(name)
                 await asyncio.to_thread(self._secrets.set, ref, secret_value)
                 minted = True
         config = ProviderConfig(

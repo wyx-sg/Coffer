@@ -44,6 +44,9 @@ class _DictStore:
     def __init__(self) -> None:
         self._d: dict[str, str] = {}
 
+    def exists(self, ref: str) -> bool:
+        return ref in self._d
+
     def get(self, ref: str) -> str | None:
         return self._d.get(ref)
 

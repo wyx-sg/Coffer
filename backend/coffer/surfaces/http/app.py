@@ -94,6 +94,7 @@ from coffer.surfaces.http.reconcile_wiring import (
     start_reconciler,
     wire_attention,
 )
+from coffer.surfaces.http.ref_names_wiring import wire_ref_names
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.secret_boundary_wiring import (
     remember_destination_sources,
@@ -249,6 +250,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Every kind has registered its secret destinations: the approval refresh
     # reads them from here on.
     remember_destination_sources(resource_svc, audit)
+    # Name each resource's own secret after it, and keep doing so on a rename.
+    # Before the boot pass, so what it converges already cites the new refs.
+    ref_mover = wire_ref_names(resource_svc, secret_store, audit)
+    await ref_mover.normalise()
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.

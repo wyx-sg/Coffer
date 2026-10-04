@@ -151,6 +151,8 @@ shape is the framework's):
 | `master_key_exported`  | `{path, fingerprint}` — the desktop app's key backup |
 | `secret_resolved`      | `{name, argv0, cwd}` — one `coffer run` resolve, never the rest of argv |
 | `secret_approval_requested` / `_approved` / `_rejected` | `{approval_id, op, ref}` |
+| `secret_imported`      | `{source, resource, key, name or ref, path or field}` — one value the plaintext import moved |
+| `secret_renamed`       | `{from, to, kind, resource}` — a resource's secret moved to its name |
 
 No payload carries a value (see "Keep secret values out of secret audit
 events"). `secret_deleted` is written both by the delete route and by the

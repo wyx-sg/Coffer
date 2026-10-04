@@ -221,6 +221,7 @@
     "secret_deleted",
     "secret_imported",
     "secret_protection_enabled",
+    "secret_renamed",
     "secret_resolved",
     "secret_revealed",
     "secret_set",

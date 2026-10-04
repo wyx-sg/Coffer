@@ -27,7 +27,7 @@ import builtins
 import inspect
 import logging
 import uuid
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -82,6 +82,20 @@ class ResourceService:
         self._audit = audit
         self._secrets = secrets
         self._bindings = bindings
+        self._after_rename: Callable[[Resource, str], Awaitable[None]] | None = None
+
+    def set_after_rename(self, callback: Callable[[Resource, str], Awaitable[None]] | None) -> None:
+        """Install the post-rename seam: called with the renamed resource and its
+        OLD name once the new name is written. A pre-write kind hook cannot do
+        what follows a rename that rewrites the stored resource (moving the
+        secrets named after the old name, spec secret "Name a resource's secret
+        after the resource and its slot")."""
+        self._after_rename = callback
+
+    def secret_slots(self, resource: Resource) -> dict[str, str]:
+        """``{slot key: ref}`` for the secrets ``resource`` cites, by its kind's extractor."""
+        kind_def = self._kinds.get(resource.kind)
+        return {} if kind_def is None else resource_kind_ops.secret_refs(kind_def, resource.config)
 
     def set_binding_settler(self, settler: BindingSettlerPort | None) -> None:
         """Install the post-register seam, once every kind has declared where

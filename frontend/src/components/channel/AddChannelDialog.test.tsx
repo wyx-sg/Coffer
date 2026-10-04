@@ -158,9 +158,8 @@ function renderSeatalk() {
 /**
  * The ref of the n-th `/secrets` write, read back off the mock.
  *
- * A ref is minted opaque — `channel/<uuid4 hex>/<secret>` — so no test can name
- * the value it expects, and the thing worth asserting was never the value: it
- * is that the secret write and the config that follows it agree on ONE address.
+ * A ref is `channel/<name>/<secret>`, but the thing worth asserting is not
+ * the value: it is that the secret write and the config that follows it agree on ONE address.
  * Reading it back and reusing it is what makes that agreement the assertion
  * rather than two independent guesses.
  */
@@ -176,8 +175,7 @@ const failure = (code: string, message: string) => ({
   response: new Response(null, { status: 422 }),
 });
 
-const refFor = (secret: string) =>
-  expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
+const refFor = (secret: string) => expect.stringMatching(new RegExp(`^channel/(tg|st)/${secret}$`));
 
 beforeEach(() => {
   pairing.people = [];

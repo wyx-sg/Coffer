@@ -9,7 +9,9 @@ This module owns the move's *order*, not the detection or the file I/O
 * **a skill's value** becomes a standalone ``secret/<name>`` and its file is
   rewritten to cite it; a file that cannot be rewritten keeps its values and
   its findings come back skipped as ``stored``;
-* **a server's value** becomes a ref of the server's own and the server's
+* **a server's value** becomes a ref named for the server and the variable
+  (``mcp_server/<server>/<KEY>``, spec secret "Name a resource's secret after
+  the resource and its slot") and the server's
   config is changed through the resource service (``update_config``), so the
   change is validated, audited and reconciled like any edit. If that fails,
   the refs just written are deleted again: nothing is left half-moved.
@@ -23,11 +25,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import dataclasses
-import uuid
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Collection, Iterable
 from typing import Any, Protocol
 
-from coffer.domain.secrets import secret_ref
+from coffer.domain.secrets import resource_secret_ref, secret_ref
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -112,6 +113,18 @@ class SecretStore(Protocol):
 UpdateConfig = Callable[[str, dict[str, Any]], Awaitable[object]]
 #: ``(path, hits, names)`` — replace each hit's value with its reference.
 RewriteFile = Callable[[str, list[Hit], dict[str, str]], None]
+#: Every ref some resource cites right now.
+CitedRefs = Callable[[], Awaitable[Collection[str]]]
+
+
+def _free_ref(kind: str, name: str, slot: str, taken: Callable[[str], bool]) -> str:
+    """``<kind>/<name>/<slot>``, or with ``-2``, ``-3``… on the name while ``taken``."""
+    n = 1
+    while True:
+        ref = resource_secret_ref(kind, name if n == 1 else f"{name}-{n}", slot)
+        if not taken(ref):
+            return ref
+        n += 1
 
 
 def _put_standalone(store: SecretStore, name: str, value: str) -> bool:
@@ -197,9 +210,22 @@ async def _move_server(
     hits: list[Hit],
     store: SecretStore,
     update_config: UpdateConfig,
+    cited: CitedRefs | None,
 ) -> tuple[list[Moved], list[Skipped], list[dict[str, str]]]:
     first = hits[0].finding
-    refs = {h.finding.id: f"mcp_server/{uuid.uuid4().hex}/{h.finding.key}" for h in hits}
+    in_use = set(await cited()) if cited is not None else set()
+
+    def taken(ref: str) -> bool:
+        try:
+            return ref in in_use or store.peek(ref) is not None
+        except Exception:
+            return True  # held, if unreadable
+
+    refs: dict[str, str] = {}
+    for h in hits:
+        ref = _free_ref("mcp_server", first.resource, h.finding.key, taken)
+        refs[h.finding.id] = ref
+        in_use.add(ref)
     written: list[str] = []
 
     def skip_all(why: str) -> tuple[list[Moved], list[Skipped], list[dict[str, str]]]:
@@ -233,6 +259,7 @@ async def move(
     store: SecretStore,
     rewrite: RewriteFile,
     update_config: UpdateConfig,
+    cited: CitedRefs | None = None,
     dry_run: bool = False,
 ) -> ImportResult:
     """Move the chosen findings (all, when ``ids`` is None) into the store.
@@ -255,7 +282,7 @@ async def move(
                 Moved(h.finding.id, "mcp_server", h.finding.resource, None, None) for h in group
             ]
             continue
-        m, s, a = await _move_server(uid, group, store, update_config)
+        m, s, a = await _move_server(uid, group, store, update_config, cited)
         moved += m
         skipped += s
         stored += a

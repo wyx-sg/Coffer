@@ -15,11 +15,11 @@ import {
 import type { ParsedEnvVar } from "./pasteTypes";
 
 /** The name a ref is called in the picker: a Secrets-page secret by its name, a
- *  ref Coffer minted for the server (`mcp_server/<uid>/<KEY>`) by its key. */
+ *  ref Coffer minted for the server (`mcp_server/<name>/<KEY>`) by its key. */
 function refLabel(ref: string): string {
   const named = secretNameOf(ref);
   if (named) return named;
-  const minted = /^mcp_server\/[0-9a-f]{32}\/(.+)$/.exec(ref);
+  const minted = /^mcp_server\/[^/]+\/(.+)$/.exec(ref);
   return minted ? minted[1] : ref;
 }
 

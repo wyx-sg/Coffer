@@ -30,15 +30,11 @@ const AGENT_UID = "u-8f31c0a2";
  * A secret ref, asserted as a SHAPE and never as a literal.
  *
  * A ref no longer says anything about the channel — it is
- * `channel/<uuid4 hex>/<secret>`, minted fresh — so a test cannot name the
- * value it expects, and should not want to: what the planner owes its caller
- * is that the config and the secret write agree on one opaque address whose
- * readable tail says which secret it holds. The fixture channels are still
- * called `tg` and `st`, and every assertion below goes on to check the name is
- * nowhere in the ref, which is the regression this shape exists to prevent.
+ * `channel/<name>/<secret>`, named after the channel being saved. What the
+ * planner owes its caller is that the config and the secret write agree on one
+ * address, named for the channel and the slot it fills.
  */
-const refFor = (secret: string) =>
-  expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
+const refFor = (secret: string) => expect.stringMatching(new RegExp(`^channel/(tg|st)/${secret}$`));
 
 const telegram = {
   channel_type: "telegram" as const,
@@ -57,10 +53,9 @@ describe("planChannel", () => {
       default_agent: AGENT_UID,
       runs_on: HERE,
     });
-    // The write lands where the config points, and the channel's name is not
-    // part of the address.
+    // The write lands where the config points.
     expect(plan.secrets).toEqual([{ ref: plan.config.bot_token_ref, value: "123:abc" }]);
-    expect(plan.config.bot_token_ref).not.toContain("/tg/");
+    expect(plan.config.bot_token_ref).toBe("channel/tg/bot-token");
   });
 
   test("seatalk: the app secret goes to the store by ref, the app id stays in the config", () => {

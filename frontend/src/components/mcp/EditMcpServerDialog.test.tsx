@@ -27,8 +27,8 @@ const getApiClientMock = vi.mocked(getApiClient);
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
-/** The ref Coffer minted for this server's key, as an older server holds it. */
-const OWN = "mcp_server/0123456789abcdef0123456789abcdef/GITHUB_TOKEN";
+/** The ref Coffer minted for this server's key, . */
+const OWN = "mcp_server/gh/GITHUB_TOKEN";
 
 const stdioResource: ResourceOut = {
   uid: "u-github",

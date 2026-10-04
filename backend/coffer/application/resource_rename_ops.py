@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+import logging
 from typing import TYPE_CHECKING
 
 from coffer.application.resource_actor import acting_as
@@ -25,6 +26,9 @@ from coffer.domain.resource import Kind, Resource
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
+
+
+_logger = logging.getLogger(__name__)
 
 
 async def _fire(kind_def: Kind, resource: Resource, new_name: str) -> None:
@@ -96,4 +100,10 @@ async def rename(
         actor=actor,
         details={"from": before.name, "to": new_name},
     )
+    if service._after_rename is not None:
+        try:
+            await service._after_rename(renamed, before.name)
+        except Exception:
+            # The rename is done; what follows it must not undo it.
+            _logger.exception("resource.after_rename_failed", extra={"uid": uid})
     return renamed

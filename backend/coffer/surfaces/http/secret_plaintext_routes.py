@@ -92,12 +92,16 @@ async def import_plaintext(
     async def update_config(uid: str, config: dict[str, Any]) -> object:
         return await resources.update_config(uid, config, actor)
 
+    async def cited() -> set[str]:
+        return set(await resources.cited_secret_refs())
+
     result = await plaintext_move.move(
         hits,
         body.ids,
         store=store,
         rewrite=plaintext_findings.rewrite_file,
         update_config=update_config,
+        cited=cited,
         dry_run=body.dry_run,
     )
     for details in result.stored:

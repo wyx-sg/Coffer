@@ -1,59 +1,51 @@
 // frontend/src/lib/secretRef.ts
 // Where a secret ref is minted, for the two kinds that mint one from the
-// browser (`channel` and `mcp_server`). The backend's `provider` kind mints its
-// own in `application/provider/service.py::_mint_ref`; this is the same shape,
-// spelled once so the three call sites here cannot drift from each other.
+// browser (`channel` and `mcp_server`). The backend's `domain/secrets.py` has
+// the same rule for `provider` and for plaintext import; this is its mirror,
+// spelled once so the call sites here cannot drift from each other.
 //
-// A ref is an ADDRESS, not a description: nothing in it comes from the
-// resource's name, because rename is a field on `PATCH /resources/{uid}` for
-// every kind (docs/decisions/identity-is-the-uid-inside-the-file.md) and a
-// name-derived ref would make the name a key into the encrypted store.
+// A ref is named after the resource and the slot it fills:
+// `<kind>/<name segment>/<slot>`, so `coffer secret list` reads as whose secret
+// each one is. The name segment is the resource's name with every character
+// outside `[A-Za-z0-9_.-]` replaced by `-` and leading dots stripped (never
+// empty — it falls back to `x`).
 //
-// The trailing logical key (`bot-token`, `SMART_PAT`) is not derived from
-// anything mutable, and it is the only thing that makes a ref readable in
-// `coffer secret list`.
-
-/** A uuid4 as 32 hex characters, the spelling `machine_id` and provider refs
- *  already use.
- *
- *  Built from `getRandomValues` rather than `crypto.randomUUID`, which is only
- *  defined in a secure context — Coffer's UI is normally on http://localhost
- *  (which counts), but a vault reached over a LAN address is plain http and
- *  would hand us `undefined` at the exact moment a user is storing a secret.
- *  The two masked bytes are the version and variant bits, so the value really
- *  is a v4 UUID and not merely 16 random bytes wearing its shape. */
-function uuid4Hex(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
+// A name is only a label the ref was minted from, never a key to look it up
+// by: the config cites the ref, so nothing resolves a secret from the name.
+// MCP server names are fixed, so their refs never move; renaming a channel or
+// provider moves its refs server-side, in the same change as the rename.
 
 /** The kinds that mint their own refs from this file. */
 export type SecretRefKind = "channel" | "mcp_server";
 
-/**
- * A fresh vault address for one secret: `<kind>/<uuid4 hex>/<logical key>`.
- *
- * Fresh per SECRET, not per resource — the same rule provider follows. A
- * rotation must therefore reuse the ref already in the config rather than call
- * this again, or the secret moves and crosses the sync remote as a delete plus
- * an unrelated add.
- */
-export function mintSecretRef(kind: SecretRefKind, logicalKey: string): string {
-  return `${kind}/${uuid4Hex()}/${logicalKey}`;
+/** A resource name as one ref path segment. Mirrors `ref_segment` in
+ *  `domain/secrets.py`. */
+export function refSegment(name: string): string {
+  const segment = name.replace(/[^A-Za-z0-9_.-]/g, "-").replace(/^\.+/, "");
+  return segment === "" ? "x" : segment;
 }
 
 /**
- * Whether `ref` is one Coffer minted for `kind` — what the MCP edit dialog
- * reads to decide which no-longer-cited refs it may delete.
+ * A vault address for one secret: `<kind>/<name segment>/<slot>`.
  *
- * A minted ref carries a uuid nothing else can have produced, so matching the
- * shape means Coffer created this address for one secret of this kind. A ref
- * the user typed themselves, or pasted from elsewhere to share one secret
- * between two servers, cannot match and is never deleted.
+ * One per SECRET, not per resource. A rotation must reuse the ref already in
+ * the config rather than call this again, or the secret moves and crosses the
+ * sync remote as a delete plus an unrelated add.
  */
-export function isMintedSecretRef(kind: SecretRefKind, ref: string): boolean {
-  return new RegExp(`^${kind}/[0-9a-f]{32}/`).test(ref);
+export function mintSecretRef(kind: SecretRefKind, resourceName: string, slot: string): string {
+  return `${kind}/${refSegment(resourceName)}/${slot}`;
+}
+
+/**
+ * Whether `ref` is named for THIS resource — what the MCP edit dialog reads to
+ * decide which no-longer-cited refs it may delete.
+ *
+ * It matches the resource's own segment, with the `-<n>` suffix the backend
+ * adds when two names collapse to one segment. A ref the user typed themselves,
+ * or pasted from elsewhere to share one secret between two servers, names some
+ * other resource and is never deleted.
+ */
+export function isOwnRef(kind: SecretRefKind, resourceName: string, ref: string): boolean {
+  const segment = refSegment(resourceName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${kind}/${segment}(-\\d+)?/`).test(ref);
 }

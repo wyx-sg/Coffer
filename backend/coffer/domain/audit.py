@@ -51,6 +51,7 @@ class AuditEventType(StrEnum):
     SECRET_REVEALED = "secret_revealed"
     SECRET_RESOLVED = "secret_resolved"
     SECRET_IMPORTED = "secret_imported"
+    SECRET_RENAMED = "secret_renamed"
     SECRET_APPROVAL_REQUESTED = "secret_approval_requested"
     SECRET_APPROVAL_APPROVED = "secret_approval_approved"
     SECRET_APPROVAL_REJECTED = "secret_approval_rejected"

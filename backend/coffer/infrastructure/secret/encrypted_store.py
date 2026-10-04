@@ -215,6 +215,17 @@ class EncryptedSecretStore:
                 hook(ref)
         return removed
 
+    def carry_records(self, old: str, new: str) -> None:
+        """Give ``new`` the creation time and last-used stamp this machine
+        holds for ``old``, for a value moved to a new name."""
+
+        def carry(records: dict[str, object]) -> None:
+            if old in records:
+                records[new] = records[old]
+
+        self._times.update(carry)
+        self._used.update(carry)
+
     def created_at(self, ref: str) -> datetime | None:
         """When this machine first stored ``ref``; None when it is not stored
         or arrived from elsewhere (see the module docstring)."""

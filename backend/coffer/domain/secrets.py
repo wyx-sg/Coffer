@@ -75,6 +75,55 @@ def cited_secret_names(text: str) -> set[str]:
     return set(_URI_RE.findall(text))
 
 
+#: A channel's secret fields and the slot name each one fills in a ref.
+CHANNEL_SECRET_SLOTS: dict[str, str] = {
+    "bot_token_ref": "bot-token",
+    "app_secret_ref": "app-secret",
+}
+#: The kinds that own secrets of their own and so name them (spec secret "Name a
+#: resource's secret after the resource and its slot").
+NAMED_SECRET_KINDS: tuple[str, ...] = ("mcp_server", "channel", "provider")
+
+_SEGMENT_UNSAFE = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def ref_segment(name: str) -> str:
+    """A resource's name as one ref segment: every character outside
+    ``[A-Za-z0-9_.-]`` becomes ``-``, leading dots are dropped, never empty."""
+    return _SEGMENT_UNSAFE.sub("-", name).lstrip(".") or "x"
+
+
+def resource_secret_ref(kind: str, name: str, slot: str) -> str:
+    """The ref a resource's own secret is named: ``<kind>/<name>/<slot>``."""
+    return f"{kind}/{ref_segment(name)}/{slot}"
+
+
+def slot_of(kind: str, key: str) -> str | None:
+    """The slot name a kind's secret-ref key fills, or None for a kind whose
+    secrets are not named after it. ``key`` is the extractor's key: an MCP
+    server's env var or header name, a channel field, a provider's ``secret_ref``."""
+    if kind == "mcp_server":
+        return key
+    if kind == "channel":
+        return CHANNEL_SECRET_SLOTS.get(key)
+    if kind == "provider":
+        return "key"
+    return None
+
+
+def is_named_for(ref: str, kind: str, name: str, slot: str) -> bool:
+    """Whether ``ref`` is ``resource_secret_ref(kind, name, slot)``, allowing the
+    ``-2``, ``-3``… a taken name takes on its name segment."""
+    parts = ref.split("/")
+    if len(parts) != 3 or parts[0] != kind or parts[2] != slot:
+        return False
+    segment = ref_segment(name)
+    if parts[1] == segment:
+        return True
+    head, _, tail = parts[1].rpartition("-")
+    return head == segment and tail.isdigit() and int(tail) >= 2
+
+
 def default_env_var(name: str) -> str:
     """The variable ``coffer run --secret NAME`` sets: upper-cased, ``-``/``.`` → ``_``."""
     return re.sub(r"[-.]", "_", name).upper()

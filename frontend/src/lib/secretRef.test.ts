@@ -1,59 +1,59 @@
 // frontend/src/lib/secretRef.test.ts
 //
-// The shape of a secret ref, and the ownership test that reads it back:
-// nothing mutable gets into an address.
+// The shape of a secret ref, and the ownership test that reads it back.
 import { describe, expect, test } from "vitest";
 
-import { isMintedSecretRef, mintSecretRef } from "./secretRef";
+import { isOwnRef, mintSecretRef, refSegment } from "./secretRef";
 
-describe("mintSecretRef", () => {
-  test("is `<kind>/<uuid4 hex>/<logical key>`", () => {
-    expect(mintSecretRef("channel", "bot-token")).toMatch(/^channel\/[0-9a-f]{32}\/bot-token$/);
-    expect(mintSecretRef("mcp_server", "GITHUB_TOKEN")).toMatch(
-      /^mcp_server\/[0-9a-f]{32}\/GITHUB_TOKEN$/,
-    );
+describe("refSegment", () => {
+  test("keeps [A-Za-z0-9_.-] and replaces everything else with a dash", () => {
+    expect(refSegment("my-bot_1.2")).toBe("my-bot_1.2");
+    expect(refSegment("My Bot/é")).toBe("My-Bot--");
   });
 
-  test("really is a version-4 uuid, not sixteen random bytes wearing its shape", () => {
-    const body = mintSecretRef("channel", "bot-token").split("/")[1];
-    expect(body[12]).toBe("4");
-    expect("89ab").toContain(body[16]);
-  });
-
-  test("mints a fresh address every call", () => {
-    // Fresh per SECRET is the rule provider follows, and it is why a rotation
-    // has to reuse the ref already in the config rather than call this again.
-    const many = new Set(Array.from({ length: 50 }, () => mintSecretRef("channel", "x")));
-    expect(many.size).toBe(50);
-  });
-
-  test("the only thing a caller puts in is the logical key", () => {
-    // There is no name parameter to pass, which is the point: nothing a user
-    // can rename can reach the address. The tail is the secret's own role.
-    expect(mintSecretRef("channel", "signing-secret").endsWith("/signing-secret")).toBe(true);
+  test("strips leading dots and never comes back empty", () => {
+    expect(refSegment("..hidden")).toBe("hidden");
+    expect(refSegment("...")).toBe("x");
+    expect(refSegment("")).toBe("x");
   });
 });
 
-describe("isMintedSecretRef", () => {
-  test("recognises what it minted, for that kind only", () => {
-    const ref = mintSecretRef("mcp_server", "TOKEN");
-    expect(isMintedSecretRef("mcp_server", ref)).toBe(true);
-    // Kinds do not claim each other's addresses — the MCP edit dialog's orphan
-    // cleanup would otherwise delete a channel's secret.
-    expect(isMintedSecretRef("channel", ref)).toBe(false);
+describe("mintSecretRef", () => {
+  test("is `<kind>/<name segment>/<slot>`", () => {
+    expect(mintSecretRef("channel", "tg", "bot-token")).toBe("channel/tg/bot-token");
+    expect(mintSecretRef("mcp_server", "my github", "GITHUB_TOKEN")).toBe(
+      "mcp_server/my-github/GITHUB_TOKEN",
+    );
+  });
+});
+
+describe("isOwnRef", () => {
+  test("recognises a ref named for this resource, for that kind only", () => {
+    const ref = mintSecretRef("mcp_server", "github", "TOKEN");
+    expect(isOwnRef("mcp_server", "github", ref)).toBe(true);
+    expect(isOwnRef("channel", "github", ref)).toBe(false);
+    expect(isOwnRef("mcp_server", "gitlab", ref)).toBe(false);
   });
 
-  test("never claims a ref a person wrote", () => {
-    // These are the refs the cleanup must leave alone: hand-written ones, and
-    // refs of other shapes.
+  test("accepts the -<n> collision suffix and normalised names", () => {
+    expect(isOwnRef("mcp_server", "github", "mcp_server/github-2/TOKEN")).toBe(true);
+    expect(isOwnRef("mcp_server", "my github", "mcp_server/my-github/TOKEN")).toBe(true);
+  });
+
+  test("never claims a ref a person wrote or another resource owns", () => {
     for (const foreign of [
       "smart.SMART_PAT",
       "my-token",
-      "provider/1b2c3d4e5f60718293a4b5c6d7e8f900/key",
-      "mcp_server/NOT-HEX-0000000000000000000000/TOKEN",
-      "mcp_server/1b2c3d4e5f60718293a4b5c6d7e8f900",
+      "provider/github/key",
+      "mcp_server/github-extra/TOKEN",
+      "mcp_server/github",
     ]) {
-      expect(isMintedSecretRef("mcp_server", foreign)).toBe(false);
+      expect(isOwnRef("mcp_server", "github", foreign)).toBe(false);
     }
+  });
+
+  test("escapes regex characters in the name", () => {
+    expect(isOwnRef("mcp_server", "a.b", "mcp_server/axb/TOKEN")).toBe(false);
+    expect(isOwnRef("mcp_server", "a.b", "mcp_server/a.b/TOKEN")).toBe(true);
   });
 });

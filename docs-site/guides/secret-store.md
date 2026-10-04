@@ -39,7 +39,7 @@ coffer secret set github/token
 
 An empty value is rejected. `--value <secret>` also works but prints a warning, because the value lands in your shell history.
 
-Most of the time you do not create refs by hand. The dialogs that ask for a secret — **Add server** on the MCP servers page, the MCP server **Edit** dialog's secrets, **Add model provider**, a channel's token field, the sync remote's push secret — write the secret to the store first and save only the generated ref (for example `mcp_server/<uuid>/GITHUB_TOKEN` or `provider/<uuid>/key`). If the registration that follows fails, the just-written secret is deleted again.
+Most of the time you do not create refs by hand. The dialogs that ask for a secret — **Add server** on the MCP servers page, the MCP server **Edit** dialog's secrets, **Add model provider**, a channel's token field, the sync remote's push secret — write the secret to the store first and save only the ref, named after the resource and the slot it fills: `mcp_server/github/GITHUB_TOKEN`, `channel/seatalk/app-secret`, `provider/agnes/key`. If the registration that follows fails, the just-written secret is deleted again. Renaming a channel or a model provider moves the secrets it owns to the new name (MCP server names are fixed). A secret two resources share, and a standalone `secret/<name>`, keep the name they have. When the daemon starts, it gives every secret a resource owns that is still named another way — an older `mcp_server/<32 hex characters>/…` or `postman.AUTHORIZATION` — its name, moving the value, the citing config and this Mac's approval along with it; each move is in Activity as **Renamed secret**.
 
 ## Cite a secret
 

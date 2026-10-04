@@ -154,10 +154,10 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
         # machines converging this vault agree on which resource is which.
         assert len(body["uid"]) == 32 and int(body["uid"], 16) >= 0
         assert body["uid"] != body["name"] and body["name"] == "acme"
-        # The minted ref is opaque — the connection's name must not be
-        # recoverable from it, or the name is a key again.
+        # The minted ref is named for the connection and its slot (spec secret
+        # "Name a resource's secret after the resource and its slot").
         ref = body["secret_ref"]
-        assert ref.startswith("provider/") and "acme" not in ref
+        assert ref == "provider/acme/key"
         # the secret landed in the vault under that ref
         ex = c.get(f"/api/v1/secrets/{ref}/exists")
         assert ex.status_code == 200 and ex.json()["present"] is True
@@ -987,10 +987,12 @@ def test_rename_keeps_the_uid_secret_and_projection(tmp_path, monkeypatch):
         assert _uids_named(c, "acme") == []
         assert _uids_named(c, "acme-prod") == [uid]
 
-        # The vault entry did not move, because it never named the connection:
-        # the ref is an address, so a rename has nothing to do to it.
-        assert _ref_of(c, uid) == ref_before
-        assert _key_present(c, ref_before)
+        # The key's ref is named for the connection, so it moved with the name
+        # (spec secret "Name a resource's secret after the resource and its slot").
+        assert ref_before == "provider/acme/key"
+        assert _ref_of(c, uid) == "provider/acme-prod/key"
+        assert _key_present(c, "provider/acme-prod/key")
+        assert not _key_present(c, ref_before)
 
         # And the projection was not rewritten AT ALL — the helper line reads
         # exactly as it did before the rename, because it cites the uid. The

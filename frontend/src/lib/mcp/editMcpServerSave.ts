@@ -7,10 +7,9 @@
 // never stored, and brand-new refs are rolled back when that PATCH fails so a
 // rejected edit never orphans a secret.
 //
-// The PATCH is addressed to the server's uid, and so are the secret refs:
-// `mcp_server/<uuid4 hex>/<key>`, minted by `@/lib/secretRef`. Nothing here
-// reads the server's NAME: a ref built from the name would make the name a key
-// into the encrypted store, and rename is a field on `PATCH /resources/{uid}`.
+// The PATCH is addressed to the server's uid. The secret refs Coffer minted
+// for it are named after the server, `mcp_server/<name>/<key>`
+// (`@/lib/secretRef`); an MCP server's name is fixed, so they never move.
 //
 // Which row cites which ref is `serverRows.ts`; this file does the writes in order.
 import type { TFunction } from "i18next";
@@ -20,7 +19,7 @@ import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import type { components } from "@/lib/api/types";
 import { persistNewSecrets, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
-import { isMintedSecretRef } from "@/lib/secretRef";
+import { isOwnRef } from "@/lib/secretRef";
 import { keptRows, plainMapOfRows, secretRefsForSave, secretRefsOf } from "@/lib/mcp/serverRows";
 import { withTimeouts, type Timeouts } from "@/lib/mcp/serverTimeouts";
 
@@ -177,12 +176,12 @@ export async function saveMcpServerEdit({
   // Clean up secret store entries this server no longer references — but
   // only ones Coffer minted for it, never a Secrets-page secret or a ref the
   // user wrote by hand to share one secret between two servers. Ownership is
-  // the ref's SHAPE (a minted ref carries a uuid nothing else produced), not
-  // the server's name. A failed cleanup must not roll back the PATCH above.
+  // the ref being named for this server. A failed cleanup must not roll back
+  // the PATCH above.
   const newRefs = new Set(Object.values(secretRefs));
   const orphanWarnings: string[] = [];
   for (const ref of Object.values(secretRefsOf(resource.config))) {
-    if (!newRefs.has(ref) && isMintedSecretRef("mcp_server", ref)) {
+    if (!newRefs.has(ref) && isOwnRef("mcp_server", resource.name, ref)) {
       try {
         await secretsApi.remove(ref);
       } catch (e) {
