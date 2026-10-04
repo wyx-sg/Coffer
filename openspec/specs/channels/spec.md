@@ -201,13 +201,12 @@ Inbound text from the paired peer MUST route to the peer's active conversation,
 creating one on first use via the turn platform's standard
 conversation-creation path (default agent validated by the agent registry). The
 channel layer MUST reach agents only through the turn platform's seams:
-conversation service, turn orchestrator (spec `chat`). The conversation is an
-ordinary one, recorded in the vault with full history. When the active
+conversation service, turn orchestrator (spec `chat`). The conversation is an ordinary one: an index row on the turn platform whose native session holds the history, and no message of it is stored by Coffer. When the active
 conversation has been deleted, the peer's next message creates a fresh
 conversation with the thread's agent — its sticky agent (chosen with `/new <agent>`, see "Switch the agent with /new") while that
-agent is still inside the channel's scope, else the channel's default agent — opened with the thread's other remembered settings (see "Keep a chat's agent, model and directory across its conversations"); when the daemon restarts mid-turn, the turn
-platform's startup sweep marks the orphaned turn failed and the channel
-conversation simply continues on the next message.
+agent is still inside the channel's scope, else the channel's default agent — opened with the thread's other remembered settings (see "Keep a chat's agent, model and directory across its conversations"); when the daemon restarts mid-turn, the orphaned turn is gone and the channel
+conversation simply continues on the next message, resuming the agent's own session. A message for a session that is open in a terminal is
+refused as [chat](../chat/spec.md) "Run a session in one place at a time" says.
 
 #### Scenario: a paired message gets an agent reply
 - **GIVEN** a paired channel whose default agent is available
@@ -217,8 +216,8 @@ conversation simply continues on the next message.
 
 #### Scenario: the channel conversation is a normal chat conversation
 - **GIVEN** a channel conversation created by first contact
-- **WHEN** the user opens the turn platform's conversation APIs
-- **THEN** the conversation and its messages are listed like any other
+- **WHEN** the user opens the Conversations page
+- **THEN** the conversation is listed there like any other, with the channel's badge, and no message text is stored
 
 ### Requirement: Render replies by the adapter's declared capabilities
 Replies MUST render per channel capability — each adapter converts the agent's
@@ -288,7 +287,7 @@ card) carries no button for a direct-chat command.
 "Offer the commands as a help card") and `/del` withdraws a bot reply (see
 "Withdraw a bot reply on the owner's command"). `/stop` and `/new` take effect even while
 a turn is running; other messages join the conversation's pending queue (spec
-`chat` — the one the web shows) and run in order, a burst of them arriving as one
+`chat`) and run in order, a burst of them arriving as one
 turn (see "Take a burst of messages as one turn"). A message that joins the
 queue behind a running turn MUST be answered "⏳ Queued — runs when the current
 one finishes." Up to 10 may wait; only a message arriving while 10 already wait
@@ -559,8 +558,8 @@ the audit log by channel — the claim with the claiming sender's id. Those two 
 channel-specific audit surface, alongside the automatic resource-lifecycle audit
 the framework records. Traffic MUST NOT be audited — a notification sent and a
 turn run are neither irreversible nor invisible afterwards, and the conversation
-and its messages, readable from the Conversations page (spec `chat`) and the REST
-API, are already their record.
+(listed on the Conversations page, spec `chat`) and the agent's own session are
+already their record.
 
 #### Scenario: notifications and turns leave no channel audit entry
 - **GIVEN** a paired channel whose pairing code issue and claim are in the audit log
@@ -663,8 +662,7 @@ first line is the outcome in one sentence, because it becomes the notification;
 at most about 15 lines, anything longer under a `## Details` heading; code blocks
 under 30 lines, longer logs attached as files; diagrams and charts as PNG files,
 never as source; and, when the agent needs a yes or a choice before it goes on,
-to call `coffer__ask` (see "Ask the owner in the chat and take the answer back
-to the agent").
+to call `coffer__ask` (see "Ask the owner in the chat and take the chat's answer back to the agent").
 Concise never drops evidence — an investigation's key log lines, error messages
 and IDs are quoted verbatim — and the agent is told it cannot click permission
 or confirmation dialogs on the user's computer. Web-UI turns are unaffected —
@@ -693,13 +691,13 @@ has been deleted, or is not running, still gets the note, saying less.
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each
-attachment to a Coffer-managed media dir; the bytes never enter the chat DB (the
-persisted user message keeps the caption, or a short note when there is none).
+attachment to a Coffer-managed media dir; the bytes never enter the chat DB (Coffer stores
+no message at all; the agent's own session keeps the caption).
 For the turn, each attachment is handed to the agent adapter, which materialises
 it in its own native shape — a vision agent (Claude Code) inlines an image as a
 base64 content block it sees directly and a PDF as a document block; a
 path-native agent (Codex) and any non-vision file receive the on-disk path to
-open. This keeps history small, works for arbitrary file types, and generalises
+open. This works for arbitrary file types, and generalises
 to future modalities (a new type is a new mime, not a new schema). A sticker is
 a picture the user chose deliberately, so it is downloaded like any other
 attachment. Only a message with no text and nothing downloadable at all — a
@@ -1245,9 +1243,8 @@ group's) — so an agent asked "which group is this?" answers from the turn it w
 given instead of listing the bot's groups and inferring, and a platform tool call
 has a chat id to aim at. The block is folded in after command detection (a
 prefixed `/help` would stop being a command) and after the empty-envelope check,
-and is persisted on the user message exactly like thread context — the single
-source of truth (see "Hand inbound attachments to the turn as references") stays one
-string. It rides on **every** turn, not just a conversation's first: `/new <agent>`
+and is folded into the turn's text exactly like thread context, so it stays one
+string and the agent's own session records it. It rides on **every** turn, not just a conversation's first: `/new <agent>`
 can swap the agent between conversations of one thread (see "Drive every managed agent from one
 bot") and a resumed session would otherwise lose it. Title and sender name are
 chat-member-settable, so both are collapsed to one clipped line before they
@@ -2115,7 +2112,7 @@ recent conversations, newest first, each by title, agent and age, with the one
 in effect ticked, as a card where the transport has buttons; `/resume <n>` or a
 tap makes the n-th the thread's active conversation again, so the next message
 continues it. Only conversations this chat thread opened are offered — never one
-from the web or another chat, and a tapped value naming any other conversation
+from another chat, and a tapped value naming any other conversation
 is refused. A conversation deleted since is left out.
 
 #### Scenario: /resume lists this chat's earlier conversations
@@ -2474,67 +2471,6 @@ opens the dialog at Connect.
 - **THEN** it keeps its header and lists the platforms with what each needs
 - **AND** choosing one opens Add channel at its Connect step
 
-### Requirement: Ask the owner in the chat and take the answer back to the agent
-A question raised in a channel conversation (spec chat "Pause a turn on a question
-for the owner") MUST go out in that chat, one card per question in order: the
-context (a diff as a code block), "❓ <question>", the options — with their
-descriptions listed in the body when any has one — as up to four equal buttons,
-and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
-✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
-like every card tap. The owner's next text message in that chat or thread while
-the question is pending MUST be taken as the answer and not start or queue a
-turn. Nothing MUST be posted in the owner's name. Once the question is answered —
-in the chat or on the Conversations page — or cancelled, every card of it MUST be
-rewritten in place to "✓ Answered: <answer> · HH:MM" ("✓ Answered in Coffer:
-<answer> · HH:MM" for a web answer, "Stopped" when cancelled); where the platform
-cannot rewrite it, that line is sent as a reply. A long turn that is waiting on a
-question pings "❓ Needs you · <elapsed> — <question>" on a surface that pings.
-
-#### Scenario: a tap answers the agent without a message from the owner
-- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
-- **WHEN** the owner taps Yes
-- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
-
-#### Scenario: a text reply answers the pending question
-- **GIVEN** a pending question in the owner's Telegram chat
-- **WHEN** the owner sends "only the read replica"
-- **THEN** the agent receives that text as the answer and no new turn starts
-
-#### Scenario: an answer given in Coffer rewrites the chat card
-- **GIVEN** a pending question shown in Telegram
-- **WHEN** the owner answers Yes on the Conversations page
-- **THEN** the Telegram message reads "✓ Answered in Coffer: Yes · 11:42" and its keyboard is gone
-
-#### Scenario: a multi-select question is answered with Submit in the chat
-- **GIVEN** a SeaTalk card for a multi-select question with three options
-- **WHEN** the owner taps two options and then Submit
-- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
-
-#### Scenario: a question with described options lists them in the card
-- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
-- **WHEN** its card goes out
-- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
-
-#### Scenario: several questions go out one card at a time
-- **GIVEN** an ask of two questions in a SeaTalk chat
-- **WHEN** the owner answers the first
-- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
-
-#### Scenario: a non-owner's tap is refused
-- **GIVEN** a question card in a paired group
-- **WHEN** a member who is not the owner taps an option
-- **THEN** the group is told only the bot’s owners can use it and the question stays pending
-
-#### Scenario: stopping a turn rewrites the pending card
-- **GIVEN** a pending question card in a chat
-- **WHEN** the owner stops the turn
-- **THEN** the card reads "Stopped" with its buttons gone
-
-#### Scenario: a long turn that waits on the owner pings
-- **GIVEN** a long turn on a persisting surface
-- **WHEN** it raises a question
-- **THEN** a short message reads "❓ Needs you · <elapsed> — <question>" before the card
-
 ### Requirement: Switch the model from chat
 The owner MUST be able to choose the model from chat with one command, `/model`.
 The choice applies to the next turn of the same conversation (the model is
@@ -2598,3 +2534,83 @@ default` are the ways back to the defaults.
 - **GIVEN** a group whose defaults name an agent
 - **WHEN** the owner starts a new thread in that group
 - **THEN** that thread's conversation opens on the group's agent
+
+### Requirement: Hand inbound attachments to the turn as references
+An inbound attachment MUST reach the turn that carries it as a **reference** —
+path, mime, filename; the bytes stay in the media dir, never the chat DB. The
+reference rides the queued message to its turn, and the adapter receives it as an
+`Attachment` ([chat](../chat/spec.md) "Let the agent's own session hold the conversation");
+Coffer stores no message, so a later turn is not handed it again — the agent's own
+session holds what the agent made of it. The path stays inside the daemon: only
+the agent adapter, which must read the bytes, ever sees it. The media dir is
+bounded by the `attachments` retention policy
+([resource-framework](../resource-framework/spec.md) "Retain attachments on an adjustable policy"):
+an mtime prune on the retention cadence, 30 days by default and the user's to change (bytes are re-downloadable; no
+size cap). See
+[Channel Attachments](../../../docs/decisions/channel-attachments.md).
+
+#### Scenario: an inbound attachment reaches the turn as a reference
+- **GIVEN** a paired channel driving a turn with an image attachment
+- **WHEN** the turn starts
+- **THEN** the adapter receives an `Attachment` with the path, mime and filename — never the bytes on the wire
+- **AND** no message row records it
+
+#### Scenario: the media dir prune deletes stale files and keeps fresh ones
+- **GIVEN** the channel-media dir with one file older than the attachments window (30 days by default) and one recent
+- **WHEN** the retention sweep runs
+- **THEN** the stale file is deleted and the recent one is kept
+
+### Requirement: Ask the owner in the chat and take the chat's answer back to the agent
+A question raised in a channel conversation (spec chat "Pause a turn on a question
+for the owner") MUST go out in that chat, one card per question in order: the
+context (a diff as a code block), "❓ <question>", the options — with their
+descriptions listed in the body when any has one — as up to four equal buttons,
+and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
+✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
+like every card tap. The owner's next text message in that chat or thread while
+the question is pending MUST be taken as the answer and not start or queue a
+turn. Nothing MUST be posted in the owner's name. Once the question is answered or
+cancelled, every card of it MUST be rewritten in place to
+"✓ Answered: <answer> · HH:MM" ("Stopped" when cancelled); where the platform
+cannot rewrite it, that line is sent as a reply. A long turn that is waiting on a
+question pings "❓ Needs you · <elapsed> — <question>" on a surface that pings.
+
+#### Scenario: a tap answers the agent without a message from the owner
+- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
+- **WHEN** the owner taps Yes
+- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
+
+#### Scenario: a text reply answers the pending question
+- **GIVEN** a pending question in the owner's Telegram chat
+- **WHEN** the owner sends "only the read replica"
+- **THEN** the agent receives that text as the answer and no new turn starts
+
+#### Scenario: a multi-select question is answered with Submit in the chat
+- **GIVEN** a SeaTalk card for a multi-select question with three options
+- **WHEN** the owner taps two options and then Submit
+- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
+
+#### Scenario: a question with described options lists them in the card
+- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
+- **WHEN** its card goes out
+- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
+
+#### Scenario: several questions go out one card at a time
+- **GIVEN** an ask of two questions in a SeaTalk chat
+- **WHEN** the owner answers the first
+- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
+
+#### Scenario: a non-owner's tap is refused
+- **GIVEN** a question card in a paired group
+- **WHEN** a member who is not the owner taps an option
+- **THEN** the group is told only the bot’s owners can use it and the question stays pending
+
+#### Scenario: stopping a turn rewrites the pending card
+- **GIVEN** a pending question card in a chat
+- **WHEN** the owner stops the turn
+- **THEN** the card reads "Stopped" with its buttons gone
+
+#### Scenario: a long turn that waits on the owner pings
+- **GIVEN** a long turn on a persisting surface
+- **WHEN** it raises a question
+- **THEN** a short message reads "❓ Needs you · <elapsed> — <question>" before the card

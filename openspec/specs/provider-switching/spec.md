@@ -648,29 +648,25 @@ is on").
 
 #### Scenario: every surface offers the same models
 - **GIVEN** an agent running on a connection that curates two model ids, and an agent catalogue of its own that names different ones,
-- **WHEN** the model list is read for the Conversations page and for a channel's `/model` card,
+- **WHEN** the model list is read over `GET /api/v1/agent-providers/{agent_key}/models` and for a channel's `/model` card,
 - **THEN** both are exactly the connection's curated ids, in the user's order — the agent's own ids are absent, because the turns go to that endpoint,
 - **AND** neither read touches the network, so an unreachable endpoint cannot silently shorten either list (see "Serve one model list to every surface").
 
 ### Requirement: Choose a model from a fixed list
 Every Coffer surface that chooses a model MUST offer a fixed list with no free-text entry, always
 including the current value so it stays selectable; non-chat models are never offered, so a connection
-an agent runs on that curates models, none of them `text`, offers none. The per-conversation picker also
-always carries a **Default** option that clears the conversation's model, so the agent runs its
-projected default. A model name MUST be passed to the agent verbatim, with no validation against a list of
+an agent runs on that curates models, none of them `text`, offers none.  A model name MUST be passed to the agent verbatim, with no validation against a list of
 Coffer's own (the one narrow exception is the local model proxy, which replaces a requested model its connection
 does not curate with the agent's projected default — [Reach API-key and local connections through the local model proxy](#requirement-reach-api-key-and-local-connections-through-the-local-model-proxy)): the CLI owns that namespace, so a renamed or added model works the day it ships, and one an
 account cannot run fails where every other unusable choice fails. A model name is still raw
 passthrough everywhere the CLI accepts one. Coffer offers no reasoning-effort control on any surface: the agent runs at the effort its own configuration names.
 
 On the built-in login the Change model dialog offers no model control — those slots bind a connection's
-model — and says where the model is chosen instead (the agent's own `/model`, per conversation in the Chat
-page's picker, or with `/model` in a channel); the agent's Overview › Model still shows the model its own configuration names, read-only. The model is stored per conversation in the provider-owned `AgentConfig` blob: `PATCH
-/api/v1/chat/conversations/{id}/agent-config` takes `model`, and an empty or null value clears it so the agent runs at its own
+model — and says where the model is chosen instead (the agent's own `/model`, or `/model` in a channel); the agent's Overview › Model still shows the model its own configuration names, read-only. The model is stored per conversation in the provider-owned `AgentConfig` blob, set with `/model` in a channel; `/model default` clears it so the agent runs at its own
 default.
 
 #### Scenario: the agent's model picker offers a fixed list without free-form entry
-- **GIVEN** an agent whose model is being chosen — on its detail page or in a conversation,
+- **GIVEN** an agent whose model is being chosen — on its detail page or on a channel's `/model` card,
 - **WHEN** the model picker is opened,
 - **THEN** it offers a fixed dropdown with no free-text "Custom…" entry and no text input: the agent's own catalogue (`GET /api/v1/agent-providers/{agent_key}/models`) when it is on its built-in login, and, when a connection overrides it, that connection's curated `text` ids served by the same route — never a model field stored on the connection, which carries none (TypeScript acceptance test).
 

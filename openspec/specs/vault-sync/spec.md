@@ -826,7 +826,7 @@ when the set of conflicts changes. The Resolve conflicts view MUST offer, for ea
 - open in the editor and mark resolved, except for an encrypted secret;
 - a hand-off that gives that one file to an agent (see "Hand conflicting files to an agent"), after
   which the file reads "Merged by an agent · check it" and shows the merge's diff from this
-  machine's version with **Mark resolved**, **Open conversation** and **Back to two choices**.
+  machine's version with **Mark resolved** and **Back to two choices**.
 
 The view says how many files are answered, lets the person leave the round for later, and offers
 Continue round once every file has an answer. A hold is shown the same way, on its own card, leading
@@ -1368,8 +1368,8 @@ base) are the same question and share one set of routes and one prompt shape. Th
 every such file at once or one file; `POST /api/v1/sync/stop/handoff` (a join's:
 `POST /api/v1/sync/join-choices/handoff`) takes the optional `paths`, writes each file's marked-up copy
 under `derived/sync-conflicts/`, records the hand-off with its time, and returns the prompt. The body
-may also carry the `agent` and the Coffer `conversation_id` it was opened in; sending the request
-again with them attaches them without a second hand-off. The prompt states the goal and the
+may also carry the `agent` the hand-off was started on; sending the request
+again with it attaches it without a second hand-off. The prompt states the goal and the
 constraints only:
 
 - the vault's path, to read for context;
