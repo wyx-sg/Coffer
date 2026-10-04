@@ -102,9 +102,9 @@ async def test_a_groups_help_lists_only_the_group_commands(env: ChannelEnv) -> N
 
     help_card, new_card = adapter.cards[-2:]
     assert help_card[1] == help_text(group=True)
-    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /help"
+    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /del · /help"
     assert [b.value for b in help_card[2]] == ["cmd:new", "cmd:stop"]
     # The /new card in a group offers Agent alone.
     assert [b.label for b in new_card[2]] == ["Agent"]
-    # A direct chat gets all eight.
-    assert help_text().count("/") >= 8
+    # A direct chat gets all nine.
+    assert help_text().count("/") >= 9

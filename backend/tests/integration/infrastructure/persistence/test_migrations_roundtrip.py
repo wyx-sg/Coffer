@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0144"
+HEAD_REVISION = "0145"
 #: The last revision whose tables still hold the pre-vault state: a data test
 #: of an older revision reads them here, before 0136 drops them.
 PRE_LAYOUT_REVISION = "0135"
@@ -285,8 +285,9 @@ MOVED_OUT_TABLES = {
     "sync_convergence_state",
     "sync_held_paths",
 }
-# 0142 created ``chat_reply_files`` after the layout move, so no earlier set names it.
-EXPECTED_TABLES = (PRE_LAYOUT_TABLES - MOVED_OUT_TABLES) | {"chat_reply_files"}
+# 0142 created ``chat_reply_files`` and 0145 ``channel_replies`` after the layout move,
+# so no earlier set names them.
+EXPECTED_TABLES = (PRE_LAYOUT_TABLES - MOVED_OUT_TABLES) | {"chat_reply_files", "channel_replies"}
 
 PRE_MERGE_TABLES = (
     PRE_LAYOUT_TABLES

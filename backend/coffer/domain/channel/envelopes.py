@@ -68,6 +68,11 @@ class InboundMessage:
     # body itself when the turn is built (spec channels "Ground a turn in the
     # message it quotes").
     quoted_message_id: str = ""
+    # The message this one REPLIES to, as the platform's reply pointer names it
+    # (Telegram's ``reply_to_message``) — kept apart from ``quoted_message_id``,
+    # which makes the turn fetch the quoted body. ``/del`` reads either to find the
+    # reply it withdraws (spec channels "Withdraw a bot reply on the owner's command").
+    replies_to_message_id: str = ""
     # A forwarded chat record — rarely the whole ask, so the burst buffer waits
     # longer for the words that follow it ("Take a burst of messages as one turn").
     forwarded: bool = False
@@ -178,6 +183,18 @@ class ChannelCapabilities:
     renders_tables: bool = True
     max_inline_code_lines: int = 0
     collapses_details: bool = False
+    # "Withdraw a bot reply on the owner's command": how many hours after it was
+    # sent a bot message can still be taken back (Telegram's deleteMessage: 48;
+    # SeaTalk's card rewrite: 168). 0 means the transport cannot withdraw at all.
+    withdraw_window_hours: float = 0.0
+    # Withdrawing REMOVES the message (Telegram) rather than rewriting it into a
+    # "Withdrawn" card (SeaTalk); only a transport that removes messages can also
+    # remove the owner's own ``/del`` message.
+    withdraw_removes: bool = False
+    # Whether the reply surface may stream in a GROUP. SeaTalk's cannot: a stream
+    # cannot be rewritten afterwards, so a group reply must be a card the owner can
+    # withdraw ("Send SeaTalk group replies as withdrawable cards").
+    streams_in_groups: bool = True
 
 
 @dataclass(frozen=True)
@@ -294,3 +311,12 @@ class SentMessage:
     """Handle to a delivered platform message (for later edit/delete)."""
 
     message_id: str
+    #: Every platform message the send produced, in order, when it was cut into
+    #: several (``message_id`` is the last one). Empty means "just ``message_id``".
+    message_ids: tuple[str, ...] = ()
+
+    @property
+    def all_ids(self) -> tuple[str, ...]:
+        """Every message id this send delivered ("" ids dropped)."""
+        ids = self.message_ids or (self.message_id,)
+        return tuple(i for i in ids if i)

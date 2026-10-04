@@ -14,11 +14,15 @@ import os
 import pathlib
 import re
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.reply_shape import ReplyFile
+from coffer.domain.channel.envelopes import SentMessage
 from coffer.domain.chat.attachment import Attachment
+
+#: Told about each uploaded file's message, so the reply it belongs to can be withdrawn.
+OnFileSent = Callable[[SentMessage], None]
 
 #: A line-anchored ``MEDIA:/abs/path`` sentinel, with an optional ``| caption``
 #: after a pipe. Unlike markdown image syntax this never collides with prose.
@@ -75,6 +79,7 @@ async def deliver_media(
     *,
     thread_id: str = "",
     chat_kind: str = "direct",
+    on_sent: OnFileSent | None = None,
 ) -> tuple[str, int]:
     """Handle each ``MEDIA:`` sentinel line whose file exists; return the text
     with the handled lines removed and how many files were uploaded.
@@ -115,7 +120,7 @@ async def deliver_media(
                         chat_kind=chat_kind,
                         action="upload_photo" if as_photo else "upload_document",
                     )
-            await adapter.send_media(
+            sent_file = await adapter.send_media(
                 chat_id,
                 path,
                 caption=caption or None,
@@ -123,6 +128,8 @@ async def deliver_media(
                 thread_id=thread_id,
                 chat_kind=chat_kind,
             )
+            if on_sent is not None:
+                on_sent(sent_file)
         except Exception:
             continue  # leave the line in place so the intent is still visible
         sent += 1
@@ -137,6 +144,7 @@ async def send_reply_files(
     *,
     thread_id: str = "",
     chat_kind: str = "direct",
+    on_sent: OnFileSent | None = None,
 ) -> int:
     """Upload the files a shaped reply carries beside its text (a table's CSV,
     a long log — see "Shape a reply for what the chat can show"), after the
@@ -152,9 +160,11 @@ async def send_reply_files(
             path = pathlib.Path(staged) / file.filename
             try:
                 path.write_text(file.content, encoding="utf-8")
-                await adapter.send_media(
+                sent_file = await adapter.send_media(
                     chat_id, str(path), as_photo=False, thread_id=thread_id, chat_kind=chat_kind
                 )
+                if on_sent is not None:
+                    on_sent(sent_file)
             except Exception:
                 continue
             sent += 1

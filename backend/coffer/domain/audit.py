@@ -97,6 +97,7 @@ class AuditEventType(StrEnum):
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
     CHANNEL_PERSON_REMOVED = "channel_person_removed"
+    CHANNEL_REPLY_WITHDRAWN = "channel_reply_withdrawn"
     # spec vault-storage: a person's edit found on disk and committed as a
     # ``disk`` write, and a version of a vault file or folder put back.
     VAULT_FILE_EDITED = "vault_file_edited"

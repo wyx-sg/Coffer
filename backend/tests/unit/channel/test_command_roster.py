@@ -19,7 +19,7 @@ from coffer.domain.channel.commands import (
     near_miss,
 )
 
-_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "help"}
+_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "del", "help"}
 
 
 @pytest.mark.acceptance(
@@ -35,11 +35,11 @@ def test_the_menu_offers_exactly_the_reserved_words() -> None:
 
 def test_a_group_menu_offers_the_group_set() -> None:
     group = {c.name for c in menu_entries(group=True)}
-    assert group == {"new", "stop", "help"}
+    assert group == {"new", "stop", "del", "help"}
 
 
 def test_a_group_help_lists_only_the_group_commands() -> None:
-    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /help"
+    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /del · /help"
     assert "/model" in help_text() and "/thread" in help_text()
 
 

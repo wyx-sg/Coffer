@@ -210,7 +210,9 @@ SeaTalk cannot edit a delivered text message at all, yet streams one, which is w
 the core asks for a live surface (`supports_live_text`) and not for edits
 ([channels](../spec.md) "Grow a reply in place on one live surface"); the streamed message IS the reply, so
 `live_text_persists` MUST be true and the surface opens the moment the turn
-starts, acknowledging the owner immediately.
+starts, acknowledging the owner immediately. This is the direct-chat reply: a
+group reply is a withdrawable card instead (see "Send group replies as
+withdrawable cards").
 
 - Every update carries the **FULL accumulated text**, never a delta: the client
   renders the latest snapshot it received.
@@ -300,6 +302,44 @@ so a long body degrades to a truncated card instead of a refused one.
 - **GIVEN** a selection card whose buttons include a label too wide to share a row, such as "Claude Code" beside "Codex"
 - **WHEN** it is built as a SeaTalk interactive card
 - **THEN** that button sits alone in its button group, while short labels still share one
+
+### Requirement: Send group replies as withdrawable cards
+SeaTalk has no delete API, but a card its bot sent can be rewritten by that bot for 7
+days ([channels](../spec.md) "Withdraw a bot reply on the owner's command"). So a
+reply in a **group** MUST be sent as interactive cards and never streamed — a
+stream cannot be rewritten — and the adapter declares that it does not stream in a
+group, so the core shows the typing indication and delivers the finished reply
+(`streams_in_groups` false). Direct chats are unchanged: they stream. The reply is
+markdown rendered as SeaTalk's own, in description blocks of at most 1000 characters
+(a card holds up to four such blocks here), cut on paragraph and never inside a code
+fence; a reply that does not fit one card runs on into further cards, numbered
+`(2/3)` after the first, and the 🗑 button rides on the last. Every card id is
+reported so the whole reply can be withdrawn.
+
+Withdrawing rewrites each card through Update Message into a neutral "🗑 Withdrawn"
+card with no buttons and no title; the adapter declares a window of 7 days and that
+withdrawing does not remove the message. Past 7 days the platform refuses and the
+core tells the owner privately.
+
+#### Scenario: a group reply is cards with the trash button on the last
+- **GIVEN** a SeaTalk group reply longer than one card holds
+- **WHEN** it is sent
+- **THEN** it goes out as interactive cards, never as text or a stream, each card id is reported, and only the last carries the 🗑 button
+
+#### Scenario: a short group reply is one card with markdown rendered
+- **GIVEN** a SeaTalk group reply of a few lines with bold text and a code fence
+- **WHEN** it is sent
+- **THEN** one card carries it rendered as SeaTalk markdown
+
+#### Scenario: withdrawing rewrites each card blank
+- **GIVEN** a SeaTalk reply sent as several cards
+- **WHEN** it is withdrawn
+- **THEN** each card is rewritten through Update Message into a "🗑 Withdrawn" card with no buttons
+
+#### Scenario: a seatalk group turn does not stream
+- **GIVEN** a SeaTalk channel and a group turn
+- **WHEN** the capabilities are read
+- **THEN** streaming in a group is not offered, withdrawing takes up to 168 hours, and withdrawing does not remove the message
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
 A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only

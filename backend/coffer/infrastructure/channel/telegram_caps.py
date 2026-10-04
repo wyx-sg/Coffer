@@ -50,4 +50,7 @@ def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
         render_notes=RICH_RENDER_NOTES if rich else PLAIN_RENDER_NOTES,
         # ``## Details`` becomes a collapsed block in both send paths.
         collapses_details=True,
+        # deleteMessage works on a bot's own message for 48 hours.
+        withdraw_window_hours=48,
+        withdraw_removes=True,
     )

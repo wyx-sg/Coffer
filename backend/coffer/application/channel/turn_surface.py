@@ -61,8 +61,19 @@ class TurnSurface:
         with contextlib.suppress(Exception):
             await self.live.update(self._snapshot(text))
 
+    @property
+    def available(self) -> bool:
+        """Whether this turn may have a live surface at all: the transport has one,
+        and — in a group — it may stream there. SeaTalk's stream cannot be rewritten
+        afterwards, so a group reply there is a card the owner can withdraw instead
+        (spec channels/seatalk "Send group replies as withdrawable cards")."""
+        caps = self.adapter.capabilities
+        if not caps.supports_live_text:
+            return False
+        return not (self.chat_kind == "group" and not caps.streams_in_groups)
+
     async def open(self, text: str) -> None:
-        if self.tried or not self.adapter.capabilities.supports_live_text:
+        if self.tried or not self.available:
             return
         self.tried = True  # ask once per turn, whatever the answer
         try:

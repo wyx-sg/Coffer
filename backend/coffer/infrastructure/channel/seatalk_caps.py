@@ -53,4 +53,9 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     # 200-line log is a wall on a phone: both go out as files.
     renders_tables=False,
     max_inline_code_lines=30,
+    # A SeaTalk bot cannot delete a message, but it can rewrite a card it sent for 7
+    # days (``/messaging/v2/update``): a group reply is therefore a card (never a
+    # stream, which cannot be rewritten) and "withdrawing" it rewrites it blank.
+    streams_in_groups=False,
+    withdraw_window_hours=168,
 )

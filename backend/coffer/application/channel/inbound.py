@@ -39,6 +39,7 @@ from coffer.application.channel.question_flow import QuestionPort, answer_messag
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
+    ReplyLedgerPort,
 )
 from coffer.application.channel.turn_context import fold_turn_context
 from coffer.application.channel.turn_driver import (
@@ -51,6 +52,7 @@ from coffer.application.channel.turn_driver import (
     Session as _Session,
 )
 from coffer.application.channel.turn_media import conversation_title_hint
+from coffer.application.channel.withdraw import ReplyWithdrawal
 from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
@@ -79,6 +81,7 @@ class InboundProcessor:
         audit: AuditService,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
+        replies: ReplyLedgerPort,
         questions: QuestionPort | None = None,
     ) -> None:
         self._peers = peers
@@ -99,6 +102,8 @@ class InboundProcessor:
             turns=turns,
             agents=agents,
             model_suggestions=model_suggestions,
+            replies=replies,
+            withdrawal=ReplyWithdrawal(ledger=replies, audit=audit, peers=peers),
             running_in=self._running_in,
             running_in_chat=self._running_in_chat,
         )
@@ -109,6 +114,7 @@ class InboundProcessor:
             turns=turns,
             safe_send=safe_send,
             session=self._session,
+            replies=replies,
         )
         # Each chat/thread's burst, held until quiet ("Take a burst of messages as one turn").
         self._burst = InboundBurst(

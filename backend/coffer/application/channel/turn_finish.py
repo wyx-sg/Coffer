@@ -12,11 +12,12 @@ from __future__ import annotations
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from coffer.application.channel.details_card import details_buttons, save_details
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.reply_shape import ReplyFile, shape_reply, split_details
+from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.turn_media import deliver_media, send_reply_files
 from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
@@ -137,6 +138,22 @@ def ping_line(end: TurnEnd, body: str) -> str:
 
 async def deliver_reply(
     *,
+    tracker: ReplyTracker | None = None,
+    **kwargs: Any,
+) -> Delivered:
+    """Deliver the finished reply (see ``_deliver_reply``) and file what it was
+    delivered as, so the owner can withdraw it (spec channels "Withdraw a bot reply
+    on the owner's command")."""
+    try:
+        return await _deliver_reply(tracker=tracker, **kwargs)
+    finally:
+        if tracker is not None:
+            await tracker.commit()
+
+
+async def _deliver_reply(
+    *,
+    tracker: ReplyTracker | None,
     adapter: ChannelAdapter,
     chat_id: str,
     thread_id: str,
@@ -162,7 +179,12 @@ async def deliver_reply(
     files: tuple[ReplyFile, ...] = ()
     if text:
         text, media_sent = await deliver_media(
-            adapter, chat_id, text, thread_id=thread_id, chat_kind=chat_kind
+            adapter,
+            chat_id,
+            text,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
+            on_sent=tracker.note_file if tracker is not None else None,
         )
         # What this chat cannot show becomes bullets and files (see "Shape a
         # reply for what the chat can show").
@@ -209,15 +231,29 @@ async def deliver_reply(
     mentioned = mention(body)
     leftover = await surface.close(mentioned)
     if leftover:
-        await send(leftover)
-    await send_reply_files(adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind)
+        if tracker is not None:
+            await tracker.send(leftover)
+        else:
+            await send(leftover)
+    await send_reply_files(
+        adapter,
+        chat_id,
+        files,
+        thread_id=thread_id,
+        chat_kind=chat_kind,
+        on_sent=tracker.note_file if tracker is not None else None,
+    )
     if details and send_card is not None:
-        await _send_details_card(send_card, send, text, details)
+        await _send_details_card(send_card, send, text, details, tracker)
     return Delivered(body, was_open and leftover != mentioned)
 
 
 async def _send_details_card(
-    send_card: SendCard, send: Callable[[str], Awaitable[None]], head: str, details: str
+    send_card: SendCard,
+    send: Callable[[str], Awaitable[None]],
+    head: str,
+    details: str,
+    tracker: ReplyTracker | None = None,
 ) -> None:
     """The outcome as the card's title, how long the details are, and the two
     buttons that fetch them. A card the platform refuses leaves the details
@@ -225,10 +261,12 @@ async def _send_details_card(
     lines = len([line for line in details.splitlines() if line.strip()])
     try:
         details_id = save_details(f"## Details\n\n{details}")
-        await send_card(
+        sent = await send_card(
             f"{lines} more line" + ("" if lines == 1 else "s") + " of details.",
             details_buttons(details_id),
             title=first_line(head) or "Details",
         )
+        if tracker is not None:
+            tracker.note(sent)
     except Exception:
         await send(f"**Details**\n\n{details}")

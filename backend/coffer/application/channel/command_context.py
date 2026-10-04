@@ -121,6 +121,10 @@ class CommandContext:
     group_main: bool = False
     #: The card a tap came from, rewritten in place where the transport can.
     card_message_id: str = ""
+    #: The message the command quotes (``/del`` withdraws that reply), and the
+    #: command's own message (which ``/del`` removes where the platform lets it).
+    quoted_message_id: str = ""
+    command_message_id: str = ""
 
     @property
     def resource_uid(self) -> str:

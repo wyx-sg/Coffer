@@ -164,6 +164,17 @@ class ChannelAdapter(Protocol):
 
     async def delete_message(self, chat_id: str, message_id: str) -> None: ...
 
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        """Take one of the bot's own messages back (spec channels "Withdraw a bot
+        reply on the owner's command"): Telegram deletes it, SeaTalk — which has no
+        delete — rewrites the card into a neutral "Withdrawn" card without buttons.
+        Only called inside ``capabilities.withdraw_window_hours``; a transport with
+        a window of 0 raises. Raises when the platform refuses, so the caller can
+        tell the owner."""
+        ...
+
     async def send_typing(
         self,
         chat_id: str,

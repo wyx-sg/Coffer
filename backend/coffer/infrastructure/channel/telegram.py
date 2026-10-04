@@ -341,6 +341,13 @@ class TelegramAdapter:
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)
 
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        """Delete the message (``deleteMessage``, within the platform's 48 hours)."""
+        del chat_kind
+        await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)
+
     async def send_typing(
         self,
         chat_id: str,

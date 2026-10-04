@@ -69,6 +69,7 @@ Telegram replies are built from the agent's Markdown.
 - **HTML fallback** — otherwise the reply is converted to Telegram's HTML subset and split into messages of at most 4,000 characters on paragraph boundaries. A chunk Telegram refuses as HTML is re-sent as plain text.
 - **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Where the server supports rich drafts, the status header sits in the draft's collapsible thinking block. In a group, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent; it is sent silently, so it does not buzz the group. A quick reply opens no status message at all.
 - **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
+- **Withdrawing** — every reply in a group carries an inline 🗑 button, and the owner can also quote a reply and send `/del`. Either deletes the whole reply, however many messages it was split into. Telegram lets a bot delete a message for 48 hours; past that the owner is told privately it can no longer be deleted. Coffer deletes the `/del` message too when the bot has the right to delete messages in that chat; give it that right if you want the chat kept tidy. Only the owner's tap counts. Group replies still stream as described above. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 - **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
 - **Private command answers** — in a group, where the server supports ephemeral messages, the answer to `/help`, and the one-line notice that a private-chat command was sent in a group, are shown only to you.
 - **Cards** — in a private chat a bare `/model`, `/dir` or `/resume` answers with an inline keyboard, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs). `/help` carries **New**, **Stop**, **Model**, **Status** and **Resume** in a private chat and only **New** and **Stop** in a group. `/new` carries **Agent**, **Model** and **Dir** in a private chat and only **Agent** in a group. The card's title is a heading or a bold first line.
@@ -81,8 +82,8 @@ Coffer registers the bot's command menus with Telegram every time the channel st
 
 | Where | Commands in the menu |
 | --- | --- |
-| Private chats | All eight: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/help` |
-| Groups | `/new`, `/stop`, `/help` |
+| Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/del`, `/help` |
+| Groups | `/new`, `/stop`, `/del`, `/help` |
 
 Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
 

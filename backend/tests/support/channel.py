@@ -125,6 +125,13 @@ class FakeChannelAdapter:
         self.card_updates: list[tuple[str, str, str, list[ChoiceButton], str]] = []
         self.edits: list[tuple[str, str, str]] = []  # (chat_id, message_id, text)
         self.deleted: list[tuple[str, str]] = []  # (chat_id, message_id)
+        # (chat_id, message_id, chat_kind) for every withdraw_message ("Withdraw a bot reply
+        # on the owner's command"), and the message ids a scripted refusal applies to.
+        self.withdrawn: list[tuple[str, str, str]] = []
+        self.withdraw_fails_for: set[str] = set()
+        # The ``buttons`` of each send_text, positionally aligned with ``sent`` (empty
+        # when the send carried none) — the 🗑 button of a group reply is read here.
+        self.sent_buttons: list[list[ChoiceButton]] = []
         self.typing: list[str] = []  # chat_ids
         # (chat_id, chat_kind, thread_id) for every send_typing call — the full
         # routing detail, kept separate so existing ``.typing`` assertions stay
@@ -215,6 +222,7 @@ class FakeChannelAdapter:
         # pointed back at, so a test can assert a group
         # reply is attached to the message it answers.
         self.sent_reply_targets.append(reply_to_message_id)
+        self.sent_buttons.append(list(buttons or []))
         if buttons:
             self.cards.append((chat_id, markdown, list(buttons)))
             self.card_titles.append(title)
@@ -253,6 +261,13 @@ class FakeChannelAdapter:
 
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         self.deleted.append((chat_id, message_id))
+
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        if message_id in self.withdraw_fails_for:
+            raise RuntimeError("withdraw_message failed (scripted)")
+        self.withdrawn.append((chat_id, message_id, chat_kind))
 
     async def send_typing(
         self,
