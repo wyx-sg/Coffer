@@ -58,7 +58,7 @@ export function ResourcesPage() {
   useDaemonEvents();
 
   // Custom-tool groups are `mcp_server`s too, but they live on the Custom
-  // tools page (spec web-ui "Manage custom tools on their own page"); an
+  // tools page (spec web-ui "Manage custom tool groups on their own page"); an
   // address naming one goes there.
   const all = list.data ?? [];
   const servers = all.filter((r) => !isCustomToolGroup(r));

@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
-from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
 from coffer.application.mcp.gateway_coerce import (
     coerce_call_result,
     coerce_prompt_result,
@@ -182,7 +181,6 @@ async def _invoke(
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
     session_agent_uid: str | None = None,
-    tool_reach: ToolReachRepoPort | None = None,
     auth_monitor: UpstreamAuthMonitor | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
@@ -257,10 +255,10 @@ async def _invoke(
         await _record("denied")
         raise
 
-    # A custom tool switched off, or outside its reach override, is refused like
-    # a disabled capability (spec mcp-gateway "Switch off or narrow one custom tool").
+    # A custom tool switched off is refused like a disabled capability (spec
+    # mcp-gateway "Switch off one custom tool").
     if spec.capability_type == "tool":
-        denial = await custom_tool_denial(resource, original, session_agent_uid, tool_reach)
+        denial = custom_tool_denial(resource, original)
         if denial is not None:
             await _record("denied")
             raise ToolDisabled(denial)

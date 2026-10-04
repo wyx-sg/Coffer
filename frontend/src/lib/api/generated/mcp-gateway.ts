@@ -170,23 +170,6 @@ export interface paths {
         patch: operations["update_tool_api_v1_custom_tools__name__tools__tool__patch"];
         trace?: never;
     };
-    "/api/v1/custom-tools/{name}/tools/{tool}/reach": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set Tool Reach */
-        put: operations["set_tool_reach_api_v1_custom_tools__name__tools__tool__reach_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/mcp/builtin": {
         parameters: {
             query?: never;
@@ -774,13 +757,6 @@ export interface components {
             operation: string | null;
             /** Path */
             path: string;
-            /**
-             * Reach Mode
-             * @enum {string}
-             */
-            reach_mode: "inherit" | "all" | "chosen";
-            /** Reach Override */
-            reach_override: string[] | null;
         };
         /**
          * CustomToolPatch
@@ -809,21 +785,6 @@ export interface components {
             name?: string | null;
             /** Path */
             path?: string | null;
-        };
-        /**
-         * CustomToolReachIn
-         * @description One tool's own reach: ``inherit`` clears the override (same as the group),
-         *     ``all`` is every agent the group reaches (agents added later too), ``chosen``
-         *     narrows it to ``agents``.
-         */
-        CustomToolReachIn: {
-            /** Agents */
-            agents?: string[];
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "inherit" | "all" | "chosen";
         };
         /**
          * CustomToolReimportChangeOut
@@ -2128,54 +2089,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CustomToolPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CustomToolGroupOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    set_tool_reach_api_v1_custom_tools__name__tools__tool__reach_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                name: string;
-                tool: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CustomToolReachIn"];
             };
         };
         responses: {

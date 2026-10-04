@@ -60,7 +60,6 @@ from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
-    MCPToolReachStore,
 )
 from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
@@ -129,8 +128,6 @@ def wire_mcp_kind(
     inv_repo = MCPInvocationRepo(sm, name_of=names)
     health_repo = MCPServerHealthRepo(vault.derived_sm)
     auth_monitor = UpstreamAuthMonitor(health_repo)
-    # Custom tools' reach overrides: machine-local, beside reach.json.
-    tool_reach = MCPToolReachStore()
 
     # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)
     session_supervisors: dict[str, SubprocessSupervisor] = {}
@@ -206,7 +203,6 @@ def wire_mcp_kind(
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
             builtin_tools=builtin_tools,
-            tool_reach=tool_reach,
             auth_monitor=auth_monitor,
         )
 
@@ -221,7 +217,7 @@ def wire_mcp_kind(
             probe=build_command_probe(), secrets=secret_store, boundary=optional_secret_boundary
         )
     )
-    wire_custom_tools(resource_svc, audit, secret_store, tool_reach, inv_repo)
+    wire_custom_tools(resource_svc, audit, secret_store, inv_repo)
     return McpWiring(
         process_supervisor=process_supervisor,
         session_supervisors=session_supervisors,
@@ -234,13 +230,11 @@ def wire_custom_tools(
     resource_svc: ResourceService,
     audit: AuditService,
     secret_store: EncryptedSecretStore,
-    tool_reach: MCPToolReachStore,
     inv_repo: MCPInvocationRepo,
 ) -> CustomToolService:
     """Custom-tool groups (design add-http-custom-tools §9): the service behind
     ``/api/v1/custom-tools`` and ``coffer tool``."""
     viewer = GroupViewer(
-        reach=tool_reach,
         outcomes=inv_repo,
         secrets=secret_store,
         boundary=optional_secret_boundary,
@@ -249,7 +243,6 @@ def wire_custom_tools(
     service = CustomToolService(
         resources=resource_svc,
         audit=audit,
-        reach=tool_reach,
         viewer=viewer,
         resolver=lambda: boundary_resolver(secret_store),
         runner=HttpApiToolRunner(),

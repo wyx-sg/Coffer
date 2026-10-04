@@ -4,6 +4,8 @@
 import { beforeEach, describe, expect, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
+import { makeGroup, makeTool } from "@/components/custom-tools/testFixtures";
+import { resourcesApi } from "@/lib/api/resources";
 import { acceptance } from "@/test/acceptance";
 import { api, billing, location, renderAt, resetCustomToolMocks } from "./customToolsTestHarness";
 
@@ -19,7 +21,6 @@ vi.mock("@/lib/api/customTools", async (orig) => ({
       "addTool",
       "updateTool",
       "removeTool",
-      "setToolReach",
       "test",
       "testUnsaved",
       "readOpenApi",
@@ -94,6 +95,90 @@ describe("CustomToolsPage", () => {
     expect(within(dialog).queryByText(/script/i)).not.toBeInTheDocument();
   });
 
+  acceptance("web-ui", "ticking a group puts the selection bar at the top", async () => {
+    renderAt("/custom-tools");
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select row: billing" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select row: grafana" }));
+    const bar = screen.getByRole("region", { name: "Selected custom tool groups" });
+    expect(within(bar).getByText("2 of 4 selected")).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: /Reach/ })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Clear selection" })).toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole("button", { name: /Reach/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Off/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
+    await waitFor(() => expect(resourcesApi.disable).toHaveBeenCalledTimes(2));
+    expect(resourcesApi.disable).toHaveBeenCalledWith("uid-billing");
+    expect(resourcesApi.disable).toHaveBeenCalledWith("uid-grafana");
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Selected custom tool groups" })).toBeNull(),
+    );
+  });
+
+  test("bulk Delete removes each ticked group and leaves a deleted group's page", async () => {
+    api.remove.mockResolvedValue(undefined);
+    renderAt("/custom-tools/billing");
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select row: billing" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select row: status-page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Delete 2 groups?")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(api.remove).toHaveBeenCalledTimes(2));
+    expect(api.remove).toHaveBeenCalledWith("billing");
+    expect(api.remove).toHaveBeenCalledWith("status-page");
+    await waitFor(() => expect(location()).toBe("/custom-tools"));
+  });
+
+  acceptance("web-ui", "the list narrows to one agent", async () => {
+    api.list.mockResolvedValue([
+      makeGroup({ name: "only-claude", scope: ["ag-cc"] }),
+      makeGroup({ name: "everyone", scope: null }),
+    ]);
+    renderAt("/custom-tools?agent=ag-cx");
+    expect(await screen.findByText("everyone")).toBeInTheDocument();
+    expect(screen.queryByText("only-claude")).not.toBeInTheDocument();
+    expect(screen.getByText("Codex")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove the Codex filter" }));
+    expect(await screen.findByText("only-claude")).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "the tools table has no reach column and is searched by name", async () => {
+    const invoices = makeGroup({
+      name: "billing",
+      tools: ["list_invoices", "refund", "void_invoice"].map((name) => makeTool({ name })),
+    });
+    api.list.mockResolvedValue([invoices]);
+    api.get.mockResolvedValue(invoices);
+    renderAt("/custom-tools/billing");
+    const tools = await screen.findByRole("region", { name: /Tools/ });
+    expect(within(tools).queryByRole("columnheader", { name: "Available to" })).toBeNull();
+    expect(within(tools).queryByRole("button", { name: /Available to/ })).toBeNull();
+
+    fireEvent.change(within(tools).getByRole("textbox", { name: "Filter tools" }), {
+      target: { value: "invoice" },
+    });
+    const table = within(tools).getByRole("table");
+    expect(within(table).getByText("list_invoices")).toBeInTheDocument();
+    expect(within(table).getByText("void_invoice")).toBeInTheDocument();
+    expect(within(table).queryByText("refund")).toBeNull();
+    // The count still speaks for the whole group.
+    expect(within(tools).getByText("3 of 3 on")).toBeInTheDocument();
+
+    // Add request sits above the table, beside the search, and not below it.
+    const add = within(tools).getByRole("button", { name: "Add request" });
+    expect(add.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(tools).getAllByRole("button", { name: "Add request" })).toHaveLength(1);
+
+    fireEvent.change(within(tools).getByRole("textbox", { name: "Filter tools" }), {
+      target: { value: "zzz" },
+    });
+    expect(within(tools).getByText("No tool matches “zzz”")).toBeInTheDocument();
+    fireEvent.click(within(tools).getByRole("button", { name: "Clear filter" }));
+    expect(within(tools).getByText("refund")).toBeInTheDocument();
+  });
+
   acceptance(
     "web-ui",
     "the custom tools page with no group shows the first-run panel",
@@ -146,10 +231,8 @@ describe("CustomToolsPage", () => {
     expect(screen.getByText(/58 calls, 2 errors in 24 h/)).toBeInTheDocument();
     expect(within(tools).getByText("GET /invoices/{id}")).toBeInTheDocument();
     expect(within(tools).getByText("2 of 2 on")).toBeInTheDocument();
-    // Each tool's reach is the inherited control: Same as the group unless it has its own agents.
-    expect(within(tools).getAllByRole("button", { name: /Available to: / })[0]).toHaveTextContent(
-      "Same as the group",
-    );
+    // A tool has no reach of its own: the group's header carries it.
+    expect(within(tools).queryByRole("button", { name: /Available to/ })).toBeNull();
 
     fireEvent.click(within(tools).getByText("get_invoice"));
     const drawer = await screen.findByRole("dialog");
@@ -169,56 +252,19 @@ describe("CustomToolsPage", () => {
     expect(location()).toBe("/custom-tools/billing");
   });
 
-  acceptance("web-ui", "a tool's reach is set from its row in the table", async () => {
-    api.setToolReach.mockResolvedValue(billing);
+  acceptance("web-ui", "a tool's drawer has no switch, and Delete tool is outlined", async () => {
     renderAt("/custom-tools/billing");
     const tools = await screen.findByRole("region", { name: /Tools/ });
-    // create_invoice narrows to Claude Code: its trigger shows the badge alone.
-    const [inherited, narrowed] = within(tools).getAllByRole("button", {
-      name: /Available to: /,
-    });
-    expect(inherited).toHaveTextContent("Same as the group");
-    expect(narrowed.querySelectorAll("[data-agent-mark]")).toHaveLength(1);
-
-    // Opening the control never opens the drawer; All agents saves at once.
-    fireEvent.click(inherited);
-    expect(screen.queryByRole("dialog", { name: "get_invoice" })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("radio", { name: /All agents/ }));
-    await waitFor(() =>
-      expect(api.setToolReach).toHaveBeenCalledWith("billing", "get_invoice", { mode: "all" }),
-    );
+    fireEvent.click(within(tools).getByText("get_invoice"));
+    const drawer = await screen.findByRole("dialog");
+    // The tool's own On switch is in the table, not in the drawer footer.
+    expect(within(drawer).queryByLabelText("Tool on")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText(/Only for this tool/)).not.toBeInTheDocument();
+    // The group's header shows as what the group already adds.
+    expect(within(drawer).getByText("from the group")).toBeInTheDocument();
+    expect(within(drawer).getByRole("button", { name: "Delete tool" })).toBeInTheDocument();
+    expect(within(drawer).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
-
-  acceptance("web-ui", "a narrowed tool goes back to Same as the group", async () => {
-    api.setToolReach.mockResolvedValue(billing);
-    renderAt("/custom-tools/billing");
-    const tools = await screen.findByRole("region", { name: /Tools/ });
-    fireEvent.click(within(tools).getAllByRole("button", { name: /Available to: / })[1]);
-    fireEvent.click(await screen.findByRole("radio", { name: /Same as the group/ }));
-    await waitFor(() =>
-      expect(api.setToolReach).toHaveBeenCalledWith("billing", "create_invoice", {
-        mode: "inherit",
-      }),
-    );
-  });
-
-  acceptance(
-    "web-ui",
-    "a tool's drawer has no switch or reach, and Delete tool is outlined",
-    async () => {
-      renderAt("/custom-tools/billing");
-      const tools = await screen.findByRole("region", { name: /Tools/ });
-      fireEvent.click(within(tools).getByText("get_invoice"));
-      const drawer = await screen.findByRole("dialog");
-      // The tool's own On switch is in the table, not in the drawer footer.
-      expect(within(drawer).queryByLabelText("Tool on")).not.toBeInTheDocument();
-      expect(within(drawer).queryByText(/Only for this tool/)).not.toBeInTheDocument();
-      // The group's header shows as what the group already adds.
-      expect(within(drawer).getByText("from the group")).toBeInTheDocument();
-      expect(within(drawer).getByRole("button", { name: "Delete tool" })).toBeInTheDocument();
-      expect(within(drawer).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    },
-  );
 
   acceptance("web-ui", "a hand-made request joins an existing group", async () => {
     api.addTool.mockResolvedValue(billing);

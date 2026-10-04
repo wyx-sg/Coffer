@@ -13,7 +13,6 @@ from typing import Any
 
 import pytest
 
-from coffer.infrastructure.mcp.tool_reach_repo import tool_reach_path
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
     prepare_home,
@@ -157,14 +156,6 @@ def test_reimport_applies_additions_and_removals_keeping_switches(daemon: Bounda
         ).status_code
         == 200
     )
-    agent_uid = "c" * 32
-    assert (
-        daemon.client.put(
-            "/api/v1/custom-tools/billing/tools/list_charges/reach",
-            json={"mode": "chosen", "agents": [agent_uid]},
-        ).status_code
-        == 200
-    )
     # The new document drops GET /invoices and adds POST /charges/refund.
     changed = json.dumps(_document(*three[1:], _FIVE[3]))
     before = get_group(daemon, "billing")
@@ -185,7 +176,7 @@ def test_reimport_applies_additions_and_removals_keeping_switches(daemon: Bounda
     assert set(tools) == {"create_invoice", "list_charges", "refund_charge"}
     assert tools["refund_charge"]["enabled"] is True
     assert tools["create_invoice"]["enabled"] is False
-    assert tools["list_charges"]["reach_override"] == [agent_uid]
+    assert tools["list_charges"]["enabled"] is True
 
 
 @pytest.mark.acceptance(
@@ -235,16 +226,10 @@ def test_the_group_list_puts_a_failing_group_first(daemon: BoundaryDaemon, api: 
     assert groups[1]["handoff"] is None and groups[2]["handoff"] is None
 
 
-def test_deleting_a_group_keeps_its_secret_and_drops_its_overrides(
-    daemon: BoundaryDaemon, api: FakeHttpApi
-):
+def test_deleting_a_group_keeps_its_secret(daemon: BoundaryDaemon, api: FakeHttpApi):
     create_group(daemon, "billing", api.base_url, [tool("a", "GET", "/a")])
-    daemon.client.put(
-        "/api/v1/custom-tools/billing/tools/a/reach", json={"mode": "chosen", "agents": ["e" * 32]}
-    )
     assert daemon.client.delete("/api/v1/custom-tools/billing").status_code == 204
     assert daemon.value(f"secret/{SECRET_NAME}") == SECRET_VALUE
-    assert json.loads(tool_reach_path(daemon.home).read_text()) == {}
 
 
 def test_an_http_mcp_server_is_not_a_custom_tool_group(daemon: BoundaryDaemon):

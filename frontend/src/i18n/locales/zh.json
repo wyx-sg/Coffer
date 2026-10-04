@@ -2084,6 +2084,12 @@
         "title_other": "经 Coffer 的 {{count}} 个服务器",
         "open": "打开 MCP 服务器"
       },
+      "fromCofferTools": {
+        "description": "{{agent}} 通过 Coffer 唯一的那条 MCP 条目使用这些分组。到「自定义工具」页管理它们。",
+        "title_one": "经 Coffer 的 {{count}} 个自定义工具分组",
+        "title_other": "经 Coffer 的 {{count}} 个自定义工具分组",
+        "open": "打开自定义工具"
+      },
       "own": {
         "title": "{{agent}} 自己的 MCP 服务器",
         "description": "{{agent}} 自己配置里绕过 Coffer 的条目。纳入托管后即可经由 Coffer 提供。",
@@ -4211,8 +4217,6 @@
     "off": "关闭",
     "everywhere": "所有智能体",
     "restricted": "指定智能体",
-    "inherited": "与分组一致",
-    "inheritedSub": "跟随分组的智能体",
     "filterAgents": "筛选智能体",
     "noMatch": "没有匹配的智能体。",
     "applying": "正在应用…",
@@ -5164,6 +5168,11 @@
     "list": {
       "toolCount_other": "{{count}} 个工具",
       "filter": "筛选分组",
+      "bulkLabel": "已选的自定义工具分组",
+      "clearSelection": "清除选择",
+      "deleteManyTitle_one": "删除 {{count}} 个分组？",
+      "deleteManyTitle_other": "删除 {{count}} 个分组？",
+      "deleteManyBody": "智能体在下次调用时将失去这些工具。密钥和调用记录仍保留。",
       "section": {
         "attention": "需要处理",
         "healthy": "正常",
@@ -5219,7 +5228,7 @@
       "baseUrl": "基础 URL",
       "baseUrlHelp": "每个请求的路径都拼接在它后面。",
       "availableTo": "可用于",
-      "availableToHelp": "分组内每个工具的默认范围；单个工具可以只给更少的智能体。",
+      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "headers": "请求头",
       "headersHelp": "Coffer 会把这些加到每次调用中；密钥的值保存在 Coffer 的钥匙串里，智能体永远看不到。"
     },
@@ -5249,7 +5258,7 @@
       "section": "{{section}} · {{count}} / {{total}}",
       "pickNote": "你选中的每个操作都会成为一个工具。读取类默认选中；会修改数据的操作默认不选。",
       "baseUrlMissing": "规范没有声明服务器；每个请求的路径会接在这个 URL 后面。",
-      "availableToHelp": "分组中每个工具的默认范围。",
+      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "try": "试运行一个操作",
       "tryNone": "请先选择一个操作。",
       "tryPick": "要试运行的操作",
@@ -5350,9 +5359,8 @@
       "addRequest": "添加请求",
       "heading": "工具",
       "description": "每个工具就是一个请求；智能体看到的是 {{prefix}}。",
-      "groupGives": "{{group}} 把它提供给 {{agents}}",
-      "reachFootnote": "要对所有智能体停用它，请在表格里关闭它的开关。",
-      "reachOf": "可用于：{{name}}",
+      "filter": "筛选工具",
+      "noMatch": "没有工具匹配“{{query}}”",
       "edit": "编辑 {{name}}"
     },
     "editor": {

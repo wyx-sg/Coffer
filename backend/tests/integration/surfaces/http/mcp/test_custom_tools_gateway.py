@@ -11,11 +11,9 @@ import json
 import pathlib
 import sys
 from collections.abc import Iterator
-from typing import Any
 
 import pytest
 
-from coffer.infrastructure.mcp.tool_reach_repo import tool_reach_path
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 from tests.support.custom_tools import (
     SECRET_NAME,
@@ -198,62 +196,19 @@ def test_a_switched_off_tool_is_hidden_and_refused(daemon: BoundaryDaemon, api: 
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a reach override hides one tool from one agent"
+    spec="mcp-gateway", scenario="every tool that is on follows its group's reach"
 )
-@pytest.mark.acceptance(spec="web-ui", scenario="a tool's reach override narrows one tool")
-def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, api: FakeHttpApi):
-    group = create_group(
+def test_every_tool_that_is_on_follows_its_groups_reach(daemon: BoundaryDaemon, api: FakeHttpApi):
+    create_group(
         daemon,
         "billing",
         api.base_url,
         [tool("list_invoices", "GET", "/invoices"), tool("refund", "POST", "/refunds")],
-        agents=[CLAUDE, CODEX],
+        agents=[CLAUDE],
     )
-    r = daemon.client.put(
-        "/api/v1/custom-tools/billing/tools/refund/reach",
-        json={"mode": "chosen", "agents": [CLAUDE]},
-    )
-    assert r.status_code == 200, r.text
-    codex, claude = Agent(daemon, CODEX), Agent(daemon, CLAUDE)
-    assert {n for n in codex.tools() if n.startswith("billing__")} == {"billing__list_invoices"}
-    assert {n for n in claude.tools() if n.startswith("billing__")} == {
-        "billing__list_invoices",
-        "billing__refund",
-    }
-    assert codex.call("billing__refund")["error"]["code"] == -32000
-    # The override is machine-local: nothing of it is in the config the vault syncs.
-    row = daemon.client.get(f"/api/v1/resources/{group['uid']}").json()
-    assert CLAUDE not in json.dumps(row["config"])
-    assert json.loads(tool_reach_path(daemon.home).read_text()) == {
-        group["uid"]: {"refund": [CLAUDE]}
-    }
-
-
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a tool's own reach can be every agent, apart from the group's"
-)
-def test_a_tools_reach_can_be_every_agent_apart_from_following_the_group(
-    daemon: BoundaryDaemon, api: FakeHttpApi
-):
-    group = create_group(
-        daemon, "billing", api.base_url, [tool("refund", "POST", "/refunds")], agents=[CLAUDE]
-    )
-    url = "/api/v1/custom-tools/billing/tools/refund/reach"
-
-    def refund() -> dict[str, Any]:
-        return {t["name"]: t for t in get_group(daemon, "billing")["tools"]}["refund"]
-
-    assert refund()["reach_mode"] == "inherit" and refund()["reach_override"] is None
-    assert daemon.client.put(url, json={"mode": "all"}).status_code == 200
-    assert refund()["reach_mode"] == "all" and refund()["reach_override"] is None
-    # Stored as "all", not as a snapshot of today's agents, so later agents are included.
-    assert json.loads(tool_reach_path(daemon.home).read_text()) == {group["uid"]: {"refund": "all"}}
-    assert "billing__refund" in Agent(daemon, CLAUDE).tools()
-    assert daemon.client.put(url, json={"mode": "chosen", "agents": [CLAUDE]}).status_code == 200
-    assert refund()["reach_mode"] == "chosen" and refund()["reach_override"] == [CLAUDE]
-    assert daemon.client.put(url, json={"mode": "inherit"}).status_code == 200
-    assert refund()["reach_mode"] == "inherit"
-    assert json.loads(tool_reach_path(daemon.home).read_text()) == {}
+    seen = lambda a: {n for n in Agent(daemon, a).tools() if n.startswith("billing__")}  # noqa: E731
+    assert seen(CLAUDE) == {"billing__list_invoices", "billing__refund"}
+    assert seen(CODEX) == set()
 
 
 @pytest.mark.acceptance(

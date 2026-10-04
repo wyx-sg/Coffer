@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Response
 
 from coffer.application.mcp.custom_tool_handoff import request_test_handoff
 from coffer.application.mcp.custom_tool_import import CustomToolImporter
-from coffer.application.mcp.custom_tool_ports import ToolReach, ToolTestOutcome
+from coffer.application.mcp.custom_tool_ports import ToolTestOutcome
 from coffer.application.mcp.custom_tools import UNSET, CustomToolService
 from coffer.domain.errors import ConfigValidationError
 from coffer.surfaces.http.auth import require_token
@@ -33,7 +33,6 @@ from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolHeaderIn,
     CustomToolIn,
     CustomToolPatch,
-    CustomToolReachIn,
     CustomToolReimportChangeOut,
     CustomToolReimportIn,
     CustomToolReimportPreviewOut,
@@ -190,20 +189,6 @@ async def delete_tool(
     name: str, tool: str, svc: CustomToolService = _service, actor: str = _actor
 ) -> CustomToolGroupOut:
     return group_out(await svc.delete_tool(name, tool, actor=actor))
-
-
-@router.put("/{name}/tools/{tool}/reach", response_model=CustomToolGroupOut)
-async def set_tool_reach(
-    name: str,
-    tool: str,
-    body: CustomToolReachIn,
-    svc: CustomToolService = _service,
-    actor: str = _actor,
-) -> CustomToolGroupOut:
-    reach: ToolReach | None = (
-        None if body.mode == "inherit" else "all" if body.mode == "all" else body.agents
-    )
-    return group_out(await svc.set_tool_reach(name, tool, reach, actor=actor))
 
 
 @router.post("/{name}/test", response_model=CustomToolTestOut)

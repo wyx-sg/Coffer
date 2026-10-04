@@ -75,7 +75,6 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | This machine's agents, one resource file each. | daemon | Never | The agent is unregistered here. |
 | `local/reach.json` | Every resource's reach on this machine: enabled, and for which agents. | daemon | Never | Every resource returns to its kind's default reach. |
-| `local/tool-reach.json` | Custom tools' per-tool reach overrides. | daemon | Never | The overrides are lost. |
 | `local/engine.json` | When this machine last changed Coffer's engine settings. | daemon | Never | Yes. |
 | `local/retention.json` | Each prunable table's retention and when it was last pruned. | daemon | Never | Yes: the defaults apply. |
 | `local/curation.json` | The content each knowledge document had when curation last settled it, so a person's later edit is noticed. | daemon | Never | Curation re-reads every document once. |

@@ -38,13 +38,13 @@ A spec URL is fetched only from a public address: Coffer refuses to fetch from l
 
 ### Re-import when the spec changes
 
-A group made by an import shows its spec and when it was fetched, with **Re-import** (also in the group's **⋯** menu). Re-import reads the spec again and shows every change as a preview, with the spec text before and after where Coffer kept it: operations to **add** — a read becomes a tool, switched on; an operation that changes data is listed but not added — tools the spec **changed** (a new required argument, a moved path), and tools it would **remove** because their operation is gone. Nothing changes until **Apply N changes**. Unchanged tools keep their on/off switch, their changes-data flag and their reach override; tools you added by hand are never removed. A group imported from a file asks for the file again.
+A group made by an import shows its spec and when it was fetched, with **Re-import** (also in the group's **⋯** menu). Re-import reads the spec again and shows every change as a preview, with the spec text before and after where Coffer kept it: operations to **add** — a read becomes a tool, switched on; an operation that changes data is listed but not added — tools the spec **changed** (a new required argument, a moved path), and tools it would **remove** because their operation is gone. Nothing changes until **Apply N changes**. Unchanged tools keep their on/off switch and their changes-data flag; tools you added by hand are never removed. A group imported from a file asks for the file again.
 
 ## Add a request by hand
 
 Choose **Add custom tool** and pick the group it goes in:
 
-- **An existing group** — **Continue** opens **Add a request**, which uses that group's base URL and secret. A group's own **Add request** button opens the same form.
+- **An existing group** — **Continue** opens **Add a request**, which uses that group's base URL and secret. A group's own **Add request** button, in the row above its tools table, opens the same form.
 - **New group** — pick **Add one request by hand**, then fill in the group: name, base URL, headers (the auth header is a row whose value is a stored secret), and default reach. **Create group** moves on to its first request; the group is saved together with that request.
 
 The request form asks for:
@@ -81,18 +81,18 @@ Every tool carries a **changes data** flag, on by default for every method but G
 
 ## Choose which agents reach each tool
 
-A group has a reach, like any MCP server: the **Reach** button in its header (**Off**, **All agents** or **Chosen agents**, saved as you change it). Each tool has its own reach in the **Reach** column of the tools table, with the inherited modes: **Same as the group** (the default), **All agents** or **Chosen agents**. Narrowing one tool is useful for the one dangerous operation among many harmless ones. **All agents** on a tool covers agents you add later, and, like every reach, stays on this machine.
+A group has a reach, like any MCP server: the **Reach** button in its header (**Off**, **All agents** or **Chosen agents**, saved as you change it). A tool has no reach of its own: every tool that is on reaches exactly the agents its group reaches. To keep one tool from some agents — the one dangerous operation among many harmless ones — switch it off, or move it to a group of its own with a narrower reach. **All agents** on a group covers agents you add later, and, like every reach, stays on this machine.
 
-Each tool also has an on/off switch (**All on · All off** switches every tool of the group). A tool that is off, or outside an agent's reach, is not listed to that agent and a call to it is refused.
+Each tool also has an on/off switch (**All on · All off** switches every tool of the group). A tool that is off, or in a group outside an agent's reach, is not listed to that agent and a call to it is refused.
 
 ## The Custom tools page
 
-With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A group's page shows, on one page:
+With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. Open the list with `?agent=<uid>` — an agent's **Open Custom tools ›** link does — and a removable **Agent: <name>** filter under the search keeps the groups that reach that agent. Groups can be ticked: a selection bar replaces the search, reading "N of M selected" with **Reach**, **Delete** and **×** (a select-all row and **Esc** also clear or extend the selection), so reach or deletion applies to every ticked group at once. A group's page shows, on one page:
 
 - a header with three fixed buttons, **Reach**, **Edit group** and **⋯** (Re-import for an imported group, Turn off and Delete group), and, when the group's calls fail or a test fails because of this machine, a banner with the daemon's hand-off, **Ask an agent ▾**;
 - its **definition** — what agents see (`billing__<tool>`), the reach, the base URL, the auth header with the secret's name, and the spec it came from;
 - a one-line summary of the last 24 hours: calls, errors and a link to Activity;
-- the **tools table** — each tool's switch, method and path, changes-data flag, reach (group default or override), and its calls and errors in 24 hours. Choosing a tool opens its editor in a 640-wide drawer, with the test result under the fields.
+- the **tools table**, with a search by tool name and **Add request** in one row above it — each tool's switch, method and path, changes-data flag, and its calls and errors in 24 hours. Choosing a tool opens its editor in a 640-wide drawer, with the test result under the fields.
 
 ## How a call is made
 

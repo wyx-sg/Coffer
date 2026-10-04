@@ -639,34 +639,6 @@ but GET, and a person MAY turn it off or on for any tool.
 - **WHEN** an agent lists the gateway's tools
 - **THEN** the namespaced entry carries `readOnlyHint: true`
 
-### Requirement: Switch off or narrow one custom tool
-A custom tool switched off, or whose **reach override** does not admit the
-session's agent, MUST be left out of `tools/list` and of
-`coffer__search_tools` results, and a call on it MUST be recorded as `denied`
-and answered with TOOL_DISABLED. A reach override is either a list of agent uids that
-narrows the group's reach for that one tool, or `all` — every agent the group
-reaches, agents added later included — and no override at all follows the
-group; an agent the group does not reach is not reached by any of its tools. Like every reach, an override is kept on
-this machine only, in `~/.coffer/local/tool-reach.json`, and never travels with sync. Removing a tool or its group
-MUST remove its override.
-
-#### Scenario: a switched-off custom tool is hidden and refused
-- **GIVEN** a group with two tools, one switched off
-- **WHEN** an agent lists the tools and then calls the switched-off one by its name
-- **THEN** only the other tool is listed, and the call is refused with TOOL_DISABLED and recorded as `denied`
-
-#### Scenario: a reach override hides one tool from one agent
-- **GIVEN** a group reaching Claude Code and Codex, and one tool overridden to Claude Code only
-- **WHEN** each agent lists the tools
-- **THEN** Codex is offered every tool but that one, and Claude Code is offered all of them
-- **AND** the override is absent from what the vault syncs
-
-#### Scenario: a tool's own reach can be every agent, apart from the group's
-- **GIVEN** a group reaching Claude Code and a tool with no override
-- **WHEN** the tool's reach is set to every agent, then to Claude Code only, then cleared
-- **THEN** the tool reads `all`, then `chosen` with Claude Code, then follows the group
-- **AND** `all` is stored as `all`, not as a list of today's agents
-
 ### Requirement: Import custom tools from an OpenAPI document
 The system MUST read an OpenAPI 3.0 or 3.1 document, JSON or YAML, given as a
 file or fetched from a URL, into draft tools — one per operation, named from
@@ -688,7 +660,7 @@ left out. **Re-import** MUST read the source again and first preview the
 operations it would add, the tools it would remove and the ones it keeps,
 changing nothing; applying it MUST remove the removed tools, add the chosen
 added ones switched on, refresh each kept tool's request from the document and
-keep its switch, changes-data flag and reach override. A tool added by hand is
+keep its switch and changes-data flag. A tool added by hand is
 never removed by a re-import.
 
 #### Scenario: an OpenAPI document becomes draft tools
@@ -718,10 +690,10 @@ never removed by a re-import.
 - **THEN** the read is refused before any request is sent, and the refusal says to import the document as a file
 
 #### Scenario: re-import applies additions and removals keeping switches
-- **GIVEN** a group imported with three operations, one switched off and one with a reach override, and a document that now drops one of them and adds a new one
+- **GIVEN** a group imported with three operations, one of them switched off, and a document that now drops one of them and adds a new one
 - **WHEN** re-import is previewed and then applied with the new operation chosen
 - **THEN** the preview names one operation to add and one tool to remove and nothing changed before applying
-- **AND** after applying, the dropped tool and its override are gone, the new tool is on, and the kept tools keep their switch and reach override
+- **AND** after applying, the dropped tool is gone, the new tool is on, and the kept tools keep their switch
 
 ### Requirement: Wait for approval before a custom tool sends its secret
 Binding a stored secret to one of a group's headers MUST be treated as a new
@@ -753,8 +725,7 @@ concerned.
 Custom-tool groups MUST be managed through `/api/v1/custom-tools` — list
 (failing groups first, each with its health, its secret's state, its calls and
 failures in the last 24 hours and its tools), create (with tools), read,
-change, delete, add / change / remove one tool, set or clear one tool's reach
-override, test a draft tool once without saving it, read an OpenAPI document,
+change, delete, add / change / remove one tool, test a draft tool once without saving it, read an OpenAPI document,
 and preview and apply a re-import — and on the Custom tools page, which calls
 those routes; the command line carries no custom-tool command. A change that
 waits for a secret approval MUST report it as a pending approval on the Secrets
@@ -1068,3 +1039,19 @@ denial — for the page and for its count.
 - **GIVEN** an ok, an errored, a timed-out and a denied call
 - **WHEN** the invocations are read with `status=failed`
 - **THEN** the errored, timed-out and denied calls are listed, and the total is three
+
+### Requirement: Switch off one custom tool
+A custom tool that is switched off MUST be left out of `tools/list` and of
+`coffer__search_tools` results, and a call on it MUST be recorded as `denied`
+and answered with TOOL_DISABLED. A tool that is on reaches exactly the agents its
+group reaches: a tool has no reach of its own.
+
+#### Scenario: a switched-off custom tool is hidden and refused
+- **GIVEN** a group with two tools, one switched off
+- **WHEN** an agent lists the tools and then calls the switched-off one by its name
+- **THEN** only the other tool is listed, and the call is refused with TOOL_DISABLED and recorded as `denied`
+
+#### Scenario: every tool that is on follows its group's reach
+- **GIVEN** a group reaching Claude Code only, with two tools that are on
+- **WHEN** Claude Code and Codex each list the gateway's tools
+- **THEN** Claude Code is offered both tools and Codex neither

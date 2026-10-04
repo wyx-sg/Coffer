@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
-ToolReachMode = Literal["inherit", "all", "chosen"]
 GroupHealthName = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretStateName = Literal["none", "present", "missing", "pending_approval"]
 #: How a test run failed before the API answered: the request could not be
@@ -77,11 +76,6 @@ class CustomToolOut(BaseModel):
     #: Whether the flag was set by hand rather than following the method.
     changes_data_set: bool
     operation: str | None
-    #: How the tool's own reach stands: ``inherit`` follows the group, ``all`` is
-    #: every agent (later ones too), ``chosen`` is ``reach_override``.
-    reach_mode: ToolReachMode
-    #: Agent uids the tool is narrowed to; ``null`` unless ``reach_mode`` is ``chosen``.
-    reach_override: list[str] | None
     calls_24h: int
     failures_24h: int
 
@@ -177,15 +171,6 @@ class CustomToolGroupOut(BaseModel):
 
 class CustomToolGroupListOut(BaseModel):
     groups: list[CustomToolGroupOut]
-
-
-class CustomToolReachIn(BaseModel):
-    """One tool's own reach: ``inherit`` clears the override (same as the group),
-    ``all`` is every agent the group reaches (agents added later too), ``chosen``
-    narrows it to ``agents``."""
-
-    mode: ToolReachMode
-    agents: list[str] = Field(default_factory=list)
 
 
 class CustomToolTestIn(BaseModel):

@@ -6,6 +6,7 @@
 // file that failed to parse and is then read-only. The `coffer` entry of the
 // agent's config is the gateway itself, so it is never a row.
 import { reachesAgent } from "@/lib/agents/counts";
+import { isCustomToolGroup } from "@/lib/customTools/groups";
 import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import type { Scope } from "@/lib/hooks/useScope";
 
@@ -15,6 +16,7 @@ interface McpServerLike {
   name: string;
   enabled: boolean;
   scope?: Scope | null;
+  config?: unknown;
 }
 
 export type OwnMcpState = "bypasses" | "duplicate" | "readOnly";
@@ -52,11 +54,26 @@ export function buildOwnMcpRows(
     }));
 }
 
-/** The registered servers that reach this agent through the gateway. */
-export function cofferMcpNames(agentUid: string, servers: readonly McpServerLike[]): string[] {
+function reachingNames(agentUid: string, servers: readonly McpServerLike[]): string[] {
   return servers
     .filter((server) =>
       reachesAgent(agentUid, { enabled: server.enabled, scope: server.scope ?? null }),
     )
     .map((server) => server.name);
+}
+
+/** The registered MCP servers (custom-tool groups left out) that reach this agent through the gateway. */
+export function cofferMcpNames(agentUid: string, servers: readonly McpServerLike[]): string[] {
+  return reachingNames(
+    agentUid,
+    servers.filter((s) => !isCustomToolGroup(s)),
+  );
+}
+
+/** The custom-tool groups that reach this agent through the gateway. */
+export function cofferToolGroupNames(
+  agentUid: string,
+  servers: readonly McpServerLike[],
+): string[] {
+  return reachingNames(agentUid, servers.filter(isCustomToolGroup));
 }

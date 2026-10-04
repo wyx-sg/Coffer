@@ -35,14 +35,6 @@ def tool_out(group: str, view: ToolView) -> CustomToolOut:
         changes_data=t.effective_changes_data,
         changes_data_set=t.changes_data is not None,
         operation=t.operation,
-        reach_mode=(
-            "inherit"
-            if view.reach_override is None
-            else "all"
-            if view.reach_override == "all"
-            else "chosen"
-        ),
-        reach_override=view.reach_override if isinstance(view.reach_override, list) else None,
         calls_24h=view.calls,
         failures_24h=view.failures,
     )
