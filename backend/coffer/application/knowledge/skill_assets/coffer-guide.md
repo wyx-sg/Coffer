@@ -138,6 +138,19 @@ waits for the developer's approval in the Coffer app (a command that hits this
 prints `waiting for approval in the Coffer app` and exits `9`). That is not an
 error to retry or to route around: tell the developer what is waiting.
 
+## Command-line tools Coffer manages
+
+Coffer keeps track of the command-line tools this developer relies on: the ones
+skills require, the launchers MCP servers start with, and the ones the
+developer added by hand, each with what it is for. `coffer cli list` prints
+them with whether each is ready, missing, outdated or logged out on this
+machine as of Coffer's last check; `coffer cli list --json` adds, for one that
+needs attention, the prompt for installing, updating or logging in to it. Read
+it before concluding a tool is unavailable, or to learn which tool this
+developer uses for a job. Coffer installs nothing itself: a missing or
+logged-out tool is one to set up as that prompt says, or to raise with the
+developer.
+
 ## When Coffer itself misbehaves
 
 Coffer keeps three records of what it did: its audit log (what changed), its
