@@ -322,11 +322,11 @@ async def test_list_reports_every_cited_ref_with_its_presence() -> None:
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="secret", scenario="an agent's model-proxy token is not listed")
 async def test_list_leaves_out_agents_model_proxy_tokens() -> None:
-    """An agent's ``proxy-token/<agent_uid>`` is Coffer's own: it mints it and
+    """An agent's ``proxy-token/<agent name>`` is Coffer's own: it mints it and
     the agent fetches it, so the list a person manages does not show it.
     """
     fake = _FakeSecretStore()
-    fake.store["proxy-token/9a006a32d0bf5787955c43d54e4b44e9"] = "cfr_token"
+    fake.store["proxy-token/codex"] = "cfr_token"
     fake.store["secret/github"] = "ghp_secret"
     transport = ASGITransport(_build_app(fake, resources=_FakeResourceService()))
     async with AsyncClient(

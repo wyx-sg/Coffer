@@ -119,7 +119,7 @@ def proxy_root(port: int) -> str:
 
 
 #: Secret-store refs holding the per-agent local proxy tokens:
-#: ``proxy-token/<agent_uid>``. Machine-local — a token unlocks this machine's
+#: ``proxy-token/<agent name>`` (``proxy-token/codex``). Machine-local — a token unlocks this machine's
 #: loopback proxy and nothing else — so vault sync never carries them.
 PROXY_TOKEN_REF_PREFIX = "proxy-token/"
 

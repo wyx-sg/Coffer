@@ -53,7 +53,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 
 ## 令牌 {#tokens}
 
-每个托管的智能体都有自己的随机 256 位令牌，首次使用时生成。它以 Fernet 密文的形式保存在密钥存储里，位于 `proxy-token/<agent_uid>` 下，这是一个本机专属的 ref，保险库同步永远不会带走。
+每个托管的智能体都有自己的随机 256 位令牌，首次使用时生成。它以 Fernet 密文的形式保存在密钥存储里，位于 `proxy-token/<智能体名>` 下（`proxy-token/claude-code`、`proxy-token/codex`；智能体的名字是固定的），这是一个本机专属的 ref，保险库同步永远不会带走。智能体已不存在的令牌，会在下一次构建代理状态时被删除。
 
 - `coffer proxy token --agent-uid <uid>` 打印令牌。两个智能体运行的就是这条命令。
 

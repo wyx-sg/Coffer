@@ -181,7 +181,7 @@ send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -
 coffer secret list
 ```
 
-[密钥页面](#the-secrets-page)显示同一份列表，按使用中和未被使用分组。`--json` 还会为每个密钥附带 `locked`（已存储，但这台 Mac 的主密钥打不开它）、`created_at` 和 `last_used_at`。列表包含存储中保存的每个 ref 和每个资源引用的每个 ref，以及各自的使用方——资源、文件中引用了 `coffer://secret/<name>` 的技能、等待审批的去处——没有任何东西在用的密钥标为 `(unreferenced)`。每个托管智能体的模型代理令牌（`proxy-token/<agent uid>`）不在列表里：它由 Coffer 生成、由智能体自己取用，没有需要你填写、替换或引用的东西。**Readable by local processes** 为 `yes` 表示：以你身份运行的其他程序，能在 Coffer 放置该值的地方读到它——每个独立密钥都是（它会进入 `coffer run` 的子进程），stdio MCP 服务器环境中的每个密钥也是。各列的含义见[密钥存储 → 列出与查看](/zh/guides/secret-store#list-and-inspect)。
+[密钥页面](#the-secrets-page)显示同一份列表，按使用中和未被使用分组。`--json` 还会为每个密钥附带 `locked`（已存储，但这台 Mac 的主密钥打不开它）、`created_at` 和 `last_used_at`。列表包含存储中保存的每个 ref 和每个资源引用的每个 ref，以及各自的使用方——资源、文件中引用了 `coffer://secret/<name>` 的技能、等待审批的去处——没有任何东西在用的密钥标为 `(unreferenced)`。每个托管智能体的模型代理令牌（`proxy-token/<智能体名>`）不在列表里：它由 Coffer 生成、由智能体自己取用，没有需要你填写、替换或引用的东西。**Readable by local processes** 为 `yes` 表示：以你身份运行的其他程序，能在 Coffer 放置该值的地方读到它——每个独立密钥都是（它会进入 `coffer run` 的子进程），stdio MCP 服务器环境中的每个密钥也是。各列的含义见[密钥存储 → 列出与查看](/zh/guides/secret-store#list-and-inspect)。
 
 只要还有资源引用某个独立密钥，或还有技能文件引用它的 URI，删除就会被拒绝；报错会列出它们。
 

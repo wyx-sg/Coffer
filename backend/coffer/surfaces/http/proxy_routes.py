@@ -80,9 +80,13 @@ class ProxyRouteOut(BaseModel):
     fallbacks: list[ProxyRouteMemberOut]
 
 
-async def _known(facade: ProxyFacade, agent_uid: str) -> None:
-    if not await facade.agent_exists(agent_uid):
+async def _known(facade: ProxyFacade, agent_uid: str) -> str:
+    """The name of the agent with this uid — what its token is kept under —
+    or 404 for an agent this machine does not have."""
+    name = await facade.agent_name(agent_uid)
+    if name is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no such agent")
+    return name
 
 
 @router.get("/status", response_model=ProxyStatusOut)
@@ -98,8 +102,8 @@ async def proxy_token(
 ) -> ProxyTokenOut:
     """The agent's local proxy token, minted on first ask. 404 for an agent
     this machine does not have, so a stale helper fails closed."""
-    await _known(facade, agent_uid)
-    token, minted = await facade.tokens.issue(agent_uid)
+    agent = await _known(facade, agent_uid)
+    token, minted = await facade.tokens.issue(agent)
     if minted:
         # The proxy learns a token's digest from a state push; a token that was
         # already there is already known, so a plain read (every helper call)
@@ -114,8 +118,8 @@ async def proxy_token_hint(
     facade: ProxyFacade = Depends(get_proxy_facade),  # noqa: B008
 ) -> ProxyTokenHintOut:
     """The last four characters of the agent's token, minted on first ask."""
-    await _known(facade, agent_uid)
-    token = await facade.tokens.token_for(agent_uid)
+    agent = await _known(facade, agent_uid)
+    token = await facade.tokens.token_for(agent)
     return ProxyTokenHintOut(agent_uid=agent_uid, last4=token[-4:])
 
 
@@ -151,8 +155,8 @@ async def rotate_proxy_token(
 ) -> ProxyTokenRotatedOut:
     """Replace the agent's token; the old one is refused from the next push,
     which happens before this answers."""
-    await _known(facade, agent_uid)
-    await facade.tokens.rotate(agent_uid)
+    agent = await _known(facade, agent_uid)
+    await facade.tokens.rotate(agent)
     await facade.refresh()
     return ProxyTokenRotatedOut(agent_uid=agent_uid, rotated=True)
 

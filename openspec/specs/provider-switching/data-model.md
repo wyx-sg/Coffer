@@ -396,7 +396,7 @@ every push: `ProxyState {revision, agents: [ProxyAgent {agent_uid, agent_type,
 token_sha256}], routes: [ProxyRoute {agent_uid, wire, members: [ProxyMember
 {connection_uid, connection_name, upstream_root, auth, key, models, local}]}]}`.
 `key` is held only in the proxy's memory and never shown by `repr`. The
-per-agent tokens live in the secret store under `proxy-token/<agent_uid>`
+per-agent tokens live in the secret store under `proxy-token/<agent name>`
 (machine-local ciphertext under `~/.coffer/local/secret/`, never in the vault). `~/.coffer/proxy.json` (mode `0600`)
 holds `{port, pid, started_at, version, control_token}`.
 

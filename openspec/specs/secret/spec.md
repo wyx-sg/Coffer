@@ -654,7 +654,7 @@ nothing references it (`unreferenced`), the destinations it is approved for or
 waits on, and whether another process of this user can read the value where
 Coffer puts it (a standalone secret, or a stdio MCP server's environment). The
 listing decrypts nothing and records no audit entry. It MUST leave out an
-agent's model-proxy token (`proxy-token/<agent_uid>`): Coffer mints it and the
+agent's model-proxy token (`proxy-token/<agent name>`): Coffer mints it and the
 agent fetches it itself, so no person enters, replaces or cites it. A delete MUST also be
 refused with `SECRET_IN_USE` while a skill in the master store cites a
 standalone secret's URI, naming that skill, and a delete that removes a ref

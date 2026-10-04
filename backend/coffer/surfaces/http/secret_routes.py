@@ -102,7 +102,7 @@ async def list_refs(
     standalone ``secret/<name>`` also lists the skills whose files cite its
     ``coffer://secret/<name>``. A stored ref whose ciphertext this Mac's key
     cannot open is ``locked``. An agent's model-proxy token
-    (``proxy-token/<agent_uid>``) is not listed: Coffer mints it, the agent
+    (``proxy-token/<agent name>``) is not listed: Coffer mints it, the agent
     fetches it, and no person enters, replaces or cites it. Presence only — no
     value is decrypted, so nothing is audited.
     """
