@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import time
 import tomllib
 import types
@@ -291,7 +292,12 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         assert r.status_code == 200, r.text
         assert r.json()["name"] == "fetcher"
         transport = r.json()["config"]["transport"]
-        assert transport["secret_refs"] == {"API_TOKEN": ref}
+        # The key is flagged by name; Coffer mints the secret's id, whatever
+        # ref the caller suggested (spec secret "Mint every secret's id; a
+        # person names it").
+        minted = transport["secret_refs"]["API_TOKEN"]
+        assert set(transport["secret_refs"]) == {"API_TOKEN"}
+        assert re.fullmatch(r"secret/[0-9a-f]{32}", minted) and minted != ref
         assert SECRET_VALUE not in r.text
 
         # The entry is gone from the agent's own file.
@@ -303,7 +309,7 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         # store — never via the keychain.
         from coffer.surfaces.http.secret_composition import get_secret_store
 
-        assert get_secret_store().get(ref) == SECRET_VALUE
+        assert get_secret_store().get(minted) == SECRET_VALUE
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="reject adoption on resource name conflict")
