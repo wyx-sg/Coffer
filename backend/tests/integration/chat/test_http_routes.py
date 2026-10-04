@@ -216,6 +216,31 @@ def test_the_conversation_list_searches_titles_and_pages_the_matches() -> None:
         assert len(get(q="%")["conversations"]) == 1
         assert len(get(q="  ")["conversations"]) == 5
 
+        # Source and agent filters: server-side, on page and total, bound into the cursor.
+        asyncio.run(chat_svc._conversations.touch(made[0], base + timedelta(minutes=9)))
+        other = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()
+        assert get(source="coffer")["total"] == 6
+        assert get(source="nope")["total"] == 0
+        assert get(source=" , ")["total"] == 6
+        assert get(agent="builtin")["total"] == 6
+        assert get(agent="codex,claude_code")["total"] == 0
+        by_agent = get(agent="builtin", limit=2)
+        assert by_agent["next_cursor"] and by_agent["total"] == 6
+        mismatched = client.get(
+            "/api/v1/chat/conversations",
+            params={"agent": "codex", "cursor": by_agent["next_cursor"]},
+        )
+        assert mismatched.status_code == 400
+        assert mismatched.json()["error"]["code"] == "CURSOR_INVALID"
+        assert (
+            client.get(
+                "/api/v1/chat/conversations",
+                params={"source": "coffer", "cursor": by_agent["next_cursor"]},
+            ).status_code
+            == 400
+        )
+        assert other["id"]
+
         # A cursor issued for one q does not page another.
         refused = client.get(
             "/api/v1/chat/conversations", params={"q": "lunch", "cursor": first["next_cursor"]}

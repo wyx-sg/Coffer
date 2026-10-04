@@ -3557,9 +3557,6 @@
     },
     "title": "Conversations",
     "thinking": "Thinking…",
-    "message": {
-      "tokens": "{{prompt}} in · {{completion}} out"
-    },
     "history": {
       "rename": "Rename",
       "delete": "Delete…",
@@ -3637,8 +3634,8 @@
       "workspaceFull": "Coffer’s workspace (~/.coffer/content/workspace)",
       "workspacePicker": {
         "label": "Workspace",
-        "choose": "Choose a folder…",
-        "typePath": "Or type a folder path",
+        "choose": "Choose…",
+        "typePath": "Type or paste a folder path",
         "use": "Use"
       }
     },

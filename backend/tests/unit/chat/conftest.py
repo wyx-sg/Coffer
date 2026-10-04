@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from coffer.application.chat.conversation_repo import EVERY, Narrowing
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.audit import AuditEntry
@@ -73,17 +74,28 @@ class FakeConversationRepo:
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
         contains: str | None = None,
+        narrow: Narrowing = EVERY,
     ) -> list[Conversation]:
         rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
         if contains:
             rows = [c for c in rows if contains.casefold() in (c.title or "").casefold()]
+        if sources := narrow.sources:
+            rows = [
+                c
+                for c in rows
+                if (c.channel_uid is None and "coffer" in sources) or c.channel_uid in sources
+            ]
+        if narrow.agents:
+            rows = [c for c in rows if c.agent_key in narrow.agents]
         rows.sort(key=lambda c: (c.updated_at, c.id), reverse=True)
         if after is not None:
             rows = [c for c in rows if (c.updated_at, c.id) < after]
         return rows if limit is None else rows[:limit]
 
-    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
-        return len(await self.list(archived=archived, contains=contains))
+    async def count(
+        self, *, archived: bool = False, contains: str | None = None, narrow: Narrowing = EVERY
+    ) -> int:
+        return len(await self.list(archived=archived, contains=contains, narrow=narrow))
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         conv = self._store[conversation_id]

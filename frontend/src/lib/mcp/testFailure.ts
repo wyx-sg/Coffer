@@ -5,7 +5,8 @@
 import type { McpTestResult } from "@/lib/api/mcpTestConfig";
 
 /** `NAME_LIKE_THIS` followed, on the same line, by a word that says it is absent. */
-const NEEDS = /\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b[^\n]*?\b(?:is |are )?(?:required|not set|missing|must be set|undefined)/;
+const NEEDS =
+  /\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b[^\n]*?\b(?:is |are )?(?:required|not set|missing|must be set|undefined)/;
 /** "Missing environment variable: NAME" / "missing NAME". */
 const MISSING_FIRST = /\bmissing\b[^\n]*?\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b/i;
 

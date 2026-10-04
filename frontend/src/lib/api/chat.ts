@@ -93,10 +93,19 @@ export const chatApi = {
   // One page of the listing (spec chat "List conversations by latest
   // activity"): the caller reads as many pages as it shows, 30 and then 50, and
   // passes the abort signal of its query so a stale request is cancelled. `q`
-  // is a case-insensitive substring of the title; a cursor belongs to the
-  // archived flag and the `q` it was issued for.
+  // is a case-insensitive substring of the title; `source` and `agent` narrow
+  // by where and by which agent; a cursor belongs to the archived flag and the
+  // `q`, `source` and `agent` it was issued for.
   listConversations: (
-    opts: { archived?: boolean; limit: number; cursor?: string | null; q?: string },
+    opts: {
+      archived?: boolean;
+      limit: number;
+      cursor?: string | null;
+      q?: string;
+      /** Source tokens (`coffer`, channel uids) and agent keys; empty is every one. */
+      source?: readonly string[];
+      agent?: readonly string[];
+    },
     signal?: AbortSignal,
   ): Promise<ConversationListOut> =>
     unwrap(
@@ -108,6 +117,8 @@ export const chatApi = {
             limit: opts.limit,
             ...(opts.cursor ? { cursor: opts.cursor } : {}),
             ...(opts.q ? { q: opts.q } : {}),
+            ...(opts.source?.length ? { source: opts.source.join(",") } : {}),
+            ...(opts.agent?.length ? { agent: opts.agent.join(",") } : {}),
           },
         },
       }),

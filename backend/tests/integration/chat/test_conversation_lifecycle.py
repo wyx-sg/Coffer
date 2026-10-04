@@ -689,3 +689,36 @@ async def test_finalize_records_when_the_reply_ended(tmp_path):  # type: ignore[
         assert row.content[0].duration_ms == 300  # type: ignore[union-attr]
     finally:
         await engine.dispose()
+
+
+async def test_the_listing_filters_by_source_and_agent_in_sql(tmp_path):  # type: ignore[no-untyped-def]
+    import dataclasses
+
+    from coffer.application.chat.conversation_repo import Narrowing
+
+    engine, conv_repo, _ = await _setup(tmp_path)
+    try:
+        own = await conv_repo.create(_conv("own", offset_secs=0))
+        a = await conv_repo.create(
+            dataclasses.replace(_conv("a", offset_secs=1), channel_uid="ch-a", agent_key="codex")
+        )
+        await conv_repo.create(
+            dataclasses.replace(
+                _conv("b", offset_secs=2), channel_uid="ch-b", agent_key="claude_code"
+            )
+        )
+
+        async def titles(**kw):  # type: ignore[no-untyped-def]
+            return sorted(c.title for c in await conv_repo.list(narrow=Narrowing.of(**kw)))
+
+        assert await titles(sources=["coffer"]) == ["own"]
+        assert await titles(sources=["ch-a"]) == ["a"]
+        assert await titles(sources=["coffer", "ch-b"]) == ["b", "own"]
+        assert await titles(agents=["codex", "claude_code"]) == ["a", "b"]
+        assert await titles(sources=["coffer", "ch-a"], agents=["codex"]) == ["a"]
+        assert await titles() == ["a", "b", "own"]
+        assert await conv_repo.count(narrow=Narrowing.of(sources=["coffer", "ch-b"])) == 2
+        assert await conv_repo.count(narrow=Narrowing.of(agents=["builtin"])) == 1
+        assert own.id and a.id
+    finally:
+        await engine.dispose()

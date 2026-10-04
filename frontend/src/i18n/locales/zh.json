@@ -3557,9 +3557,6 @@
     },
     "title": "对话",
     "thinking": "正在思考…",
-    "message": {
-      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
-    },
     "history": {
       "rename": "重命名",
       "delete": "删除…",
@@ -3637,8 +3634,8 @@
       "workspaceFull": "Coffer 的工作区（~/.coffer/content/workspace）",
       "workspacePicker": {
         "label": "工作区",
-        "choose": "选择文件夹…",
-        "typePath": "或输入文件夹路径",
+        "choose": "选择…",
+        "typePath": "输入或粘贴文件夹路径",
         "use": "使用"
       }
     },

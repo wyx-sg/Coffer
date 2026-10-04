@@ -16,8 +16,7 @@ const SECRET_NAME_RE = /token|secret|pass|pwd|key|cred|auth/i;
  * the encrypted secret store in the review step instead of being POSTed
  * inline and rejected with a CONFIG_INVALID the user can't easily action.
  */
-const SECRET_VALUE_RE =
-  /^(?:Bearer\s+|ghp_|gho_|github_pat_|sk-|xox[abp]-|eyJ[A-Za-z0-9_-]{20,})/;
+const SECRET_VALUE_RE = /^(?:Bearer\s+|ghp_|gho_|github_pat_|sk-|xox[abp]-|eyJ[A-Za-z0-9_-]{20,})/;
 
 /** Whether an env var or header named `key` holding `value` looks secret.
  *  An `Authorization` header (any value, `Bearer …` included) always does. */

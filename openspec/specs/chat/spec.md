@@ -279,6 +279,10 @@ never one list with a flag every caller must remember. Both listings MUST page
 by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor")
 with the conversation id as the tie-break, so a conversation whose activity is
 bumped while a reader pages moves to the head rather than appearing twice.
+Both listings MUST narrow by source (`source`: `coffer` for conversations opened in
+Coffer's own UI, any other token a channel uid) and by agent (`agent`: agent keys),
+each a comma-separated set, in the server — the page and its `total` both — and a
+cursor MUST be bound to the `q`, source and agent filters it was issued for.
 
 #### Scenario: the conversation list is ordered by activity, not by creation
 - **GIVEN** two conversations created in order,
@@ -291,6 +295,11 @@ bumped while a reader pages moves to the head rather than appearing twice.
 - **WHEN** the active listing is read with `limit=2` and then with the answer's `next_cursor`
 - **THEN** the first page holds the two with the latest activity and the second the third, with a `null` `next_cursor`
 - **AND** both pages report a `total` of 3
+
+#### Scenario: the conversation list narrows by source and agent on the server
+- **GIVEN** conversations opened in Coffer and in a channel, run by different agents
+- **WHEN** the listing is read with `source=coffer` or `source=<channel uid>`, and with `agent=<key>`
+- **THEN** the page and `total` hold only the matching conversations, and a cursor issued for one set of filters is `CURSOR_INVALID` for another
 
 ### Requirement: Require every writer to name the agent
 `agent_key` MUST have no storage-level default. Every writer names the agent
@@ -610,7 +619,7 @@ naming the conversation, and says its messages are removed from Coffer while the
 stay. The filter row reads, in order, an **Active / Archived** switch, a search box over titles and
 message text (`/` focuses it), a **Source** pill (Coffer and each channel, several at once, each
 channel shown as its platform's logo and `SeaTalk · Team bot`), an **Agent** pill, and **Clear filters**
-once anything narrows the list; it shows no result count. All of it is in the URL — `?q=`,
+once anything narrows the list; it shows no result count. The source and agent filters are applied by the server, so a filtered list pages through matches only. All of it is in the URL — `?q=`,
 `?source=coffer,<channel uid>`, `?agent=`, `?archived=1` — so a filtered list is a link, and a channel's
 **Conversations from this channel** link opens `?source=<uid>`; a link carrying the earlier
 `?channel=<uid>` is read once as that source and the address rewritten. Ticking a row (a shift-click

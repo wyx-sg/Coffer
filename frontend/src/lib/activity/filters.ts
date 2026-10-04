@@ -208,10 +208,7 @@ function changeAgent(entry: AuditEntry, agentNames: ReadonlyMap<string, string>)
 }
 
 /** The who value one record carries — `agent:<uid>` or `actor:<group>` — or null. */
-function recordWho(
-  r: ActivityRecord,
-  agentNames: ReadonlyMap<string, string>,
-): string | null {
+function recordWho(r: ActivityRecord, agentNames: ReadonlyMap<string, string>): string | null {
   if (r.source === "call") return r.call.agent_uid ? `agent:${r.call.agent_uid}` : null;
   if (r.source === "daemon") return "actor:system";
   const who = actorWho(r.entry.actor);

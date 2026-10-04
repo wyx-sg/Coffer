@@ -20,6 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from coffer.application.chat.conversation_repo import EVERY, Narrowing
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
@@ -99,6 +100,7 @@ class ConversationRepo:
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
         contains: str | None = None,
+        narrow: Narrowing = EVERY,
     ) -> list[Conversation]:
         """Conversations newest activity first with the id breaking ties.
         ``archived=False`` is the active threads,
@@ -110,7 +112,7 @@ class ConversationRepo:
             stmt = select(ConversationModel).order_by(
                 ConversationModel.updated_at.desc(), ConversationModel.id.desc()
             )
-            stmt = _listing_filter(stmt, archived=archived, contains=contains)
+            stmt = _listing_filter(stmt, archived=archived, contains=contains, narrow=narrow)
             if after is not None:
                 stmt = stmt.where(
                     newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)
@@ -120,13 +122,12 @@ class ConversationRepo:
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
 
-    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
+    async def count(
+        self, *, archived: bool = False, contains: str | None = None, narrow: Narrowing = EVERY
+    ) -> int:
         async with self._sm() as session:
-            stmt = _listing_filter(
-                select(func.count()).select_from(ConversationModel),
-                archived=archived,
-                contains=contains,
-            )
+            stmt = select(func.count()).select_from(ConversationModel)
+            stmt = _listing_filter(stmt, archived=archived, contains=contains, narrow=narrow)
             return int((await session.execute(stmt)).scalar_one())
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:

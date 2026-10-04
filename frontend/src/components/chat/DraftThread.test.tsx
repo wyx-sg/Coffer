@@ -229,7 +229,7 @@ describe("DraftThread", () => {
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual(["Coffer’s workspace", "~/a", "~/b"]);
-    expect(screen.getByRole("button", { name: "Choose a folder…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose…" })).toBeInTheDocument();
 
     fireEvent.click(within(list).getByRole("button", { name: "~/b" }));
     expect(onCwdChange).toHaveBeenLastCalledWith("/Users/me/b");
@@ -243,10 +243,12 @@ describe("DraftThread", () => {
     expect(onCwdChange).toHaveBeenLastCalledWith(null);
 
     fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
-    expect(screen.getByRole("button", { name: "Use" })).toBeDisabled();
-    fireEvent.change(screen.getByRole("textbox", { name: "Or type a folder path" }), {
+    // One button: Choose… while the field is empty, Use once it holds a path.
+    expect(screen.queryByRole("button", { name: "Use" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Type or paste a folder path" }), {
       target: { value: "  /srv/project " },
     });
+    expect(screen.queryByRole("button", { name: "Choose…" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use" }));
     expect(onCwdChange).toHaveBeenLastCalledWith("/srv/project");
   });
