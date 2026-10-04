@@ -187,7 +187,7 @@ def resources(home: Path) -> list[Spec]:
             None,
         ),
         (11, "knowledge", "notes", {}, True, None, None),
-        (12, "knowledge", "work", {}, True, None, "Work notes"),
+        (12, "knowledge", "work", {}, True, None, None),
         (
             13,
             "agent",

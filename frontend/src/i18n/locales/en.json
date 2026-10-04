@@ -231,10 +231,7 @@
     "subtitle": "MCP servers Coffer runs and serves to your agents through one endpoint.",
     "addServer": "Add server",
     "titleField": {
-      "label": "Title",
-      "hint": "Shown in place of the name wherever this is listed. Leave empty to show the name.",
-      "dialogTitle": "Edit title",
-      "dialogSubtitle": "A title is for display only; agents keep seeing the name."
+      "hint": "Shown in place of the name wherever this is listed. Leave empty to show the name."
     },
     "fixedName": {
       "label": "Name",

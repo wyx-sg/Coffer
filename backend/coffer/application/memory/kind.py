@@ -115,4 +115,5 @@ def make_memory_kind(service: MemoryService) -> Kind:
         generic_create_allowed=False,
         toggleable=False,
         storage=StorageClass.DERIVED,
+        titled=False,
     )

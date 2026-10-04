@@ -1021,11 +1021,6 @@ components:
             type: string
           title: Sources
           type: array
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         uid:
           title: Uid
           type: string
@@ -1053,7 +1048,6 @@ components:
       - repository_path
       - note_count
       - unresolvable
-      - title
       - distilled_at
       - sample
       - sources

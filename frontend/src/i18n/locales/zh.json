@@ -231,10 +231,7 @@
     "subtitle": "Coffer 运行的 MCP 服务器，通过同一个端点提供给你的智能体。",
     "addServer": "添加服务器",
     "titleField": {
-      "label": "标题",
-      "hint": "在列出它的地方代替名称显示。留空则显示名称。",
-      "dialogTitle": "编辑标题",
-      "dialogSubtitle": "标题只用于显示，智能体看到的仍是名称。"
+      "hint": "在列出它的地方代替名称显示。留空则显示名称。"
     },
     "fixedName": {
       "label": "名称",

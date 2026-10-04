@@ -58,10 +58,6 @@ class PartitionOut(BaseModel):
     #: partitions"). Surfaced
     #: rather than hidden: only the developer can decide it is not coming back.
     unresolvable: bool
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
     #: When a distil pass last finished over this partition; ``null`` if none
     #: has ("Present a partition as its memories").
     distilled_at: datetime | None = None

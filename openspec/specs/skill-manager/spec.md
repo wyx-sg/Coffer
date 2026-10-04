@@ -26,7 +26,7 @@ The system MUST register each managed skill as a Resource of kind `skill`, ident
 - **THEN** each is refused with `NAME_IMMUTABLE` (409), and the message says that a new name means removing the skill and importing it again, which resets its enabled flag, scope and deliveries
 - **AND** the row, the master folder `before`, its SKILL.md `name: before` and the delivered link are all exactly as they were, and `verify` reports no drift
 
-#### Scenario: a skill's title is edited without touching disk
+#### Scenario: a skill takes no title
 - **GIVEN** an imported skill `before` delivered to a registered agent
 - **WHEN** the user submits the title `Release checklist` for it through the resource update route
 - **THEN** the title is refused as a validation error, `GET /api/v1/skills` and the Skills page still show `before`, and `GET /api/v1/skills/{uid}` carries no `title`

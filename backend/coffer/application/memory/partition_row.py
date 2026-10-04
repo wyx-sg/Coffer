@@ -72,10 +72,6 @@ class PartitionSummary:
     repository_path: str
     note_count: int
     unresolvable: bool
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
     #: When a distil pass last finished over this partition, or ``None`` if none
     #: has — what the table's Distil column and the header's "distilled 2 h ago"
     #: read (spec memory "Present a partition as its memories").
@@ -120,7 +116,6 @@ def summary_of(row: Resource, placement: Placement) -> PartitionSummary:
     return PartitionSummary(
         uid=row.uid,
         name=row.name,
-        title=row.title,
         repository_key=placement.repository_key,
         repository_path=placement.repository_path,
         note_count=len(notes),

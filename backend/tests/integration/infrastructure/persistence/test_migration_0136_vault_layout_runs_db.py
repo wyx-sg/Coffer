@@ -136,5 +136,5 @@ def test_a_fresh_database_goes_straight_to_head(tmp_path) -> None:  # type: igno
     db_path = tmp_path / "runs.db"
     migrations_runner.run_migrations(f"sqlite+aiosqlite:///{db_path}")
     with sqlite3.connect(db_path) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0143",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0144",)
         assert "resources" not in _tables(conn)

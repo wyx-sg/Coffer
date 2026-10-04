@@ -195,7 +195,7 @@ class Kind:
     name_from_config: Callable[[dict[str, Any]], str] | None = None
     # Whether rows of this kind carry the optional display ``title`` (spec
     # resource-framework "Carry an optional editable title on the kinds that
-    # have one"). False for `agent`, `mcp_server` and `skill`: each
+    # have one"). False for `agent`, `knowledge`, `mcp_server`, `memory` and `skill`: each
     # has a fixed name and nothing else to be called — a non-empty title is
     # refused on register and on edit.
     titled: bool = True

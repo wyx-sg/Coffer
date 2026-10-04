@@ -438,9 +438,9 @@ across every spec and so has no narrower home.
 ### Requirement: Carry an optional editable title on the kinds that have one
 A resource of a kind that carries a title MUST carry an optional **`title`**: free text of at
 most 80 characters that a person chooses for display, separate from the resource's `name`. The
-kinds with a title are those whose name is a label a person chose — `provider`, `channel`
-and `memory`. `agent`, `mcp_server`, `skill` and `knowledge` carry none: each is shown by its fixed
-name — a knowledge collection by its folder, with an editable description instead
+kinds with a title are those whose name is a label a person chose — `provider` and `channel`.
+`agent`, `mcp_server`, `skill`, `memory` and `knowledge` carry none: each is shown by its fixed
+name — a memory partition by its name, a knowledge collection by its folder, with an editable description instead
 ([knowledge](../knowledge/spec.md) "Name a collection by its folder and edit its description in place")
 — and a non-empty title for one MUST be refused as a validation error (422) on registration
 and on update, with nothing changed. On a kind that carries one, the title MUST be editable
@@ -465,7 +465,7 @@ resource that arrives without one MUST keep its title empty.
 - **AND** the second clears the title, and surfaces show the name again
 
 #### Scenario: a kind without a title refuses one
-- **GIVEN** a registered MCP server, a registered skill and a registered agent
+- **GIVEN** a registered MCP server, a registered skill, a registered agent and a memory partition
 - **WHEN** the user submits a title for each through the kind-agnostic update, and registers an MCP server with a title
 - **THEN** each is refused as a validation error (422) and nothing is stored
 - **AND** each of those resources is still shown by its fixed name

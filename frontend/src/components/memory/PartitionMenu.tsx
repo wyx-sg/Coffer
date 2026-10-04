@@ -14,7 +14,6 @@ import { useToast } from "@/components/ui/toast";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { useFsActions } from "@/lib/fsActions";
 import { useMemoryNotes } from "@/lib/hooks/useMemory";
-import { displayName } from "@/lib/resourceTitle";
 
 interface Props {
   partition: PartitionOut;
@@ -72,7 +71,7 @@ export function PartitionMenu({ partition }: Props) {
   return (
     <>
       <ActionMenu
-        label={t("memory.detail.menu.label", { name: displayName(partition) })}
+        label={t("memory.detail.menu.label", { name: partition.name })}
         actions={actions}
       />
       <DeletePartitionDialog

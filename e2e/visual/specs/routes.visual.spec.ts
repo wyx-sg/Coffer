@@ -315,12 +315,20 @@ test.describe("knowledge collection", () => {
         "# Vault sync\n\nA sync round takes the vault lock; curation waits for it.\n",
       ],
     ]) {
-      const res = await fetch(`${base}/material`, {
+      // Submitted as the page's Upload does: one Markdown file per document.
+      const form = new FormData();
+      form.set("collection", collection);
+      form.set(
+        "file",
+        new Blob([body], { type: "text/markdown" }),
+        `${title.toLowerCase().replaceAll(" ", "-")}.md`,
+      );
+      const res = await fetch(`${base}/upload`, {
         method: "POST",
-        headers,
-        body: JSON.stringify({ collection, title, description: title, body }),
+        headers: { "X-Coffer-Token": headers["X-Coffer-Token"] },
+        body: form,
       });
-      expect(res.status).toBe(201);
+      expect(res.ok).toBe(true);
     }
   });
 

@@ -28,12 +28,10 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
 import { DeletePartitionDialog } from "@/components/memory/DeletePartitionDialog";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
-import { displayName } from "@/lib/resourceTitle";
 
 interface Props {
   rows: PartitionOut[];
@@ -55,7 +53,7 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
       key: "name",
       header: t("memory.cols.name"),
       className: "w-[20%]",
-      cell: (r) => <ResourceLabel resource={r} truncate />,
+      cell: (r) => <TruncatedText text={r.name} className="font-medium" />,
     },
     {
       key: "path",
@@ -116,7 +114,7 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
             icon={Trash2}
             label={`${t("common.delete")}…`}
             destructive
-            aria-label={`${t("common.delete")}: ${displayName(r)}`}
+            aria-label={`${t("common.delete")}: ${r.name}`}
             onClick={() => setDeleting(r)}
           />
         ) : null,
