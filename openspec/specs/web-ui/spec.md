@@ -1088,10 +1088,16 @@ machine only is a setting shown on the tab it belongs to:
   or not it syncs ([vault-storage](../vault-storage/spec.md) "Keep the vault a
   git repository whether or not it syncs"): its size (with its history), how
   many versions it holds, when and by whom it last changed, whether it syncs to
-  a remote or is this machine's only copy, its location, and **Open folder**.
+  a remote or is this machine's only copy, and **Open folder**, whose tooltip
+  names the folder (no separate location row).
 - **Local content** — what is not synced and the user must back up themselves:
   chat and channel attachments and media only, with their size and **Open
-  folder**, and a line saying so.
+  folder**, and one short line saying how they are kept: "Include this folder in
+  your own backups." under keep forever, or that attachments are deleted
+  automatically after N days. Its **Attachments** row is the retention of those
+  files, a Keep forever switch and a number of days (30 by default) that auto-saves like
+  every History row, and shortening it asks first, counting the files the shorter
+  window deletes.
 - **History** — the retention of each record kind — changes, MCP calls and
   conversations — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
@@ -1100,7 +1106,8 @@ machine only is a setting shown on the tab it belongs to:
   window (or turning Keep forever off) MUST ask first, and the confirmation
   MUST say how many records the shorter window deletes at the next cleanup and
   how many the table holds now and would hold after, counted by the daemon
-  without deleting anything. A refused save MUST say so above the blocks with
+  without deleting anything. **Clear expired now** also removes attachments past
+  their window and reports them as files. A refused save MUST say so above the blocks with
   **Try again**, name the window still in place, and mark the row "Not saved".
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache,
   both under `~/.coffer/derived/`, which Coffer rebuilds on its own: one **Clear** action,
@@ -1119,7 +1126,13 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+
+#### Scenario: the attachments retention is set where the attachments are listed
+- **GIVEN** attachments kept for 30 days
+- **WHEN** the user opens `/settings/data`
+- **THEN** Local content has an Attachments row at 30 days and says attachments are deleted automatically after 30 days, and History has no Attachments row
+- **AND** after the user turns Keep forever on, the line reads "Include this folder in your own backups." and the choice is saved
 
 #### Scenario: shortening a retention window counts what it deletes
 - **GIVEN** MCP calls kept for 30 days, some of them older than 7 days

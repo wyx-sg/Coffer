@@ -227,7 +227,7 @@ Send photos, files, voice messages and other media as you would to a person. Eac
 | Any other file | The file path. |
 | A location, a contact card | Nothing to download: the bot asks for text, a photo or a file. |
 
-A file larger than the platform lets a bot download is not fetched; the turn text notes it, so the reply acknowledges it. Attachments are stored as references, so a later turn in the same conversation can still reach them. Files in `~/.coffer/content/channel-media` are pruned 30 days after they were last modified.
+A file larger than the platform lets a bot download is not fetched; the turn text notes it, so the reply acknowledges it. Attachments are stored as references, so a later turn in the same conversation can still reach them. Files in `~/.coffer/content/channel-media` are pruned after the **Attachments** retention window, 30 days after they were last modified by default (see **Settings → Data → Local content**).
 
 ::: warning Voice transcription sends audio off your machine
 Transcription sends the audio to the transcription provider you configured. It is off until you choose both a transcription provider and a model. A transcription failure never fails the turn; the agent gets the audio file instead.

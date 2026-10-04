@@ -90,8 +90,8 @@ A local file that does not parse is moved aside as `<name>.unreadable-<n>` and r
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `content/channel-media/` | Attachments received over Telegram and SeaTalk, saved so the agent can open them. Files older than 30 days are pruned. | daemon | No | Yes. |
-| `content/chat-media/` | Files attached on the Conversations page: each upload's bytes (`<id><ext>`) beside a small `<id>.json` record of its name, type and size. Files older than 30 days are pruned. | daemon | No | Yes. A conversation keeps showing the file's chip, but a later turn can no longer open it. |
+| `content/channel-media/` | Attachments received over Telegram and SeaTalk, saved so the agent can open them. Files older than the attachments retention window (30 days by default) are pruned. | daemon | No | Yes. |
+| `content/chat-media/` | Files attached on the Conversations page: each upload's bytes (`<id><ext>`) beside a small `<id>.json` record of its name, type and size. Files older than the attachments retention window (30 days by default) are pruned. | daemon | No | Yes. A conversation keeps showing the file's chip, but a later turn can no longer open it. |
 | `content/workspace/` | The default working directory for a chat when you pick none. | daemon | No | Only if no chat uses it. |
 
 ### History and keys

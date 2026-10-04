@@ -21,6 +21,23 @@ from coffer.domain.retention import files_to_prune
 _logger = logging.getLogger(__name__)
 
 
+def _stat_files(media_dir: pathlib.Path) -> list[tuple[str, datetime]]:
+    """``(path, mtime)`` of every file directly in ``media_dir`` (none if missing)."""
+    if not media_dir.exists():
+        return []
+    entries: list[tuple[str, datetime]] = []
+    for child in media_dir.iterdir():
+        if not child.is_file():
+            continue
+        try:
+            mtime = datetime.fromtimestamp(child.stat().st_mtime, tz=UTC)
+        except OSError:
+            _logger.warning("media.stat_failed path=%s", child, exc_info=True)
+            continue
+        entries.append((str(child), mtime))
+    return entries
+
+
 def prune_media_dir(
     media_dir: pathlib.Path,
     *,
@@ -34,19 +51,7 @@ def prune_media_dir(
     unlinked. A single failed stat/unlink is skipped (logged), never wedging the
     sweep. Returns the paths actually deleted.
     """
-    if not media_dir.exists():
-        return []
-    entries: list[tuple[str, datetime]] = []
-    for child in media_dir.iterdir():
-        if not child.is_file():
-            continue
-        try:
-            mtime = datetime.fromtimestamp(child.stat().st_mtime, tz=UTC)
-        except OSError:
-            _logger.warning("media.stat_failed path=%s", child, exc_info=True)
-            continue
-        entries.append((str(child), mtime))
-
+    entries = _stat_files(media_dir)
     deleted: list[str] = []
     for path in files_to_prune(entries, max_age_days=max_age_days, now=now):
         try:
@@ -60,4 +65,15 @@ def prune_media_dir(
     return deleted
 
 
-__all__ = ["prune_media_dir"]
+def count_media_dir(
+    media_dir: pathlib.Path,
+    *,
+    max_age_days: int,
+    now: datetime,
+) -> tuple[int, int]:
+    """``(files in media_dir, files older than max_age_days)``: what a sweep would delete."""
+    entries = _stat_files(media_dir)
+    return len(entries), len(files_to_prune(entries, max_age_days=max_age_days, now=now))
+
+
+__all__ = ["count_media_dir", "prune_media_dir"]

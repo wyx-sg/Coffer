@@ -121,7 +121,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 
 ### 内容 {#content}
 
-`content/chat-media/`（在对话页面附加的文件）、`content/channel-media/`（从聊天平台下载的附件）和 `content/workspace/`（聊天轮次的默认工作目录）。两个媒体目录都按时间清理。内容是你唯一的副本，不同步。
+`content/chat-media/`（在对话页面附加的文件）、`content/channel-media/`（从聊天平台下载的附件）和 `content/workspace/`（聊天轮次的默认工作目录）。两个媒体目录都按时间清理，由 `attachments` 保留策略决定（默认 30 天；可调整，或永久保留）。内容是你唯一的副本，不同步。
 
 ### runs.db {#runs-db}
 

@@ -21,8 +21,7 @@ import uuid
 from datetime import datetime
 
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment, is_upload_id
-from coffer.domain.retention import MEDIA_RETENTION_DAYS
-from coffer.infrastructure.media_retention import prune_media_dir
+from coffer.infrastructure.media_retention import count_media_dir, prune_media_dir
 from coffer.infrastructure.vault.home import content_root
 
 _logger = logging.getLogger(__name__)
@@ -57,10 +56,14 @@ class FileChatMediaStore:
     async def present(self, attachment: Attachment) -> bool:
         return await asyncio.to_thread(pathlib.Path(attachment.path).is_file)
 
-    def prune(self, now: datetime) -> list[str]:
-        """Delete stored files older than the media retention window — the
-        sweep the composition root binds into the retention cadence."""
-        return prune_media_dir(self._root, max_age_days=MEDIA_RETENTION_DAYS, now=now)
+    def prune(self, now: datetime, max_age_days: int) -> list[str]:
+        """Delete stored files older than ``max_age_days`` — the sweep the
+        composition root binds into the attachments retention policy."""
+        return prune_media_dir(self._root, max_age_days=max_age_days, now=now)
+
+    def count(self, now: datetime, max_age_days: int) -> tuple[int, int]:
+        """``(files stored, files older than max_age_days)`` for the preview."""
+        return count_media_dir(self._root, max_age_days=max_age_days, now=now)
 
     # -- blocking halves, run off the event loop ----------------------------
 

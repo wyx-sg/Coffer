@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
+import type { components } from "@/lib/api/types";
 import type { StorageSummary } from "@/lib/hooks/useStorage";
 import { acceptance } from "@/test/acceptance";
 
@@ -24,7 +26,9 @@ const { getApiClient } = await import("@/lib/api/client");
 const { fsApi } = await import("@/lib/api/fs");
 const getApiClientMock = vi.mocked(getApiClient);
 
-const POLICIES = [
+type Policy = components["schemas"]["RetentionPolicyOut"];
+
+const POLICIES: Policy[] = [
   {
     table_name: "audit_log",
     display_name: "Audit log",
@@ -49,6 +53,15 @@ const POLICIES = [
     description: "x",
     default_retention_days: 30,
     retention_days: 90,
+    last_pruned_at: null,
+    last_pruned_rows: 0,
+  },
+  {
+    table_name: "attachments",
+    display_name: "Attachments",
+    description: "x",
+    default_retention_days: 30,
+    retention_days: 30,
     last_pruned_at: null,
     last_pruned_rows: 0,
   },
@@ -82,13 +95,16 @@ function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <ToastProvider>{ui}</ToastProvider>
+      <TooltipProvider>
+        <ToastProvider>{ui}</ToastProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
 
 function mockApi({
   storage = STORAGE,
+  policies = POLICIES,
   patch = vi.fn().mockResolvedValue({ data: {}, error: undefined }),
   post = vi
     .fn()
@@ -99,6 +115,7 @@ function mockApi({
     ),
 }: {
   storage?: typeof STORAGE;
+  policies?: typeof POLICIES;
   patch?: ReturnType<typeof vi.fn>;
   post?: ReturnType<typeof vi.fn>;
 } = {}) {
@@ -109,7 +126,7 @@ function mockApi({
         ? { data: storage, error: undefined }
         : path === "/retention/policies/{table_name}/preview"
           ? { data: { table_name: "mcp_invocations", days: 30, total_rows: 10, rows_to_delete: 4 } }
-          : { data: { policies: POLICIES }, error: undefined },
+          : { data: { policies }, error: undefined },
     );
   getApiClientMock.mockReturnValue({ GET: get, POST: post, PATCH: patch } as unknown as ReturnType<
     typeof getApiClient
@@ -125,11 +142,13 @@ describe("DataSettings", () => {
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
     await within(vault).findByText("12.4 MB · 1,382 versions");
-    expect(within(vault).getByText("~/.coffer/vault")).toBeInTheDocument();
     expect(within(vault).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const local = screen.getByTestId("settings-data-local");
-    expect(screen.getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
-    expect(within(local).getByText("~/.coffer/chat-media")).toBeInTheDocument();
+    expect(
+      await within(local).findByText("Attachments are deleted automatically after 30 days."),
+    ).toBeInTheDocument();
+    // The folder is named in the button's tooltip, not in a Location row.
+    expect(within(local).queryByText("~/.coffer/chat-media")).toBeNull();
     expect(within(local).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const history = screen.getByTestId("settings-data-history");
     expect(within(history).getByText("48.2 MB")).toBeInTheDocument();
@@ -138,12 +157,53 @@ describe("DataSettings", () => {
     expect(within(history).getByText("Conversations")).toBeInTheDocument();
     // Only the three record kinds; the other pruned tables keep their defaults.
     expect(within(history).queryByText("Sync rounds")).toBeNull();
+    expect(within(history).queryByText("Attachments")).toBeNull();
     expect(within(history).getByRole("button", { name: /clear expired data now/i })).toBeVisible();
     const cache = screen.getByTestId("settings-data-cache");
     expect(within(cache).getByText("96 MB")).toBeInTheDocument();
     expect(within(cache).getByRole("button", { name: /^clear$/i })).toBeInTheDocument();
     expect(screen.queryByText(/this mac only/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
+
+  acceptance(
+    "web-ui",
+    "the attachments retention is set where the attachments are listed",
+    async () => {
+      const { patch } = mockApi();
+      render(wrap(<DataSettings />));
+      const local = await screen.findByTestId("settings-data-local");
+      expect(await within(local).findByText("Attachments")).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId("settings-data-history")).queryByText("Attachments"),
+      ).toBeNull();
+      expect(
+        await within(local).findByText("Attachments are deleted automatically after 30 days."),
+      ).toBeInTheDocument();
+      fireEvent.click(within(local).getByRole("switch", { name: /keep forever/i }));
+      await waitFor(() =>
+        expect(patch).toHaveBeenCalledWith("/retention/policies/{table_name}", {
+          params: { path: { table_name: "attachments" } },
+          body: { retention_days: null },
+        }),
+      );
+    },
+  );
+
+  test("attachments kept forever fall back to the backup line; shortening counts files", async () => {
+    const policies = POLICIES.map((p) =>
+      p.table_name === "attachments" ? { ...p, retention_days: null } : p,
+    );
+    mockApi({ policies });
+    render(wrap(<DataSettings />));
+    const local = await screen.findByTestId("settings-data-local");
+    expect(
+      await within(local).findByText("Include this folder in your own backups."),
+    ).toBeInTheDocument();
+    fireEvent.click(await within(local).findByRole("switch", { name: /keep forever/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Keep attachments for 30 days?")).toBeInTheDocument();
+    expect(await within(dialog).findByText(/4 files/)).toBeInTheDocument();
   });
 
   test("the history footer names the last nightly clear", async () => {
@@ -156,12 +216,12 @@ describe("DataSettings", () => {
     mockApi();
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
-    await within(vault).findByText("~/.coffer/vault");
+    await within(vault).findByText("12.4 MB · 1,382 versions");
     fireEvent.click(within(vault).getByRole("button", { name: /open folder/i }));
     expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/vault", undefined);
   });
 
-  test("the vault block shows its size, versions and location, as drawn", async () => {
+  test("the vault block shows its size and versions, as drawn", async () => {
     mockApi();
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");

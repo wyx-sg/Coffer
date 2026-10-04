@@ -218,17 +218,18 @@ The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, s
 
 Retention policies decide how long rows are kept. The retention worker prunes once at start-up and then every 6 hours. Policies are local to this machine, kept in `~/.coffer/local/retention.json`.
 
-The window is set in **Settings → Data → History**, which shows three policies. The other two keep their defaults and are reachable only over REST (`/api/v1/retention/policies`).
+The window is set in **Settings → Data → History**, which shows three policies, and **Attachments** under **Local content**. The other two keep their defaults and are reachable only over REST (`/api/v1/retention/policies`).
 
 | Policy | Key | Default | Effect |
 | --- | --- | --- | --- |
 | **Changes** | `audit_log` | 365 days | Deletes audit entries older than the window. |
 | **MCP calls** | `mcp_invocations` | 30 days | Deletes gateway invocation log rows. |
 | **Conversations** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
+| **Attachments** | `attachments` | 30 days | Deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` whose last-modified time is older than the window. Shown under **Local content**. |
 | REST only | `sync_runs` | 90 days | Deletes the history of sync rounds. |
 | REST only | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
 
-Both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
+Both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes aged shim and upstream logs older than 7 days.
 
 ### Settings → Security
 

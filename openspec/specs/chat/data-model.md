@@ -131,7 +131,7 @@ flat files under `~/.coffer/content/chat-media` (see "Upload a file for a web me
 `id` is 32 lowercase hex characters, opaque to the client, and the only thing a
 send names (`attachment_ids`). There is no table and no link from an upload to
 a conversation: a send turns each id into an `attachment` block, and the
-30-day age sweep removes both files whether or not they were sent.
+attachments retention sweep (30 days unless the user changed it) removes both files whether or not they were sent.
 
 ## The event union — a wire contract, not a table
 

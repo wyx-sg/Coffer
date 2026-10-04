@@ -39,7 +39,7 @@ type, writes it under `~/.coffer/content/chat-media` as `<id><ext>` beside an
 `<id>.json` record (name, type, size), and answers `{id, filename, mime,
 size}`. `POST …/messages` gains `attachment_ids`; the route resolves each id to
 an `Attachment` and calls the same `enqueue_message(…, attachments=…)` a
-channel calls. The directory is pruned by the same 30-day mtime rule as
+channel calls. The directory is pruned by the `attachments` retention policy (30 days by default, adjustable) with
 `channel-media`, one sweep per directory.
 
 Pros: the send stays one small JSON body with one content type. Each file has
@@ -120,7 +120,7 @@ stores it under `~/.coffer/content/chat-media` and returns an opaque id; a send 
 the ids in `attachment_ids`, and the route resolves them to the same
 `Attachment` references a channel hands the orchestrator. A file is at most
 20 MB, a message carries at most ten, and only images, audio, documents and
-UTF-8 text are accepted. `chat-media` is pruned by the 30-day mtime rule
+UTF-8 text are accepted. `chat-media` is pruned by the `attachments` retention policy (30 days by default, adjustable) by the mtime rule
 `channel-media` uses.
 
 Rules a future change must respect:
@@ -144,5 +144,5 @@ Rules a future change must respect:
 - Enforced by: `domain/chat/attachment.py` (bounds, `upload_mime`),
   `application/chat/attachments.py`, `infrastructure/chat/media_store.py`,
   `surfaces/http/chat/attachment_routes.py`, `domain/retention.py`,
-  `infrastructure/media_retention.py`, and the `media_sweeps` binding in
+  `infrastructure/media_retention.py`, and the `attachments` file policy binding in
   `surfaces/http/app_mcp_composition.py`.

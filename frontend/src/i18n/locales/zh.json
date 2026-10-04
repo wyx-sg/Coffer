@@ -1158,7 +1158,7 @@
       "pruneAll": "立即清理过期数据",
       "pruning": "正在清理…",
       "pruneConfirmTitle": "立即清理过期数据？",
-      "pruneConfirmBody": "超过各项保留期的记录会被永久删除。",
+      "pruneConfirmBody": "超过各项保留期的记录和附件会被永久删除。",
       "pruneRow": "已从{{name}}清理 {{rows}} 行",
       "pruneNothing": "没有需要清理的数据",
       "policy": {
@@ -1186,6 +1186,15 @@
           "shortenTitle": "对话只保留 {{days}} 天？",
           "unit_one": "个对话",
           "unit_other": "个对话"
+        },
+        "attachments": {
+          "name": "附件",
+          "description": "在对话和消息渠道中发送的文件和图片",
+          "shortenTitle": "附件只保留 {{days}} 天？",
+          "shortenBody": "下次清理会删除更早的附件。",
+          "pruneRow": "已从{{name}}清理 {{rows}} 个文件",
+          "unit_one": "个文件",
+          "unit_other": "个文件"
         },
         "sync_runs": {
           "name": "同步轮次",
@@ -1463,7 +1472,6 @@
       "intro": "Coffer 保存了什么、放在哪里、保留多久。",
       "openFolder": "打开文件夹",
       "showInFinder": "在访达中显示",
-      "location": "位置",
       "notSaved": "未保存",
       "saveFailedTitle": "未能保存新的保留期限",
       "lastCleared": "上次清理：{{when}} — {{rows}} 行",
@@ -1477,9 +1485,9 @@
       },
       "local": {
         "title": "本地内容",
-        "description": "不会同步 — 请自行备份（把这个文件夹加入你的备份）。",
-        "attachments": "对话和消息渠道的附件",
-        "attachmentsHelp": "在对话和消息渠道中发送的文件和图片"
+        "description": "请把这个文件夹加入你的备份。",
+        "descriptionDays_one": "附件保留 {{count}} 天后自动删除。",
+        "descriptionDays_other": "附件保留 {{count}} 天后自动删除。"
       },
       "history": {
         "title": "历史记录",

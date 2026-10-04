@@ -16,7 +16,7 @@ import pytest
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
-from coffer.infrastructure.media_retention import prune_media_dir
+from coffer.infrastructure.media_retention import count_media_dir, prune_media_dir
 from coffer.surfaces.http.chat.conversation_routes import _block_out
 from tests.support.chat_turns import start_turn
 
@@ -106,6 +106,7 @@ def test_media_dir_prune_ages_out_by_mtime(tmp_path: object) -> None:
     os.utime(stale, (old_ts, old_ts))
     os.utime(fresh, (fresh_ts, fresh_ts))
 
+    assert count_media_dir(media_dir, max_age_days=30, now=now) == (2, 1)  # type: ignore[arg-type]
     deleted = prune_media_dir(media_dir, max_age_days=30, now=now)  # type: ignore[arg-type]
 
     assert deleted == [str(stale)]

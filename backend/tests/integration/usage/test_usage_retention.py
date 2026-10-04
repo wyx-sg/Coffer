@@ -71,7 +71,7 @@ async def _keys(sm, model) -> set[str]:  # type: ignore[no-untyped-def]
 async def test_request_detail_follows_the_mcp_calls_window(sm) -> None:  # type: ignore[no-untyped-def]
     svc = _retention(sm)
     await svc.initialize_defaults()
-    names = {v.table.name for v in await svc.list_policies()}
+    names = {v.name for v in await svc.list_policies()}
     assert "usage_daily" in names
     assert "usage_requests" not in names  # a follower lists no policy of its own
     await _seed(sm)

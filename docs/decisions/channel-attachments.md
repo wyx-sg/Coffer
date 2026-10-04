@@ -75,7 +75,7 @@ Chat page and lost after a daemon restart.
   `filename` and `mime` for a chip on the web page; the local path never
   leaves the daemon (`surfaces/http/chat/conversation_routes.py`).
 - **Retention.** `~/.coffer/content/channel-media` is swept on the retention cadence:
-  files whose mtime is more than 30 days old are deleted
+  files whose mtime is older than the `attachments` retention window (30 days by default, adjustable) are deleted
   (`files_to_prune` in the kind-agnostic `domain/retention.py` decides,
   `infrastructure/media_retention.py` does the I/O, bound into
   `RetentionService` as one sweep per media directory). There is no size cap and no
@@ -173,7 +173,7 @@ history, and each agent adapter turns them into its native form: voice is
 transcribed when opted in, documents become text for every agent, supported
 images are inlined as base64 for Claude Code and handed as paths to Codex, and
 everything else is a path pointer. The API exposes an attachment's filename
-and mime, never its path. Files older than 30 days by mtime are pruned.
+and mime, never its path. Files older than the `attachments` retention window (30 days by default) by mtime are pruned.
 
 Rules a future change must respect:
 
