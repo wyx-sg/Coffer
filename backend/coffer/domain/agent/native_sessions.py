@@ -1,5 +1,5 @@
-"""An agent's own sessions, as Coffer lists them (spec agent-registry "List an
-agent's native sessions").
+"""An agent's own sessions, as Coffer lists them (spec agent-registry
+"List an agent's native sessions through the agent").
 
 The agents keep their conversations themselves — Claude Code in its project
 files, Codex in its thread store — and answer for them through their own

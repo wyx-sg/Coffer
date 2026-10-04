@@ -144,7 +144,7 @@ The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own na
 - **AND** a store holding fact files beside its `MEMORY.md` counts only the fact files
 
 ### Requirement: Read Claude Code transcripts from the projects directory
-The transcript location of [agent-registry](../spec.md) "List an agent's transcript sessions read-only" for this type MUST be `<config_dir>/projects/**/*.jsonl`. That directory is also the parent of this type's memory stores, which is why the store read of [agent-registry](../spec.md) "Read one native memory store's files read-only" MUST accept only a directory the layout of "Scan Claude Code's per-project memory stores" would have listed and reject a sibling path under `projects/` that merely looks like one.
+The transcript location of [agent-registry](../spec.md) "List an agent's native sessions through the agent" for this type MUST be `<config_dir>/projects/**/*.jsonl`. That directory is also the parent of this type's memory stores, which is why the store read of [agent-registry](../spec.md) "Read one native memory store's files read-only" MUST accept only a directory the layout of "Scan Claude Code's per-project memory stores" would have listed and reject a sibling path under `projects/` that merely looks like one.
 
 #### Scenario: list sessions from projects and refuse a sibling as a memory store
 - **GIVEN** a registered `claude_code` agent with a session `.jsonl` and a `memory/` store under `<config_dir>/projects/<slug>/`

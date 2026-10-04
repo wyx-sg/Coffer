@@ -1246,7 +1246,7 @@ given instead of listing the bot's groups and inferring, and a platform tool cal
 has a chat id to aim at. The block is folded in after command detection (a
 prefixed `/help` would stop being a command) and after the empty-envelope check,
 and is persisted on the user message exactly like thread context — the single
-source of truth (see "Persist inbound attachments as references") stays one
+source of truth (see "Hand inbound attachments to the turn as references") stays one
 string. It rides on **every** turn, not just a conversation's first: `/new <agent>`
 can swap the agent between conversations of one thread (see "Drive every managed agent from one
 bot") and a resumed session would otherwise lose it. Title and sender name are

@@ -139,8 +139,7 @@ The adapter seam is a contract in both directions. An adapter MUST yield a
 terminal turn-done or turn-error event before its iterator ends, and on
 cancellation MUST clean up and re-raise rather than swallow it — the platform's
 interrupt, delete and idle-watchdog paths all arrive that way. An iterator that
-simply stops is not a completed turn (see "Keep partial output when a turn is
-interrupted or fails").
+simply stops is not a completed turn (see "Deliver partial output as events when a turn is interrupted or fails").
 
 #### Scenario: an agent stream that ends without a terminal is a turn error
 - **GIVEN** an agent whose event stream ends without a completion event,
@@ -193,8 +192,7 @@ name a model.
 ### Requirement: Keep a turn's record in its conversation, not the audit log
 A turn's own record is the conversation it ran in. The user message, the
 assistant message, its tool-call and tool-result blocks, its model and its
-token usage are all persisted (see "Persist conversations and messages in
-SQLite") and readable from the REST API and the Conversations page, so "which agent did
+token usage are all persisted (see "Keep the conversation index without its text") and readable from the REST API and the Conversations page, so "which agent did
 what" is answerable after the fact from the timeline rather than from a second
 ledger. Turn activity MUST therefore NOT be written to the audit log: a turn is
 neither irreversible nor security-sensitive nor invisible afterwards, and an
@@ -523,7 +521,7 @@ be removable, and MUST be editable by pulling it back out of the queue into the
 draft surface to amend — re-sending it then enqueues it at the **tail**,
 because it is a new send and whatever was queued behind it was queued first.
 `PUT .../pending` replaces the queue wholesale, and the resulting queue MUST
-ride the event stream (see "Express a turn as typed events") so a second tab,
+ride the event stream (see "Express a turn as typed events in memory") so a second tab,
 and the phone, render the same rows.
 
 #### Scenario: editing a queued message re-queues it at the tail
@@ -580,8 +578,7 @@ in a reply that was stopped or whose stream was lost reads "Stopped" or
 ### Requirement: Summarise the files a reply changed
 Under an assistant reply that is no longer streaming, the thread MUST show a
 "Files changed" card listing each file the reply changed, with the lines added and
-removed, read from the reply's recorded files (see "Record what each reply changed
-in each file"); a reply recorded before files were recorded falls back to the
+removed, read from the reply's recorded files (see "Keep the conversation index without its text"); a reply recorded before files were recorded falls back to the
 files its tool calls wrote, with repeated edits to one file summed into one row. A
 reply that changed no file shows no card. The card sits inside the reply, after
 its text and before Copy reply, and its title carries no count.
