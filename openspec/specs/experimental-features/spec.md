@@ -382,7 +382,7 @@ embed data of a switched-off feature MUST leave that section out.
 
 ### Requirement: Show the Features tab in every build
 Settings MUST carry a **Features** tab (`/settings/features`) in every build,
-after General, Security, Data, Daemon and About. The tab MUST list every
+after General, Security, Data and Daemon, and before About. The tab MUST list every
 registered feature, in registry order, with its name, an **Experimental** mark,
 a one-line description, a switch showing its current state, and what decided
 that state — a pin in `COFFER_FEATURES`, this machine's own setting, or the
@@ -395,7 +395,7 @@ card.
 - **GIVEN** a running daemon
 - **WHEN** the user opens Settings → Features
 - **THEN** the tab lists `knowledge`, `memory`, `sync` and `models` with name, Experimental mark, description, state and what decided it
-- **AND** the Settings tab list is General, Security, Data, Daemon, About and Features
+- **AND** the Settings tab list is General, Security, Data, Daemon, Features and About
 
 #### Scenario: the features tab switches a feature
 - **GIVEN** the daemon reports a registered feature `f` off and unpinned
