@@ -132,6 +132,16 @@ describe("the collection tree and the document pane", () => {
     expect(within(tree()).queryByRole("button", { name: "gateway.md" })).toBeNull();
   });
 
+  test("a collection closed on its chevron opens again when a link leads into it", async () => {
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await within(tree()).findByRole("button", { name: `Collapse ${NAME}` }));
+    expect(within(tree()).queryByRole("button", { name: "gateway.md" })).toBeNull();
+    // Leave for Recent changes, then come back in through a document link.
+    fireEvent.click(within(tree()).getByRole("link", { name: /Recent changes/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /Login retry/ }));
+    expect(await within(tree()).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
+  });
+
   test("the Inbox list closes on its chevron and the collection stays open", async () => {
     renderKnowledge(`/knowledge/${UID}/inbox`);
     const item = await within(tree()).findByRole("button", { name: ITEM.path.split("/").pop() });

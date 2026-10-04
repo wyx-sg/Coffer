@@ -52,6 +52,22 @@ export function KnowledgeNav(props: Props) {
   // it keeps it open rather than flipping it shut.
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
+  // Arriving in a collection — a document, its Inbox, a link from Recent
+  // changes — opens it again even if it was closed earlier, so what is on
+  // screen is visible in the tree. Adjusted during render, not in an effect,
+  // so the tree never paints closed first.
+  const [arrivedAt, setArrivedAt] = useState(props.currentUid);
+  if (arrivedAt !== props.currentUid) {
+    setArrivedAt(props.currentUid);
+    const uid = props.currentUid;
+    if (uid && closed.has(uid)) {
+      setClosed((prev) => {
+        const next = new Set(prev);
+        next.delete(uid);
+        return next;
+      });
+    }
+  }
   const isOpen = (uid: string) => !closed.has(uid) && (opened.has(uid) || uid === props.currentUid);
   const toggle = (uid: string) => {
     const nowOpen = !isOpen(uid);
