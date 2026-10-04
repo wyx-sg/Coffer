@@ -3,14 +3,16 @@
 // A collection's own page (boards 5.1.10, 5.1.11, 5.1.12, 5.1.14), mocked only
 // at the network boundary: the folder name as the heading, the description
 // edited in place (blur / ⌘Enter saves, Esc cancels, the toast offers Undo),
-// the properties rows, the empty collection's one muted line, and Delete
-// collection… from the ⋯ menu — at once, with an Undo toast.
+// the properties rows, the empty collection's one muted line, Rename… from the
+// ⋯ menu (a dialog that closes only on success), and Delete collection… from
+// the same menu — at once, with an Undo toast.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 import { COLLECTION, EDIT, NAME, OTHER, UID } from "./knowledgeTestData";
 import { acceptance } from "@/test/acceptance";
+import { ApiError } from "@/lib/api/errors";
 
 vi.mock("@/lib/api/knowledge", () => ({
   listCollections: vi.fn(),
@@ -33,7 +35,7 @@ vi.mock("@/lib/api/knowledge", () => ({
 }));
 vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
-vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn() } }));
+vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn(), rename: vi.fn() } }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
@@ -177,6 +179,7 @@ describe("Delete collection…", () => {
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
       "Reveal in Finder",
       "Copy path",
+      "Rename…",
       "Delete collection…",
     ]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection…" }));
@@ -204,5 +207,52 @@ describe("Delete collection…", () => {
     api.restoreDeleted.mockRejectedValue(new Error("name taken"));
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(await screen.findByText(`Couldn’t restore ${NAME}`)).toBeInTheDocument();
+  });
+});
+
+describe("Rename…", () => {
+  const openRename = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: `More actions for ${NAME}` }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename…" }));
+    return screen.findByRole("dialog");
+  };
+
+  acceptance("knowledge", "rename a collection from its menu", async () => {
+    vi.mocked(resourcesApi.rename).mockResolvedValue({} as never);
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await openRename();
+    const field = within(dialog).getByRole("textbox", { name: /Name/ });
+    expect(field).toHaveValue(NAME);
+    // Unchanged, the name cannot be submitted.
+    expect(within(dialog).getByRole("button", { name: "Rename" })).toBeDisabled();
+    fireEvent.change(field, { target: { value: "  shops  " } });
+    expect(within(dialog).getByText("Folder: ~/.coffer/vault/knowledge/shops/")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Rename" }));
+
+    await waitFor(() => expect(resourcesApi.rename).toHaveBeenCalledWith(UID, "shops"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(await screen.findByText("Renamed to shops")).toBeInTheDocument();
+    // The address carries the uid, so the page stays where it was.
+    expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}`);
+    // The collection list is read again.
+    await waitFor(() => expect(api.listCollections.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  test("a refused name is said under the field and the dialog stays open", async () => {
+    vi.mocked(resourcesApi.rename).mockRejectedValue(
+      new ApiError("RESOURCE_ALREADY_EXISTS", "knowledge 'shops' already exists"),
+    );
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await openRename();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /Name/ }), {
+      target: { value: "shops" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Rename" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "A resource with that name already exists",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByText("Renamed to shops")).toBeNull();
   });
 });

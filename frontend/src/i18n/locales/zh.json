@@ -1515,7 +1515,6 @@
         "cleared": "已清除 {{size}}。记忆会在下次更新时重建。"
       },
       "stillKept": "{{name}}仍保留{{window}}。",
-      "otherRetention": "其他保留设置：",
       "tryAgain": "重试"
     },
     "prices": {
@@ -3106,6 +3105,13 @@
       "submit": "创建知识集",
       "created": "已创建 {{name}}"
     },
+    "rename": {
+      "menu": "重命名…",
+      "title": "重命名 {{name}}",
+      "body": "它的文件夹会随之改名，智能体会按新名字找到它。",
+      "submit": "重命名",
+      "renamed": "已重命名为 {{name}}"
+    },
     "deleteCollection": {
       "menu": "删除知识集…",
       "deleted": "已删除 {{name}}",
@@ -3194,7 +3200,7 @@
       "reload": "重新加载",
       "copyMine": "复制我的文字",
       "copyFailed": "无法复制你的文字",
-      "editStands": "你的修改会被保留：之后整理的条目会绕开它，绝不覆盖它。",
+      "editStands": "整理会把你的修改带到与它说法不一致的文档里。",
       "unsaved": "有未保存的修改",
       "notSaved": "未保存",
       "copied": "你的文字已复制到剪贴板",

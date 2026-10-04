@@ -90,7 +90,7 @@ Only the distil pass sends memory content anywhere, and only to the model endpoi
 
 In the Memory header, **Automatic · hourly** opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. The header shows when the agents' memory was last read (*Read 14 min ago*), and says so when an agent's memory could not be read: a warning banner then names the agent and the path, with **Retry** and **Ask an agent ▾**, whose prompt asks an agent to fix the read permission; while **Update memory** runs it reads *Distilling 2 of 5 partitions*.
 
-A change applies without a restart. The shortest interval is 60 seconds.
+A change applies without a restart. The popover offers 15 minutes to 1 day; the settings API accepts down to 60 seconds.
 
 ### Run a pass now
 
@@ -117,7 +117,7 @@ Both go through one hook, installed into the agent's own settings when you conne
 Delivery goes through each agent's own hook mechanism. The hook is one part of the agent's [Coffer connection](/guides/agents#connect-an-agent-to-coffer): connecting an agent installs it and disconnecting removes it. Coffer never installs it into an agent you have not connected.
 
 ```text
-Agents → choose the agent → Connect to Coffer
+Agents → choose the agent → Connect
 ```
 
 What gets installed is two entries, one per event, in the agent's settings file: `~/.claude/settings.json` for Claude Code, `~/.codex/hooks.json` for Codex.

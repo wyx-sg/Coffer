@@ -73,7 +73,7 @@ stdio 服务器是一条由 Coffer 作为子进程启动的命令。
 Brave Search 服务器从环境变量 `BRAVE_API_KEY` 读取 API 密钥。在服务器的环境变量里引用它：
 
 1. 打开 **MCP 服务器**，点**添加服务器**，把 `npx -y @modelcontextprotocol/server-brave-search` 粘贴进输入框。
-2. 在环境变量里添加 `BRAVE_API_KEY`，把这一行设为**密钥**并粘贴 key。Coffer 把它存进密钥库，用生成的 ref 命名，并在 `secret_refs` 里引用。（由智能体替你存 key 时，交接提示词会让它用 `coffer secret set` 从 stdin 读取值，这样值不会进入聊天或 shell 历史。）
+2. 在环境变量里添加 `BRAVE_API_KEY` 并把 key 粘贴为它的值（这个字段提示「选择一个密钥，或粘贴新的值」，粘贴的、看起来像密钥的值会在你添加服务器时存为新密钥）。Coffer 把它存进密钥库，用生成的 ref 命名，并在 `secret_refs` 里引用。（由智能体替你存 key 时，交接提示词会让它用 `coffer secret set` 从 stdin 读取值，这样值不会进入聊天或 shell 历史。）
 3. 点**测试**：服务器启动并列出它的工具。然后点**添加服务器**。
 
 你为服务器存下、再随注册一起引用的密钥，会由这次注册批准，服务器立即生效。引用一个已经用在别处的密钥，或之后修改服务器的命令行或 URL，都会让密钥暂扣，直到你在桌面应用里批准：服务器页面会提示它在等待，在此之前 Coffer 不会启动该服务器。Coffer 还会把环境变量里带密钥的 stdio 服务器标记为「这台 Mac 上的其他进程可读」，因为任何以你的身份运行的程序都能读取进程的环境变量。见[密钥 → 审批](/zh/guides/secrets#approvals)。
@@ -106,10 +106,10 @@ HTTP 服务器是一个使用 streamable HTTP 传输的远程 MCP 端点。Coffe
 ### 完整示例：带 bearer 令牌的 HTTP 服务器 {#worked-example-an-http-server-with-a-bearer-token}
 
 1. 打开 **MCP 服务器**，点**添加服务器**，把 `https://api.githubcopilot.com/mcp/` 粘贴进输入框。
-2. 在请求头里添加 `Authorization`，把这一行设为**密钥**，并粘贴完整的请求头值，包含方案（`Bearer …`）。
+2. 在请求头里添加 `Authorization`，并把完整的请求头值粘贴为它的值（从字段菜单里选一个已存的密钥，或粘贴一个会存为新密钥的值），包含方案（`Bearer …`）。
 3. 点**测试**，然后点**添加服务器**。
 
-对 HTTP 服务器，每个设为**密钥**的请求头行都会变成一个请求头：解密后的密钥作为该请求头的**完整**值发送，所以当服务器要求 `Bearer …` 形式时，就把它原样存进去。非密钥的请求头放在传输配置的 `headers` 映射里（在 Web 界面编辑配置 JSON）。
+对 HTTP 服务器，每个值是密钥的请求头都会变成一个请求头：解密后的密钥作为该请求头的**完整**值发送，所以当服务器要求 `Bearer …` 形式时，就把它原样存进去。非密钥的请求头放在传输配置的 `headers` 映射里（在 Web 界面编辑配置 JSON）。
 
 Coffer 存储的配置：
 

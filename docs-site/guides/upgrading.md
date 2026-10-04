@@ -68,7 +68,7 @@ Every move is recorded in `local/migration.json` as it happens, so a rollback ca
 - **Your sync remote is replaced** by the first upgraded machine, if you had one (below).
 - **Secrets waiting for approval.** When the home holds secrets, the report counts them and says that each one's first use at each destination waits once for your approval in the Coffer app.
 
-Then start Coffer as usual. **Settings → Data** shows the new roots.
+Then start Coffer as usual. **Settings → Data** shows where the vault now lives (**Vault** and **Local content** each list their location).
 
 ## Roll it back
 

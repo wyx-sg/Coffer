@@ -75,7 +75,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 整理所有者（Curation owner） {#curation-owner}
 
-唯一允许自动运行[一轮整理](#curation-pass)的机器，这样两台同步的机器永远不会同时改写同一个知识集。用**设置 › 通用**里的**运行位置**设置。见[知识](/zh/architecture/knowledge#the-owner-machine)。
+唯一允许自动运行[一轮整理](#curation-pass)的机器，这样两台同步的机器永远不会同时改写同一个知识集。在知识页页头的**自动**弹出框里用**整理运行在**设置。见[知识](/zh/architecture/knowledge#the-owner-machine)。
 
 ### 一轮整理（Curation pass） {#curation-pass}
 

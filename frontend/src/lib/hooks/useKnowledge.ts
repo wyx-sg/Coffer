@@ -34,6 +34,7 @@ import {
   knowledgeTreeRootKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
+import { resourcesApi } from "@/lib/api/resources";
 import { curateOutcome } from "@/lib/hooks/curateToast";
 
 export function useKnowledgeCollections() {
@@ -51,6 +52,21 @@ export function useCreateCollection() {
     mutationFn: (input: { name: string; description?: string | null }) => createCollection(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey }),
     onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Rename a collection: the kind-agnostic `PATCH /resources/{uid}` with the new
+ * name, which moves the collection's folder with it. The whole `["knowledge"]`
+ * subtree is refreshed, since tree levels, files and changes are keyed by the
+ * folder path. No `onError` toast: the rename dialog shows the refusal (a name
+ * taken or invalid) under its field and stays open.
+ */
+export function useRenameCollection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ uid, name }: { uid: string; name: string }) => resourcesApi.rename(uid, name),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }
 

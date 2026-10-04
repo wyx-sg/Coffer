@@ -238,7 +238,7 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `SYNC_NO_REMOTE` | 409 | No sync remote is configured. | Set one on the **Sync** page (**Setup**). See [Vault sync](/guides/vault-sync). |
+| `SYNC_NO_REMOTE` | 409 | No sync remote is configured. | Set one on the **Sync** page (the **Remote** tab). See [Vault sync](/guides/vault-sync). |
 | `SYNC_NO_PLAINTEXT_FOUND` | 409 | Push anyway was asked for, but the last round did not stop on a plaintext secret. | Nothing to override; run **Sync now**. See [Vault sync](/guides/vault-sync#when-a-round-finds-a-plaintext-secret). |
 | `SYNC_REMOTE_INVALID` | 422 | The URL or branch would be read by git as an option, or is not a name git accepts. | Correct the URL or branch. |
 | `SYNC_REMOTE_FAILED` | 502 | A git operation against the remote failed. The message is redacted. | Check network access, the remote URL and the token's permissions. |
