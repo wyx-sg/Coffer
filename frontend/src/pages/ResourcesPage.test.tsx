@@ -369,7 +369,10 @@ describe("ResourcesPage", () => {
       expect(
         within(screen.getByRole("region", { name: "Built-in" })).queryByRole("checkbox"),
       ).toBeNull();
-      expect(await screen.findByTestId("mcp-builtin-pane")).toBeInTheDocument();
+      // The pane is lazy-loaded; a cold CI worker can take over a second to import it.
+      expect(
+        await screen.findByTestId("mcp-builtin-pane", {}, { timeout: 5000 }),
+      ).toBeInTheDocument();
       expect(screen.getByText("coffer__search_tools", { exact: false })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^(Test|Edit)$/ })).toBeNull();
       expect(screen.getAllByText("All agents").length).toBeGreaterThan(0);
