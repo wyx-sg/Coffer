@@ -241,7 +241,7 @@ def _bind_port() -> socket.socket:
     Precedence: the environment's explicit range (the test harness's override,
     the only path that still scans), otherwise the port
     :func:`~coffer.infrastructure.daemon.config.effective_port` names — the one
-    the user pinned, or 8000 when they pinned none.
+    the user pinned, or 38470 when they pinned none.
 
     The second path raises
     :class:`~coffer.infrastructure.daemon.port_alloc.PortInUse` rather than

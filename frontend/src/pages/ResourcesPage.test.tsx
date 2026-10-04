@@ -344,7 +344,7 @@ describe("ResourcesPage", () => {
         name: "coffer",
         invocation_uid: "coffer",
         transport: "http",
-        url: "http://127.0.0.1:8000/mcp",
+        url: "http://127.0.0.1:38470/mcp",
         status: "healthy",
         checked_at: new Date().toISOString(),
         reaches_all_connected_agents: true,

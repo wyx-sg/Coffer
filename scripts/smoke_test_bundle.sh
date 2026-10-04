@@ -165,7 +165,7 @@ trap cleanup EXIT
 DAEMON_JSON="$SMOKE_HOME/.coffer/daemon.json"
 
 # Pin free ports for the daemon and its model proxy. Without a setting the
-# daemon insists on 8000 and the proxy on 8001, so on a machine that already
+# daemon insists on 38470 and the proxy on 38471, so on a machine that already
 # runs Coffer — any developer's, where this script is also meant to run — the
 # bundled daemon cannot bind and the test fails for a reason that has nothing
 # to do with the bundle. The ports go in daemon-config.json, the one place the

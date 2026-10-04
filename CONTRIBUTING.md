@@ -9,7 +9,7 @@ git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
 make install                       # .venv from uv.lock + frontend, OpenSpec CLI and e2e npm deps
 make hooks                         # wire pre-commit + commit-msg hooks
-make dev                           # backend (:8000) + frontend (:5173)
+make dev                           # backend (:38470) + frontend (:5173)
 ```
 
 ## Project Anchors

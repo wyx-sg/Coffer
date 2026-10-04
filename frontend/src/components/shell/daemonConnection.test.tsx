@@ -54,7 +54,7 @@ function renderProbe(onRecovered = vi.fn()) {
   return { rerender, onRecovered };
 }
 
-const RUNNING = { status: "ready", port: 8000, version: "1.0.0" };
+const RUNNING = { status: "ready", port: 38470, version: "1.0.0" };
 
 beforeEach(() => {
   vi.useFakeTimers();

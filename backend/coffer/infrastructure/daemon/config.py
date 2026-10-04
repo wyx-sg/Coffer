@@ -39,7 +39,7 @@ _logger = logging.getLogger(__name__)
 #: port that moves silently resets the UI's own remembered state. A default the
 #: daemon refuses to start without is the trade that ADR
 #: "The Desktop Shell Returns" chose in its place.
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 38470
 
 #: Ports the daemon will accept as a fixed port. The floor is not arbitrary:
 #: binding below 1024 needs privileges the daemon does not have and must not

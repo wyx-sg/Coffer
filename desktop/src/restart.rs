@@ -182,15 +182,15 @@ mod tests {
     fn a_responsive_daemon_is_shut_down_and_its_port_awaited_before_anything_else() {
         let calls = StopCalls::default();
         let stopped = stop_running_daemon(
-            || Some((8000, "tok-123".to_string())),
+            || Some((38470, "tok-123".to_string())),
             |port| {
                 calls.note("responds");
-                assert_eq!(port, 8000);
+                assert_eq!(port, 38470);
                 true
             },
             |port, token| {
                 calls.note("shutdown");
-                assert_eq!(port, 8000);
+                assert_eq!(port, 38470);
                 // The shutdown route is token-gated; the token has to be the
                 // one daemon.json named, not one the shell invented.
                 assert_eq!(token, "tok-123");
@@ -198,12 +198,12 @@ mod tests {
             },
             |port| {
                 calls.note("port_free");
-                assert_eq!(port, 8000);
+                assert_eq!(port, 38470);
                 true
             },
         );
 
-        assert_eq!(stopped, Ok(Some(8000)));
+        assert_eq!(stopped, Ok(Some(38470)));
         assert_eq!(calls.seen(), vec!["responds", "shutdown", "port_free"]);
     }
 
@@ -213,13 +213,13 @@ mod tests {
     #[test]
     fn a_port_that_never_frees_is_an_error_naming_the_port() {
         let err = stop_running_daemon(
-            || Some((8000, "tok".to_string())),
+            || Some((38470, "tok".to_string())),
             |_| true,
             |_, _| Ok(()),
             |_| false,
         )
         .unwrap_err();
-        assert!(err.contains("8000"), "{err}");
+        assert!(err.contains("38470"), "{err}");
         assert!(err.contains("did not stop"), "{err}");
     }
 
@@ -227,7 +227,7 @@ mod tests {
     fn a_rejected_shutdown_stops_the_restart_rather_than_waiting_on_the_port() {
         let calls = StopCalls::default();
         let err = stop_running_daemon(
-            || Some((8000, "stale-token".to_string())),
+            || Some((38470, "stale-token".to_string())),
             |_| true,
             |_, _| Err("shutdown rejected: HTTP/1.1 401 Unauthorized".to_string()),
             |_| {
@@ -268,7 +268,7 @@ mod tests {
         // a shutdown request, so we go straight to spawning.
         let calls = StopCalls::default();
         let stopped = stop_running_daemon(
-            || Some((8000, "tok".to_string())),
+            || Some((38470, "tok".to_string())),
             |_| false,
             |_, _| {
                 calls.note("shutdown");

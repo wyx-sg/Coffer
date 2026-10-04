@@ -18,7 +18,7 @@ const ITEMS: ChangeItem[] = [
       { kind: "hunk", text: "@@ −12,6 +12,7 @@ mcpServers" },
       { kind: "context", text: '  "mcpServers": {', oldNo: 12, newNo: 12 },
       { kind: "remove", text: '"url": "http://127.0.0.1:8123/mcp"', oldNo: 14 },
-      { kind: "add", text: '"url": "http://127.0.0.1:8000/mcp",', newNo: 14 },
+      { kind: "add", text: '"url": "http://127.0.0.1:38470/mcp",', newNo: 14 },
       { kind: "add", text: '"type": "http"', newNo: 15 },
     ],
   },
@@ -53,7 +53,7 @@ function renderPreview(
       state={state}
       items={ITEMS}
       summaries={[
-        { agentType: "claude_code", text: "Its Coffer entry moves to port 8000." },
+        { agentType: "claude_code", text: "Its Coffer entry moves to port 38470." },
         { agentType: "codex", text: "Gets the Coffer gateway." },
       ]}
       onApply={onApply}
@@ -97,7 +97,7 @@ describe("ChangePreview", () => {
       "Changes to ~/.claude.json",
       "Changes to ~/.codex/config.toml",
     ]);
-    expect(within(diffs[0]).getByText('"url": "http://127.0.0.1:8000/mcp",')).toBeInTheDocument();
+    expect(within(diffs[0]).getByText('"url": "http://127.0.0.1:38470/mcp",')).toBeInTheDocument();
     expect(diffs[0].querySelectorAll('[data-line="add"]')).toHaveLength(2);
     expect(diffs[0].querySelectorAll('[data-line="remove"]')).toHaveLength(1);
 

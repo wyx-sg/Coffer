@@ -27,7 +27,7 @@ So the design has to answer four questions:
 | Discovery is one file, `~/.coffer/daemon.json`, mode `0600`. | Every client reads the same answer for port and token. Written atomically, it is never read half-written. |
 | The probe, bind, publish and readiness run under one exclusive `flock`, held until the daemon is serving HTTP. | Two racing spawns produce exactly one daemon. |
 | Liveness is an HTTP status call, never a TCP connect. | After a crash, an unrelated process can squat the recorded port. |
-| The port is fixed (`8000` unless you pin another) and the daemon refuses to start rather than move. | A bookmark to the web UI keeps working, and the browser's per-origin state survives restarts. |
+| The port is fixed (`38470` unless you pin another) and the daemon refuses to start rather than move. | A bookmark to the web UI keeps working, and the browser's per-origin state survives restarts. |
 | Version skew is detected and reported, never acted on. | The daemon outlives upgrades. Silently killing it would drop every attached MCP client. |
 | The daemon never stands down on its own for want of use. | Agents need it when no Coffer window is open. An idle exit makes the next caller pay a cold start. |
 
@@ -61,7 +61,7 @@ flowchart LR
 | Process | Lifetime | Role |
 | --- | --- | --- |
 | `coffer-daemon` | Long-lived, one per vault | Serves the REST API (`/api/v1/*`), the MCP endpoint (`/mcp`) and the built web UI on `127.0.0.1:<port>`. It owns all state and is the only SQLite writer. From source it runs as the Python package's daemon entry module. A frozen build runs the `coffer-daemon` binary. |
-| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy` in a frozen build (the package's proxy entry module from source), the daemon's only sibling process, on `127.0.0.1:8001`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
+| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy` in a frozen build (the package's proxy entry module from source), the daemon's only sibling process, on `127.0.0.1:38471`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
 | `coffer` CLI | One command | Calls the daemon over loopback HTTP with the token from `daemon.json` and an `X-Coffer-Actor: cli` header, so its mutations are audited as the CLI. |
 | `coffer-mcp-shim` | One MCP client session | A stdio ↔ HTTP/SSE forwarder. An agent launches it as a stdio MCP server, and it relays each JSON-RPC line to `/mcp`. See [MCP gateway](/architecture/mcp-gateway). |
 | Desktop shell | While the app runs | A Tauri 2 app that hosts the same frontend build as a local asset and hands it the daemon's URL and token over IPC. It detects or spawns the daemon, but the daemon outlives the app: quitting the app does not stop it. See [Desktop app](/guides/desktop-app). |
@@ -90,7 +90,7 @@ A sample `daemon.json`:
 {
   "version": 1,
   "pid": 48213,
-  "port": 8000,
+  "port": 38470,
   "token": "q3V0…",
   "started_at": "2026-09-24T08:12:40.118204+00:00",
   "binary_path": "/Users/you/.coffer/bin/0.1.1/coffer-daemon"
@@ -117,7 +117,7 @@ sequenceDiagram
     E->>L: release
     E-->>E: exit 0
   end
-  E->>C: read fixed port, else 8000
+  E->>C: read fixed port, else 38470
   E->>E: bind 127.0.0.1:port or refuse
   E->>J: write pid, port, fresh token (0600)
   E->>U: serve on the pre-bound fd
@@ -141,7 +141,7 @@ Step by step (two arguments skip all of it: `--version` prints the package versi
 1. **Environment hygiene.** The daemon removes every agent-home variable it inherited (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, taken from the agent descriptors). Otherwise a daemon started from a shell that exports one would run agents against that directory while Coffer delivers skills and config into the registered one. It also raises its `RLIMIT_NOFILE` soft limit toward the hard limit, capped at 8192, because a daemon launched by a GUI app inherits a limit of about 256.
 2. **Spawn lock.** It takes an exclusive `flock` on `~/.coffer/daemon.lock`. The lock lives on the open descriptor, so the file stays on disk between runs.
 3. **Liveness probe.** Under the lock, it calls `GET /api/v1/daemon/status` on the port `daemon.json` records, with a 15 s timeout. The timeout must outlast the slowest status a warming daemon can produce, because a timeout looks exactly like "nobody is live". If a daemon answers, the new process releases the lock and exits 0.
-4. **Bind.** It reads the port from `daemon-config.json` (the pinned port, else `8000`) and binds exactly `127.0.0.1:<port>` with `SO_REUSEADDR`. It retries four times, 0.3 s apart, so a restart outlasts the outgoing daemon's last moment. If the port is still held, it fails with a port-in-use error, prints a message naming the holder's pid and command line, and exits with code 2.
+4. **Bind.** It reads the port from `daemon-config.json` (the pinned port, else `38470`) and binds exactly `127.0.0.1:<port>` with `SO_REUSEADDR`. It retries four times, 0.3 s apart, so a restart outlasts the outgoing daemon's last moment. If the port is still held, it fails with a port-in-use error, prints a message naming the holder's pid and command line, and exits with code 2.
 5. **Publish.** It mints a fresh random token (URL-safe, from 32 random bytes) and writes `daemon.json`. The socket stays open and its file descriptor goes to uvicorn, so the published port is never released and rebound. Otherwise another process could take the port in between and receive the token.
 6. **Migrations.** The lifespan first refuses a home that still keeps its state in `coffer.db` (`VAULT_MIGRATION_REQUIRED`, naming `coffer migrate`) or that a rolled-back upgrade left on hold (`VAULT_MIGRATION_ON_HOLD`, naming `--resume`). It then runs Alembic on `runs.db` off the event loop. If the database's revision is unknown to this build, startup fails with `DB_SCHEMA_TOO_NEW` rather than an opaque Alembic error. If an upgrade is due, the file and its `-wal`/`-shm` companions are first copied to `runs.db.pre-<revision>`, keeping the three newest copies. A current schema copies nothing. See [Persistence](/architecture/persistence).
 7. **Startup sweep.** The startup sweep kills every process tree recorded under `~/.coffer/upstream-pids/` that is still alive with the same command line. A frozen build also terminates other daemon processes provably serving this same vault, meaning the same executable name and the same resolved `~/.coffer`. A process whose vault cannot be read is left alone.
@@ -225,13 +225,13 @@ A shim can live for hours, and the daemon may restart underneath it. When a POST
 
 ## Fixed port
 
-The daemon binds one port and never moves off it. With nothing configured that port is `8000`. You can pin another port between 1024 and 65535:
+The daemon binds one port and never moves off it. With nothing configured that port is `38470`. You can pin another port between 1024 and 65535:
 
 ```sh
 coffer config get daemon.port      # the port the next start will bind
 coffer config set daemon.port 8765 # write it to daemon-config.json
 coffer daemon restart              # a running daemon owns its socket; restart to move
-coffer config unset daemon.port    # back to 8000
+coffer config unset daemon.port    # back to 38470
 ```
 
 The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason `coffer config set daemon.port` writes straight into the pre-bind settings file rather than through a route, and `coffer config` carries only keys of that kind. The web UI reaches the same file through the running daemon: `GET /api/v1/daemon/port` returns the saved port, the bound one and whether a restart is pending, and `PUT /api/v1/daemon/port` saves the next start's port, refusing one that cannot be bound.

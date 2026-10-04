@@ -1043,7 +1043,7 @@ existing token pushes nothing to the proxy; only minting or rotating one does.
 - **AND** for a uid no agent has it exits 4 with nothing on stdout
 
 ### Requirement: Refuse a foreign Host or any Origin at the proxy
-The proxy MUST bind `127.0.0.1` only, on a fixed port (`proxy_port` in `daemon-config.json`, 8001
+The proxy MUST bind `127.0.0.1` only, on a fixed port (`proxy_port` in `daemon-config.json`, 38471
 by default), and MUST refuse with 403 a request whose `Host` is not a loopback name on the port it
 arrived on, and any request that carries an `Origin` header — no browser page is a client of it.
 
@@ -1131,7 +1131,7 @@ levels with each curated model"). Neither compatibility key is a field the user 
 ### Requirement: Detect a local model runtime without changing it
 `POST /api/v1/providers/detect-local` (the Add provider dialog's Detect, with an optional base URL) MUST
 report which runtime answers at a loopback URL — or, with none given, at each runtime's default port
-(Ollama 11434, LM Studio 1234, llama-server 8080; vLLM's default 8000 is the daemon's own port, so
+(Ollama 11434, LM Studio 1234, llama-server 8080; vLLM's default 8000 is shared by many development servers, so
 vLLM is found only on a URL the user gives) — by fingerprint rather than port, with its version, the
 wires it serves at that version and, per model, the context window it serves and whether it can
 call tools, where the runtime says. Detection MUST be read-only — nothing is pulled, loaded or

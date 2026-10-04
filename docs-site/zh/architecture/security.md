@@ -177,7 +177,7 @@ flowchart LR
 
 ## 回环绑定 {#loopback-binding}
 
-守护进程只绑定 `127.0.0.1`。交给 Uvicorn 的是一个预先绑定好的 socket，而不是主机和端口，所以下游的任何东西都无法扩大绑定范围。Coffer 还监听另一个 socket：[本地模型代理](/zh/architecture/model-proxy)——守护进程的兄弟进程——只绑定 `127.0.0.1:8001`（`daemon-config.json` 中的 `proxy_port`），并运行它自己的 Host 和 Origin 检查（见[下文](#the-model-proxy-listener)）。除此之外没有别的监听：Telegram 在守护进程内部长轮询，每个 SeaTalk 消息渠道持有一条出站 websocket 连接。没有哪个消息渠道需要公网 URL、隧道或入站端口。
+守护进程只绑定 `127.0.0.1`。交给 Uvicorn 的是一个预先绑定好的 socket，而不是主机和端口，所以下游的任何东西都无法扩大绑定范围。Coffer 还监听另一个 socket：[本地模型代理](/zh/architecture/model-proxy)——守护进程的兄弟进程——只绑定 `127.0.0.1:38471`（`daemon-config.json` 中的 `proxy_port`），并运行它自己的 Host 和 Origin 检查（见[下文](#the-model-proxy-listener)）。除此之外没有别的监听：Telegram 在守护进程内部长轮询，每个 SeaTalk 消息渠道持有一条出站 websocket 连接。没有哪个消息渠道需要公网 URL、隧道或入站端口。
 
 ## Host 和 Origin 检查 {#the-host-and-origin-checks}
 
@@ -187,11 +187,11 @@ flowchart LR
 
 假设攻击者控制了 `evil.example`，并把它的 DNS 名称重新指向 `127.0.0.1`。对浏览器来说，页面仍然与 `evil.example` 同源，所以 CORS 根本不起作用，页面能读到响应体。守护进程会把 API 令牌放进 Web 界面的 `index.html`（见下文），所以从那个页面请求一次 `/` 就能拿到令牌，随之拿到 API 能做的一切：修改 Coffer 的配置、注册服务器、刷爆你的提供商账单。
 
-DNS 重绑定不会改变 `Host` 请求头。一个重绑定的请求仍然写着 `Host: evil.example:8000`。所以守护进程只在 `Host` 指明 `127.0.0.1`、`localhost` 或 `[::1]`，**并且**端口就是请求到达的那个端口时才接受请求。其他一律拒绝，包括没有 `Host` 的请求，以及回环名字配上其他端口的请求：
+DNS 重绑定不会改变 `Host` 请求头。一个重绑定的请求仍然写着 `Host: evil.example:38470`。所以守护进程只在 `Host` 指明 `127.0.0.1`、`localhost` 或 `[::1]`，**并且**端口就是请求到达的那个端口时才接受请求。其他一律拒绝，包括没有 `Host` 的请求，以及回环名字配上其他端口的请求：
 
 ```text
 HTTP/1.1 403 Forbidden
-{"error": {"code": "HOST_NOT_ALLOWED", "message": "Coffer only answers requests addressed to 127.0.0.1:8000 or localhost:8000; this one named evil.example:8000.", "details": null}}
+{"error": {"code": "HOST_NOT_ALLOWED", "message": "Coffer only answers requests addressed to 127.0.0.1:38470 or localhost:38470; this one named evil.example:38470.", "details": null}}
 ```
 
 ### Origin：来自其他站点的请求 {#origin-requests-from-other-sites}
@@ -244,7 +244,7 @@ Web 界面也需要令牌，而 URL 是错误的渠道：它会进入浏览器�
 
 - 该文档以 `Cache-Control: no-store` 提供，不带 ETag 或 Last-Modified，所以重启后的守护进程所对应的浏览器永远不会从缓存里拿到上一个守护进程的令牌。`/assets` 下带哈希的文件照常缓存。
 - 页面不持久化任何东西：守护进程重启后刷新页面，就会对新的守护进程完成认证。
-- 你打开的地址（默认 `http://127.0.0.1:8000/`）不携带任何凭据。令牌只出现在页面正文里。
+- 你打开的地址（默认 `http://127.0.0.1:38470/`）不携带任何凭据。令牌只出现在页面正文里。
 
 页面里的令牌，正是 [Host 检查](#host-dns-rebinding)必不可少的原因；两者缺一不可。
 

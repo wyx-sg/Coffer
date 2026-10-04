@@ -26,7 +26,7 @@ from coffer.surfaces.http import host_guard
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
-_PORT = 8000
+_PORT = 38470
 _BASE = f"http://127.0.0.1:{_PORT}"
 _EVIL = "https://evil.example"
 
@@ -68,7 +68,7 @@ def daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
 
 @pytest.mark.parametrize(
     "authority",
-    ["127.0.0.1:8000", "localhost:8000", "LOCALHOST:8000", "[::1]:8000"],
+    ["127.0.0.1:38470", "localhost:38470", "LOCALHOST:38470", "[::1]:38470"],
 )
 def test_loopback_authorities_on_the_daemon_port_are_accepted(authority: str) -> None:
     client = TestClient(_app(), base_url=_BASE)
@@ -83,12 +83,12 @@ def test_loopback_authorities_on_the_daemon_port_are_accepted(authority: str) ->
 @pytest.mark.parametrize(
     "authority",
     [
-        "evil.example:8000",
+        "evil.example:38470",
         "evil.example",
-        "coffer.evil.example:8000",
-        "192.168.1.4:8000",
-        "localhost.evil.example:8000",
-        "127.0.0.1.evil.example:8000",
+        "coffer.evil.example:38470",
+        "192.168.1.4:38470",
+        "localhost.evil.example:38470",
+        "127.0.0.1.evil.example:38470",
         # Loopback, but not the port this request arrived on.
         "127.0.0.1:9999",
         "localhost:3000",
@@ -112,7 +112,7 @@ def test_any_other_authority_is_refused(authority: str) -> None:
     scenario="a rebound page is refused before it can read the token",
 )
 def test_a_rebound_request_for_the_served_page_is_refused(daemon: TestClient) -> None:
-    r = daemon.get("/", headers={"Host": "evil.example:8000"})
+    r = daemon.get("/", headers={"Host": "evil.example:38470"})
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "HOST_NOT_ALLOWED"
     assert "tok" not in r.text
@@ -126,11 +126,11 @@ def test_a_request_with_no_host_header_is_refused() -> None:
 
 def test_the_escape_hatch_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
     """``COFFER_ALLOWED_HOSTS`` names extra hostnames; ``*`` disables the check."""
-    assert host_guard.is_allowed_host("testserver:8000", _PORT) is False
+    assert host_guard.is_allowed_host("testserver:38470", _PORT) is False
     monkeypatch.setenv("COFFER_ALLOWED_HOSTS", "testserver")
-    assert host_guard.is_allowed_host("testserver:8000", _PORT) is True
+    assert host_guard.is_allowed_host("testserver:38470", _PORT) is True
     assert host_guard.is_allowed_host("testserver:9999", _PORT) is False
-    assert host_guard.is_allowed_host("evil.example:8000", _PORT) is False
+    assert host_guard.is_allowed_host("evil.example:38470", _PORT) is False
     monkeypatch.setenv("COFFER_ALLOWED_HOSTS", "*")
     assert host_guard.is_allowed_host("evil.example", _PORT) is True
 

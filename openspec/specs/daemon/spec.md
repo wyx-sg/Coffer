@@ -244,7 +244,7 @@ somebody a running daemon while a missed one costs only a port the next start re
 ### Requirement: Bind a fixed, settable port
 The daemon's listening port MUST be **fixed by default and settable**, so a browser bookmark to
 Coffer's UI keeps working across restarts. With nothing configured the daemon MUST bind exactly
-`8000` and MUST NOT scan for an alternative; a drifting origin is not merely a broken bookmark,
+`38470` and MUST NOT scan for an alternative; a drifting origin is not merely a broken bookmark,
 because browser `localStorage` is keyed by origin, so the UI language, sidebar state, page size and
 preferred editor silently reset when the port moves and nothing connects the two events for the
 user.
@@ -265,8 +265,8 @@ stopping the boot, since an unbootable daemon cannot be repaired from the UI it 
 Users MUST be able to read and change the setting **from the CLI** as the key `daemon.port` of the
 generic `coffer config` command ([resource-framework](../resource-framework/spec.md): one key
 registry, typed validation, `unset` returns a key to its default) — `coffer config get daemon.port`
-prints the configured port or the 8000 default, `coffer config set daemon.port <n>` pins one, and
-`coffer config unset daemon.port` returns to 8000. Those three MUST read and write the pre-bind file
+prints the configured port or the 38470 default, `coffer config set daemon.port <n>` pins one, and
+`coffer config unset daemon.port` returns to 38470. Those three MUST read and write the pre-bind file
 directly and MUST work with no daemon running, because a daemon that cannot bind its port is exactly
 the state the setting has to be fixable from — the CLI stays the escape hatch where a squatted port
 is diagnosed. The running daemon MUST also accept a new port from the web UI's Settings → Daemon,
@@ -289,9 +289,9 @@ exactly the path that matters most, and recording a change only when a daemon ha
 would be less honest than recording none.
 
 #### Scenario: the daemon binds the same port every start
-- **GIVEN** no port has been configured, so the daemon's default of 8000 applies,
+- **GIVEN** no port has been configured, so the daemon's default of 38470 applies,
 - **WHEN** the daemon is stopped and started again — by the user, by the CLI, or auto-spawned by an MCP shim, which inherits no shell profile,
-- **THEN** it binds 8000 every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working and nothing the browser stored against that origin is lost.
+- **THEN** it binds 38470 every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working and nothing the browser stored against that origin is lost.
 
 #### Scenario: a configured daemon port survives restarts
 - **GIVEN** the user has moved the daemon's port with `coffer config set daemon.port <n>`,
@@ -299,24 +299,24 @@ would be less honest than recording none.
 - **THEN** it binds that same port every time and records it in `~/.coffer/daemon.json`.
 
 #### Scenario: a port that is taken refuses to start and says what holds it
-- **GIVEN** the port the daemon would bind — its 8000 default, or one the user configured — is already held by another process,
+- **GIVEN** the port the daemon would bind — its 38470 default, or one the user configured — is already held by another process,
 - **WHEN** the daemon starts,
 - **THEN** it refuses to start rather than binding a different port, and the message names the process holding the port and the commands that resolve it — free that process, or `coffer config set daemon.port <other>`.
 
 #### Scenario: the port key is read and changed with no daemon running
 - **GIVEN** no daemon is running and no port has been configured,
 - **WHEN** the user runs `coffer config get daemon.port`, then `coffer config set daemon.port 8123`, then `coffer config get daemon.port`, then `coffer config unset daemon.port`,
-- **THEN** the first prints the 8000 default, the set writes 8123 into `~/.coffer/daemon-config.json`, the second get prints 8123, and the unset leaves the file carrying no port so the default applies again,
+- **THEN** the first prints the 38470 default, the set writes 8123 into `~/.coffer/daemon-config.json`, the second get prints 8123, and the unset leaves the file carrying no port so the default applies again,
 - **AND** no daemon is spawned, no database is opened and no audit entry is recorded.
 
 #### Scenario: a port set from the settings page is pending until restart
-- **GIVEN** a running daemon on port 8000
+- **GIVEN** a running daemon on port 38470
 - **WHEN** `PUT /api/v1/daemon/port` is sent with 8123, and then with a port another process holds
-- **THEN** the first answers that 8123 is pending, `~/.coffer/daemon-config.json` carries 8123 and the daemon still answers on 8000
+- **THEN** the first answers that 8123 is pending, `~/.coffer/daemon-config.json` carries 8123 and the daemon still answers on 38470
 - **AND** the second is refused naming the process that holds the port, and the file is unchanged
 
 #### Scenario: after a restart on a new port every agent reconnects
-- **GIVEN** a daemon configured for 8123 while answering on 8000, and Claude Code and Codex connected to Coffer
+- **GIVEN** a daemon configured for 8123 while answering on 38470, and Claude Code and Codex connected to Coffer
 - **WHEN** the daemon is restarted
 - **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry and delivery hook name no port and are left as they are, and the discovery the CLI, an MCP shim and the hook share finds the daemon on 8123
 

@@ -89,7 +89,7 @@ describe("useDaemonStatus", () => {
 
     await act(async () => {
       release({
-        data: { status: "ready", version: "1.0.0", port: 8000 },
+        data: { status: "ready", version: "1.0.0", port: 38470 },
         error: undefined,
       });
     });
@@ -126,7 +126,7 @@ describe("useRestartDaemon", () => {
   beforeEach(() => vi.clearAllMocks());
 
   test("installs the connection the restart returned, then refetches the whole cache", async () => {
-    const connection = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh" };
+    const connection = { baseUrl: "http://127.0.0.1:38470/api/v1", token: "fresh" };
     restartDaemonMock.mockResolvedValue({ pid: 1, started: true, ...connection } as never);
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");

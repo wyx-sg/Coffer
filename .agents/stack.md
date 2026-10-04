@@ -90,7 +90,7 @@ The wire contract runs **Pydantic models → generated OpenAPI → generated fro
 
 ```bash
 make install                       # one-time setup
-make dev                           # backend on :8000 + Vite on :5173
+make dev                           # backend on :38470 + Vite on :5173
 # backend only — go through the daemon entry point, never bare uvicorn:
 cd backend && COFFER_DEV_CORS=1 PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry
 make lint / make verify-unit / make format / make verify

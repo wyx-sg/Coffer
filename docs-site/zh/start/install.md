@@ -40,7 +40,7 @@ login, tell me what to do instead.
 
 预编译二进制只面向 **Apple 芯片（arm64）的 macOS**。Intel Mac、Linux 和 Windows 没有发布构建，在这些机器上请从源码安装（Python 3.12 或更高版本）。
 
-每种方式装的都是完整的 Coffer。Web 界面由守护进程自己提供，所以装了 CLI 也就有了界面（在 `http://127.0.0.1:8000/`），装了桌面应用也就有了 CLI。
+每种方式装的都是完整的 Coffer。Web 界面由守护进程自己提供，所以装了 CLI 也就有了界面（在 `http://127.0.0.1:38470/`），装了桌面应用也就有了 CLI。
 
 ## 桌面应用 {#desktop-app}
 
@@ -140,7 +140,7 @@ cd frontend && npm install && npm run build && cd ..
 ```
 
 ::: tip 贡献者环境
-`make install` 会创建 `.venv`，安装带开发依赖的后端，并安装前端的 npm 依赖。然后 `make dev` 会在 8000 端口运行守护进程，在 5173 端口运行带热重载的 Vite 开发服务器。见[开发环境搭建](/zh/contributing/development)。
+`make install` 会创建 `.venv`，安装带开发依赖的后端，并安装前端的 npm 依赖。然后 `make dev` 会在 38470 端口运行守护进程，在 5173 端口运行带热重载的 Vite 开发服务器。见[开发环境搭建](/zh/contributing/development)。
 :::
 
 ### 从源码构建冻结二进制和应用 {#frozen-binaries-and-the-app-from-source}
@@ -178,11 +178,11 @@ coffer daemon status
 ```text
 status:  ready
 version: 0.2.0
-port:    8000
+port:    38470
 pid:     48213
 ```
 
-你的版本号和 PID 会不一样。然后在浏览器里打开 `http://127.0.0.1:8000/`，或者打开桌面应用。守护进程提供的页面已经带上了 API 令牌，所以不用任何额外步骤就处于登录状态。
+你的版本号和 PID 会不一样。然后在浏览器里打开 `http://127.0.0.1:38470/`，或者打开桌面应用。守护进程提供的页面已经带上了 API 令牌，所以不用任何额外步骤就处于登录状态。
 
 ## 启动并保持守护进程运行 {#start-and-keep-the-daemon-running}
 
@@ -194,7 +194,7 @@ pid:     48213
 
 守护进程一旦启动，就会一直运行，直到你停止它或者另一个守护进程取代它。如果想让 macOS 在登录时启动它、崩溃后自动重启，就在**设置 › 守护进程**里打开**开机自启动**。
 
-守护进程绑定 `127.0.0.1:8000`。如果有别的程序已经占用了这个端口，守护进程会拒绝启动，并说出占用端口的程序。你可以用 `coffer config set daemon.port <port>` 换端口，用 `coffer config unset daemon.port` 改回去。见[运行守护进程](/zh/guides/daemon)。
+守护进程绑定 `127.0.0.1:38470`。如果有别的程序已经占用了这个端口，守护进程会拒绝启动，并说出占用端口的程序。你可以用 `coffer config set daemon.port <port>` 换端口，用 `coffer config unset daemon.port` 改回去。见[运行守护进程](/zh/guides/daemon)。
 
 ## 升级 {#upgrade}
 

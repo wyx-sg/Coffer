@@ -105,7 +105,7 @@ The user has delegated architectural authority. **Default to deciding and explai
 make install                # one-time: .venv from uv.lock + frontend, OpenSpec CLI and e2e npm deps
 make verify                 # fast path (lint + unit + integration + contract + acceptance)
 make verify-all             # adds e2e
-make dev                    # backend (:8000) + frontend (:5173)
+make dev                    # backend (:38470) + frontend (:5173)
 
 git checkout -b feature/<short-name>
 git add <files> && git commit -m "feat(<scope>): <subject>"

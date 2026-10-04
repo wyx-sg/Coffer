@@ -69,7 +69,7 @@ const checkboxSlot = (box: HTMLElement) => box.parentElement?.parentElement as H
 
 describe("McpServerList", () => {
   beforeEach(() => {
-    builtin.data = { name: "coffer", url: "http://127.0.0.1:8000/mcp", tool_count: 2 };
+    builtin.data = { name: "coffer", url: "http://127.0.0.1:38470/mcp", tool_count: 2 };
   });
 
   test("the search is the only filter: no Reach filter", () => {

@@ -257,16 +257,16 @@ mod tests {
 
     #[test]
     fn a_post_counts_its_body_in_bytes() {
-        let req = request_text(8000, "tok", "POST", "/p", Some(r#"{"a":"é"}"#));
+        let req = request_text(38470, "tok", "POST", "/p", Some(r#"{"a":"é"}"#));
         assert!(
-            req.starts_with("POST /p HTTP/1.1\r\nHost: 127.0.0.1:8000\r\n"),
+            req.starts_with("POST /p HTTP/1.1\r\nHost: 127.0.0.1:38470\r\n"),
             "{req}"
         );
         assert!(req.contains("X-Coffer-Token: tok\r\n"), "{req}");
         assert!(req.contains("Content-Type: application/json\r\n"), "{req}");
         assert!(req.contains("Content-Length: 10\r\n\r\n"), "{req}");
         assert!(req.ends_with(r#"{"a":"é"}"#));
-        let get = request_text(8000, "tok", "GET", "/g", None);
+        let get = request_text(38470, "tok", "GET", "/g", None);
         assert!(get.ends_with("Connection: close\r\n\r\n"), "{get}");
         assert!(!get.contains("Content-Length"), "{get}");
     }

@@ -88,7 +88,7 @@ These are for contributors. Do not set them on a daemon you use day to day.
 
 | Name | Default | Effect |
 | --- | --- | --- |
-| `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | unset | Bind the first free port in this range instead of the single configured port. Outranks `daemon-config.json`. If only one end is set, the other falls back to `8000` or `8009`. |
+| `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | unset | Bind the first free port in this range instead of the single configured port. Outranks `daemon-config.json`. If only one end is set, the other falls back to `38470` or `8009`. |
 | `COFFER_EVAL_CAPTURE` | unset | Records each `coffer__search_tools` query and its results as JSON lines for the eval harness. `1`, `true` or `yes` writes to `~/.coffer/eval-capture.jsonl`; any other non-falsy value is taken as the output path. |
 | `COFFER_RUN_BENCHMARKS` | unset | `1` runs the perf-budget tests too slow for `make verify`, such as the reconcile pass cost (`make verify-benchmark`). |
 
@@ -112,7 +112,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 ```json
 {
   "port": 8123,
-  "proxy_port": 8001,
+  "proxy_port": 38471,
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
   "features": {},
@@ -122,8 +122,8 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 
 | Key | Type | Default | Effect | Changed with |
 | --- | --- | --- | --- | --- |
-| `port` | integer 1024–65535, or `null` | `8000` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | **Settings › Daemon → Port**, or `coffer config set daemon.port <port>` and `coffer config unset daemon.port` when the daemon cannot start |
-| `proxy_port` | integer 1024–65535, or `null` | `8001` | The port the [local model proxy](/architecture/model-proxy) binds on `127.0.0.1`, and the one projected into agents' configs. An invalid value is ignored with a warning and the default applies. Takes effect when the proxy next starts. | edit the file |
+| `port` | integer 1024–65535, or `null` | `38470` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | **Settings › Daemon → Port**, or `coffer config set daemon.port <port>` and `coffer config unset daemon.port` when the daemon cannot start |
+| `proxy_port` | integer 1024–65535, or `null` | `38471` | The port the [local model proxy](/architecture/model-proxy) binds on `127.0.0.1`, and the one projected into agents' configs. An invalid value is ignored with a warning and the default applies. Takes effect when the proxy next starts. | edit the file |
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
 | `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features** |

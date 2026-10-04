@@ -90,13 +90,13 @@ async def test_a_second_press_does_not_start_a_second_successor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: None)
-    monkeypatch.setattr(daemon_port, "_PORT", 8000)
+    monkeypatch.setattr(daemon_port, "_PORT", 38470)
     restart, audit = _Restart(), _Audit()
     async for c in _client(_app(restart, audit)):
         first = await c.post("/api/v1/daemon/restart")
         second = await c.post("/api/v1/daemon/restart")
     # A test port range: the successor binds where this daemon answers.
-    assert first.json() == second.json() == {"port": 8000}
+    assert first.json() == second.json() == {"port": 38470}
     assert restart.calls == ["spawn", "exit"]
     assert len(audit.records) == 1
 
@@ -109,7 +109,7 @@ async def test_two_simultaneous_presses_start_one_successor(
     import asyncio
     import threading
 
-    monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: 8000)
+    monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: 38470)
     gate = threading.Event()
     restart, audit = _Restart(), _Audit()
 
@@ -139,7 +139,7 @@ async def test_two_simultaneous_presses_start_one_successor(
 async def test_a_successor_that_cannot_start_leaves_this_daemon_running(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: 8000)
+    monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: 38470)
     restart, audit = _Restart(fail=True), _Audit()
     async for c in _client(_app(restart, audit)):
         r = await c.post("/api/v1/daemon/restart")

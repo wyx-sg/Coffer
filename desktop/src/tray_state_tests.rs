@@ -6,7 +6,7 @@ use super::*;
 fn running() -> TrayState {
     let mut s = TrayState::new();
     s.daemon = Daemon::Running {
-        port: 8000,
+        port: 38470,
         version: "1.0.0".into(),
     };
     s
@@ -18,7 +18,7 @@ fn a_running_daemon_is_named_with_its_port_and_version() {
     let s = running();
     assert_eq!(
         status_line(&s, Lang::En),
-        "Daemon running · port 8000 · 1.0.0"
+        "Daemon running · port 38470 · 1.0.0"
     );
     assert_eq!(icon(&s), Icon::Normal);
     assert_eq!(title(&s), None);

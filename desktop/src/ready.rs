@@ -44,11 +44,38 @@ pub fn base_url_for(port: u16) -> String {
 /// trusted the file would hand the page a token for a socket that does not
 /// answer yet.
 pub fn wait_for_daemon_ready(deadline: std::time::Instant) -> Option<(u16, String)> {
-    use std::thread::sleep;
+    wait_until_ready(
+        deadline,
+        read_daemon_info,
+        daemon_responds_ok,
+        std::thread::sleep,
+    )
+}
+
+/// [`wait_for_daemon_ready`] with its three side effects injected, so the
+/// sequencing is testable without a socket or a clock.
+///
+/// `read` is called afresh on every poll: after a restart that changed the
+/// daemon's port, the file first names the stopped daemon's port (nothing
+/// answers there) and then, once the replacement has bound, the new one. The
+/// connection returned is whatever the file names when something answers — the
+/// port is never carried over from before the restart (spec desktop-app
+/// "Restart by stopping the running daemon first").
+fn wait_until_ready<R, P, S>(
+    deadline: std::time::Instant,
+    mut read: R,
+    mut responds: P,
+    mut sleep: S,
+) -> Option<(u16, String)>
+where
+    R: FnMut() -> Option<(u16, String)>,
+    P: FnMut(u16) -> bool,
+    S: FnMut(std::time::Duration),
+{
     use std::time::{Duration, Instant};
     loop {
-        if let Some((port, token)) = read_daemon_info() {
-            if daemon_responds_ok(port) {
+        if let Some((port, token)) = read() {
+            if responds(port) {
                 return Some((port, token));
             }
         }
@@ -56,5 +83,48 @@ pub fn wait_for_daemon_ready(deadline: std::time::Instant) -> Option<(u16, Strin
             return None;
         }
         sleep(Duration::from_millis(DAEMON_READY_POLL_MS));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::time::{Duration, Instant};
+
+    // acceptance(spec = "desktop-app", scenario = "a restart onto a changed port reconnects the shell to the new port")
+    #[test]
+    fn a_restart_onto_a_new_port_hands_back_the_new_port_and_token() {
+        // The file still names the stopped daemon on the first polls, then the
+        // replacement on the port the user saved in Settings -> Daemon.
+        let polls = Cell::new(0u32);
+        let read = || {
+            polls.set(polls.get() + 1);
+            if polls.get() < 3 {
+                Some((38470, "old-token".to_string()))
+            } else {
+                Some((39001, "new-token".to_string()))
+            }
+        };
+        let responds = |port: u16| port == 39001;
+        let got = wait_until_ready(
+            Instant::now() + Duration::from_secs(60),
+            read,
+            responds,
+            |_| {},
+        );
+        assert_eq!(got, Some((39001, "new-token".to_string())));
+        assert_eq!(base_url_for(39001), "http://127.0.0.1:39001/api/v1");
+    }
+
+    #[test]
+    fn a_daemon_that_never_answers_is_given_up_on_at_the_deadline() {
+        let got = wait_until_ready(
+            Instant::now(),
+            || Some((38470, "tok".to_string())),
+            |_| false,
+            |_| {},
+        );
+        assert_eq!(got, None);
     }
 }

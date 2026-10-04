@@ -24,7 +24,7 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 - **The list** (left) has a **Filter** and one row per provider: a drag handle, its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer's engine only" for an Ollama-protocol provider), and the marks of the agents running on it. It is headed **Fallback order**, with a help tip: **the order is fallback priority** (see [Failover](#failover-between-providers)). Drag a row, or focus its handle and press ↑ / ↓, to move it. A chip marks the provider Coffer's own engine uses (**Coffer · background model**) and the one that transcribes speech (**Coffer · speech to text**); both are changed in **Settings › General**. Opening the page opens the first provider.
 - **The header** of the open provider shows its health, read from listing the endpoint's models when you open it — **Reachable**, **Key rejected** or **Unreachable** — its protocol, host and, when the endpoint answered, how long it took, the **Reach** control, **Test**, **Edit**, and a **⋯** menu with **Delete provider**.
-- **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:8001`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**, and **Fallback**: the switch **Use as a fallback** (a local runtime is never a fallback). **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
+- **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:38471`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**, and **Fallback**: the switch **Use as a fallback** (a local runtime is never a fallback). **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
 
 The provider's address is `/model-providers/<uid>`.
 
@@ -78,7 +78,7 @@ The model lives on the **agent**, not on the provider: a provider says which gat
 
 ## What gets written
 
-An agent on a provider does not call the provider directly. It calls Coffer's **local model proxy** on `127.0.0.1:8001`, which forwards each request to the provider with the real key attached, fails over to another provider serving the same model if the first one fails before answering, and records what the request cost ([Usage](/guides/usage)). How the proxy works is in [The local model proxy](/architecture/model-proxy). What lands in the agent's own file is therefore the proxy's address and a command that prints the agent's own **local proxy token** — never the provider's endpoint or its key.
+An agent on a provider does not call the provider directly. It calls Coffer's **local model proxy** on `127.0.0.1:38471`, which forwards each request to the provider with the real key attached, fails over to another provider serving the same model if the first one fails before answering, and records what the request cost ([Usage](/guides/usage)). How the proxy works is in [The local model proxy](/architecture/model-proxy). What lands in the agent's own file is therefore the proxy's address and a command that prints the agent's own **local proxy token** — never the provider's endpoint or its key.
 
 Coffer merges only its own keys into the agent's file and leaves everything else as it was. Writes go through the same machinery as the [config-file editor](/guides/agents#edit-config-files): atomic, with `.bak`, `.bak.1` and `.bak.2` kept, and refused with `CONFIG_FILE_STALE` if the file changed after Coffer read it (audited as `provider_projection_refused`).
 
@@ -88,7 +88,7 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 {
   "apiKeyHelper": "/Users/you/.coffer/bin/coffer proxy token --agent-uid 3f1c0b9a7d2e4c5f8a6b1d0e9f2c3a4b",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8001/anthropic",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:38471/anthropic",
     "NO_PROXY": "127.0.0.1,localhost",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-pro",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-pro",
@@ -122,7 +122,7 @@ model_catalog_json = "/Users/you/.codex/coffer-model-catalog.json"
 
 [model_providers.coffer]
 name = "Coffer (deepseek)"
-base_url = "http://127.0.0.1:8001/openai/v1"
+base_url = "http://127.0.0.1:38471/openai/v1"
 wire_api = "responses"
 supports_websockets = false
 requires_openai_auth = false
@@ -143,7 +143,7 @@ In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each ru
 
 If nothing answers, the dialog says so and offers a prompt for your agent (**Ask an agent**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running.
 
-- **Detection is read-only.** It probes loopback addresses only (each runtime's default port, or the URL you give), fingerprints the runtime rather than trusting the port, and never pulls, loads or downloads a model. vLLM's default port 8000 is Coffer's own daemon port, so start vLLM on another port and type its address, then press **Detect**.
+- **Detection is read-only.** It probes loopback addresses only (each runtime's default port, or the URL you give), fingerprints the runtime rather than trusting the port, and never pulls, loads or downloads a model. vLLM's default port 8000 is shared by many development servers, so it is not probed by default: type vLLM's address, then press **Detect**.
 - **A local runtime needs no key**; Coffer curates the runtime's models that can call tools, each with the context window the runtime serves it with. Ollama's served window is known once the model is loaded; before that it is unknown, and you can set it in the provider's **Models** section.
 - **Claude Code** gets `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (local runtimes reject its beta fields) and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to the served window, with every tier pinned to the one model. **Codex** gets the window in its catalogue. Coffer never runs Codex with `--oss`, which can pull models.
 - Agents work far better with a window of at least 64k tokens; token counts from local runtimes are approximate, and a first request may wait for a cold model load.
@@ -239,7 +239,7 @@ The unattended passes, the per-call time limit and which machine may run knowled
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
 | The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key. |
 | The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; **Rotate proxy token** in the agent page's **⋯** menu issues a fresh one. |
-| Nothing answers on `127.0.0.1:8001` | The proxy is not running | The daemon restarts a crashed proxy within a few seconds; `coffer daemon status` shows whether the daemon is up. |
+| Nothing answers on `127.0.0.1:38471` | The proxy is not running | The daemon restarts a crashed proxy within a few seconds; `coffer daemon status` shows whether the daemon is up. |
 | The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and cleared the agent's provider rather than re-route it | Switch again if you still want the provider. |
 
 ## Related

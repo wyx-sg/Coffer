@@ -29,7 +29,7 @@ coffer daemon start
 daemon started (pid=48213)
 ```
 
-然后在浏览器里打开 `http://127.0.0.1:8000/`，或者打开 Coffer 桌面应用。守护进程会把 API 令牌写进它提供的页面，所以你已经处于登录状态。如果守护进程已经在运行，这条命令会打印 `daemon already running`。
+然后在浏览器里打开 `http://127.0.0.1:38470/`，或者打开 Coffer 桌面应用。守护进程会把 API 令牌写进它提供的页面，所以你已经处于登录状态。如果守护进程已经在运行，这条命令会打印 `daemon already running`。
 
 ### 注册 Claude Code {#register-claude-code}
 

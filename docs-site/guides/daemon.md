@@ -35,7 +35,7 @@ In the web UI, **Settings → Daemon → Restart** restarts it from a browser to
 ```text
 status:  ready
 version: 0.2.0
-port:    8000
+port:    38470
 pid:     41822
 ```
 
@@ -50,11 +50,11 @@ A few behaviours worth knowing:
 - `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger.
 - `restart` is how a setting read before the daemon binds (the port) takes effect.
 
-To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port is in `~/.coffer/daemon.json` (8000 by default). The [desktop app](/guides/desktop-app) opens it for you.
+To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port is in `~/.coffer/daemon.json` (38470 by default). The [desktop app](/guides/desktop-app) opens it for you.
 
 ## Choose the port
 
-The daemon listens on **port 8000** by default and never scans for another one. A fixed port keeps a bookmark to the UI working, and it keeps what the browser stores for that origin (the interface language, page size, sidebar state, preferred editor) from resetting when the port moves.
+The daemon listens on **port 38470** by default and never scans for another one. A fixed port keeps a bookmark to the UI working, and it keeps what the browser stores for that origin (the interface language, page size, sidebar state, preferred editor) from resetting when the port moves.
 
 To move it:
 
@@ -62,7 +62,7 @@ To move it:
 coffer config get daemon.port        # the configured port
 coffer config set daemon.port 8765   # always bind 8765 from now on
 coffer daemon restart                # apply it (or Restart now on Settings → Daemon)
-coffer config unset daemon.port      # back to 8000
+coffer config unset daemon.port      # back to 38470
 ```
 
 `daemon.port` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. **Settings → Daemon** writes the same file through the running daemon, and its **Restart now** applies the change; the page then reloads from the new port.
@@ -74,8 +74,8 @@ A change applies at the next start. If a daemon is running on the old port, `set
 If the port is held by another process, the daemon refuses to start rather than binding a different port, and names what holds it:
 
 ```text
-port 8000 is the port Coffer's daemon binds, but something else is already using it.
-  held by: pid 5120  python3 -m http.server 8000
+port 38470 is the port Coffer's daemon binds, but something else is already using it.
+  held by: pid 5120  python3 -m http.server 38470
   fix one of:
     stop that process, then    coffer daemon start
     use a different port       coffer config set daemon.port <port>

@@ -62,7 +62,7 @@ def test_audit_entry_nullable_resource_fields():
         resource_kind=None,
         resource_name=None,
         actor="system",
-        details={"port": 8000},
+        details={"port": 38470},
     )
     assert e.resource_kind is None
     assert e.resource_name is None

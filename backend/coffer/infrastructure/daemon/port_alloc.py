@@ -4,7 +4,7 @@
 or :data:`~coffer.infrastructure.daemon.config.DEFAULT_PORT` when they pinned
 none. :func:`bind_free_socket` is the scan, kept for the
 ``COFFER_PORT_RANGE_*`` override the test suite pins so concurrent test daemons
-cannot collide on 8000. No user-facing start reaches the scan.
+cannot collide on 38470. No user-facing start reaches the scan.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def fixed_port_conflict_message(
     ``coffer config unset daemon.port`` is offered only when the port that failed is
     NOT the default, because that is the only case where clearing changes
     anything: it returns the daemon to :data:`DEFAULT_PORT`. Listing it against
-    a failing 8000 would send the user to a command that does nothing.
+    a failing 38470 would send the user to a command that does nothing.
     """
     if note is not None:
         held_by = note
@@ -175,7 +175,7 @@ def bind_free_socket(
 
     This is reached ONLY through the ``COFFER_PORT_RANGE_*`` override — the
     hook the test suite uses to give each of its daemons a disjoint range, well
-    away from the real 8000. A user's daemon never scans: it moves to the next
+    away from the real 38470. A user's daemon never scans: it moves to the next
     port whenever one is taken, and a port that moves is precisely what
     :func:`bind_fixed_socket` exists to stop.
     """

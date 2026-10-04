@@ -24,7 +24,7 @@ def _setup_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return home
 
 
-def _info(pid: int, port: int = 8000) -> DaemonInfo:
+def _info(pid: int, port: int = 38470) -> DaemonInfo:
     return DaemonInfo(
         version=1,
         pid=pid,

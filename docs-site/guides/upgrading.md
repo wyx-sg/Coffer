@@ -21,6 +21,14 @@ The error code is `VAULT_MIGRATION_REQUIRED`. Nothing has been changed at that p
 
 After the upgrade, one thing looks like a fault and is not: **every secret waits once for your approval**. The upgrade carries your secrets across but no approvals, and a secret goes to a destination only after you approve it there. So the first time a provider, an MCP server, a channel or the sync remote needs its secret, it waits for you in the Coffer app (the [Secrets page](/guides/secrets#approvals)) and stays idle until you approve — a channel, for example, shows "waiting for approval" instead of connecting, with its pairing and settings kept. Approve each one once; it starts by itself on its next attempt, with no restart.
 
+## The default ports moved
+
+The daemon's default port is now **38470** (it was 8000) and the local model proxy's is **38471** (it was 8001), because 8000 and 8001 are the most commonly taken development ports. A port you set yourself with `coffer config set daemon.port` is kept. Otherwise, after the first start of the new build:
+
+- Bookmarks to `http://127.0.0.1:8000/` stop working; use `http://127.0.0.1:38470/`.
+- The browser stores the web UI's language, sidebar state, page size and preferred editor per address, so they reset once on the new address. The desktop app is unaffected.
+- Agents follow by themselves: the MCP shim reads the daemon's discovery file, and Coffer rewrites the model proxy address in each agent's config on its next reconcile.
+
 ## Before you start
 
 - **Stop the daemon.** Quit the desktop app if you use it, then run `coffer daemon stop`. `coffer migrate` refuses while a daemon runs.

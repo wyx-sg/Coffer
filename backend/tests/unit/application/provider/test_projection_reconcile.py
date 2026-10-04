@@ -35,7 +35,7 @@ _AGENT_UID = "8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f"
 _CONNECTION_UID = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 _CLI = "/Users/me/.coffer/bin/coffer"
 #: Where the proxy-form projection points Claude Code (the default port).
-_PROXY_URL = "http://127.0.0.1:8001/anthropic"
+_PROXY_URL = "http://127.0.0.1:38471/anthropic"
 
 
 def _resource(

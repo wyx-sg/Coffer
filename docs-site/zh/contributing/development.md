@@ -54,7 +54,7 @@ make dev
 `make dev` 通过真正的入口 `python -m coffer.infrastructure.daemon.entry` 从 `backend/` 启动守护进程，并设置 `COFFER_DEV_CORS=1`。它会等到 `~/.coffer/daemon.json` 出现、并且 `GET /api/v1/daemon/status` 有响应，然后在 `http://localhost:5173` 上启动 Vite。一个 Vite 插件会读取 `daemon.json`，把守护进程的端口和 API 令牌注入页面，所以界面无需任何设置就处于登录状态。按 Ctrl-C 同时停止两个进程。后端改动需要重启，因为守护进程没有开自动重载。
 
 ::: danger `make dev` 用的是你真实的保险库
-直接运行时，`make dev` 会读写 `~/.coffer`，那里有你真实的保险库（配置、知识、技能和密钥）、历史和记忆。它还会写入你 home 目录下各智能体的配置，比如 `~/.claude`。它还会绑定 8000 端口。如果已安装的 Coffer 已经在那里运行，开发守护进程会拒绝启动，而且不会退到别的端口。请按下一节的做法使用沙盒。
+直接运行时，`make dev` 会读写 `~/.coffer`，那里有你真实的保险库（配置、知识、技能和密钥）、历史和记忆。它还会写入你 home 目录下各智能体的配置，比如 `~/.claude`。它还会绑定 38470 端口。如果已安装的 Coffer 已经在那里运行，开发守护进程会拒绝启动，而且不会退到别的端口。请按下一节的做法使用沙盒。
 :::
 
 始终通过 `coffer.infrastructure.daemon.entry` 启动守护进程，不要直接用 `uvicorn coffer.main:app`。这个入口负责分配端口、生成 API 令牌并写入 `daemon.json`。没有它，每个需要令牌的端点都会返回 `503`。
@@ -69,7 +69,7 @@ export COFFER_PORT_RANGE_START=18150 COFFER_PORT_RANGE_END=18159
 make dev
 ```
 
-设置了端口范围后，守护进程会绑定该范围内第一个空闲端口，而不是坚持用 8000。`make dev` 和 Vite 插件都从沙盒的 `daemon.json` 读取选中的端口。在第二个终端里，导出同样的三个变量，就可以对沙盒使用 CLI：
+设置了端口范围后，守护进程会绑定该范围内第一个空闲端口，而不是坚持用 38470。`make dev` 和 Vite 插件都从沙盒的 `daemon.json` 读取选中的端口。在第二个终端里，导出同样的三个变量，就可以对沙盒使用 CLI：
 
 ```sh
 .venv/bin/coffer daemon status
@@ -82,7 +82,7 @@ port:    18150
 ```
 
 ::: warning 在每个 shell 里都导出这些变量
-需要守护进程的 `coffer` 命令在找不到守护进程时会启动一个。如果你用真实的 `HOME` 运行 CLI，它连的就是你真实的保险库。如果你用沙盒 `HOME` 但没设端口范围，它会试图在 8000 端口再启动一个守护进程。
+需要守护进程的 `coffer` 命令在找不到守护进程时会启动一个。如果你用真实的 `HOME` 运行 CLI，它连的就是你真实的保险库。如果你用沙盒 `HOME` 但没设端口范围，它会试图在 38470 端口再启动一个守护进程。
 :::
 
 Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出目录的 `make dev` 已经占用了这个端口，前端那一半会以 `Port 5173 is already in use` 失败，守护进程那一半则继续运行。
@@ -93,7 +93,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 
 | 变量 | 作用 |
 | --- | --- |
-| `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 绑定该范围内第一个空闲端口，而不是配置的固定端口（默认 8000） |
+| `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 绑定该范围内第一个空闲端口，而不是配置的固定端口（默认 38470） |
 | `COFFER_DEV_CORS=1` | 允许 Vite 的来源 `http://localhost:5173` 和 `http://127.0.0.1:5173`，以及桌面壳的来源。不设的话，守护进程会以 `403 ORIGIN_NOT_ALLOWED` 拒绝来自这些来源的请求 |
 | `COFFER_CORS_ORIGINS` | 逗号分隔的列表，完全替换 CORS 允许列表（包括桌面壳的来源）。当你的界面运行在其他任何来源上时使用 |
 | `HOME` | Coffer 的每一棵目录树（保险库、`local/`、`content/`、`derived/`、`runs.db`）都从它解析，没有针对单棵树的覆盖选项。沙盒 `HOME` 就是一个独立的 Coffer |
@@ -225,7 +225,7 @@ cd ../coffer-my-fix && make install
 - **stash 也是共享的。** 在一个 worktree 里 `git stash`，推入的是所有 worktree 都能看到的同一个栈，而裸的 `git stash pop` 可能会应用别人的工作。优先用一个临时的 WIP 提交。如果一定要 stash，就给条目命名（`git stash push -m "<tag>"`），并按它的 SHA 来应用。
 - **每个 worktree 用自己的 `.venv`。** 后端以可编辑模式安装，所以从另一个检出目录软链过来的 `.venv` 导入的是那个检出目录的代码，你的测试就会在错误的代码树上通过。有两道门禁防范这一点：`make lint` 用 `PYTHONPATH=backend` 运行 `lint-imports`；如果 `coffer` 解析到本检出目录之外，`e2e/scripts/start_daemon.sh` 会拒绝启动。其他一切都只会测试 venv 指向的那份代码。
 - **每个 worktree 只开一个会话。** 两个编辑器或智能体写同一个 worktree，会互相覆盖对方未提交的改动。
-- **把守护进程放进沙盒。** 各 worktree 共享你的 `HOME`，所以两个 `make dev` 会争抢 `~/.coffer` 和 8000 端口。请使用上文的一次性保险库做法。
+- **把守护进程放进沙盒。** 各 worktree 共享你的 `HOME`，所以两个 `make dev` 会争抢 `~/.coffer` 和 38470 端口。请使用上文的一次性保险库做法。
 
 ## 相关 {#related}
 

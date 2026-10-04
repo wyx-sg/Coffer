@@ -126,7 +126,7 @@ async def test_insert_with_null_resource_fields(tmp_path):
             kind=None,
             name=None,
             actor="system",
-            details={"port": 8000},
+            details={"port": 38470},
         )
     )
     rows = await repo.query()

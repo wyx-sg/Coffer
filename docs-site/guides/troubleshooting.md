@@ -18,11 +18,11 @@ An agent with a shell can read Coffer's own records: `coffer log daemon --errors
 **Symptom.** `coffer daemon start` (or any command) prints:
 
 ```text
-port 8000 is the port Coffer's daemon binds, but something else is already using it.
+port 38470 is the port Coffer's daemon binds, but something else is already using it.
   held by: pid 5120  node server.js
 ```
 
-**Cause.** Coffer binds one fixed port (8000 unless you changed it) and never moves to another.
+**Cause.** Coffer binds one fixed port (38470 unless you changed it) and never moves to another.
 
 **Fix.** Stop the process named, or move Coffer to another port and restart:
 
@@ -133,7 +133,7 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Cause.** The browser keeps those preferences per origin, and the origin includes the port. The daemon is now on a different port than before, so the browser treats it as a different site.
 
-**Fix.** Keep one port: `coffer config get daemon.port` tells you the configured port; `coffer config unset daemon.port` returns to 8000.
+**Fix.** Keep one port: `coffer config get daemon.port` tells you the configured port; `coffer config unset daemon.port` returns to 38470.
 
 ### A page or tool is missing because a feature is switched off
 

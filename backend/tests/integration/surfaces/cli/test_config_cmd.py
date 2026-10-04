@@ -49,7 +49,7 @@ def test_the_port_key_is_read_changed_and_unset_with_no_daemon(no_daemon: Any) -
 
     first = _run("config", "get", "daemon.port")
     assert first.exit_code == 0, first.output
-    assert first.output.strip() == "8000"
+    assert first.output.strip() == "38470"
 
     changed = _run("config", "set", "daemon.port", "8123")
     assert changed.exit_code == 0, changed.output
@@ -60,15 +60,15 @@ def test_the_port_key_is_read_changed_and_unset_with_no_daemon(no_daemon: Any) -
     back = _run("config", "unset", "daemon.port")
     assert back.exit_code == 0, back.output
     assert json.loads(config_file.read_text()).get("port") is None
-    assert _run("config", "get", "daemon.port").output.strip() == "8000"
+    assert _run("config", "get", "daemon.port").output.strip() == "38470"
 
     listed = _run("config", "list", "daemon.", "--json")
     assert listed.exit_code == 0, listed.output
     [row] = json.loads(listed.output)["settings"]
-    assert row["key"] == "daemon.port" and row["value"] == 8000 and row["default"] == 8000
+    assert row["key"] == "daemon.port" and row["value"] == 38470 and row["default"] == 38470
     assert row["type"] == "port" and row["help"]
     table = _run("config", "list", "daemon.")
-    assert "daemon.port" in table.output and "8000" in table.output
+    assert "daemon.port" in table.output and "38470" in table.output
 
 
 @pytest.mark.acceptance(

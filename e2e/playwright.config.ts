@@ -54,7 +54,7 @@ export default defineConfig({
       // Vite dev server pointed at the e2e daemon.
       // IMPORTANT: reuseExistingServer is intentionally false (even in local
       // dev) for the Vite entry.  A reused `make dev` Vite instance lacks
-      // VITE_COFFER_BASE_URL, so the app silently falls back to port 8000
+      // VITE_COFFER_BASE_URL, so the app silently falls back to port 38470
       // (no daemon there) and all API calls fail with "Failed to fetch".
       // The daemon entry above still reuses to avoid TCP TIME_WAIT delays;
       // Vite starts quickly enough that a fresh start per run is fine.

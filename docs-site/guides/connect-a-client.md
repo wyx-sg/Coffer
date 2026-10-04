@@ -109,7 +109,7 @@ A client that can only speak HTTP MCP connects to the daemon directly:
 
 | | Value |
 | --- | --- |
-| URL | `http://127.0.0.1:<port>/mcp` — port `8000` unless you changed it (`coffer config get daemon.port`) |
+| URL | `http://127.0.0.1:<port>/mcp` — port `38470` unless you changed it (`coffer config get daemon.port`) |
 | Auth header | `X-Coffer-Token: <token>`, the `token` field of `~/.coffer/daemon.json` |
 | Session | the daemon returns `Mcp-Session-Id` on the first response; send it on every later request |
 | Requests | JSON-RPC over `POST /mcp` |
@@ -117,7 +117,7 @@ A client that can only speak HTTP MCP connects to the daemon directly:
 
 ```sh
 TOKEN=$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/.coffer/daemon.json")))["token"])')
-curl -s http://127.0.0.1:8000/mcp \
+curl -s http://127.0.0.1:38470/mcp \
   -H "X-Coffer-Token: $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
 ```

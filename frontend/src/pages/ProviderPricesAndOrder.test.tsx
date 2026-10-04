@@ -20,7 +20,7 @@ vi.mock("@/lib/api/providers", async (orig) => ({
 }));
 vi.mock("@/lib/api/proxy", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/proxy")>()),
-  proxyApi: { status: vi.fn().mockResolvedValue({ port: 8001 }) },
+  proxyApi: { status: vi.fn().mockResolvedValue({ port: 38471 }) },
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
 vi.mock("@/lib/api/secret", () => ({

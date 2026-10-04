@@ -102,13 +102,19 @@ A daemon it starts MUST be given a readiness budget that is a ceiling rather tha
 ### Requirement: Restart by stopping the running daemon first
 Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
 
-A restart MUST wait for its replacement to answer and return that daemon's connection with the result, and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
+A restart MUST wait for its replacement to answer and return that daemon's connection with the result — read from the daemon's discovery file while waiting, never carried over from the daemon it stopped, so a restart that moves the daemon to a port saved in Settings → Daemon (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port") reconnects the shell on that port — and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
 
 #### Scenario: a restart stops the running daemon before spawning a replacement
 - **GIVEN** a daemon that is listening but not serving usefully,
 - **WHEN** the user chooses restart from the tray, the offline banner or Settings → Daemon,
 - **THEN** the shell asks the running daemon to shut down over its token-gated route, waits for the port to free, and only then spawns a replacement,
 - **AND** a restart that cannot free the port reports that rather than appearing to succeed.
+
+#### Scenario: a restart onto a changed port reconnects the shell to the new port
+- **GIVEN** a port saved on Settings → Daemon, so the replacement binds a different port from the daemon being stopped,
+- **WHEN** the user presses Restart now in the desktop shell,
+- **THEN** the shell stops the daemon on the old port, then reads `~/.coffer/daemon.json` afresh while it waits and answers only when the daemon the file names responds,
+- **AND** the base URL and token it returns name the new port, which the page installs, so the window is connected to the daemon on the new port without relaunching the app
 
 #### Scenario: a restart hands back the connection it waited for
 - **GIVEN** the user restarts the daemon from the tray, the offline banner or Settings → Daemon,
@@ -223,9 +229,9 @@ its approval sheet opens.
 The shell MUST keep an item in the macOS menu bar whose icon is the Stroke C mark as a monochrome template image, so macOS tints it for a light or a dark menu bar, dimmed and struck through while no daemon is serving. While anything needs the user, the icon MUST carry that count beside it as a number, "9+" past nine; the count is the length of the Overview's attention list, which leaves out what the user has ignored. Its menu MUST offer, in this order, and nothing more: a status line naming the daemon's port and version while it runs, or that it is offline, which cannot be chosen; an entry "N things need you" ("1 thing needs you" for one) — shown only when something does, directly under the status line, and opening Overview; a separator; Open Coffer; Restart daemon, which reads Start daemon while none is serving and runs the one restart (see "Restart by stopping the running daemon first"); a separator; and Quit Coffer (⌘Q). The icon's tooltip MUST read "Coffer · N things need you" ("Coffer · 1 thing needs you" for one) while something needs the user, and plain "Coffer" otherwise, offline included. While no daemon is serving the attention entry and the count MUST be absent. What the menu bar says MUST follow the daemon without the user opening the window: a daemon that stops answering MUST read as offline within one poll, and a launching app MUST allow a cold daemon a few polls before calling it offline.
 
 #### Scenario: the menu bar says whether the daemon is running
-- **GIVEN** a daemon serving on port 8000 at version 1.0.0 and nothing that needs the user
+- **GIVEN** a daemon serving on port 38470 at version 1.0.0 and nothing that needs the user
 - **WHEN** the user opens the menu bar item
-- **THEN** the first line reads "Daemon running · port 8000 · 1.0.0" and cannot be chosen
+- **THEN** the first line reads "Daemon running · port 38470 · 1.0.0" and cannot be chosen
 - **AND** the icon is the plain mark with no count, and the entries after it are Open Coffer, Restart daemon and Quit Coffer
 
 #### Scenario: the menu bar counts what needs the user

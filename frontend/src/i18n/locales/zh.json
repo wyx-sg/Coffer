@@ -1430,7 +1430,7 @@
       "restartTimedOut": "守护进程在 90 秒内没有恢复。等它响应后到「活动 › 守护进程日志」查看，或重新启动它。",
       "copyCommand": "复制 {{command}}",
       "port": "端口",
-      "portHelp": "{{min}}–{{max}}，默认 8000。按回车生效；书签和智能体连接都会跟随它。",
+      "portHelp": "{{min}}–{{max}}，默认 38470。按回车生效；书签和智能体连接都会跟随它。",
       "portRange": "请使用 {{min}} 到 {{max}} 之间的端口。",
       "portInUse": "端口 {{port}} 已被其他程序占用，请换一个端口。",
       "portInUseBy": "端口 {{port}} 已被 {{name}}（pid {{pid}}）占用，请换一个端口。",

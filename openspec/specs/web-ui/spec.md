@@ -2001,9 +2001,9 @@ Port controls MUST be disabled.
 - **AND** in the browser it asks the daemon to restart itself, and in the desktop shell it runs the shell's restart
 
 #### Scenario: saving a valid port leaves it pending until restart
-- **GIVEN** a daemon answering on port 8000, opened in the desktop shell
+- **GIVEN** a daemon answering on port 38470, opened in the desktop shell
 - **WHEN** the user sets the port to 8123 on the Daemon tab and presses Enter
-- **THEN** 8123 is saved through `PUT /api/v1/daemon/port` (which writes it to `~/.coffer/daemon-config.json`), the row reads takes effect after restart with Restart now, and the status still shows 8000
+- **THEN** 8123 is saved through `PUT /api/v1/daemon/port` (which writes it to `~/.coffer/daemon-config.json`), the row reads takes effect after restart with Restart now, and the status still shows 38470
 - **AND** in a browser the row offers the same Restart now
 
 #### Scenario: a browser restarts the daemon from the daemon tab

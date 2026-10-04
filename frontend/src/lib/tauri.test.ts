@@ -82,7 +82,7 @@ describe("getDaemonInfo", () => {
 
   test("invokes get_daemon_info and returns its connection info inside Tauri", async () => {
     enterTauri();
-    const info = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "tok" };
+    const info = { baseUrl: "http://127.0.0.1:38470/api/v1", token: "tok" };
     invokeMock.mockResolvedValue(info);
     await expect(getDaemonInfo()).resolves.toEqual(info);
     expect(invokeMock).toHaveBeenCalledWith("get_daemon_info");
@@ -143,13 +143,13 @@ describe("connectToShellDaemon", () => {
 
   acceptance("desktop-app", "the handshake credentials a locally-hosted page", async () => {
     enterTauri();
-    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh-token" });
+    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:38470/api/v1", token: "fresh-token" });
 
     await connectToShellDaemon();
 
     // Read back through the ordinary getters: nothing downstream should be
     // able to tell which host supplied the secrets.
-    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:8000/api/v1");
+    expect(getCofferBaseUrl()).toBe("http://127.0.0.1:38470/api/v1");
     expect(getCofferToken()).toBe("fresh-token");
   });
 
@@ -159,7 +159,7 @@ describe("connectToShellDaemon", () => {
     // the desktop host an asset origin with no daemon behind it. Forgetting
     // this reset is the bug that makes every request go nowhere.
     const staleClient = getApiClient();
-    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:8000/api/v1", token: "tok" });
+    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:38470/api/v1", token: "tok" });
 
     await connectToShellDaemon();
 

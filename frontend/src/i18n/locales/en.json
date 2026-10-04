@@ -1430,7 +1430,7 @@
       "restartTimedOut": "The daemon did not come back within 90 seconds. Check Activity › Daemon log once it answers, or start it again.",
       "copyCommand": "Copy {{command}}",
       "port": "Port",
-      "portHelp": "{{min}}–{{max}}, default 8000. Press Enter to apply; bookmarks and agent connections follow it.",
+      "portHelp": "{{min}}–{{max}}, default 38470. Press Enter to apply; bookmarks and agent connections follow it.",
       "portRange": "Use a port from {{min}} to {{max}}.",
       "portInUse": "Port {{port}} is in use by another program. Pick another port.",
       "portInUseBy": "Port {{port}} is in use by {{name}} (pid {{pid}}). Pick another port.",

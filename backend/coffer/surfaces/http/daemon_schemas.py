@@ -202,7 +202,7 @@ class DaemonPortOut(BaseModel):
     says so and the status keeps showing ``bound_port``.
     """
 
-    #: The configured port, or the 8000 default when none is configured.
+    #: The configured port, or the 38470 default when none is configured.
     port: int
     bound_port: int
     pending: bool

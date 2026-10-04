@@ -407,3 +407,48 @@ def test_the_master_folder_carries_no_machine_specific_provenance(home) -> None:
         "name": GUIDE_SKILL_NAME,
         "source": {"type": "builtin"},
     }
+
+
+@pytest.mark.acceptance(spec="vault-storage", scenario="clearing derived state rebuilds it")
+def test_clearing_derived_rebuilds_it_at_the_next_start(home) -> None:  # type: ignore[no-untyped-def]
+    """Delete ``derived/`` under a stopped daemon; the next boot writes it again.
+
+    Boot one makes the derived class: the health database and the guide's
+    master folder. The whole directory is then removed, as ``rm -rf`` would, and
+    the next boot must find the guide still seeded, its master re-rendered, its
+    delivery link into the agent working again and the database recreated —
+    with the person's own collection untouched, because it was never there.
+    """
+    import shutil
+
+    config_dir = home / "agent-cfg"
+    config_dir.mkdir()
+
+    with _client() as client:
+        _seed_collection(client, "shopee", "Shopee's account system.")
+        _register_agent(client, "delivered-to", config_dir)
+    with _client():
+        pass
+
+    derived = home / ".coffer" / "derived"
+    assert _master(home).is_file() and (derived / "derived.db").is_file()
+
+    shutil.rmtree(derived)
+    assert not derived.exists()
+
+    with _client() as client:
+        listed = client.get("/api/v1/skills")
+        assert listed.status_code == 200, listed.text
+        assert GUIDE_SKILL_NAME in {s["name"] for s in listed.json()["items"]}
+        collections = client.get("/api/v1/knowledge/collections")
+        assert collections.status_code == 200, collections.text
+        assert "shopee" in {c["name"] for c in collections.json()["collections"]}
+    with _client():
+        pass
+
+    assert _master(home).is_file()
+    assert (derived / "derived.db").is_file()
+    assert "Shopee's account system" in _master(home).read_text(encoding="utf-8")
+    delivered = config_dir / "skills" / GUIDE_SKILL_NAME
+    assert delivered.is_symlink()
+    assert (delivered / "SKILL.md").is_file()

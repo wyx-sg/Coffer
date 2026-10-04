@@ -43,7 +43,7 @@ def test_0116_strips_the_three_graduated_keys_and_keeps_the_rest(tmp_path, monke
         tmp_path,
         monkeypatch,
         {
-            "port": 8000,
+            "port": 38470,
             "machine_id": "M-THIS",
             "features": {
                 "vault_sync": False,
@@ -57,7 +57,7 @@ def test_0116_strips_the_three_graduated_keys_and_keeps_the_rest(tmp_path, monke
     command.upgrade(cfg, "0116")
 
     assert json.loads(path.read_text()) == {
-        "port": 8000,
+        "port": 38470,
         "machine_id": "M-THIS",
         "features": {"fake_feature": True},
     }
@@ -65,7 +65,7 @@ def test_0116_strips_the_three_graduated_keys_and_keeps_the_rest(tmp_path, monke
 
 
 def test_0116_leaves_a_file_without_them_untouched(tmp_path, monkeypatch):
-    original = '{"port": 8000, "features": {"fake_feature": false}}'
+    original = '{"port": 38470, "features": {"fake_feature": false}}'
     path, cfg = _at_0115(tmp_path, monkeypatch, original)
 
     command.upgrade(cfg, "0116")

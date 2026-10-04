@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn parse_daemon_port_reads_well_formed_value() {
-        assert_eq!(parse_daemon_port(r#"{"port": 8000, "pid": 1}"#), Some(8000));
+        assert_eq!(parse_daemon_port(r#"{"port": 38470, "pid": 1}"#), Some(38470));
     }
 
     #[test]
@@ -198,7 +198,7 @@ mod tests {
     fn parse_daemon_token_reads_urlsafe_value() {
         // Obviously-fake fixture (URL-safe `-`/`_` chars, low entropy) so the
         // secrets scanner doesn't flag it as a real token.
-        let raw = r#"{"port": 8000, "token": "EXAMPLE-url_safe-token_value", "pid": 1}"#;
+        let raw = r#"{"port": 38470, "token": "EXAMPLE-url_safe-token_value", "pid": 1}"#;
         assert_eq!(
             parse_daemon_token(raw).as_deref(),
             Some("EXAMPLE-url_safe-token_value")
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn parse_daemon_token_missing_key_is_none() {
-        assert_eq!(parse_daemon_token(r#"{"port": 8000}"#), None);
+        assert_eq!(parse_daemon_token(r#"{"port": 38470}"#), None);
     }
 
     #[test]

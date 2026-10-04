@@ -117,7 +117,7 @@ function ok(data: unknown) {
 const FAIL = { error: { code: "INTERNAL_ERROR", message: "boom" } };
 const FAILED_RESPONSE = {
   status: 503,
-  url: "http://127.0.0.1:8000/api/v1/skills",
+  url: "http://127.0.0.1:38470/api/v1/skills",
   headers: new Headers({ "X-Coffer-Trace": "01JA2M7X4Q" }),
 };
 

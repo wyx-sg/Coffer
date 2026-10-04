@@ -28,7 +28,7 @@ def _assert_proxy_form(settings: dict) -> None:
     helper = settings["apiKeyHelper"]
     assert is_managed_api_key_helper(helper), helper
     assert " proxy token --agent-uid " in helper, helper
-    assert settings["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8001/anthropic"
+    assert settings["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:38471/anthropic"
 
 
 def _proxy_state(c: TestClient) -> ProxyState:
@@ -369,7 +369,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
         block = doc["model_providers"]["coffer"]
         # Codex calls the local proxy and fetches its own local token; the
         # upstream and its key stay with the proxy.
-        assert block["base_url"] == "http://127.0.0.1:8001/openai/v1"
+        assert block["base_url"] == "http://127.0.0.1:38471/openai/v1"
         assert block["wire_api"] == "responses"
         assert block["supports_websockets"] is False
         assert block["requires_openai_auth"] is False

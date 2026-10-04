@@ -148,7 +148,7 @@ coffer path logs                            # the log directory and its daemon.l
 守护进程处理的每个 HTTP 请求都有一个 trace id。守护进程把它作为 `trace_id` 写到该请求产生的每条日志记录上，并在每个响应（包括错误响应）的 `X-Coffer-Trace` 响应头中返回。要查一次失败请求期间发生了什么：
 
 ```sh
-curl -si -H "X-Coffer-Token: $TOKEN" http://127.0.0.1:8000/api/v1/resources/nope \
+curl -si -H "X-Coffer-Token: $TOKEN" http://127.0.0.1:38470/api/v1/resources/nope \
   | grep -i x-coffer-trace
 # x-coffer-trace: 3f9c0a6e2b7d4e1f9a0c5b2d8e7f6a1c
 

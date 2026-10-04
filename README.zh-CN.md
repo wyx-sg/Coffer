@@ -87,7 +87,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 ## 快速上手
 
 ```sh
-coffer daemon start                  # 启动守护进程；Web 界面在 http://127.0.0.1:8000/，已登录
+coffer daemon start                  # 启动守护进程；Web 界面在 http://127.0.0.1:38470/，已登录
 ```
 
 在 Web 界面（或桌面应用）中：
@@ -116,7 +116,7 @@ flowchart LR
   D -.->|"技能链接、切换提供商、记忆 Hook"| agents
 ```
 
-- **`coffer-daemon`** 保存全部状态，在 `127.0.0.1`（默认端口 8000）上提供 MCP 端点、管理 API 和 Web 界面。
+- **`coffer-daemon`** 保存全部状态，在 `127.0.0.1`（默认端口 38470）上提供 MCP 端点、管理 API 和 Web 界面。
 - **`coffer-mcp-shim`** 是每个智能体当作普通 stdio MCP 服务器启动的程序。它找到守护进程（必要时启动一个），然后转发会话。
 - **保险库**（`~/.coffer/vault`）是一个由普通文件组成的 git 仓库：每个资源一个 JSON 文件、技能文件夹、知识集，以及密文形式的密钥。任何文件都可以手工编辑，每次改动都有历史。只属于本机的设置和历史数据库（`runs.db`）放在它旁边。
 

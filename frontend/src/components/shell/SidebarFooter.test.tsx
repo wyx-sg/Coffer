@@ -38,7 +38,7 @@ function answer(body: Record<string, unknown>) {
     data: {
       status: "ready",
       version: "1.0.0",
-      port: 8000,
+      port: 38470,
       started_at: "2026-09-30T00:00:00Z",
       ...body,
     },

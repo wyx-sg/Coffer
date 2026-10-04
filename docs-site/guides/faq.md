@@ -90,7 +90,7 @@ Yes, through [vault sync](/guides/vault-sync). Each machine pulls and pushes its
 
 No. The daemon binds to loopback only, so its UI and API are reachable from the machine they run on and nowhere else. To reach your agents from a phone, use a [channel](/guides/channels): Telegram or SeaTalk.
 
-## Why port 8000, and can I change it?
+## Why port 38470, and can I change it?
 
 A fixed port keeps bookmarks working and keeps the browser's stored preferences for the UI. Change it with `coffer config set daemon.port <port>`, then `coffer daemon restart`. See [Choose the port](/guides/daemon#choose-the-port).
 

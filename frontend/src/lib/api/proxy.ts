@@ -4,7 +4,7 @@
 import { getApiClient, unwrap } from "@/lib/api/client";
 
 /** The proxy's loopback address the agents are pointed at. */
-export const proxyAddress = (port: number | undefined) => `127.0.0.1:${port ?? 8001}`;
+export const proxyAddress = (port: number | undefined) => `127.0.0.1:${port ?? 38471}`;
 
 // Query keys for the proxy's reads (kept here: queryKeys.ts is at its size limit).
 export const proxyRouteKey = (agentUid: string, model: string | null) =>

@@ -162,7 +162,7 @@ the new daemon finds the running proxy through `~/.coffer/proxy.json`
 A proxy from an older build drains its open streams and is replaced once idle.
 
 **Surface.** It binds `127.0.0.1` only, with no option for another interface,
-on a fixed port (`proxy_port` in `daemon-config.json`, 8001 by default), so the value written into the
+on a fixed port (`proxy_port` in `daemon-config.json`, 38471 by default), so the value written into the
 agents' files never changes on its own
 ([The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md)).
 It serves only `POST /anthropic/v1/messages`,

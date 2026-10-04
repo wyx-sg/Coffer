@@ -1305,7 +1305,7 @@ def _rotated_daemon(port: int, token: str) -> Any:
 async def test_handle_envelope_recovers_when_daemon_restarts_on_same_port_with_new_token(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Regression: a daemon restart kept port 8000 but rotated the token, so
+    """Regression: a daemon restart kept port 38470 but rotated the token, so
     every POST got a 401 rather than a connect error and recovery never ran —
     every tool call failed until the editor restarted the shim."""
     port = 18765

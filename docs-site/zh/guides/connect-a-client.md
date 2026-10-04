@@ -109,7 +109,7 @@ sequenceDiagram
 
 | | 值 |
 | --- | --- |
-| URL | `http://127.0.0.1:<port>/mcp`——除非你改过，端口是 `8000`（`coffer config get daemon.port`） |
+| URL | `http://127.0.0.1:<port>/mcp`——除非你改过，端口是 `38470`（`coffer config get daemon.port`） |
 | 认证请求头 | `X-Coffer-Token: <token>`，即 `~/.coffer/daemon.json` 的 `token` 字段 |
 | 会话 | 守护进程在第一次响应里返回 `Mcp-Session-Id`；之后每个请求都带上它 |
 | 请求 | 通过 `POST /mcp` 发送 JSON-RPC |
@@ -117,7 +117,7 @@ sequenceDiagram
 
 ```sh
 TOKEN=$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/.coffer/daemon.json")))["token"])')
-curl -s http://127.0.0.1:8000/mcp \
+curl -s http://127.0.0.1:38470/mcp \
   -H "X-Coffer-Token: $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
 ```
