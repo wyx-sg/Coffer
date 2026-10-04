@@ -65,6 +65,9 @@ export default defineConfig({
       cwd: path.join(ROOT, "frontend"),
       env: {
         VITE_COFFER_BASE_URL: `http://127.0.0.1:${DAEMON_PORT}/api/v1`,
+        // The Query devtools' floating button sits over the bottom-left corner
+        // and intercepts clicks on controls there.
+        VITE_COFFER_NO_DEVTOOLS: "1",
       },
     },
   ],

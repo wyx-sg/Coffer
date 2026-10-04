@@ -2164,10 +2164,6 @@
       "title": "From Coffer",
       "more": "+{{count}} more"
     },
-    "filterPill": {
-      "agent": "Agent",
-      "remove": "Remove the {{name}} filter"
-    },
     "kindTab": {
       "loadFailed": "Couldn’t read this list",
       "moreFor": "More for {{name}}"
@@ -2595,6 +2591,10 @@
         "hooks": "Hooks"
       }
     }
+  },
+  "reachFilter": {
+    "label": "Reach",
+    "all": "All"
   },
   "skills": {
     "subtitle": "Skills Coffer keeps in one master folder and delivers to the agents you choose, as a link or a copy.",
@@ -3229,9 +3229,6 @@
       "needsGitTitle": "History needs git",
       "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
       "checkAgain": "Check again"
-    },
-    "diff": {
-      "none": "No changes to the text."
     },
     "writer": {
       "user": "You",
@@ -5992,6 +5989,9 @@
       "provider": "Provider",
       "findProvider": "Find a provider"
     }
+  },
+  "diff": {
+    "none": "No changes to the text."
   },
   "splitView": {
     "resizeList": "Resize the list"

@@ -119,14 +119,15 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await expect(importDialog.getByLabel("Base URL")).toHaveCount(0);
     await importDialog.getByRole("button", { name: "Review 1 tool" }).click();
     // Step 2 reads the group back, with the base URL the spec carried.
-    await expect(importDialog.getByText(upstreamUrl)).toBeVisible();
+    await expect(importDialog.getByText(upstreamUrl, { exact: true })).toBeVisible();
     await importDialog.getByRole("button", { name: "Create group with 1 tool" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await expect(page.getByText("Imported from OpenAPI")).toBeVisible();
     await expect(page.getByRole("tablist")).toHaveCount(0);
-    const tools = page.getByRole("region", { name: /Tools · 1 of 1 on/ });
+    const tools = page.getByRole("region", { name: "Tools", exact: true });
+    await expect(tools.getByText("1 of 1 on")).toBeVisible();
     await expect(tools.getByText("GET /items/{id}")).toBeVisible();
 
     await tools.getByText("get_item", { exact: true }).click();
@@ -135,7 +136,10 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await drawer.getByRole("button", { name: "Run" }).click();
     const result = drawer.getByTestId("custom-tool-test-result");
     await expect(result).toContainText("200 OK");
-    await expect(result).toContainText('"id":"7"');
+    // The response sits in the viewer under the status block, indented.
+    await expect(drawer.getByTestId("custom-tool-response")).toContainText(
+      /"id":\s*"7"/,
+    );
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
   } finally {
     await deleteGroup(name);
