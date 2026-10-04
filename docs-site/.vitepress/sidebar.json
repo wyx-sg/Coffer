@@ -58,7 +58,6 @@
         { "text": { "en": "Running the daemon", "zh": "运行守护进程" }, "link": "/guides/daemon" },
         { "text": { "en": "Editing the vault by hand", "zh": "手工编辑保险库" }, "link": "/guides/vault-files" },
         { "text": { "en": "Vault sync", "zh": "保险库同步" }, "link": "/guides/vault-sync" },
-        { "text": { "en": "Upgrading an existing Coffer", "zh": "升级已有的 Coffer" }, "link": "/guides/upgrading" },
         { "text": { "en": "Activity and audit", "zh": "活动与审计" }, "link": "/guides/activity" },
         { "text": { "en": "Experimental features", "zh": "实验功能" }, "link": "/guides/experimental-features" },
         { "text": { "en": "Troubleshooting", "zh": "故障排查" }, "link": "/guides/troubleshooting" },

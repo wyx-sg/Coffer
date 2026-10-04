@@ -2,7 +2,6 @@
 import { describe, expect, test } from "vitest";
 
 import type { SecretRef } from "@/lib/api/secret";
-import { changeCount, planOf, shortPath } from "./scanPlan";
 import {
   citersFromRefusal,
   citersOf,
@@ -67,23 +66,6 @@ describe("secretRows", () => {
       citersFromRefusal({ resources: [{ kind: "channel", name: "SeaTalk", uid: "c1" }, { x: 1 }] }),
     ).toEqual([{ key: "channel:c1", kind: "channel", name: "SeaTalk", href: "/channels/c1" }]);
     expect(citersFromRefusal(null)).toEqual([]);
-  });
-
-  test("a dry run's plan counts each secret and each file once", () => {
-    const plan = planOf({
-      dry_run: true,
-      moved: [
-        { id: "1", name: "aws-a", path: "/Users/me/.coffer/secrets/aws.env", uri: "" },
-        { id: "2", name: "aws-b", path: "/Users/me/.coffer/secrets/aws.env", uri: "" },
-      ],
-      skipped: [],
-    });
-    expect(plan).toEqual({
-      secrets: ["aws-a", "aws-b"],
-      files: ["/Users/me/.coffer/secrets/aws.env"],
-    });
-    expect(changeCount(plan)).toBe(3);
-    expect(shortPath("/Users/me/.coffer/secrets/aws.env")).toBe("~/.coffer/secrets/aws.env");
   });
 
   test("a ref is missing on this Mac when it is not stored, or stored under another key", () => {

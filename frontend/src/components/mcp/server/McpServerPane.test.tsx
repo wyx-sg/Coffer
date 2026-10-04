@@ -233,6 +233,17 @@ describe("McpServerPane", () => {
     },
   );
 
+  acceptance("web-ui", "the 24-hour block opens the server's own call history", async () => {
+    renderPane();
+    const link = await screen.findByRole("link", { name: "View invocations" });
+    expect(link).toHaveAttribute("href", "/mcp-servers/sentry/invocations");
+    fireEvent.click(link);
+    expect(await screen.findByRole("tab", { name: "Invocations" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   acceptance("web-ui", "a failing stdio server opens its Server log", async () => {
     api.status = { status: "failing", last_error: "exited with status 1" };
     renderPane(DUCKDB);
@@ -378,10 +389,10 @@ describe("McpServerPane", () => {
           { kind: "cli", name: "npx", status: "found", version: "10.9.2", secret: null },
           {
             kind: "secret",
-            name: "SENTRY_AUTH_TOKEN",
+            name: "Authorization",
             status: "missing",
             version: null,
-            secret: "SENTRY_AUTH_TOKEN",
+            secret: "sentry.AUTH_TOKEN",
           },
         ],
       };
@@ -400,7 +411,12 @@ describe("McpServerPane", () => {
       expect(await screen.findByText("Found · 10.9.2")).toBeInTheDocument();
       expect(screen.getByText("View in CLIs")).toHaveAttribute("href", "/clis/npx");
       expect(screen.getByText("Missing")).toBeInTheDocument();
-      expect(screen.getByText("View in Secrets")).toHaveAttribute("href", "/secrets");
+      // A secret row names the secret, not the header that carries it.
+      expect(screen.getByText("sentry.AUTH_TOKEN")).toHaveAttribute("title", "Authorization");
+      expect(screen.getByText("View in Secrets")).toHaveAttribute(
+        "href",
+        "/secrets?q=sentry.AUTH_TOKEN",
+      );
       // Busiest first, four shown, read-only (no switches), the rest one link away.
       const tools = await screen.findByRole("table", { name: "Most-called tools" });
       const rows = within(tools).getAllByRole("row");

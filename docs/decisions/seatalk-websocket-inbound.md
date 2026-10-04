@@ -221,4 +221,4 @@ Rules a future change must respect:
   outbound `httpx` call and does not involve the SDK.
 - Enforced by: `infrastructure/channel/seatalk_ws.py`,
   `seatalk_ws_controller.py` and `seatalk_sdk.py`; `SeaTalkChannelConfig` in
-  `domain/channel/config.py`; migration `0103`.
+  `domain/channel/config.py`.

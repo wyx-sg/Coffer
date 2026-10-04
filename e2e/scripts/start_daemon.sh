@@ -6,7 +6,7 @@ set -euo pipefail
 # Create a per-run isolated dir (or reuse one passed in via env)
 COFFER_E2E_HOME="${COFFER_E2E_HOME:-$(mktemp -d -t coffer-e2e-XXXXXX)}"
 export HOME="${COFFER_E2E_HOME}"
-export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/coffer.db"
+export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/runs.db"
 # COFFER_E2E_PORT lets a second suite (the visual baseline,
 # playwright.visual.config.ts) run its own daemon beside this one.
 COFFER_E2E_PORT="${COFFER_E2E_PORT:-18000}"
@@ -36,6 +36,26 @@ mkdir -p "${COFFER_E2E_HOME}/.coffer"
 # default, and a real install on the login shell's PATH still comes first.
 mkdir -p "${COFFER_E2E_HOME}/bin"
 export PATH="${COFFER_E2E_HOME}/bin:${PATH}"
+
+# Agent programs are looked up on the user's LOGIN-SHELL path first (the daemon
+# asks `$SHELL -l -c 'printf %s "$PATH"'`), which on a laptop lists Homebrew and
+# ~/.local/bin ahead of the `bin` above, so a real `codex` would win over the
+# stand-in a spec drops there and the suite would start a real `codex
+# app-server` against a throwaway config directory (and leave it writing into it
+# while the spec removes it). A login shell of our own answers that one question
+# with the isolated `bin` and the system directories only, so the machine
+# running the suite and a CI runner see the same programs: none unless a spec
+# installs one.
+cat > "${COFFER_E2E_HOME}/bin/e2e-login-shell" <<'SHELL_EOF'
+#!/bin/sh
+[ "$1" = "-l" ] && shift
+case "$*" in
+  *'printf %s "$PATH"'*) printf %s "${HOME}/bin:/usr/bin:/bin:/usr/sbin:/sbin" ;;
+  *) exec /bin/sh "$@" ;;
+esac
+SHELL_EOF
+chmod +x "${COFFER_E2E_HOME}/bin/e2e-login-shell"
+export SHELL="${COFFER_E2E_HOME}/bin/e2e-login-shell"
 
 # Persist the chosen home path so _helpers.ts can locate daemon.json.
 # COFFER_E2E_HOME_FILE moves the pointer so a second suite does not repoint it.

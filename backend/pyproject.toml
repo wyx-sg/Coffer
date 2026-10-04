@@ -268,10 +268,6 @@ name = "CLI does not access the keychain directly"
 type = "forbidden"
 source_modules = ["coffer.surfaces.cli"]
 forbidden_modules = ["coffer.infrastructure.secret"]
-ignore_imports = [
-    # The one-time upgrade copies ciphertext files; it never reads the key.
-    "coffer.surfaces.cli.migrate_cmd -> coffer.infrastructure.vault.migration.**",
-]
 
 # Contract 5: cross-kind imports forbidden. Each kind's modules may not import
 # any other kind's modules; the kind-agnostic core (Resource/Audit/etc.),
@@ -1130,8 +1126,6 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_dependencies",
 ]
 ignore_imports = [
-    # The one-time upgrade reads every kind's old tables once.
-    "coffer.infrastructure.vault.migration.** -> coffer.**",
     "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.channel.persistence",
     "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.mcp.persistence",
 ]

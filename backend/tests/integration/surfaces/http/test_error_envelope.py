@@ -325,7 +325,7 @@ def _err_app():
         # These three once had no status entry and fell through to 500.
         (lambda e: e.MasterKeyMissing("/v/master.key"), 503, "MASTER_KEY_MISSING"),
         (lambda e: e.AgentConfigDirMissing("/no/such/dir"), 409, "AGENT_CONFIG_DIR_MISSING"),
-        (lambda e: e.DatabaseSchemaTooNew("abc123", "/v/coffer.db"), 409, "DB_SCHEMA_TOO_NEW"),
+        (lambda e: e.DatabaseSchemaTooNew("abc123", "/v/runs.db"), 409, "DB_SCHEMA_TOO_NEW"),
     ],
     ids=[
         "ResourceNotFound",

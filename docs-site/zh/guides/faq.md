@@ -96,7 +96,7 @@ Coffer 免费且开源，采用 MIT 许可证。唯一的费用是你本来就�
 
 ## 怎么升级？ {#how-do-i-upgrade}
 
-用你安装旧版本的同样方式安装新版本，然后运行 `coffer daemon restart`，替换掉正在运行的守护进程。在此之前，命令会打印版本警告。上一个构建保留在 `~/.coffer/bin` 中以便回滚，历史数据库在任何迁移之前都会先复制一份。如果你之前的 Coffer 仍把状态存在 `coffer.db` 里，请运行一次性的 `coffer migrate`：见[升级现有的 Coffer](/zh/guides/upgrading)。另见[升级与回滚](/zh/guides/daemon#upgrades-and-rollback)。
+用你安装旧版本的同样方式安装新版本，然后运行 `coffer daemon restart`，替换掉正在运行的守护进程。在此之前，命令会打印版本警告。上一个构建保留在 `~/.coffer/bin` 中以便回滚，历史数据库在任何迁移之前都会先复制一份。另见[升级与回滚](/zh/guides/daemon#upgrades-and-rollback)。
 
 ## 怎么卸载 Coffer？ {#how-do-i-uninstall-coffer}
 

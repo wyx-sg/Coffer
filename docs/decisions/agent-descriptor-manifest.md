@@ -20,9 +20,8 @@ Hermes), which would have meant touching every one of those sites four times
 over. The answers are static facts about a product, not behaviour that varies at
 runtime, so the question was where to keep them.
 
-The agent set has since moved twice. The four extra types were cut in 2026-06
-(migration `0031`), brought back, and cut again in 2026-09 by PR #309 (migration
-`0048`). `AgentType` is now exactly `claude_code` and `codex`.
+The agent set has since moved twice. The four extra types were cut in 2026-06,
+brought back, and cut again in 2026-09 by PR #309. `AgentType` is now exactly `claude_code` and `codex`.
 
 ## Options Considered
 
@@ -114,8 +113,7 @@ Pros: an agent could be half-landed without being offered. Cons: it was `True`
 on every record it ever held, and registration accepted any manifest type
 anyway, so its only reachable effect would have been hiding an agent from the
 one screen that helps a user add it. It was removed; withdrawing an agent means
-removing it from `AgentType` and the table, which is what migrations `0031` and
-`0048` did.
+removing it from `AgentType` and the table, which is what both cuts did.
 
 ## Decision
 

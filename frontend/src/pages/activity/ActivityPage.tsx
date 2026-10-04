@@ -41,6 +41,8 @@ import { useActivityView } from "@/lib/hooks/useActivityView";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { useSortParam } from "@/lib/hooks/useSortParam";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 /** The tab each log belongs to, for the warning icon on a tab whose log failed. */
 const SOURCE_TAB = { change: "changes", call: "mcp", daemon: "daemon" } as const;
@@ -116,8 +118,8 @@ export function ActivityPage() {
   return (
     // Full-bleed, like Conversations: the list owns the scroll region, so
     // "at the top" is the list's own scroll position.
-    <div className="-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden">
-      <div className="flex flex-col gap-4 px-8 pt-4">
+    <div className={cn(PAGE_BLEED, "flex-col")}>
+      <div className={cn(PAGE_BLEED_HEAD, "flex flex-col gap-4")}>
         <ActivityHeader
           tab={tab}
           onTab={(next) => setTab(next)}

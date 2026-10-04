@@ -135,7 +135,7 @@ The id is not only for `daemon.log`. `application/runtime/correlation.py` holds 
 
 A turn binds its ids around the spawn of its task: a fresh `turn_id`, the conversation's id, and the trace id of the request that started it — or, for a channel message that arrived over a websocket or a long poll with no request behind it, the turn's own id as its trace id. Because `asyncio` copies the context into every task it creates, the turn's renderer and anything else it starts carry the same ids with no parameter threaded through.
 
-So "what else did this request do?" is one filter on each record: `GET /api/v1/audit?trace_id=…`, `GET /api/v1/mcp/invocations?trace_id=…` and `GET /api/v1/daemon/logs?trace_id=…`, or `--trace <id>` on `coffer log audit`, `coffer log mcp` and `coffer log daemon`. The Activity page's record drawer shows a change's and a call's trace id. Rows older than migration 0137 carry none, and no id is invented for them.
+So "what else did this request do?" is one filter on each record: `GET /api/v1/audit?trace_id=…`, `GET /api/v1/mcp/invocations?trace_id=…` and `GET /api/v1/daemon/logs?trace_id=…`, or `--trace <id>` on `coffer log audit`, `coffer log mcp` and `coffer log daemon`. The Activity page's record drawer shows a change's and a call's trace id.
 
 ## The audit log
 
@@ -148,7 +148,7 @@ The audit log answers "what changed, and who changed it". It lives in the `audit
 | `timestamp` | when the event happened (UTC) |
 | `event_type` | one value from the vocabulary below |
 | `actor` | who caused it: `cli`, `api`, `ui`, `system`, or another short lowercase identifier |
-| `resource_uid` | the resource's uid, or empty for an event that names no resource or whose resource was deleted before the vault layout |
+| `resource_uid` | the resource's uid, or empty for an event that names no resource or whose resource was deleted |
 | `resource_kind`, `resource_name` | the label the resource carried **at the time** |
 | `details` | event-specific fields, already redacted |
 | `trace_id` | the request's or turn's correlation id; empty for a row written with none bound, such as a boot pass |
@@ -172,7 +172,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
@@ -187,7 +187,6 @@ No secret event carries a secret value; each records the ref, the standalone sec
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
 - `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` — a secret waited to be sent somewhere new (or a value in use waited to be replaced, or the protection waited to be switched off), and a person answered. See [Secrets](/guides/secrets#approvals).
-- `secret_imported` — a plaintext secret was moved from a file into the store.
 - `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
 
 Decrypting a secret to spawn an upstream is not an audit event.

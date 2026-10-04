@@ -6,8 +6,8 @@ import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 
-// Foundations-Tooltips "Timing": open after 400ms of hover (focus opens at
-// once — Radix does that itself), and for 600ms after one closes the next
+// Foundations-Tooltips "Timing": open after 400ms of hover (keyboard focus opens
+// at once — Radix does that itself), and for 600ms after one closes the next
 // opens without the wait. A provider may still pass its own values.
 const OPEN_DELAY_MS = 400;
 const WARM_MS = 600;
@@ -26,7 +26,33 @@ function TooltipProvider({
   );
 }
 const Tooltip = TooltipPrimitive.Root;
-const TooltipTrigger = TooltipPrimitive.Trigger;
+/** Whether focus arrived from the keyboard; a browser without `:focus-visible` counts as yes. */
+function keyboardFocus(el: Element): boolean {
+  try {
+    return el.matches(":focus-visible");
+  } catch {
+    return true;
+  }
+}
+
+// Focus opens the tooltip only when it came from the keyboard. Focus a dialog
+// moves onto its first control on open is not a request for the label, and an
+// open tooltip is the topmost layer: Escape would close it, not the dialog.
+const TooltipTrigger = React.forwardRef<
+  React.ElementRef<typeof TooltipPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger>
+>(({ onFocus, ...props }, ref) => (
+  <TooltipPrimitive.Trigger
+    ref={ref}
+    onFocus={(event) => {
+      onFocus?.(event);
+      // Radix skips its own open when the event is default-prevented.
+      if (!keyboardFocus(event.currentTarget)) event.preventDefault();
+    }}
+    {...props}
+  />
+));
+TooltipTrigger.displayName = TooltipPrimitive.Trigger.displayName;
 
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,

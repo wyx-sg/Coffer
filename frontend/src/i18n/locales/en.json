@@ -651,7 +651,7 @@
       "noCalls": "No calls in the last 24 hours.",
       "offBody": "Turning it on gives it back to the agents you chose last time.",
       "offTitle": "Off — no agent can use it",
-      "openInActivity": "View in Activity",
+      "viewInvocations": "View invocations",
       "reason": {
         "failing": "Failing",
         "failingSince": "{{error}} · since {{since}}",
@@ -822,7 +822,6 @@
       "secret_approval_requested": "Asked for approval of a secret change",
       "secret_approval_approved": "Approved a secret change",
       "secret_approval_rejected": "Rejected a secret change",
-      "secret_imported": "Imported secrets",
       "secret_protection_enabled": "Turned secret approval back on",
       "storage_cache_cleared": "Cleared the rebuildable cache",
       "vault_file_edited": "Edited a vault file on disk",
@@ -1778,9 +1777,6 @@
     "VAULT_FILE_INVALID": "The change was refused: the file would not be valid. Nothing was written.",
     "VAULT_FILE_STALE": "The file changed since you loaded it. Reload and try again.",
     "VAULT_GIT_FAILED": "git failed while reading or writing the vault.",
-    "VAULT_MIGRATION_ON_HOLD": "The vault upgrade was rolled back. Run coffer migrate --resume before starting Coffer again.",
-    "VAULT_MIGRATION_REFUSED": "The vault upgrade can't run now. Stop Coffer and try again.",
-    "VAULT_MIGRATION_REQUIRED": "This home still uses the old layout. Stop Coffer and run coffer migrate once.",
     "VAULT_PATH_INVALID": "That is not a path inside the vault.",
     "VAULT_VERSION_NOT_FOUND": "That version of the file does not exist.",
     "SKILL_COPY_NOT_OURS": "An agent's copy of this skill is no longer Coffer's link, so Coffer won't remove it. Restore it from master first, or delete that folder yourself.",
@@ -2161,10 +2157,6 @@
     "fromCoffer": {
       "title": "From Coffer",
       "more": "+{{count}} more"
-    },
-    "filterPill": {
-      "agent": "Agent",
-      "remove": "Remove the {{name}} filter"
     },
     "kindTab": {
       "loadFailed": "Couldn’t read this list",
@@ -2593,6 +2585,10 @@
         "hooks": "Hooks"
       }
     }
+  },
+  "reachFilter": {
+    "label": "Reach",
+    "all": "All"
   },
   "skills": {
     "subtitle": "Skills Coffer keeps in one master folder and delivers to the agents you choose, as a link or a copy.",
@@ -3227,9 +3223,6 @@
       "needsGitTitle": "History needs git",
       "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
       "checkAgain": "Check again"
-    },
-    "diff": {
-      "none": "No changes to the text."
     },
     "writer": {
       "user": "You",
@@ -4279,8 +4272,7 @@
         "confirmBody": "Coffer pushes the files as they are now, and records that you did in the audit log. Do this only if you checked each place is not a real secret: once pushed, the value is in the remote's history.",
         "confirmLabel": "I checked it, push anyway",
         "title_one": "Nothing was pushed: {{count}} file holds a plaintext secret",
-        "title_other": "Nothing was pushed: {{count}} files hold a plaintext secret",
-        "move": "Move into secrets…"
+        "title_other": "Nothing was pushed: {{count}} files hold a plaintext secret"
       },
       "push_failed": {
         "title": "The push was rejected",
@@ -5798,64 +5790,6 @@
       "body_other": "{{count}} things still read {{reference}}. Point them at another secret or remove the reference, then delete it.",
       "open": "Open"
     },
-    "scan": {
-      "open": "Find plaintext keys",
-      "scanning": "Looking for plaintext keys…",
-      "failed": "Couldn't look for plaintext keys",
-      "noneTitle": "No plaintext keys found",
-      "noneBody": "Nothing in ~/.coffer/secrets/ or your skills holds a key in plain text.",
-      "foundTitle": "Plaintext keys found",
-      "foundSummary_one": "{{count}} found in {{files}} file",
-      "foundSummary_other": "{{count}} found in {{files}} files",
-      "foundIn": "Found in",
-      "key": "Key",
-      "secretName": "Secret name",
-      "line": "line {{line}}",
-      "source": {
-        "secrets_file": "secrets file",
-        "skill": "skill"
-      },
-      "tickAll": "Tick all",
-      "tickOne": "Move {{path}} line {{line}}",
-      "tickWhole": "Move {{path}}",
-      "ticked": "{{count}} of {{total}} ticked",
-      "mentions_one": "{{count}} skill still reads keys from ~/.coffer/secrets/. Update it by hand, or hand it to an agent:",
-      "mentions_other": "{{count}} skills still read keys from ~/.coffer/secrets/. Update them by hand, or hand them to an agent:",
-      "hint": "Each ticked value moves into the encrypted store and the file refers to it by name instead. A value that matches a secret you already have reuses it.",
-      "review_one": "Review {{count}} change",
-      "review_other": "Review {{count}} changes",
-      "reviewing": "Checking…",
-      "previewTitle": "Review changes",
-      "previewSummary": "{{secrets}} secrets added, {{files}} files changed",
-      "previewSecrets": "Secrets",
-      "previewFiles": "Files",
-      "add": "+ Add",
-      "modify": "~ Modify",
-      "previewNote": "Values are masked here. Each file keeps its place and permissions; only the lines that hold a key change.",
-      "back": "Back",
-      "apply_one": "Apply {{count}} change",
-      "apply_other": "Apply {{count}} changes",
-      "applying": "Applying…",
-      "applied_one": "Moved {{count}} key into secrets",
-      "applied_other": "Moved {{count}} keys into secrets",
-      "resultTitle_one": "Moved {{moved}} of {{count}} key",
-      "resultTitle_other": "Moved {{moved}} of {{count}} keys",
-      "skipped": "Skipped",
-      "noneBody_one": "Coffer checked {{count}} file and found no API keys or tokens written in plain text.",
-      "noneBody_other": "Coffer checked {{count}} files and found no API keys or tokens written in plain text.",
-      "checked": "Checked",
-      "checkedWhere": "Agent configs, MCP server definitions, custom tools, skills, ~/.coffer",
-      "notChanged": "not changed",
-      "inActivity": "Every change is in Activity",
-      "unwrittenTitle": "{{path}} couldn’t be rewritten",
-      "unwrittenTitleMany_one": "{{count}} file couldn’t be rewritten",
-      "unwrittenTitleMany_other": "{{count}} files couldn’t be rewritten",
-      "unwrittenBody": "{{reason}}. The key is saved as the secret {{name}}, but the file still holds it in plain text.",
-      "unwrittenBodyMany": "The keys are saved as secrets, but those files still hold them in plain text.",
-      "moved": "Moved",
-      "savedNotChanged": "Saved · file not changed",
-      "retry": "Retry"
-    },
     "time": {
       "never": "Never"
     },
@@ -6047,6 +5981,9 @@
       "provider": "Provider",
       "findProvider": "Find a provider"
     }
+  },
+  "diff": {
+    "none": "No changes to the text."
   },
   "splitView": {
     "resizeList": "Resize the list"

@@ -58,9 +58,9 @@ class ChannelThreadConversationModel(Base):
     # every other row.
     parallel_ordinal: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parallel_title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # "direct" / "group": which send path reaches the thread (migration 0108).
+    # "direct" / "group": which send path reaches the thread.
     chat_kind: Mapped[str | None] = mapped_column(String, nullable=True)
-    # The thread's sticky model, effort and working directory (migration 0108).
+    # The thread's sticky model, effort and working directory.
     preferred_model: Mapped[str | None] = mapped_column(String, nullable=True)
     preferred_effort: Mapped[str | None] = mapped_column(String, nullable=True)
     preferred_cwd: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -77,7 +77,7 @@ class ChannelThreadConversationModel(Base):
 
 
 class ChannelThreadHistoryModel(Base):
-    """One conversation a chat thread opened (migration 0108)."""
+    """One conversation a chat thread opened."""
 
     __tablename__ = "channel_thread_history"
 

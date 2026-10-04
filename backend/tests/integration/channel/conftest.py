@@ -39,6 +39,7 @@ from coffer.application.chat.turn_orchestrator import (
     clear_active_turns,
 )
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.supervisor import tasks
 from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
@@ -582,7 +583,7 @@ class ChannelEnv:
 
 
 async def _build_env(tmp_path: Any) -> ChannelEnv:
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'coffer.db'}")
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'runs.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
@@ -694,6 +695,22 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     )
 
 
+async def _drain_background_tasks(timeout: float = 5.0) -> None:
+    """Cancel and await every task except the caller, until none is left.
+
+    Cancelling a task that awaits a shielded write leaves the write itself
+    running, so a second pass picks up what the first one unmasked.
+    """
+    await tasks().shutdown(timeout=timeout)
+    for _ in range(5):
+        leftovers = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        if not leftovers:
+            return
+        for task in leftovers:
+            task.cancel()
+        await asyncio.wait(leftovers, timeout=timeout)
+
+
 @pytest.fixture(autouse=True)
 def _reset_turns() -> Any:
     clear_active_turns()
@@ -707,17 +724,11 @@ async def env(tmp_path: Any) -> Any:
     try:
         yield e
     finally:
-        # Cancel any still-running turn and drain tasks deterministically
-        # before closing the database they write to.
-        leftovers = [
-            t
-            for t in asyncio.all_tasks()
-            if t is not asyncio.current_task()
-            and t.get_name().startswith(("turn:", "channel-drain:"))
-        ]
-        for task in leftovers:
-            task.cancel()
-        if leftovers:
-            await asyncio.gather(*leftovers, return_exceptions=True)
+        # Cancel every still-running task the test left behind (turns, burst
+        # windows, trailing partial flushes, reply-ledger writes, tickers) and
+        # wait for them BEFORE closing the database they write to. A task that
+        # outlives the engine holds a pooled aiosqlite connection, and the
+        # dispose then blocks on it (a >300s CI hang in teardown).
+        await _drain_background_tasks()
         e.processor.shutdown()
         await e.engine.dispose()

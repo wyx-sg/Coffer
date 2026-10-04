@@ -25,10 +25,10 @@ export function specDiff(oldText: string, newText: string, startLine: number): S
   });
   const shown = rows.filter((_, i) => keep[i]);
   const oldCount = shown.filter((r) => r.kind !== "add").length;
-  const newCount = shown.filter((r) => r.kind !== "del").length;
+  const newCount = shown.filter((r) => r.kind !== "remove").length;
   const first = shown[0];
-  const oldFrom = (first?.oldLine ?? 1) + base;
-  const newFrom = (first?.newLine ?? 1) + base;
+  const oldFrom = (first?.oldNo ?? 1) + base;
+  const newFrom = (first?.newNo ?? 1) + base;
   const lines: DiffLine[] = [];
   if (shown.length > 0) {
     lines.push({
@@ -38,15 +38,15 @@ export function specDiff(oldText: string, newText: string, startLine: number): S
   }
   for (const row of shown) {
     lines.push({
-      kind: row.kind === "del" ? "remove" : row.kind === "hunk" ? "hunk" : row.kind,
+      kind: row.kind,
       text: row.text,
-      oldNo: row.oldLine === undefined ? undefined : row.oldLine + base,
-      newNo: row.newLine === undefined ? undefined : row.newLine + base,
+      oldNo: row.oldNo === undefined ? undefined : row.oldNo + base,
+      newNo: row.newNo === undefined ? undefined : row.newNo + base,
     });
   }
   return {
     lines,
     added: rows.filter((r) => r.kind === "add").length,
-    removed: rows.filter((r) => r.kind === "del").length,
+    removed: rows.filter((r) => r.kind === "remove").length,
   };
 }

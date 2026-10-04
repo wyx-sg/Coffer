@@ -281,7 +281,7 @@ The history is the vault repository's own: collections live under `knowledge/` i
 
 ### Look at a document's history
 
-A document's **History** tab is one list of its versions, newest first, with their writers and line counts. Choose a row and it expands in place to its diff: **Changes in this version** (against the version before) or **Compare with current**, with **Restore this version** on every version but the current one. A curation's row links to **See the pass**. If the history cannot be read, the tab shows one **Load error** row with **Retry** and **Open Activity**, and the Document tab keeps working.
+A document's **History** tab is split in two, like a skill's: its versions on the left, newest first, with their writers and line counts, and the chosen version on the right — the newest when the tab opens. Drag the divider to give either side more room. The right side shows the diff, **Changes in this version** (against the version before) or **Compare with current**, with **Restore this version** on every version but the current one, and **See the pass** on a curation's version. Long lines wrap rather than being cut off. If the history cannot be read, the tab shows one **Load error** row with **Retry** and **Open Activity**, and the Document tab keeps working.
 
 A restore is a new version of its own, written by you; the history before it stays. Curation treats it like any edit and carries it through to the rest of the collection as a newer statement. A deleted document is restored the same way, from the version before the delete.
 

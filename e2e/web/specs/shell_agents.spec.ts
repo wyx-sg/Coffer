@@ -117,7 +117,7 @@ acceptance("agent-registry", "desktop app agents page", async ({ page }) => {
     await expect(page).toHaveURL(/\/agents\/codex$/);
   } finally {
     await removeCodex();
-    fs.rmSync(configDir, { recursive: true, force: true });
+    fs.rmSync(configDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
 
@@ -205,7 +205,7 @@ acceptance(
       }
 
       // More holds Plugins and Memory; picking one opens it at its own path.
-      await page.getByRole("button", { name: /^More/ }).click();
+      await page.getByRole("button", { name: "More", exact: true }).click();
       await page.getByRole("menuitem", { name: /^Plugins/ }).click();
       await expect(page).toHaveURL(/\/agents\/codex\/plugins$/);
 
@@ -213,7 +213,7 @@ acceptance(
       await expect(page.getByText(/^Title$/)).toHaveCount(0);
     } finally {
       await removeCodex();
-      fs.rmSync(configDir, { recursive: true, force: true });
+      fs.rmSync(configDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   },
 );

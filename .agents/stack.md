@@ -11,7 +11,7 @@ Coffer's backend is Python 3.12+.
 - **Pydantic v2** for models + validation
 - **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the only access path to `runs.db`, the history database; the vault's files are the system of record for configuration and are written only through `VaultWriter`, `infrastructure/vault/`)
 - **`cryptography`** (Fernet) for the envelope-encrypted secret store
-- **`keyring`** for OS keychain (secret module only — master key opt-in + legacy migration)
+- **`keyring`** for OS keychain (secret module only — the opt-in master-key location)
 - **`asyncio`** for async + subprocess management. Coffer's own code imports
   `asyncio`, never `anyio` (which `domain/` is forbidden to import at all) — but
   `anyio` is underneath Starlette and the `mcp` SDK, and its task-group cancel
@@ -31,6 +31,8 @@ before assuming something is absent.
 - **`mcp`** (≥ 2.2, plus **`httpx2`** its 2.x line builds on) — the MCP SDK
   behind the gateway, both as server and as client of upstream servers.
 - **`alembic`** — every schema change is a migration, never an implicit create.
+  `runs.db`'s history starts at one baseline revision (`0146`); a schema change is
+  a new revision stacked on it with a working `downgrade()`.
 - **`typer`** + **`rich`** (CLI), **`structlog`** (logging), **`psutil`**,
   **`tomlkit`**, **`pyyaml`** (agent-native config files), **`sse-starlette`** +
   **`watchfiles`** (streamed turns, file watching).

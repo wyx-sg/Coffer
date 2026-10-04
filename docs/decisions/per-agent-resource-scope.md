@@ -95,7 +95,7 @@ kind can shape the answer to its own semantics. Cons: three kinds had already
 diverged on the same question, and divergence was not cosmetic. Skills needed
 three mechanisms to answer "does this agent get it"; `compatible_agents = null`
 meant "the wire's default" while every other kind read null as "everyone", so
-the provider migration (0071) had to materialise every row's effective set
+the provider migration had to materialise every row's effective set
 rather than rename the field, or every never-narrowed connection would have
 widened. Lost: the next kind would diverge again, and the UI could not offer one
 control.
@@ -123,15 +123,15 @@ either be bypassed by every administrative path or break them.
 
 The scope shipped as a machine × agent matrix in PR #296 (2026-07) and returned
 as a second `AND`-ed machine allow-list in PR #381 (2026-09-14), removed the
-next day in PR #382 (migration 0076 resolved each row against the machine it
-was on, taking dormant when unsure). Lost because reach does not travel between
+next day in PR #382 (each stored row was resolved against the machine it was
+on, taking dormant when unsure). Lost because reach does not travel between
 machines at all; argued in
 [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md).
 
 ### Option F — scope on every kind, `knowledge` and `memory` included
 
-Both had `supports_scope` at times. Withdrawn in PR #404 (migration 0088 cleared
-their stored scope) because for those two kinds scope withheld a *name* and
+Both had `supports_scope` at times. Withdrawn in PR #404 (their stored scope was
+cleared) because for those two kinds scope withheld a *name* and
 nothing else: both serve files on disk that the agent is handed the path of,
 enforcement sat only on the MCP tool surface, and the skill knowledge delivers
 tells the agent to grep the whole root. The stored data bore it out — every
@@ -147,7 +147,7 @@ The list held names until PR #406. Renaming an agent silently emptied every
 scope naming it, and the channel kind carried a translation module because its
 `default_agent` and its scope named agents in two vocabularies. Lost: a scope
 is a reference to another resource, and references hold the immutable uid
-(migration 0096; see
+(see
 [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md)).
 
 ### How the gateway learns the asking agent

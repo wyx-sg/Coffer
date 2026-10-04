@@ -259,7 +259,7 @@
   --titlebar-inset: 0px;
 }
 :root[data-chrome="overlay"] {
-  --titlebar-inset: 44px;
+  --titlebar-inset: 38px;
 }
 /* The shell root is `h-[100vh]`; the full-bleed workspace pages are `h-screen`
    inside a scroll area that starts below the strip, so they give the strip's

@@ -1,12 +1,12 @@
 // frontend/src/components/skills/SkillRequireRow.tsx
 // One row of the Requires tab (canvas 4.3.10): the name in mono, an optional
 // Kind column (tools), a note, the state on the right and a link to the page
-// that owns the thing ("View in CLIs"). The four groups share it so their
-// columns line up (124 · [88] · fluid · 170 · 128).
+// that owns the thing ("View in CLIs"). A group's list is the grid
+// (`requireColumns`) and each row a subgrid of it, so the name column is as
+// wide as the group's longest name — never cut — and the rows line up
+// (name ≥ 124 · [88] · fluid · 170 · 128).
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-
-import { cn } from "@/lib/utils";
 
 interface Props {
   name: string;
@@ -24,14 +24,9 @@ export function SkillRequireRow({ name, kind, note, state, to, linkLabel, testId
   return (
     <li
       data-testid={testId}
-      className={cn(
-        "grid min-h-10 items-center gap-3 border-t border-border-subtle last:border-b",
-        kind !== undefined
-          ? "grid-cols-[124px_88px_minmax(0,1fr)_170px_128px]"
-          : "grid-cols-[124px_minmax(0,1fr)_170px_128px]",
-      )}
+      className="col-span-full grid min-h-10 grid-cols-subgrid items-center border-t border-border-subtle last:border-b"
     >
-      <span className="truncate font-mono text-xs font-label text-text">{name}</span>
+      <span className="whitespace-nowrap font-mono text-xs font-label text-text">{name}</span>
       {kind !== undefined ? (
         <span className="whitespace-nowrap text-xs text-text-muted">{kind}</span>
       ) : null}

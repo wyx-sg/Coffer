@@ -58,18 +58,17 @@ Forces on the choice:
   each commit is an fsync).
 - **Schema.** Every ORM model registers on one `Base.metadata`; one Alembic
   lineage under `infrastructure/persistence/migrations/versions/`, linear,
-  numbered, hand-written. A kind's tables arrive in the same lineage as
-  everyone else's.
+  numbered, hand-written, starting at one baseline revision that creates the
+  whole schema. A kind's tables arrive in the same lineage as everyone else's.
 - **When.** The daemon lifespan runs `run_migrations`
   (`infrastructure/persistence/migrations_runner.py`) before it builds any
-  service, off the event loop. It (1) refuses a home that still keeps its state
-  in the pre-vault `coffer.db`, which only `coffer migrate` moves; (2) refuses a
-  database whose revision this build does not know, raising
-  `DatabaseSchemaTooNew` (`DB_SCHEMA_TOO_NEW`) with an actionable message
-  instead of Alembic's; (3) if an upgrade is due, copies `runs.db` and its
+  service, off the event loop. It (1) refuses a database
+  whose revision this build does not know, raising `DatabaseSchemaTooNew`
+  (`DB_SCHEMA_TOO_NEW`) with an actionable message instead of Alembic's; (2) if
+  an upgrade is due, copies `runs.db` and its
   `-wal`/`-shm` companions to `runs.db.pre-<revision>` — never overwriting an
   earlier copy for the same revision, keeping the three newest — and copies
-  nothing when the schema is already current; (4) runs `alembic upgrade head`
+  nothing when the schema is already current; (3) runs `alembic upgrade head`
   with the URL pinned on the Alembic config, so a caller that names a database
   cannot migrate a different one (such as the developer's real home from a
   test).
@@ -202,8 +201,7 @@ daemon writes it. Its schema is one linear, hand-written Alembic lineage over
 one `Base.metadata`, and the daemon runs it forward at startup before building
 any service — refusing a database from a newer or divergent build
 (`DB_SCHEMA_TOO_NEW`) and copying the file aside as `runs.db.pre-<revision>`
-before any upgrade. The legacy `coffer.db` is read only by `coffer migrate`,
-which moves a pre-vault home into the vault layout once, on request.
+before any upgrade.
 
 Rules this implies for every future change:
 

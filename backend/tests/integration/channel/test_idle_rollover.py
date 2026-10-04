@@ -1,9 +1,9 @@
-"""A message to a stale conversation opens a new one, and a legacy pairing is
-completed on its first DM.
+"""A message to a stale conversation opens a new one, and a message with no
+sender is refused.
 
 Spec channels "Open a new conversation after an idle period", "Open a new
-conversation when the active one is archived" and "Backfill the owner's sender id
-on a legacy pairing".
+conversation when the active one is archived" and "Refuse a message with an
+empty sender id".
 """
 
 from __future__ import annotations

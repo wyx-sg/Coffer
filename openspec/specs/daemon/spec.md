@@ -186,7 +186,7 @@ presence of `daemon.json`, MUST diagnose a port that is already held *before* sp
 after a boot timeout, and MUST wait a bounded time for the spawned daemon to **answer its status call** — a published
 `daemon.json` is not that, because the file is written before the daemon has finished starting and a
 stale one left by a crash is there before it has started at all. A daemon that exits before it
-answers (a vault migration is required, git is too old) MUST be reported as failed with a pointer to
+answers (git is too old, say) MUST be reported as failed with a pointer to
 `daemon.log`, never as started. That pre-flight
 check MUST be allowed to report "free" when the port is not — a port in `TIME_WAIT` from the daemon
 a `restart` has just stopped is bindable and must not be called a conflict — and MUST never err the
@@ -700,10 +700,7 @@ version directory is not Coffer's deployment and MUST be left alone.
 Before `alembic upgrade head` changes the on-disk history database, `~/.coffer/runs.db`, the
 daemon MUST copy it (and any `-wal`/`-shm` companions) to `runs.db.pre-<revision>`, keeping the
 three newest copies; an already-current schema or an in-memory database MUST NOT be copied.
-Before any of that the daemon MUST refuse a home that still holds only the single database of
-the layout before the vault, naming `coffer migrate`: moving a home into the vault layout is a
-step of its own that backs the old database up as `coffer.db.pre-vault` first, never a startup
-migration ([vault-storage](../vault-storage/spec.md) "Move an existing home into the vault layout once, on request, reversibly"). A source install MUST NOT do
+A source install MUST NOT do
 any of this: `pip install` already puts the console scripts on `PATH` (see "Install the console
 scripts from source"). The daemon owns the deployment because it is the one process every frozen install starts,
 whichever tier it came from.

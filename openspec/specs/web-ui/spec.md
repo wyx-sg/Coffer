@@ -181,7 +181,7 @@ persist across sessions (`localStorage`). The sidebar toggle's shortcut is ⌘\
 - **AND** expanding it again is likewise remembered
 
 ### Requirement: Go back and forward from the title bar
-The desktop shell on macOS MUST draw its own 44px title strip across the top of
+The desktop shell on macOS MUST draw its own 38px title strip across the top of
 the window, in the sidebar's colour and with no rule beneath it. Besides the
 traffic lights the strip MUST hold only the sidebar toggle and back and forward
 arrows through the app's own history, to the right of the toggle — with one
@@ -189,8 +189,11 @@ exception: an open conversation's title row (its title, its channel source and
 its ⋯ menu) sits in the strip, 32px right of the sidebar's edge, because that page
 has no header of its own; no other page puts anything there, and a page's title
 stays in the page. The controls
-start 16px right of the traffic lights, or at the left edge in full screen,
-where the lights are hidden. Where the strip is blank the window MUST remain
+start just right of the traffic lights, or at the left edge in full screen,
+where the lights are hidden, and the lights and the controls share the strip's
+centre line. Under the strip every page's title MUST start at the same place,
+16px below the strip and 32px from the sidebar's edge, whether the page scrolls
+as a whole or is a workspace whose panes scroll on their own. Where the strip is blank the window MUST remain
 draggable. While the sidebar is expanded its right edge MUST run up through the
 strip; collapsed, the strip MUST run across. An arrow MUST be greyed out and
 inert when the app's history has nowhere to go that way, and ⌘[ and ⌘] (Ctrl
@@ -560,11 +563,14 @@ Overview, before the per-capability tabs, and its tabs — Overview, Tools,
 Resources, Prompts, Invocations — MUST carry no counts. Under the banner the
 Overview stacks **Last 24 hours** (the server's calls and errors, with a table of
 the agents that made them and a line for a session that named no agent; for a
-server that is off, only its last call and who made it), **Requires** — what the
+server that is off, only its last call and who made it; for a server that is on,
+a View invocations link to the server's own Invocations tab), **Requires** — what the
 server's command and settings need from this machine (see mcp-gateway "Show what
 an MCP server requires"): the launcher as a row reading "Found · <version>" or
 "Not found" with a View in CLIs link to `/clis/<launcher>`, and each secret as
-Set, Missing or Waiting for approval with a View in Secrets link to `/secrets` —
+named by the secret's own name (the setting that carries it is its tooltip) as
+Set, Missing or Waiting for approval with a View in Secrets link to
+`/secrets?q=<name>`, the Secrets list searched for it —
 and **Most-called tools**: the busiest four, read-only with no switches, each
 marked when it sits behind search, with the rest one link away ("Show all N in
 Tools").
@@ -578,8 +584,13 @@ Tools").
 #### Scenario: the Overview stacks the last 24 hours by agent, what it requires and the busiest tools
 - **GIVEN** a server with 312 calls in 24 hours, a launcher that is found, one secret that is missing and five tools
 - **WHEN** its Overview opens
-- **THEN** it shows the totals and the table of the agents that called it, then Requires with the launcher found and linked to its CLI page and the secret Missing and linked to Secrets, then the four busiest tools without switches and a link to all five
+- **THEN** it shows the totals and the table of the agents that called it, then Requires with the launcher found and linked to its CLI page and the secret Missing under its own name and linked to Secrets searched for it, then the four busiest tools without switches and a link to all five
 - **AND** no Agents section and no reach note sit on it
+
+#### Scenario: the 24-hour block opens the server's own call history
+- **GIVEN** a server that is on, with calls in the last 24 hours
+- **WHEN** the user chooses View invocations on its Overview
+- **THEN** the server's Invocations tab opens on the same page, at `/mcp-servers/<name>/invocations`
 
 ### Requirement: Keep an MCP server's header fixed and answer each state in a banner
 An MCP server's header MUST carry the same actions whatever the server's state —
@@ -637,13 +648,20 @@ once any is ticked. Ticking a row puts the selection bar at the top of the list:
 "N of M selected", **Reach** (the bulk control of "Apply reach to a whole
 selection"), **Delete** and a clear (×); a select-all row appears and ticks every
 listed server. The built-in server has no checkbox and is not counted, and Esc
-clears the selection. The list's search is its only filter.
+clears the selection. Over the list sit its search and a Reach filter — every
+server, or only the servers that reach one chosen agent — which reads and writes
+the same `agent` query parameter the agent's MCP servers tab links with; the
+built-in server reaches every agent and stays listed.
 
 #### Scenario: ticking a server puts the selection bar at the top
 - **GIVEN** the MCP servers list
 - **WHEN** the user ticks one row
 - **THEN** the bar at the top reads "1 of N selected" with Reach, Delete and a clear control
-- **AND** the list offers no reach filter
+
+#### Scenario: the Reach filter narrows the servers to one agent
+- **GIVEN** a server on for every agent and one limited to Codex
+- **WHEN** the user chooses Claude Code in the MCP servers list's Reach filter
+- **THEN** only the server on for every agent and the built-in server are listed, and the address carries `?agent=<Claude Code's uid>`
 
 ### Requirement: Keep a failed save and a partial batch in the MCP dialogs
 The Add server and Edit dialogs MUST test the form as typed before it is saved
@@ -674,7 +692,7 @@ naming the secret. A success is a toast that says what was kept or added.
 - **THEN** the dialog says the secret waits for approval before it closes
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box — its only filter — and a client-side pager so a large vault stays navigable; the skills list works the same way, and no list offers a filter by reach.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -1012,12 +1030,12 @@ rather than by how Coffer is built, and MUST open on General:
   and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **About** (`/settings/about`) — version, license, source, whether a newer
-  version is available (see "Check for and install updates on Settings › About"),
-  and a small **Copy diagnostics** action beside the version.
 - **Features** (`/settings/features`) — the four experimental features, each
   marked Experimental, with its switch (spec
   [experimental-features](../experimental-features/spec.md) "Show the Features tab in every build").
+- **About** (`/settings/about`) — version, license, source, whether a newer
+  version is available (see "Check for and install updates on Settings › About"),
+  and a small **Copy diagnostics** action beside the version.
 
 Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
@@ -1418,7 +1436,8 @@ library beside a reading pane. The library MUST group skills under **Needs
 attention**, **In use**, **Off** and **Built-in**, without counts in the group
 titles; a row MUST show, in place of its description, the one thing that needs the
 reader, and an Off row carries no reach word. The library offers a search, which
-applies to the built-in skills too, and no filter by reach or by kind. Rows ticked
+applies to the built-in skills too, and a reach filter — all skills, or the skills
+that reach one chosen agent — but no filter by kind. Rows ticked
 for bulk actions MUST show the selection as a bar above the list ("N of M
 selected", Reach, Delete, ×) and in the reading pane, which names the selected
 skills, says the built-in skill can't be selected and offers only what the bar does
@@ -1440,7 +1459,8 @@ each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
 "Declare the secrets a skill requires"), **Tools** — the MCP servers and
 custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
 the tools a skill requires"), each with its state and a link to its page — and
-**Skills** it needs. **Check again** re-checks the commands. The rows carry no
+**Skills** it needs. A row's name is shown in full, never cut short: a group's
+name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
 secret that is not set MUST read "secret <name> is not set" and open the Secrets
@@ -1475,10 +1495,10 @@ validates its source inline and MUST carry the Available to reach control.
 - **WHEN** the user ticks the two skills
 - **THEN** the bar above the list reads "2 skills selected", the reading pane names both, says the built-in skill can't be selected and offers Check copies of 2 skills, and the one Delete button deletes both after one confirmation
 
-#### Scenario: the library has no reach filter and groups skills by what they need
-- **GIVEN** a skill that is on, one that is off and one needing attention
-- **WHEN** the user opens the Skills page
-- **THEN** they sit under Needs attention, In use and Off, and the list offers a search and no reach or kind filter
+#### Scenario: the library filters by reach and groups skills by what they need
+- **GIVEN** a skill that is on for every agent, one that is off and one limited to Claude Code
+- **WHEN** the user opens the Skills page and chooses Codex in the Reach filter
+- **THEN** the skills first sit under In use and Off, the list offers a search and a Reach filter but no kind filter, and with Codex chosen only the skill on for every agent is listed and the address carries `?agent=<Codex's uid>`
 
 #### Scenario: a skill file changed on disk refuses the save and keeps the text
 - **GIVEN** a skill file open for editing
@@ -2253,9 +2273,6 @@ The page MUST carry:
   [secret](../secret/spec.md) "Approve several bindings in one confirmation").
   A rejection shows a toast; the page keeps no list of refused changes and has
   no "Ask again".
-- **Find plaintext keys** — the entry point that moves plaintext secret files
-  into the store (spec [secret](../secret/spec.md) "Move plaintext secret files
-  into the store").
 
 Each banner has an × that ignores it exactly as Ignore does on Overview, where
 the same two situations are listed (spec [secret](../secret/spec.md) "List
@@ -2265,8 +2282,7 @@ banner returns when the set changes. The help icon beside the title is gone: how
 to run a command with a secret is in the documentation, not on the page.
 
 This requirement fixes the page's place and its parts. What the store enumerates,
-how each operation behaves, and the steps of finding plaintext keys are the
-secret capability's, specified with it.
+and how each operation behaves are the secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
@@ -2555,7 +2571,7 @@ any skill requires or any enabled stdio MCP server starts with (spec
 skill-manager "Check every required command where the agent runs"), with the
 version found beside the minimum the skills ask for, the login state where the
 command has one, and how many MCP servers and skills need it, problems first —
-missing, older than the minimum, or not logged in, grouped under Needs you above
+missing, older than the minimum, or not logged in, grouped under Needs attention above
 Ready — as a split view with the selected CLI's detail beside the list
 (`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
 with the command, each opening that server's page and naming its launcher, and
@@ -2588,7 +2604,7 @@ is probed are specified by skill-manager; this page shows what they report.
 #### Scenario: the CLIs page lists problems first
 - **GIVEN** skills requiring `jq` (not found), `gh` (minimum 2.40, found 2.30.0), `gcloud` (not logged in) and `uv` (found, current)
 - **WHEN** the user opens `/clis`
-- **THEN** `jq`, `gh` and `gcloud` are listed under Needs you above `uv` under Ready, `gh` shows 2.30.0 against 2.40, `gcloud` shows not logged in, and each row counts the skills that need it
+- **THEN** `jq`, `gh` and `gcloud` are listed under Needs attention above `uv` under Ready, `gh` shows 2.30.0 against 2.40, `gcloud` shows not logged in, and each row counts the skills that need it
 
 #### Scenario: a CLI that needs the user offers a prompt for an agent
 - **GIVEN** a required CLI that is missing and a Coffer-managed agent
@@ -2679,22 +2695,22 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 
 ### Requirement: Show a knowledge document's history on its History tab
 A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**, neither
-with a count. History is **one list** of the document's versions, newest first — who wrote each (the
-user, Coffer's curation naming the agent whose item it curated, or sync), when, and its added and
-removed line counts — with a **See the pass** link on a curation's row. Choosing a row MUST expand it
-in place to its diff, with a switch between **Changes in this version** (against the one before) and
-**Compare with current**, and **Restore this version** on every version but the current one, which
-writes a new version rather than rewriting the past (spec [knowledge](../knowledge/spec.md) "Keep
-every document's history and undo a pass as a whole"); a long line wraps in the diff rather than
-being cut. A history that cannot be read MUST say so in one **Load error** row inside the tab —
-*Couldn't load the history*, the reason, **Retry** and **Open Activity** — leaving the Document tab
-working; without git the row is *History needs git* (see "Offer the hand-off a knowledge refusal
-carries beside it").
+with a count. History is the version-history split of "Show every version history as one split": the
+document's versions on the left, newest first — who wrote each (the user, Coffer's curation naming the
+agent whose item it curated, or sync), when, and its added and removed line counts — and the chosen
+version on the right, the newest chosen when the tab opens. The right side MUST carry a switch between
+**Changes in this version** (against the one before) and **Compare with current**, **Restore this
+version** on every version but the current one, which writes a new version rather than rewriting the
+past (spec [knowledge](../knowledge/spec.md) "Keep every document's history and undo a pass as a
+whole"), a **See the pass** link on a curation's version, and the diff. A history that cannot be read
+MUST say so in one **Load error** row inside the tab — *Couldn't load the history*, the reason,
+**Retry** and **Open Activity** — leaving the Document tab working; without git the row is *History
+needs git* (see "Offer the hand-off a knowledge refusal carries beside it").
 
 #### Scenario: the history tab lists versions with their writers
 - **GIVEN** a document the user created, that curation then changed from a Codex item
 - **WHEN** the user opens its History tab and chooses the older version's row
-- **THEN** the tab lists both versions newest first with their writers, the row expands in place to its diff, and Restore this version is offered on it and not on the current version
+- **THEN** the tab lists both versions newest first with their writers, its diff shows on the right beside the list, and Restore this version is offered on it and not on the current version
 - **AND** restoring it writes it back as a new version
 
 #### Scenario: a history that fails to load leaves the document readable
@@ -2972,3 +2988,35 @@ call is the server's page; it carries no step to read the daemon log.
 - **GIVEN** a call refused by its server, a denied call, and a daemon ERROR that is a refused connection beside one that is Coffer's own
 - **WHEN** each is opened
 - **THEN** the refused call's card and the environment error's button row lead with the hand-off, and the others have none
+
+### Requirement: Show every version history as one split
+Every page that lists the versions of a file or folder with what each changed — a skill's History tab
+and a knowledge document's History tab — MUST lay it out the same way: one bordered card split in two
+by a divider, the versions on the left (newest first, the newest marked **Current**, each with its
+writer and when) and, on the right, the chosen version's diff file by file, each file under its path,
+operation and line counts. The divider MUST move both ways: the list narrows to 160 px and widens to
+half the card, and the width is remembered per page. Every diff in the web UI that shows a file's
+changed lines — these histories, a knowledge change or pass, a stale-save compare, a skill restore,
+copy or update review, and a change preview — MUST be drawn by one renderer: old and new line
+numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped
+at a word boundary with a ↳ on its continuation rows, never cut off.
+
+#### Scenario: a history list narrows below its starting width
+- **GIVEN** a skill with two versions, its History tab open
+- **WHEN** the user moves the divider left
+- **THEN** the version list narrows below the width it opened at, down to 160 px, and the chosen version's diff stays on the right with long lines wrapped
+
+### Requirement: Match a list's search on names only
+A search box over a list of named things — MCP servers and their tools, resources
+and prompts, skills, channels, model providers, custom tool groups, secrets and
+what uses a secret, an agent's skills, plugins, MCP servers and memory folders,
+and a picker's options — MUST match the item's name (its title too, where it has
+one) and nothing else: not its description, endpoint, host, path, kind or the
+names of what it contains. A hook has no name, so the agent's own hooks match on
+their command. Searches over records — Activity, conversations, a document's
+text — are not lists of named things and keep matching their text.
+
+#### Scenario: a search does not match descriptions
+- **GIVEN** a server whose tools' descriptions all contain "does" and whose names do not
+- **WHEN** the user searches its Tools tab for "does"
+- **THEN** no tool is listed

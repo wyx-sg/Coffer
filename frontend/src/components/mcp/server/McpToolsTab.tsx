@@ -58,9 +58,7 @@ export function McpToolsTab({
   const rows = toolRows(tools, summary, tiering, countsUsage(state));
   const on = rows.filter((r) => r.enabled).length;
   const q = query.trim().toLowerCase();
-  const matching = q
-    ? rows.filter((r) => `${r.key} ${r.description ?? ""}`.toLowerCase().includes(q))
-    : rows;
+  const matching = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
   const fromCache = capabilities?.from_cache ?? false;
   const page = useShowMore(matching, q);
   const exposure = useSetToolExposure();

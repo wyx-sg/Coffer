@@ -1,15 +1,13 @@
-"""Knowledge scenarios that need a real database or the migration's real tree.
+"""Knowledge scenarios that need a real database.
 
-Every test pins ``HOME`` and ``COFFER_DB_URL`` under ``tmp_path``: the
-migrations move and delete files. The knowledge layer resolves its root
-(``~/.coffer/vault/knowledge``) from ``HOME``; the 0101 migration still reads
-its own historical ``COFFER_KNOWLEDGE_ROOT``, pinned here too.
+Every test pins ``HOME`` and ``COFFER_DB_URL`` under ``tmp_path``. The
+knowledge layer resolves its root (``~/.coffer/vault/knowledge``) from
+``HOME``.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import pathlib
 import sqlite3
 from datetime import UTC, datetime
@@ -20,7 +18,6 @@ from alembic.config import Config as AlembicConfig
 
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.resource import Resource
-from coffer.infrastructure.persistence.migrations import knowledge_tree_0101 as tree
 
 _ALEMBIC_INI = (
     pathlib.Path(__file__).resolve().parents[3]
@@ -36,8 +33,6 @@ _ALEMBIC_INI = (
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    # The 0101 migration keeps reading its own historical root and override.
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     return tmp_path
 
 
@@ -51,61 +46,6 @@ def _files(root: pathlib.Path) -> dict[str, bytes]:
     return {
         str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
     }
-
-
-# ----- migration -----------------------------------------------------------
-
-
-@pytest.mark.acceptance(spec="knowledge", scenario="reuse the backup on a second run")
-def test_an_existing_backup_is_reported_and_left_alone(home: pathlib.Path) -> None:
-    root = home / "knowledge"
-    topic = root / "shopee" / "topics" / "session.md"
-    topic.parent.mkdir(parents=True)
-    topic.write_text("topic\n", encoding="utf-8")
-    source = root / "shopee" / "sources" / "note.md"
-    source.parent.mkdir(parents=True)
-    source.write_text("source\n", encoding="utf-8")
-
-    # What an earlier, interrupted run photographed: the tree as it was then.
-    backup = home / f"knowledge{tree.BACKUP_SUFFIX}"
-    earlier = backup / "shopee" / "topics" / "session.md"
-    earlier.parent.mkdir(parents=True)
-    earlier.write_text("the original, as first backed up\n", encoding="utf-8")
-    before = _files(backup)
-
-    report = tree.migrate()
-
-    assert report.backup == str(backup)
-    assert _files(backup) == before
-    # The rewrite itself still happened.
-    assert not (root / "shopee" / "topics").exists()
-    assert not (root / "shopee" / "sources").exists()
-
-
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="a migrated vault curates on the machine that migrated it"
-)
-def test_upgrading_through_0101_leaves_curation_on_and_owned_here(home: pathlib.Path) -> None:
-    db = home / "c.db"
-    (home / "daemon-config.json").write_text(json.dumps({"machine_id": "machine-a"}))
-    cfg = _alembic(db)
-    command.upgrade(cfg, "0084")
-    with sqlite3.connect(db) as conn:
-        # A vault from before curation: tidy shipped off, and no owner named.
-        conn.execute(
-            "INSERT INTO internal_engine_config (id, model, updated_at, auto_tidy_enabled) "
-            "VALUES (1, NULL, '2026-09-01 00:00:00', 0)"
-        )
-        conn.commit()
-
-    command.upgrade(cfg, "0101")
-
-    with sqlite3.connect(db) as conn:
-        enabled, owner = conn.execute(
-            "SELECT auto_curate_enabled, curate_owner_machine_id FROM internal_engine_config"
-        ).fetchone()
-    assert enabled == 1
-    assert owner == "machine-a"
 
 
 # ----- constraints ---------------------------------------------------------

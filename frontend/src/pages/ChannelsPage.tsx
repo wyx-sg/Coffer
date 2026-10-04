@@ -24,6 +24,8 @@ import { useDetailTab } from "@/lib/detailTabs";
 import { CHANNEL_TABS, DEFAULT_CHANNEL_TAB, channelPath } from "@/lib/channels/tabs";
 import { useChannels, useChannelViews } from "@/lib/hooks/useChannels";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function ChannelsPage() {
   const { t } = useTranslation();
@@ -115,8 +117,10 @@ export function ChannelsPage() {
   return (
     <>
       {/* Full-bleed like Skills: the two panes each scroll on their own. */}
-      <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-        <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">{header}</div>
+      <div className={cn(PAGE_BLEED, "flex-col")}>
+        <div className={cn(PAGE_BLEED_HEAD, "shrink-0 border-b border-border-subtle pb-4")}>
+          {header}
+        </div>
         <SplitView
           storageKey="channels.list"
           defaultListWidth={292}

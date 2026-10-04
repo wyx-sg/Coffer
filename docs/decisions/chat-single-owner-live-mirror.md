@@ -86,7 +86,7 @@ the return address for pushing output back to IM — a conversation "has a
 binding" iff `channel_uid` is set — and the page shows an "also on
 Telegram/SeaTalk" badge. The chat list shows every conversation. An earlier
 design reserved an `owner` column to keep another surface's conversations out of
-the list; no surface ever set it, and migration 0138 dropped it.
+the list; no surface ever set it, and the schema has no such column.
 
 Pros: the owner can watch a phone-started turn token by token, stop it, and
 keep typing, from the desktop; no event path is special-cased by sender;

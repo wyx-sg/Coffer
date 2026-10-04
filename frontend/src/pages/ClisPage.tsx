@@ -24,6 +24,8 @@ import { ClisList } from "@/components/clis/ClisList";
 import { ClisWarnings } from "@/components/clis/ClisWarnings";
 import { Button } from "@/components/ui/button";
 import { useCheckClis, useClis } from "@/lib/hooks/useClis";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function ClisPage() {
   const { t } = useTranslation();
@@ -80,8 +82,8 @@ export function ClisPage() {
   }
 
   return (
-    <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="flex shrink-0 flex-col gap-1.5 px-6 py-5 md:px-8">
+    <div className={cn(PAGE_BLEED, "flex-col")}>
+      <div className={cn(PAGE_BLEED_HEAD, "flex shrink-0 flex-col gap-1.5 pb-5")}>
         <PageHeader
           title={t("clis.title")}
           subtitle={t("clis.subtitle")}

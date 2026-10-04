@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-storage "Move an existing home into the vault layout once, on request, reversibly", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Run an unattended rewriter on one owner machine", spec vault-sync "Hold a round that would lose too much", PR #452
+**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Run an unattended rewriter on one owner machine", spec vault-sync "Hold a round that would lose too much", PR #452
 
 ## Context
 
@@ -36,9 +36,9 @@ titled document as `unexpected field(s): title`.
 "a sync peer on an older build ignores the key"; the parser those builds ran
 did not.
 
-The one-time move of a home out of the single database (`coffer.db`) into
-files is also a one-way move of every user's data, and the rule is that every
-data migration can be rolled back, with the old data kept untouched.
+A data migration of a user's vault is a one-way move of that data, and the
+rule is that every data migration can be rolled back, with the old data kept
+untouched.
 
 ## Options Considered
 
@@ -104,27 +104,16 @@ data migration can be rolled back, with the old data kept untouched.
   | After a breaking layout commit | normal | keeps its last valid version of each upgraded resource, flagged; converges everything else |
   | Owner absent or on the older build | waits, and offers "take over upgrades here" (the owner field's existing repair) | — |
 
-- **Rollback of a migration is a restore, never a downgrade.** The one-time
-  move from `coffer.db` to files follows three rules:
-  1. **Back up first.** The database is copied as `coffer.db.pre-vault` with
-     its `-wal`/`-shm` companions, and the trees it moves are moved, not
-     copied, so moving them back is a rename.
-  2. **The old data is never rewritten.** The migrating build leaves
-     `coffer.db.pre-vault` and `pre-vault/` as they were, and no code reads the
-     old layout except the upgrade and its rollback.
-  3. **`coffer migrate --rollback` is rehearsable.** It runs with the daemon stopped,
-     restores `coffer.db.pre-vault` and the trees, and moves
-     `vault/` and `local/` aside as `vault.rolled-back-<timestamp>` and
-     `local.rolled-back-<timestamp>` rather than deleting them, so changes made
-     after the migration survive in that repository's history for a person to
-     re-apply; it leaves a hold marker that `coffer migrate --resume` lifts.
-     `coffer migrate --rehearse` runs the migration against a copy in an
-     isolated `HOME` and reports the difference. A remote at the old layout is
-     never converted: a build at the new layout replaces it with its own vault
-     (a fast-forward push whose parents are this machine's commit and the old
-     tip, so the old history stays in git), and a build refuses a remote at a
-     newer layout (`remote_too_new`). The upgraded vault is the source of
-     truth; converting a remote would invent a second migration path.
+- **Rollback of a data migration is a restore, never a downgrade.** A
+  migration of vault data backs up first, leaves the old data untouched, and is
+  undone by restoring the backup and moving the migrated vault aside rather than
+  deleting it, so changes made after the migration survive in that repository's
+  history for a person to re-apply. A remote at the old layout is never
+  converted: a build at the new layout replaces it with its own vault (a
+  fast-forward push whose parents are this machine's commit and the old tip, so
+  the old history stays in git), and a build refuses a remote at a newer layout
+  (`remote_too_new`). The upgraded vault is the source of truth; converting a
+  remote would invent a second migration path.
 
 Pros: an upgrade on one machine no longer stops convergence on the others; a
 field added by one build survives a round trip through another; the rewrite
@@ -214,8 +203,7 @@ files is one **layout commit** made by the owner machine of unattended rewrites,
 verified to lose no uid and no tree file, and on that proof not counted by the
 deletion breaker. Machines on different builds keep converging per file. A data
 migration backs up first, leaves the old data untouched, and is undone by
-`coffer migrate --rollback`, which restores the copy and moves the new vault
-aside, never a downgrade.
+restoring the copy and moving the new vault aside, never a downgrade.
 
 ## Consequences
 

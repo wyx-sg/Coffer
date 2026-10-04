@@ -194,7 +194,7 @@ backend/coffer/
 | 把上面这些接起来 | `surfaces/http/` 里该类型的接线模块 |
 | 第二个类型现在也需要的东西 | 层根目录下一个与类型无关的模块 |
 | 因操作系统而异的行为 | 基础设施层的平台部分，应用层通过它的平台端口访问（[平台端口](/zh/architecture/platform)） |
-| schema 变更 | 持久化包的 `migrations/versions/` 目录下一个新的 Alembic 迁移 |
+| schema 变更 | 持久化包的 `migrations/versions/` 目录下、叠在基线之上的一个新 Alembic 修订 |
 
 ## 前端 {#the-frontend}
 

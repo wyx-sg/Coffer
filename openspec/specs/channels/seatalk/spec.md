@@ -58,24 +58,11 @@ every event over one outbound websocket connection"), and the register handshake
 authenticates it from those two values alone. The secret lives in the secret
 store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a secret-referencing resource kind").
 
-A channel stored while webhook delivery existed MUST be rewritten once, by a
-migration, so that it carries none of `delivery`, `signing_secret_ref`,
-`public_base_url` or `tunnel_token_ref`: a stored key that configures nothing
-misdescribes the running system. The secret values those refs cited MUST be
-left in the secret store rather than deleted, because a migration that
-destroys secrets cannot be undone by its downgrade.
-
 #### Scenario: a seatalk channel without an app id or secret reference is refused
 - **GIVEN** a stored SeaTalk app secret under a secret reference
 - **WHEN** a seatalk channel is registered missing `app_id`, or missing `app_secret_ref`
 - **THEN** the registration is rejected and nothing is persisted
 - **AND** the same registration carrying both is accepted with the secret held only as a reference
-
-#### Scenario: a webhook-era seatalk channel keeps only its app credentials
-- **GIVEN** a stored seatalk channel carrying `delivery: webhook`, a signing secret ref, a public base URL and a tunnel token ref
-- **WHEN** the daemon's startup migrations run
-- **THEN** the channel's configuration carries its `app_id`, its `app_secret_ref` and its common fields, and none of the four webhook-era keys
-- **AND** the secret values the removed refs cited are still in the secret store
 
 ### Requirement: Load the websocket client library from an operator-supplied directory
 The WebSocket client library MUST be an **operator-supplied optional

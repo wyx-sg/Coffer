@@ -39,7 +39,7 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 | --- | --- |
 | `coffer-daemon` | 整个后端：FastAPI 和 uvicorn、SQLAlchemy 和 aiosqlite、alembic 及作为数据文件的迁移脚本、MCP SDK、文档转换器、模型 SDK，以及构建时若前端已构建（`frontend/dist`）则打包进来的 Web 界面。 |
 | `coffer-mcp-shim` | MCP 客户端启动的 stdio 到 HTTP 的桥。不含 FastAPI、uvicorn、SQLAlchemy、alembic 和 structlog，这样对每个会话都要拉起它的客户端来说启动很快。 |
-| `coffer` | Typer 命令行、httpx 和 `keyring` 后端，以及 SQLAlchemy、aiosqlite 和 alembic（迁移脚本作为数据文件），因为 `coffer migrate` 在命令行进程里执行一次性的 vault 升级。不含 Web 服务端和 MCP SDK。 |
+| `coffer` | Typer 命令行、httpx 和 `keyring` 后端：守护进程的一个轻量 HTTP 客户端。不含 Web 服务端、SQLAlchemy、Alembic 和 MCP SDK。 |
 
 每个 spec 都构建一个单文件的控制台可执行程序，不做 UPX 压缩，并且都把解释器选项 `-X utf8` 冻结进去。这个选项只对发布出去的二进制有意义：未冻结的解释器在 C locale 下会自己打开 UTF-8 模式，但从 Finder 或 launchd 启动、没有 `LANG` 的冻结二进制否则会退回 ASCII。
 
@@ -157,7 +157,7 @@ stateDiagram-v2
 
 部署是尽力而为的：复制不了的二进制会被记日志并跳过，守护进程照常启动。要手动回滚，把三个符号链接指回上一个版本目录即可。
 
-在运行数据库迁移之前，守护进程还会把 `runs.db`（及其 `-wal`/`-shm` 文件）复制为 `runs.db.pre-<revision>`，保留最近三份。从 `coffer.db` 一次性迁移到保险库布局不是守护进程做的：那是 `coffer migrate`，见[升级已有的 Coffer](/zh/guides/upgrading)。另见[持久化](/zh/architecture/persistence)。
+在运行数据库迁移之前，守护进程还会把 `runs.db`（及其 `-wal`/`-shm` 文件）复制为 `runs.db.pre-<revision>`，保留最近三份。另见[持久化](/zh/architecture/persistence)。
 
 ::: warning
 `install.sh` 往 `~/.coffer/bin` 里装的是普通文件，每个都改名覆盖公开名字，所以之前部署留下的符号链接会被替换而不是被写穿，版本目录保持完好。从 `~/.coffer/bin` 本身运行的守护进程会跳过部署，所以只用安装脚本的机器在别处的构建（比如桌面应用）启动守护进程之前，不会有版本目录。
@@ -173,7 +173,7 @@ stateDiagram-v2
 
 实验功能是一项在每个构建里都有、但在你开启之前一直关闭的能力。领域层里的功能注册表是唯一的清单；不在里面的一律开启。每个条目写明一个键、该功能拥有的 REST 前缀以及它拥有的资源类型。
 
-注册表里有四个条目，顺序为：`knowledge`、`memory`、`sync`（保险库同步）和 `models`（模型提供商、本地模型代理和用量）。对话和消息渠道始终开启。更早的设计里还有 `run` 和 `context` 两个条目，现在都没了，`context` 拆成了 `knowledge` 和 `memory`。存在注册表未声明的键下的设置会被忽略，所以残留的键无害，也不做任何迁移。
+注册表里有四个条目，顺序为：`knowledge`、`memory`、`sync`（保险库同步）和 `models`（模型提供商、本地模型代理和用量）。对话和消息渠道始终开启。更早的设计里还有 `run` 和 `context` 两个条目，现在都没了，`context` 拆成了 `knowledge` 和 `memory`。存在注册表未声明、也没有出现在任何一张表里的键下的设置会被忽略，所以残留的键无害。转正或下线的功能则登记在注册表旁边的两张小表里：守护进程启动时对 `daemon-config.json` 应用一次，转正的功能删除它的开关并把表里指明的设置移到新键，下线的功能删除它的开关和表里指明的设置。两张表目前都是空的。
 
 没有哪个功能硬依赖另一个。关闭的功能只是在其他展示它的地方被略去那一部分：`knowledge` 关闭时，`coffer-guide` skill 没有知识相关章节；`memory` 关闭时，渠道对话不带记忆；`models` 关闭时，内部引擎已选的连接仍然可用。
 
@@ -205,7 +205,7 @@ flowchart LR
 - 功能放到智能体面前的东西会被撤回，开启时放回：记忆投递 Hook 和指南里提到的记忆根目录（`memory`）、`coffer-guide` skill 的知识章节（`knowledge`），以及向每个智能体自己配置的提供商投射加上空的模型代理状态（`models`）。
 - Web 界面从守护进程状态读取功能状态，关闭的功能看起来就像不存在：它的侧边栏入口、命令面板条目、概览数字和页面里的相应部分都不见了，指向它页面的链接会落到“未找到”页面。页面上没有提示，也没有“开启”按钮。**设置 → 功能**是开启功能的唯一入口，每个构建里都有。
 
-关掉一个功能从不删除、移动或改写它保存的东西；重新打开后从同一状态继续。用 `coffer config set feature.<key> on|off` 或 `PUT /api/v1/daemon/features/{key}` 切换功能；被固定的功能会以 `409 FEATURE_PINNED` 拒绝修改。一个功能加入的方式是添加一个注册表条目，并通过它给自己的各个界面把关；准备好之后它离开（转正），方式是删除它的条目、所有提到它的门禁，并通过一次迁移删除它存储的开关。见[实验功能](/zh/guides/experimental-features)。
+关掉一个功能从不删除、移动或改写它保存的东西；重新打开后从同一状态继续。用 `coffer config set feature.<key> on|off` 或 `PUT /api/v1/daemon/features/{key}` 切换功能；被固定的功能会以 `409 FEATURE_PINNED` 拒绝修改。一个功能加入的方式是添加一个注册表条目，并通过它给自己的各个界面把关；准备好之后它离开（转正），方式是删除它的条目和所有提到它的门禁，并在转正表或下线表里加一个条目，下次守护进程启动时就会删除它存储的开关（并移动或删除表里指明的设置）。见[实验功能](/zh/guides/experimental-features)。
 
 ## 签名、公证与更新 {#signing-notarisation-and-updates}
 

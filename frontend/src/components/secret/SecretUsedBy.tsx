@@ -81,12 +81,7 @@ export function SecretUsedBy({ row }: { row: SecretRef }) {
   }
   const name = displayName(row);
   const needle = q.trim().toLowerCase();
-  const shown = needle
-    ? sorted.filter(
-        (c) =>
-          c.name.toLowerCase().includes(needle) || kindLabel(c.kind).toLowerCase().includes(needle),
-      )
-    : sorted;
+  const shown = needle ? sorted.filter((c) => c.name.toLowerCase().includes(needle)) : sorted;
   const rest = citers.length - NAMES_SHOWN;
   return (
     <Popover onOpenChange={(open) => !open && setQ("")}>

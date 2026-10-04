@@ -135,7 +135,7 @@ sequenceDiagram
 
 轮次在创建它的任务时绑定这些 id：一个新的 `turn_id`、对话的 id，以及发起它的那个请求的 trace id——如果是经 websocket 或长轮询到达、背后没有请求的渠道消息，就用轮次自己的 id 作为 trace id。因为 `asyncio` 会把上下文复制进它创建的每个任务，轮次的渲染器以及它启动的其他任何东西都带着同样的 id，中间不用传任何参数。
 
-所以“这个请求还做了什么？”在每种记录上都只是一个过滤条件：`GET /api/v1/audit?trace_id=…`、`GET /api/v1/mcp/invocations?trace_id=…` 和 `GET /api/v1/daemon/logs?trace_id=…`，或者在 `coffer log audit`、`coffer log mcp` 和 `coffer log daemon` 上加 `--trace <id>`。「活动」页的记录抽屉会显示变更和调用的 trace id。早于迁移 0137 的行没有 id，也不会为它们编造一个。
+所以“这个请求还做了什么？”在每种记录上都只是一个过滤条件：`GET /api/v1/audit?trace_id=…`、`GET /api/v1/mcp/invocations?trace_id=…` 和 `GET /api/v1/daemon/logs?trace_id=…`，或者在 `coffer log audit`、`coffer log mcp` 和 `coffer log daemon` 上加 `--trace <id>`。「活动」页的记录抽屉会显示变更和调用的 trace id。
 
 ## 审计日志 {#the-audit-log}
 
@@ -148,7 +148,7 @@ sequenceDiagram
 | `timestamp` | 事件发生的时间（UTC） |
 | `event_type` | 下文词汇表中的一个值 |
 | `actor` | 谁引起的：`cli`、`api`、`ui`、`system`，或其他简短的小写标识符 |
-| `resource_uid` | 资源的 uid；如果事件不涉及资源，或其资源在保险库布局之前就已删除，则为空 |
+| `resource_uid` | 资源的 uid；如果事件不涉及资源，或其资源已被删除，则为空 |
 | `resource_kind`、`resource_name` | 资源**当时**的标签 |
 | `details` | 事件相关字段，已脱敏 |
 | `trace_id` | 请求或轮次的关联 id；写入时没有绑定任何 id 的行（比如启动时的一轮）为空 |
@@ -172,7 +172,7 @@ sequenceDiagram
 | 资源 | `resource_created`、`resource_updated`、`resource_enabled`、`resource_disabled`、`resource_deleted`、`resource_renamed`、`resource_scope_updated` |
 | MCP 能力 | `capability_enabled`、`capability_disabled` |
 | 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`internal_engine_model_set` |
-| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`、`secret_imported` |
+| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
 | 智能体 | `agent_config_file_written`、`agent_config_file_deleted`、`agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted`、`knowledge_curated` |
@@ -187,7 +187,6 @@ sequenceDiagram
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
 - `secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`——一个密钥等待被发往新的地方（或者一个正在使用的值等待被替换，或者保护等待被关闭），然后有人做了答复。见[密钥](/zh/guides/secrets#approvals)。
-- `secret_imported`——一个明文密钥从文件被移进了存储。
 - `master_key_exported`——桌面应用在经过在场验证后写出了一份密钥备份。没有任何命令或路由能导出密钥。
 
 为启动上游而解密密钥不是审计事件。

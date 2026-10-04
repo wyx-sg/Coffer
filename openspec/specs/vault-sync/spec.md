@@ -394,21 +394,6 @@ ways to disagree.
 - **THEN** `null` matches every agent, the list matches exactly its agents, the empty list matches none, and the unknown uid matches nothing without being refused
 - **AND** a scope that carries a machine axis is refused
 
-### Requirement: Remove the machine axis without widening reach
-Removing the axis MUST NOT widen anything. A stored scope that named machines
-was, on this machine, either admitted by that list or dormant because of it;
-the migration MUST resolve each row against the machine id the daemon was
-actually using and write the answer that machine already saw, taking
-`agents: []` — dormant — whenever it cannot tell. Narrowing is visible and one
-click to undo; widening is a resource silently reaching an agent it was kept
-from.
-
-#### Scenario: removing the machine axis narrows rather than widens
-- **GIVEN** stored scopes that named machines — one admitting this machine, one excluding it, and one whose machine list the migration cannot interpret
-- **WHEN** the migration that removes the machine axis runs
-- **THEN** the row that admitted this machine keeps its agents, and the row that excluded it and the uninterpretable row become `agents: []`, dormant
-- **AND** on a vault that cannot name the machine it was using, every machine-scoped row becomes `agents: []`
-
 ### Requirement: Run a round as pull, merge, guard, check out, push
 A round MUST be these steps **in this order**:
 
@@ -1206,17 +1191,17 @@ older layout must upgrade.
 - **THEN** the preview is of kind `REPLACE` with nothing pulled, the old tip, what goes up and the files that go away with their exact total
 - **AND** confirming replaces the remote, which is then at this vault's layout
 
+#### Scenario: code that assigns a secret-named variable is not a plaintext secret
+- **GIVEN** a script with `token = m.group(0)`, `user, _, password = creds.partition(":")` and `password=password,`
+- **WHEN** it is read for plaintext secrets
+- **THEN** nothing is reported
+- **AND** a quoted literal assigned to `password`, or a `.env`-style `API_KEY=` value, still is
+
 #### Scenario: replacing an older remote still refuses a plaintext secret
 - **GIVEN** a remote at an older layout and a vault holding a plaintext credential
 - **WHEN** a round runs
 - **THEN** the round ends `plaintext_found`
 - **AND** the remote keeps its old tip
-
-#### Scenario: two machines upgrade and keep syncing through the replaced remote
-- **GIVEN** two machines that synced through a remote before the upgrade, and the first of them upgraded
-- **WHEN** it joins and replaces the old remote, and the second machine upgrades and joins that remote
-- **THEN** the old history stays in the remote, and the second machine joins as new with nothing lost on either
-- **AND** both machines end with every resource byte-identical and one vault
 
 ### Requirement: Check a remote before it is saved
 A person SHALL be able to ask what a remote holds before saving it — empty, a
@@ -1399,8 +1384,9 @@ imported and exported in Settings › Security, not on the Sync page.
 ### Requirement: Refuse to push a plaintext secret
 Before a round pushes — a round that merged, a push with nothing to pull, or a join — it MUST read
 every file version the push would publish: each blob reachable from the commit being pushed and
-not from the remote's head, from every commit in between. It reads them with the detection
-the Secrets scan uses (an assignment whose name says secret, and the well-known token shapes).
+not from the remote's head, from every commit in between. It reads them for an assignment whose name says secret and for the well-known token shapes.
+An unquoted value holding call, index or list punctuation (`(`, `)`, `[`, `]`, `,`, `;`) is code,
+not a secret, so `token = m.group(0)` or `password=password,` is not reported.
 An encrypted `secret/<ref>.enc` file is ciphertext and MUST NOT be read; a binary file or one over
 1 MB is not read either.
 
@@ -1450,7 +1436,7 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 #### Scenario: the Sync page names each place and offers the hand-off and push anyway
 - **GIVEN** the Sync page with a `plaintext_found` problem
 - **WHEN** it is shown
-- **THEN** its card lists each file, line and key a file still holds, with "Move into secrets…", which opens the Secrets scan limited to those files, and no Retry
+- **THEN** its card lists each file, line and key a file still holds, with the agent hand-off that moves each value into a secret, and no Retry
 - **AND** Push anyway runs only after a confirmation that says it is recorded in the audit log
 
 ### Requirement: Undo a retired machine

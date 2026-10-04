@@ -8,8 +8,8 @@ directory is its owner's business (``knowledge/paths.py``, ``memory/paths.py``
 …), reached from the root this module returns.
 
 Every path is resolved from ``HOME`` at the moment it is asked for, never
-cached, so a test (or a rehearsal of the migration in a throwaway home) that
-repoints ``HOME`` moves every class with it. There is deliberately no per-tree
+cached, so a test that repoints ``HOME`` moves every class with it. There is
+deliberately no per-tree
 override: the knowledge collections and the skill master folders are inside
 the vault repository, and a tree outside it would be a tree git cannot see.
 The overrides that do exist (``COFFER_LOG_DIR``, ``COFFER_PROXY_SPOOL_DIR``,
@@ -102,11 +102,6 @@ def master_key_path(home: Path | None = None) -> Path:
     return coffer_home(home) / "master.key"
 
 
-def legacy_secrets_dir(home: Path | None = None) -> Path:
-    """The plain key files skills read before ``coffer run --secret``."""
-    return coffer_home(home) / "secrets"
-
-
 def upstream_pids_dir(home: Path | None = None) -> Path:
     """One pid file per spawned upstream MCP server, for the orphan sweep."""
     return coffer_home(home) / "upstream-pids"
@@ -144,7 +139,6 @@ __all__ = [
     "daemon_lock_path",
     "derived_root",
     "eval_capture_path",
-    "legacy_secrets_dir",
     "local_root",
     "logs_dir",
     "master_key_path",

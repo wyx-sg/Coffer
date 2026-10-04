@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { KnowledgeDiff } from "@/components/knowledge/KnowledgeDiff";
+import { DiffLines } from "@/components/change-preview/FileDiff";
 import { Button } from "@/components/ui/button";
 import { diffLines } from "@/lib/knowledge/lineDiff";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ export function KnowledgeCompareView({
     [choice, mine, onDisk],
   );
   const added = rows.filter((r) => r.kind === "add").length;
-  const removed = rows.filter((r) => r.kind === "del").length;
+  const removed = rows.filter((r) => r.kind === "remove").length;
 
   const cards: { value: Choice; label: string; meta: string }[] = [
     { value: "mine", label: t("knowledge.compare.keepMine"), meta: mineMeta },
@@ -117,7 +117,7 @@ export function KnowledgeCompareView({
             <span className="text-danger">−{removed}</span>
           </span>
         </div>
-        <KnowledgeDiff rows={rows} className="min-h-0 flex-1" />
+        <DiffLines lines={rows} className="min-h-0 flex-1 overflow-auto" />
         <p className="shrink-0 text-xs text-text-muted">
           {choice === "mine"
             ? t("knowledge.compare.captionMine")

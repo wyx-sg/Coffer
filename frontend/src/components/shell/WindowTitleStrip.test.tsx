@@ -69,7 +69,7 @@ beforeEach(() => {
 describe("WindowTitleStrip", () => {
   test("controls start right of the traffic lights, and at x 14 in full screen", () => {
     const first = renderStrip();
-    expect(screen.getByTestId("title-controls").style.left).toBe("88px");
+    expect(screen.getByTestId("title-controls").style.left).toBe("82px");
     first.unmount();
     full.value = true;
     renderStrip();

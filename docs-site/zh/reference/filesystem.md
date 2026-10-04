@@ -33,8 +33,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── logs/                         # daemon, proxy, shim and upstream logs
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
 ├── vendor/                       # operator-supplied SeaTalk SDK
-├── secrets/                      # legacy plaintext key files (only if left from an old setup)
-├── coffer.db.pre-vault, pre-vault/   # only after the one-time upgrade: its backup set
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
 
@@ -86,7 +84,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
 | `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、用户名、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
 | `local/sync/round.json` | 一轮停下的同步、一次保留，或一次加入尚待选择的项目，以及你目前的回答。 | 守护进程 | 从不 | 下一轮会重新提问。 |
-| `local/migration.json` | 一次性升级的记录：它做过的每一次移动，供 `coffer migrate --rollback` 读取。 | `coffer migrate` | 从不 | 确定不会回滚之前不要删。 |
 
 本机文件解析失败时，会被挪到一边改名为 `<name>.unreadable-<n>`，并按空文件读取。
 
@@ -120,16 +117,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `derived/resources/` | 派生的资源文件：记忆分区，以及 `skill/coffer-guide.json`。 | 守护进程启动时 |
 | `derived/skills/coffer-guide/` | Coffer 自带的指南技能，由当前构建渲染。 | 守护进程启动时 |
 | `derived/sync-conflicts/` | 停下的同步轮次中冲突文件的标注副本，供手工合并。 | 在编辑器里重新打开该文件 |
-
-### 一次性升级之后 {#after-the-one-time-upgrade}
-
-| 路径 | 用途 | 能否安全删除 |
-| --- | --- | --- |
-| `coffer.db.pre-vault`（及 `-wal`、`-shm`） | `coffer migrate` 之前的数据库。之后不会再以写方式打开；`coffer migrate --rollback` 会把它复制回去。 | 确定不回滚后可以。 |
-| `pre-vault/knowledge.git`、`pre-vault/knowledge-stamped/`、`pre-vault/daemon-config.json` | 旧的知识历史、去掉整理标记之前的知识文档，以及旧的 `daemon-config.json`。 | 确定不回滚后可以。 |
-| `vault.rolled-back-<ts>/`、`local.rolled-back-<ts>/` | 回滚时挪到一边的内容。 | 取走你需要的东西之后可以。 |
-
-见[升级现有的 Coffer](/zh/guides/upgrading)。
 
 ### 守护进程文件 {#daemon-files}
 
@@ -169,7 +156,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `vendor/` | 你放 SeaTalk WebSocket SDK（`seatalk_oapi_sdk`）的地方。Coffer 只读取它。 | 你 | 否 | 不用 SeaTalk 就可以。 |
-| `secrets/` | 遗留目录：`coffer run --secret` 出现之前技能读取的明文密钥文件。Coffer 从不往这里写。 | 你 | 否 | 其中的密钥进了保险库之后可以。 |
 | `eval-capture.jsonl` | 捕获的 `coffer__search_tools` 调用，仅在设置了 `COFFER_EVAL_CAPTURE` 时存在。 | 守护进程 | 否 | 可以。 |
 
 ## ~/.coffer 之外 {#outside-coffer}
@@ -217,5 +203,4 @@ Coffer 通过 `coffer` 服务器键、`: coffer-memory` 标记，以及运行 `c
 - [安全模型](/zh/architecture/security)
 - [保险库同步](/zh/guides/vault-sync)
 - [手动编辑保险库](/zh/guides/vault-files)
-- [升级现有的 Coffer](/zh/guides/upgrading)
 - [故障排查](/zh/guides/troubleshooting)

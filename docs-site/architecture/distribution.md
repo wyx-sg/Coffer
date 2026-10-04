@@ -39,7 +39,7 @@ Each binary is frozen from its own PyInstaller spec in `backend/`, one per entry
 | --- | --- |
 | `coffer-daemon` | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when the frontend has been built (`frontend/dist`) at build time. |
 | `coffer-mcp-shim` | The stdio-to-HTTP bridge an MCP client launches. Excludes FastAPI, uvicorn, SQLAlchemy, alembic and structlog, so it starts quickly for clients that spawn it every session. |
-| `coffer` | The Typer CLI, httpx, and the `keyring` backends, plus SQLAlchemy, aiosqlite and alembic with the migration scripts as data files, because `coffer migrate` runs the one-time vault upgrade in the CLI process. Excludes the web server and the MCP SDK. |
+| `coffer` | The Typer CLI, httpx, and the `keyring` backends: a thin HTTP client of the daemon. Excludes the web server, SQLAlchemy, Alembic and the MCP SDK. |
 
 Each spec builds a single-file console executable without UPX compression, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
 
@@ -157,7 +157,7 @@ For each of `coffer`, `coffer-daemon` and `coffer-mcp-shim`:
 
 Deployment is best-effort: a binary that cannot be copied is logged and skipped, and the daemon starts anyway. To roll back by hand, point the three symlinks at the previous version directory.
 
-Before running database migrations, the daemon also copies `runs.db` (and its `-wal`/`-shm` files) to `runs.db.pre-<revision>`, keeping the three most recent copies. The one-time move from `coffer.db` into the vault layout is not done by the daemon: it is `coffer migrate`, see [Upgrading an existing Coffer](/guides/upgrading). See [Persistence](/architecture/persistence).
+Before running database migrations, the daemon also copies `runs.db` (and its `-wal`/`-shm` files) to `runs.db.pre-<revision>`, keeping the three most recent copies. See [Persistence](/architecture/persistence).
 
 ::: warning
 `install.sh` installs plain files into `~/.coffer/bin`, each renamed over its public name, so a symlink left by an earlier deploy is replaced rather than written through and the version directories stay intact. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.
@@ -173,7 +173,7 @@ The mark is a security detail and nothing else. A tagged release ignores the dev
 
 An experimental feature is a capability that ships in every build but is off until you switch it on. The feature registry in the domain layer is the one list; anything not in it is always on. Each entry names a key, the REST prefixes the feature owns and the resource kinds it owns.
 
-The registry holds four entries, in this order: `knowledge`, `memory`, `sync` (vault sync) and `models` (model providers, the local model proxy and Usage). Conversations and Channels are always on. An earlier design also had `run` and `context` entries; they are gone, and `context` split into `knowledge` and `memory`. Settings stored under a key the registry does not declare are ignored, so a leftover one is harmless, and nothing is migrated.
+The registry holds four entries, in this order: `knowledge`, `memory`, `sync` (vault sync) and `models` (model providers, the local model proxy and Usage). Conversations and Channels are always on. An earlier design also had `run` and `context` entries; they are gone, and `context` split into `knowledge` and `memory`. Settings stored under a key the registry does not declare, and no table lists, are ignored, so a leftover one is harmless. A feature that graduates or is retired is listed in one of two small tables beside the registry instead: at startup the daemon applies them once to `daemon-config.json`, removing a graduated feature's switch and moving the settings it names to their new keys, and removing a retired feature's switch and the settings it names. Both tables are empty today.
 
 No feature hard-depends on another. A switched-off feature simply leaves its part out of whatever else shows it: with `knowledge` off the `coffer-guide` skill has no knowledge sections; with `memory` off channel turns carry no memory; with `models` off the internal engine's chosen connection still resolves.
 
@@ -205,7 +205,7 @@ The gates are request-time:
 - Whatever a feature put in front of agents is withdrawn and returns on switch-on: the memory delivery hook and the memory root named in the guide (`memory`), the knowledge sections of the `coffer-guide` skill (`knowledge`), and the provider projection into each agent's own config plus an empty model-proxy state (`models`).
 - The web UI reads the state off the daemon status, and a switched-off feature looks absent: its sidebar entry, palette entries, Overview figures and page sections are gone, and a link into its page lands on the not-found page. There is no notice and no switch-on button on the page itself. **Settings → Features** is the one place to switch a feature on, and it exists in every build.
 
-Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature joins by adding one registry entry and gating its surfaces through it; it leaves (graduates) once it is ready, by deleting its entry, every gate that names it, and, through a migration, its stored switch. See [Experimental features](/guides/experimental-features).
+Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature joins by adding one registry entry and gating its surfaces through it; it leaves (graduates) once it is ready, by deleting its entry and every gate that names it, and by adding one entry to the graduated or retired table, which removes its stored switch (and moves or removes the settings it names) at the next daemon start. See [Experimental features](/guides/experimental-features).
 
 ## Signing, notarisation and updates
 

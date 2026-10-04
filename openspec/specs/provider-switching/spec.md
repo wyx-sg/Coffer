@@ -741,11 +741,10 @@ kind an embedding model could be picked as an agent's chat model. The id keeps e
 the models a connection offers" gives it (opaque, verbatim to the vendor, shape-validated only,
 deduplicated preserving order, empty list = no restriction).
 
-The STORED modality is the truth: the system MUST infer a modality in exactly two places — the
-one-shot Alembic migration that converts stored plain-string entries, and endpoint introspection
-(see "Offer only text models to chat pickers") — both correctable by the user from the connection
-editor. There MUST be no load-time shim: reading a stored row MUST NOT re-derive a modality. The
-inference rule, identical in both places, operates on the lowercased id: one containing `embed` →
+The STORED modality is the truth: the system MUST infer a modality in exactly one place —
+endpoint introspection (see "Offer only text models to chat pickers") — correctable by the user
+from the connection editor. Reading a stored row MUST NOT re-derive a modality. The inference rule
+operates on the lowercased id: one containing `embed` →
 `embedding`; containing `dall`, `image`, `imagen` or `flux`, or carrying a token `sd` / `sd<digits>` →
 `image`; containing `video` or `sora`, or a token `veo` / `veo<digits>` → `video`; containing
 `whisper` or `audio`, or a token `tts` / `tts<digits>` → `audio`; everything else → `text`. The long

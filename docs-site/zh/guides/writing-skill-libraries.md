@@ -163,7 +163,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  不要保留 `~/.coffer/secrets/<name>.env` 这样的明文文件；密钥页面上的**查找明文密钥**会找出它们并把它们移入存储。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的名称，这样 Coffer 能在它未设置时告诉你。
+  不要把密钥放在 `~/.coffer/secrets/<name>.env` 这样的明文文件里；把它们存成密钥。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的名称，这样 Coffer 能在它未设置时告诉你。
 
 ## 描述 {#descriptions}
 

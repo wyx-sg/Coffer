@@ -78,7 +78,7 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     await dialog.getByRole("button", { name: /SeaTalk/ }).click();
     await dialog.getByRole("button", { name: "Next" }).click();
     await expect(
-      dialog.getByRole("heading", { name: "Add SeaTalk channel" }),
+      dialog.getByRole("heading", { name: "Add a SeaTalk channel" }),
     ).toBeVisible();
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByLabel("App ID").fill("e2e-app-1");
@@ -86,7 +86,7 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     await dialog.getByRole("button", { name: "Connect" }).click();
 
     await expect(
-      dialog.getByRole("heading", { name: `Pair ${name}` }),
+      dialog.getByRole("heading", { name: `Pair SeaTalk · ${name}` }),
     ).toBeVisible();
     await expect(dialog.getByTestId("channel-pairing-code")).toBeVisible();
     await dialog.getByRole("button", { name: "Pair later" }).click();
@@ -107,7 +107,7 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     // Overview links to the conversations this channel started.
     await expect(
       page.getByTestId("channel-conversations-link"),
-    ).toHaveAttribute("href", `/conversations?channel=${uid}`);
+    ).toHaveAttribute("href", `/conversations?source=${uid}`);
 
     // Settings save as they change.
     await page.getByRole("tab", { name: "Settings" }).click();
@@ -135,7 +135,7 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     // Delete, from the danger zone.
     await page.getByRole("button", { name: "Delete…" }).click();
     const confirm = page.getByRole("dialog");
-    await expect(confirm).toContainText("Conversations stay in Conversations");
+    await expect(confirm).toContainText("conversations stay in Conversations");
     await confirm.getByRole("button", { name: "Delete channel" }).click();
     await expect(
       page.getByTestId("channel-row").filter({ hasText: name }),

@@ -14,7 +14,6 @@ from coffer.surfaces.cli import (
     daemon_cmd,
     log_cmd,
     memory_cmd,
-    migrate_cmd,
     path_cmd,
     proxy_cmd,
     run_cmd,
@@ -70,7 +69,6 @@ app.command(
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(proxy_cmd.app, name="proxy")
 app.add_typer(vault_cmd.app, name="vault")
-app.command("migrate")(migrate_cmd.migrate_command)
 
 
 def run() -> None:

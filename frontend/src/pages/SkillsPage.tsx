@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useSkillCopies, useSkills } from "@/lib/hooks/useSkills";
 import { DEFAULT_SKILL_TAB as DEFAULT_TAB, SKILL_TABS as TABS } from "@/lib/skills/tabs";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function SkillsPage() {
   const { t } = useTranslation();
@@ -76,8 +78,8 @@ export function SkillsPage() {
   return (
     // Full-bleed like the chat page: Layout pads every page, and this one is a
     // workspace whose two panes each scroll on their own.
-    <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="shrink-0 px-6 pb-3 pt-4 md:px-8">
+    <div className={cn(PAGE_BLEED, "flex-col")}>
+      <div className={cn(PAGE_BLEED_HEAD, "shrink-0 pb-3")}>
         <PageHeader
           title={t("skills.title")}
           subtitle={t("skills.subtitle")}
@@ -92,6 +94,7 @@ export function SkillsPage() {
       <SplitView
         storageKey="skills.list"
         defaultListWidth={300}
+        listMinWidth={180}
         label={t("splitView.resizeList")}
         className="min-h-0 flex-1"
         detailClassName="overflow-y-auto"

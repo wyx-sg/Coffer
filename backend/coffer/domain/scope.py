@@ -49,10 +49,8 @@ class Scope:
     def from_json(cls, raw: Any) -> Scope | None:
         """Parse a persisted ``scope_json`` payload.
 
-        The machine-axis removal migration rewrote every row into the
-        single-axis shape, so this accepts only that shape — there is no
-        fallback keeping a stale row limping, because a migration is a one-time
-        event and leaves no load-time shim behind.
+        Only the single-axis shape is accepted: there is no fallback
+        keeping a row of another shape limping.
         """
         if raw is None:
             return None

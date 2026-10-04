@@ -96,7 +96,7 @@ A fixed port keeps bookmarks working and keeps the browser's stored preferences 
 
 ## How do I upgrade?
 
-Install the new version the same way you installed the old one, then run `coffer daemon restart` so the running daemon is replaced. Until you do, commands print a version warning. The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. Coming from a Coffer that still keeps its state in `coffer.db`, run the one-time `coffer migrate`: see [Upgrading an existing Coffer](/guides/upgrading). See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
+Install the new version the same way you installed the old one, then run `coffer daemon restart` so the running daemon is replaced. Until you do, commands print a version warning. The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
 
 ## How do I uninstall Coffer?
 

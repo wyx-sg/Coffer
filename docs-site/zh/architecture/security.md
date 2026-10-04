@@ -366,7 +366,7 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 ## 哪些内容会进入日志和审计 {#what-goes-into-logs-and-audit}
 
 - **日志**（`~/.coffer/logs/`，每行一个 JSON 对象）记录事件、标识符和错误。没有任何代码路径会记录密钥值、令牌或解密后的密钥。
-- **审计**记录每一次生命周期变更及其操作者。密钥事件（`secret_set`、`secret_revealed`、`secret_deleted`、`secret_resolved`、`secret_imported` 以及 `secret_approval_*` 事件）只记录**引用**、密钥的名字或目的地。资源配置先经过该类型的审计脱敏器——MCP 类型会整个剥掉 `transport.env` 和 `transport.headers`——所以即使把值粘贴进了错误的字段，它也到不了审计日志。主密钥事件（`master_key_relocated`、`master_key_exported`、`master_key_imported`）只记录事件发生过，不记录密钥。
+- **审计**记录每一次生命周期变更及其操作者。密钥事件（`secret_set`、`secret_revealed`、`secret_deleted`、`secret_resolved` 以及 `secret_approval_*` 事件）只记录**引用**、密钥的名字或目的地。资源配置先经过该类型的审计脱敏器——MCP 类型会整个剥掉 `transport.env` 和 `transport.headers`——所以即使把值粘贴进了错误的字段，它也到不了审计日志。主密钥事件（`master_key_relocated`、`master_key_exported`、`master_key_imported`）只记录事件发生过，不记录密钥。
 - **同步历史**存储远端的提交和错误，推送密钥已被脱敏去除。
 
 ## 同步只携带密文 {#sync-carries-ciphertext-only}

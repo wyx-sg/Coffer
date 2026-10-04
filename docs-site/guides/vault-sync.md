@@ -184,7 +184,7 @@ Either answer continues the round. On the web the **Status** tab says who delete
 
 ## When a round finds a plaintext secret
 
-Before a round pushes, it reads every file version the push would publish: each file changed in every commit the remote does not have yet. It uses the same detection as **Find plaintext keys** on the Secrets page : a value assigned to a name that says secret (`DB_PASSWORD=…`, `api_key: …`), or a well-known token shape. Encrypted secret files (`secret/*.enc`) are ciphertext and are not read.
+Before a round pushes, it reads every file version the push would publish: each file changed in every commit the remote does not have yet. It uses this detection: a value assigned to a name that says secret (`DB_PASSWORD=…`, `api_key: …`), or a well-known token shape. Code is not a value: an unquoted right-hand side with brackets, a comma or a semicolon (`token = m.group(0)`, `password=password,`) is skipped. Encrypted secret files (`secret/*.enc`) are ciphertext and are not read.
 
 A value pushed to the remote stays in its history, in every clone and in every backup of either, so a round that finds one pushes **nothing** and says `plaintext found`. Pulling from the other machines still works; only this machine's push waits. The Sync page, the Overview's list name each place by file, line and key, never the value.
 
@@ -236,7 +236,7 @@ The round's steps, the breaker, joining and the reasons behind each are in [Vaul
 
 ## Related
 
-- [Editing the vault by hand](/guides/vault-files) · [Upgrading an existing Coffer](/guides/upgrading)
+- [Editing the vault by hand](/guides/vault-files)
 - [Secret store](/guides/secret-store) · [Secrets](/guides/secrets) · [Channels](/guides/channels) · [Knowledge](/guides/knowledge)
 - [CLI reference](/reference/cli)
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) · Decisions: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)

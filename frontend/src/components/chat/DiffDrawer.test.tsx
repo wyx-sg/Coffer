@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { pressEscape } from "@/test/escape";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -71,7 +72,7 @@ describe("DiffDrawer", () => {
     expect(await screen.findByText("hello")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next file" })).toBeDisabled();
 
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    pressEscape();
     expect(onClose).toHaveBeenCalled();
   });
 
