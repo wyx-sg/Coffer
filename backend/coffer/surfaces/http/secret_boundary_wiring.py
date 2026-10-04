@@ -155,6 +155,12 @@ def init_secret_boundary(
         key = manager.current
         return derive_grant_key(key) if key else None
 
+    # Each daemon start publishes its own callbacks and sources below the boundary
+    # (the kinds' wiring runs after this); the ones a previous start left behind
+    # belong to a store and a master key that are no longer this daemon's, and
+    # would act on this home with them.
+    _ON_APPROVED.clear()
+    _OTHER_SOURCES.clear()
     boundary = SecretBoundary(FileBoundaryStore(home), store)
     # Every path that deletes a ref (the route, a resource's release, a failed
     # registration's rollback) forgets its approved destinations.

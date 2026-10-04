@@ -144,3 +144,22 @@ def test_the_setting_survives_a_restart_of_the_boundary(daemon: BoundaryDaemon) 
     # A fresh boundary over the same tables reads the stored setting.
     fresh = SecretBoundary(d.boundary._store, d.boundary._values)
     assert fresh.protections_on() is False
+
+
+def test_a_second_start_in_one_process_inherits_nothing_from_the_first(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An earlier start's callbacks belong to its own store and master key; left
+    # registered they re-push the old proxy state into the new home and write
+    # ciphertext the new key cannot open, which the Overview then calls a
+    # secret missing on this Mac.
+    from coffer.surfaces.http import secret_boundary_wiring as wiring
+
+    counts: list[int] = []
+    for n in range(2):
+        home = tmp_path / f"run{n}"
+        home.mkdir()
+        db = prepare_home(home, monkeypatch)
+        with running_daemon(home, db):
+            counts.append(len(wiring._ON_APPROVED) + len(wiring._OTHER_SOURCES))
+    assert counts[0] == counts[1]
