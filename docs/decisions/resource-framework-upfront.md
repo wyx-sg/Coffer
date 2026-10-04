@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
-**Related**: [principles](../../docs-site/architecture/principles.md) (Technology & architectural constraints — the extraction rule and its one exception), [Code Layout — Layer-First](code-layout-layer-first.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Composition Root With Explicit Wiring](composition-root-explicit-wiring.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Control-Plane State Is One SQLite File](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Storage Is Five Classes, Chosen by Nature](storage-is-five-classes-by-nature.md), spec resource-framework, spec mcp-gateway, [Resource framework](../../docs-site/architecture/resource-framework.md)
+**Related**: [principles](../../docs-site/architecture/principles.md) (Technology & architectural constraints — the extraction rule), [Code Layout — Layer-First](code-layout-layer-first.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Composition Root With Explicit Wiring](composition-root-explicit-wiring.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Control-Plane State Is One SQLite File](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Storage Is Five Classes, Chosen by Nature](storage-is-five-classes-by-nature.md), spec resource-framework, spec mcp-gateway, [Resource framework](../../docs-site/architecture/resource-framework.md)
 
 ## Context
 
@@ -82,8 +82,7 @@ two share.
 - **Why it loses.** The rule exists to avoid paying for abstractions that turn
   out to be wrong; here the cost of *not* abstracting was known in advance and
   larger than the risk of abstracting wrongly, because the named kinds all
-  demonstrably shared identity, lifecycle, audit and CRUD. The principles record
-  this as the rule's one exception.
+  demonstrably shared identity, lifecycle, audit and CRUD.
 
 ### Option C — Full plugin architecture (third-party loadable kinds)
 

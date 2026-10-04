@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-18
 **Deciders**: Yuxing Wu
-**Related**: [Channel Owner Gate](channel-owner-gate.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md), spec channels "Pair exactly one owner with a single-use code", spec channels "Gate inbound traffic on sender identity", spec chat "Interrupt the watched turn from the page", [principles](../../docs-site/architecture/principles.md) ("Not a firewall or security boundary"), research note [IM agent bridges](../research/im-agent-bridges.md), PR #77, PR #82, PR #101, PR #398, PR #410, PR #431
+**Related**: [Channel Owner Gate](channel-owner-gate.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md), spec channels "Pair exactly one owner with a single-use code", spec channels "Gate inbound traffic on sender identity", spec chat "Interrupt the watched turn from the page", [principles](../../docs-site/architecture/principles.md) ("Not a firewall or a sandbox"), research note [IM agent bridges](../research/im-agent-bridges.md), PR #77, PR #82, PR #101, PR #398, PR #410, PR #431
 
 ## Context
 

@@ -69,10 +69,6 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rules out.** A generic invoke operation; a third-party plugin system (a plugin contract needs several concrete implementations to design against, and Coffer serves one user); per-kind CRUD, audit or scope implementations.
 
-::: info Why this principle was built up front
-Coffer's general rule is to extract shared code only on second use. The Resource framework is the deliberate exception: it is core domain, not a cross-cutting helper, and extracting it later from MCP-specific code would have meant re-modelling the audit table, the routes and retention at once. See [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md).
-:::
-
 ## Identity is an immutable uid
 
 **Statement.** A resource's identity is its `uid`: an opaque random (version 4) UUID written as 32 hex characters, minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a label, unique within its kind, and mutable unless agents quote it: an MCP server's name (the prefix of every tool name) and a skill's name (the folder an agent loads it from) are fixed once registered, and an agent's name is its type (one agent per type). The kinds whose name is free — providers, channels, knowledge collections, memory partitions — also carry an optional `title` for display. The uid is written inside the resource's own file, so the file's path and name are only its location and label; there is no integer surrogate key.
@@ -171,7 +167,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** An abstraction designed against one use case either over-fits it or is too generic to enforce anything. Waiting for the second caller means the shared shape is discovered, not guessed.
 
-**In the code.** Shared packages exist exactly where two kinds met: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (transcript readers shared by agent and memory), and the hook-trust check in the domain layer (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
+**In the code.** Shared packages exist exactly where two kinds met: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (transcript readers shared by agent and memory), and the hook-trust check in the domain layer (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build.
 
 **Rules out.** Speculative "common" packages; a utilities module that grows ahead of its callers; one kind importing another's services.
 
@@ -185,13 +181,12 @@ The principles group into three families, and the places where they pull against
 | One mechanism | Everything is a Resource, identity is a uid, reach is machine-local, reach is enforced at each kind's choke point, extract on second use | Behaviour that every kind shares is built once and cannot drift between kinds; behaviour that differs stays where it belongs. |
 | Contract first | Spec as truth, secrets never plaintext at rest, pull not push | What Coffer promises, and what it will never do behind your back, is written down and checked by the build. |
 
-Three tensions are resolved by a declared, bounded exception rather than by quietly bending a rule:
+Two tensions are resolved by a declared, bounded exception rather than by quietly bending a rule:
 
 - **Local-first versus several machines.** Vault sync is allowed only as a rendezvous you own, off by default, with secrets as ciphertext. See [Local-first](#local-first).
 - **Pull, not push, versus memory at session start.** The memory index is the one thing a session is handed, through a hook you install per agent, remove the same way, and see fire in the audit log. See [Pull, not push](#pull-not-push).
-- **Extract on second use versus a shared resource model.** The Resource framework was designed before the second kind existed, because extracting it later would have meant re-modelling audit, routes and retention at once. See [Everything user-managed is a Resource](#everything-user-managed-is-a-resource).
 
-When a proposal needs a fourth exception, that is the signal to amend [Principles](/architecture/principles) in its own pull request, not to add a special case in code.
+When a proposal needs a third exception, that is the signal to amend [Principles](/architecture/principles) in its own pull request, not to add a special case in code.
 
 ## Related
 
