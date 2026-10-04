@@ -15,6 +15,8 @@ Coffer is a single-user tool that runs as you, beside coding agents that also ru
 
 What stays exposed, by design:
 
+- **Group chats are not content-filtered.** In a group turn the agent can still read your memory, knowledge and files, and a SeaTalk group reply cannot be recalled by the platform. Coffer does not scan replies for secrets or personal data. Your safeguard is deleting a reply (`/del`, the 🗑 button); an agent tricked by a group member can still say something private. Do not pair the bot with a group that contains people you do not trust.
+
 - A stdio MCP server's environment, including its secrets, is readable by any same-user process (`ps eww`), even from inside an agent's sandbox.
 - A secret `coffer run` hands to a command is readable by the agent that ran the command; `coffer run` guards against accidents, not against that agent.
 - An agent with Accessibility or screen control can click an approval.

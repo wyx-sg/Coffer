@@ -18,6 +18,7 @@ from coffer.infrastructure.channel.seatalk_parse import interactive_card, split_
 __all__ = [
     "SEATALK_MENTION_EMAIL_TEMPLATE",
     "SEATALK_MENTION_TEMPLATE",
+    "card_blocks",
     "numbered",
     "rendered_pieces",
     "send_text_pieces",
@@ -78,6 +79,29 @@ def rendered_pieces(markdown: str, char_limit: int, byte_limit: int) -> list[str
     ]
 
 
+#: A card's description blocks: one is 1000 characters at most, a card holds five.
+_CARD_BLOCK_CHARS = 1000
+_CARD_BLOCKS = 4
+
+
+def card_blocks(markdown: str) -> list[list[str]]:
+    """``markdown`` rendered and cut into the description blocks of one or more
+    cards — each block within SeaTalk's 1000 characters, at most ``_CARD_BLOCKS``
+    to a card, a reply that does not fit one card running on into the next.
+
+    Cut on paragraph and never inside a fence (``chunk_text``) BEFORE rendering,
+    with room left for the escaping rendering adds; a block that still renders
+    past the cap is cut by length, which beats a refused card."""
+    blocks: list[str] = []
+    for chunk in chunk_text(markdown, _CARD_BLOCK_CHARS - 200):
+        rendered = markdown_to_seatalk(chunk)
+        blocks.extend(
+            rendered[i : i + _CARD_BLOCK_CHARS] for i in range(0, len(rendered), _CARD_BLOCK_CHARS)
+        )
+    blocks = blocks or [""]
+    return [blocks[i : i + _CARD_BLOCKS] for i in range(0, len(blocks), _CARD_BLOCKS)]
+
+
 def numbered(piece: str, index: int, total: int) -> str:
     """Head every piece after the first of a reply cut into several with
     ``(2/3)`` (spec channels "Shape a reply for what the chat can show")."""
@@ -99,16 +123,29 @@ async def send_text_pieces(
     """Deliver ``markdown`` as a card (when ``buttons`` are given) or as one or
     more text messages; return the last delivered message's handle."""
     if buttons:
-        # Selection prompts are short — one interactive card, no chunking.
-        # (A card description renders SeaTalk markdown but NOT tables.)
-        result = await send(
-            chat_id,
-            interactive_card(markdown_to_seatalk(markdown), buttons, title=title),
-            thread_id,
-            chat_kind,
-        )
-        return SentMessage(message_id=str(result.get("message_id", "")))
+        # A card is the one SeaTalk message the bot can rewrite afterwards, so a reply
+        # that must stay withdrawable goes out as cards. A selection prompt is short
+        # and is one card; a long reply runs on into further cards, the buttons on the
+        # last. (A card description renders SeaTalk markdown but NOT tables.)
+        cards = card_blocks(markdown)
+        ids: list[str] = []
+        for i, blocks in enumerate(cards):
+            head = numbered(blocks[0], i, len(cards))
+            result = await send(
+                chat_id,
+                interactive_card(
+                    head,
+                    buttons if i == len(cards) - 1 else (),
+                    title=title if i == 0 else "",
+                    more=blocks[1:],
+                ),
+                thread_id,
+                chat_kind,
+            )
+            ids.append(str(result.get("message_id", "")))
+        return SentMessage(ids[-1], tuple(ids))
     last = ""
+    sent_ids: list[str] = []
     pieces = rendered_pieces(markdown, char_limit, byte_limit)
     for i, piece in enumerate(pieces):
         result = await send(
@@ -118,4 +155,5 @@ async def send_text_pieces(
             chat_kind,
         )
         last = str(result.get("message_id", ""))
-    return SentMessage(message_id=last)
+        sent_ids.append(last)
+    return SentMessage(message_id=last, message_ids=tuple(sent_ids))

@@ -46,6 +46,8 @@ from coffer.infrastructure.channel.seatalk_send import send_text_pieces
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
+#: What a withdrawn reply's card is rewritten to say.
+WITHDRAWN_TEXT = "🗑 Withdrawn"
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
 
@@ -311,6 +313,14 @@ class SeaTalkAdapter:
 
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         raise ChannelSendFailed(self._name, "seatalk cannot delete messages")
+
+    async def withdraw_message(
+        self, chat_id: str, message_id: str, *, chat_kind: str = "direct"
+    ) -> None:
+        """SeaTalk cannot delete, so a withdrawn card is rewritten into a neutral
+        one with no buttons (Update Message: 7 days, cards only, sender only)."""
+        del chat_id, chat_kind
+        await update_interactive_card(self._post, message_id, WITHDRAWN_TEXT, ())
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         # "Acknowledge receipt and completion by capability": SeaTalk has no outbound reaction API

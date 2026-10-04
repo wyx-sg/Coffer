@@ -267,6 +267,26 @@ it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
 Indexes on `(resource_uid, delivered_at)` and `conversation_id`. Migration 0108
 creates it; 0136 re-keys it to `resource_uid`.
 
+### `channel_replies`
+
+Which platform messages make up each bot reply, so the owner can withdraw it with
+`/del` or the 🗑 button (spec channels "Withdraw a bot reply on the owner's command").
+Ids and times only — never the reply's text. A row is removed when its reply is
+withdrawn, when it is older than eight days (the longest platform window plus a
+day), and with its channel.
+
+| column         | type             | notes                                                     |
+| -------------- | ---------------- | --------------------------------------------------------- |
+| `reply_id`     | VARCHAR PK       | a random id, also the payload of the reply's 🗑 button    |
+| `resource_uid` | VARCHAR NOT NULL | the channel's uid                                         |
+| `chat_id`      | VARCHAR NOT NULL |                                                           |
+| `thread_id`    | VARCHAR NOT NULL | `""` for a direct chat or a group's main chat             |
+| `chat_kind`    | VARCHAR NOT NULL | `direct` / `group`                                        |
+| `message_ids`  | TEXT NOT NULL    | a JSON list of platform message ids, in send order        |
+| `sent_at`      | DATETIME (UTC)   | what the platform's withdraw window is measured from      |
+
+Index on `(resource_uid, chat_id, sent_at)`. Migration 0145 creates it.
+
 ## Migrations that touch a channel's config
 
 These Alembic data migrations ran against channel configs while resources were
@@ -320,7 +340,7 @@ InboundMessage:     channel name, chat_id, text, platform message id, timestamp;
                     the sender as three values — sender_id (the owner gate),
                     sender_mention_id and sender_mention_email (the @mention of
                     the asker) — plus sender_display; chat_kind, chat_title,
-                    thread_id, quoted_message_id; addressed and mentions_others
+                    thread_id, quoted_message_id, replies_to_message_id; addressed and mentions_others
                     (group gating); attachments; ephemeral_id
 InboundCallback:    a selection-card tap: the opaque `data` value, callback_id,
                     platform message id, and the same chat/thread/sender
@@ -331,11 +351,16 @@ InboundLifecycle:   the bot's own standing in a chat changed — removed, or the
 InboundStop:        the platform's own stop control was pressed
 ChoiceButton:       label + opaque value; a list of them renders as a card
 EphemeralTarget:    who a privately-delivered reply is addressed to
-SentMessage:        what a send returned, so a later rewrite can address it
+SentMessage:        what a send returned — the last message's id and the ids of
+                    every message the send produced — so a later rewrite or
+                    withdrawal can address them
 ChannelCapabilities: supports_live_text, live_text_persists,
                     supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
+                    withdraw_window_hours, withdraw_removes (can a bot message be
+                    taken back, for how long, and does that remove it),
+                    streams_in_groups,
                     mention_template, mention_email_template — how the
                     transport spells an @mention of an id (or of an email
                     address); an empty template means it cannot mention
@@ -353,6 +378,7 @@ one live surface").
 | ------------------------ | --------------------------------------------------------------------- |
 | `channel_pairing_issued` | a pairing code is generated                                           |
 | `channel_paired`         | a sender claims the code and becomes the peer; carries the chat id, the sender id and the display name |
+| `channel_reply_withdrawn` | the owner withdraws a bot reply (`/del` or 🗑); actor `owner`, carries the chat id, how many messages went and `via` (`command` / `button`) — never the text |
 
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
 the framework automatically. Turn activity is **not** audited: a turn happening

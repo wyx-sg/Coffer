@@ -207,6 +207,27 @@ card stays an ordinary message.
 - **THEN** it is sent as an ephemeral message addressed to the owner's user id
 - **AND** a selection card in the same group is sent as an ordinary message
 
+### Requirement: Delete a withdrawn reply with deleteMessage
+Withdrawing a bot reply ([channels](../spec.md) "Withdraw a bot reply on the owner's command") MUST
+delete each of its messages with `deleteMessage`, which the Bot API allows for a
+bot's own message for **48 hours**; the adapter declares that window and that
+withdrawing removes the message. Every message a send produced is reported — a
+reply cut into chunks hands back each chunk's id, rich or plain — so the whole reply
+goes. The reply pointer of an inbound message (`reply_to_message`) is what `/del`
+reads as its quote, and the owner's own `/del` message is deleted too when the bot
+has the right to. Past the window the platform refuses and the core tells the owner
+privately.
+
+#### Scenario: every chunk of a reply is reported and deleted
+- **GIVEN** a Telegram reply long enough to be sent as several messages
+- **WHEN** it is sent and then withdrawn
+- **THEN** the send reports every chunk's message id, and each is removed with `deleteMessage`
+
+#### Scenario: a quote reaches the core as the reply pointer
+- **GIVEN** a Telegram message that replies to another message
+- **WHEN** it is normalised
+- **THEN** the inbound message carries the replied-to message id
+
 ### Requirement: Render selection cards as inline keyboards
 A selection card ([channels](../spec.md) "Offer choices and actions as owner-gated cards") MUST be rendered as an **inline
 keyboard**, and a tap arrives as a callback query carrying the button's opaque
@@ -399,6 +420,6 @@ listed.
 #### Scenario: private chats get every command and groups the group set, in English and Chinese
 - **GIVEN** a Telegram channel starting
 - **WHEN** it registers its menus
-- **THEN** the private-chat scope lists all eight commands and the group scope
-  lists new, stop and help, each once in English and once
+- **THEN** the private-chat scope lists all nine commands and the group scope
+  lists new, stop, del and help, each once in English and once
   with `language_code` `zh`

@@ -218,6 +218,13 @@ def prepend_context(message: dict[str, Any], text: str) -> str:
     return body.strip()
 
 
+def _replied_to_id(message: dict[str, Any]) -> str:
+    """The id of the message this one replies to ("" for none) — what ``/del`` reads
+    to find the reply it withdraws."""
+    reply = message.get("reply_to_message")
+    return str(reply.get("message_id") or "") if isinstance(reply, dict) else ""
+
+
 def build_inbound_message(
     message: dict[str, Any],
     attachments: tuple[InboundAttachment, ...],
@@ -276,6 +283,7 @@ def build_inbound_message(
         addressed=addressed,
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
+        replies_to_message_id=_replied_to_id(message),
         forwarded=_is_forwarded(message),
         attachments=attachments,
         # Present when the user sent an ephemeral command, and the

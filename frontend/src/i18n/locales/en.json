@@ -772,6 +772,7 @@
       "channel_paired": "Paired the {{resource}} channel",
       "channel_pairing_issued": "Issued a pairing code for {{resource}}",
       "channel_person_removed": "Removed a paired owner from {{resource}}",
+      "channel_reply_withdrawn": "Withdrew a bot reply in {{resource}}",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a document from {{resource}}",
       "knowledge_edited": "Edited a document in {{resource}}",

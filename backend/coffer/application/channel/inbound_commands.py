@@ -86,5 +86,7 @@ async def route_slash(
         thread_id=msg.thread_id,
         conversation_thread_id=conv_thread,
         group_main=group_main,
+        quoted_message_id=msg.quoted_message_id or msg.replies_to_message_id,
+        command_message_id=msg.platform_message_id,
     )
     return True

@@ -30,6 +30,7 @@ from typing import Any
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.question_card import question_ping
 from coffer.application.channel.question_flow import QuestionChat, forget_conversation
+from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.stop_notice import take as take_stop_notice
 from coffer.application.channel.turn_finish import (
     Delivered,
@@ -108,6 +109,9 @@ class TurnRenderer:
     # "Ping the asker when a long turn ends": seconds, 0 = never.
     notify_after_seconds: float = 0.0
     # Cadences, injectable so a test can drive them fast.
+    #: What the reply was delivered as, filed for ``/del`` and the 🗑 button; ``None``
+    #: (a renderer built without a ledger) tracks nothing.
+    tracker: ReplyTracker | None = None
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
     tick_seconds: float = _STATUS_TICK_SECONDS
     _status: TurnStatus = field(init=False)
@@ -188,6 +192,7 @@ class TurnRenderer:
             end=end,
             send_card=self.send_card,
             stop_noted=stop_noted,
+            tracker=self.tracker,
         )
         if self._ping_due(end, delivered):
             # One new message where the answer's own message was created when
@@ -311,7 +316,7 @@ class TurnRenderer:
         (Telegram's) is opened lazily instead — posting one only to delete it
         would be noise, and the 👀 receipt reaction already says "heard"."""
         caps = self.adapter.capabilities
-        if caps.supports_live_text and caps.live_text_persists:
+        if self._surface.available and caps.live_text_persists:
             await self._surface.open(self._status.block(self.now()))
 
     def _start_typing_heartbeat(self) -> asyncio.Task[None] | None:

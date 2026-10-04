@@ -32,10 +32,12 @@ from coffer.application.channel.conversation_ops import (
     explain_conversation_error,
 )
 from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.store_ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
+    ReplyLedgerPort,
 )
 from coffer.application.channel.turn_finish import TurnOutcome, failure_line
 from coffer.application.channel.turn_render import TurnRenderer
@@ -163,6 +165,7 @@ class TurnDriver:
         turns: TurnPort,
         safe_send: SafeSend,
         session: SessionAccessor,
+        replies: ReplyLedgerPort,
     ) -> None:
         self._peers = peers
         self._threads = threads
@@ -170,6 +173,7 @@ class TurnDriver:
         self._turns = turns
         self._safe_send = safe_send
         self._session = session
+        self._replies = replies
 
     async def acknowledge(
         self, binding: ChannelBinding, peer: ChannelPeer, item: QueuedInbound
@@ -328,6 +332,10 @@ class TurnDriver:
             )
             return sent
 
+        # What the reply turns out to be, so ``/del`` and the 🗑 button can take it back.
+        tracker = ReplyTracker.for_turn(
+            self._replies, binding, peer.chat_id, item.thread_id, item.chat_kind, _send_card
+        )
         renderer = TurnRenderer(
             channel=binding.resource.name,
             adapter=adapter,
@@ -342,6 +350,7 @@ class TurnDriver:
             mention_user_name=item.mention_user_name,
             show_steps=binding.show_steps,
             notify_after_seconds=binding.notify_after_seconds,
+            tracker=tracker,
         )
         outcome: TurnOutcome = "failed"
         try:

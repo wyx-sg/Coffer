@@ -40,6 +40,7 @@ from coffer.domain.secrets import SecretDestination, channel_destination
 from coffer.infrastructure.channel.persistence import (
     ChannelOutboxRepo,
     ChannelPeerRepo,
+    ChannelReplyRepo,
     ChannelThreadConversationRepo,
 )
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
@@ -134,6 +135,7 @@ def wire_channel_kind(
     peers.documents.add_owner_listener(vault.resources.announce)
     threads = ChannelThreadConversationRepo(sm)
     outbox = ChannelOutboxRepo(sm)
+    replies = ChannelReplyRepo(sm)
     pairing = PairingManager()
     processor = InboundProcessor(
         peers=peers,
@@ -147,6 +149,9 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
+        # Which platform messages make up each reply, so the owner can withdraw it (spec
+        # channels "Withdraw a bot reply on the owner's command").
+        replies=replies,
         # Questions an agent asks the owner (spec channels "Ask the owner in the
         # chat and take the answer back to the agent").
         questions=ChatQuestions(),
@@ -222,6 +227,7 @@ def wire_channel_kind(
         # a file, so they go here, with the channel.
         await threads.delete_for_channel(channel.uid)
         await outbox.delete_for_channel(channel.uid)
+        await replies.delete_for_channel(channel.uid)
 
     async def agent_names() -> dict[str, str]:
         """Every registered agent's UID mapped to its name.

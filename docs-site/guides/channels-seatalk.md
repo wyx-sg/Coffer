@@ -94,14 +94,15 @@ No state is shown before the first attempt. Events that SeaTalk sends while the 
 
 ## How replies look
 
-- **Streaming** — the reply is one message that grows while the agent writes, starting the moment the turn begins with the status line (`⏳ Working · 0s`). Each update carries the full text so far, and the status line's clock moves every 10 seconds. Coffer re-sends the latest text every 10 seconds on a long tool call, because SeaTalk ends a stream that goes 30 seconds without an update. SeaTalk clients older than 3.67 show the finished message when the stream closes.
-- **Long replies** — one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages numbered `(2/3)`, `(3/3)`.
+- **Streaming (direct chats)** — the reply is one message that grows while the agent writes, starting the moment the turn begins with the status line (`⏳ Working · 0s`). Each update carries the full text so far, and the status line's clock moves every 10 seconds. Coffer re-sends the latest text every 10 seconds on a long tool call, because SeaTalk ends a stream that goes 30 seconds without an update. SeaTalk clients older than 3.67 show the finished message when the stream closes.
+- **Group replies are cards, not streams.** In a group the bot shows the working and typing indicator while the turn runs, and the finished reply arrives as one interactive card, split into several cards if it is long. Cards are used because SeaTalk can rewrite a card but cannot delete or edit anything else, and that is what lets the owner withdraw a group reply (see below). Each card carries a 🗑 button.
+- **Long replies** — in a direct chat one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages numbered `(2/3)`, `(3/3)`.
 - **Long turns** — finishing a stream notifies nobody, because the message was created when the turn began. A turn longer than the channel's threshold (90 seconds by default) therefore ends with one new message, `✅ Done · 4m 12s — <first line>`, in the same thread; in a group it @mentions whoever asked.
 - **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. A table becomes one bullet per row (a big one also arrives as a `.csv`), and a code block over 30 lines arrives as a file. Messages are split to stay under SeaTalk's 4,096-byte cap.
 - **Details** — a `## Details` section goes behind a card titled with the answer's first line; **Details** posts it as a reply in the card's thread, **As file** sends it as a `.md`.
 - **Receipt** — SeaTalk has no reactions, so a typing indicator is kept alive every 3 seconds while the turn runs, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
 - **Tool progress** — under the status line, the message shows the newest tool calls, one line each. In a **group** the line names only the tool (`⏳ Bash`), because everyone in the group reads it and a tool's input can carry a command, a query or a path. In a **direct chat** it adds the agent's own one-line description or the file name (`⏳ Bash · list the desktop`), never a raw command.
-- **Replies cannot be deleted or edited.** SeaTalk's Open Platform has no API to withdraw a bot's message, and a finished stream cannot be updated. Only interactive cards can be rewritten, and only by the bot that sent them, so Coffer offers no delete button on a streamed reply. Check the answer's basis before relying on it; a wrong reply stays in the chat.
+- **Withdrawing a reply.** SeaTalk's Open Platform has no API to delete a bot's message, and a finished stream cannot be updated. Only interactive cards can be rewritten, and only by the bot that sent them. So when the owner withdraws a group reply — by tapping its 🗑 button, or by quoting it and sending `/del` — Coffer rewrites each card of that reply into a neutral “🗑 Withdrawn” card with no buttons. The text is gone from the chat, but the card stays. SeaTalk allows rewriting for 7 days; past that the owner is told privately that the reply can no longer be withdrawn. Only the owner's tap or command counts, and `/del` without a quote withdraws the most recent reply in the group or thread. A direct-chat reply is a streamed message and cannot be withdrawn on SeaTalk. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 
 The keep-alive gives up after about 10 minutes with no new content, so a turn that stays silent that long lets its stream lapse. If a stream is ended by SeaTalk — an error or a gap past 30 seconds — Coffer does not reuse it. The partial message stays in the chat and the full reply is sent as ordinary messages.
 
@@ -121,7 +122,7 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
+Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
 
 To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
@@ -166,14 +167,14 @@ On the channel's page choose **Replace secret** (in the **⋯** menu, or under *
 
 | Limit | Value |
 | --- | --- |
-| Streamed reply | 4,096 characters per stream; the rest as ordinary messages |
+| Streamed reply (direct chat) | 4,096 characters per stream; the rest as ordinary messages |
 | Ordinary message | under 4,096 bytes |
 | Stream idle limit | 30 seconds (Coffer re-sends every 10) |
 | Card rewrite window | 7 days, interactive cards only |
 | Card content | 6 buttons in up to 3 rows; title 120 characters, description 1,000 |
 | Thread pages | 100 messages per page, bounded page count |
 | Thread history | Replies from the last 7 days only; no whispers or deleted messages |
-| Withdrawing a bot message | Not available |
+| Withdrawing a bot message | No delete API; a group reply card is rewritten to “🗑 Withdrawn” within 7 days |
 | Connections per app | 1 |
 
 ## Troubleshooting
@@ -193,7 +194,7 @@ Check pairing (`peer: not paired` means the bot answers nobody), and that you @m
 **The bot says it can only see a few messages of a thread.**
 SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. A thread you started today reads in full. Forward or quote the older messages to give the agent that context.
 
-**The streamed reply stops midway and the answer arrives again below it.**
+**The streamed reply stops midway and the answer arrives again below it.** (Direct chats; group replies are not streamed.)
 SeaTalk ended the stream. The full answer is the one sent below.
 
 ## Related

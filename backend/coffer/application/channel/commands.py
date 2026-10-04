@@ -1,5 +1,5 @@
 """The channel's reserved commands: /new /stop /model /dir /status /resume
-/thread /help (spec channels "Answer the conversation commands from any
+/thread /del /help (spec channels "Answer the conversation commands from any
 paired chat", and the requirements each command cites in its own module).
 
 The roster itself — which words are reserved, their help text and menus — is
@@ -25,12 +25,18 @@ from coffer.application.channel import (
     resume_switch,
     status_card,
     stop_notice,
+    withdraw,
 )
 from coffer.application.channel.card_delivery import dispatch_card_tap
 from coffer.application.channel.command_context import CommandContext, SafeSend
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
 from coffer.application.channel.stop_notice import StopNotice
-from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversationRepoPort
+from coffer.application.channel.store_ports import (
+    ChannelPeer,
+    ChannelThreadConversationRepoPort,
+    ReplyLedgerPort,
+)
+from coffer.application.channel.withdraw import ReplyWithdrawal
 from coffer.domain.channel.commands import DM_ONLY_NOTICE, command_name, is_dm_only
 from coffer.domain.chat.errors import ConversationNotFound
 
@@ -47,6 +53,7 @@ _HANDLERS: dict[str, _Handler] = {
     "status": status_card.cmd_status,
     "resume": resume_switch.cmd_resume,
     "thread": parallel_threads.cmd_thread,
+    "del": withdraw.cmd_del,
     "help": status_card.cmd_help,
 }
 
@@ -62,6 +69,8 @@ class ChannelCommands:
         turns: Any,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
+        replies: ReplyLedgerPort,
+        withdrawal: ReplyWithdrawal,
         running_in: Callable[[str, str, str], str | None] = lambda *_: None,
         running_in_chat: Callable[[str, str], list[str]] = lambda *_: [],
     ) -> None:
@@ -71,6 +80,10 @@ class ChannelCommands:
         #: ``(channel, chat) → every conversation rendering a turn in that chat``
         #: — a SeaTalk group's main chat stops and reports them all.
         self.running_in_chat = running_in_chat
+        #: The replies the bot can still take back, and what takes them back
+        #: (``/del`` and the 🗑 button).
+        self.replies = replies
+        self.withdrawal = withdrawal
         self._threads = threads
         self._conversations = conversations
         self._turns = turns
@@ -89,6 +102,8 @@ class ChannelCommands:
         thread_id: str = "",
         conversation_thread_id: str,
         group_main: bool = False,
+        quoted_message_id: str = "",
+        command_message_id: str = "",
     ) -> None:
         """Dispatch one reserved command. ``thread_id`` is where the answer goes;
         ``conversation_thread_id`` is which conversation it is about (see "Key
@@ -105,6 +120,8 @@ class ChannelCommands:
             thread_id=thread_id,
             conversation_thread_id=conversation_thread_id,
             group_main=group_main,
+            quoted_message_id=quoted_message_id,
+            command_message_id=command_message_id,
         )
         await self.run(ctx, text)
 

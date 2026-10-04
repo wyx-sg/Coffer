@@ -428,3 +428,27 @@ def test_an_unknown_own_username_never_claims_a_named_command() -> None:
         _command("/model@mybot"), (), channel="tg", bot_id=None, bot_username=None
     )
     assert built.addressed is False
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="a quote reaches the core as the reply pointer"
+)
+def test_a_reply_pointer_is_carried_as_the_replied_to_message_id():
+    message = _message(
+        message_id=7,
+        date=0,
+        text="/del",
+        reply_to_message={"message_id": 5, "from": {"id": BOT_ID}, "text": "answer"},
+    )
+    parsed = build_inbound_message(
+        message, (), channel="tg", bot_id=BOT_ID, bot_username=BOT_USERNAME
+    )
+    assert parsed.replies_to_message_id == "5"
+    plain = build_inbound_message(
+        _message(message_id=8, date=0, text="hi"),
+        (),
+        channel="tg",
+        bot_id=BOT_ID,
+        bot_username=BOT_USERNAME,
+    )
+    assert plain.replies_to_message_id == ""

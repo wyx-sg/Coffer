@@ -189,6 +189,7 @@ async def _send_rich_chunks(
     """
     pieces = list(chunk_text(_rich_markdown(markdown), RICH_MESSAGE_LIMIT))
     last: SentMessage | None = None
+    ids: list[str] = []
     for i, piece in enumerate(pieces):
         sent = await send_rich_text(
             call,
@@ -207,7 +208,7 @@ async def _send_rich_chunks(
                 return None
             rest = "\n\n".join(pieces[i:])
             rest = rest.replace(_DETAILS_OPEN, "## Details").replace(_DETAILS_CLOSE, "")
-            return await _send_plain_chunks(
+            tail = await _send_plain_chunks(
                 call,
                 chat_id,
                 rest,
@@ -218,8 +219,12 @@ async def _send_rich_chunks(
                 reply_to_message_id="",
                 silent=True,
             )
+            return SentMessage(tail.message_id, (*ids, *tail.all_ids))
         last = sent
-    return last if last is not None else SentMessage(message_id="")
+        ids.append(sent.message_id)
+    if last is None:
+        return SentMessage(message_id="")
+    return SentMessage(last.message_id, tuple(ids))
 
 
 async def _send_plain_chunks(
@@ -251,6 +256,7 @@ async def _send_plain_chunks(
     chunks = [(c, False) for c in chunk_text(head, limit)]
     chunks += [(c, True) for c in chunk_text(details, limit - _WRAP_ROOM)]
     last: SentMessage | None = None
+    ids: list[str] = []
     for i, (chunk, collapsed) in enumerate(chunks):
         # The inline keyboard rides on the final chunk so it sits under the
         # whole (possibly chunked) message. The reply pointer rides on the
@@ -267,7 +273,10 @@ async def _send_plain_chunks(
             prefix=continuation(i, len(chunks)),
             collapsed=collapsed,
         )
-    return last if last is not None else SentMessage(message_id="")
+        ids.append(last.message_id)
+    if last is None:
+        return SentMessage(message_id="")
+    return SentMessage(last.message_id, tuple(ids))
 
 
 async def _send_chunk(

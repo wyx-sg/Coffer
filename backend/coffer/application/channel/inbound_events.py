@@ -28,6 +28,7 @@ from coffer.application.channel.inbound_burst import InboundBurst
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.question_card import parse_callback
 from coffer.application.channel.question_flow import QuestionPort, handle_tap
+from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
 from coffer.domain.channel.commands import command_name
@@ -100,6 +101,11 @@ class InboundEvents:
             if not paired:
                 return
             if not cb.sender_id or cb.sender_id not in paired:
+                if cb.data.startswith(f"{WITHDRAW_KIND}:"):
+                    # Anyone may tap a reply's 🗑; for anyone but the owner it does
+                    # nothing and says nothing (spec channels "Withdraw a bot reply
+                    # on the owner's command").
+                    return
                 await self.safe_send(
                     binding,
                     cb.chat_id,

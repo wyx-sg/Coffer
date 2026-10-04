@@ -270,10 +270,11 @@ when the platform rate-limits outbound sends, sends back off and retry.
   from its input, because everyone in the group reads it
 
 ### Requirement: Answer the conversation commands from any paired chat
-Eight words are Coffer's commands in a paired chat, and nothing else: `/new`,
-`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/help` (`/start`
-is a hidden alias of `/help`). They are split by chat type. In a **direct chat**
-all eight work. In a **group** only `/new`, `/stop` and `/help` work — they
+Nine words are Coffer's commands in a paired chat, and nothing else: `/new`,
+`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/del` and `/help`
+(`/start` is a hidden alias of `/help`). They are split by chat type. In a
+**direct chat** all nine work. In a **group** only `/new`, `/stop`, `/del` and
+`/help` work — they
 control the group's own conversation — and `/model`, `/dir`, `/status`,
 `/resume` and `/thread` work only in a direct chat: sent in a group by the owner
 (see "Act in a group only on an addressed message from the owner"), one of
@@ -281,13 +282,14 @@ those five is answered with one line in English and Chinese saying it works in a
 private chat with the bot, delivered privately to the sender where the platform
 can (see "Keep non-answer chatter private in a group"), and does nothing else —
 it is not passed to the agent as a message. A group's `/help` lists only the
-three group commands, and a card offered in a group (the `/new` card, the help
+four group commands, and a card offered in a group (the `/new` card, the help
 card) carries no button for a direct-chat command.
 `/new [agent]` starts a fresh conversation with the chat's settings (see "Keep a
 chat's settings across its conversations" and "Switch the agent with /new"),
 `/stop` interrupts the running turn, `/status` reports the chat's state (see
 "Report the chat's state as a status card") and `/help` lists the commands (see
-"Offer the commands as a help card"). `/stop` and `/new` take effect even while
+"Offer the commands as a help card") and `/del` withdraws a bot reply (see
+"Withdraw a bot reply on the owner's command"). `/stop` and `/new` take effect even while
 a turn is running; other messages join the conversation's pending queue (spec
 `chat` — the one the web shows) and run in order, a burst of them arriving as one
 turn (see "Take a burst of messages as one turn"). A message that joins the
@@ -345,14 +347,92 @@ the agent").
 #### Scenario: a group's help lists only the group commands
 - **GIVEN** a paired group and a paired direct chat
 - **WHEN** the owner sends `/help` in each
-- **THEN** the group's answer lists `/new`, `/stop` and `/help` only, with New and Stop as its buttons
-- **AND** the direct chat's answer lists all eight commands
+- **THEN** the group's answer lists `/new`, `/stop`, `/del` and `/help` only, with New and Stop as its buttons
+- **AND** the direct chat's answer lists all nine commands
 
 #### Scenario: /new answers with a one-line card
 - **GIVEN** a paired chat on a button-capable transport with two agents the channel may drive
 - **WHEN** the owner sends `/new`, taps Agent, and taps the second agent
 - **THEN** the first answer is one line naming the agent, the model and the directory, with Agent, Model and Dir buttons
 - **AND** Agent offers the channel's agents with the current one ticked, and the tap starts a fresh conversation on the second agent
+
+### Requirement: Withdraw a bot reply on the owner's command
+A reply in a group cannot be unsaid by the platform on its own, and the agent can
+read everything the owner keeps in Coffer, so the owner MUST be able to take any bot
+reply back. Two owner-only ways do it, and both end the same way. The command
+`/del` withdraws the reply it QUOTES (the platform's reply pointer or quote), the
+whole reply — every part a long answer was cut into, the files it carried and its
+details card — and `/del` with no quote withdraws the bot's most recent reply in
+that chat (in a thread, in that thread; in a group's main chat, anywhere in the
+group). It works in groups and in direct chats. And every bot reply in a group
+carries a 🗑 button on its last text message, where the transport has buttons and
+can withdraw at all.
+
+Both are owner-only: `/del` passes the same owner gate as every command, and a tap on
+🗑 by anyone else does nothing and says nothing. What "withdraw" does is the
+transport's own fact, declared as capabilities: Telegram deletes the messages
+(`withdraw_removes`), SeaTalk — which has no delete — rewrites each card into a
+neutral "🗑 Withdrawn" card without buttons. Each platform has a window after which
+it refuses (`withdraw_window_hours`: 48 for Telegram, 168 for SeaTalk); a reply past
+it is not touched and the owner is told so in their direct chat, never in the group.
+The owner's own `/del` message is deleted too where the platform lets the bot remove
+it (Telegram, given the right), and left alone otherwise. A direct-chat reply a
+transport cannot take back (SeaTalk's streamed text) is not recorded, and `/del`
+says there is nothing to withdraw.
+
+To make that reliable the channel records, for every reply, which platform messages
+it was delivered as — in `runs.db` (`channel_replies`: chat, thread, reply id, the
+message ids, the time sent; never the text), so a daemon restart inside the window
+loses nothing — and forgets a reply once it is older than the longest window. Each
+withdrawal is audited as `channel_reply_withdrawn` with the actor (the owner), the
+channel and how many messages went, and no content.
+
+#### Scenario: /del with a quote withdraws that whole reply
+- **GIVEN** a paired group where the bot answered the owner in a reply sent as several messages
+- **WHEN** the owner sends `/del` quoting one of those messages
+- **THEN** every message of that reply is withdrawn through the adapter
+- **AND** the reply is no longer on record
+
+#### Scenario: /del without a quote withdraws the latest reply
+- **GIVEN** a paired chat where the bot has answered twice
+- **WHEN** the owner sends `/del` quoting nothing
+- **THEN** only the more recent reply is withdrawn and the earlier one stays
+
+#### Scenario: a long reply is withdrawn in every part
+- **GIVEN** a reply cut into several messages and followed by an uploaded file
+- **WHEN** the owner withdraws it
+- **THEN** each text part, and a file on a transport that can delete one, is withdrawn
+
+#### Scenario: nobody but the owner can withdraw a reply
+- **GIVEN** a paired group with a bot reply on record
+- **WHEN** someone who is not the owner sends `/del` or taps the reply's 🗑
+- **THEN** nothing is withdrawn and nothing is said in the group
+
+#### Scenario: a group reply carries a trash button the owner can tap
+- **GIVEN** a paired group on a button-capable transport that can withdraw
+- **WHEN** the bot answers and the owner taps 🗑 under the reply
+- **THEN** the last message of the reply carries that button, and the tap withdraws the whole reply
+
+#### Scenario: a direct chat reply carries no trash button
+- **GIVEN** a paired direct chat
+- **WHEN** the bot answers
+- **THEN** the reply has no 🗑 button, and `/del` still withdraws it
+
+#### Scenario: a reply past the platform window is reported privately
+- **GIVEN** a reply on record that was sent longer ago than the transport's withdraw window
+- **WHEN** the owner sends `/del` quoting it, in a group
+- **THEN** no message is touched
+- **AND** the owner is told in their direct chat that it can no longer be withdrawn, and the group is told nothing
+
+#### Scenario: a withdrawal is audited without content
+- **GIVEN** a reply the owner withdraws
+- **WHEN** the withdrawal completes
+- **THEN** a `channel_reply_withdrawn` audit entry records the owner, the channel and the message count and carries no text
+
+#### Scenario: replies are remembered across a restart
+- **GIVEN** a reply recorded before the daemon restarted
+- **WHEN** a new ledger opens the same database
+- **THEN** the reply and every message id of it are found by any of its messages, and replies past the retention are pruned
 
 ### Requirement: Notify the paired owner on demand
 A notify entry point (`POST /api/v1/channels/{uid}/notify`) MUST deliver arbitrary text to a
@@ -1464,6 +1544,12 @@ message has to be able to carry an @mention from the moment it is created (see
 "Mention the asker in a group answer"), and a mention is only a name in rich
 text.
 
+A transport may also declare that its surface cannot stream in a GROUP
+(`streams_in_groups` false — SeaTalk, whose stream cannot be rewritten and so
+cannot be withdrawn): a group turn there opens no surface at all, shows the typing
+indication, and its finished reply is sent through the ordinary send path (see
+"Withdraw a bot reply on the owner's command"). Direct chats stream as before.
+
 How a surface *ends* is the transport's business, and each child spec states its
 own. A transport with no live surface at all posts no interim traffic; its final
 reply is the whole signal. All best-effort — a failed update, close, or
@@ -1491,6 +1577,11 @@ heartbeat never breaks the turn.
   progress first, then the accumulating reply — and it finishes carrying the
   final reply, so nothing is sent twice and the answer never arrives as
   fragments
+
+#### Scenario: a group turn opens no live surface on a transport that cannot stream in a group
+- **GIVEN** a paired group on a transport that streams in direct chats but declares it cannot in a group
+- **WHEN** a turn runs and writes its reply
+- **THEN** no live surface is opened, and the finished reply arrives through the ordinary send path
 
 ### Requirement: Process each inbound event once
 Inbound events MUST be de-duplicated: a redelivered platform event (same message
@@ -2095,7 +2186,7 @@ default` are the ways back to the defaults.
 - **THEN** that thread's conversation opens on the group's agent
 
 ### Requirement: Pass unreserved slash text to the agent
-Only Coffer's eight commands (see "Answer the conversation commands from any
+Only Coffer's nine commands (see "Answer the conversation commands from any
 paired chat") MUST be taken out of the conversation. Any other text starting
 with `/` — an agent's own command such as `/compact` or a skill invoked as
 `/review`, or a message that opens with a path such as `/Users/me/app crashes` —
@@ -2230,7 +2321,7 @@ help card.
 arguments, then say that anything else is a message to the agent; where the
 transport has buttons it is a card titled "Commands" carrying New, Stop, Model,
 Status and Resume in a direct chat. In a group `/help` lists only `/new`,
-`/stop` and `/help`, and its card carries New and Stop alone. The help card is
+`/stop`, `/del` and `/help`, and its card carries New and Stop alone. The help card is
 sent automatically right after pairing succeeds (pairing is a direct chat). A
 platform with no command menu (SeaTalk) shows what the bot accepts through
 `/help`.

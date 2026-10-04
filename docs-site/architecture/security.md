@@ -349,6 +349,12 @@ A channel is the one surface through which someone outside your machine can make
 
 Channel secrets are refs, resolved from the secret store when the adapter starts.
 
+### Group privacy {#group-privacy}
+
+A group is the one place where the agent's answer is read by people other than the owner. In a group turn the agent can still read the owner's memory, knowledge and files, exactly as in a direct chat, and a SeaTalk group reply cannot be recalled by the platform. Coffer does not filter reply content: there is no secret, personal-data or memory-overlap scanning. The owner's safeguard is deleting a reply with `/del` or the 🗑 button (Telegram deletes the message; SeaTalk rewrites the reply's cards into a neutral “Withdrawn” card). Each withdrawal is written to the audit log with the owner, the channel and the number of messages, never the content.
+
+An agent that is tricked by a group member can still say something private. An owner who needs a stronger guarantee should not pair the bot with a group that contains people they do not trust. See [Channels](/guides/channels#group-privacy).
+
 ## What goes into logs and audit
 
 - **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted secret.

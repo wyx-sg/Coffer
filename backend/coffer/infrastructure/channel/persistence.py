@@ -144,6 +144,10 @@ from coffer.infrastructure.channel.outbox_persistence import (  # noqa: E402
     ChannelOutboxModel,
     ChannelOutboxRepo,
 )
+from coffer.infrastructure.channel.reply_persistence import (  # noqa: E402
+    ChannelReplyModel,
+    ChannelReplyRepo,
+)
 from coffer.infrastructure.channel.thread_persistence import (  # noqa: E402
     ChannelThreadConversationModel,
     ChannelThreadConversationRepo,
@@ -155,6 +159,8 @@ __all__ = [
     "ChannelOutboxModel",
     "ChannelOutboxRepo",
     "ChannelPeerRepo",
+    "ChannelReplyModel",
+    "ChannelReplyRepo",
     "ChannelThreadConversationModel",
     "ChannelThreadConversationRepo",
     "ChannelThreadHistoryModel",

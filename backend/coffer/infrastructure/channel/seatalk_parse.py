@@ -272,7 +272,11 @@ def button_rows(buttons: Sequence[ChoiceButton]) -> list[list[ChoiceButton]]:
 
 
 def interactive_card(
-    text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
+    text: str,
+    buttons: Sequence[ChoiceButton],
+    *,
+    title: str = "",
+    more: Sequence[str] = (),
 ) -> dict[str, Any]:
     """A SeaTalk ``interactive_message`` card: a markdown body + callback buttons
     each carrying our custom ``value``. A tap returns the value in an
@@ -306,7 +310,11 @@ def interactive_card(
     subject has to be crammed into the first line of the description, competing
     with the content. Omitted when empty rather than sent blank.
 
-    ``format: 1`` selects SeaTalk's markdown for the description body."""
+    ``format: 1`` selects SeaTalk's markdown for the description body.
+
+    ``more`` are further description blocks after the first, for a reply card whose
+    text runs past one block's 1000 characters (the caller keeps the total within
+    the card's five)."""
     elements: list[dict[str, Any]] = []
     if title:
         elements.append(
@@ -317,6 +325,13 @@ def interactive_card(
             "element_type": "description",
             "description": {"format": 1, "text": _clamp(text, CARD_DESCRIPTION_MAX_CHARS)},
         }
+    )
+    elements.extend(
+        {
+            "element_type": "description",
+            "description": {"format": 1, "text": _clamp(block, CARD_DESCRIPTION_MAX_CHARS)},
+        }
+        for block in more
     )
     if buttons and all(b.own_row for b in buttons) and len(buttons) <= CARD_BARE_BUTTONS_MAX:
         # A question's options: bare buttons, one full-width line each.

@@ -309,3 +309,51 @@ class ChannelOutboxRepoPort(Protocol):
     async def pending_for_conversation(self, conversation_id: str) -> list[OutboxEntry]: ...
 
     async def mark_delivered(self, entry_id: int) -> None: ...
+
+
+@dataclass(frozen=True)
+class ReplyRecord:
+    """One bot reply and every platform message it was delivered as (one
+    ``channel_replies`` row): a long answer is cut into parts, the files it
+    carried and a details card are messages of their own, and withdrawing the
+    reply takes all of them (spec channels "Withdraw a bot reply on the owner's
+    command")."""
+
+    reply_id: str
+    resource_uid: str
+    chat_id: str
+    thread_id: str
+    chat_kind: str
+    message_ids: tuple[str, ...]
+    sent_at: datetime
+
+
+class ReplyLedgerPort(Protocol):
+    """What the channel remembers about its replies, for as long as a platform
+    lets one be taken back. Names no content: ids and times only."""
+
+    async def add(self, record: ReplyRecord) -> None: ...
+
+    async def get(self, reply_id: str) -> ReplyRecord | None: ...
+
+    async def find_by_message(
+        self, resource_uid: str, chat_id: str, message_id: str
+    ) -> ReplyRecord | None:
+        """The reply one of whose messages is ``message_id`` (any part)."""
+        ...
+
+    async def latest(
+        self, resource_uid: str, chat_id: str, thread_id: str | None
+    ) -> ReplyRecord | None:
+        """The most recently sent reply in the chat; ``thread_id`` narrows it to
+        one thread, ``None`` takes the whole chat."""
+        ...
+
+    async def remove(self, reply_id: str) -> None: ...
+
+    async def prune(self, before: datetime) -> int:
+        """Forget replies sent before ``before`` (past every platform's window);
+        returns how many."""
+        ...
+
+    async def delete_for_channel(self, resource_uid: str) -> None: ...

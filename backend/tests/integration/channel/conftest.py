@@ -53,6 +53,7 @@ from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
+    ChannelReplyRepo,
     ChannelThreadConversationRepo,
 )
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
@@ -618,6 +619,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         audit=audit,
         agents=registry,
         model_suggestions=model_suggestions,
+        replies=ChannelReplyRepo(sm),
         questions=ChatQuestions(),
     )
 

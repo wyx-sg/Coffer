@@ -845,6 +845,7 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
             "status",
             "resume",
             "thread",
+            "del",
             "help",
         }
         assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
@@ -1409,3 +1410,28 @@ async def test_a_send_that_stays_rate_limited_fails_after_a_bounded_number_of_re
     finally:
         await adapter.stop()
     assert len(fake_telegram.calls_for("sendMessage")) == 4  # the send plus three retries
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="every chunk of a reply is reported and deleted"
+)
+async def test_every_chunk_of_a_reply_is_reported_and_withdrawn_with_delete_message(
+    fake_telegram: FakeTelegram,
+) -> None:
+    para1 = ("alpha " * 500).strip()
+    para2 = ("bravo " * 500).strip()
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        sent = await adapter.send_text("555", f"{para1}\n\n{para2}")
+        for message_id in sent.all_ids:
+            await adapter.withdraw_message("555", message_id, chat_kind="group")
+        caps = adapter.capabilities
+    finally:
+        await adapter.stop()
+
+    assert sent.all_ids == ("101", "102")
+    assert fake_telegram.calls_for("deleteMessage") == [
+        {"chat_id": "555", "message_id": "101"},
+        {"chat_id": "555", "message_id": "102"},
+    ]
+    assert caps.withdraw_window_hours == 48 and caps.withdraw_removes is True

@@ -1,13 +1,13 @@
 ---
 title: Channel commands
-description: The eight channel commands, how each behaves in direct chats, threads and groups, how settings stick to a chat, and the command menus and selection cards.
+description: The nine channel commands, how each behaves in direct chats, threads and groups, how settings stick to a chat, and the command menus and selection cards.
 ---
 
 # Channel commands
 
-Eight words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
+Nine words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
 
-The table lists the eight words. How each reads, where it works and the cards it answers with follow below. To pair and start chatting, see [Channels](/guides/channels).
+The table lists the nine words. How each reads, where it works and the cards it answers with follow below. To pair and start chatting, see [Channels](/guides/channels).
 
 | Command | What it does |
 | --- | --- |
@@ -18,9 +18,10 @@ The table lists the eight words. How each reads, where it works and the cards it
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
+| `/del` | Owner only. Withdraw the bot's reply: quote one of its messages and send `/del` to withdraw that whole reply, or send it bare to withdraw the bot's most recent reply in this chat or thread. |
 | `/help` | List the commands, with New, Stop, Model, Status and Resume buttons (New and Stop in a group), under the title **Commands**. |
 
-In a group only `/new`, `/stop` and `/help` work; the other five work only in a direct chat (see [Where each command works](#where-each-command-works)). `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
+In a group only `/new`, `/stop`, `/help` and `/del` work; the other five work only in a direct chat (see [Where each command works](#where-each-command-works)). `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
 ## How the commands read
 
@@ -34,7 +35,7 @@ Names are the ones you see, never internal ids. An agent is its display name or 
 
 ## Where each command works
 
-`/new`, `/stop` and `/help` control the group's own conversation, so they work in a group. `/model`, `/dir`, `/status`, `/resume` and `/thread` configure or inspect your own chat with the bot, so they work only in a direct chat.
+`/new`, `/stop`, `/help` and `/del` control the group's own conversation and its replies, so they work in a group. `/model`, `/dir`, `/status`, `/resume` and `/thread` configure or inspect your own chat with the bot, so they work only in a direct chat.
 
 | Command | Direct chat | Parallel thread | Group thread | Group main chat |
 | --- | --- | --- | --- | --- |
@@ -45,13 +46,20 @@ Names are the ones you see, never internal ids. An agent is its display name or 
 | `/status` | ✓, with the parallel threads | ✓ | Direct chat only | Direct chat only |
 | `/resume` | ✓ | ✓ | Direct chat only | Direct chat only |
 | `/thread` | ✓ | ✓ | Direct chat only | Direct chat only |
-| `/help` | ✓, all eight | ✓ | ✓, the three group commands | ✓, the three group commands |
+| `/del` | ✓ | ✓ | ✓ | ✓ |
+| `/help` | ✓, all nine | ✓ | ✓, the four group commands | ✓, the four group commands |
 
 Sent in a group by the owner, a direct-chat-only command is answered privately to the sender where the platform supports private delivery, with one line, “This command works in a private chat with me.”, and does nothing else: it is not passed to the agent and sets nothing. `/help`, that notice and any "Did you mean" correction are the only private answers in a group; `/new` and `/stop` change something the whole room shares, so they stay visible.
 
+## Withdrawing a reply with /del {#withdrawing-a-reply-with-del}
+
+`/del` is for the owner only; anyone else's `/del` does nothing. Quote one of the bot's messages and send `/del`, and the whole reply that message belongs to is withdrawn, including every part a long reply was split into. Sent without a quote, `/del` withdraws the bot's most recent reply in that chat, or in that thread when you send it inside one. It works in direct chats and in groups.
+
+The `/del` message itself is deleted where the platform allows it: on Telegram when the bot has the right to delete messages in that chat, otherwise it stays. How a reply is withdrawn, and how long it can be, differs by platform; see [Withdrawing a reply](/guides/channels#withdrawing-a-reply). In a group, every reply also carries a 🗑 button that does the same for the owner.
+
 ## Other slash text goes to the agent
 
-Only the eight words above are taken out of the conversation. `/compact`, a skill such as `/review`, or a message that opens with a path such as `/Users/me/app crashes on start` reaches the agent like any other message, so the agent's own slash commands keep working from your phone.
+Only the nine words above are taken out of the conversation. `/compact`, a skill such as `/review`, or a message that opens with a path such as `/Users/me/app crashes on start` reaches the agent like any other message, so the agent's own slash commands keep working from your phone.
 
 A word that is one slip away from a command — `/stpo`, `/stat`, `/threads` — is answered with one line, `Unknown command /stpo. Did you mean /stop? Send /help for all commands.`, and nothing runs. Short commands (four letters or fewer) tolerate one wrong letter, longer ones two; a swap of two neighbouring letters counts as one.
 
@@ -96,7 +104,7 @@ Only conversations this chat opened are offered — never one from the web page 
 
 `/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model, the effort and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
 
-In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /help`.
+In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /del · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /del · /help`.
 
 `/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons in a direct chat and only the **Agent** button in a group. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
 
@@ -113,7 +121,7 @@ On SeaTalk every @mention in a group's main chat roots a fresh thread, so a sett
 
 ## Command menus
 
-Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all eight commands; groups get only `/new`, `/stop` and `/help`, the ones that control the group's own conversation. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu, so it has a single surface: send `/help`, and a command that is only for a direct chat answers with the one-line private notice.
+Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all nine commands; groups get only `/new`, `/stop`, `/del` and `/help`, the ones that control the group's own conversation. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu, so it has a single surface: send `/help`, and a command that is only for a direct chat answers with the one-line private notice.
 
 The English descriptions are:
 
@@ -126,6 +134,7 @@ The English descriptions are:
 | `/status` | What is running, threads |
 | `/resume` | Go back to a conversation |
 | `/thread` | Open a parallel thread |
+| `/del` | Withdraw a reply |
 | `/help` | Commands |
 
 ## Selection cards

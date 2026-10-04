@@ -772,6 +772,7 @@
       "channel_paired": "完成了消息渠道 {{resource}} 的配对",
       "channel_pairing_issued": "为 {{resource}} 签发了配对码",
       "channel_person_removed": "从 {{resource}} 移除了一位已配对的主人",
+      "channel_reply_withdrawn": "撤回了 {{resource}} 中的一条机器人回复",
       "internal_engine_model_set": "设置了内部引擎使用的模型",
       "knowledge_deleted": "从 {{resource}} 删除了一篇文档",
       "knowledge_edited": "编辑了 {{resource}} 中的一篇文档",

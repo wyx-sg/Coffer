@@ -181,6 +181,7 @@
     "channel_paired",
     "channel_pairing_issued",
     "channel_person_removed",
+    "channel_reply_withdrawn",
     "cli_tool_added",
     "cli_tool_edited",
     "cli_tool_removed",

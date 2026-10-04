@@ -128,7 +128,7 @@ Each turn tells the agent it is on a chat channel: keep replies concise but quot
 
 ## Commands
 
-Eight words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
+Nine words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
 
 | Command | What it does |
 | --- | --- |
@@ -139,9 +139,10 @@ Eight words are Coffer's commands. Everything else you type — including other 
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
+| `/del` | Owner only. Withdraw the bot's reply: quote it and send `/del`, or send it bare for the most recent one. |
 | `/help` | List the commands, with New, Stop, Model, Status and Resume buttons. |
 
-In a group only `/new`, `/stop` and `/help` work, because they control the group's own conversation. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
+In a group only `/new`, `/stop`, `/help` and `/del` work, because they control the group's own conversation and replies. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
 
 The full reference, with where each command works, is at [Channel commands](/reference/channel-commands).
 
@@ -200,6 +201,17 @@ Two channel settings tune when the bot answers in a group. They change when the 
 
 **Web UI:** on the channel's **Settings** tab, use the switches under **In group chats**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. They save as you flip them.
 
+
+### Withdrawing a reply {#withdrawing-a-reply}
+
+A reply the bot has sent can be taken back, by the owner only. Anyone else's tap or command does nothing.
+
+- **`/del`.** Quote one of the bot's messages and send `/del` to withdraw that whole reply, with every part a long reply was split into. Without a quote it withdraws the bot's most recent reply in that chat, or in that thread. It works in direct chats and groups. The `/del` message is itself deleted where the platform allows it (Telegram, if the bot has the right); otherwise it stays.
+- **The 🗑 button.** Under every bot reply in a group there is a 🗑 button. Only the owner's tap counts.
+
+How a reply is withdrawn depends on the platform. **Telegram** deletes the message; the platform allows this for 48 hours, and past that the owner is told privately that it can no longer be deleted. **SeaTalk** has no delete API, so group replies are sent as interactive cards, and withdrawing rewrites each card into a neutral “🗑 Withdrawn” card with no buttons; SeaTalk allows rewriting for 7 days, and past that the owner is told privately.
+
+Coffer remembers which platform messages make up each reply, only as long as that window and across daemon restarts, and writes one audit entry per withdrawal: the owner, the channel and the number of messages, never the content.
 
 If the bot is removed from a group, that group's sessions stop. If a SeaTalk group becomes an external group, the bot posts one warning in it.
 
@@ -264,11 +276,18 @@ Owner pairing is the security boundary for everything a channel can do.
 - **Only the paired owner drives agents.** Coffer checks both the chat and the sender's platform identity — Telegram's user id, SeaTalk's employee code — so another member of a paired group cannot drive a turn.
 - **Strangers get silence.** A message from anyone who is not the owner produces no reply and no turn in a direct chat, so the bot does not reveal that it is running. In a group, an addressed message from a non-owner gets a short refusal.
 - **A tap is checked like a message.** A button on a selection card never pairs and never switches anything for a non-owner.
+- **Group replies are not filtered.** See [Group privacy](#group-privacy).
 - **Agents run with full permissions.** There is no approval step for tool calls. Anyone who can pair the bot can make an agent act on your machine, so treat a pairing code like a password and generate it only when you are about to use it.
 - **Secrets stay in the vault.** The channel configuration holds only secret references; Coffer refuses a value that looks like a raw secret in a reference field.
 - **Nothing is exposed to the network.** Telegram is polled and SeaTalk is an outbound websocket; neither opens a port or needs a public URL.
 
-Pairing codes issued and claimed are written to the audit log, together with the channel's lifecycle changes. Messages, notifications and turns are not; the conversation is their record.
+Pairing codes issued and claimed are written to the audit log, together with the channel's lifecycle changes and each withdrawal of a reply. Messages, notifications and turns are not; the conversation is their record.
+
+### Group privacy {#group-privacy}
+
+In a group turn the agent can still read your memory, knowledge and files, as it can in a direct chat, and everyone in the group reads its reply. On SeaTalk the platform cannot recall a group reply. Coffer does not scan or filter reply content: it looks for no secrets, personal data or overlap with your memory. Your safeguard is deleting a reply you do not want to stay, with `/del` or the 🗑 button.
+
+An agent that is tricked by a group member can still say something private. If you need a stronger guarantee, do not pair the bot with a group that contains people you do not trust.
 
 ## How it works
 
