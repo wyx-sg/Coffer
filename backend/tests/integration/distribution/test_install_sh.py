@@ -83,3 +83,58 @@ def test_install_refuses_an_archive_missing_a_binary(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "binary 'coffer-daemon' not found in archive" in result.stderr
+
+
+def _run_check_git(path: str, home: Path) -> subprocess.CompletedProcess[str]:
+    script = _INSTALL_SH.read_text()
+    prelude = "".join(_function(script, fn) for fn in ("warn", "check_git"))
+    return subprocess.run(
+        # The shell by its full path: PATH is the test's made-up one.
+        [shutil.which("sh") or "/bin/sh", "-c", f"set -eu\n{prelude}\ncheck_git"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"PATH": path, "HOME": str(home)},
+    )
+
+
+def _fake_git(directory: Path, answer: str) -> str:
+    directory.mkdir(parents=True, exist_ok=True)
+    fake = directory / "git"
+    fake.write_text(f"#!/bin/sh\n{answer}\n")
+    fake.chmod(0o755)
+    # awk and the shell's own tools stay reachable beside the fake git.
+    return f"{directory}:/usr/bin:/bin"
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="install.sh is POSIX sh")
+@pytest.mark.parametrize(
+    ("answer", "warning"),
+    [
+        ('echo "git version 2.30.1"', "git 2.30 is older than 2.40, which Coffer needs."),
+        ("exit 1", "git is installed but did not report a version."),
+        ('echo "git version 2.45.0"', None),
+        ('echo "git version 3.0.0"', None),
+    ],
+)
+def test_the_installer_warns_about_an_old_or_broken_git_and_never_fails(
+    tmp_path: Path, answer: str, warning: str | None
+) -> None:
+    result = _run_check_git(_fake_git(tmp_path / "gitbin", answer), tmp_path)
+    assert result.returncode == 0, result.stderr
+    if warning is None:
+        assert result.stderr == ""
+    else:
+        assert warning in result.stderr
+        assert "start/install#requirements" in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="install.sh is POSIX sh")
+def test_the_installer_warns_when_git_is_missing(tmp_path: Path) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    # Only the empty directory is searched, so no git can be found; the check
+    # itself needs nothing else when there is none.
+    result = _run_check_git(str(empty), tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "git was not found. Coffer needs git 2.40 or later" in result.stderr

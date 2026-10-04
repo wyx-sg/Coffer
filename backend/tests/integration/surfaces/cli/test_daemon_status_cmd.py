@@ -97,7 +97,7 @@ def live_daemon(tmp_path, monkeypatch):
     # draining.
     monkeypatch.setattr(phase, "_PHASE", "ready")
 
-    def _connect():
+    def _connect(**_kwargs):
         app = FastAPI()
         err_handlers.register(app)
         app.include_router(daemon_router)

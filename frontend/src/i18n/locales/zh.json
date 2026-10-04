@@ -1560,6 +1560,17 @@
       "lastReply": "上次响应 {{time}}",
       "logHint": "在终端里读取守护进程日志",
       "openLog": "打开守护进程日志"
+    },
+    "setupState": {
+      "title": "Coffer 需要 git",
+      "missing": "这台机器上没有安装 git。",
+      "tooOld": "git {{found}} 低于 Coffer 需要的 {{needed}}。",
+      "why": "vault 用 git 保存历史并同步。",
+      "checkAgain": "重新检查",
+      "checking": "正在检查…",
+      "restarting": "正在启动 Coffer…",
+      "stillMissing": "仍未找到 · {{time}} 检查",
+      "stillTooOld": "仍是 git {{found}} · {{time}} 检查"
     }
   },
   "listStates": {
@@ -1813,7 +1824,8 @@
     "SYNC_VAULT_MOVE_FAILED": "金库没能移动，仍留在原处。",
     "SYNC_VAULT_TARGET_INVALID": "请为金库选择本机上的一个空文件夹。",
     "SYNC_VAULT_TARGET_IN_CLOUD": "该文件夹位于 iCloud Drive、Dropbox 或 Syncthing 中，请选择它们之外的文件夹。",
-    "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。"
+    "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。",
+    "GIT_NEEDED": "Coffer 需要 git 才能打开 vault。安装或更新 git 后点「重新检查」。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",

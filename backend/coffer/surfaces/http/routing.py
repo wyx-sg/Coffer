@@ -80,6 +80,7 @@ from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.secret_boundary_routes import router as secret_boundary_router
 from coffer.surfaces.http.secret_routes import router as secret_router
 from coffer.surfaces.http.settings_routes import router as settings_router
+from coffer.surfaces.http.setup_state import router as setup_router
 from coffer.surfaces.http.skill_copy_routes import router as skill_copy_router
 from coffer.surfaces.http.skill_delete_routes import router as skill_delete_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
@@ -98,6 +99,7 @@ def include_all_routers(app: FastAPI) -> None:
         daemon_routes.router,
         daemon_port_router,  # spec daemon (the port of the next start)
         daemon_restart_router,  # spec daemon (restart itself on request)
+        setup_router,  # spec daemon (wait in a setup state for git)
         daemon_upgrade_router,  # spec daemon (the upgrade hand-off)
         storage_router,  # spec daemon (Settings > Data: what Coffer stores)
         feature_router,  # spec experimental-features

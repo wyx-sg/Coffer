@@ -29,19 +29,6 @@ from coffer.domain.vault.writers import CommitMeta, message
 from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.repository import VaultRepository
 
-#: ``merge-tree --write-tree`` needs git 2.38; ``--merge-base`` needs 2.40.
-MIN_GIT = (2, 40)
-
-
-def git_version(repo: VaultRepository) -> tuple[int, int]:
-    done = git.run(repo.root, "--version", check=False)
-    words = git.text(done).split()
-    try:
-        major, minor = words[2].split(".")[:2]
-        return int(major), int(minor)
-    except (IndexError, ValueError):
-        return (0, 0)
-
 
 def merge_base(repo: VaultRepository, a: str, b: str) -> str | None:
     done = git.run(repo.root, "merge-base", a, b, check=False)
@@ -247,7 +234,6 @@ def delete_tag(repo: VaultRepository, name: str) -> None:
 
 
 __all__ = [
-    "MIN_GIT",
     "ConflictEntry",
     "MergeResult",
     "TreeChange",
@@ -256,7 +242,6 @@ __all__ = [
     "commit_tree",
     "delete_tag",
     "diff_trees",
-    "git_version",
     "hash_blob",
     "is_ancestor",
     "merge_base",

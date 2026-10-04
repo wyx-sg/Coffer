@@ -15,6 +15,10 @@ VAULT_AND_SYNC_STATUS: dict[str, int] = {
     "VAULT_VERSION_NOT_FOUND": 404,
     "VAULT_GIT_FAILED": 500,
     "GIT_MISSING": 500,
+    # A daemon waiting in its setup state refuses everything that needs the
+    # vault until git is there (spec daemon "Wait in a setup state when git is
+    # missing or too old"): the service is not available yet, not broken.
+    "GIT_NEEDED": 503,
     "MASTER_KEY_FILE_INVALID": 422,
     "MASTER_KEY_PASSPHRASE_WRONG": 422,
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": 422,

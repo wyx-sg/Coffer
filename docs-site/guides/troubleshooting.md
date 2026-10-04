@@ -121,6 +121,20 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Fix.** In a browser, run `coffer daemon start` in a terminal; the page checks again every 30 seconds and the notice clears itself. If it stays, reload the page: the daemon hands the page its current token on every load. In the desktop app, use **Restart daemon**.
 
+### Coffer needs git
+
+**Symptom.** The app or the web UI shows **Coffer needs git** in place of every page, and a `coffer` command prints the reason and a prompt for your agent, then exits 10:
+
+```text
+Coffer needs git, and git isn't installed on this machine. The vault keeps its history and syncs with git. Install git, then check again: press Check again in Coffer, or run the command again.
+```
+
+`coffer daemon status` reports `status:  setup` with the same words.
+
+**Cause.** The vault is a git repository, and sync's merges need git 2.40 or later. With no git, or an older one, the daemon still starts, but waits in a setup state: it serves the page and its status and refuses everything that needs the vault (`GIT_NEEDED`, 503). It looks for git on its own `PATH` and on your login shell's, so a git your terminal finds is used even when the daemon was started from the Dock.
+
+**Fix.** Install or update git. **Copy prompt** on the screen (or the prompt the command printed) hands the chore to your agent, which picks the way that fits your machine. Then press **Check again**: once git is there, Coffer restarts its daemon and opens normally. From a terminal, `coffer daemon restart` does the same.
+
 ### The UI lost its language, page size or sidebar state
 
 **Cause.** The browser keeps those preferences per origin, and the origin includes the port. The daemon is now on a different port than before, so the browser treats it as a different site.

@@ -99,14 +99,35 @@ def _spawn_daemon() -> subprocess.Popen[bytes] | None:
 _SKEW_PROBE_TIMEOUT: float = 2.0
 
 
-def warn_if_version_skew(info: DaemonInfo) -> None:
+def warn_if_version_skew(info: DaemonInfo) -> dict[str, object] | None:
     """Print a one-line WARNING to stderr when the daemon ``info`` names is a
     different build than this CLI (ADR daemon-detect-or-spawn: detection, not
     refusal). Silent when the probe fails — the command itself will say so.
+    Returns the status body it read, ``None`` when nothing answered.
     """
-    message = skew_warning(probe_status(info, timeout=_SKEW_PROBE_TIMEOUT), caller="coffer")
+    status = probe_status(info, timeout=_SKEW_PROBE_TIMEOUT)
+    message = skew_warning(status, caller="coffer")
     if message is not None:
         print(message, file=sys.stderr)
+    return status
+
+
+def waiting_for_git(status: dict[str, object] | None) -> dict[str, object] | None:
+    """What the daemon waits for while it is in its setup state, else ``None``."""
+    if not status or status.get("status") != "setup":
+        return None
+    setup = status.get("setup")
+    return setup if isinstance(setup, dict) else None
+
+
+def print_waiting_for_git(setup: dict[str, object]) -> None:
+    """Say why the daemon waits — the message and the hand-off the page shows
+    (spec daemon "Wait in a setup state when git is missing or too old")."""
+    typer.echo(str(setup.get("message", "Coffer needs git.")), err=True)
+    handoff = setup.get("handoff")
+    if isinstance(handoff, dict) and handoff.get("prompt"):
+        typer.echo("\nTo hand this to your agent, give it this prompt:\n", err=True)
+        typer.echo(str(handoff["prompt"]), err=True)
 
 
 def daemon_is_running() -> bool:
@@ -118,7 +139,7 @@ def daemon_is_running() -> bool:
     return live_daemon() is not None
 
 
-def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
+def client_or_exit(*, allow_setup: bool = False) -> tuple[httpx.Client, DaemonInfo]:
     """Return an authenticated httpx.Client + DaemonInfo for the running daemon.
 
     Implements detect-or-spawn: if no daemon is *reachable* — daemon.json
@@ -126,7 +147,10 @@ def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
     serving its port) — spawn one automatically and wait up to
     ``_DAEMON_BOOT_TIMEOUT`` seconds for it to start serving.
 
-    Raises DaemonNotRunning (exit 3) only if the spawn fails or times out.
+    Raises DaemonNotRunning (exit 3) only if the spawn fails or times out. A
+    daemon waiting for git is answered here, before the command's own request:
+    the reason and the hand-off, exit 10 — unless ``allow_setup`` (``coffer
+    daemon status``, which reports it).
     """
     # live_daemon() (not discover()) so a stale daemon.json from a crashed
     # daemon is treated as "no daemon" and respawned, instead of returning a
@@ -149,7 +173,10 @@ def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
             )
             raise DaemonNotRunning()
 
-    warn_if_version_skew(info)
+    setup = waiting_for_git(warn_if_version_skew(info))
+    if setup is not None and not allow_setup:
+        print_waiting_for_git(setup)
+        raise typer.Exit(int(ExitCode.GIT_NEEDED))
     base = f"http://127.0.0.1:{info.port}/api/v1"
     return (
         httpx.Client(

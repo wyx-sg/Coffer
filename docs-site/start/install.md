@@ -11,6 +11,16 @@ This page covers every supported way to install Coffer, what each one puts on di
 The one-line installer, the desktop `.dmg` and the release archive all download from a tagged GitHub release. Until the first `v*` tag is published those downloads return 404. For now, [install from source](#from-source).
 :::
 
+## Requirements
+
+| What | Why |
+| --- | --- |
+| **macOS on Apple silicon (arm64)**, for a prebuilt build | The desktop app, the one-line installer and the release archive are built for it only. Any other machine installs [from source](#from-source). |
+| **git 2.40 or later** — required | The vault is a git repository: every change is a commit, and history, undo and sync run on git (sync's merges need 2.40). Without it Coffer still starts, but shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until git is there. Check with `git --version`. |
+| **A coding agent to connect** — Claude Code or Codex | Coffer serves its MCP servers, skills and the rest to your agents. You can install Coffer first and connect an agent afterwards. |
+| **ripgrep (`rg`)** — optional | Faster knowledge search. Without it, Coffer uses a slower built-in search over the same files. |
+| **From source:** Python 3.12 or later, and Node.js 20 | Python runs the daemon and the CLI; Node.js builds the web UI (CI builds it with Node.js 20). |
+
 ## Let your agent install it
 
 If you already work with a coding agent — Claude Code, Codex, or any agent that can run commands on your machine — paste this prompt into it:
@@ -19,8 +29,10 @@ If you already work with a coding agent — Claude Code, Codex, or any agent tha
 Install Coffer on this machine by following
 https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
 this machine (a release build if one is published for this OS and architecture,
-otherwise from source). Ask me before running anything with sudo or editing my
-shell profile. When it is installed, check it with `coffer daemon status`.
+otherwise from source). Check its Requirements first: if `git --version` is
+missing or older than 2.40, install or update git the way that fits this machine.
+Ask me before running anything with sudo or editing my shell profile. When it is
+installed, check it with `coffer daemon status`.
 Then tell me which coding agents it found here (claude-code, codex) and which
 config files each one's Connect button on the web UI's Agents page will change,
 so I can connect them myself. Do not handle any credentials: if a step needs a
@@ -38,7 +50,7 @@ The agent reads this page, chooses the path that fits your machine and checks th
 | [Release archive](#release-archive) | Installing by hand, or on machines with no GUI | The same three binaries, extracted wherever you choose |
 | [From source](#from-source) | Contributors, Linux users, and anyone tracking `main` | A Python install with `coffer` and `coffer-mcp-shim` on your `PATH` |
 
-Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source (Python 3.12 or later).
+Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source. Every path needs git 2.40 or later; see [Requirements](#requirements).
 
 Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (at `http://127.0.0.1:38470/`), and the desktop app also gives you the CLI.
 
@@ -86,6 +98,7 @@ The script:
 2. Downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and the release's `SHA256SUMS` from GitHub Releases, then verifies the archive's checksum. If the checksum does not match, the script stops.
 3. Installs `coffer`, `coffer-daemon` and `coffer-mcp-shim` into the install directory. Each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
 4. If that directory is not already on your `PATH`, appends a line to your shell profile. The profile depends on your shell: `~/.zshrc` for zsh (or `$ZDOTDIR/.zshrc`), `~/.bash_profile` for bash on macOS, `~/.config/fish/config.fish` for fish (as `fish_add_path`), and `~/.profile` for anything else. Running the script again does not add the line twice.
+5. Warns, without failing, when `git` is missing or older than 2.40, and points to [Requirements](#requirements).
 
 Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by pointing you to the web UI's **Agents** page, where **Connect** connects Claude Code. See the [Quickstart](/start/quickstart).
 
@@ -121,7 +134,7 @@ Keep the three binaries together in one directory. `coffer` and `coffer-mcp-shim
 
 ## From source
 
-You need Python 3.12 or later and git. Node.js is required to build the web UI, and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is recommended. Knowledge curation uses `rg` to select candidate documents, and falls back to a slower built-in search when it is missing.
+Besides git, a source install needs Python 3.12 or later and Node.js 20 to build the web UI, and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is recommended; see [Requirements](#requirements).
 
 ```sh
 git clone https://github.com/wyx-sg/Coffer.git
@@ -181,7 +194,7 @@ port:    38470
 pid:     48213
 ```
 
-Your version and PID will differ. Then open `http://127.0.0.1:38470/` in your browser, or open the desktop app. The page the daemon serves already carries the API token, so you are signed in with no further step.
+Your version and PID will differ. `status:  setup` means the daemon is waiting for git: the same command prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). Then open `http://127.0.0.1:38470/` in your browser, or open the desktop app. The page the daemon serves already carries the API token, so you are signed in with no further step.
 
 ## Start and keep the daemon running
 

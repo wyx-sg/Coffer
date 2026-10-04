@@ -1,4 +1,4 @@
-// src/lib/api/daemon.ts — request functions for the daemon's own status, port, residency and upgrade hand-off.
+// src/lib/api/daemon.ts — request functions for the daemon's own status, port, residency, setup check and upgrade hand-off.
 import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/types";
 
@@ -6,6 +6,9 @@ export type DaemonStatus = components["schemas"]["DaemonStatusOut"];
 export type DaemonPort = components["schemas"]["DaemonPortOut"];
 export type DaemonResidency = components["schemas"]["DaemonResidencyOut"];
 export type DaemonResidencyIn = components["schemas"]["DaemonResidencyIn"];
+/** What a daemon in its setup state waits for (spec daemon "Wait in a setup state when git is missing or too old"). */
+export type DaemonSetup = components["schemas"]["DaemonSetupOut"];
+export type DaemonSetupCheck = components["schemas"]["DaemonSetupCheckOut"];
 
 export const daemonApi = {
   status: (): Promise<DaemonStatus> => unwrap(getApiClient().GET("/daemon/status")),
@@ -15,6 +18,8 @@ export const daemonApi = {
   residency: (): Promise<DaemonResidency> => unwrap(getApiClient().GET("/daemon/residency")),
   setResidency: (body: DaemonResidencyIn): Promise<DaemonResidency> =>
     unwrap(getApiClient().PUT("/daemon/residency", { body })),
+  /** Ask a daemon waiting in its setup state to look for git again. */
+  setupCheck: (): Promise<DaemonSetupCheck> => unwrap(getApiClient().POST("/daemon/setup/check")),
   /** The prompt that hands an upgrade of Coffer to an agent. */
   upgradePrompt: async (): Promise<string> =>
     (await unwrap(getApiClient().GET("/daemon/upgrade"))).handoff.prompt,

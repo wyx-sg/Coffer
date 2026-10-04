@@ -190,7 +190,7 @@ A hand edit is found, not intercepted. File events are a hint (debounced until t
 
 Every file and folder in the vault has a history you can read, diff and restore: the REST routes under `/api/v1/vault/` and the **History** tab of a skill. A restore is a new commit through the same checks. See [Edit the vault by hand](/guides/vault-files).
 
-The vault needs `git`. A machine without it fails at startup with a message saying so. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff`, and the Sync status reports the problem `git_missing` with the same prompt.
+The vault needs `git` 2.40 or later. Without one the daemon starts but [waits for git](/architecture/daemon#waiting-for-git), saying why on every surface. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff`, and the Sync status reports the problem `git_missing` with the same prompt.
 
 ## Migrations of runs.db
 

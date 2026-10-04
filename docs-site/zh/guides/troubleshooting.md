@@ -121,6 +121,20 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 **解决办法。** 在浏览器里用的话，在终端运行 `coffer daemon start`；页面每 30 秒检查一次，提示会自己消失。如果一直不消失，就刷新页面：每次加载时，守护进程都会把当前令牌交给页面。在桌面应用里，用**重启守护进程**。
 
+### Coffer 需要 git {#coffer-needs-git}
+
+**现象。** 应用或 Web 界面在每个页面的位置都显示 **Coffer 需要 git**；`coffer` 命令会打印原因和一段给智能体的提示词，然后以退出码 10 结束：
+
+```text
+Coffer needs git, and git isn't installed on this machine. The vault keeps its history and syncs with git. Install git, then check again: press Check again in Coffer, or run the command again.
+```
+
+`coffer daemon status` 会报告 `status:  setup`，并给出同样的说明。
+
+**原因。** 保险库是一个 git 仓库，同步的合并需要 git 2.40 或更高版本。没有 git，或者版本太旧时，守护进程仍会启动，但停在一个设置状态：它提供页面和状态，拒绝一切需要保险库的请求（`GIT_NEEDED`，503）。它会在自己的 `PATH` 和你的登录 shell 的 `PATH` 上找 git，所以即使守护进程是从程序坞启动的，终端里能找到的 git 也会被用上。
+
+**解决办法。** 安装或更新 git。界面上的**复制提示词**（或命令打印的提示词）把这件事交给你的智能体，由它选择适合这台机器的做法。然后点**重新检查**：git 就绪后，Coffer 会重启守护进程并正常打开。在终端里，`coffer daemon restart` 效果相同。
+
 ### 界面丢了语言、每页条数或侧边栏状态 {#the-ui-lost-its-language-page-size-or-sidebar-state}
 
 **原因。** 浏览器按 origin 保存这些偏好，而 origin 包含端口。守护进程现在的端口和以前不同，所以浏览器把它当成了另一个网站。

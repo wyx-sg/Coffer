@@ -201,24 +201,6 @@ async def test_a_missing_git_is_a_startup_error_saying_so(
 
 
 @pytest.mark.acceptance(
-    spec="vault-storage", scenario="a git older than 2.40 stops the daemon with a hand-off"
-)
-async def test_a_git_older_than_2_40_is_a_startup_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    from coffer.surfaces.http import vault_composition
-
-    monkeypatch.setattr(vault_composition, "git_version", lambda _repo: (2, 30))
-    with pytest.raises(RuntimeError, match=r"git 2\.40 or later and found 2\.30") as caught:
-        await vault_composition.build_vault_stores({})
-    # Refused before the vault was opened: no repository, no first commit.
-    assert not (vault_root() / ".git").exists()
-    message = str(caught.value)
-    # The refusal names no installer; it hands the chore to the person's agent.
-    assert "xcode-select" not in message and "brew" not in message
-    assert "Please update git on this machine to version 2.40 or later." in message
-    assert "run `git --version`" in message
-
-
-@pytest.mark.acceptance(
     spec="vault-storage", scenario="a secret written before the first sync round is committed"
 )
 async def test_a_remote_that_carries_secrets_is_known_before_the_vault_opens() -> None:

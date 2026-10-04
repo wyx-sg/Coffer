@@ -91,6 +91,12 @@ def get_audit_service() -> AuditService:
     return _audit_service
 
 
+def get_audit_service_optional() -> AuditService | None:
+    """The audit service, or ``None`` while it is not wired — a daemon waiting
+    in its setup state wires none, and its restart still answers."""
+    return _audit_service
+
+
 _retention_service: RetentionService | None = None
 
 

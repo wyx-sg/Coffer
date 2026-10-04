@@ -29,11 +29,10 @@ def forward_response(
             "shim.gateway_error_status",
             extra={"status": response.status_code, "body_head": raw_body[:200]},
         )
-        body_excerpt = raw_body[:200] or "(empty body)"
         emit_error(
             req_id,
             code=-32603,
-            message=f"coffer gateway HTTP {response.status_code}: {body_excerpt}",
+            message=f"coffer gateway HTTP {response.status_code}: {_error_text(raw_body)}",
         )
         return
     if not raw_body:
@@ -55,6 +54,21 @@ def forward_response(
         return
     sys.stdout.write(raw_body + "\n")
     sys.stdout.flush()
+
+
+def _error_text(raw_body: str) -> str:
+    """What the agent is told about a refused call: the daemon's own message
+    and, when the refusal carries one, its hand-off prompt in full — a daemon
+    waiting for git says why and how to fix it (spec daemon "Wait in a setup
+    state when git is missing or too old"). Anything else, the body's head."""
+    try:
+        error = _json.loads(raw_body).get("error") or {}
+        message = str(error["message"])
+    except (ValueError, AttributeError, KeyError, TypeError):
+        return raw_body[:200] or "(empty body)"
+    handoff = (error.get("details") or {}).get("handoff") or {}
+    prompt = handoff.get("prompt") if isinstance(handoff, dict) else None
+    return f"{message}\n\n{prompt}" if prompt else message
 
 
 def emit_error(req_id: Any, code: int, message: str) -> None:

@@ -1560,6 +1560,17 @@
       "lastReply": "last reply {{time}}",
       "logHint": "Read the daemon log from a terminal",
       "openLog": "Open daemon log"
+    },
+    "setupState": {
+      "title": "Coffer needs git",
+      "missing": "git isn’t installed on this machine.",
+      "tooOld": "git {{found}} is older than {{needed}}, which Coffer needs.",
+      "why": "The vault keeps its history and syncs with git.",
+      "checkAgain": "Check again",
+      "checking": "Checking…",
+      "restarting": "Starting Coffer…",
+      "stillMissing": "Still not found · checked {{time}}",
+      "stillTooOld": "Still git {{found}} · checked {{time}}"
     }
   },
   "listStates": {
@@ -1813,7 +1824,8 @@
     "SYNC_VAULT_MOVE_FAILED": "The vault couldn’t be moved; it was left where it was.",
     "SYNC_VAULT_TARGET_INVALID": "Choose an empty folder on this Mac for the vault.",
     "SYNC_VAULT_TARGET_IN_CLOUD": "That folder is inside iCloud Drive, Dropbox or Syncthing. Choose one outside them.",
-    "SYNC_VAULT_TARGET_NOT_EMPTY": "That folder isn’t empty. Choose an empty one."
+    "SYNC_VAULT_TARGET_NOT_EMPTY": "That folder isn’t empty. Choose an empty one.",
+    "GIT_NEEDED": "Coffer needs git before it can open the vault. Install or update git, then press Check again."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",

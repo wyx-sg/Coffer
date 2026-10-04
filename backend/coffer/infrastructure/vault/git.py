@@ -27,7 +27,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from coffer.domain.error_base import CofferError
-from coffer.domain.git_handoff import git_missing_details
+from coffer.domain.git_handoff import VAULT_NEEDS_GIT_FOR, git_missing_details
 from coffer.domain.vault.writers import author_name
 from coffer.infrastructure.platform.host import machine_label
 
@@ -96,9 +96,7 @@ class GitMissing(CofferError):  # noqa: N818
         # installer: its details carry the install hand-off for the person's
         # agent (``domain/git_handoff.py``), which the web UI offers and the
         # CLI prints.
-        self.error_details = git_missing_details(
-            machine_label(), needed_for="keeping the vault's history and syncing it"
-        )
+        self.error_details = git_missing_details(machine_label(), needed_for=VAULT_NEEDS_GIT_FOR)
 
 
 def git_available() -> bool:

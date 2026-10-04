@@ -166,6 +166,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/daemon/setup/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Again
+         * @description Look for git again, on the daemon's ``PATH`` and the login shell's.
+         *
+         *     ``ready`` once a usable git is there; a git found only on the login
+         *     shell's ``PATH`` is put first on this process's, so the restart that
+         *     follows — which inherits this environment — runs it too. A daemon that is
+         *     not in its setup state is ready already.
+         */
+        post: operations["check_again_api_v1_daemon_setup_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/daemon/shutdown": {
         parameters: {
             query?: never;
@@ -465,6 +490,39 @@ export interface components {
             /** Port */
             port: number;
         };
+        /**
+         * DaemonSetupCheckOut
+         * @description The answer to Check again: whether git is now there.
+         */
+        DaemonSetupCheckOut: {
+            /** Ready */
+            ready: boolean;
+            setup: components["schemas"]["DaemonSetupOut"] | null;
+        };
+        /**
+         * DaemonSetupOut
+         * @description What a daemon in its setup state is waiting for (spec daemon "Wait in a
+         *     setup state when git is missing or too old").
+         */
+        DaemonSetupOut: {
+            /** Found */
+            found: string | null;
+            handoff: components["schemas"]["HandoffOut"];
+            /** Message */
+            message: string;
+            /**
+             * Need
+             * @constant
+             */
+            need: "git";
+            /** Needed */
+            needed: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "git_missing" | "git_too_old";
+        };
         /** DaemonStatusOut */
         DaemonStatusOut: {
             /** Commit */
@@ -488,6 +546,7 @@ export interface components {
             /** Port */
             port: number;
             runtime: components["schemas"]["RuntimeHealthOut"] | null;
+            setup: components["schemas"]["DaemonSetupOut"] | null;
             /**
              * Started At
              * Format: date-time
@@ -497,7 +556,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ready" | "draining";
+            status: "ready" | "draining" | "setup";
             upstream_summary: components["schemas"]["UpstreamSummary"] | null;
             /** Version */
             version: string;
@@ -1134,6 +1193,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenRotationOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_again_api_v1_daemon_setup_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonSetupCheckOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

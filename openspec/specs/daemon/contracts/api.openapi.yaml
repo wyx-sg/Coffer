@@ -503,6 +503,47 @@ paths:
       summary: Rotate Token
       tags:
       - daemon
+  /api/v1/daemon/setup/check:
+    post:
+      description: |-
+        Look for git again, on the daemon's ``PATH`` and the login shell's.
+
+        ``ready`` once a usable git is there; a git found only on the login
+        shell's ``PATH`` is put first on this process's, so the restart that
+        follows — which inherits this environment — runs it too. A daemon that is
+        not in its setup state is ready already.
+      operationId: check_again_api_v1_daemon_setup_check_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonSetupCheckOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Again
+      tags:
+      - daemon
   /api/v1/daemon/shutdown:
     post:
       operationId: shutdown_daemon_api_v1_daemon_shutdown_post
@@ -1032,6 +1073,58 @@ components:
       - port
       title: DaemonRestartOut
       type: object
+    DaemonSetupCheckOut:
+      description: 'The answer to Check again: whether git is now there.'
+      properties:
+        ready:
+          title: Ready
+          type: boolean
+        setup:
+          anyOf:
+          - $ref: '#/components/schemas/DaemonSetupOut'
+          - type: 'null'
+      required:
+      - ready
+      - setup
+      title: DaemonSetupCheckOut
+      type: object
+    DaemonSetupOut:
+      description: |-
+        What a daemon in its setup state is waiting for (spec daemon "Wait in a
+        setup state when git is missing or too old").
+      properties:
+        found:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Found
+        handoff:
+          $ref: '#/components/schemas/HandoffOut'
+        message:
+          title: Message
+          type: string
+        need:
+          const: git
+          title: Need
+          type: string
+        needed:
+          title: Needed
+          type: string
+        reason:
+          enum:
+          - git_missing
+          - git_too_old
+          title: Reason
+          type: string
+      required:
+      - need
+      - reason
+      - found
+      - needed
+      - message
+      - handoff
+      title: DaemonSetupOut
+      type: object
     DaemonStatusOut:
       properties:
         commit:
@@ -1073,6 +1166,10 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RuntimeHealthOut'
           - type: 'null'
+        setup:
+          anyOf:
+          - $ref: '#/components/schemas/DaemonSetupOut'
+          - type: 'null'
         started_at:
           format: date-time
           title: Started At
@@ -1081,6 +1178,7 @@ components:
           enum:
           - ready
           - draining
+          - setup
           title: Status
           type: string
         upstream_summary:
@@ -1105,6 +1203,7 @@ components:
       - data_dir
       - connected_agents
       - runtime
+      - setup
       title: DaemonStatusOut
       type: object
     DaemonUpgradeOut:

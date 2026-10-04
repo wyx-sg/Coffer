@@ -26,6 +26,8 @@ Coffer is one daemon on your machine that your coding agents connect to (today C
 
 ## Install
 
+**Requirements:** git 2.40 or later; a coding agent to connect (Claude Code or Codex). Prebuilt builds are for macOS on Apple silicon; elsewhere, install from source (Python 3.12+, Node.js 20). ripgrep is optional. See [Requirements](https://wyx-sg.github.io/Coffer/start/install#requirements).
+
 Paste this into a coding agent that can run commands on your machine:
 
 ```text
