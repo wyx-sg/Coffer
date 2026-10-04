@@ -17,8 +17,7 @@ import pytest
 from coffer.application.fs import terminal_service
 from coffer.application.fs.terminal_service import TerminalDetectService, TerminalService
 from coffer.domain.fs_terminal_errors import FsTerminalFailed, FsTerminalInvalid
-
-from ._fake_platform import FakePlatform
+from tests.unit.application.fs._fake_platform import FakePlatform
 
 
 class _Spawns:
