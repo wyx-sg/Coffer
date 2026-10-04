@@ -82,8 +82,8 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
       {
         name: "new",
         args: "[agent]",
-        description: "Start a fresh conversation (keeps model, effort and directory)",
-        description_zh: "开始新对话并保留模型、推理强度和目录",
+        description: "Start a fresh conversation (keeps model and directory)",
+        description_zh: "开始新对话并保留模型和目录",
       },
       {
         name: "stop",
@@ -93,9 +93,9 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
       },
       {
         name: "model",
-        args: "[name] [level]",
-        description: "Pick model, then effort",
-        description_zh: "先选模型、再选推理强度",
+        args: "[name]",
+        description: "Pick a model",
+        description_zh: "选择模型",
       },
     ],
     people: [

@@ -62,13 +62,13 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 
 1. Open **Agents**, choose the agent, and under **Model** on its **Overview** click **Change…**. (From a provider's **Used by** list, **Codex › Change model** opens the same form.)
 2. Pick a **Provider**. Only enabled providers that reach this agent are offered, beside the agent's built-in login.
-3. Pick a **Model** and, where the model reports levels, an **Effort**; for Claude Code also the **Model per tier**. The first model the endpoint returns is pre-selected, and the tiers are prefilled with suggestions.
+3. Pick a **Model**; for Claude Code also the **Model per tier**. The first model the endpoint returns is pre-selected, and the tiers are prefilled with suggestions.
 4. Click **Review changes**. Coffer lists, file by file, the lines it will write — `settings.json` for Claude Code; `config.toml` and Coffer's model list file for Codex — and tests the provider with the chosen model while it does. A failed test is a warning, not a block.
 5. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**.
 
 Picking the **Built-in login** puts the agent back on its own login; the form asks for nothing else. The details of the form are in [Change an agent's model](/guides/agents#change-an-agent-s-model).
 
-The agent's **Overview › Model** section then reads the provider, the model, the effort and the **Route** — through Coffer's proxy, with a **Test** button. **Rotate proxy token**, which replaces the agent's own local token for Coffer's proxy, is in the agent page's **⋯** menu, offered only while the agent runs on a provider; the built-in login bypasses the proxy.
+The agent's **Overview › Model** section then reads the provider, the model and the **Route** — through Coffer's proxy, with a **Test** button. **Rotate proxy token**, which replaces the agent's own local token for Coffer's proxy, is in the agent page's **⋯** menu, offered only while the agent runs on a provider; the built-in login bypasses the proxy.
 
 Which provider an agent runs on is a field of the agent itself (its `connection_uid`), so an agent is on at most one provider at a time and the choice stays on this machine; it never syncs. A provider that is deleted, switched off or no longer reaches the agent leaves that agent on its own login.
 
@@ -95,7 +95,6 @@ Coffer merges only its own keys into the agent's file and leaves everything else
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-pro"
   },
   "model": "deepseek-pro",
-  "effortLevel": "high",
   "modelPicker": {
     "options": [{ "model": "deepseek-pro", "label": "deepseek-pro", "description": "via Coffer" }],
     "replaceBuiltInOptions": true
@@ -106,7 +105,7 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 - **The key is never written.** Claude Code runs `apiKeyHelper`, and `coffer proxy token --agent-uid <uid>` prints the agent's local token, which unlocks only the loopback proxy. The proxy swaps it for the provider's key. `ANTHROPIC_API_KEY` is never written, because it would override the helper. For an agent this machine does not have, the helper prints nothing and exits with code 4.
 - **The file names the proxy, not the provider.** Switching Claude Code from one API-key provider to another changes the proxy's route; `settings.json` stays as it is, and renaming a provider touches nothing.
 - **`NO_PROXY`** gains `127.0.0.1,localhost`, so a corporate `HTTPS_PROXY` never captures the loopback call. Your own entries stay, and switching back removes only the pair Coffer appended.
-- **The model** goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. **Effort** goes in `effortLevel`.
+- **The model** goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. Coffer writes no effort key: the agent runs at the effort its own configuration names, and an `effortLevel` an earlier version wrote stays in your file as your own setting.
 - **Every tier is pinned.** Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable. On an endpoint that serves no Claude ids each tier is the agent's model; on a gateway serving Claude ids each tier is the model whose name carries it. **Model per tier** in the Change model dialog sets one yourself.
 - **`modelPicker`** puts the provider's models in `/model`, replacing the built-in rows when the provider serves no Claude ids.
 
@@ -117,7 +116,6 @@ The helper names the `coffer` CLI by absolute path (shell-quoted if the path hol
 ```toml
 model = "deepseek-flash"
 model_provider = "coffer"
-model_reasoning_effort = "high"
 model_catalog_json = "/Users/you/.codex/coffer-model-catalog.json"
 
 [model_providers.coffer]
@@ -131,9 +129,9 @@ auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "-
 
 The file is edited with `tomlkit`, so your comments and key order survive. Codex runs the `auth` command for its token itself, so a Codex you start in your own terminal needs nothing exported, and no key is in any Codex process's environment. The command-backed `auth` table needs **Codex 0.155.1 or later**. `supports_websockets = false` keeps Codex from trying the Responses WebSocket transport first, which stalls against any base URL but OpenAI's.
 
-When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, an auto-compact limit at 90% of it, and its effort levels, from what the provider records for the model; `model_reasoning_effort` is written only when the chosen model has levels.
+When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, and an auto-compact limit at 90% of it, from what the provider records for the model. Coffer writes no `model_reasoning_effort`; one an earlier version wrote stays in your file as your own setting.
 
-Reverting to the built-in login removes exactly the keys Coffer wrote. A `model` or effort you changed since with `/model` or `/effort` is yours and stays.
+Reverting to the built-in login removes exactly the keys Coffer wrote. A `model` you changed since with `/model` is yours and stays, and so is any effort key an earlier version wrote.
 
 ## Local model runtimes
 
@@ -195,7 +193,7 @@ On the provider's header:
 
 - **Edit** changes the **Name**, the **Protocol** and the **Base URL**, with **Test** before you save. Renaming changes only the label; the page stays where it is. The protocol is locked while an agent runs on the provider. The key is not edited here.
 - **Replace key** (on Overview, or the key-rejected banner) takes a new key, can **Test** it first, and overwrites the value behind the same secret — the agents' config files only name the secret, so they do not change. The new value takes effect at once. See [Secret store](/guides/secret-store).
-- **⋯ › Delete provider** deletes a provider nothing runs on, with its secret, after a confirmation. A provider something runs on is not blocked: **Delete provider** opens a review instead. The left side says what will happen to each user — an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted — and the right side shows exactly the lines Coffer will remove from each agent's config file (for Codex its model, provider table, effort and model-list pointer; your own lines stay). **Delete** applies it: the agents are put back on their own logins first, then the provider goes. If an agent's file changed in the meantime the delete stops with the provider still there.
+- **⋯ › Delete provider** deletes a provider nothing runs on, with its secret, after a confirmation. A provider something runs on is not blocked: **Delete provider** opens a review instead. The left side says what will happen to each user — an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted — and the right side shows exactly the lines Coffer will remove from each agent's config file (for Codex its model, provider table and model-list pointer; your own lines stay). **Delete** applies it: the agents are put back on their own logins first, then the provider goes. If an agent's file changed in the meantime the delete stops with the provider still there.
 
 - **Replacing** the key overwrites the stored secret at the same ref; nothing that cites it changes.
 - **Waiting for approval.** A new base URL for a connection whose key already goes somewhere, and a key another connection already uses, are saved but held until you approve them in the Coffer app. The old URL stays in use until then; a replaced key is not held.

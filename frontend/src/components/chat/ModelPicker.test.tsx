@@ -18,27 +18,22 @@ const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>
 /** The daemon-served catalogue per agent, read back from the installed agent
  * (`fable` is the case no frontend constant could have known about). */
 const CATALOGUE: Record<string, AgentModel[]> = {
-  // Claude Code names tier aliases and no model of its takes a reasoning effort;
-  // Codex names concrete models and every one of its does.
+  // Claude Code names tier aliases; Codex names concrete models.
   claude_code: [
-    { id: "opus", label: "Opus", description: "", efforts: [], default_effort: null },
-    { id: "sonnet", label: "Sonnet", description: "", efforts: [], default_effort: null },
-    { id: "fable", label: "", description: "", efforts: [], default_effort: null },
+    { id: "opus", label: "Opus", description: "" },
+    { id: "sonnet", label: "Sonnet", description: "" },
+    { id: "fable", label: "", description: "" },
   ],
   codex: [
     {
       id: "gpt-5-codex",
       label: "",
       description: "",
-      efforts: ["low", "medium", "high", "xhigh"],
-      default_effort: "xhigh",
     },
     {
       id: "gpt-5",
       label: "",
       description: "",
-      efforts: ["low", "medium", "high"],
-      default_effort: "medium",
     },
   ],
 };
@@ -84,10 +79,8 @@ describe("ModelPicker", () => {
             id: "claude-sonnet-4-6",
             label: "",
             description: "",
-            efforts: [],
-            default_effort: null,
           },
-          { id: "claude-3-5-haiku", label: "", description: "", efforts: [], default_effort: null },
+          { id: "claude-3-5-haiku", label: "", description: "" },
         ],
       }));
       render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
@@ -107,7 +100,7 @@ describe("ModelPicker", () => {
     // so it offered ids the endpoint would reject — and disagreed with the
     // `/model` card in a chat, which has always read the same `offered()`.
     useAgentModelsMock.mockImplementation(() => ({
-      data: [{ id: "gw/big", label: "", description: "", efforts: [], default_effort: null }],
+      data: [{ id: "gw/big", label: "", description: "" }],
     }));
     // Resolving with the agent's own ids, so a picker that still introspected
     // would visibly merge them back in.
@@ -128,9 +121,7 @@ describe("ModelPicker", () => {
   test("selecting a model the daemon offered commits it", () => {
     const onCommit = vi.fn();
     useAgentModelsMock.mockImplementation(() => ({
-      data: [
-        { id: "claude-sonnet-4-6", label: "", description: "", efforts: [], default_effort: null },
-      ],
+      data: [{ id: "claude-sonnet-4-6", label: "", description: "" }],
     }));
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
     openAndReadOptions();

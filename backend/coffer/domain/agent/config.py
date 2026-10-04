@@ -13,8 +13,9 @@ to ``<config_dir>/skills`` — there is no separate skill-dir concept.
 from __future__ import annotations
 
 import pathlib
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from coffer.domain.agent.types import AgentType
 
@@ -36,14 +37,11 @@ class AgentConfig(BaseModel):
     # Per-agent model binding (spec provider-switching "Take projected model
     # keys from the agent's binding"). The model the agent projects comes from
     # HERE, not the connection: ``model`` → Claude Code's top-level ``model``
-    # settings key / Codex's ``model``; ``effort`` → Claude Code's
-    # ``effortLevel`` / Codex's ``model_reasoning_effort``; ``tier_models`` →
+    # settings key / Codex's ``model``; ``tier_models`` →
     # Claude Code's ``ANTHROPIC_DEFAULT_<TIER>_MODEL`` pins (the Haiku pin also
-    # runs its background tasks). All
-    # optional — an unbound agent projects no model key, so it runs on its OWN
-    # default model (the connection carries none).
+    # runs its background tasks). All optional — an unbound agent projects no
+    # model key, so it runs on its OWN default model (the connection carries none).
     model: str | None = None
-    effort: str | None = None
     tier_models: dict[str, str] | None = None
     # The provider connection this agent runs on (spec agent-registry "Carry the
     # connection an agent runs on on the agent record"): the uid of a ``provider``
@@ -55,18 +53,15 @@ class AgentConfig(BaseModel):
     # (``application.provider.targets.connection_for_agent``).
     connection_uid: str | None = None
 
-    @field_validator("effort")
+    @model_validator(mode="before")
     @classmethod
-    def _validate_effort(cls, v: str | None) -> str | None:
-        """Shape only: the levels are the model's own (read back from the agent
-        or recorded on the connection's curated model), so Coffer does not keep
-        a list of its own to check against."""
-        if v is None:
-            return None
-        v = v.strip()
-        if not v or len(v) > 32:
-            raise ValueError("effort must be a non-empty level name")
-        return v
+    def _drop_retired_effort(cls, data: Any) -> Any:
+        """Migration for the removal of reasoning effort: a stored agent config
+        may still carry ``effort``; drop it (the file loses the key on its next
+        write)."""
+        if isinstance(data, dict) and "effort" in data:
+            return {k: v for k, v in data.items() if k != "effort"}
+        return data
 
     @field_validator("tier_models")
     @classmethod

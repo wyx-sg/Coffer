@@ -3,7 +3,7 @@ channels "Report the chat's state as a status card" and "Offer the commands as
 a help card").
 
 `/status` names things, never ids: the conversation's title (or a parallel
-thread's mark), then one line with the agent, model, effort and directory by
+thread's mark), then one line with the agent, model and directory by
 the names a person reads, and whether a turn is running or how many wait, then
 the chat's parallel threads (spec channels "Open parallel conversations beside
 a direct chat"). `/status` works only in a direct chat; the help card lists

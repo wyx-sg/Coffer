@@ -329,7 +329,6 @@ def binding_of(agent_cfg: AgentConfig) -> ModelBinding:
     """The agent's model binding, as the projection reads it."""
     return ModelBinding(
         model=agent_cfg.model,
-        effort=agent_cfg.effort,
         tier_models=dict(agent_cfg.tier_models or {}),
     )
 
@@ -342,8 +341,6 @@ def projected_models(cfg: ProviderConfig) -> tuple[ProjectedModel, ...]:
         ProjectedModel(
             id=m.id,
             context_window=m.context_window,
-            effort_levels=tuple(m.effort_levels or ()),
-            default_effort=m.default_effort,
         )
         for m in cfg.models
         if m.modality is Modality.TEXT

@@ -78,7 +78,6 @@ def test_catalogue_route_answers_per_agent_with_every_field(tmp_path: pathlib.Pa
     assert resp.status_code == 200, resp.text
     models = resp.json()["models"]
     assert [m["id"] for m in models] == ["local-codex-model"]
-    assert {"id", "label", "description", "efforts", "default_effort"} <= set(models[0])
-    assert models[0]["efforts"] == []
-    assert models[0]["default_effort"] is None
+    assert {"id", "label", "description"} <= set(models[0])
+    assert "efforts" not in models[0] and "default_effort" not in models[0]
     assert unknown.status_code == 404, unknown.text

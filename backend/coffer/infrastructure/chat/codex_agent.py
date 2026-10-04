@@ -232,17 +232,10 @@ class CodexAppServerAdapter:
         except Exception as exc:
             raise _ConnectError(str(exc)) from exc
 
-        # ``effort`` rides on the TURN, which is where Codex takes it — the
-        # thread's own settings are behind its experimental API, and a model
-        # name carries no effort. Omitted when unset, so Codex keeps whatever
-        # its own config says.
         turn_params: dict[str, Any] = {
             "threadId": thread_id,
             "input": [{"type": "text", "text": prompt, "text_elements": []}],
         }
-        effort = self._extra.get("effort")
-        if effort:
-            turn_params["effort"] = effort
         turn = await rpc.request("turn/start", turn_params)
         return (turn.get("turn") or {}).get("id") or ""
 

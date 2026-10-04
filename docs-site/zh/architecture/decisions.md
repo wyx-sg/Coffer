@@ -104,7 +104,7 @@ Coffer 保留三类设计文本，各司其职：
 | 消息渠道是共享核心之上的薄传输适配器，在守护进程内受监管 | [`channel-adapter-framework`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md) |
 | 消息渠道只回应已配对的所有者，在群组中默认拒绝 | [`channel-owner-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-owner-gate.md) |
 | 消息渠道对话以（渠道、聊天、线程）为键，并以其所在线程和引用为上下文 | [`channel-conversation-identity-and-context`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-conversation-identity-and-context.md) |
-| 消息渠道中的切换：换智能体开新对话，换模型和推理强度下一轮生效 | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
+| 消息渠道中的切换：换智能体开新对话，换模型下一轮生效 | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
 | 消息渠道的回复在同一个实时界面上增长，节奏由传输层决定 | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
 | 消息渠道附件：字节存磁盘，消息里放引用，发送时按智能体具体化 | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
 | 对话页面先上传文件再发送其 id，文件存进一个同级的媒体目录 | [`chat-attachment-uploads`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md) |

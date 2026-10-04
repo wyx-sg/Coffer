@@ -241,17 +241,10 @@ class FakeKeyring:
 
 
 class FakeModelSuggestions:
-    """In-memory ModelSuggestionPort: per-agent model and effort quick-picks.
-
-    Efforts are stored per ``(agent, model)`` with a ``None`` key standing for
-    "no model pinned", so a test can script the two halves of the choice
-    independently — including the case the real service handles by standing the
-    head of the catalogue in for an unpinned model.
-    """
+    """In-memory ModelSuggestionPort: per-agent model quick-picks."""
 
     def __init__(self) -> None:
         self._by_agent: dict[str, list[str]] = {}
-        self._efforts: dict[tuple[str, str | None], list[str]] = {}
         self._labels: dict[str, str] = {}
 
     def add(
@@ -260,18 +253,12 @@ class FakeModelSuggestions:
         self._by_agent[agent_key] = models
         self._labels.update(labels or {})
 
-    def add_efforts(self, agent_key: str, levels: list[str], *, model: str | None = None) -> None:
-        self._efforts[(agent_key, model)] = levels
-
     async def suggest(self, agent_key: str) -> list[str]:
         return list(self._by_agent.get(agent_key, []))
 
     async def model_labels(self, agent_key: str) -> dict[str, str]:
         # Unlabelled unless a test names them, so a button shows its bare id.
         return {m: self._labels.get(m, m) for m in self._by_agent.get(agent_key, [])}
-
-    async def efforts(self, agent_key: str, model: str | None) -> list[str]:
-        return list(self._efforts.get((agent_key, model), []))
 
 
 class StubWebSocketController:

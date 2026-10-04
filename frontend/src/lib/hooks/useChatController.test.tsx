@@ -2,9 +2,9 @@
 //
 // The draft → create → first-message flow, from the controller's side. What is
 // pinned here is what the DRAFT carries into the conversation it creates: the
-// agent, the model, and — the half that used to have nowhere to be chosen — the
-// reasoning effort. The first turn fires the moment the conversation exists, so
-// a level not carried in the create call is a level the first turn never ran at.
+// agent, the folder and the model. The first turn fires the moment the
+// conversation exists, so a model not carried in the create call is a model the
+// first turn never ran on.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
@@ -73,19 +73,18 @@ beforeEach(() => {
 });
 
 describe("useChatController draft", () => {
-  test("carries the chosen effort into the conversation it creates", () => {
+  test("carries the chosen model into the conversation it creates", () => {
     const { result } = renderHook(() => useChatController());
 
     act(() => result.current.setDraftModel("opus"));
-    act(() => result.current.setDraftEffort("xhigh"));
     act(() => {
       void result.current.sendDraft("first message");
     });
 
-    expect(createdWith()).toEqual({ model: "opus", effort: "xhigh" });
+    expect(createdWith()).toEqual({ model: "opus" });
   });
 
-  test("an unset effort is omitted, so the agent runs at its own level", () => {
+  test("an unset model is omitted, so the agent runs on its own", () => {
     // Sending nothing is not the same as sending an empty string: the backend
     // reads a present-but-empty field as "clear it", and there is nothing to
     // clear on a conversation that does not exist yet.
@@ -98,14 +97,10 @@ describe("useChatController draft", () => {
     expect(createdWith()).toEqual({});
   });
 
-  test("switching agent drops the effort with the model", () => {
-    // A level is the agent's own vocabulary — carrying `xhigh` from Codex to an
-    // agent that has never heard of it would pin the first turn to a name its
-    // CLI would reject.
+  test("switching agent drops the model", () => {
     const { result } = renderHook(() => useChatController());
 
     act(() => result.current.setDraftModel("gpt-5-codex"));
-    act(() => result.current.setDraftEffort("xhigh"));
     act(() => result.current.setDraftAgent("claude_code"));
 
     // The folder stays: it is where the work is, whichever agent does it.
@@ -113,20 +108,7 @@ describe("useChatController draft", () => {
       agentKey: "claude_code",
       cwd: null,
       model: null,
-      effort: null,
     });
-  });
-
-  test("switching model keeps the effort", () => {
-    // The picker keeps a level it no longer offers selectable rather than
-    // dropping it silently, so the trigger never misreports the first turn.
-    const { result } = renderHook(() => useChatController());
-
-    act(() => result.current.setDraftEffort("high"));
-    act(() => result.current.setDraftModel("sonnet"));
-
-    expect(result.current.effectiveDraft.effort).toBe("high");
-    expect(result.current.effectiveDraft.model).toBe("sonnet");
   });
 });
 
@@ -144,7 +126,6 @@ describe("useChatController hand-off", () => {
       agentKey: "codex",
       cwd: "/w",
       model: null,
-      effort: null,
     });
     expect(result.current.draftPrefill).toEqual({ text: "Install jq.", attachments: [] });
     // The history entry loses the state, so a reload or Back does not type it again.

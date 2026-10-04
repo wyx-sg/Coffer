@@ -40,7 +40,7 @@ CALLBACK_MAX_BYTES = 64
 #: The namespace a *navigation* payload lives in — ``page:<kind>:<index>``,
 #: e.g. ``page:model:3`` (13 bytes, fixed-size, nowhere near the cap).
 #:
-#: It is deliberately disjoint from the ``model:`` / ``effort:`` / ``dir:`` /
+#: It is deliberately disjoint from the ``model:`` / ``dir:`` /
 #: ``resume:`` / ``collection:`` / ``cmd:`` namespaces the *choices* use: a page
 #: turn must change nothing, and the one way it could change something is by
 #: being mistaken for a choice. Because the prefix is read first and a whole
@@ -66,10 +66,7 @@ PAGE_SIZE = MAX_CARD_BUTTONS - 2
 
 #: The card kinds that can be paged — closed and explicit, so a page value
 #: naming anything else is dropped rather than re-rendered.
-PAGED_KINDS: frozenset[str] = frozenset({"model", "effort", "collection", "resume", "dir", "agent"})
-
-#: The ``effort:`` value of the effort step's "Keep …" button: no change.
-KEEP_EFFORT = "-"
+PAGED_KINDS: frozenset[str] = frozenset({"model", "collection", "resume", "dir", "agent"})
 
 
 def callback_fits(value: str) -> bool:
@@ -199,10 +196,9 @@ def model_card(
     current: str | None,
     picks: Sequence[str],
     labels: Mapping[str, str] | None = None,
-    effort: str | None = None,
     page: int | None = None,
 ) -> SelectionCard:
-    """Pick the model the agent's CLI runs from the next message — step 1 of 2.
+    """Pick the model the agent's CLI runs from the next message.
 
     ``current`` is ``None`` when no model is pinned, in which case the body says
     the CLI's own default is in effect and no option carries the tick.
@@ -217,8 +213,6 @@ def model_card(
     """
     names = labels or {}
     shown = names.get(current or "") or current or "Default model"
-    if effort:
-        shown = f"{shown} · {effort.capitalize()}"
     options = [
         ChoiceButton(
             label=tick(names.get(name) or name, name == current),
@@ -231,52 +225,10 @@ def model_card(
     return paginate(
         kind="model",
         title="Model",
-        header=(f"Current: {shown}\nStep 1 of 2 — tap a model (or send /model <name> <level>):"),
+        header=f"Current: {shown}\nTap a model (or send /model <name>):",
         options=options,
         current_value=f"model:{current}" if current else None,
         current_label=names.get(current or "") or current or "Default model",
-        page=page,
-    )
-
-
-def effort_card(
-    *,
-    current: str | None,
-    levels: Sequence[str],
-    model: str | None = None,
-    page: int | None = None,
-) -> SelectionCard:
-    """The effort step of the model card: how hard the chosen model thinks
-    (spec channels "Switch the model and reasoning effort from chat").
-
-    The level is not part of the model NAME — both agents take it as their own
-    field (Codex's ``turn/start``, Claude's ``--effort``) — so it is a second
-    step rather than four buttons per model. A ``Keep …`` button ends the step
-    without changing anything, so a model tap never forces a level choice.
-
-    ``current`` is ``None`` when the conversation pins no level (the agent's
-    own default is in effect, and no level carries the tick). ``model`` is the
-    model's shown name for the header. The caller only builds this when
-    ``levels`` is non-empty.
-    """
-    shown = current or "default"
-    options = [
-        ChoiceButton(
-            label=tick(level, level == current),
-            value=f"effort:{level}",
-            selected=level == current,
-        )
-        for level in dict.fromkeys(levels)
-        if callback_fits(f"effort:{level}")
-    ]
-    lead = f"{model} · step 2 of 2" if model else "Step 2 of 2"
-    return paginate(
-        kind="effort",
-        title="Effort",
-        header=f"{lead} — tap an effort level:",
-        options=options,
-        current_value=f"effort:{current}" if current else None,
-        current_label=shown,
         page=page,
     )
 

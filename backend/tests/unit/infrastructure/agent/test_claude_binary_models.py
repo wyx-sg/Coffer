@@ -116,35 +116,6 @@ async def test_each_alias_is_labelled_with_the_model_it_is_today(
     assert models["haiku"].label == "Haiku 3.5"
 
 
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="report no default when the runtime publishes none"
-)
-@pytest.mark.acceptance(
-    spec="agent-registry/claude-code",
-    scenario="apply the SDK's effort levels to every alias without a default",
-)
-async def test_every_alias_carries_the_runtimes_reasoning_levels(
-    discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
-) -> None:
-    """The bundle has no per-model effort table, and it would mean nothing if it
-    did: Claude takes the level as an option on the session, so the menu is the
-    runtime's and every entry reports the same one.
-
-    The expected levels are written out literally — the ``EffortLevel`` alias of
-    the SDK version ``uv.lock`` pins — rather than read back through the helper
-    under test, so a helper that drops, reorders or invents a level fails here.
-    An SDK bump that changes the alias fails here too, deliberately: the picker
-    changed, and that deserves a look."""
-    _bundle(tmp_path / "claude")
-
-    models = await discovery.discover(agent_key="claude_code", config_dir=None)
-
-    assert [m.id for m in models] == ["opus", "haiku"]
-    for model in models:
-        assert model.efforts == ("low", "medium", "high", "xhigh", "max"), model.id
-        assert model.default_effort is None, model.id
-
-
 async def test_the_per_provider_deployments_are_not_aliases(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:

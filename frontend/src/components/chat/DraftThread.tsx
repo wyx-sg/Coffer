@@ -3,8 +3,8 @@
 // the title bar, one line saying which agent will run in which folder, and the
 // composer whose first send creates the conversation (see
 // useChatController.sendDraft) — no welcome or suggestions. The folder picker
-// sits in the composer's toolbar beside the paperclip; the agent, model and
-// effort on its right. A hand-off (Ask an agent) opens it with a prompt already
+// sits in the composer's toolbar beside the paperclip; the agent and model
+// on its right. A hand-off (Ask an agent) opens it with a prompt already
 // in the composer (`restore`), waiting for Send, and says so under the box. When
 // no managed agent is available, a state with a way to the Agents page replaces
 // the composer (NoManagedAgentHelp).
@@ -25,7 +25,6 @@ import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { Composer } from "./Composer";
 import { DraftTitleBar } from "./ConversationHeader";
 import { DraftWorkspacePicker } from "./DraftWorkspacePicker";
-import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
 import { NoManagedAgentHelp } from "./NoManagedAgentHelp";
 
@@ -40,8 +39,6 @@ interface Props {
   onCwdChange?: (cwd: string | null) => void;
   modelValue?: string | null;
   onModelChange?: (model: string | null) => void;
-  effortValue?: string | null;
-  onEffortChange?: (effort: string | null) => void;
   /** Create the conversation and send; resolves whether the create succeeded. */
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
   /** True while the create-then-send round-trip is in flight. */
@@ -62,8 +59,6 @@ export function DraftThread({
   onCwdChange,
   modelValue = null,
   onModelChange,
-  effortValue = null,
-  onEffortChange,
   onSend,
   creating = false,
   restore,
@@ -130,14 +125,6 @@ export function DraftThread({
               agentKey={agentKey}
               value={modelValue}
               onCommit={(model) => onModelChange?.(model)}
-            />
-            {/* Renders nothing for an agent whose models report no levels. It is on
-            the draft because the first turn runs the moment the conversation exists. */}
-            <EffortPicker
-              agentKey={agentKey}
-              model={modelValue}
-              value={effortValue}
-              onCommit={(effort) => onEffortChange?.(effort)}
             />
           </>
         }

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Related**: [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [Agent Descriptor Manifest](agent-descriptor-manifest.md), spec agent-registry "Read the model catalogue back from the installed agent", spec agent-registry "Keep one source of truth for an agent's models", spec agent-registry "Contribute models from the type's native config read-only", spec agent-registry "Carry reasoning-effort levels beside the model id", spec agent-registry "Read reasoning-effort levels from the agent runtime", spec provider-switching "Serve one model list to every surface", spec provider-switching "Curate the models a connection offers", PR #319, PR #352, PR #365, PR #378
+**Related**: [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [Agent Descriptor Manifest](agent-descriptor-manifest.md), spec agent-registry "Read the model catalogue back from the installed agent", spec agent-registry "Keep one source of truth for an agent's models", spec agent-registry "Contribute models from the type's native config read-only",  spec provider-switching "Serve one model list to every surface", spec provider-switching "Curate the models a connection offers", PR #319, PR #352, PR #365, PR #378
 
 ## Context
 
@@ -27,17 +27,17 @@ What is locally knowable, and what is not:
   groups. The CLI's own entitlement answer (`modelAccessCache` in
   `.claude.json`) is server-provided and routinely empty.
 - **Codex** answers a `model/list` request over the same `codex app-server`
-  JSON-RPC Coffer already uses to run turns. Per model, it reports
-  `supportedReasoningEfforts` and `defaultReasoningEffort`.
+  JSON-RPC Coffer already uses to run turns.
 - **Native config** holds local choices: Claude Code caches extra picker options
   in `.claude.json`; Codex profiles in `config.toml` name the model each one
   runs.
-- **Reasoning effort** is a Codex turn parameter, not part of the model name.
-  `thread/start` accepts an effort field and ignores it; the response keeps
-  echoing the config default. `thread/settings/update` works but requires
-  declaring the `experimentalApi` capability. `turn/start` honours it: the same
-  prompt used 53 reasoning output tokens at `low` and 2569 at `xhigh`, measured
-  from Codex's own token-usage notification.
+- **Reasoning effort** is a Codex turn parameter, not part of the model name,
+  and the agents read it from their own configuration. An earlier version
+  carried the runtimes' effort levels beside each model and sent the chosen
+  one; the effect was real (the same prompt used 53 reasoning output tokens at
+  `low` and 2569 at `xhigh`), but the agents already have their own control for
+  it, so Coffer no longer reads, offers or sends one.
+
 
 When a Coffer connection is active for an agent, turns go to that endpoint,
 not to the account the agent's catalogue describes.
@@ -57,8 +57,7 @@ answer in picker order:
    Claude Code's own picker offers, and an alias cannot fail on entitlement
    because the CLI resolves it against the account at turn time.
 2. `CodexRpcModelDiscovery` (`infrastructure/agent/codex_rpc_models.py`) sends
-   `model/list` to a short-lived `codex app-server`, with a timeout, and keeps
-   each model's efforts and default effort.
+   `model/list` to a short-lived `codex app-server`, with a timeout.
 3. `NativeConfigModelDiscovery` (`infrastructure/agent/model_discovery.py`)
    adds the models the CLIs have written into their own config files, read-only.
 
@@ -66,12 +65,8 @@ Each source degrades to an empty list on any failure — a missing CLI, a moved
 bundle anchor, an unauthenticated or wedged Codex — and costs only its own
 models. When a connection is active for the agent, `offered()` returns that
 connection's curated `models` instead (a connection that curates nothing falls
-through to the agent's catalogue), while efforts still come from the runtime
-for the ids the agent also knows. Nothing validates a model name: a name typed anywhere is passed to the
-CLI verbatim. The effort rides beside the id — `AgentModel.efforts` and `.default_effort`
-in the catalogue, `effort` beside `model` in the conversation's agent config
-(`domain/chat/agent_config.py`) — and is sent on `turn/start`. An agent
-that reports no efforts gets no effort control and no effort field.
+through to the agent's catalogue). Nothing validates a model name: a name typed anywhere is passed to the
+CLI verbatim. A catalogue entry is an id, a label and a description.
 
 Pros: a model released after Coffer shipped appears with no Coffer release; the
 picker shows exactly what the agent itself would offer, with the version in the
@@ -100,7 +95,7 @@ List models from the vendor or gateway API.
 Pros: authoritative for what the endpoint serves. Cons: the agents' built-in
 logins are OAuth sessions whose model APIs Coffer does not hold credentials
 for; a gateway's `/models` lists dozens of models the agent's wire cannot use;
-and it knows nothing about Claude Code's aliases or Codex's efforts. Coffer does
+and it knows nothing about Claude Code's aliases. Coffer does
 use the endpoint's catalogue where it is the right answer: when the owner
 curates a connection's models, and when that connection is active for an agent.
 
@@ -129,12 +124,12 @@ by aliases (PR #378).
 ## Decision
 
 Coffer holds no model table. Each agent type's catalogue is read from the
-installed agent: Claude Code's tier aliases from its binary, Codex's models and
-reasoning efforts from `model/list`, and local additions from both agents'
+installed agent: Claude Code's tier aliases from its binary, Codex's models
+from `model/list`, and local additions from both agents'
 native config. The sources are composed in one service that every surface
 reads. When a connection is active for the agent, its curated model set
-replaces the agent's ids. Model names and effort levels are opaque and never
-validated. Effort is a field beside the model, sent on each Codex turn.
+replaces the agent's ids. Model names are opaque and never
+validated.
 
 ## Consequences
 

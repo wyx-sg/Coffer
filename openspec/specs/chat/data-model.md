@@ -53,7 +53,6 @@ it and unset fields are omitted from the stored JSON rather than written null.
 | `cwd` | The directory a turn runs in. Optional here: a conversation whose provider has not stored one yet is represented faithfully, and it is building the adapter that requires one. |
 | `session_id` | The agent's own upstream session, so the next turn resumes rather than restarts. A stale one costs one retry, not the conversation (see "Retry a forgotten resume id once as a fresh session"). |
 | `model` | The agent's own model id, passed through to its CLI. Empty clears the override. |
-| `effort` | How hard that model thinks. A **separate field**, not part of the model name, because that is how the agents take it. |
 
 The HTTP `agent_config` request field stays an opaque object: the typed shape is
 internal, so tightening it is not a wire change.

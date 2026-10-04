@@ -2282,7 +2282,6 @@
         "change": "Change…",
         "provider": "Provider",
         "model": "Default model",
-        "effort": "Effort",
         "route": "Route",
         "test": "Test",
         "auto": "Built-in default",
@@ -2416,10 +2415,9 @@
           "builtin": "Switch {{agent}} to its built-in login"
         },
         "summary": {
-          "provider": "Sends its requests to {{provider}} through Coffer’s proxy and answers with {{model}}{{effort}}. No provider key is written.",
-          "atEffort": " at {{effort}} effort",
-          "catalog": "Coffer also rewrites its model list so {{agent}} knows this model’s context window and levels.",
-          "builtin": "Goes back to {{agent}}’s own login. Coffer removes only the keys it wrote; a model or effort you set yourself stays."
+          "provider": "Sends its requests to {{provider}} through Coffer’s proxy and answers with {{model}}. No provider key is written.",
+          "catalog": "Coffer also rewrites its model list so {{agent}} knows this model’s context window.",
+          "builtin": "Goes back to {{agent}}’s own login. Coffer removes only the keys it wrote; a model you set yourself stays."
         },
         "staleTitle": "{{file}} changed on disk",
         "staleBody": "It was saved after this preview was made, so nothing was written. Reload to preview against the current file.",
@@ -2437,30 +2435,12 @@
         }
       },
       "builtinNote": {
-        "claude_code": "With its own login, {{agent}} picks its model and effort itself (<code>/model</code>, <code>/effort</code>). Coffer sets them only for a provider you add.",
-        "codex": "With its own login, {{agent}} picks its model and effort itself (<code>/model</code>). Coffer sets them only for a provider you add."
+        "claude_code": "With its own login, {{agent}} picks its model itself (<code>/model</code>). Coffer sets it only for a provider you add.",
+        "codex": "With its own login, {{agent}} picks its model itself (<code>/model</code>). Coffer sets it only for a provider you add."
       },
       "model": {
         "label": "Default model",
         "placeholder": "Select a model"
-      },
-      "effort": {
-        "label": "Effort",
-        "default": "Default",
-        "none": "The agent's model catalogue does not list this model, so its levels are unknown; no effort is set and the provider's default applies.",
-        "choose": "Choose a model to see its levels.",
-        "levels": {
-          "minimal": "Minimal",
-          "low": "Low",
-          "medium": "Medium",
-          "high": "High",
-          "xhigh": "Extra high",
-          "max": "Max"
-        },
-        "hint": {
-          "claude_code": "Levels this model reports.",
-          "codex": "Levels this model reports. Codex has one model per session, no tiers."
-        }
       },
       "tiers": {
         "label": "Model per tier",
@@ -3609,12 +3589,6 @@
       "label": "Agent model",
       "placeholder": "Model (optional)",
       "inheritNoModel": "Default"
-    },
-    "effortPicker": {
-      "label": "Reasoning effort",
-      "placeholder": "Effort (optional)",
-      "inheritNoEffort": "Agent default",
-      "shown": "{{effort}} effort"
     },
     "draft": {
       "line": "New conversation with {{agent}} in <mono>{{dir}}</mono> — send a message to start.",
@@ -6309,7 +6283,7 @@
       "confirm": "Delete {{name}}? This can't be undone.",
       "confirmWithSecret": "Delete {{name}}? Its secret {{ref}} is deleted from this Mac too. This can't be undone.",
       "agentTitle": "{{agent}} goes back to its own login",
-      "agentBody": "Coffer removes its model, effort and provider lines from {{path}}",
+      "agentBody": "Coffer removes its model and provider lines from {{path}}",
       "agentBodyNoFile": "Coffer clears its connection to this provider",
       "engineTitle": "Coffer’s engine pauses",
       "engineBody": "Until you pick another model in Settings › General",

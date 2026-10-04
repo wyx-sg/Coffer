@@ -113,8 +113,6 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
         onCwdChange={c.setDraftCwd}
         modelValue={c.effectiveDraft.model}
         onModelChange={c.setDraftModel}
-        effortValue={c.effectiveDraft.effort}
-        onEffortChange={c.setDraftEffort}
         onSend={c.sendDraft}
         creating={c.creating}
         restore={c.draftPrefill}

@@ -104,7 +104,7 @@ class ProviderProjection(_Protocol):
     def remove(
         self, text: str, config_file: pathlib.Path, binding: ModelBinding | None = None
     ) -> ProjectionPlan:
-        """``binding`` is what Coffer projected: a model or effort still equal
+        """``binding`` is what Coffer projected: a model still equal
         to it is Coffer's to remove, anything else is the user's."""
         ...
 
@@ -141,7 +141,6 @@ class ClaudeCodeProviderProjection:
                 base_url=req.base_url,
                 api_key_helper=req.key_helper,
                 model=req.binding.model,
-                effort=req.binding.effort,
                 tier_models=claude_tiers(req),
                 picker_models=req.model_ids,
                 # Replace Claude Code's built-in rows only where they would
@@ -156,11 +155,7 @@ class ClaudeCodeProviderProjection:
         self, text: str, config_file: pathlib.Path, binding: ModelBinding | None = None
     ) -> ProjectionPlan:
         binding = binding or ModelBinding()
-        return ProjectionPlan(
-            remove_anthropic_settings(
-                text, managed_model=binding.model, managed_effort=binding.effort
-            )
-        )
+        return ProjectionPlan(remove_anthropic_settings(text, managed_model=binding.model))
 
     def is_present(self, text: str) -> bool:
         if not text.strip():
@@ -183,20 +178,12 @@ class CodexProviderProjection:
     ) -> ProjectionPlan:
         catalog_path = codex_model_catalog_path(config_file.parent)
         catalog = codex_model_catalog_json(req.models)
-        chosen = find_model(req.models, req.binding.model)
-        # Only a level the chosen model records: without levels Codex sends no
-        # reasoning effort whatever the key says, so writing one would only
-        # make the file claim something that is not happening.
-        effort = req.binding.effort
-        if chosen is None or effort not in chosen.effort_levels:
-            effort = None
         new_text = apply_codex_provider(
             text,
             base_url=req.base_url,
             model=req.binding.model,
             # The label Codex shows in its own picker — the name, not the uid.
             display_name=f"Coffer ({req.connection_name})",
-            effort=effort,
             auth=req.codex_auth,
             catalog_path=catalog_path if catalog is not None else None,
         )
@@ -209,7 +196,7 @@ class CodexProviderProjection:
     ) -> ProjectionPlan:
         binding = binding or ModelBinding()
         return ProjectionPlan(
-            remove_codex_provider(text, managed_effort=binding.effort),
+            remove_codex_provider(text),
             after=(ProjectedFile(codex_model_catalog_path(config_file.parent), None),),
         )
 

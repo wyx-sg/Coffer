@@ -279,15 +279,11 @@ class AgentCatalogPort(Protocol):
 
 
 class ModelSuggestionPort(Protocol):
-    """Best-effort quick-picks for a managed agent's ``/model`` (model and effort steps)
-    selection cards, mirroring the web pickers the two sit beside.
+    """Best-effort quick-picks for a managed agent's ``/model``
+    selection card, mirroring the web picker it sits beside.
 
-    Two questions, because the choice has two halves and only the first is
-    always asked: WHICH model the agent runs, and — for an agent whose models
-    take one — how hard that model thinks. Empty answers are ordinary: no
-    catalogue to offer means the card falls back to the free-text path, and no
-    levels means the agent has no such setting and `/model` says so rather than
-    rendering an empty card."""
+    An empty answer is ordinary: no catalogue to offer means the card falls back
+    to the free-text path."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...
 
@@ -297,14 +293,6 @@ class ModelSuggestionPort(Protocol):
         for the web picker's name-plus-id, and a bare id can hide the one part
         that tells two choices apart (a 1M-context variant cut to
         ``claude-fable-5-…``), so the card shows a name instead."""
-        ...
-
-    async def efforts(self, agent_key: str, model: str | None) -> list[str]:
-        """The levels ``model`` can be run at, in the agent's own order.
-
-        ``model`` is ``None`` when the conversation pins none — the agent then
-        runs a default it never names, and the implementation stands the head of
-        its catalogue in for it, exactly as the web picker does."""
         ...
 
 

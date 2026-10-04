@@ -40,7 +40,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 - `env.ANTHROPIC_BASE_URL` is `http://127.0.0.1:<port>/anthropic`.
 - `apiKeyHelper` is `<coffer> proxy token --agent-uid <uid>`. Claude Code sends its output as both `x-api-key` and `Authorization`, and caches it for five minutes.
 - `env.NO_PROXY` gains `127.0.0.1,localhost`, so a corporate `HTTPS_PROXY` never captures the loopback leg.
-- The model keys (`model`, `effortLevel`, the tier pins, `modelPicker`) come from the agent's binding, as described in [Model providers](/guides/providers#what-gets-written).
+- The model keys (`model`, the tier pins, `modelPicker`) come from the agent's binding, as described in [Model providers](/guides/providers#what-gets-written).
 
 **Codex** (`config.toml`):
 

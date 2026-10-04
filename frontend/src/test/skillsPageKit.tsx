@@ -56,7 +56,6 @@ export function makeAgent(over: Partial<AgentOut> = {}): AgentOut {
     config_dir: "/Users/me/.claude",
     state: "installed_active",
     model: null,
-    effort: null,
     tier_models: null,
     version: null,
     created_at: "2026-05-26T00:00:00Z",

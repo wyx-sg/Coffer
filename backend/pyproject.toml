@@ -1211,8 +1211,7 @@ forbidden_modules = [
 # Contract 9b: the Claude Agent SDK confined to the two places that speak to
 # Claude Code's own runtime — infrastructure/chat, where the agent adapters
 # live, and infrastructure/agent, which interrogates the installed agent for its
-# catalogue and reads the SDK's own ``EffortLevel`` there rather than writing the
-# levels down. Both are deliberately absent from the source list below;
+# catalogue. Both are deliberately absent from the source list below;
 # everything else — including infrastructure/llm — must not import it.
 [[tool.importlinter.contracts]]
 name = "Claude Agent SDK confined to infrastructure/chat"

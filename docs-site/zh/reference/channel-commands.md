@@ -13,7 +13,7 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | --- | --- |
 | `/new [agent]` | 用这个聊天的设置开始一个新对话。带上智能体名则切换到那个智能体。 |
 | `/stop` | 中断正在运行的轮次，并暂停队列。在能编辑消息的平台上，「⏹ Stopping…」会被原地改成「⏹ Stopped after 12s.」；不能编辑的平台则另发一条。正在等你回答的问题会被取消，它的卡片显示「⏹ Stopped」。 |
-| `/model [name] [level]` | 查看或设置模型和推理强度。 |
+| `/model [name]` | 查看或设置模型。 |
 | `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话。 |
 | `/status` | 这个聊天正在运行什么，以带快捷操作的卡片显示。 |
 | `/resume [n]` | 重新打开这个聊天之前的一个对话。 |
@@ -65,20 +65,19 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 ## 设置跟着聊天走 {#settings-stick-to-the-chat}
 
-每个聊天，以及其中的每个话题，都记住四项设置：智能体、模型、推理强度和工作目录。在那里打开的每个新对话，无论是通过 `/new`、`/dir`，还是因为旧对话被删了，都从这些设置开始。
+每个聊天，以及其中的每个话题，都记住三项设置：智能体、模型和工作目录。在那里打开的每个新对话，无论是通过 `/new`、`/dir`，还是因为旧对话被删了，都从这些设置开始。
 
 所以 `/new` 可以放心常用：它清掉的是上下文，不是你的选择。聊天里没设置的项会依次回退到所在群组的默认值（在群组话题里），再到消息渠道的默认智能体和配置。
 
-- `/new <agent>` 切换智能体并记住它。为上一个智能体选的模型和推理强度不会跟过去，因为一个智能体的模型对另一个毫无意义；目录则会跟过去。
+- `/new <agent>` 切换智能体并记住它。为上一个智能体选的模型不会跟过去，因为一个智能体的模型对另一个毫无意义；目录则会跟过去。
 - 已有的对话不能更换智能体或目录，因为智能体会话和这两者绑定，所以切换任意一个都会开新对话。旧对话随时可以用 `/resume` 找回。
-- 模型和推理强度每个轮次都会重新读取，所以 `/model` 对同一对话的下一个轮次就生效。
+- 模型每个轮次都会重新读取，所以 `/model` 对同一对话的下一个轮次就生效。
 
-## 模型和推理强度 {#model-and-effort}
+## 模型 {#model}
 
 - `/model <name>` 设置模型。智能体目录里没有的名字会原样传给智能体的 CLI，所以你可以用选择器里没显示的模型；智能体跑不了的名字，会在下一个轮次以 CLI 自己的报错返回。
-- `/model <level>` 只设置推理强度。级别有 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；没有模型以这些词命名。
-- `/model <name> <level>` 同时设置两者，`/model default` 清除两者，回到智能体自己的默认值。
-- 不带参数的 `/model` 显示当前生效的模型和推理强度。在支持按钮的平台上，它是一张两步卡片：先点一个模型（「Step 1 of 2」），如果该模型有推理级别，同一张卡片会变成级别选择（「step 2 of 2」）。回答只有一行：「Model: Claude Sonnet 5.5 · effort Medium — from your next message」。
+- `/model` 后面的任何词都是模型名，`high`、`max` 也不例外；唯一保留的词是 `default`。`/model default` 清除模型，回到智能体自己的默认值。Coffer 没有推理强度设置。
+- 不带参数的 `/model` 显示当前生效的模型。在支持按钮的平台上，它是一张卡片：点一个模型即可。回答只有一行：「Model: Claude Sonnet 5.5 — from your next message」。
 
 ## 工作目录 {#working-directory}
 
@@ -102,7 +101,7 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 ## 状态和帮助卡片 {#status-and-help-cards}
 
-`/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型、推理强度和目录；然后是 **Running**、**Running · 2 waiting** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、等待还是空闲。
+`/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型和目录；然后是 **Running**、**Running · 2 waiting** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、等待还是空闲。
 
 在私聊里，`/help` 在一行里列出所有命令，`/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /del · /help`，并说明其他任何内容都是发给智能体的消息。在群组里它只列出 `/new [agent] · /stop · /del · /help`。
 
@@ -129,7 +128,7 @@ Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一�
 | --- | --- |
 | `/new` | Start a fresh conversation [agent] |
 | `/stop` | Stop what’s running |
-| `/model` | Pick model, then effort |
+| `/model` | Pick a model |
 | `/dir` | Pick the working directory |
 | `/status` | What is running, threads |
 | `/resume` | Go back to a conversation |

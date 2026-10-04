@@ -46,15 +46,14 @@ interface FirstMessage {
   attachments: ChatAttachment[];
 }
 
-/** What the draft will create: the agent, where it runs, and how. `model` and
- *  `effort` null inherit the agent's own defaults; `cwd` null is Coffer's own
+/** What the draft will create: the agent, where it runs, and how. `model`
+ *  null inherits the agent's own default; `cwd` null is Coffer's own
  *  workspace (~/.coffer/content/workspace). */
 /** @ui-only draft form state; never crosses the wire. */
 export interface DraftConfig {
   agentKey: string;
   cwd: string | null;
   model: string | null;
-  effort: string | null;
 }
 
 export function useChatController() {
@@ -90,7 +89,7 @@ export function useChatController() {
     const seed = readDraftSeed(handoffState);
     if (!seed) return;
     const cwd = seed.cwd === undefined ? readLastWorkingDir() : seed.cwd;
-    setDraftConfig({ agentKey: seed.agentKey, cwd, model: null, effort: null });
+    setDraftConfig({ agentKey: seed.agentKey, cwd, model: null });
     setDraftPrefill(seed.prompt ? { text: seed.prompt, attachments: [] } : null);
     setDraftFromHandoff(!!seed.prompt);
     navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
@@ -159,14 +158,13 @@ export function useChatController() {
     agentKey: defaultDraftAgent(agents),
     cwd: readLastWorkingDir(),
     model: null,
-    effort: null,
   };
 
   const listPath = `/conversations${search}`;
   const pathFor = (id: string) => `/conversations/${encodeURIComponent(id)}${search}`;
 
   /** New conversation: straight to the draft, on the remembered defaults; what is
-   *  chosen (agent, folder, model, effort) is chosen on the draft itself. */
+   *  chosen (agent, folder, model) is chosen on the draft itself. */
   const openDraft = () => {
     setDraftConfig(null);
     setDraftPrefill(null);
@@ -180,12 +178,11 @@ export function useChatController() {
   // draft composer's chips (the error shows as `createError`).
   const sendDraft = (text: string, attachments: ChatAttachment[] = []) =>
     new Promise<boolean>((resolve) => {
-      // Only what was chosen is sent: unset inherits the agent's own model and
-      // level, and no cwd runs the turn in Coffer's workspace.
+      // Only what was chosen is sent: unset inherits the agent's own model, and
+      // no cwd runs the turn in Coffer's workspace.
       const agent_config: Record<string, unknown> = {};
       if (effectiveDraft.cwd) agent_config.cwd = effectiveDraft.cwd;
       if (effectiveDraft.model) agent_config.model = effectiveDraft.model;
-      if (effectiveDraft.effort) agent_config.effort = effectiveDraft.effort;
       createConv.mutate(
         { agent_key: effectiveDraft.agentKey, agent_config },
         {
@@ -261,13 +258,12 @@ export function useChatController() {
     turn,
     effectiveDraft,
     noManagedAgent: !firstAvailableAgent,
-    // A different agent has its own models and levels: the draft's model and
-    // effort are cleared rather than carried over.
+    // A different agent has its own models: the draft's model is
+    // cleared rather than carried over.
     setDraftAgent: (agentKey: string) =>
-      setDraftConfig({ ...effectiveDraft, agentKey, model: null, effort: null }),
+      setDraftConfig({ ...effectiveDraft, agentKey, model: null }),
     setDraftCwd: (cwd: string | null) => setDraftConfig({ ...effectiveDraft, cwd }),
     setDraftModel: (model: string | null) => setDraftConfig({ ...effectiveDraft, model }),
-    setDraftEffort: (effort: string | null) => setDraftConfig({ ...effectiveDraft, effort }),
     openDraft,
     selectConversation,
     sendDraft,

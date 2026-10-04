@@ -322,7 +322,6 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
             f"/api/v1/agents/{cc}",
             json={
                 "model": "bound-opus",
-                "effort": "high",
                 "tier_models": {"haiku": "bound-haiku", "opus": "bound-opus"},
             },
         )
@@ -331,7 +330,7 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
         _activate(c, uid)
         data = json.loads((cfg / "settings.json").read_text())
         assert data["model"] == "bound-opus"
-        assert data["effortLevel"] == "high"
+        assert "effortLevel" not in data
         assert data["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "bound-haiku"
         assert data["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "bound-opus"
         assert "ANTHROPIC_MODEL" not in data["env"]
@@ -867,8 +866,6 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # ``text``, the kind every curated set held before modalities existed.
         unknown = {
             "context_window": None,
-            "effort_levels": None,
-            "default_effort": None,
             "price": None,
         }
         curated_set = [
@@ -924,8 +921,6 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
                 "id": "opus",
                 "modality": "text",
                 "context_window": None,
-                "effort_levels": None,
-                "default_effort": None,
                 "price": None,
             }
         ]

@@ -38,7 +38,6 @@ function agent(type: AgentOut["type"]): AgentOut {
     config_dir: "/home/u/.claude",
     display_name: type === "codex" ? "Codex" : "Claude Code",
     model: null,
-    effort: null,
     tier_models: null,
     version: null,
     install_handoff: null,

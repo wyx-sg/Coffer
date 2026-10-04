@@ -10,7 +10,7 @@ import type { Provider } from "@/lib/api/providers";
 
 // The model picker (and the no-connection empty state) read the providers list.
 vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
-// The model AND effort pickers both read the daemon's answer now — with a
+// The model picker reads the daemon's answer: with a
 // connection active it is that connection's curated ids, resolved server-side.
 // The picker used to introspect the endpoint from the browser and union the
 // result with the agent's own catalogue; it no longer reaches the network at
@@ -23,19 +23,12 @@ import type { AgentModel } from "@/lib/api/agentModels";
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
 
-/** Claude Code's entries now carry the SDK's reasoning levels; an agent whose
- * models report none is what the self-hiding rule is checked against. */
-const WITH_LEVELS: AgentModel[] = [
+const MODELS: AgentModel[] = [
   {
     id: "opus",
     label: "Opus 5",
     description: "",
-    efforts: ["low", "medium", "high", "xhigh", "max"],
-    default_effort: null,
   },
-];
-const WITHOUT_LEVELS: AgentModel[] = [
-  { id: "opus", label: "Opus 5", description: "", efforts: [], default_effort: null },
 ];
 
 const activeConnection = {
@@ -57,7 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Default: an active connection exists so the composer/draft surface renders.
   useProvidersMock.mockReturnValue({ data: [activeConnection] });
-  useAgentModelsMock.mockReturnValue({ data: WITH_LEVELS });
+  useAgentModelsMock.mockReturnValue({ data: MODELS });
 });
 
 const agents: AgentProviderInfo[] = [
@@ -181,30 +174,6 @@ describe("DraftThread", () => {
     expect(screen.getByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
     expect(screen.queryByText("No connection configured")).not.toBeInTheDocument();
-  });
-
-  test("offers an effort picker beside the model picker and commits the choice", () => {
-    // The draft is where the FIRST turn's level is chosen; after the fact the
-    // turn the user cared about is already running.
-    const onEffortChange = vi.fn();
-    renderDraft({ onEffortChange });
-
-    const trigger = screen.getByRole("combobox", { name: /reasoning effort/i });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    fireEvent.click(screen.getByRole("option", { name: "xhigh" }));
-
-    expect(onEffortChange).toHaveBeenCalledWith("xhigh");
-  });
-
-  test("renders no effort control for an agent whose models report no levels", () => {
-    // Same self-hiding rule as the open conversation's bar: nothing to choose
-    // between means no control at all, not a disabled or empty one.
-    useAgentModelsMock.mockReturnValue({ data: WITHOUT_LEVELS });
-    renderDraft();
-
-    expect(screen.queryByRole("combobox", { name: /reasoning effort/i })).not.toBeInTheDocument();
-    // ...and the rest of the bar is untouched.
-    expect(screen.getByRole("combobox", { name: /agent model/i })).toBeInTheDocument();
   });
 
   test("names the folder the turn will run in — Coffer's workspace when none was chosen", () => {

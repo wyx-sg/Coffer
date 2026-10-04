@@ -64,16 +64,16 @@ def inherited_setting(
     field: str,
 ) -> str | None:
     """One sticky ``preferred_*`` setting of a thread: its own, else its group's
-    (spec channels "Keep a chat's settings across its conversations").
+    (spec channels "Keep a chat's agent, model and directory across its conversations").
 
-    The group's model and effort were chosen for the group's agent, so a thread
+    The group's model was chosen for the group's agent, so a thread
     that switched to another agent does not inherit them; its directory it
     does."""
     own: str | None = getattr(row, field) if row is not None else None
     if own or group is None:
         return own
     own_agent = row.preferred_agent if row is not None else None
-    if field in ("preferred_model", "preferred_effort") and own_agent not in (
+    if field == "preferred_model" and own_agent not in (
         None,
         group.preferred_agent,
     ):
@@ -117,7 +117,6 @@ async def open_conversation(
         preferred_agent=pick("preferred_agent"),
         agent_scope=binding.agent_scope,
         preferred_model=pick("preferred_model"),
-        preferred_effort=pick("preferred_effort"),
         preferred_cwd=pick("preferred_cwd"),
     )
     conv = await conversations.create_conversation(

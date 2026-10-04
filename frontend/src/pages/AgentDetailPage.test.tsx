@@ -70,7 +70,6 @@ const AGENT = {
   display_name: "Claude Code",
   config_dir: "/Users/u/.claude",
   model: "claude-opus-5-5",
-  effort: null,
   tier_models: null,
   state: "installed_active" as const,
   version: "2.1.281",

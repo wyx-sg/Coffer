@@ -128,14 +128,9 @@ class ClaudeSdkProvider:
         # Persist the model so a chat-chosen model reaches the SDK; without this
         # the option was always None and the CLI always picked the model itself.
         model = agent_config.get("model")
-        effort = agent_config.get("effort")
         config = AgentConfig(
             cwd=str(resolved),
             model=model if isinstance(model, str) else None,
-            # Claude Code's own reasoning level, kept here exactly as Codex keeps
-            # its own: a draft that chose one at creation time must not lose it
-            # between the create call and the first turn.
-            effort=effort if isinstance(effort, str) else None,
         )
         await self._conversations.set_agent_config(conversation_id, config)
 
@@ -184,7 +179,7 @@ class ClaudeSdkProvider:
             cwd=config.cwd,
             env=home_env or None,
             resume_session=config.session_id,
-            extra={"model": config.model, "effort": config.effort},
+            extra={"model": config.model},
             session_factory=self._session_factory,
             on_session=_save_session,
             ask_owner=asker_for(conversation_id),

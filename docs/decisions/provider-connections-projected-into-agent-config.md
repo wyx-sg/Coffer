@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Keep an agent on at most one connection", spec provider-switching "Switch one agent at a time", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an agent's connection its config contradicts", spec provider-switching "Converge connections across machines", spec agent-registry "Carry the connection an agent runs on on the agent record", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
+**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without overwriting it", spec provider-switching "Keep an agent on at most one connection", spec provider-switching "Switch one agent at a time", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an agent's connection its config contradicts", spec provider-switching "Converge connections across machines", spec agent-registry "Carry the connection an agent runs on on the agent record", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
 
 ## Context
 
@@ -40,7 +40,7 @@ A connection is a `kind='provider'` resource whose config is `ProviderConfig`
 `internal_default` and `transcribe_default`. The protocol is chosen from provider
 presets in the add dialog or set explicitly (`coffer provider add --protocol`). It
 carries no model to run and no flag saying it is switched on: the model is chosen
-where it is used, on the agent record (`AgentConfig.model`, `effort`,
+where it is used, on the agent record (`AgentConfig.model` and
 `tier_models`), the conversation, or the engine settings; and which connection an
 agent runs on is **one field of the agent record**, `AgentConfig.connection_uid`.
 
@@ -83,9 +83,9 @@ models, `model_catalog_json` pointing at a Coffer-owned catalogue file so Codex'
 own picker offers them. The file names the proxy, not the connection, so moving an
 agent between two API-key connections changes the proxy's route and leaves the
 file alone. The model keys written come from the agent's binding: the top-level
-`model` and `effortLevel`, the `ANTHROPIC_DEFAULT_<TIER>_MODEL` pins and
-`modelPicker` for Claude Code, `model`, `model_reasoning_effort` and the catalogue
-for Codex; never `ANTHROPIC_MODEL` or `ANTHROPIC_SMALL_FAST_MODEL`, which outrank
+`model`, the `ANTHROPIC_DEFAULT_<TIER>_MODEL` pins and
+`modelPicker` for Claude Code, `model` and the catalogue
+for Codex; no reasoning-effort key, because the agent decides its own effort and a key an earlier version wrote is left as the user's; never `ANTHROPIC_MODEL` or `ANTHROPIC_SMALL_FAST_MODEL`, which outrank
 the user's own `/model` choice. No provider key and no `env_key` appears in either
 file, and the user's own `shell_environment_policy` is left as it is.
 

@@ -77,6 +77,21 @@ def test_a_config_key_the_schema_does_not_declare_is_refused() -> None:
     assert finding.severity is Severity.ERROR
 
 
+def test_a_retired_agent_config_key_is_accepted_and_ignored() -> None:
+    from coffer.domain.agent.config import AgentConfig
+
+    kinds = {"agent": Kind(name="agent", display_name="Agent", config_schema=AgentConfig)}
+    rule = resource_rule(kinds, lambda: {})
+
+    def judge(config: dict[str, Any]):  # type: ignore[no-untyped-def]
+        data = _doc(kind="agent", config=config)
+        return rule([Change("resources/agent/w.json", data, None)], _Tree())
+
+    assert judge({"type": "claude_code", "effort": "high"}).findings == []
+    [finding] = judge({"type": "claude_code", "shade": "x"}).findings
+    assert finding.code is FindingCode.CONFIG_INVALID and "'shade'" in finding.message
+
+
 def test_an_unknown_kind_is_kept_with_a_warning() -> None:
     data = _doc(kind="newkind")
     verdict = _judge([Change("resources/newkind/w.json", data, None)])

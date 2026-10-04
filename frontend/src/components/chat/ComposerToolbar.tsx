@@ -2,7 +2,7 @@
 //
 // The paperclip on the left, then the working folder (a read-only chip in an
 // open conversation, the draft's picker before the first send); on the right the
-// compact controls the page hands in (agent, model, effort — `controls`), then
+// compact controls the page hands in (agent, model — `controls`), then
 // Send, which becomes Stop in the same slot while a turn streams. The hidden file input lives here too: the
 // paperclip opens it and what it picks goes to `onPickFiles`.
 import { useRef, type ReactNode } from "react";

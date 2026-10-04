@@ -44,7 +44,6 @@ const AGENT = {
   config_dir: "/Users/xing/.claude",
   display_name: "Claude Code",
   model: null,
-  effort: null,
   tier_models: null,
   version: null,
   state: "installed_active",

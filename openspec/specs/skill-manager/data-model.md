@@ -243,7 +243,7 @@ so the reconciler computes
 wanted = {s.uid for s in skills if s.enabled and is_active(s.scope, agent.uid)}
 ```
 
-for every enabled agent (a disabled agent wants nothing), and states each wanted
+for every registered agent, and states each wanted
 delivery as an item keyed `<skill_uid>@<agent_uid>` with parameters `{link,
 target, state, bound}`: the link path under the agent's skill directory, the
 master folder it points at, the on-disk state (`ok` or a `DriftKind`) and

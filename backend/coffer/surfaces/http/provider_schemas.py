@@ -41,10 +41,6 @@ class ProviderModel(BaseModel):
     #: The context window the endpoint serves the model with, in tokens;
     #: ``None`` when unknown (never guessed).
     context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
-    #: The reasoning-effort levels the model accepts; ``None`` when it takes none.
-    effort_levels: list[str] | None = None
-    #: The level used when an agent's binding names none.
-    default_effort: str | None = None
     #: This connection's own price for the model (USD per million tokens);
     #: ``None``: the provider API's, the bundled list's, or none.
     price: CuratedPrice | None = None
@@ -357,15 +353,14 @@ class DetectLocalOut(BaseModel):
 class ModelSwitchIn(BaseModel):
     """What the agent page's Change model dialog asks for.
 
-    ``connection_uid`` ``null`` is the agent's own built-in login: no model,
-    effort or tiers are written, and Coffer removes only the keys it wrote.
+    ``connection_uid`` ``null`` is the agent's own built-in login: no model
+    or tiers are written, and Coffer removes only the keys it wrote.
     ``seen`` is sent only to apply: each previewed file's path with the
     fingerprint the preview read, so a file edited since is refused."""
 
     agent_type: AgentType
     connection_uid: str | None = None
     model: str | None = None
-    effort: str | None = None
     tier_models: dict[str, str] | None = None
     seen: dict[str, str] | None = None
 

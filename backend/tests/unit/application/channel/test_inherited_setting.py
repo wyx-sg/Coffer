@@ -1,5 +1,5 @@
 """A group thread inherits the group's settings, but not another agent's model
-(spec channels "Keep a chat's settings across its conversations")."""
+(spec channels "Keep a chat's agent, model and directory across its conversations")."""
 
 from __future__ import annotations
 

@@ -72,12 +72,10 @@ export function ChangeModelReview({ agent, draft, open, onOpenChange, onApplied 
   }));
 
   const catalog = files.some((f) => f.path.endsWith("coffer-model-catalog.json"));
-  const effort = draft.request.effort;
   const summary = target
     ? t(`${K}.summary.provider`, {
         provider: target,
         model: draft.request.model,
-        effort: effort ? t(`${K}.summary.atEffort`, { effort }) : "",
       }) + (catalog ? ` ${t(`${K}.summary.catalog`, { agent: name })}` : "")
     : t(`${K}.summary.builtin`, { agent: name });
 

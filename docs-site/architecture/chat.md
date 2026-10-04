@@ -35,7 +35,7 @@ A conversation is not a [resource](/architecture/resource-framework). It is a ro
 | --- | --- |
 | `id` | Opaque conversation id. |
 | `agent_key` | The agent the conversation belongs to (`claude_code` or `codex`). There is no storage default: every writer names the agent explicitly. |
-| `agent_config` | Provider-owned JSON: `cwd`, `session_id` (the upstream session to resume), `model` and `effort`. |
+| `agent_config` | Provider-owned JSON: `cwd`, `session_id` (the upstream session to resume), and `model`. |
 | `title` | Starts as a placeholder. It is replaced by the first user message's text unless the owner has already renamed the conversation. |
 | `archived_at` | `null` while the conversation is active. |
 | `channel_uid`, `peer_chat_id` | The optional channel binding: the return address for relaying output to an IM chat. It stores the channel's immutable uid, so it survives a rename. |
@@ -179,7 +179,7 @@ The SSE route stays open across turns. With no turn running, it holds the connec
 | `GET /api/v1/chat/conversations/{id}/events` | SSE subscription: replay the in-flight turn, then follow live. |
 | `PUT /api/v1/chat/conversations/{id}/pending` | Replace the pending queue (reorder, drop, resume). Unpauses. |
 | `POST /api/v1/chat/conversations/{id}/interrupt` | Stop the running turn and pause the queue. `204`. |
-| `GET\|PATCH /api/v1/chat/conversations/{id}/agent-config` | Read or set model and reasoning effort; preserves `cwd` and the session id. |
+| `GET\|PATCH /api/v1/chat/conversations/{id}/agent-config` | Read or set the model; preserves `cwd` and the session id. |
 | `GET /api/v1/agent-providers` | Registered agents with display name and availability. |
 | `GET /api/v1/agent-providers/{agent_key}/models` | Models offered for an agent; 404 for an unknown key. |
 
@@ -200,7 +200,7 @@ A registry holds the providers. They are registered at the composition root. No 
 
 ### Claude Code: the Claude Agent SDK
 
-The Claude Code adapter drives Claude Code through the client in `claude-agent-sdk`, and it is the only part of Coffer that imports the SDK. Each turn resumes the stored session id, runs in the `bypassPermissions` permission mode, passes the reasoning effort when one is set, and asks for partial messages. Coffer's system context is appended to Claude Code's own preset prompt, not substituted for it.
+The Claude Code adapter drives Claude Code through the client in `claude-agent-sdk`, and it is the only part of Coffer that imports the SDK. Each turn resumes the stored session id, runs in the `bypassPermissions` permission mode, and asks for partial messages. Coffer's system context is appended to Claude Code's own preset prompt, not substituted for it.
 
 Partial messages are what make a reply grow as it is written. With them enabled, the SDK delivers both the increments and the finished assistant message. The mapping to platform events subtracts what was already emitted, so the reply reaches consumers exactly once. On cancellation, the adapter interrupts and disconnects the SDK client and still persists the session id, which the SDK reports early, so an interrupted turn stays resumable.
 
@@ -212,7 +212,7 @@ Each turn spawns an app-server process, resolving `codex` on `PATH`. The process
 
 1. `initialize`, then the `initialized` notification.
 2. `thread/resume` with the stored thread id, or `thread/start`. Coffer's system context rides in `developerInstructions`, which adds to Codex's base instructions and does not replace them. A rejected resume falls back once to `thread/start`.
-3. `turn/start` with the prompt, plus `effort` when one is set. Effort belongs to the turn in Codex's protocol, not to the model name.
+3. `turn/start` with the prompt. Coffer sends no `effort`, so Codex runs at the effort its own configuration names.
 
 Notifications are mapped to platform events. On cancellation, the adapter sends `turn/interrupt`, persists the thread id and closes the process.
 
@@ -325,8 +325,8 @@ The commands a phone can send are a small, closed vocabulary: `/new [agent]`, `/
 
 - **One roster.** The commands live in one roster, and each entry carries its English and Chinese description, and whether it belongs in a group's menu and works there at all. The help text, every registered platform menu, the typo guard and the group rule are all rendered from it, so adding a command is one entry plus its handler and no list can fall behind. The typo guard answers a word within one or two edits of a command with "Did you mean …?" instead of running it or handing it to the agent, because a mistyped `/stop` that reached the agent as a message would be the worst possible outcome.
 - **One grammar.** A bare command shows what is in effect (as a card where the transport has buttons), an argument sets it, and `default` resets it. Arguments are names a person reads — an agent's display name, a model's shown name, a directory's base name — never internal keys, and no answer prints an id.
-- **Settings belong to the chat thread, not to the conversation.** The per-thread row that maps `(channel, chat, thread)` to its active conversation also holds that thread's chosen agent, model, effort and working directory. A fresh conversation — `/new`, `/dir`, a deleted conversation replaced — opens with them, so clearing the context never throws away the owner's choices. In a group, the group's own row (thread id `""`) holds the group's defaults, which a group thread inherits for whatever it has not set, before falling back to the channel's default agent and configuration.
-- **Structural versus parametric.** An agent session is tied to its agent and its directory, so `/new <agent>` and `/dir` open a fresh conversation; the model and effort are re-read every turn, so `/model` applies to the next turn of the same conversation. A model chosen for one agent is cleared when the agent changes, because it names nothing the other agent runs.
+- **Settings belong to the chat thread, not to the conversation.** The per-thread row that maps `(channel, chat, thread)` to its active conversation also holds that thread's chosen agent, model and working directory. A fresh conversation — `/new`, `/dir`, a deleted conversation replaced — opens with them, so clearing the context never throws away the owner's choices. In a group, the group's own row (thread id `""`) holds the group's defaults, which a group thread inherits for whatever it has not set, before falling back to the channel's default agent and configuration.
+- **Structural versus parametric.** An agent session is tied to its agent and its directory, so `/new <agent>` and `/dir` open a fresh conversation; the model is re-read every turn, so `/model` applies to the next turn of the same conversation. A model chosen for one agent is cleared when the agent changes, because it names nothing the other agent runs.
 - **An allow-list for `/dir`.** A channel's configuration lists the directories `/dir` may reach (each admitting the directories beneath it), beside the default directory new conversations start in (the default agent configuration's `cwd`); with none listed, `/dir` is off. The agent runs with full permissions, so which folders a phone can aim it at is decided at the computer, in advance, and never widened from chat.
 - **Per-thread history.** Every conversation a thread opens is recorded against that thread. `/resume` reads only that history, so a chat can return to its own earlier conversations and never reach one from the web or from another chat, even with a forged button value.
 - **Group main chat on SeaTalk.** A SeaTalk @mention in a group's main chat roots a new thread, so a setting sent there would configure a thread nobody continues. The transport marks such a message as the group's main chat, and a command there writes the group's defaults instead; `/stop` there interrupts every turn in the group.

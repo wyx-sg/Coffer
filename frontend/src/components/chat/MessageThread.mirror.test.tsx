@@ -18,7 +18,7 @@ vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listMessages: vi.fn(),
     getConversation: vi.fn(),
-    getAgentConfig: vi.fn().mockResolvedValue({ model: null, effort: null }),
+    getAgentConfig: vi.fn().mockResolvedValue({ model: null }),
   },
 }));
 vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: () => ({ data: [] }) }));

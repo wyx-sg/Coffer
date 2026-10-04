@@ -93,20 +93,10 @@ def test_codex_removal_drops_the_block_then_the_catalogue() -> None:
     assert removed.after == (ProjectedFile(_CFG.parent / "coffer-model-catalog.json", None),)
 
 
-def test_codex_writes_effort_only_for_a_model_with_levels() -> None:
+def test_codex_never_writes_a_reasoning_effort() -> None:
     facet = CodexProviderProjection()
-    leveled = ProviderProjectionRequest(
-        **{
-            **_req().__dict__,
-            "binding": ModelBinding(model="m-1", effort="high"),
-            "models": (ProjectedModel(id="m-1", effort_levels=("low", "high")),),
-        }
-    )
-    assert tomllib.loads(facet.apply("", leveled, _CFG).text)["model_reasoning_effort"] == "high"
-    bare = ProviderProjectionRequest(
-        **{**_req(("m-1",)).__dict__, "binding": ModelBinding(model="m-1", effort="high")}
-    )
-    assert "model_reasoning_effort" not in tomllib.loads(facet.apply("", bare, _CFG).text)
+    plan = facet.apply("", _req(("m-1",)), _CFG)
+    assert "model_reasoning_effort" not in tomllib.loads(plan.text)
 
 
 @pytest.mark.acceptance(

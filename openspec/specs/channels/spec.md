@@ -206,7 +206,7 @@ conversation service, turn orchestrator (spec `chat`). The conversation is an
 ordinary one, recorded in the vault with full history. When the active
 conversation has been deleted, the peer's next message creates a fresh
 conversation with the thread's agent — its sticky agent (chosen with `/new <agent>`, see "Switch the agent with /new") while that
-agent is still inside the channel's scope, else the channel's default agent — opened with the thread's other remembered settings (see "Keep a chat's settings across its conversations"); when the daemon restarts mid-turn, the turn
+agent is still inside the channel's scope, else the channel's default agent — opened with the thread's other remembered settings (see "Keep a chat's agent, model and directory across its conversations"); when the daemon restarts mid-turn, the turn
 platform's startup sweep marks the orphaned turn failed and the channel
 conversation simply continues on the next message.
 
@@ -283,8 +283,7 @@ can (see "Keep non-answer chatter private in a group"), and does nothing else �
 it is not passed to the agent as a message. A group's `/help` lists only the
 four group commands, and a card offered in a group (the `/new` card, the help
 card) carries no button for a direct-chat command.
-`/new [agent]` starts a fresh conversation with the chat's settings (see "Keep a
-chat's settings across its conversations" and "Switch the agent with /new"),
+`/new [agent]` starts a fresh conversation with the chat's settings (see "Keep a chat's agent, model and directory across its conversations" and "Switch the agent with /new"),
 `/stop` interrupts the running turn, `/status` reports the chat's state (see
 "Report the chat's state as a status card") and `/help` lists the commands (see
 "Offer the commands as a help card") and `/del` withdraws a bot reply (see
@@ -305,8 +304,7 @@ when the previous turn finishes joins the queue rather than racing it: turns for
 one conversation never overlap.
 
 The commands that configure the conversation the chat is bound to are specified
-in their own requirements — `/model` in "Switch the model and reasoning effort
-from chat", `/dir` in "Choose the working directory from chat", `/resume` in
+in their own requirements — `/model` in "Switch the model from chat", `/dir` in "Choose the working directory from chat", `/resume` in
 "Resume an earlier conversation from chat", and `/thread` in "Open parallel conversations beside a direct chat".
 All of them live on one roster (see "Register the bot's command menu and profile
 from one roster"), so none of the lists derived from it can go stale, and every
@@ -585,7 +583,7 @@ The peer is a `ChannelPeer`: `(resource, chat_id)`, display name, paired-at and
 the paired sender's identity (`sender_id`) — one row per (channel, chat): the
 paired owner plus one row per group the owner has addressed the bot in. The
 conversation a chat is in the middle of, and its sticky preferences (the chosen
-agent, model, effort and directory), are not on the peer: they live in the
+agent, model and directory), are not on the peer: they live in the
 thread conversation rows keyed by (channel, chat, thread).
 
 The core never sees platform payloads: every adapter produces and consumes
@@ -652,68 +650,6 @@ line a clean *long* turn may end with is its ping.
 - **WHEN** a turn shorter than the ping threshold completes successfully
 - **THEN** no completion summary is sent — the reply itself is the end-of-turn
   signal
-
-### Requirement: Switch the model and reasoning effort from chat
-The owner MUST be able to choose the model and its reasoning effort from chat
-with one command, `/model`, because both managed agents present the two as one
-choice. The choice applies to the next turn of the same conversation (the model
-and effort are re-read each turn, unlike the agent and working directory) and is
-remembered for the chat (see "Keep a chat's settings across its conversations").
-
-- `/model <name>` sets the model. The name is matched against the agent's model
-  catalogue by id or by the name its button shows, case-insensitively; a name
-  the catalogue does not list is passed through verbatim, because the model
-  namespace belongs to the agent's CLI and not to Coffer — a name that agent
-  cannot run surfaces as the CLI's own error on the next turn.
-- `/model <level>` — a word of the closed effort vocabulary `minimal`, `low`,
-  `medium`, `high`, `xhigh`, `max`, which no model name uses — sets the effort
-  alone. `/model <name> <level>` sets both.
-- `/model default` clears both, returning the conversation and the chat to the
-  agent's own defaults.
-- `/model` with no argument reports the model and effort in effect and, on a
-  transport that `supports_buttons` (see "Offer choices and actions as
-  owner-gated cards"), renders a two-step card. The **model step** offers the
-  agent's catalogue — read back from the installed CLI, the one list Coffer has
-  of what that agent can run — in **full**, one page at a time, opening on the
-  page holding the model in effect. Each button shows the model's **name**, not
-  its raw id, and the tap still carries the id: a model with no name shows its
-  id, and a 1M-context variant says "1M", so `fable` and `claude-fable-5-1[1m]`
-  read as two different choices. Tapping a model sets it; when that model
-  reports reasoning levels the same card is rewritten into the **effort step**
-  — the levels of the model now in effect — and tapping a level sets it,
-  answered "Model: <model> · effort <level> — from your next message". A model with no levels ends the choice
-  at the model step. Where the card cannot be rewritten in place the effort step
-  arrives as a fresh card. With no catalogue it falls back to the text report.
-
-#### Scenario: /model switches the model for the next turn
-- **GIVEN** a paired channel in an active conversation
-- **WHEN** the peer sends `/model <name>` and then a message
-- **THEN** the next turn runs with the chosen model in the same conversation
-
-#### Scenario: a model card button shows the model's name
-- **GIVEN** an agent whose catalogue offers `fable`, named "Fable 5.1", and
-  `claude-fable-5-1[1m]`, named "Fable"
-- **WHEN** the `/model` card is built
-- **THEN** the buttons read "Fable 5.1" and "Fable 1M"
-- **AND** tapping either carries its model id
-
-#### Scenario: /model with a level sets the effort only
-- **GIVEN** a paired channel whose conversation runs a pinned model
-- **WHEN** the peer sends `/model high`
-- **THEN** the next turn runs at effort `high` on the same model
-
-#### Scenario: /model default clears the model and effort
-- **GIVEN** a conversation with a model and an effort set from chat
-- **WHEN** the peer sends `/model default`
-- **THEN** the conversation and the chat carry neither, so the agent's own
-  defaults apply from the next turn and in the next conversation
-
-#### Scenario: a model tap leads to the effort step
-- **GIVEN** a `/model` card on a transport that can rewrite a card, for an agent
-  whose models report reasoning levels
-- **WHEN** the owner taps a model
-- **THEN** the model is set and the same card now offers that model's levels
-- **AND** tapping a level sets the effort for the next turn
 
 ### Requirement: Tell a channel-driven agent it is on a chat channel
 A channel-originated turn MUST tell the agent it is bridged to a chat channel,
@@ -1268,8 +1204,7 @@ conversation identity by channel, chat and thread"). The old conversation stays
 where it was, in the conversation list; the chat is told in one short line,
 `🆕 Started a new conversation after 24 h idle.`, before the answer. The new
 conversation opens exactly as `/new` opens one, so the chat's sticky agent,
-model, effort and directory carry over (see "Keep a chat's settings across its
-conversations").
+model and directory carry over (see "Keep a chat's agent, model and directory across its conversations").
 
 The setting is edited on the Channels page, on the channel's Settings tab, and
 the channel's status reports it.
@@ -2001,7 +1936,7 @@ realizes the interactive-button capability that
 [Channel Adapter Framework](../../../docs/decisions/channel-adapter-framework.md)'s
 `ChannelCapabilities` anticipated ("show buttons?").
 
-Two kinds of button exist. A **choice** carries `model:`, `effort:`, `dir:`,
+Two kinds of button exist. A **choice** carries `model:`, `dir:`,
 `resume:` or `collection:` and applies that choice. A **command button** carries
 `cmd:<name>` — the Stop, New, Model, Resume and Dir buttons of the status and
 help cards — and a tap runs exactly what typing `/<name>` in that chat or thread
@@ -2023,7 +1958,7 @@ A card carries a **bounded number of buttons** — six, navigation included. A
 choice list longer than that bound is **paginated**: the card shows four choices
 plus `← Prev` / `Next →`, and a navigation tap **rewrites the same message** at
 the next window through the same `supports_card_update` path an applied choice
-uses. One rule serves every card — a handful of levels or directories render
+uses. One rule serves every card — a handful of models or directories render
 with no navigation chrome at all.
 
 A navigation payload lives in its own callback namespace (`page:<kind>:<index>`),
@@ -2126,7 +2061,7 @@ with `-`, `_` and spaces treated alike — never an internal key, and no answer
 shows one. It is validated against the agents the channel may drive (see "Limit
 the agents a channel may drive to its scope"); on success it becomes the chat
 thread's sticky agent, so later messages and `/new` use it until switched again.
-A model and effort chosen for the previous agent do not follow it to a different
+A model chosen for the previous agent does not follow it to a different
 one; the working directory does. An unknown name is refused with the valid names
 listed and the active conversation unchanged; no channel-side code is added per
 agent. The `/new` card's Agent button offers the same agents as a card, the one
@@ -2144,27 +2079,6 @@ an agent the channel may no longer drive is refused with nothing changed.
 - **WHEN** the peer sends `/new nope`
 - **THEN** the channel replies that the agent is unknown and lists the valid
   names, and the active conversation is unchanged
-
-### Requirement: Keep a chat's settings across its conversations
-A chat thread MUST remember its settings — the agent, the model, the reasoning
-effort and the working directory — and a fresh conversation opened there, by
-`/new`, by a deleted conversation being replaced, or by `/dir`, MUST open with
-them. What the thread has not set falls back, in a group thread, to the group's
-defaults (see "Set a group's defaults from its main chat"), and then to the
-channel's own default agent and agent configuration. `/model default` and `/dir
-default` are the ways back to the defaults.
-
-#### Scenario: /new keeps the chat's model, effort and directory
-- **GIVEN** a paired chat whose owner set a model, an effort and an allowed
-  directory from chat
-- **WHEN** the owner sends `/new`
-- **THEN** the fresh conversation runs on the same agent, model, effort and
-  directory
-
-#### Scenario: a group thread inherits the group's defaults
-- **GIVEN** a group whose defaults name an agent
-- **WHEN** the owner starts a new thread in that group
-- **THEN** that thread's conversation opens on the group's agent
 
 ### Requirement: Pass unreserved slash text to the agent
 Only Coffer's nine commands (see "Answer the conversation commands from any
@@ -2276,8 +2190,7 @@ is refused. A conversation deleted since is left out.
 ### Requirement: Report the chat's state as a status card
 `/status` MUST answer what the chat is running in words a person reads, under
 the title "Status": the conversation's title (or its parallel mark); one line
-with the agent by its display name, the model by the name its button shows, the
-effort when one is set, and the working directory (under the home directory as
+with the agent by its display name, the model by the name its button shows, and the working directory (under the home directory as
 `~/…`); then "Running", "Running · n waiting", "n waiting" or "Idle"; in a
 direct chat, one "Parallel threads (n):" line naming each with its agent and its state (see "Open
 parallel conversations beside a direct chat"). It shows no conversation or agent
@@ -2293,8 +2206,8 @@ help card.
 - **GIVEN** a paired chat on a button-capable transport with an active
   conversation
 - **WHEN** the owner sends `/status`
-- **THEN** a card titled "Status" names the conversation, the agent by display name, the model,
-  the effort and the directory, carries the New, Model, Resume and Dir buttons —
+- **THEN** a card titled "Status" names the conversation, the agent by display name, the model
+  and the directory, carries the New, Model, Resume and Dir buttons —
   and Stop too while a turn runs — and contains no conversation id
 
 ### Requirement: Offer the commands as a help card
@@ -2322,8 +2235,7 @@ platform with no command menu (SeaTalk) shows what the bot accepts through
 On a platform where every @mention in a group's main chat roots a fresh thread
 (SeaTalk), a command sent in the main chat MUST configure the group rather than
 that one-message thread: `/new <agent>` sets the group's default agent, which
-every new thread of the group inherits (see "Keep a chat's settings across its
-conversations"), and the answer says so, while bare `/new` says what the
+every new thread of the group inherits (see "Keep a chat's agent, model and directory across its conversations"), and the answer says so, while bare `/new` says what the
 defaults are; and `/stop` interrupts every turn running in that group and lists
 what it stopped. A thread's own settings still win inside it. `/model`, `/dir`,
 `/status` and `/resume` are direct-chat commands and set nothing here (see
@@ -2674,3 +2586,67 @@ question pings "❓ Needs you · <elapsed> — <question>" on a surface that pin
 - **GIVEN** a long turn on a persisting surface
 - **WHEN** it raises a question
 - **THEN** a short message reads "❓ Needs you · <elapsed> — <question>" before the card
+
+### Requirement: Switch the model from chat
+The owner MUST be able to choose the model from chat with one command, `/model`.
+The choice applies to the next turn of the same conversation (the model is
+re-read each turn, unlike the agent and working directory) and is remembered for
+the chat (see "Keep a chat's agent, model and directory across its conversations").
+
+- `/model <name>` sets the model. The name is matched against the agent's model
+  catalogue by id or by the name its button shows, case-insensitively; a name
+  the catalogue does not list is passed through verbatim, because the model
+  namespace belongs to the agent's CLI and not to Coffer — a name that agent
+  cannot run surfaces as the CLI's own error on the next turn. Whatever word
+  follows `/model` is treated as a model name, `high` or `max` included; Coffer
+  reserves no word but `default`, and it has no reasoning-effort setting.
+- `/model default` clears the model, returning the conversation and the chat to
+  the agent's own default.
+- `/model` with no argument reports the model in effect and, on a
+  transport that `supports_buttons` (see "Offer choices and actions as
+  owner-gated cards"), renders a card that offers the
+  agent's catalogue — read back from the installed CLI, the one list Coffer has
+  of what that agent can run — in **full**, one page at a time, opening on the
+  page holding the model in effect. Each button shows the model's **name**, not
+  its raw id, and the tap still carries the id: a model with no name shows its
+  id, and a 1M-context variant says "1M", so `fable` and `claude-fable-5-1[1m]`
+  read as two different choices. Tapping a model sets it,
+  answered "Model: <model> — from your next message". With no catalogue it falls back to the text report.
+
+#### Scenario: /model switches the model for the next turn
+- **GIVEN** a paired channel in an active conversation
+- **WHEN** the peer sends `/model <name>` and then a message
+- **THEN** the next turn runs with the chosen model in the same conversation
+
+#### Scenario: a model card button shows the model's name
+- **GIVEN** an agent whose catalogue offers `fable`, named "Fable 5.1", and
+  `claude-fable-5-1[1m]`, named "Fable"
+- **WHEN** the `/model` card is built
+- **THEN** the buttons read "Fable 5.1" and "Fable 1M"
+- **AND** tapping either carries its model id
+
+#### Scenario: /model default clears the model
+- **GIVEN** a conversation with a model set from chat
+- **WHEN** the peer sends `/model default`
+- **THEN** the conversation and the chat carry no model, so the agent's own
+  default applies from the next turn and in the next conversation
+
+### Requirement: Keep a chat's agent, model and directory across its conversations
+A chat thread MUST remember its settings — the agent, the model and the working directory — and a fresh conversation opened there, by
+`/new`, by a deleted conversation being replaced, or by `/dir`, MUST open with
+them. What the thread has not set falls back, in a group thread, to the group's
+defaults (see "Set a group's defaults from its main chat"), and then to the
+channel's own default agent and agent configuration. `/model default` and `/dir
+default` are the ways back to the defaults.
+
+#### Scenario: /new keeps the chat's model and directory
+- **GIVEN** a paired chat whose owner set a model and an allowed
+  directory from chat
+- **WHEN** the owner sends `/new`
+- **THEN** the fresh conversation runs on the same agent, model and
+  directory
+
+#### Scenario: a group thread inherits the group's defaults
+- **GIVEN** a group whose defaults name an agent
+- **WHEN** the owner starts a new thread in that group
+- **THEN** that thread's conversation opens on the group's agent

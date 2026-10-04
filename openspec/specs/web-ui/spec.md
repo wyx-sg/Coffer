@@ -1839,7 +1839,7 @@ word a user navigates by:
   `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
   agent in that agent's Change model dialog (spec
-  [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST and the web").
+  [provider-switching](../provider-switching/spec.md) "Offer every connection operation over REST and in the web UI").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
   Conversations is where a person reads and continues every conversation, a
   channel is an IM bot set up once and revisited rarely, and the conversations a

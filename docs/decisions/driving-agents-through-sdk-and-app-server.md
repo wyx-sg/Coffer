@@ -27,7 +27,7 @@ from the integration, per turn:
 - **Session continuity** across turns and daemon restarts: the upstream
   session id is stored as `AgentConfig.session_id` and resumed next turn; a
   forgotten id is retried once as a fresh session.
-- **Per-turn parameters**: model and reasoning effort, an appended system
+- **Per-turn parameters**: the model, an appended system
   context ("you are on a chat channel"), the working directory, environment
   (the agent's config directory), and inline images for Claude.
 - **Full permissions** with no interactive prompt, since nobody is at the
@@ -41,7 +41,7 @@ from the integration, per turn:
 **Claude Code.** `infrastructure/chat/claude_sdk_agent.py` builds a
 `ClaudeSDKClient` per turn with `ClaudeAgentOptions`: `cwd`,
 `resume=<session_id>`, `permission_mode="bypassPermissions"`, `model`,
-`effort`, `include_partial_messages=True` (without it the SDK yields only whole
+`include_partial_messages=True` (without it the SDK yields only whole
 assistant messages and a live surface has nothing to grow), the preset
 `claude_code` system prompt with Coffer's context appended rather than
 replacing it, and `env`. The turn's content goes in as streamed input, so a
@@ -56,7 +56,7 @@ leaves no orphan) and speaks JSON-RPC 2.0 over stdio, NDJSON-framed, through a
 stdlib-only client (`codex_jsonrpc.py`): `initialize` → `thread/resume` (or
 `thread/start`) with `cwd`, `approvalPolicy: "never"`,
 `sandbox: "danger-full-access"`, `model` and `developerInstructions` →
-`turn/start` with the prompt and `effort` → streamed notifications until
+`turn/start` with the prompt → streamed notifications until
 `turn/completed`. Cancel sends `turn/interrupt`, and the thread id — reported
 early — is persisted even on interruption, so an interrupted turn stays
 resumable. The same protocol answers `model/list`, which is how Coffer reads
@@ -150,7 +150,7 @@ Loses on the premise: Coffer manages agents, it does not replace them.
 Claude Code turns run through the Python Claude Agent SDK's `ClaudeSDKClient`,
 and Codex turns through a `codex app-server` process spoken to over JSON-RPC on
 stdio. Each turn opens a session with the conversation's stored session id,
-model, effort, working directory, environment and appended context, streams
+model, working directory, environment and appended context, streams
 typed events into the platform's `AgentEvent`s, interrupts through the
 protocol's own call, and persists the upstream session id for the next turn.
 Both run with full permissions and no interactive prompt.

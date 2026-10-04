@@ -115,11 +115,11 @@ value object.
 Pure (I/O-free) functions that take the file's existing text and return the new
 text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
 
-- `apply_anthropic_settings(text, *, base_url, api_key_helper, model, effort, tier_models, picker_models, replace_builtin_picker, local, local_context_window, loopback_proxy) -> str`
-  and its inverse `remove_anthropic_settings(text, *, managed_model, managed_effort) -> str`
-- `apply_codex_provider(text, *, base_url, model, display_name, auth, effort, provider_id, catalog_path) -> str`
+- `apply_anthropic_settings(text, *, base_url, api_key_helper, model, tier_models, picker_models, replace_builtin_picker, local, local_context_window, loopback_proxy) -> str`
+  and its inverse `remove_anthropic_settings(text, *, managed_model) -> str`
+- `apply_codex_provider(text, *, base_url, model, display_name, auth, provider_id, catalog_path) -> str`
   (in `domain/provider/codex_projection.py`) and its inverse
-  `remove_codex_provider(text, *, provider_id, managed_effort) -> str`
+  `remove_codex_provider(text, *, provider_id) -> str`
 - `suggest_tier_models(model, curated, *, local) -> dict` (`domain/agent/tiers.py`) —
   the tier pins used when the agent stores none
 - `codex_model_catalog_json(models) -> str | None` — the catalogue document, or
@@ -154,7 +154,6 @@ is preserved, and the projection tests assert exactly this set.
 | `env.ANTHROPIC_BASE_URL` | the local model proxy's Anthropic route, `http://127.0.0.1:<proxy port>/anthropic` |
 | `env.NO_PROXY` | gains `127.0.0.1,localhost`, appended to the user's own entries; de-projection takes back only that appended pair |
 | `model` | the AGENT binding's `model`; left untouched when unbound, removed on de-projection only while it still equals the binding |
-| `effortLevel` | the binding's `effort`; same rule |
 | `env.ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL` | the binding's `tier_models`, else Coffer's suggestion (`suggest_tier_models`); an unpinned tier is removed |
 | `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` true when no curated id is a Claude id |
 | `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` / `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | a local runtime only: `"1"` and the chosen model's recorded window |
@@ -167,8 +166,8 @@ are Coffer's only while Coffer's `apiKeyHelper` is in the file. A file whose
 helper is absent or the user's own, but which holds an `ANTHROPIC_BASE_URL` or
 tier pins, is the user's own gateway setup: de-projection leaves it byte-for-byte
 and drift detection does not report it. `modelPicker` is Coffer's only when every
-option carries the `via Coffer` marker; `model` and `effortLevel` only while they
-equal the agent's binding.
+option carries the `via Coffer` marker; `model` only while it
+equals the agent's binding. Coffer writes no `effortLevel`; one in the file is the user's own.
 De-projection removes an `apiKeyHelper` only when `is_managed_api_key_helper`
 recognises it — the `coffer` CLI (bare or by any path) followed by
 `proxy token` — so a helper the user wrote is left alone.
@@ -185,11 +184,10 @@ recognises it — the `coffer` CLI (bare or by any path) followed by
 | `model_providers.coffer.wire_api` | the fixed value `"responses"` |
 | `model_providers.coffer.supports_websockets` / `requires_openai_auth` | `false` / `false` |
 | `model_providers.coffer.auth` | `{command = "<absolute path to coffer>", args = ["proxy", "token", "--agent-uid", "<agent uid>"]}` |
-| `model_reasoning_effort` | the binding's `effort`, only when the chosen curated model records that level |
 
 Each catalogue entry carries `context_window`, `max_context_window` and
 `auto_compact_token_limit` (90%) when the curated model records a window, and
-`supported_reasoning_levels` / `default_reasoning_level` when it records levels.
+an empty `supported_reasoning_levels` (Codex's parser requires the field) and no `default_reasoning_level`. Coffer writes no `model_reasoning_effort`; one in the file is the user's own.
 
 The catalogue file is written before `config.toml` points at it, and the
 pointer is dropped before the file is deleted, so Codex never reads a
@@ -409,10 +407,10 @@ from the stored document when unset.
 
 ### Curated-model facts
 
-`CuratedModel` gains `context_window`, `effort_levels`, `default_effort` and
+`CuratedModel` gains `context_window` and
 `price` (`CuratedPrice {input, output, cache_write_5m?, cache_write_1h?,
 cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
-omitted from the stored document while unknown.
+omitted from the stored document while unknown. The retired `effort_levels` and `default_effort` keys are dropped before validation, so a connection stored before reasoning effort was removed still loads and loses them on its next write.
 
 ### Usage (`usage_requests`, `usage_daily` in `runs.db`)
 

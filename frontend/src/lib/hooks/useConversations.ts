@@ -136,20 +136,6 @@ export function useSetAgentModel() {
   });
 }
 
-/** Set (or clear) the reasoning effort the conversation's model is run at. */
-export function useSetAgentEffort() {
-  const qc = useQueryClient();
-  const onError = useConversationToastError();
-  return useMutation({
-    mutationFn: (vars: { id: string; effort: string | null }) =>
-      chatApi.setAgentEffort(vars.id, vars.effort),
-    onSuccess: (updated: AgentConfigOut, vars) => {
-      qc.setQueryData(agentConfigKey(vars.id), updated);
-    },
-    onError,
-  });
-}
-
 export function useDeleteConversation() {
   const qc = useQueryClient();
   const onError = useConversationToastError();

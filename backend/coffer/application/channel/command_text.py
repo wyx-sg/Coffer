@@ -125,7 +125,6 @@ class Settings:
 
     agent: str
     model: str | None
-    effort: str | None
     cwd: str | None
     conversation: Any = None
 
@@ -139,13 +138,13 @@ async def settings_in_effect(
     chat_kind: str,
     use_conversation: bool = True,
 ) -> Settings:
-    """The agent, model, effort and directory in effect for this thread.
+    """The agent, model and directory in effect for this thread.
 
     The bound conversation, when there is one, is the truth — it is what the
     next turn runs on. Without one (or with ``use_conversation=False``, for a
     group's defaults row) it is what a fresh conversation would open with: the
     thread's sticky settings, else the group's, else the channel's defaults
-    (spec channels "Keep a chat's settings across its conversations")."""
+    (spec channels "Keep a chat's agent, model and directory across its conversations")."""
     threads = commands._threads
     row = await threads.get(binding.resource.uid, peer.chat_id, conversation_thread_id)
     if use_conversation and row is not None and row.active_conversation_id is not None:
@@ -156,7 +155,7 @@ async def settings_in_effect(
         if conv is not None:
             cfg = await commands._conversations.get_agent_config(row.active_conversation_id)
             cwd = cfg.cwd or default_cwd(binding)
-            return Settings(conv.agent_key, cfg.model, cfg.effort, cwd, conv)
+            return Settings(conv.agent_key, cfg.model, cwd, conv)
     group = None
     if conversation_thread_id and chat_kind == "group":
         group = await threads.get(binding.resource.uid, peer.chat_id, "")
@@ -168,11 +167,9 @@ async def settings_in_effect(
     same = agent == pick("preferred_agent")
     defaults = binding.default_agent_config or {}
     model = pick("preferred_model") if same else None
-    effort = pick("preferred_effort") if same else None
     return Settings(
         agent,
         model or defaults.get("model"),
-        effort or defaults.get("effort"),
         pick("preferred_cwd") or default_cwd(binding),
     )
 
@@ -195,16 +192,14 @@ async def model_display(commands: ChannelCommands, agent: str, model: str | None
 
 
 async def settings_line(commands: ChannelCommands, settings: Settings) -> str:
-    """``Claude Code · Opus 4.8 · High · ~/src/app`` — one line naming what a
-    turn runs on: the agent, the model, the effort (when one is set) and the
-    working directory. The `/new` card and `/status` both read it."""
+    """``Claude Code · Opus 4.8 · ~/src/app`` — one line naming what a
+    turn runs on: the agent, the model and the working directory.
+    The `/new` card and `/status` both read it."""
     model = (
         await model_display(commands, settings.agent, settings.model)
         if settings.model
         else "Default model"
     )
     parts = [agent_display(commands._agents, settings.agent), model]
-    if settings.effort:
-        parts.append(settings.effort[:1].upper() + settings.effort[1:])
     parts.append(dir_display(settings.cwd))
     return " · ".join(parts)

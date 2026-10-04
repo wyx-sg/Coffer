@@ -40,7 +40,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 - `env.ANTHROPIC_BASE_URL` 为 `http://127.0.0.1:<port>/anthropic`。
 - `apiKeyHelper` 为 `<coffer> proxy token --agent-uid <uid>`。Claude Code 把它的输出同时作为 `x-api-key` 和 `Authorization` 发送，并缓存五分钟。
 - `env.NO_PROXY` 加上 `127.0.0.1,localhost`，这样公司的 `HTTPS_PROXY` 永远不会截走 loopback 这一段。
-- 模型相关的键（`model`、`effortLevel`、各档位固定、`modelPicker`）来自智能体的绑定，见[模型提供商](/zh/guides/providers#what-gets-written)。
+- 模型相关的键（`model`、各档位固定、`modelPicker`）来自智能体的绑定，见[模型提供商](/zh/guides/providers#what-gets-written)。
 
 **Codex**（`config.toml`）：
 

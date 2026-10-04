@@ -121,12 +121,6 @@ class CatalogueModel(Protocol):
     @property
     def description(self) -> str: ...
 
-    @property
-    def efforts(self) -> Sequence[str]: ...
-
-    @property
-    def default_effort(self) -> str | None: ...
-
 
 class ModelCatalogPort(Protocol):
     """What a model picker should OFFER for each registered agent.

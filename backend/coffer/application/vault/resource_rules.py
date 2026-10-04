@@ -61,6 +61,11 @@ from coffer.domain.vault.writes import Change, Fix, TreeReader, Validator, Verdi
 #: Every kind's resource document is at format 1 today.
 RESOURCE_FORMAT = FormatSpec(current=1)
 
+#: Config keys a kind used to read and no longer does, per kind. A file that
+#: still carries one (a hand edit, or a sync from a machine not yet updated) is
+#: accepted and the key ignored — the schema drops it on the file's next write.
+_RETIRED_CONFIG_KEYS: Mapping[str, frozenset[str]] = {"agent": frozenset({"effort"})}
+
 #: ``{uid: (path, kind, name)}`` of every resource at ``HEAD``.
 HeadOwners = Callable[[], Mapping[str, tuple[str, str, str]]]
 
@@ -72,8 +77,9 @@ def _config_findings(
     known = known_keys(kind_def.config_schema, doc.config)
     subset = doc.config
     if known is not None:
+        retired = _RETIRED_CONFIG_KEYS.get(doc.kind, frozenset())
         for key in doc.config:
-            if key not in known:
+            if key not in known and key not in retired:
                 message = f"config: {key!r} is not a {doc.kind} setting"
                 out.append(Finding(path, FindingCode.CONFIG_INVALID, message, uid))
         subset = {k: v for k, v in doc.config.items() if k in known}

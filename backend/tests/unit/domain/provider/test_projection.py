@@ -41,7 +41,6 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
         '{"theme": "dark", "env": {"FOO": "1"}}',
         base_url="https://gw/anthropic",
         model="claude-opus-4-8",
-        effort="high",
         tier_models={"haiku": "claude-haiku-4-5", "opus": "claude-opus-4-8"},
         api_key_helper=proxy_token_helper(_AGENT_UID, coffer_cli=_CLI),
     )
@@ -50,10 +49,9 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"]["FOO"] == "1"  # unrelated env preserved
     assert d["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
-    # The top-level keys /model and /effort save to — never env.ANTHROPIC_MODEL,
+    # The top-level key /model saves to — never env.ANTHROPIC_MODEL,
     # which would outrank the user's own /model choice at every launch.
     assert d["model"] == "claude-opus-4-8"
-    assert d["effortLevel"] == "high"
     assert "ANTHROPIC_MODEL" not in d["env"]
     assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "claude-haiku-4-5"
     assert d["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "claude-opus-4-8"
@@ -106,7 +104,6 @@ def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
         '{"theme": "dark", "env": {"FOO": "1"}}',
         base_url="u",
         model="m",
-        effort="high",
         tier_models={"opus": "m", "sonnet": "m", "haiku": "m"},
         picker_models=("m",),
         replace_builtin_picker=True,
@@ -114,25 +111,20 @@ def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
         local_context_window=131072,
         api_key_helper=_HELPER,
     )
-    d = json.loads(remove_anthropic_settings(text, managed_model="m", managed_effort="high"))
+    d = json.loads(remove_anthropic_settings(text, managed_model="m"))
     assert "apiKeyHelper" not in d  # Coffer's managed helper removed
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"] == {"FOO": "1"}  # unrelated env preserved, every Coffer key gone
-    for k in ("model", "effortLevel", "modelPicker"):
+    for k in ("model", "modelPicker"):
         assert k not in d
 
 
 def test_remove_anthropic_keeps_a_model_the_user_picked_later() -> None:
-    text = apply_anthropic_settings(
-        "", base_url="u", model="m", effort="high", api_key_helper=_HELPER
-    )
+    text = apply_anthropic_settings("", base_url="u", model="m", api_key_helper=_HELPER)
     doc = json.loads(text)
     doc["model"] = "opus"  # the user's own /model choice since
-    d = json.loads(
-        remove_anthropic_settings(json.dumps(doc), managed_model="m", managed_effort="high")
-    )
+    d = json.loads(remove_anthropic_settings(json.dumps(doc), managed_model="m"))
     assert d["model"] == "opus"
-    assert "effortLevel" not in d
 
 
 def test_remove_anthropic_keeps_a_user_owned_model_picker() -> None:

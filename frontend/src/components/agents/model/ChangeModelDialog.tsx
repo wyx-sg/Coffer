@@ -1,6 +1,6 @@
 // src/components/agents/model/ChangeModelDialog.tsx — the Overview › Model "Change…" flow (boards 2.1.16–2.1.19, 2.1.65).
 //
-// A 480 form (Experimental tag): Provider, Model, Effort and Model per tier, as far as the agent and the provider call for them.
+// A 480 form (Experimental tag): Provider, Model and Model per tier, as far as the agent and the provider call for them.
 // Nothing is written here; Review changes hands the draft to the review (a 1060 preview of
 // the files that change) and Apply happens there. The form closes with the
 // review once the change is applied.

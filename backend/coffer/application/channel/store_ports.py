@@ -120,12 +120,11 @@ class ChannelThreadConversation:
     #: thread. ``None`` on a row written before it was recorded; set again by
     #: the next message that arrives there.
     chat_kind: str | None = None
-    #: The thread's other sticky settings (spec channels "Keep a chat's settings
-    #: across its conversations"): the model, the reasoning effort and the
+    #: The thread's other sticky settings (spec channels "Keep a chat's agent, model
+    #: and directory across its conversations"): the model and the
     #: working directory a fresh conversation here opens with. ``None`` means
-    #: the agent's own default (model, effort) or the channel's (directory).
+    #: the agent's own default (model) or the channel's (directory).
     preferred_model: str | None = None
-    preferred_effort: str | None = None
     preferred_cwd: str | None = None
 
     @property
@@ -200,7 +199,6 @@ class ChannelThreadConversationRepoPort(Protocol):
         *,
         agent: str | None = KEEP,
         model: str | None = KEEP,
-        effort: str | None = KEEP,
         cwd: str | None = KEEP,
     ) -> None:
         """Upsert the thread's sticky settings: each one passed is written
