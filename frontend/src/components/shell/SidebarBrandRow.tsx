@@ -3,7 +3,7 @@
 // The brand mark linking home and, at md and wider, the collapse toggle. The
 // desktop shell has neither: its title strip holds the traffic lights, the
 // toggle and the history arrows, and the sidebar starts at the search box.
-// Expanded the row is 44px high like the strip, its mark 20px with the 14px
+// Expanded the row is 44px high, its mark 20px with the 14px
 // wordmark; on the rail the mark sits 10px from the top with the toggle under it.
 import { Link } from "react-router-dom";
 

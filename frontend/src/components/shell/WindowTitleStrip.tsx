@@ -1,11 +1,12 @@
 // src/components/shell/WindowTitleStrip.tsx — the app's own title bar, standing in for the native one.
 //
-// Where the native title bar is gone (macOS shell), a 44px bar along the top
+// Where the native title bar is gone (macOS shell), a 38px bar along the top
 // edge (the sidebar's colour, no rule under it) takes its place: dragging it
 // moves the window and a double-click zooms it. It holds only window-level
-// controls (board 1.1.02): the traffic lights the system draws, 16px right of
+// controls (board 1.1.02): the traffic lights the system draws, just right of
 // them the sidebar toggle, then ← and → through the app's history. The
-// controls sit on the strip's centre line, fixed, so they stay put as the
+// controls sit on the strip's centre line (y 19, where
+// `trafficLightPosition` y 17 centres the lights too), fixed, so they stay put as the
 // sidebar changes width; they have their own pointer events instead of being
 // drag handles. In full screen the lights are hidden and the controls start at
 // x 14. With the sidebar expanded, its right edge runs up through the strip as
@@ -21,12 +22,13 @@ import { useWindowFullscreen } from "@/lib/hooks/useWindowFullscreen";
 import { shortcutLabel } from "@/lib/shortcuts";
 import { SidebarToggle } from "./SidebarToggle";
 
-// The three 12px lights at x 20 with 8px gaps end at x 72; the toggle follows 16px later.
-const CONTROLS_LEFT = 88;
+// The three lights (14px frames, 20px apart from x 20) end at x 74; the toggle's
+// 28px button starts 8px later, so its icon sits 14px after the last light.
+const CONTROLS_LEFT = 82;
 const CONTROLS_LEFT_FULLSCREEN = 14;
 const RAIL_WIDTH = 56;
-// Where the toggle and the two arrows end (88 + 3 × 28), plus a gap.
-const SLOT_AFTER_CONTROLS = 192;
+// Where the toggle and the two arrows end (82 + 3 × 28), plus a gap.
+const SLOT_AFTER_CONTROLS = 186;
 
 interface Props {
   /** Below md the sidebar is always the rail, so there is nothing to toggle. */

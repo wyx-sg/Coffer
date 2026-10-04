@@ -16,6 +16,8 @@ import { GroupPane } from "@/components/custom-tools/GroupPane";
 import type { AddStart } from "@/components/custom-tools/addFlow";
 import { Button } from "@/components/ui/button";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function CustomToolsPage() {
   const { t } = useTranslation();
@@ -27,8 +29,8 @@ export function CustomToolsPage() {
   const firstRun = !isPending && !error && groups.length === 0;
 
   return (
-    <div className="relative -mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="flex shrink-0 flex-col gap-1.5 px-6 py-5 md:px-8">
+    <div className={cn(PAGE_BLEED, "relative flex-col")}>
+      <div className={cn(PAGE_BLEED_HEAD, "flex shrink-0 flex-col gap-1.5 pb-5")}>
         <PageHeader
           title={t("customTools.title")}
           subtitle={t("customTools.subtitle")}

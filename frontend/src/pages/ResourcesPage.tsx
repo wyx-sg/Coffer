@@ -25,6 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { isCustomToolGroup } from "@/lib/customTools/groups";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useResources } from "@/lib/hooks/useResources";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 /** The pane's shape while the list or the pane's code loads — never a bare "Loading…". */
 function PaneSkeleton() {
@@ -109,8 +111,8 @@ export function ResourcesPage() {
 
   return (
     // Full-bleed like the Skills page: a workspace whose two panes each scroll.
-    <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">
+    <div className={cn(PAGE_BLEED, "flex-col")}>
+      <div className={cn(PAGE_BLEED_HEAD, "shrink-0 border-b border-border-subtle pb-4")}>
         <PageHeader
           title={t("resources.title")}
           subtitle={t("resources.subtitle")}
