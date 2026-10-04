@@ -19,6 +19,8 @@ vi.mock("@/lib/api/secret", () => ({
     list: vi.fn(),
     set: vi.fn(),
     remove: vi.fn(),
+    scan: vi.fn(),
+    importFindings: vi.fn(),
     pendingApprovals: vi.fn(),
     secretBoundary: vi.fn(),
     rejectApproval: vi.fn(),
@@ -355,12 +357,22 @@ describe("SecretsPage", () => {
     expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new");
   });
 
-  test("first run shows the empty state with its way in", async () => {
+  acceptance("web-ui", "the secrets page offers to find plaintext keys", async () => {
+    api.scan.mockResolvedValue({ findings: [], files_checked: 2, servers_checked: 1 });
     api.list.mockResolvedValue({ refs: [] });
-    renderPage();
+    const first = renderPage();
     expect(await screen.findByText("No secrets yet")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add secret" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Find plaintext keys" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Find plaintext keys" })).toBeInTheDocument();
+    first.unmount();
+
+    api.list.mockResolvedValue({ refs: [SEATALK] });
+    renderPage();
+    const find = await screen.findByRole("button", { name: "Find plaintext keys" });
+    expect(screen.getByRole("button", { name: "Add secret" })).toBeInTheDocument();
+    fireEvent.click(find);
+    expect(await screen.findByRole("dialog", { name: "No plaintext keys found" })).toBeVisible();
+    expect(api.scan).toHaveBeenCalled();
   });
 
   test("a failed list says so with a retry", async () => {

@@ -2272,6 +2272,9 @@ The page MUST carry:
 - **Missing values** — a banner counting the secrets this Mac has no value for,
   with **Add values** (spec [secret](../secret/spec.md) "Show a secret this Mac
   cannot open as missing on this Mac"); it offers no master-key import.
+- **Find plaintext keys** — the entry point that moves plaintext secrets out of
+  what Coffer manages and into the store (spec [secret](../secret/spec.md)
+  "Move plaintext secrets in managed resources into the store").
 - **Approvals** — a banner counting the changes waiting for approval, with
   **Review**, which opens the one approvals table (spec
   [secret](../secret/spec.md) "Approve several bindings in one confirmation").
@@ -2286,7 +2289,8 @@ banner returns when the set changes. The help icon beside the title is gone: how
 to run a command with a secret is in the documentation, not on the page.
 
 This requirement fixes the page's place and its parts. What the store enumerates,
-and how each operation behaves are the secret capability's, specified with it.
+how each operation behaves, and the steps of finding plaintext keys are the
+secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
@@ -2305,6 +2309,11 @@ and how each operation behaves are the secret capability's, specified with it.
 - **WHEN** the page renders, and then the user chooses Reveal value on that row and confirms
 - **THEN** no value is shown until the reveal is confirmed, and then only that secret's value is asked for and shown
 - **AND** the page says the reveal is recorded as `secret_revealed`
+
+#### Scenario: the secrets page offers to find plaintext keys
+- **GIVEN** the Secrets page
+- **WHEN** it is opened, with secrets and with none
+- **THEN** its header offers Find plaintext keys beside Add secret, and the empty page offers both
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen

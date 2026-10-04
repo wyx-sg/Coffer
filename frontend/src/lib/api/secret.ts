@@ -3,7 +3,7 @@
 // of the secrets contract's generated schemas.
 //
 // Only the routes a page may call with its token alone live here: listing,
-// storing, deleting, listing the
+// storing, deleting, scanning for plaintext and importing it, listing the
 // pending approvals, rejecting one, and reading whether approval is required.
 // None of them returns a value. Approving — like revealing a value or writing
 // a key backup — needs a presence grant only the desktop shell can sign, so it
@@ -21,6 +21,9 @@ export type ApprovalBatchResult = Schemas["BatchResultOut"];
 
 /** One stored or cited ref: presence and what uses it, never a value. */
 export type SecretRef = Schemas["SecretRefOut"];
+export type SecretScan = Schemas["SecretScanOut"];
+export type SecretScanFinding = Schemas["SecretScanFindingOut"];
+export type SecretImport = Schemas["SecretImportOut"];
 
 export const secretsApi = {
   /** Every stored ref and every ref a resource cites, with what uses it. */
@@ -31,6 +34,11 @@ export const secretsApi = {
   /** Delete a ref; refused with `SECRET_IN_USE` while something cites it. */
   remove: (ref: string) =>
     unwrapVoid(getApiClient().DELETE("/secrets/{ref}", { params: { path: { ref } } })),
+  /** Plaintext secrets in skills and MCP servers — where they are, never what they are. */
+  scan: () => unwrap(getApiClient().POST("/secrets/scan")),
+  /** Move the chosen findings into the store; `dryRun` writes nothing. */
+  importFindings: (ids: string[], dryRun: boolean) =>
+    unwrap(getApiClient().POST("/secrets/import", { body: { ids, dry_run: dryRun } })),
   /** Every approval still waiting, newest first. */
   pendingApprovals: () =>
     unwrap(getApiClient().GET("/secrets/approvals", { params: { query: { status: "pending" } } })),
