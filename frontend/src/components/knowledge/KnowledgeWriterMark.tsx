@@ -1,11 +1,11 @@
 // frontend/src/components/knowledge/KnowledgeWriterMark.tsx
 //
-// The small tile every change, version and item carries before its writer's
-// name (boards 5.1.03, 5.1.07, 5.1.26): an agent's official mark on its
-// AgentBadge tile, curation's merge glyph on the accent tile, sync's and an
-// edit on disk's glyphs on the neutral tile, and you on the neutral tile. One
-// component so the timeline, History and the Inbox draw the same writer the
-// same way.
+// The small tile every change and version carries before its writer's name
+// (boards 5.1.03, 5.1.07): an agent's official mark on its AgentBadge tile,
+// the merge glyph on the accent tile for a change an earlier curation pass made
+// (kept in the history), sync's and an edit on disk's glyphs on the neutral
+// tile, and you on the neutral tile. One component so the timeline and History
+// draw the same writer the same way.
 import { useTranslation } from "react-i18next";
 import { GitMerge, HardDrive, RefreshCw, User } from "lucide-react";
 

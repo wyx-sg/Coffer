@@ -14,7 +14,7 @@ Everything Coffer keeps that you would want on another machine — MCP servers, 
 ├── resources/<kind>/<name>.json        one file per MCP server, skill, channel, provider, knowledge collection
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
 ├── state/channel-peers/<channel>.json  who is paired with a channel
-├── state/settings/internal-engine.json Coffer's model and upkeep settings
+├── state/settings/internal-engine.json speech-to-text model and upkeep settings
 ├── knowledge/<collection>/…            knowledge documents (Markdown)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
@@ -74,7 +74,7 @@ While you are editing a file, Coffer does not overwrite it: a save through the w
 
 ## History and restore
 
-Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer, curation or sync) and on which machine. Any file or folder has a history. Secrets have no readable history and cannot be restored.
+Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer or sync) and on which machine. Any file or folder has a history. Secrets have no readable history and cannot be restored.
 
 In the web UI, a skill's **History** tab lists its versions with who wrote each, shows each version's changes file by file, and restores a version after asking. Knowledge documents have the same history on the **Knowledge** page.
 

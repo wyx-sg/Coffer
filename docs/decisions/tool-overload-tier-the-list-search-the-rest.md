@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-09
 **Deciders**: Yuxing Wu
-**Related**: [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Coffer's Own Model Is an Internal Engine](coffer-model-is-an-internal-engine.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Eval Capture and Regression Gate](eval-capture-and-regression-gate.md), [Session Subprocess Model](session-subprocess-model.md), spec mcp-gateway "Forward tools, resources and prompts", spec mcp-gateway "Toggle individual capabilities", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Record invocations without content", research note [MCP gateways](../research/mcp-gateways.md), PR #76, PR #310
+**Related**: [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Eval Capture and Regression Gate](eval-capture-and-regression-gate.md), [Session Subprocess Model](session-subprocess-model.md), spec mcp-gateway "Forward tools, resources and prompts", spec mcp-gateway "Toggle individual capabilities", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Record invocations without content", research note [MCP gateways](../research/mcp-gateways.md), PR #76, PR #310
 
 ## Context
 
@@ -124,7 +124,7 @@ use doubles latency and cost; a router with little context selects worse than
 the main agent (Copilot's 94.5% vs 87.5%); the hop is opaque to the agent and
 to the invocation log, which records no content; and it breaks the agent's own
 reasoning loop. It loses on every axis that matters for a local, auditable
-gateway ([Coffer's Own Model Is an Internal Engine](coffer-model-is-an-internal-engine.md)).
+gateway; Coffer ranks tools lexically, with no model.
 
 ### Option D — Hide every upstream tool behind search
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import functools
+import json
 import pathlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -22,7 +23,7 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.memory import aggregate_worker
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.upkeep_schedule import wait_for_next_pass
-from coffer.domain.internal_engine_config import AGGREGATE, CURATE, DISTIL, UpkeepSetting
+from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, UpkeepSetting
 from coffer.domain.vault.writers import WRITER_SYNC, CommitMeta
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -31,6 +32,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.internal_engine_repo import VaultInternalEngineConfigRepo
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_repository, vault_writer
 
 DOC = "state/settings/internal-engine.json"
@@ -67,14 +69,51 @@ async def test_the_defaults_publish_nothing_and_a_choice_publishes_one_document(
     assert vault_repository().tree("HEAD", "state/") == {}
 
     # Written, but back to the defaults: the same decision as no document.
-    await machine.service.update(model="m", actor="api")
-    await machine.service.update(model=None, actor="api")
-    await machine.service.set_upkeep(CURATE, UpkeepSetting(enabled=True), actor="api")
+    await machine.service.set_transcribe_model("hears", actor="api")
+    await machine.service.set_transcribe_model(None, actor="api")
+    await machine.service.set_upkeep(DISTIL, UpkeepSetting(enabled=True), actor="api")
     assert vault_repository().tree("HEAD", "state/") == {}
 
-    await machine.service.update(model="brain", actor="api")
+    await machine.service.set_transcribe_model("hears", actor="api")
     assert list(vault_repository().tree("HEAD", "state/")) == [DOC]
-    assert (await machine.service.get()).model == "brain"
+    assert (await machine.service.get()).transcribe_model == "hears"
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine", scenario="ignore retired keys when the settings are read"
+)
+@pytest.mark.acceptance(spec="internal-engine", scenario="drop retired keys on the next write")
+async def test_keys_an_older_build_wrote_are_ignored_and_dropped_on_the_next_write(
+    machine: _Machine,
+) -> None:
+    await machine.service.set_transcribe_model("hears", actor="api")
+    path = vault_root() / DOC
+    doc = json.loads(path.read_text())
+    doc["model"] = "brain"
+    doc["curate_owner_machine_id"] = "laptop-1"
+    doc["model_timeout_s"] = 200
+    doc["upkeep"]["curate"] = {"enabled": False, "interval_s": 600}
+    doc["written_by_a_newer_build"] = {"kept": True}
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([DOC])
+
+    held = await machine.service.get()
+    assert not hasattr(held, "model_timeout_s")
+    assert held.transcribe_model == "hears"
+    assert not hasattr(held, "model")
+    assert not hasattr(held, "curate_owner_machine_id")
+    assert [held.upkeep(name).enabled for name in (AGGREGATE, DISTIL)] == [True, True]
+    with pytest.raises(ValueError):
+        held.upkeep("curate")
+
+    await machine.service.set_transcribe_model("hears-2", actor="api")
+    stored = json.loads(vault_writer().repo.read("HEAD", DOC) or b"{}")
+    assert "model" not in stored
+    assert "curate_owner_machine_id" not in stored
+    assert "model_timeout_s" not in stored
+    assert set(stored["upkeep"]) == {AGGREGATE, DISTIL}
+    assert stored["transcribe_model"] == "hears-2"
+    assert stored["written_by_a_newer_build"] == {"kept": True}
 
 
 @pytest.mark.acceptance(
@@ -86,9 +125,7 @@ async def test_the_defaults_publish_nothing_and_a_choice_publishes_one_document(
     scenario="the engine's settings converge and a deletion means the defaults",
 )
 async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> None:
-    await machine.service.update(model="brain", actor="api")
-    await machine.service.set_upkeep(CURATE, UpkeepSetting(enabled=False, interval_s=600))
-    await machine.service.set_model_timeout(200)
+    await machine.service.set_upkeep(DISTIL, UpkeepSetting(enabled=False, interval_s=600))
     await machine.service.set_transcribe_model("hears")
 
     # Another machine's deletion, arriving as a commit.
@@ -97,10 +134,8 @@ async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> Non
     )
 
     held = await machine.service.get()
-    assert held.model is None
-    assert held.model_timeout_s is None
     assert held.transcribe_model is None
-    for name in (AGGREGATE, DISTIL, CURATE):
+    for name in (AGGREGATE, DISTIL):
         assert held.upkeep(name) == UpkeepSetting(enabled=True, interval_s=None)
 
 

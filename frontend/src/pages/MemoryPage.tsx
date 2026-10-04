@@ -6,9 +6,11 @@
 // (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created (a person only edits a memory's body),
 // so the header's one action is Update memory: read every agent's latest
 // memory and distil what is new (spec memory "Update memory in one action"),
-// the page's one primary button, beside the Automatic control that does the
-// same on a timer and a quiet line saying when the agents' memory was last
-// read, or how far Update memory is. When the last read left an agent unread,
+// the page's one primary button, beside Tidy all (hands every partition to the
+// default managed agent and sends the prompt at once; spec memory "Hand a
+// partition's tidying to the agent"), the Automatic control that does the same
+// on a timer and a quiet line saying when the agents' memory was last read, or
+// how far Update memory is. When the last read left an agent unread,
 // a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
 //
 // The body is the partitions table, untitled, or the first-run state while
@@ -18,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { Brain } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
 import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
@@ -27,9 +30,13 @@ import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { translateApiError } from "@/lib/api/errors";
+import { getTidyHandoff } from "@/lib/api/memory";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { memoryKey } from "@/lib/api/queryKeys";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
+
+/** Tidy all's prompt, asked of the daemon when the button is pressed. */
+const tidyAllPrompt = () => getTidyHandoff().then((handoff) => handoff.prompt);
 
 export function MemoryPage() {
   const { t } = useTranslation();
@@ -61,6 +68,11 @@ export function MemoryPage() {
             <>
               <MemoryHeaderStatus />
               <MemoryAutomaticPopover />
+              <AgentHandoff
+                prompt={tidyAllPrompt}
+                autoSend={{ label: t("memory.tidy.all") }}
+                help={false}
+              />
               <MemoryUpdateButton running={updating} />
             </>
           )

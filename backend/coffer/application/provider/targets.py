@@ -54,9 +54,8 @@ def scoped_targets(
     never widens it.
 
     A keyless (ollama) connection returns nothing whatever its scope says: it
-    is Coffer's internal engine's endpoint and there is no key to write into an
-    agent's config, so it covers no agent even in principle. That used to be a
-    config-level validation rule; it is enforced here instead, because scope
+    has no key to write into an agent's config, so it covers no agent even in
+    principle. The rule is enforced here rather than in the config, because scope
     lives outside the config and the rule is about projection, not about the
     config's shape.
 

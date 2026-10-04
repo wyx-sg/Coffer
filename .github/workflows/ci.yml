@@ -52,8 +52,6 @@ jobs:
             frontend/package-lock.json
             e2e/package-lock.json
 
-      - name: install system deps (ripgrep for grep retrieval)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
 
       - name: install backend deps (frozen)
         # UV_PROJECT_ENVIRONMENT puts the venv at the repo-root .venv that the
@@ -108,8 +106,6 @@ jobs:
             frontend/package-lock.json
             e2e/package-lock.json
 
-      - name: install system deps (ripgrep for grep retrieval)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep
 
       - name: install backend deps (latest, unfrozen)
         # No --frozen: uv re-resolves the pyproject floors to the newest

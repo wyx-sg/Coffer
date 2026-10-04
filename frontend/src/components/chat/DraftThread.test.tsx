@@ -37,7 +37,6 @@ const activeConnection = {
   base_url: "https://api.anthropic.com",
   secret_ref: "ref",
   compatible_agents: ["claude_code"],
-  internal_default: false,
   transcribe_default: false,
   enabled: true,
   description: null,

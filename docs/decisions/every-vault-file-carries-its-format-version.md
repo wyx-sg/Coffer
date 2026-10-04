@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Run an unattended rewriter on one owner machine", spec vault-sync "Hold a round that would lose too much", PR #452
+**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Hold a round that would lose too much", PR #452
 
 ## Context
 
@@ -79,10 +79,10 @@ untouched.
   continues for every other file — no whole-remote refusal for a per-file
   version.
 - **The layout commit.** The upgrade of files happens once, on one machine: the
-  owner of unattended rewrites
-  ([An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md) —
-  the same field, so a fleet has one owner to keep alive, not two). When the
-  owner runs a build whose current versions are higher than the vault's, it
+  owner machine, a
+  machine named in a document every machine holds, so two machines on the new
+  build never each upgrade the same files differently and merge cleanly into
+  duplicates. When the owner runs a build whose current versions are higher than the vault's, it
   rewrites every lower file through the upgrade chain — and performs any
   directory move the new layout needs — in **one commit** with a
   `Coffer-Layout: <from> -> <to>` trailer. The upgrade functions are pure and
@@ -199,7 +199,7 @@ keeps top-level fields it does not know and writes them back; a file older than
 the build is read through a pure in-memory upgrade chain and is not rewritten
 by an ordinary write; a file newer than the build is read-only there, or kept at
 the last valid version when the build cannot read it. Upgrading the vault's
-files is one **layout commit** made by the owner machine of unattended rewrites,
+files is one **layout commit** made by one named owner machine,
 verified to lose no uid and no tree file, and on that proof not counted by the
 deletion breaker. Machines on different builds keep converging per file. A data
 migration backs up first, leaves the old data untouched, and is undone by

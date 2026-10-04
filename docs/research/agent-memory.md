@@ -1,6 +1,6 @@
 # Agent memory: how other products do it
 
-**Feature**: long-term memory for coding agents — capturing what an agent learned across sessions, consolidating it, and handing it back at session start · **Coffer spec**: [memory](../../openspec/specs/memory/spec.md) · **Related ADRs**: [aggregate-agent-memory-never-write-it](../decisions/aggregate-agent-memory-never-write-it.md), [agent-hook-installation](../decisions/agent-hook-installation.md), [coffer-model-is-an-internal-engine](../decisions/coffer-model-is-an-internal-engine.md)
+**Feature**: long-term memory for coding agents — capturing what an agent learned across sessions, consolidating it, and handing it back at session start · **Coffer spec**: [memory](../../openspec/specs/memory/spec.md) · **Related ADRs**: [aggregate-agent-memory-never-write-it](../decisions/aggregate-agent-memory-never-write-it.md), [agent-hook-installation](../decisions/agent-hook-installation.md)
 **Researched**: 2026-09 · **Method**: web research, primary sources (official docs, repository source and READMEs); star counts from the GitHub API on 2026-09-24
 
 ---

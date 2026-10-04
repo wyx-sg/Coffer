@@ -1,44 +1,26 @@
 """Turning an uploaded document into new knowledge for a collection.
 
 An upload is one of the entrances new knowledge arrives by — the Knowledge page's upload
-button and a channel attachment (see "Convert uploads into material without keeping
-them" and "Ingest documents sent to a channel"). The document is converted to Markdown
-and **submitted as material**, exactly as an agent's inbox file is: it goes
-through :meth:`KnowledgeService.submit`, so a curation pass folds what is new in it into
-the collection's documents, and with no internal model it becomes a document of its own
-(see "Promote material directly when no model is configured"). Nothing else of the
-upload is kept — not the original bytes, not the extracted text as a file of its own:
-what the collection holds is the knowledge, merged, and the document it arrived in was
-only its carrier.
+button and a channel attachment (see "Convert uploads into documents without keeping
+the original" and "Ingest documents sent to a channel"). The document is converted to
+Markdown and **submitted as material**: it goes through :meth:`KnowledgeService.submit`,
+which makes it a document of its own on the spot (see "Promote submitted material at
+once"). Nothing else of the upload is kept — not the original bytes: what the collection
+holds is the document's text, and the file it arrived in was only its carrier.
 
-What this module owns that ``submit`` does not need to think about:
-
-* **The description is optional input, never optional output.** The catalogue the
-  delivered skill carries is how an agent learns a document exists (see "Merge the
-  manual and the catalogue in the skill body"), so material that arrives with no
-  internal connection configured — or whose connection fails or stalls — still gets a
-  description, drawn from its own opening prose (see "Fill frontmatter on converted
-  material").
-
-Following ``curate.py``'s shape: the internal connection is reached through
-``ModelSelectorPort`` + ``LlmCompletionPort``, both optional, and their
-absence degrades cleanly rather than failing the ingest.
+What this module owns that ``submit`` does not need to think about: **the
+description is optional input, never optional output.** The catalogue the
+delivered skill carries is how an agent learns a document exists (see "Merge the
+manual and the catalogue in the skill body"), so every upload gets a description,
+drawn from its own opening prose (see "Fill frontmatter on converted material").
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import pathlib
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
-from coffer.application.engine_timeout import (
-    TimeoutReader,
-    resolve_timeout,
-)
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.converter import Conversion, EmptyConversion
 from coffer.domain.knowledge.entry import ACTOR_USER
@@ -71,53 +53,32 @@ class ConverterRegistry(Protocol):
 #: phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-_DESCRIPTION_SYSTEM = (
-    "You write the one-line description for a knowledge-base catalogue entry. "
-    "Reply with exactly one plain sentence describing what the document is "
-    "about, under 30 words, no preamble, no quotes, no markdown."
-)
-
-#: How much of a converted document to hand the model — enough to describe
-#: it, small enough to keep the call cheap regardless of the source file size.
-_DESCRIPTION_SOURCE_CHARS = 4000
-
 
 @dataclass(frozen=True)
 class IngestedDocument:
     """What one successful ingest produced.
 
-    ``path`` is the document the upload became when it was promoted on the spot
-    (no model to merge it); ``None`` when it waits in the inbox for a pass,
-    which is what ``pending`` says.
+    ``path`` is the document the upload became.
     """
 
-    path: str | None
+    path: str
     title: str
     description: str
     #: Name of the converter that produced the Markdown (``Conversion.converter``).
     converter: str
-    pending: bool
 
 
 class IngestService:
-    """Converts, describes, and writes one uploaded document at a time."""
+    """Converts and writes one uploaded document at a time."""
 
     def __init__(
         self,
         *,
         knowledge: KnowledgeService,
         registry: ConverterRegistry,
-        models: ModelSelectorPort | None = None,
-        completion: LlmCompletionPort | None = None,
-        secret_resolver: Callable[[str], str] | None = None,
-        read_timeout: TimeoutReader | None = None,
     ) -> None:
         self._knowledge = knowledge
         self._registry = registry
-        self._models = models
-        self._completion = completion
-        self._secret_resolver = secret_resolver
-        self._read_timeout = read_timeout
 
     async def ingest(
         self,
@@ -149,11 +110,10 @@ class IngestService:
         # "Bound uploads and leave nothing behind on failure": a converter that succeeds
         # but extracts nothing (an image-only PDF is the real case) must not be stored
         # as a titled file with an empty body. Checked here rather than in each
-        # converter so every format is covered by one rule, and BEFORE the describe call
-        # so a refusal costs no model tokens either.
+        # converter so every format is covered by one rule.
         if not conversion.markdown.strip():
             raise EmptyConversion(pathlib.Path(filename).suffix.lstrip(".").lower())
-        description = await self._describe(conversion.markdown, title=conversion.title)
+        description = _fallback_description(conversion.markdown, title=conversion.title)
 
         submitted = await self._knowledge.submit(
             collection=collection,
@@ -164,35 +124,11 @@ class IngestService:
             actor=actor,
         )
         return IngestedDocument(
-            path=submitted.document.path if submitted.document else None,
+            path=submitted.document.path,
             title=conversion.title,
             description=description,
             converter=conversion.converter,
-            pending=submitted.pending is not None,
         )
-
-    async def _describe(self, markdown: str, *, title: str) -> str:
-        """A one-line description, from the internal connection when one is
-        configured and reachable, else the document's own opening prose."""
-        if self._models is not None and self._completion is not None:
-            model = await self._models.get_default()
-            if model is not None and self._secret_resolver is not None:
-                with contextlib.suppress(Exception):
-                    timeout = await resolve_timeout(self._read_timeout)
-                    described = await asyncio.wait_for(
-                        self._completion.complete(
-                            system=_DESCRIPTION_SYSTEM,
-                            user=markdown[:_DESCRIPTION_SOURCE_CHARS],
-                            model=model,
-                            secret_resolver=self._secret_resolver,
-                            timeout=timeout,
-                        ),
-                        timeout=timeout,
-                    )
-                    cleaned = " ".join(described.split())
-                    if cleaned:
-                        return cleaned
-        return _fallback_description(markdown, title=title)
 
 
 def _fallback_description(markdown: str, *, title: str) -> str:

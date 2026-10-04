@@ -13,57 +13,7 @@ export interface paths {
         };
         /** Get Config */
         get: operations["get_config_api_v1_internal_engine_config_get"];
-        /** Update Config */
-        put: operations["update_config_api_v1_internal_engine_config_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/internal-engine-config/curation-owner": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Curation Owner
-         * @description Name the machine that runs the curation pass; ``null`` clears it.
-         *
-         *     Clearing returns the vault to "curate wherever this is read", which is
-         *     correct for a vault down to one machine and wrong for one that still spans
-         *     several — so it is something the user asks for, never a repair anything
-         *     performs on its own.
-         */
-        put: operations["update_curation_owner_api_v1_internal_engine_config_curation_owner_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/internal-engine-config/timeout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Model Timeout
-         * @description Bound one call to Coffer's own model, or return it to the default.
-         *
-         *     ``null`` is the way back to the default and the only way: it keeps the
-         *     default in one place, so raising it later reaches every vault that never
-         *     chose one rather than none of them.
-         */
-        put: operations["update_model_timeout_api_v1_internal_engine_config_timeout_put"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -122,19 +72,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * CurationOwnerUpdate
-         * @description Name the machine that may run the curation pass; ``null`` clears it.
-         *
-         *     Deliberately NOT validated against the registry. A vault that has never
-         *     converged has no registry at all and must still be able to name its own
-         *     machine — the one install where checking would refuse the only correct
-         *     answer.
-         */
-        CurationOwnerUpdate: {
-            /** Machine Id */
-            machine_id?: string | null;
-        };
         /** ErrorDetail */
         ErrorDetail: {
             /**
@@ -158,17 +95,9 @@ export interface components {
         };
         /**
          * InternalEngineConfigOut
-         * @description Coffer's own operating settings: its model, and its unattended work.
+         * @description Coffer's own operating settings: its unattended work and its speech-to-text.
          */
         InternalEngineConfigOut: {
-            /** Curate Owner Machine Id */
-            curate_owner_machine_id: string | null;
-            /** Default Model Timeout S */
-            default_model_timeout_s: number;
-            /** Model */
-            model: string | null;
-            /** Model Timeout S */
-            model_timeout_s: number | null;
             /** Transcribe Model */
             transcribe_model: string | null;
             /** Updated At */
@@ -179,34 +108,12 @@ export interface components {
             };
         };
         /**
-         * InternalEngineConfigUpdate
-         * @description Set the internal-engine model; ``null``/empty clears it.
-         */
-        InternalEngineConfigUpdate: {
-            /** Model */
-            model?: string | null;
-        };
-        /**
-         * ModelTimeoutUpdate
-         * @description Bound one call to Coffer's own model; ``null`` restores the default.
-         *
-         *     The range is checked by the service rather than declared here, so the
-         *     terminal, this route and a synced document are all refused by one rule that
-         *     says which numbers are allowed and why — and the operator reads the reason
-         *     instead of a generated constraint message.
-         */
-        ModelTimeoutUpdate: {
-            /** Seconds */
-            seconds?: number | null;
-        };
-        /**
          * TranscribeModelUpdate
          * @description Choose the speech-to-text model; ``null``/empty stops transcription.
          *
-         *     Deliberately NOT defaulted to the engine's own model: a gateway that serves
-         *     chat completions commonly serves no transcription endpoint, so borrowing
-         *     the engine's choice would aim every voice message at a 404 instead of at
-         *     the behaviour an unconfigured vault already has.
+         *     Transcription runs on the connection marked ``transcribe_default`` alone: a
+         *     gateway that serves chat completions commonly serves no transcription
+         *     endpoint.
          */
         TranscribeModelUpdate: {
             /** Model */
@@ -238,8 +145,8 @@ export interface components {
          * @description Change ONE unattended pass, leaving the others exactly as they stand.
          *
          *     One pass at a time on purpose: a settings page toggles one row, and a body
-         *     carrying all three would make every toggle a chance to write back a stale
-         *     copy of the other two — on settings the operator may also be changing on
+         *     carrying both would make every toggle a chance to write back a stale
+         *     copy of the other — on settings the operator may also be changing on
          *     another machine, since they converge through vault sync.
          *
          *     Omitting a field leaves that half of the pass alone, so a switch and a
@@ -254,7 +161,7 @@ export interface components {
              * Pass
              * @enum {string}
              */
-            pass: "aggregate" | "distil" | "curate";
+            pass: "aggregate" | "distil";
             /**
              * Use Default Interval
              * @default false
@@ -280,141 +187,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_config_api_v1_internal_engine_config_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InternalEngineConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_curation_owner_api_v1_internal_engine_config_curation_owner_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CurationOwnerUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    update_model_timeout_api_v1_internal_engine_config_timeout_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelTimeoutUpdate"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

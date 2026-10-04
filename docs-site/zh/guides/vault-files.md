@@ -14,7 +14,7 @@ Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器
 ├── resources/<kind>/<name>.json        one file per MCP server, skill, channel, provider, knowledge collection
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
 ├── state/channel-peers/<channel>.json  who is paired with a channel
-├── state/settings/internal-engine.json Coffer's model and upkeep settings
+├── state/settings/internal-engine.json 语音转文字模型和定期维护设置
 ├── knowledge/<collection>/…            knowledge documents (Markdown)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
@@ -74,7 +74,7 @@ Coffer 还会每分钟以及启动时扫描一次保险库，所以守护进程�
 
 ## 历史与恢复 {#history-and-restore}
 
-保险库的每一次被接受的改动都是一个版本，记录时间、写入者（你、在磁盘上编辑、智能体、Coffer、整理或同步）以及哪台机器。任何文件或文件夹都有历史。密钥没有可读的历史，不能恢复。
+保险库的每一次被接受的改动都是一个版本，记录时间、写入者（你、在磁盘上编辑、智能体、Coffer 或同步）以及哪台机器。任何文件或文件夹都有历史。密钥没有可读的历史，不能恢复。
 
 在 Web 界面里，技能的 **历史** 标签页列出它的各个版本及每个版本的写入者，逐文件展示每个版本的改动，并在询问后恢复某个版本。知识文档在 **知识** 页面上有同样的历史。
 

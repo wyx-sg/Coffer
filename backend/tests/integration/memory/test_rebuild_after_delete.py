@@ -10,18 +10,14 @@ leaves ``.source_state.json`` behind, which is the case a naive skip gets
 wrong and a user would experience as a partition that silently stays empty
 forever.
 
-What comes back is *equivalent*, not identical. ``.raw/`` reproduces exactly —
-same entry ids, same words, because they are the agents' own and only the
-capture time moves. ``notes/`` covers the same subjects from the same sources
-without being required to match the wording, because the notes are Coffer's
-own distillation rather than a copy.
+What comes back is equivalent: ``.raw/`` reproduces exactly — same entry ids,
+same words, because they are the agents' own and only the capture time moves —
+and ``notes/`` covers the same subjects from the same sources.
 """
 
 from __future__ import annotations
 
-import json
 import pathlib
-from typing import Any
 
 import pytest
 
@@ -37,7 +33,6 @@ from tests.integration.memory.conftest import (
     codex_config,
     init_repository,
 )
-from tests.unit.memory.conftest import ScriptedCompletion, StubModelSelector
 
 _PARTITION = "coffer"
 
@@ -59,14 +54,6 @@ applies_to: cwd={project_root}
 
 - the coffer daemon restarts with `coffer daemon stop/start`. [Task 1]
 """
-
-
-def _route(*items: dict[str, Any]) -> str:
-    return json.dumps({"actions": list(items)})
-
-
-def _write(title: str, description: str, body: str) -> str:
-    return json.dumps({"title": title, "description": description, "body": body})
 
 
 def _snapshot_raw(partition: str) -> dict[str, tuple[str, str, str]]:
@@ -96,7 +83,6 @@ def vault(tmp_path: pathlib.Path):  # type: ignore[no-untyped-def]
     resources = FakeResources()
     resources.add_agent("claude-code", "claude_code", str(claude_dir))
     resources.add_agent("codex", "codex", str(codex_dir))
-    completion = ScriptedCompletion([])
 
     def service() -> MemoryService:
         return MemoryService(
@@ -104,42 +90,22 @@ def vault(tmp_path: pathlib.Path):  # type: ignore[no-untyped-def]
             audit=FakeAudit(),  # type: ignore[arg-type]
             agent_source_resolver=agent_source_resolver,
             readers={"claude_code": ClaudeCodeMemoryReader(), "codex": CodexMemoryReader()},
-            completion=completion,  # type: ignore[arg-type]
-            model_selector=StubModelSelector(),
         )
 
     return {
         "service": service,
         "resources": resources,
-        "completion": completion,
         "project_root": project_root,
     }
 
 
-async def _aggregate_then_distil(vault, *, wording: str) -> None:  # type: ignore[no-untyped-def]
-    """One full cycle. The routing answer names entry ids, which only exist
-    once aggregation has written them — so the script is built between the two
-    halves rather than up front."""
+async def _aggregate_then_distil(vault) -> None:  # type: ignore[no-untyped-def]
+    """One full cycle."""
     service = vault["service"]()
     await service.aggregate()
-    vault["completion"]._responses.extend(_answers(wording=wording))
     # Resolved after aggregation: the partition's row (and so its uid) is what
     # that half creates.
     await service.distil(vault["resources"].uid_of(KIND_MEMORY, _PARTITION))
-
-
-def _answers(*, wording: str) -> list[str]:
-    ids = sorted(e.entry_id for e in list_raw_entries(_PARTITION))
-    assert len(ids) == 2
-    return [
-        _route(
-            {"entry": ids[0], "action": "open", "title": "The lockfile rule", "type": "project"},
-            {"entry": ids[1], "action": "open", "title": "Daemon restart", "type": "project"},
-        ),
-        # One writing request per touched note, in slug order.
-        _write("Daemon restart", f"{wording}: restart the daemon", f"{wording} body one"),
-        _write("The lockfile rule", f"{wording}: lock with uv", f"{wording} body two"),
-    ]
 
 
 @pytest.mark.asyncio
@@ -147,7 +113,7 @@ def _answers(*, wording: str) -> list[str]:
     spec="memory", scenario="deleting the memory tree and re-syncing reproduces an equivalent set"
 )
 async def test_deleting_the_tree_with_the_digest_cache_left_behind_rebuilds_it(vault) -> None:  # type: ignore[no-untyped-def]
-    await _aggregate_then_distil(vault, wording="first")
+    await _aggregate_then_distil(vault)
 
     raw_before = _snapshot_raw(_PARTITION)
     subjects_before = _subjects()
@@ -162,16 +128,14 @@ async def test_deleting_the_tree_with_the_digest_cache_left_behind_rebuilds_it(v
     assert not paths.partition_dir(_PARTITION).exists()
     assert source_state.load(), "the digest cache is deliberately still here"
 
-    await _aggregate_then_distil(vault, wording="second")
+    await _aggregate_then_distil(vault)
 
     assert _snapshot_raw(_PARTITION) == raw_before  # the same entries, verbatim
     assert _subjects() == subjects_before  # the same subjects, from the same sources
     index = store.read_index(_PARTITION)
     for slug in subjects_before:
         assert f"`{slug}.md`" in index
-    # Equivalent, not identical: the wording is the distillation's, and "Keep the
-    # memory tree derived and local" does not require it back.
-    assert {n.slug: n.body for n in store.list_notes(_PARTITION)} != bodies_before
+    assert {n.slug: n.body for n in store.list_notes(_PARTITION)} == bodies_before
 
 
 @pytest.mark.asyncio

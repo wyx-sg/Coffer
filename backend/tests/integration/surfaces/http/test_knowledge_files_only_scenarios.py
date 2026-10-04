@@ -2,18 +2,18 @@
 
 ``client`` (from ``conftest.py``) boots the full app with ``HOME`` pinned to
 ``tmp_path``. Specs: knowledge "Create collections only deliberately", "Read a
-collection's description from its README", "Submit every entrance's input as
-material" and "Let only a person delete a document".
+collection's description from its README", "Promote submitted
+material at once" and "Let only a person delete a document".
 """
 
 from __future__ import annotations
 
 import pytest
 
-from coffer.application.knowledge.intake import adopt_dropped_files
+from coffer.application.knowledge.sweep import sweep_once
 from coffer.infrastructure.knowledge import fs, inbox, paths
 
-from .conftest import _create_collection, _hold_material
+from .conftest import _create_collection
 
 
 def _root(tmp_path):  # type: ignore[no-untyped-def]
@@ -38,17 +38,12 @@ def test_a_read_of_an_unknown_collection_is_a_404_and_creates_nothing(client, tm
     ] == []
 
 
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="an upload and an agent's file both leave material in the inbox",
-)
-def test_an_upload_and_an_agents_file_both_leave_material_in_the_inbox(  # type: ignore[no-untyped-def]
-    client, tmp_path, monkeypatch
-) -> None:
+@pytest.mark.acceptance(spec="knowledge", scenario="an upload answers with the document it became")
+@pytest.mark.acceptance(spec="knowledge", scenario="a sweep promotes a file dropped into the inbox")
+def test_an_upload_and_an_agents_file_both_become_documents(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
 
     _create_collection(client, "shopee")
-    _hold_material(monkeypatch)
 
     uploaded = client.post(
         "/api/v1/knowledge/upload",
@@ -56,20 +51,23 @@ def test_an_upload_and_an_agents_file_both_leave_material_in_the_inbox(  # type:
         files={"file": ("notes.md", b"# Notes\n\nFrom a phone.\n")},
     )
     assert uploaded.status_code == 201, uploaded.text
-    assert uploaded.json()["pending"] is True
-    assert uploaded.json()["path"] is None
+    assert uploaded.json()["path"] == "shopee/notes.md"
+    assert "pending" not in uploaded.json()
 
-    # An agent writes with its own file tool; the sweep then sees the file.
+    # An agent writes with its own file tool; the next sweep promotes the file.
     directory = paths.inbox_dir("shopee")
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "agent-note.md").write_text("# Agent note\n\nFound in a repo.\n", encoding="utf-8")
-    adopted = client.portal.call(adopt_dropped_files, get_knowledge_service())  # type: ignore[union-attr]
-    assert adopted == ["shopee/.inbox/agent-note.md"]
+    service = get_knowledge_service()
+    client.portal.call(sweep_once, service, _no_refresh)  # type: ignore[union-attr]
 
-    assert sorted(inbox.inbox_items("shopee")) == ["agent-note.md", "notes.md"]
-    # Neither entrance added a document to the visible tree.
+    assert inbox.inbox_items("shopee") == ()
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
-    assert level["files"] == []
+    assert [f["path"] for f in level["files"]] == ["shopee/agent-note.md", "shopee/notes.md"]
+
+
+async def _no_refresh() -> None:
+    return None
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="delete a document an agent wrote")

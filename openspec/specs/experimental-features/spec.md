@@ -175,8 +175,8 @@ kind in object-kind lists, and every section of another page that exists only
 for it. A link to one of its pages MUST show the standard not-found page. The UI
 MUST NOT show a notice that a feature is switched off or needs another, and MUST
 NOT offer a switch-on button outside Settings → Features. An agent's
-Overview › Model section and Settings → Coffer's model MUST omit what depends on `models`:
-the section is read-only, with no Provider row and no Change….
+Overview › Model section and the Speech-to-text section of Settings › General MUST omit what depends on `models`:
+the Model section is read-only, with no Provider row and no Change…, and Speech-to-text offers no connection choice.
 
 #### Scenario: a switched-off feature's page is not found
 - **GIVEN** a registered feature `f` whose sidebar entry opens a page, and `f` off
@@ -190,8 +190,8 @@ the section is read-only, with no Provider row and no Change….
 
 #### Scenario: a page omits the section that belongs to a switched-off feature
 - **GIVEN** `models` off
-- **WHEN** the user opens an agent's Overview and Settings → Coffer's model
-- **THEN** the Model section shows the agent's own model read-only, with no Provider row and no Change…, and Coffer's model shows nothing that depends on `models`
+- **WHEN** the user opens an agent's Overview and Settings › General
+- **THEN** the Model section shows the agent's own model read-only, with no Provider row and no Change…, and Speech-to-text shows no connection choice
 - **AND** neither shows a notice about it, and `?change-model=1` opens no dialog
 
 ### Requirement: Keep what a switched-off feature holds
@@ -228,7 +228,7 @@ While `knowledge` is off, `/api/v1/knowledge` MUST answer 404
 `FEATURE_DISABLED` and the `knowledge` kind MUST be out of reach of the resource
 routes. The `coffer-guide`
 skill MUST be rendered without its knowledge catalogue, and switching
-`knowledge` on MUST restore it. The curation pass MUST
+`knowledge` on MUST restore it. The knowledge sweep MUST
 skip its rounds.
 
 #### Scenario: knowledge off closes the knowledge routes
@@ -246,9 +246,9 @@ skip its rounds.
 - **WHEN** the `coffer-guide` skill is rendered
 - **THEN** it carries no knowledge catalogue, and the catalogue returns once `knowledge` is on
 
-#### Scenario: knowledge off skips the curation pass
+#### Scenario: knowledge off skips the knowledge sweep
 - **GIVEN** `knowledge` off
-- **WHEN** the curation pass comes due
+- **WHEN** the knowledge sweep comes due
 - **THEN** it skips its round
 
 ### Requirement: Close the memory feature's surfaces
@@ -258,8 +258,8 @@ directory MUST be tagged `memory`, so the handshake does not name it, and the
 `coffer-guide` skill MUST be rendered without its memory root section. The
 memory delivery hook MUST be withdrawn from agents, and the agent connection
 status MUST carry no `memory_hook` part. Switching `memory` on MUST install the
-hook again into the connected agents and restore the section. The distil and
-aggregate passes MUST skip their rounds. A channel turn MUST carry no memory
+hook again into the connected agents and restore the section. The aggregate and
+distil passes MUST skip their rounds, and a note's retirement marker is not acted on while they are skipped. A channel turn MUST carry no memory
 index or retrieval.
 
 #### Scenario: memory off closes the memory routes
@@ -285,7 +285,7 @@ index or retrieval.
 
 #### Scenario: memory off skips the distil and aggregate passes
 - **GIVEN** `memory` off
-- **WHEN** the distil and aggregate passes come due
+- **WHEN** the aggregate and distil passes come due
 - **THEN** each skips its round
 
 #### Scenario: memory off leaves channel turns without memory
@@ -296,8 +296,7 @@ index or retrieval.
 ### Requirement: Close the sync feature's surfaces
 While `sync` is off, `/api/v1/sync` MUST answer 404 `FEATURE_DISABLED`, the
 convergence worker MUST skip its rounds, and the sync attention source MUST be
-tagged `sync` and not asked. Curation MUST treat the vault as single-machine:
-the engine's curate-owner setting is ignored. The configured remote and the
+tagged `sync` and not asked. The configured remote and the
 history stay untouched.
 
 #### Scenario: sync off closes the sync routes
@@ -309,11 +308,6 @@ history stay untouched.
 - **GIVEN** `sync` on with a configured remote
 - **WHEN** `sync` is switched off and the convergence worker comes due
 - **THEN** it skips the round, the remote and the history are unchanged, and the sync attention source is not asked
-
-#### Scenario: sync off treats the vault as single-machine for curation
-- **GIVEN** `sync` off and an engine curate-owner setting naming another machine
-- **WHEN** a curation pass comes due
-- **THEN** the pass runs as on a single-machine vault, ignoring the curate-owner setting
 
 ### Requirement: Close the models feature's surfaces
 While `models` is off, `/api/v1/providers` (including the price list),
@@ -360,9 +354,9 @@ MUST degrade when the other is off and MUST NOT fail: a surface that would
 embed data of a switched-off feature MUST leave that section out.
 
 #### Scenario: models off leaves knowledge and memory working
-- **GIVEN** `models` off and an internal engine connection already chosen
-- **WHEN** a knowledge or memory pass runs
-- **THEN** it runs on the chosen connection and does not fail
+- **GIVEN** `models` off
+- **WHEN** the knowledge sweep and the aggregate and distil passes run
+- **THEN** they run and do not fail, because none of them calls a model
 - **AND** agents fall back to their own login
 
 #### Scenario: memory off leaves knowledge and channels working
@@ -377,8 +371,8 @@ embed data of a switched-off feature MUST leave that section out.
 
 #### Scenario: sync off leaves the vault single-machine
 - **GIVEN** `sync` off
-- **WHEN** curation runs, the engine's curate-owner is displayed in Settings, and a channel is read
-- **THEN** curation and the display treat the vault as single-machine, and the channel stays bound to its machine
+- **WHEN** the knowledge sweep runs and a channel is read
+- **THEN** the sweep commits as on a single-machine vault, and the channel stays bound to its machine
 
 ### Requirement: Show the Features tab in every build
 Settings MUST carry a **Features** tab (`/settings/features`) in every build,

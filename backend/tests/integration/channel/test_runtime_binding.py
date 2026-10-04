@@ -35,6 +35,9 @@ def _config(**overrides: object) -> dict[str, object]:
 @pytest.mark.acceptance(
     spec="channels", scenario="only the machine a channel names starts its adapter"
 )
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="sync off leaves the vault single-machine"
+)
 async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg", config=_config(runs_on=_OTHER_MACHINE))
 

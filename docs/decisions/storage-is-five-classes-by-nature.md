@@ -52,8 +52,8 @@ of the class, not a rule inside a translator.
 
 | Class | Directory | Holds | Writers | Sync policy | If lost |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources/<kind>/`); skills; knowledge; state documents (an MCP server's switched-off capabilities, channel pairings, the engine's settings and the curation owner machine); a channel's `runs_on`; machine descriptors; **secret ciphertext** under `secret/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `secret/` only when that remote's `include_secret` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
-| **local** | `~/.coffer/local/` | reach, per resource uid (`reach.json`); machine-local resources (the agents); the sync remote and a stopped round's choices; retention; what curation last settled; the secret boundary's approvals and bindings; machine-local ciphertext; the record of the one-time upgrade | the daemon, through its settings API | never — it is true of this machine only | settings can be set again |
+| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources/<kind>/`); skills; knowledge; state documents (an MCP server's switched-off capabilities, channel pairings and Coffer's own settings); a channel's `runs_on`; machine descriptors; **secret ciphertext** under `secret/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `secret/` only when that remote's `include_secret` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
+| **local** | `~/.coffer/local/` | reach, per resource uid (`reach.json`); machine-local resources (the agents); the sync remote and a stopped round's choices; retention; the secret boundary's approvals and bindings; machine-local ciphertext; the record of the one-time upgrade | the daemon, through its settings API | never — it is true of this machine only | settings can be set again |
 | **content** | `~/.coffer/content/` | chat and channel media; the chat workspace; skill folders Coffer set aside (`backup/skills/`) | the service that owns each | not for now; a later decision may converge part of it | unrecoverable — needs a backup |
 | **runs** | `~/.coffer/runs.db`, `~/.coffer/skill-data/<skill-name>/`, and `~/.coffer/config-backups/<file>/` | `audit_log`, `mcp_invocations`, `conversations`, `chat_messages`, channel threads and outbox, `sync_runs`, usage; in `skill-data/`, the logs, operation journals and temp files a skill's scripts write; in `config-backups/`, copies of agent config files made before a rewrite | the daemon, the only writer of `runs.db`; a skill's scripts, of `skill-data/`, and `config-backups/` | never | history; pruned by retention anyway (`skill-data/` by the `skill_data` policy and `config-backups/` by the `config_backups` policy, files by mtime; each config file's newest backup is kept) |
 | **derived** | `~/.coffer/derived/` | `derived.db` (MCP server health, skill delivery bindings, capability first/last seen), the memory tree (`memory/`: partitions' `.raw/`, `notes/`, `MEMORY.md`, `RETIRED.md`) rebuilt from the agents' own memory, the agent transcript cache, the rendered `coffer-guide` skill, derived resource files, editor copies of a stopped round's conflicts, price lists | the daemon | never | rebuilt; deleting the directory is always safe |
@@ -94,15 +94,14 @@ Rules that come with the classes:
 - **Memory is derived, not content.** The canonical copy of what an agent
   learned is that agent's own native memory, which Coffer only reads
   ([Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md));
-  the tree under `memory/` is its distillation, and spec memory "Keep the
+  the tree under `memory/` is made from it, and spec memory "Keep the
   memory tree derived and local" requires that deleting it and re-running
-  aggregation and distil gives back an equivalent partition. The rebuild needs
-  Coffer's internal model for the same wording quality, and a lesson whose
+  aggregation and distil gives back an equivalent partition. A lesson whose
   source the agent itself has since deleted does not come back, which is the
   agent's retirement, not a loss. A person can edit a note in the web UI or an
-  editor, and a later distil pass revises it only by the newer-or-better-evidenced
-  rule; the edit lives in the derived tree, so deleting that tree and
-  rebuilding loses it, which is what deleting derived data means
+  editor, and an agent tidies notes on request; a distil pass never rewrites an
+  existing note, but the edits live in the derived tree, so deleting that tree
+  and rebuilding loses them, which is what deleting derived data means
   ([Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)).
   Nothing a person authors about memory is vault.
 - **`runs.db` keeps the single-writer rule** of

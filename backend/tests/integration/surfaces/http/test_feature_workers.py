@@ -1,11 +1,11 @@
 """The background passes of a switched-off feature skip their rounds.
 
 Spec experimental-features "Close every surface of a switched-off feature":
-the sync worker (``sync``), curation (``knowledge``), aggregation and distil
-(``memory``) read the switch at the top of every round. Each pass is started
-through its real wiring function with fakes behind it, so what is asserted is
-the check the composition root actually installs — and a switch flipped on the
-same service reaches the next round without a restart.
+the sync worker (``sync``), aggregation and distil (``memory``) read the
+switch at the top of every round. Each pass is started through its real wiring
+function with fakes behind it, so what is asserted is the check the
+composition root actually installs — and a switch flipped on the same service
+reaches the next round without a restart.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import pytest
 from coffer.application.features import FeatureService
 from coffer.application.sync.worker import SyncWorker
 from coffer.domain.features import feature_keys
-from coffer.surfaces.http import curation_wiring, memory_wiring, sync_wiring
+from coffer.surfaces.http import knowledge_sweep_wiring, memory_wiring, sync_wiring
 
 
 class _Settings:
@@ -47,7 +47,6 @@ class _EngineConfig:
     async def get(self) -> Any:
         return SimpleNamespace(
             upkeep=lambda _name: SimpleNamespace(enabled=True, interval_s=None),
-            curate_runs_on=lambda _machine: True,
         )
 
 
@@ -127,85 +126,6 @@ async def test_the_distil_worker_skips_while_memory_is_off(
     assert await seen["is_enabled"]() is True
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="knowledge off skips the curation pass",
-)
-async def test_the_curation_worker_skips_while_knowledge_is_off(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    seen = _capture(monkeypatch, curation_wiring, "CurationWorker")
-
-    async def no_divergence() -> bool:
-        return False
-
-    sync = SimpleNamespace(
-        registry=SimpleNamespace(machine_id="m1"),
-        service=SimpleNamespace(
-            lock=asyncio.Lock(), divergence_outstanding=no_divergence, machine_id="m1"
-        ),
-    )
-    features = _features(knowledge=False)
-    task = curation_wiring.start_curation_worker(
-        SimpleNamespace(),  # type: ignore[arg-type]
-        SimpleNamespace(),  # type: ignore[arg-type]
-        SimpleNamespace(refresh=None),  # type: ignore[arg-type]
-        SimpleNamespace(),  # type: ignore[arg-type]
-        _EngineConfig(),  # type: ignore[arg-type]
-        sync,  # type: ignore[arg-type]
-        features,
-    )
-    await task
-    assert await seen["is_enabled"]() is False
-    await features.set("knowledge", True)
-    assert await seen["is_enabled"]() is True
-
-
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="sync off treats the vault as single-machine for curation",
-)
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="sync off leaves the vault single-machine",
-)
-async def test_curation_treats_the_vault_as_single_machine_while_sync_is_off(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """With sync closed there is no other machine to fold the same material, so
-    an owner id the user cannot reach must not stall curation."""
-    seen = _capture(monkeypatch, curation_wiring, "CurationWorker")
-
-    class _OwnedElsewhere:
-        async def get(self) -> Any:
-            return SimpleNamespace(
-                upkeep=lambda _name: SimpleNamespace(enabled=True, interval_s=None),
-                curate_runs_on=lambda _machine: False,
-            )
-
-    async def held() -> bool:
-        return True
-
-    sync = SimpleNamespace(
-        registry=SimpleNamespace(machine_id="m1"),
-        service=SimpleNamespace(lock=asyncio.Lock(), divergence_outstanding=held, machine_id="m1"),
-    )
-    features = _features(sync=False)
-    task = curation_wiring.start_curation_worker(
-        SimpleNamespace(),  # type: ignore[arg-type]
-        SimpleNamespace(),  # type: ignore[arg-type]
-        SimpleNamespace(refresh=None),  # type: ignore[arg-type]
-        SimpleNamespace(),  # type: ignore[arg-type]
-        _OwnedElsewhere(),  # type: ignore[arg-type]
-        sync,  # type: ignore[arg-type]
-        features,
-    )
-    await task
-    assert await seen["is_enabled"]() is True
-    await features.set("sync", True)
-    assert await seen["is_enabled"]() is False
-
-
 async def test_the_sync_worker_is_built_with_the_sync_switch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -250,32 +170,65 @@ async def test_a_skipped_sync_round_never_reaches_the_service() -> None:
 @pytest.mark.acceptance(
     spec="experimental-features", scenario="models off leaves knowledge and memory working"
 )
-async def test_the_knowledge_passes_do_not_depend_on_models(
+async def test_the_memory_passes_do_not_depend_on_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Switching ``models`` off closes the connection picker, not the chosen
-    connection: the passes read only ``knowledge`` (and their own switches)."""
-    seen = _capture(monkeypatch, curation_wiring, "CurationWorker")
-
-    async def no_divergence() -> bool:
-        return False
-
-    sync = SimpleNamespace(
-        registry=SimpleNamespace(machine_id="m1"),
-        service=SimpleNamespace(
-            lock=asyncio.Lock(), divergence_outstanding=no_divergence, machine_id="m1"
-        ),
-    )
+    connection: the passes read only ``memory`` (and their own switches)."""
+    seen = _capture(monkeypatch, memory_wiring, "DistilWorker")
     features = _features(models=False)
-    task = curation_wiring.start_curation_worker(
-        SimpleNamespace(),  # type: ignore[arg-type]
-        SimpleNamespace(),  # type: ignore[arg-type]
-        SimpleNamespace(refresh=None),  # type: ignore[arg-type]
+    task = memory_wiring.start_distil_worker(
+        lambda *_a, **_k: None,  # type: ignore[arg-type]
         SimpleNamespace(),  # type: ignore[arg-type]
         _EngineConfig(),  # type: ignore[arg-type]
-        sync,  # type: ignore[arg-type]
         features,
     )
     await task
     assert features.is_enabled("models") is False
     assert await seen["is_enabled"]() is True
+
+
+async def _sweep_ticks(monkeypatch: pytest.MonkeyPatch, features: FeatureService) -> list[object]:
+    """Run the real sweep loop for a few intervals; answer what each tick swept."""
+    swept: list[object] = []
+
+    async def record(service: object, _refresh: object) -> None:
+        swept.append(service)
+
+    monkeypatch.setattr(knowledge_sweep_wiring, "sweep_once", record)
+    monkeypatch.setattr(knowledge_sweep_wiring, "SWEEP_INTERVAL_S", 0.01)
+    task = asyncio.create_task(
+        knowledge_sweep_wiring._run_forever(
+            "service",  # type: ignore[arg-type]
+            SimpleNamespace(refresh=None),  # type: ignore[arg-type]
+            features,
+        )
+    )
+    try:
+        await asyncio.sleep(0.1)
+    finally:
+        await knowledge_sweep_wiring.stop_knowledge_sweep(task)
+    return swept
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="knowledge off skips the knowledge sweep"
+)
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a switched-off knowledge feature skips the sweep"
+)
+async def test_the_knowledge_sweep_runs_no_round_while_knowledge_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert await _sweep_ticks(monkeypatch, _features(knowledge=False)) == []
+    # The control: the same loop, switched on, does sweep.
+    assert await _sweep_ticks(monkeypatch, _features()) != []
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="sync off leaves the vault single-machine"
+)
+async def test_the_knowledge_sweep_does_not_read_the_sync_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert await _sweep_ticks(monkeypatch, _features(sync=False)) != []

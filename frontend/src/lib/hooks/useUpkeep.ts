@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useUpkeep.ts
 //
-// Whether a long, model-driven pass is running over one target — asked of the
+// Whether a long pass is running over one target — asked of the
 // SERVER, not of a component (.agents/frontend.md §3).
 //
 // This exists because the obvious alternative is wrong. A button whose spinner
@@ -10,7 +10,7 @@
 // click starts a SECOND pass over the same files. The daemon is the only thing
 // that knows what it is rewriting, so the button asks it.
 //
-// One query serves both kinds (`/api/v1/upkeep/runs` answers for all of them),
+// One query serves every kind (`/api/v1/upkeep/runs` answers for all of them),
 // and it polls on its own: a pass can also be started by the CLI or by the
 // background timer, so "running" can become true without this tab doing
 // anything. The idle interval is slow enough to be free on a loopback daemon
@@ -38,15 +38,15 @@ function useUpkeepRuns() {
  * The pass running over this one partition / collection right now, or `null`.
  *
  * Addressed by the target's **uid**: that is what the daemon claims a pass
- * under (`UPKEEP_RUNS.guard(kind, uid)`), for the Curate / Update route and
- * for the sweep alike, because a pass that takes minutes must be aimed at
+ * under (`UPKEEP_RUNS.guard(kind, uid)`), for the Update route and the timer
+ * alike, because a pass that takes minutes must be aimed at
  * something that cannot be renamed underneath it (ADR
  * identity-is-the-uid-inside-the-file). A lookup by name never matched.
  *
  * `null` while the first read is still in flight, which is the honest answer
  * to give a button: the page's own optimistic pending state covers the moment
- * between a click and the first poll. A run that drains several items (Curate
- * now) carries `done` and `total`, which is what "Curating · n of m" reads.
+ * between a click and the first poll. A run that works through several items
+ * carries `done` and `total`.
  */
 export function useUpkeepRun(kind: UpkeepKind, uid: string): UpkeepRunOut | null {
   const { data } = useUpkeepRuns();

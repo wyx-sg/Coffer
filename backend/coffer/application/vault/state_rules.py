@@ -39,6 +39,9 @@ AREAS: dict[str, tuple[str | None, frozenset[str]]] = {
     "mcp-preferences": ("server_uid", frozenset({"server_uid", "disabled", "tool_exposure"})),
     "channel-peers": ("channel_uid", frozenset({"channel_uid", "peers"})),
     "cli-tools": (None, frozenset({"tools"})),
+    # ``model``, ``curate_owner_machine_id`` and ``model_timeout_s`` are keys an
+    # older build wrote; they are accepted and ignored, and the next write of
+    # the document drops them.
     "settings": (
         None,
         frozenset(

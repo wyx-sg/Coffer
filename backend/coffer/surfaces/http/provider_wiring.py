@@ -18,7 +18,6 @@ from fastapi import FastAPI
 
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
-from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.features import FeatureService
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.prices import ProviderPriceResolver
@@ -49,7 +48,6 @@ from coffer.infrastructure.usage.price_refresh import (
 )
 from coffer.surfaces.http.engine_config_composition import (
     internal_default_model_guard,
-    internal_engine_connection,
 )
 from coffer.surfaces.http.model_proxy_wiring import (
     ModelProxyWiring,
@@ -69,13 +67,10 @@ _log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProviderWiring:
-    """What the provider kind hands back: its service, and the internal-engine
-    connection tied over it — the seam later kinds and the background workers
-    resolve Coffer's own engine through, so none of them has to hold this
-    kind's service to reach it."""
+    """What the provider kind hands back: its service, the local model proxy,
+    and the price list."""
 
     service: ProviderService
-    internal_connection: InternalEngineConnection
     #: The supervised local model proxy every agent on a connection calls.
     proxy: ModelProxyWiring
     #: Where a model's price on a provider comes from — shared by the usage
@@ -114,8 +109,8 @@ def wire_provider_kind(
         return bool(features.is_enabled(MODELS))
 
     # Handed the resource service so a direct write cannot flag a second
-    # internal default (spec provider-switching "Keep at most one internal
-    # default connection").
+    # speech-to-text default (spec provider-switching "Keep an independent
+    # speech-to-text default").
     app.state.kinds["provider"] = make_provider_kind(resource_svc)
     provider_svc = ProviderService(
         resources=resource_svc,
@@ -125,10 +120,10 @@ def wire_provider_kind(
         audit=audit,
         # The agents' provider projection facets.
         agent_catalog=agent_catalog,
-        # Coffer's own engine, told when the connection it runs on moves. The
+        # Coffer's settings, told when the speech-to-text connection moves. The
         # engine decides the fate of its model; this kind only reports the move
         # and the new connection's catalogue (spec internal-engine "Drop the
-        # engine model when its connection moves").
+        # speech-to-text model when its connection moves").
         engine=internal_default_model_guard(),
         # A switch is several writes; no reconcile pass judges it half done.
         hold=reconciler.hold,
@@ -185,9 +180,6 @@ def wire_provider_kind(
         prices=prices,
         price_list=price_list,
         price_refresh_task=refresh_task,
-        # Tied here because this is where both halves exist: the engine's rule
-        # (application.engine) and the kind that knows which row is flagged.
-        internal_connection=internal_engine_connection(provider_svc),
     )
 
 

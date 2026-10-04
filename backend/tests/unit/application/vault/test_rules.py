@@ -10,6 +10,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.mcp.kind import make_mcp_kind
+from coffer.application.provider.kind import make_provider_kind
 from coffer.application.vault.resource_rules import resource_rule
 from coffer.application.vault.state_rules import state_rule
 from coffer.domain.resource import Kind
@@ -176,10 +177,6 @@ class _Flagged(BaseModel):
     flag: bool = False
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="a file flagging a second internal default is refused by the vault",
-)
 def test_an_exclusive_flag_held_elsewhere_refuses_only_the_newcomer() -> None:
     kinds = {
         "thing": Kind(
@@ -207,6 +204,33 @@ def test_an_exclusive_flag_held_elsewhere_refuses_only_the_newcomer() -> None:
         tree,
     )
     assert moved.findings == []
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="accept two connection files that both carry the retired flag",
+)
+def test_two_connection_files_carrying_the_retired_flag_are_both_accepted() -> None:
+    kinds = {"provider": make_provider_kind()}
+
+    def connection(uid: str) -> bytes:
+        return _doc(
+            kind="provider",
+            uid=uid,
+            name=uid,
+            config={
+                "protocol": "openai",
+                "base_url": "https://x/v1",
+                "secret_ref": f"provider/{uid}/key",
+                "internal_default": True,
+            },
+        )
+
+    held = connection("a")
+    tree = _Tree({"resources/provider/a.json": held})
+    rule = resource_rule(kinds, lambda: {"a": ("resources/provider/a.json", "provider", "a")})
+    verdict = rule([Change("resources/provider/b.json", connection("b"), None)], tree)
+    assert verdict.findings == []
 
 
 def test_a_file_is_held_to_the_kinds_own_name_rules() -> None:

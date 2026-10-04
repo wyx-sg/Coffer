@@ -137,6 +137,35 @@ describe("useChatController hand-off", () => {
     expect(result.current.draftPrefill).toBeNull();
   });
 
+  test("a hand-off marked autoSend creates the conversation at once, once", () => {
+    route = { id: "new" };
+    location = {
+      pathname: "/conversations/new",
+      search: "",
+      state: { handoff: { agentKey: "codex", cwd: "/w", prompt: "Tidy.", autoSend: true } },
+    };
+    const { rerender } = renderHook(() => useChatController());
+    rerender();
+    rerender();
+
+    expect(createConv.mutate).toHaveBeenCalledTimes(1);
+    expect(createConv.mutate.mock.calls[0]?.[0]).toEqual({
+      agent_key: "codex",
+      agent_config: { cwd: "/w" },
+    });
+  });
+
+  test("a plain hand-off sends nothing", () => {
+    route = { id: "new" };
+    location = {
+      pathname: "/conversations/new",
+      search: "",
+      state: { handoff: { agentKey: "codex", cwd: null, prompt: "Install jq." } },
+    };
+    renderHook(() => useChatController());
+    expect(createConv.mutate).not.toHaveBeenCalled();
+  });
+
   test("an agent page's New conversation opens an empty draft on that agent", () => {
     route = { id: "new" };
     location = { pathname: "/conversations/new", search: "", state: { draftAgent: "codex" } };

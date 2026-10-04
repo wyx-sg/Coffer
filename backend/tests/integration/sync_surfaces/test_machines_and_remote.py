@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import subprocess
 from pathlib import Path
@@ -152,28 +151,6 @@ def test_icloud_and_file_provider_roots_are_synchronisers(tmp_path: Path) -> Non
     assert synchroniser_of(icloud, home=home) == "iCloud Drive"
     assert synchroniser_of(drive, home=home) == "a cloud drive"
     assert synchroniser_of(home / ".coffer" / "vault", home=home) is None
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="a curation pass and a converge round do not overlap"
-)
-def test_the_worker_never_runs_a_round_while_curation_holds_the_lock(tmp_path: Path) -> None:
-    (mac,) = joined(tmp_path, "Mac")
-
-    async def scenario() -> tuple[int, int, int]:
-        worker = SyncWorker(mac.service, start_delay_s=0, idle_poll_s=0.01)
-        before = await mac.history.count()
-        async with mac.service.lock:  # a curation pass is running
-            tick = asyncio.create_task(worker.tick())
-            await asyncio.sleep(0.5)
-            during = await mac.history.count()
-            assert not tick.done()
-        await tick
-        return before, during, await mac.history.count()
-
-    before, during, after = mac.run(scenario())
-    assert during == before
-    assert after == before + 1
 
 
 @pytest.mark.acceptance(

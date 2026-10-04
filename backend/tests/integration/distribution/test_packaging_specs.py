@@ -261,13 +261,12 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     channel-attachment and agent-chat features, whose runtime deps are imported
     LAZILY (inside functions) so PyInstaller's static analysis misses them.
     Declare them explicitly so a frozen daemon can extract an inbound
-    attachment and drive the built-in chat agent.
+    attachment and probe a provider.
 
     Each of these is a real lazy importer in the codebase:
       * markitdown  — infrastructure/chat/document_extract.py (spec channels "Give
                       documents to every agent as extracted text")
       * openai      — infrastructure/provider/*
-      * langgraph — infrastructure/llm/* (the only importer of langgraph/langchain_*)
 
     The knowledge layer declares nothing here: it is a directory of markdown
     files with no converter, no index and no embedding client to bundle.
@@ -281,7 +280,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     """
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
     submodules = _collect_submodules_args(tree)
-    for pkg in ("markitdown", "openai", "langgraph"):
+    for pkg in ("markitdown", "openai"):
         assert pkg in submodules, (
             f"daemon spec must collect_submodules({pkg!r}) — it is imported "
             "lazily by chat/provider code and PyInstaller misses it statically"

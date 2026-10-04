@@ -21,11 +21,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   getFile: vi.fn(),
   saveFile: vi.fn(),
   deleteFile: vi.fn(),
-  curateCollection: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getChange: vi.fn(),
-  undoPass: vi.fn(),
   getHistory: vi.fn(),
   getVersionDiff: vi.fn(),
   getVersionBody: vi.fn(),
@@ -33,8 +30,6 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn(), rename: vi.fn() } }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 
@@ -51,18 +46,16 @@ afterEach(() => {
 const DESCRIPTION = { name: "What belongs in this collection" };
 
 describe("the properties", () => {
-  test("Documents, Inbox with Open Inbox, Last curated and Folder — no big numbers or danger zone", async () => {
+  test("Documents and Folder — no inbox, no last-curated, no big numbers or danger zone", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const stats = await screen.findByTestId("knowledge-stats");
     expect(within(stats).getByText("Documents")).toBeInTheDocument();
-    expect(within(stats).getByText("1 waiting")).toBeInTheDocument();
-    expect(await within(stats).findByText("2 hours ago")).toBeInTheDocument();
+    expect(within(stats).getByText("Folder")).toBeInTheDocument();
     expect(within(stats).getByText("~/.coffer/knowledge/shopee")).toBeInTheDocument();
+    expect(within(stats).queryByText("Inbox")).toBeNull();
+    expect(within(stats).queryByText("Last curated")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit description" })).toBeNull();
     expect(screen.queryByText("Danger zone")).toBeNull();
-
-    fireEvent.click(within(stats).getByRole("button", { name: "Open Inbox" }));
-    expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}/inbox`);
   });
 
   test("the folder path copies from its icon button", async () => {
@@ -74,35 +67,31 @@ describe("the properties", () => {
   });
 
   acceptance("knowledge", "a collection page shows its properties", async () => {
-    api.listChanges.mockResolvedValue({ changes: [EDIT], waiting: [], next_cursor: null });
-    renderKnowledge(`/knowledge/${OTHER.uid}`);
-    const stats = await screen.findByTestId("knowledge-stats");
-    expect(within(stats).getByText("Nothing")).toBeInTheDocument();
-    expect(await within(stats).findByText("Never")).toBeInTheDocument();
-    expect(within(stats).queryByRole("button", { name: "Open Inbox" })).toBeNull();
-  });
-
-  test("without Coffer's engine only Documents and Folder remain", async () => {
-    answerFromFixtures({ modelSet: false });
     renderKnowledge(`/knowledge/${UID}`);
-    const stats = await screen.findByTestId("knowledge-stats");
-    await waitFor(() => expect(within(stats).queryByText("Inbox")).toBeNull());
+    expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
+    expect(screen.getByText(COLLECTION.description)).toBeInTheDocument();
+    const stats = screen.getByTestId("knowledge-stats");
     expect(within(stats).getByText("Documents")).toBeInTheDocument();
     expect(within(stats).getByText("Folder")).toBeInTheDocument();
-    expect(within(stats).queryByText("Last curated")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: `More actions for ${NAME}` }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "Reveal in Finder",
+      "Copy path",
+      "Rename…",
+      "Delete collection…",
+    ]);
   });
 });
 
 describe("a just created, empty collection", () => {
   test("is the same page with one muted line and a Reveal in Finder link", async () => {
-    api.listChanges.mockResolvedValue({ changes: [EDIT], waiting: [], next_cursor: null });
     renderKnowledge(`/knowledge/${OTHER.uid}`);
     expect(await screen.findByRole("heading", { name: OTHER.name })).toBeInTheDocument();
     expect(
       screen.getByText(/No documents yet\. Upload one, or drop Markdown files into the folder\./),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
-    // No Add a document: people write through Edit, agents write files into .inbox/.
+    // No Add a document: people write through Edit, agents write files.
     expect(screen.queryByRole("button", { name: /Add a document/ })).toBeNull();
   });
 });
@@ -191,7 +180,7 @@ describe("Delete collection…", () => {
     await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(/^\/knowledge$/));
 
     // Undo restores it from the vault's history.
-    api.listChanges.mockResolvedValue({ changes: [REMOVAL], waiting: [], next_cursor: null });
+    api.listChanges.mockResolvedValue({ changes: [REMOVAL], next_cursor: null });
     api.restoreDeleted.mockResolvedValue(REMOVAL);
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(api.restoreDeleted).toHaveBeenCalledWith("r3m0ve"));
@@ -203,7 +192,7 @@ describe("Delete collection…", () => {
     fireEvent.click(await screen.findByRole("button", { name: `More actions for ${NAME}` }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection…" }));
     await screen.findByText(`Deleted ${NAME}`);
-    api.listChanges.mockResolvedValue({ changes: [REMOVAL], waiting: [], next_cursor: null });
+    api.listChanges.mockResolvedValue({ changes: [REMOVAL], next_cursor: null });
     api.restoreDeleted.mockRejectedValue(new Error("name taken"));
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(await screen.findByText(`Couldn’t restore ${NAME}`)).toBeInTheDocument();
@@ -226,7 +215,9 @@ describe("Rename…", () => {
     // Unchanged, the name cannot be submitted.
     expect(within(dialog).getByRole("button", { name: "Rename" })).toBeDisabled();
     fireEvent.change(field, { target: { value: "  shops  " } });
-    expect(within(dialog).getByText("Folder: ~/.coffer/vault/knowledge/shops/")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("Folder: ~/.coffer/vault/knowledge/shops/"),
+    ).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Rename" }));
 
     await waitFor(() => expect(resourcesApi.rename).toHaveBeenCalledWith(UID, "shops"));

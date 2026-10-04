@@ -2,11 +2,11 @@
 //
 // Settings → General (canvas 1.4.01): preferences for this browser and this
 // Mac, in three sections — Appearance (the interface language and the theme,
-// each a segmented choice applied at once), Coffer's model (the model Coffer's
-// own engine runs on and speech to text; spec web-ui "Choose Coffer's model in
-// Settings › General", built by its own work item and mounted unchanged here),
-// and Tables and files (the default rows per page every list table seeds from,
-// and the editor Coffer opens managed files with). Everything saves as it
+// each a segmented choice applied at once), Speech-to-text (the connection and
+// model that transcribe voice; spec internal-engine "Show the speech-to-text
+// pair in Settings › General", built by its own work item and mounted unchanged
+// here), and Tables and files (the default rows per page every list table seeds
+// from, and the editor Coffer opens managed files with). Everything saves as it
 // changes; there is no Save button. (The experimental features are switched on
 // the dev-only Features tab, not here.)
 //

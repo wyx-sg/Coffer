@@ -129,11 +129,11 @@ def test_knowledge_off_re_renders_the_guide_without_its_knowledge_sections(
     with _client() as c:
         before = kind_gates._guide(home)
         assert "Knowledge is a directory of files" in before
-        assert "/.inbox/" in before
+        assert "Tidying a collection" in before
 
         _switch(c, "knowledge", False)
         off = kind_gates._guide(home)
-        assert "/.inbox/" not in off
+        assert "Tidying a collection" not in off
         assert "Knowledge is a directory of files" not in off
         assert kind_gates._names_memory(off)
         assert "coffer__search_tools" in off

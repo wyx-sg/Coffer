@@ -3,12 +3,12 @@
 // A document's History (boards 5.1.05–5.1.08; spec web-ui "Show a knowledge
 // document's history on its History tab"): the same card as a skill's History
 // (VersionHistorySplit) filling the pane — the versions on the left, newest
-// first, each with who wrote it (you, curation naming the agent whose item it
-// curated, sync, an edit on disk), "when · one sentence of what it did" and the
+// first, each with who wrote it (you, an agent, sync, an edit on disk; a version
+// an earlier curation pass wrote keeps its curation label), "when · one sentence of what it did" and the
 // lines it moved in this document, the newest wearing a Current chip; on the
 // right the chosen version's diff (KnowledgeVersionPanel) with Restore this
 // version, which writes a NEW version naming you rather than rewriting the
-// past, and, for a curation pass, "See the pass". The newest version is chosen
+// past. The newest version is chosen
 // when the tab opens. A history that cannot be read is one LoadErrorRow here;
 // with git missing it is the neutral "History needs git" row carrying the
 // daemon's install prompt. The Document tab reads on its own and keeps working.

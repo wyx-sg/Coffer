@@ -49,7 +49,7 @@ type EndpointState = {
 };
 const { agentsState, engineState, refetch, probedFor, endpoint, listModels } = vi.hoisted(() => ({
   agentsState: { data: [] as unknown[] },
-  engineState: { data: { model: null, transcribe_model: null } as Record<string, unknown> },
+  engineState: { data: { transcribe_model: null } as Record<string, unknown> },
   refetch: vi.fn(),
   probedFor: [] as string[],
   endpoint: { state: {} as Record<string, unknown> },
@@ -91,7 +91,6 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   secret_ref: "provider/acme",
   local_runtime: null,
   compatible_agents: ["codex"],
-  internal_default: false,
   transcribe_default: false,
   models: [],
   enabled: true,
@@ -158,7 +157,7 @@ describe("ProviderDetailPage", () => {
     probedFor.length = 0;
     setEndpoint({});
     agentsState.data = [];
-    engineState.data = { model: null, transcribe_model: null };
+    engineState.data = { transcribe_model: null };
     (scopeApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       scope: null,
       supports_scope: true,
@@ -168,12 +167,12 @@ describe("ProviderDetailPage", () => {
 
   acceptance("provider-switching", "a provider's used-by list is read-only", async () => {
     agentsState.data = [agent("claude_code", "claude-opus-4-1")];
-    engineState.data = { model: "gpt-5-mini", transcribe_model: null };
+    engineState.data = { transcribe_model: "whisper-1" };
     serve(
       makeProvider({
         protocol: "anthropic",
         compatible_agents: ["claude_code"],
-        internal_default: true,
+        transcribe_default: true,
       }),
     );
     renderPage();
@@ -184,16 +183,17 @@ describe("ProviderDetailPage", () => {
     const claude = within(usedBy).getByRole("link", { name: "Claude Code › Change model" });
     expect(claude).toHaveAttribute("href", "/agents/claude_code?change-model=1");
     expect(within(usedBy).getByText("claude-opus-4-1")).toBeInTheDocument();
-    expect(within(usedBy).getByText("gpt-5-mini")).toBeInTheDocument();
+    expect(within(usedBy).getByText("Speech to text")).toBeInTheDocument();
+    expect(within(usedBy).getByText("whisper-1")).toBeInTheDocument();
     // A healthy row carries no status word.
     expect(within(usedBy).queryByText(/Runs on this provider|Requests fail/)).toBeNull();
-    const engine = within(usedBy).getByRole("button", { name: "Settings › General" });
+    const settings = within(usedBy).getByRole("button", { name: "Settings › General" });
     // No switch, activate or revert control in Used by.
     expect(within(usedBy).queryByRole("switch")).toBeNull();
     expect(
       within(usedBy).queryByRole("button", { name: /switch|activate|revert|built-in|own login/i }),
     ).toBeNull();
-    fireEvent.click(engine);
+    fireEvent.click(settings);
     await waitFor(() => expect(where()).toBe("/settings/general"));
   });
 
@@ -499,8 +499,8 @@ describe("ProviderDetailPage", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  test("Deleting a provider Coffer's engine runs on names what changes, then deletes it", async () => {
-    serve(makeProvider({ internal_default: true }));
+  test("Deleting the provider speech to text runs on names what changes, then deletes it", async () => {
+    serve(makeProvider({ transcribe_default: true }));
     api.deletePreview.mockResolvedValue({ agents: [] });
     api.remove.mockResolvedValue(undefined);
     renderPage();
@@ -509,7 +509,7 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
     // Not blocked: the consequence is said, and Delete is available. (The review
     // gives way to a plain confirmation once nothing in an agent's file changes.)
-    expect(await screen.findByText(/Coffer’s engine pauses/)).toBeInTheDocument();
+    expect(await screen.findByText(/Speech to text turns off/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
   });
@@ -519,7 +519,7 @@ describe("ProviderDetailPage", () => {
     "deleting a provider an agent runs on is a review of its config diff, and Delete applies it",
     async () => {
       agentsState.data = [agent("codex", "gpt-5-codex")];
-      serve(makeProvider({ internal_default: true }));
+      serve(makeProvider({ transcribe_default: true }));
       api.deletePreview.mockResolvedValue({
         agents: [
           {
@@ -549,7 +549,7 @@ describe("ProviderDetailPage", () => {
       const dialog = within(await screen.findByRole("dialog"));
       expect(await dialog.findByText("Review changes · 1 file")).toBeInTheDocument();
       expect(dialog.getByText("Codex goes back to its own login")).toBeInTheDocument();
-      expect(dialog.getByText("Coffer’s engine pauses")).toBeInTheDocument();
+      expect(dialog.getByText("Speech to text turns off")).toBeInTheDocument();
       expect(dialog.getByText('model_provider = "coffer"')).toBeInTheDocument();
       expect(api.remove).not.toHaveBeenCalled();
       fireEvent.click(dialog.getByRole("button", { name: "Delete" }));

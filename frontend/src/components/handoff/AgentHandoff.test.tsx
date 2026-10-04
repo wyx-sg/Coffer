@@ -19,12 +19,17 @@ const PROMPT = "Install jq 1.6 or newer on this machine.";
 
 function Draft() {
   const handoff = readHandoffState(useLocation().state);
-  return <div data-testid="draft">{handoff ? `${handoff.agentKey}: ${handoff.prompt}` : ""}</div>;
+  return (
+    <div data-testid="draft">
+      {handoff ? `${handoff.agentKey}: ${handoff.prompt}${handoff.autoSend ? " (sent)" : ""}` : ""}
+    </div>
+  );
 }
 
 function renderHandoff(
   available: boolean,
   prompt: React.ComponentProps<typeof AgentHandoff>["prompt"] = PROMPT,
+  autoSend?: { label: string },
 ) {
   listAgents.mockResolvedValue({
     agents: [{ agent_key: "claude_code", display_name: "Claude Code", available }],
@@ -35,7 +40,10 @@ function renderHandoff(
       <ToastProvider>
         <MemoryRouter initialEntries={["/clis/jq"]}>
           <Routes>
-            <Route path="/clis/:command" element={<AgentHandoff prompt={prompt} />} />
+            <Route
+              path="/clis/:command"
+              element={<AgentHandoff prompt={prompt} autoSend={autoSend} />}
+            />
             <Route path="/conversations/new" element={<Draft />} />
           </Routes>
         </MemoryRouter>
@@ -69,6 +77,19 @@ describe("AgentHandoff", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
     expect(await screen.findByTestId("draft")).toHaveTextContent("claude_code: asked for");
     expect(request).toHaveBeenCalledWith({ agent: "Claude Code" });
+  });
+
+  test("a button with autoSend carries its label and asks for the prompt to be sent", async () => {
+    renderHandoff(true, PROMPT, { label: "Tidy" });
+    fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
+    expect(await screen.findByTestId("draft")).toHaveTextContent(`claude_code: ${PROMPT} (sent)`);
+  });
+
+  test("an autoSend button with no managed agent offers Copy prompt only", async () => {
+    renderHandoff(false, PROMPT, { label: "Tidy" });
+    fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
+    expect(writeText).toHaveBeenCalledWith(PROMPT);
+    expect(screen.queryByRole("button", { name: "Tidy" })).not.toBeInTheDocument();
   });
 
   test("Ask an agent opens the draft with the prompt, no dialog first", async () => {

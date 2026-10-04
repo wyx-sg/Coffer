@@ -25,7 +25,7 @@ interface Props {
   onDisk: string;
   /** "Unsaved · started today at 13:58". */
   mineMeta: string;
-  /** "Curation · today at 14:05". */
+  /** "Codex · today at 14:05". */
   diskMeta: string;
   saving: boolean;
   onBack: () => void;

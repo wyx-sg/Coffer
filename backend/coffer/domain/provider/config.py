@@ -3,7 +3,7 @@
 Value-level validation only (types, well-formedness). No I/O. A connection is a
 credentialed endpoint: ``{protocol, base_url, secret_ref}``. The MODEL it
 runs is NOT stored here — it is chosen at the point of use (per-agent binding,
-the internal-engine selector, the chat surface), per spec provider-switching
+the chat surface), per spec provider-switching
 "Take projected model keys from the agent's binding".
 ``models`` does not change that: it is the OFFERED set — which of the endpoint's
 models the user intends to use — and narrows the menu every point-of-use picker
@@ -22,8 +22,8 @@ a newly created connection starts DORMANT (``starts_dormant``) — it cannot
 supply a starting agent LIST any more, because a scope holds agent uids and no
 pure function of this config knows one. Which connection an agent runs on is
 NOT recorded here: it is ``AgentConfig.connection_uid`` on the agent.
-``internal_default`` (global, ≤1) marks the connection Coffer's internal engine
-uses.
+``transcribe_default`` (global, ≤1) marks the connection Coffer transcribes
+speech with.
 
 The secret is referenced by ``secret_ref`` only — the raw key lives in
 the Fernet vault and is never stored here, mirroring the MCP kind. ``ollama``
@@ -67,6 +67,9 @@ _MAX_MODEL_ID_LEN = 200
 
 #: Curated-model facts that are omitted from the document while unknown.
 _RETIRED_EFFORT_KEYS = ("effort_levels", "default_effort")
+
+#: Connection keys an older build wrote and this one ignores.
+_RETIRED_PROVIDER_KEYS = ("internal_default",)
 
 _OPTIONAL_FACTS = ("context_window", "price")
 
@@ -143,8 +146,7 @@ class Protocol(StrEnum):
     to every agent, including one registered tomorrow — and the user narrows
     from there; ``unknown`` means the probe was inconclusive, and the
     conservative answer to that is "ask", not "guess". ``ollama`` is
-    internal-only: it starts scoped to NO agent and is used solely by Coffer's
-    internal LLM engine.
+    internal-only: it starts scoped to NO agent.
     """
 
     ANTHROPIC = "anthropic"
@@ -192,6 +194,16 @@ class ProviderConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data: Any) -> Any:
+        """A stored connection may still carry ``internal_default``, which no
+        longer marks anything; drop it, and the file loses the key on its next
+        write (spec provider-switching "Ignore a stored internal-default flag")."""
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k not in _RETIRED_PROVIDER_KEYS}
+        return data
+
     protocol: Protocol
     base_url: str
     # Fernet vault ref — an opaque address (``provider/<uuid4>/key``), never
@@ -202,24 +214,18 @@ class ProviderConfig(BaseModel):
     secret_ref: str | None = None
     # Which of the endpoint's models the user actually intends to use — the
     # OFFERED set, not a chosen model. A picker that offers THIS connection's
-    # models (the per-agent binding, the internal-engine selector) narrows to
+    # models (the per-agent binding) narrows to
     # these ids AND to the modality it needs; EMPTY (the default, and what every
     # pre-existing connection has) means no restriction — the endpoint's whole
     # catalogue. An agent's own model catalogue is a separate source and is never
     # narrowed by this. Ids are opaque strings passed verbatim to the vendor;
     # Coffer never checks them against a list of its own.
     models: list[CuratedModel] = Field(default_factory=list)
-    # At most one connection globally is Coffer's internal-engine default
-    # (enforced by ``ProviderService.set_internal_default``).
-    internal_default: bool = False
     # At most one connection globally serves Coffer's speech-to-text
-    # (enforced by ``ProviderService.set_transcribe_default``). Separate from
-    # ``internal_default`` because they are different models: a gateway that
+    # (enforced by ``ProviderService.set_transcribe_default``). A gateway that
     # serves chat completions commonly serves no transcription endpoint at
-    # all, so borrowing the engine's connection would aim voice at an endpoint
-    # that answers 404. There is deliberately NO fallback between the two —
-    # nothing marked here means Coffer transcribes nothing and hands the agent
-    # the audio file untouched.
+    # all, so nothing marked here means Coffer transcribes nothing and hands
+    # the agent the audio file untouched.
     transcribe_default: bool = False
     # Set when the endpoint is a model runtime on this machine (Ollama, LM
     # Studio, vLLM, llama-server): what detection found there. Such a
@@ -319,9 +325,9 @@ class ResolvedConnection:
 
     The model lives apart from the connection (spec provider-switching
     "Take projected model keys from the agent's binding"), so the two travel
-    together when Coffer's internal engine builds a chat model: the connection
-    supplies the endpoint + protocol + secret, the ``model`` is resolved
-    separately (the internal-engine selector, the per-agent binding, …).
+    together when Coffer calls the connection: the connection supplies the
+    endpoint + protocol + secret, the ``model`` is resolved separately (the
+    speech-to-text selector, the per-agent binding, …).
     """
 
     config: ProviderConfig

@@ -95,7 +95,7 @@ Every type Telegram attaches to a message drives a turn: photos, documents, voic
 
 - A photo arrives at its largest size. A caption becomes the message text.
 - An album — several photos sent together — is collected for one second and handled as **one** turn with all its images and the album's caption.
-- Documents such as PDFs are extracted to text for the agent. Voice and audio are transcribed when speech to text is on (**Settings › General → Coffer's model**); otherwise the agent gets the audio file.
+- Documents such as PDFs are extracted to text for the agent. Voice and audio are transcribed when speech to text is on (**Settings › General → Speech to text**); otherwise the agent gets the audio file.
 - A file over 20 MB — the Bot API's download limit for bots — is never fetched. The turn text notes it once, so the agent's reply mentions that it did not receive the file.
 - A download that fails is noted as `[attachment '<name>' could not be downloaded]` and the turn runs on the rest of the message.
 

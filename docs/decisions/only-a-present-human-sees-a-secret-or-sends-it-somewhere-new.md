@@ -106,8 +106,8 @@ before**.
    environment variable or HTTP header, a
    channel adapter's credential, the sync remote's push token, and the base URL
    of a provider connection that carries a key. The target of a provider
-   connection is its base URL: the local model proxy and the internal engine
-   receive a key only for an approved URL. Telegram and SeaTalk channels are the
+   connection is its base URL: the local model proxy and speech-to-text
+   transcription receive a key only for an approved URL. Telegram and SeaTalk channels are the
    channel destinations wired today. Citing an existing secret from
    a destination that did not cite it before, or changing where a resource that
    already cites one sends it (the command of a stdio server, the URL of an HTTP

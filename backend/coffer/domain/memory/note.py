@@ -1,12 +1,12 @@
 """What one note is — Coffer's own unit of memory.
 
-Spec memory "Store each note as one Markdown file with frontmatter" and "Write
-notes in Coffer's own words".
+Spec memory "Store each note as one Markdown file with frontmatter" and "Distil each raw entry into
+a note mechanically".
 
 A note is **Coffer's writing**, not an agent's. It is distilled from one or
 more raw entries read out of the agents' native memories, covers one topic,
-and is rewritten in place as later material arrives ("Keep one topic per
-note"). That is the
+and is rewritten in place as later material arrives ("Distil each raw entry into a note
+mechanically"). That is the
 whole of the reversal recorded in
 [Aggregate Agent Memory](../../../docs/decisions/aggregate-agent-memory-never-write-it.md):
 the previous design stored the sources' own words, which meant Codex's
@@ -61,7 +61,7 @@ PERSONAL_TYPES = frozenset({TYPE_USER})
 class Origin:
     """One raw entry a note was built from, and where it came from.
 
-    This is the note's provenance ("Record provenance and merge by meaning").
+    This is the note's provenance ("Distil each raw entry into a note mechanically").
     It answers two questions that are
     both load-bearing: *which of my agents already knows this*, which is half
     of what makes an aggregated view worth reading at all, and *where do I go
@@ -128,6 +128,14 @@ class Note:
     #: the next agent does not have to guess a word ("Write each index line to
     #: stand on its own").
     search_terms: tuple[str, ...] = field(default_factory=tuple)
+    #: Why the note is marked for retirement, set by an agent tidying the
+    #: partition (frontmatter ``retired: <reason>``). Empty on a live note. The
+    #: next distil pass records the retirement and deletes the file (spec memory
+    #: "Retire a note an agent marked retired").
+    retired: str = ""
+    #: The slug of the note that takes this one's place, when the marker names one
+    #: (frontmatter ``replaced_by``).
+    replaced_by: str = ""
 
     @property
     def key(self) -> str:

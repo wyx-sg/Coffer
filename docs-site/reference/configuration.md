@@ -13,7 +13,7 @@ Coffer keeps configuration in five places, and each one exists for a reason:
 | --- | --- | --- |
 | Environment variables | Operator escape hatches, test and dev overrides | Read by one process at start-up; nothing persists them |
 | `~/.coffer/daemon-config.json` | Daemon and model-proxy ports, machine name and id, experimental features | Needed before anything else is opened, and machine-local |
-| The vault (`~/.coffer/vault/state/settings/internal-engine.json`) | Coffer's model, the curation owner, upkeep passes | Settings every machine shares; they travel with [vault sync](/guides/vault-sync) |
+| The vault (`~/.coffer/vault/state/settings/internal-engine.json`) | The speech-to-text model, the model-call time limit, the aggregate and distil switches and intervals | Settings every machine shares; they travel with [vault sync](/guides/vault-sync) |
 | Local state (`~/.coffer/local/`) | Retention policies, the sync remote, reach | True of this machine only; never synced |
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
@@ -182,26 +182,23 @@ These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) an
 
 **Start at login** is under **Settings → Daemon**, not General. It is off by default and, when on, installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. It is stored in the plist file.
 
-### Settings › General → Coffer's model
+### Settings › General → Speech to text
 
-The internal engine settings are one vault document, `state/settings/internal-engine.json`, and all of them are *synced*. You can also edit the file by hand; an absent file means every default.
+The settings for Coffer's own work are one vault document, `state/settings/internal-engine.json`, and all of them are *synced*. You can also edit the file by hand; an absent file means every default. Speech to text is the one place Coffer itself calls a model; it never runs a model over your knowledge or memory.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. |
-| **Time limit per call** | `60` s | How long one call to Coffer's own model may take. |
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. |
 | **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. |
 
-The upkeep passes are not in Settings. Each is switched, retimed and (for curation) given its owner in the **Automatic** popover on the page it upkeeps; the popover's interval list (**Every**) runs from 15 minutes to 1 day, and a shorter interval can be set through the settings API down to a floor of 60 seconds. `coffer daemon status` shows the passes in flight.
+The two memory passes are not in Settings. Each is switched and retimed in the **Automatic** popover on the **Memory** page; the popover's interval list (**Every**) runs from 15 minutes to 1 day, and a shorter interval can be set through the settings API down to a floor of 60 seconds. `coffer daemon status` shows the passes in flight.
 
 | Pass | Where | Default | Effect |
 | --- | --- | --- | --- |
 | aggregate | **Memory** header → **Automatic**, switched with distil as **Read memory automatically** | on, every 1 h | Reads the agents' own memory files into the derived memory tree. |
-| distil | the same switch; its interval has no control in the popover | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. |
-| curate | **Knowledge** header → **Automatic** (**Automatic curation**) | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. |
+| distil | the same switch; its interval has no control in the popover | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes as they stand, renders its `MEMORY.md`, and removes notes an agent has marked `retired:`. It calls no model. |
 
-The curation owner, the one machine allowed to run curation in a synced vault, is **Curation runs on** in the Knowledge **Automatic** popover (default: every machine).
+The knowledge sweep has no setting. While the **Knowledge** [experimental feature](#experimental-features) is on, it runs every minute: it re-renders the `coffer-guide` skill, promotes files dropped in a collection's `.inbox/`, and commits edits made on disk.
 
 ### Sync remote
 

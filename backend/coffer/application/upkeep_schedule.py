@@ -1,10 +1,9 @@
 """Waiting for the next unattended pass, in a way a settings change can reach.
 
-Coffer runs three passes on its own behalf — aggregation, distil, curation — and
-each one used to wait with a single ``asyncio.sleep(interval)`` over a constant
-compiled into the worker. Both halves of that are now the operator's to choose
-(spec memory "Aggregate on an interval and on demand", spec knowledge "Run curation
-on a sweep and on demand"), and a long sleep is exactly how a
+Coffer runs two timed passes on its own behalf — aggregation and distil — and
+each one waits on an interval the operator chooses (spec memory "Aggregate on
+an interval and on demand"). A single ``asyncio.sleep(interval)`` over a
+constant would go unnoticed when the choice changes, and a long sleep is exactly how a
 choice goes unnoticed: a worker that went to sleep for six hours does not learn
 that the interval is now fifteen minutes until the six hours are up, so the
 setting appears not to work at all for most of a day.
@@ -27,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from coffer.domain.internal_engine_config import AGGREGATE, CURATE, DISTIL
+from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 
 #: How often the wait looks up again. Short enough that changing an interval in
 #: Settings visibly takes effect, long enough to be free.
@@ -43,14 +42,8 @@ DEFAULT_INTERVALS: dict[str, float] = {
     # Frequent enough that a fact an agent learned this morning is here by the
     # afternoon; rare enough that an idle machine's passes cost a stat per source.
     AGGREGATE: 60 * 60.0,
-    # Both model passes are slower and rewrite more, so they sweep four times a
-    # day rather than hourly.
+    # Distil rewrites more, so it sweeps four times a day rather than hourly.
     DISTIL: 6 * 60 * 60.0,
-    # Hourly: new material is curated within the hour. A person who wants it
-    # readable in the same sitting presses Curate on the collection, which runs
-    # a pass on demand (spec knowledge "Run curation on a sweep and on
-    # demand").
-    CURATE: 60 * 60.0,
 }
 
 

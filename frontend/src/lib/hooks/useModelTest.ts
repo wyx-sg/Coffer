@@ -1,9 +1,10 @@
-// src/lib/hooks/useModelTest.ts — the Test button beside each Coffer's model picker.
+// src/lib/hooks/useModelTest.ts — the Test button beside a model picker (the speech-to-text picker
+// in Settings › General, an agent's Overview › Model).
 //
-// Two probes, because the two pickers run different kinds of model (spec
-// internal-engine "Show and change Coffer's model in Settings › General"):
+// Two probes, because the pickers run different kinds of model (spec
+// internal-engine "Show the speech-to-text pair in Settings › General"):
 //
-//   • `chat` (the engine) — one `POST /api/v1/models/test-connection`, a
+//   • `chat` (an agent's model) — one `POST /api/v1/models/test-connection`, a
 //     minimal chat request to the chosen connection and model.
 //   • `list` (speech to text) — one `POST /api/v1/models/list-models` for the
 //     chosen connection. A chat probe would fail on a speech model even on a

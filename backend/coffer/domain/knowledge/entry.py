@@ -17,9 +17,7 @@ ACTOR_USER = "user"
 class CollectionEntry:
     """One collection, as the top level of the catalogue shows it.
 
-    ``pending_count`` is the material still waiting in the collection's inbox
-    to be merged — what an agent cannot read yet (spec knowledge "Hide
-    dot-prefixed entries except the inbox").
+    ``document_count`` is the Markdown documents an agent can read.
     """
 
     #: The collection resource's identity. Every route that addresses this
@@ -35,7 +33,6 @@ class CollectionEntry:
     #: First paragraph of the collection's ``README.md``; empty when absent.
     description: str
     document_count: int = 0
-    pending_count: int = 0
     #: The collection directory's absolute path, so a surface can reveal it
     #: ("Return absolute paths on reads"); empty where it was not read.
     folder_path: str = ""
@@ -46,16 +43,12 @@ class CollectionEntry:
 
 @dataclass(frozen=True)
 class DirectoryEntry:
-    """A subdirectory inside a collection — filed by a person or by curation."""
+    """A subdirectory inside a collection — filed by a person or an agent."""
 
     #: Path relative to the knowledge root, e.g. ``shopee/account``.
     path: str
     name: str
     file_count: int
-    #: True for the collection's ``.inbox`` and what waits in it: material a
-    #: person may look at but not edit or delete (spec knowledge "Hide
-    #: dot-prefixed entries except the inbox").
-    inbox: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,10 +61,6 @@ class FileEntry:
     description: str
     actor: str
     updated_at: str
-    #: True for the collection's ``.inbox`` and what waits in it: material a
-    #: person may look at but not edit or delete (spec knowledge "Hide
-    #: dot-prefixed entries except the inbox").
-    inbox: bool = False
 
 
 @dataclass(frozen=True)
@@ -99,18 +88,10 @@ class KnowledgeFile:
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
-    #: When curation last settled this document as it now reads; empty when
-    #: it never has, or it changed since ("Settle an item only after its pass
-    #: completes").
-    curated_at: str = ""
     #: sha256 hex of the file's bytes as read — what an edit hands back so a
     #: file changed on disk since is refused rather than overwritten (spec
     #: knowledge "Save a document edited in the web UI").
     fingerprint: str = ""
-    #: True for the collection's ``.inbox`` and what waits in it: material a
-    #: person may look at but not edit or delete (spec knowledge "Hide
-    #: dot-prefixed entries except the inbox").
-    inbox: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,29 +108,9 @@ class GrepOutcome:
 
 
 @dataclass(frozen=True)
-class Pending:
-    """One item a pass can take: inbox material, or an edited document.
-
-    Exactly one field is set. ``material`` is the inbox item's file name —
-    never a path a caller could aim elsewhere, since the inbox is not
-    addressable from outside this layer; ``document`` is a
-    knowledge-root-relative document path.
-    """
-
-    material: str | None = None
-    document: str | None = None
-
-
-@dataclass(frozen=True)
 class Submission:
-    """What became of one piece of submitted material.
-
-    ``document`` is set when the material was promoted on the spot, and is the
-    document it became; ``pending`` is the inbox item's name when it waits for
-    a pass instead. Exactly one of the two is set.
-    """
+    """What became of one piece of submitted material: the document it became."""
 
     collection: str
     title: str
-    document: KnowledgeFile | None = None
-    pending: str | None = None
+    document: KnowledgeFile

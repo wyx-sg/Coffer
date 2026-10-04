@@ -16,10 +16,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from coffer.application.memory.partition_row import PartitionSummary
 from coffer.application.memory.service import MemoryService
+from coffer.application.memory.tidy_handoff import tidy_all_prompt, tidy_prompt
 from coffer.application.memory.update import update_memory
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.memory.dependencies import get_memory_service
 from coffer.surfaces.http.memory.schemas import (
     AggregationResultOut,
@@ -34,32 +37,50 @@ router = APIRouter(
 )
 
 
+def _partition_out(p: PartitionSummary) -> PartitionOut:
+    return PartitionOut(
+        # The identity every other route on this family takes, so a surface that
+        # has listed the partitions never has to look one up by label to act on it.
+        uid=p.uid,
+        name=p.name,
+        repository_key=p.repository_key,
+        repository_path=p.repository_path,
+        note_count=p.note_count,
+        unresolvable=p.unresolvable,
+        distilled_at=p.distilled_at,
+        sources=list(p.sources),
+        waiting_entries=p.waiting_entries,
+        waiting_agents=list(p.waiting_agents),
+        updated_at=p.updated_at,
+        tidy_handoff=HandoffOut(prompt=tidy_prompt(p.name, note_count=p.note_count)),
+    )
+
+
 @router.get("/partitions", response_model=PartitionListOut)
 async def list_partitions(
     svc: MemoryService = Depends(get_memory_service),  # noqa: B008
 ) -> PartitionListOut:
     found = await svc.list_partitions()
-    return PartitionListOut(
-        partitions=[
-            PartitionOut(
-                # The identity every other route on this family takes, so a
-                # surface that has listed the partitions never has to look one
-                # up by label to act on it.
-                uid=p.uid,
-                name=p.name,
-                repository_key=p.repository_key,
-                repository_path=p.repository_path,
-                note_count=p.note_count,
-                unresolvable=p.unresolvable,
-                distilled_at=p.distilled_at,
-                sources=list(p.sources),
-                waiting_entries=p.waiting_entries,
-                waiting_agents=list(p.waiting_agents),
-                updated_at=p.updated_at,
-            )
-            for p in found
-        ]
-    )
+    return PartitionListOut(partitions=[_partition_out(p) for p in found])
+
+
+@router.get("/tidy-handoff", response_model=HandoffOut)
+async def tidy_handoff(
+    svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+) -> HandoffOut:
+    """The prompt that hands every partition's tidying to the person's agent."""
+    found = await svc.list_partitions()
+    return HandoffOut(prompt=tidy_all_prompt([(p.name, p.note_count) for p in found]))
+
+
+@router.get("/partitions/{uid}", response_model=PartitionOut)
+async def get_partition(
+    uid: str,
+    svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+) -> PartitionOut:
+    """One partition, with the hand-off that tidies it (spec memory "Hand a
+    partition's tidying to the agent"). An unknown uid is 404."""
+    return _partition_out(await svc.partition(uid))
 
 
 @router.post("/sync", response_model=AggregationResultOut)

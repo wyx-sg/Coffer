@@ -142,16 +142,13 @@ _STATUS: dict[str, int] = {
     # refused", with ``details.reason`` naming which refusal; the size ceiling
     # gets its own code because 413 is the honest status for it.
     "INGEST_REJECTED": 400,
-    # ripgrep's two failures. No surface calls it any more — the layer offers
-    # no retrieval ("Expose exactly one knowledge tool") — but curation still
-    # matches literally to pick its candidates ("Assemble a pass from a bounded
-    # context"), so a missing binary or a bad pattern can surface through a pass.
+    # A missing converter backend or search binary, and a search pattern that
+    # does not parse.
     "ENGINE_UNAVAILABLE": 503,
-    "GREP_PATTERN_INVALID": 400,
     # spec memory
     "MEMORY_NOTE_NOT_FOUND": 404,
-    # A save naming a fingerprint the note no longer has (spec memory "Edit a
-    # memory in the web UI or on disk"): the note is left as it is.
+    # A save naming a fingerprint the note no longer has (spec memory "Edit a memory in the
+    # web UI or in an editor"): the note is left as it is.
     "MEMORY_NOTE_CONFLICT": 409,
     "MEMORY_RAW_ENTRY_NOT_FOUND": 404,
     "MEMORY_UNSAFE_PATH": 400,
@@ -197,8 +194,6 @@ _STATUS: dict[str, int] = {
     "PROVIDER_INTERNAL_ONLY": 409,
     # The connection is switched off, or the scope does not name the agent.
     "PROVIDER_DOES_NOT_REACH_AGENT": 409,
-    # A second internal-engine default outside the route that moves the flag.
-    "PROVIDER_INTERNAL_DEFAULT_TAKEN": 409,
     # A second speech-to-text default outside the route that moves the flag.
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": 409,
     # knowledge (spec knowledge). A collection an agent is not authorized for
@@ -212,13 +207,10 @@ _STATUS: dict[str, int] = {
     # knowledge "Save a document edited in the web UI"): the file moved on
     # disk since the editor read it, and is left as it is.
     "KNOWLEDGE_FILE_CONFLICT": 409,
-    # History (spec knowledge "Keep every document's history and undo a pass as
-    # a whole"): no git on this machine is a state of the machine, an unknown
-    # version a missing thing, an undo over a later change a conflict.
+    # History (spec knowledge "Keep every document's history"): no git on this
+    # machine is a state of the machine, an unknown version a missing thing.
     "KNOWLEDGE_HISTORY_UNAVAILABLE": 503,
     "KNOWLEDGE_VERSION_NOT_FOUND": 404,
-    "KNOWLEDGE_NOT_A_PASS": 400,
-    "KNOWLEDGE_UNDO_CONFLICT": 409,
     # Restoring a delete (spec knowledge "Restore a deleted collection or document
     # from Recent changes"): nothing deleted is a wrong request, a path taken again a conflict.
     "KNOWLEDGE_NOT_A_DELETE": 400,
@@ -230,15 +222,8 @@ _STATUS: dict[str, int] = {
     # Ingestion (spec knowledge "Bound uploads and leave nothing behind on
     # failure"): named the limit, refused before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
-    # Curation's two refusals (spec knowledge "Refuse file-name references in
-    # documents", "Bound a pass to eight writes"). Both are the request being
-    # wrong rather than Coffer failing, so both are 400-class
-    # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
-    # is a link that rots, and a pass past its write bound is one source trying
-    # to rewrite the corpus. Neither is retryable unchanged.
-    "KNOWLEDGE_CURATION_HELD": 409,
     "KNOWLEDGE_ERROR": 400,
-    # Upkeep passes (memory organise, knowledge curation). A second pass over a
+    # Upkeep passes (memory's distil). A second pass over a
     # target one is already rewriting is refused, not queued — the surface
     # that asked should already have been showing the running one
     # (``application.upkeep_runs``).

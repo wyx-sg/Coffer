@@ -1,7 +1,7 @@
 """Memory scenarios that follow from notes being plain files and the web UI being
 the people's surface (spec memory "Confine reads to registered agents' memory
-paths", "Keep notes readable as plain files", "Edit a memory in the web UI or on
-disk", "Manage memory in the web UI").
+paths", "Keep notes readable as plain files", "Edit a memory in the web UI or in an
+editor", "Manage memory in the web UI").
 
 Reuses the booted app and the seeding helpers of ``test_memory_routes``: HOME, the
 database and both roots sit under ``tmp_path``.

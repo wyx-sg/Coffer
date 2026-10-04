@@ -11,7 +11,7 @@ The daemon is one Python process on one `asyncio` event loop. Everything
 long-lived in it is a task on that loop: each channel adapter's inbound loop (a
 Telegram long poll, the loop that supervises a SeaTalk websocket), each chat or
 channel turn and its renderer, the reconciler, and the periodic workers
-(retention, curation, memory, sync, price refresh, usage). The 1.0 audit
+(retention, the knowledge sweep, memory, sync, price refresh, usage). The 1.0 audit
 counted about fifty `asyncio.create_task` / `ensure_future` calls starting them,
 each owner keeping — or not keeping — its own reference.
 

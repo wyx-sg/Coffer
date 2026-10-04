@@ -32,9 +32,9 @@ daemon write, a merge — is judged here before it may be committed:
   is a move — and a name another resource of the kind already has is
   ``NAME_TAKEN``;
 - a config flag the kind lets only one resource hold (``Kind.exclusive_flags``:
-  ``provider``'s ``internal_default``) set while another resource holds it —
+  ``provider``'s ``transcribe_default``) set while another resource holds it —
   at ``HEAD`` or in the same change — is ``CONFIG_INVALID`` on the file that
-  sets it (spec provider-switching "Keep at most one internal default connection":
+  sets it (spec provider-switching "Keep an independent speech-to-text default":
   what a partial unique index enforced in SQL).
 
 Plain-text secrets are not detected here: the detector lives in
@@ -64,7 +64,10 @@ RESOURCE_FORMAT = FormatSpec(current=1)
 #: Config keys a kind used to read and no longer does, per kind. A file that
 #: still carries one (a hand edit, or a sync from a machine not yet updated) is
 #: accepted and the key ignored — the schema drops it on the file's next write.
-_RETIRED_CONFIG_KEYS: Mapping[str, frozenset[str]] = {"agent": frozenset({"effort"})}
+_RETIRED_CONFIG_KEYS: Mapping[str, frozenset[str]] = {
+    "agent": frozenset({"effort"}),
+    "provider": frozenset({"internal_default"}),
+}
 
 #: ``{uid: (path, kind, name)}`` of every resource at ``HEAD``.
 HeadOwners = Callable[[], Mapping[str, tuple[str, str, str]]]

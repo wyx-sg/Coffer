@@ -1,12 +1,10 @@
-"""A collection's inbox: where new material waits to be merged.
+"""A collection's inbox: the drop zone where new material lands before it is a document.
 
-The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Submit every
-entrance's input as material"). An item is ordinary frontmatter and Markdown,
-so a pass reads it exactly as it reads a document; it is deleted when that pass
-completes, and with no model to fold it, :func:`promote` makes it a document of
-its own (see "Promote material directly when no model is configured"). A person
-may read an item (see "Hide dot-prefixed entries except the inbox"); nothing
-but this module writes or deletes one.
+The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Promote submitted
+material at once"). An item is ordinary frontmatter and Markdown;
+:func:`promote` makes it a document of its own and removes it. Coffer's own
+entrances promote at once, and the sweep adopts and promotes whatever an agent
+outside Coffer, another machine or an older guide dropped there.
 """
 
 from __future__ import annotations
@@ -22,7 +20,6 @@ from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.fs import (
     atomic_write,
     decode,
-    fingerprint,
     render,
     timestamp,
     write_file,
@@ -54,8 +51,7 @@ def submit_material(
 ) -> str:
     """Put new material in the collection's inbox. Returns the item's name.
 
-    The item is ordinary frontmatter and Markdown, so the pass that merges it
-    reads it exactly as it reads a document. It is written under a name of its
+    The item is ordinary frontmatter and Markdown. It is written under a name of its
     own — never onto an existing item — because two submissions of the same
     title are two pieces of material.
     """
@@ -95,7 +91,7 @@ def _first_heading(body: str) -> str:
 
 def adopt_dropped(collection: str, name: str) -> tuple[str, str, bool]:
     """Fill the frontmatter of an item written outside Coffer, in place (spec
-    knowledge "Submit material by writing a file into the inbox").
+    knowledge "Adopt a file dropped into the inbox").
 
     ``title`` is kept, else the first ``# `` heading, else the file name's stem;
     ``description`` is kept, else the first prose paragraph, else the title;
@@ -128,7 +124,7 @@ def adopt_dropped(collection: str, name: str) -> tuple[str, str, bool]:
 
 
 def non_markdown_items(collection: str) -> tuple[str, ...]:
-    """Files in a collection's inbox that are not Markdown: never curated."""
+    """Files in a collection's inbox that are not Markdown: never promoted."""
     directory = paths.inbox_dir(collection)
     if not directory.is_dir():
         return ()
@@ -153,7 +149,7 @@ def _submitted_at(entry: pathlib.Path) -> float:
 
 
 def inbox_items(collection: str) -> tuple[str, ...]:
-    """The names of a collection's unmerged items, oldest submitted first."""
+    """The names of a collection's waiting items, oldest submitted first."""
     directory = paths.inbox_dir(collection)
     if not directory.is_dir():
         return ()
@@ -165,50 +161,23 @@ def inbox_items(collection: str) -> tuple[str, ...]:
     return tuple(name for _, name in sorted(found))
 
 
-def read_material(collection: str, name: str) -> KnowledgeFile:
-    """One inbox item, read the way a document is."""
-    path = _inbox_item(collection, name)
-    if not path.is_file():
-        raise KnowledgeFileNotFound(f"{collection}/{paths.INBOX_DIR_NAME}/{name}")
-    raw = path.read_bytes()
-    fm, body = split_frontmatter(decode(raw))
-    return KnowledgeFile(
-        path=f"{collection}/{paths.INBOX_DIR_NAME}/{name}",
-        title=str(fm.get("title") or path.stem),
-        description=str(fm.get("description") or ""),
-        actor=str(fm.get("actor") or ACTOR_AGENT),
-        created_at=str(fm.get("created_at") or ""),
-        updated_at=str(fm.get("updated_at") or ""),
-        body=body,
-        file_path=str(path),
-        folder_path=str(path.parent),
-        fingerprint=fingerprint(raw),
-        inbox=True,
-    )
-
-
-def discard_material(collection: str, name: str) -> None:
-    """Delete an inbox item a pass has folded in."""
-    _inbox_item(collection, name).unlink(missing_ok=True)
-
-
 def promote(collection: str, name: str) -> KnowledgeFile:
     """Make an inbox item a document of its own, as it stands.
 
-    The path with no model to merge it: the material is knowledge the moment it
-    arrives, so it must not wait in a hidden directory for a connection that
-    may never be configured. It lands at the collection root, recorded as
-    settled by curation — nothing is going to curate it, and an unsettled
-    document would only be handed back by every sweep.
+    The material is knowledge the moment it arrives, so it must not wait in a
+    hidden directory: it lands at the collection root with its frontmatter, and
+    the inbox file is removed.
     """
-    material = read_material(collection, name)
+    path = _inbox_item(collection, name)
+    if not path.is_file():
+        raise KnowledgeFileNotFound(inbox_path(collection, name))
+    fm, body = split_frontmatter(decode(path.read_bytes()))
     written = write_file(
         directory=collection,
-        title=material.title,
-        description=material.description,
-        body=material.body,
-        actor=material.actor,
-        curated=True,
+        title=str(fm.get("title") or path.stem),
+        description=str(fm.get("description") or ""),
+        body=body,
+        actor=str(fm.get("actor") or ACTOR_AGENT),
     )
-    discard_material(collection, name)
+    path.unlink(missing_ok=True)
     return written

@@ -6,9 +6,7 @@
 //
 // "Last seen" is when that machine last ran a round against the remote, read
 // from the descriptor it pushed — so a Mac that has been off for a month says
-// so here without anyone having to retire it first. The Mac that curates
-// knowledge for the whole vault carries a read-only "Runs curation" tag; the
-// owner is chosen in Knowledge, not here.
+// so here without anyone having to retire it first.
 //
 // Retire runs at once and the toast offers Undo (6.4.26): the registry entry
 // is all it removes, so the mistake it can make is cheap to take back.
@@ -20,7 +18,6 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { Machine } from "@/lib/api/sync";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useInternalEngineConfig } from "@/lib/hooks/useInternalEngine";
 import { useMachines, useRestoreMachine, useRetireMachine } from "@/lib/hooks/useMachines";
 import { SyncMachineRow } from "./SyncMachineRow";
 
@@ -32,8 +29,6 @@ export function SyncMachinesTab() {
   const { data, isPending } = useMachines();
   const retire = useRetireMachine();
   const restore = useRestoreMachine();
-  const engine = useInternalEngineConfig();
-  const curator = engine.data?.curate_owner_machine_id ?? null;
   const machines = data?.machines ?? [];
   const now = new Date();
 
@@ -80,7 +75,6 @@ export function SyncMachinesTab() {
                 <SyncMachineRow
                   key={machine.machine_id}
                   machine={machine}
-                  curates={curator !== null && machine.machine_id === curator}
                   now={now}
                   onRetire={onRetire}
                 />

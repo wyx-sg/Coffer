@@ -325,7 +325,10 @@ describe("DataSettings", () => {
     fireEvent.click(within(cache).getByRole("button", { name: /^clear$/i }));
     const dialog = await screen.findByRole("dialog");
     expect(
-      within(dialog).getByText(/rebuilds memory from the agents' own memory/i),
+      within(dialog).getByText(/rebuilt from the agents' own memory on the next update/i),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/each entry becoming a note as it stands/i),
     ).toBeInTheDocument();
     expect(within(dialog).getByText(/sources are gone won't come back/i)).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 // src/lib/hooks/useUpkeep.test.ts
 //
-// The hook that makes the organise / curate buttons survive a navigation: the
+// The hook that makes the Update memory button survive a navigation: the
 // running state comes from the daemon's own list, not from a mutation object
 // that dies with the component.
 import { describe, expect, test, vi, beforeEach } from "vitest";
@@ -66,11 +66,11 @@ describe("useUpkeepRun", () => {
   });
 
   test("finds the run by the target's uid and carries its n of m", async () => {
-    // The daemon claims a pass under the collection's uid, never its name.
+    // The daemon claims a pass under the partition's uid, never its name.
     listMock.mockResolvedValue({
       runs: [
         {
-          kind: "knowledge",
+          kind: "memory",
           name: "kn-8c1f",
           started_at: "2026-09-30T00:00:00Z",
           done: 1,
@@ -78,7 +78,7 @@ describe("useUpkeepRun", () => {
         },
       ],
     });
-    const { result } = renderHook(() => useUpkeepRun("knowledge", "kn-8c1f"), { wrapper });
+    const { result } = renderHook(() => useUpkeepRun("memory", "kn-8c1f"), { wrapper });
     await waitFor(() => expect(result.current).toMatchObject({ done: 1, total: 3 }));
   });
 });

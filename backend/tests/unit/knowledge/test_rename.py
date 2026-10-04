@@ -65,7 +65,7 @@ def knowledge_root(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 @pytest.fixture
 def collection() -> Resource:
-    """One collection on disk with two documents, a pending item and a README."""
+    """One collection on disk with two documents, an inbox item and a README."""
     row = _row("shopee")
     fs.create_collection_dir(row.name)
     paths.readme_path(row.name).write_text("# shopee\n\nThe account system.\n", encoding="utf-8")
@@ -82,7 +82,7 @@ def collection() -> Resource:
         description="Which service issues a login token.",
         body="account.session.",
     )
-    inbox.submit_material(row.name, title="Waiting", description="d", body="not merged yet")
+    inbox.submit_material(row.name, title="Waiting", description="d", body="not promoted yet")
     return row
 
 
@@ -134,7 +134,7 @@ async def test_the_files_inside_are_still_readable_under_the_new_name(
         moved = old_path.replace("shopee/", "account/", 1)
         assert fs.read_file(moved).body == body
     assert paths.readme_path("account").read_text(encoding="utf-8").startswith("# shopee")
-    assert inbox.read_material("account", "waiting.md").body.strip() == "not merged yet"
+    assert (paths.inbox_dir("account") / "waiting.md").is_file()
 
 
 def _walk(relpath: str) -> tuple:

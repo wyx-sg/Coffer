@@ -3,16 +3,14 @@
 // The right half of a document's History (boards 5.1.05, 5.1.06; Foundations
 // 0.6.05): for the chosen version, a segmented control — Changes in this
 // version (against the version before) or Compare with current (this version
-// against the document as it is now) — a "See the pass" link when a curation
-// pass wrote it, and, on the right, Restore this version, then the document's
-// diff as a FileDiff (the one diff renderer: header, op, counts, long lines
+// against the document as it is now) — and, on the right, Restore this
+// version, then the document's diff as a FileDiff (the one diff renderer: header, op, counts, long lines
 // wrapped). The newest version is the current one and offers no restore. A
 // restore writes a NEW version naming you, so it is itself in History and can
 // be undone the same way; once done the button reads "Restored as a new
 // version".
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 
 import { FileDiff } from "@/components/change-preview/FileDiff";
 import { Button } from "@/components/ui/button";
@@ -24,7 +22,6 @@ import type { DocumentVersionOut } from "@/lib/api/knowledge";
 import type { ChangeItem, ChangeOp, DiffLine } from "@/lib/changePreview/changeCounts";
 import { whenLabel } from "@/lib/knowledge/changes";
 import { diffLines } from "@/lib/knowledge/lineDiff";
-import { changePath } from "@/lib/knowledge/routes";
 import { parseUnifiedDiff } from "@/lib/knowledge/unifiedDiff";
 import { useRestoreVersion, useVersionBody, useVersionDiff } from "@/lib/hooks/useKnowledgeHistory";
 
@@ -100,14 +97,6 @@ export function KnowledgeVersionPanel({ path, version, isCurrent, currentBody }:
             { value: "current", label: t("knowledge.history.compareCurrent") },
           ]}
         />
-        {c.operation === "pass" ? (
-          <Link
-            to={changePath(c.version)}
-            className="text-xs font-label text-accent-text hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-          >
-            {t("knowledge.history.seePass")}
-          </Link>
-        ) : null}
         {!isCurrent && !version.removed ? (
           <span className="ml-auto flex shrink-0">
             {restored ? (

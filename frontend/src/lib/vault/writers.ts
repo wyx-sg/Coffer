@@ -3,7 +3,7 @@
 // Who wrote a version of a vault file, in a word (ADR
 // every-vault-write-is-a-validated-commit-naming-its-writer), as a skill's
 // History says it (canvas 4.3.19): You (a person through Coffer, or an edit
-// found on disk — also theirs), Coffer (the daemon, a curation pass), Git (a
+// found on disk — also theirs), Coffer (the daemon, or a curation pass in an older version), Git (a
 // sync round's merge — sync is experimental, so it is never worded "Sync"), or
 // an agent by product name. It takes the daemon's display writer
 // (`agent:<type>` for an agent, else the writer). Pure, unit-tested without a

@@ -175,7 +175,7 @@ An experimental feature is a capability that ships in every build but is off unt
 
 The registry holds four entries, in this order: `knowledge`, `memory`, `sync` (vault sync) and `models` (model providers, the local model proxy and Usage). Conversations and Channels are always on. An earlier design also had `run` and `context` entries; they are gone, and `context` split into `knowledge` and `memory`. Settings stored under a key the registry does not declare, and no table lists, are ignored, so a leftover one is harmless. A feature that graduates or is retired is listed in one of two small tables beside the registry instead: at startup the daemon applies them once to `daemon-config.json`, removing a graduated feature's switch and moving the settings it names to their new keys, and removing a retired feature's switch and the settings it names. Both tables are empty today.
 
-No feature hard-depends on another. A switched-off feature simply leaves its part out of whatever else shows it: with `knowledge` off the `coffer-guide` skill has no knowledge sections; with `memory` off channel turns carry no memory; with `models` off the internal engine's chosen connection still resolves.
+No feature hard-depends on another. A switched-off feature simply leaves its part out of whatever else shows it: with `knowledge` off the `coffer-guide` skill has no knowledge sections; with `memory` off channel turns carry no memory; with `models` off the speech-to-text connection still resolves.
 
 A feature's state is resolved on every read, highest precedence first:
 
@@ -201,7 +201,7 @@ The gates are request-time:
 - The kind-agnostic `/api/v1/resources` routes refuse a resource whose kind a switched-off feature owns, and leave such resources out of lists.
 - The MCP gateway's one builtin tool, `coffer__search_tools`, belongs to no feature, so switching a feature on or off never changes the tool list.
 - CLI commands reach the daemon over the gated routes and print one line naming `coffer config set feature.<key> on`, then exit 1.
-- Background passes owned by the feature skip their rounds: curation while `knowledge` is off, distil and aggregate while `memory` is off, the usage ingest and price refresh while `models` is off, and the converge worker while `sync` is off.
+- Background passes owned by the feature skip their rounds: the knowledge sweep while `knowledge` is off, distil and aggregate while `memory` is off, the usage ingest and price refresh while `models` is off, and the converge worker while `sync` is off.
 - Whatever a feature put in front of agents is withdrawn and returns on switch-on: the memory delivery hook and the memory root named in the guide (`memory`), the knowledge sections of the `coffer-guide` skill (`knowledge`), and the provider projection into each agent's own config plus an empty model-proxy state (`models`).
 - The web UI reads the state off the daemon status, and a switched-off feature looks absent: its sidebar entry, palette entries, Overview figures and page sections are gone, and a link into its page lands on the not-found page. There is no notice and no switch-on button on the page itself. **Settings → Features** is the one place to switch a feature on, and it exists in every build.
 

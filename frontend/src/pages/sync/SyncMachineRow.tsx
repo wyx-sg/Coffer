@@ -1,7 +1,6 @@
 // frontend/src/pages/sync/SyncMachineRow.tsx — one row of the machine registry.
 //
-// Beside the name: "This Mac" on the local row, "Runs curation" (read-only)
-// on the Mac that curates knowledge for the vault, and a warning tag only
+// Beside the name: "This Mac" on the local row, and a warning tag only
 // when that Mac publishes a different master key — its secrets cannot be
 // decrypted here. Unknown ("no fingerprint yet") is not a mismatch and shows
 // nothing.
@@ -49,14 +48,12 @@ function Tagged({
 
 interface Props {
   machine: Machine;
-  /** This machine is the vault's curation owner. */
-  curates: boolean;
   now: Date;
   /** Retire this machine now; the tab's toast offers Undo. */
   onRetire: (machine: Machine) => void;
 }
 
-export function SyncMachineRow({ machine, curates, now, onRetire }: Props) {
+export function SyncMachineRow({ machine, now, onRetire }: Props) {
   const { t, i18n } = useTranslation();
   const [renaming, setRenaming] = useState(false);
   const Icon = /book/i.test(`${machine.name} ${machine.hostname}`) ? Laptop : Monitor;
@@ -89,13 +86,6 @@ export function SyncMachineRow({ machine, curates, now, onRetire }: Props) {
             {machine.name}
           </span>
           {machine.is_self ? <Badge variant="secondary">{t("sync.machines.thisMac")}</Badge> : null}
-          {curates ? (
-            <Tagged
-              variant="secondary"
-              label={t("sync.machines.curates")}
-              tip={t("sync.machines.curatesTip")}
-            />
-          ) : null}
           {machine.key_matches === false ? (
             <Tagged
               variant="warning"

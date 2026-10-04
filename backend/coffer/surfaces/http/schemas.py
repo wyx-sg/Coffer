@@ -381,20 +381,3 @@ class SecretSettingsIn(BaseModel):
     """Request body to relocate the master key."""
 
     master_key_storage: Literal["file", "keychain"]
-
-
-class InternalEngineConfigOut(BaseModel):
-    """Coffer's own operating settings: its model, and its unattended work."""
-
-    model: str | None = None
-    updated_at: datetime | None = None
-    #: Keyed by pass name (``aggregate`` / ``distil`` / ``curate``); the value
-    #: shape is ``internal_engine_routes.UpkeepSettingOut``, defined beside the
-    #: route that builds it (this module is at its size ceiling).
-    upkeep: dict[str, Any] = Field(default_factory=dict)
-
-
-class InternalEngineConfigUpdate(BaseModel):
-    """Set the internal-engine model; ``null``/empty clears it."""
-
-    model: str | None = None

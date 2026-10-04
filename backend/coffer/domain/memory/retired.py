@@ -29,33 +29,31 @@ from dataclasses import dataclass
 class RetiredNote:
     """One record of something this layer decided not to carry forward.
 
-    Two things are recorded here, because the exclusion list has to account
+    Three kinds of record live here, because the exclusion list has to account
     for both or the pass that reads it re-imports what the last one removed:
 
-    * **A note that was retired.** ``slug`` names the file it had under
+    * **A note that was retired** — by an agent's ``retired:`` mark, by hand, or
+      because its sources are gone. ``slug`` names the file it had under
       ``notes/``, ``replaced_by`` names what took its place, and
       ``entry_ids`` carries the raw entries that note was built from — so
       those entries are accounted for the moment the note leaves, rather than
-      surfacing as undistilled again on the next pass and having to be
-      re-judged.
-    * **Entries a pass kept nothing from** (the fourth action of "Distil
-      incrementally in two stages"). There is
-      no note and no file, so ``slug`` is empty and ``entry_ids`` is the whole
-      of what the record excludes. ``.raw/`` may not be pruned to express this
-      ("Keep distil out of the raw directory"), so without the record the same
-      entry is routed to the model on
-      every pass for the rest of the vault's life.
+      surfacing as undistilled again on the next pass.
+    * **Entries a pass kept nothing from.** There is no note and no file, so
+      ``slug`` is empty and ``entry_ids`` is the whole of what the record
+      excludes. ``.raw/`` may not be pruned to express this ("Leave the raw
+      directory to aggregation"), so the record is what keeps those entries from
+      being distilled on every pass. Records of this kind survive in existing
+      vaults' ``RETIRED.md`` and are read as they are.
     * **A note whose sources are all gone** (spec memory "Retire a note whose
       raw entries are all gone"). Every raw entry its provenance names has
       left the partition's ``.raw/`` — the agent deleted the fact, or
       aggregation now files it into another partition. ``sources_gone`` is set
       and ``entry_ids`` is empty: there is nothing left to exclude, and the
-      subject was never judged untrue, so its title is **not** an exclusion
-      the next routing prompt is handed. Should the material come back, it is
+      subject was never judged untrue, so nothing is excluded. Should the material come back, it is
       distilled afresh.
 
     ``entry_ids`` is what :mod:`coffer.application.memory.distil` matches on
-    in both cases; ``slug`` is for the human and for naming a file that
+    in every case; ``slug`` is for the human and for naming a file that
     actually existed.
     """
 

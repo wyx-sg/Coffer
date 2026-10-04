@@ -46,10 +46,10 @@ def _submit_material(
 ) -> Submission:
     """Submit material the way an entrance does, through the running service.
 
-    There is no REST route for it any more (spec knowledge "Manage knowledge in the
-    web UI"): an agent writes a file into the inbox and an upload goes through
-    ``/upload``. The service is what both end up in, driven here on the app's own
-    event loop so a test needs no document converter or file drop.
+    There is no REST route for it (spec knowledge "Manage knowledge in the web
+    UI"): an upload goes through ``/upload``. The service is what every entrance ends
+    up in, driven here on the app's own event loop so a test needs no document
+    converter or file drop.
     """
     from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
 
@@ -76,29 +76,11 @@ def _submit(
 ) -> str:
     """Submit material and return the document it became.
 
-    The app booted here has no internal model configured, so material is promoted to
-    a document on the spot rather than waiting in the inbox (spec knowledge "Promote
-    material directly when no model is configured") — which is what gives the caller
-    a path to read back.
+    Material is promoted to a document on the spot (spec knowledge "Promote submitted
+    material at once") — which is what gives the caller a path to read
+    back.
     """
     submitted = _submit_material(
         client, collection=collection, title=title, description=description, body=body
     )
-    assert submitted.document is not None, submitted
     return submitted.document.path
-
-
-def _hold_material(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make the running service believe a model could merge material, so a
-    submission waits in the inbox instead of being promoted.
-
-    Patched on the service rather than by configuring a provider: the only
-    thing under test is where material lands, and a real provider would bring
-    a model call into a tier that makes none.
-    """
-    from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
-
-    async def _yes() -> bool:
-        return True
-
-    monkeypatch.setattr(get_knowledge_service(), "_merge_available", _yes)

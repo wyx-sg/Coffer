@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
-from collections.abc import Callable
 from dataclasses import dataclass
 
-from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked, SecretMissing
+from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore, ref_files
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.secret_boundary_wiring import (
@@ -56,20 +55,6 @@ def get_master_key_manager() -> MasterKeyManager:
     if _master_key_manager is None:
         raise RuntimeError("master key manager not initialised")
     return _master_key_manager
-
-
-def make_secret_resolver(store: EncryptedSecretStore) -> Callable[[str], str]:
-    """Build the ``ref -> plaintext`` resolver used by internal-LLM consumers
-    (knowledge curation, memory distil, transcription). Raises SecretMissing
-    for an unknown ref."""
-
-    def _resolve(ref: str) -> str:
-        value: str | None = store.get(ref)
-        if value is None:
-            raise SecretMissing(ref)
-        return value
-
-    return _resolve
 
 
 @dataclass(frozen=True)

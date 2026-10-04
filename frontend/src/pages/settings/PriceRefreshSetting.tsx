@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/PriceRefreshSetting.tsx
 //
-// "Refresh model prices" in Settings › General, under Coffer's model (spec
+// "Refresh model prices" in Settings › General, under Speech-to-text (spec
 // provider-switching "Refresh the bundled price list in the background"). The
 // canvas has no price settings of its own, so the one switch lives here: on,
 // the daemon fetches genai-prices' published price list once a day; off, it

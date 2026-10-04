@@ -16,7 +16,7 @@ import pytest
 
 from coffer.infrastructure.knowledge.paths import knowledge_root
 
-from .conftest import _create_collection, _hold_material, _submit, _submit_material
+from .conftest import _create_collection, _submit
 
 
 def _uid(client, name: str) -> str:  # type: ignore[no-untyped-def]
@@ -38,18 +38,14 @@ def _edited(client) -> list[dict[str, Any]]:  # type: ignore[no-untyped-def]
 @pytest.mark.acceptance(
     spec="knowledge", scenario="restore a deleted collection from Recent changes"
 )
-def test_a_deleted_collection_comes_back_with_its_documents_readme_and_items(  # type: ignore[no-untyped-def]
-    client, tmp_path, monkeypatch
+def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type: ignore[no-untyped-def]
+    client, tmp_path
 ) -> None:
     resp = client.post(
         "/api/v1/knowledge/collections", json={"name": "shopee", "description": "Shopee services."}
     )
     assert resp.status_code == 201, resp.text
     doc = _submit(client, collection="shopee", title="Cache", description="d", body="kept text")
-    _hold_material(monkeypatch)
-    assert _submit_material(
-        client, collection="shopee", title="Waiting", description="d", body="b"
-    ).pending
     old_uid = _uid(client, "shopee")
 
     deleted = client.delete(f"/api/v1/resources/{old_uid}")
@@ -70,11 +66,7 @@ def test_a_deleted_collection_comes_back_with_its_documents_readme_and_items(  #
     rows = client.get("/api/v1/knowledge/collections").json()["collections"]
     row = next(r for r in rows if r["name"] == "shopee")
     assert row["uid"] != old_uid
-    assert (row["description"], row["document_count"], row["pending_count"]) == (
-        "Shopee services.",
-        1,
-        1,
-    )
+    assert (row["description"], row["document_count"]) == ("Shopee services.", 1)
     body = client.get("/api/v1/knowledge/file", params={"path": doc}).json()["body"]
     assert body.strip() == "kept text"
     assert any(e["details"].get("restored_from") == removal["version"] for e in _edited(client))

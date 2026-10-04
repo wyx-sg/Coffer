@@ -32,7 +32,7 @@ The knowledge layer already delivered a generated skill with a catalogue, and
 did it outside the resource framework: it wrote real bytes into each agent's
 `<config_dir>/skills/` itself, on the grounds that a skill Resource is a bundle
 a person imports and owns, and nobody can keep a bundle level with a catalogue
-that curation rewrites. That delivery was invisible on the Skills page, beyond
+that changes whenever a document is added or reorganised. That delivery was invisible on the Skills page, beyond
 the reach of `enabled` and scope, and outside drift verification, boot repair,
 reclaim and the audit trail — two ways to put a folder in an agent's skills
 directory, one of which nothing could see. And the 448-session audit behind

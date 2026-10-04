@@ -3,7 +3,7 @@
 
 Three writers change the vault and none waits for the others: a person (an
 editor, a shell, an agent's own file tools), the daemon (a save from the web
-UI, a CLI or API change, a curation pass, a uid minted, a layout upgrade) and
+UI, a CLI or API change, a knowledge sweep, a uid minted, a layout upgrade) and
 sync. Every change any of them makes is admitted the same way:
 
 1. **Compare.** A write states what it expects the file to hold — the
@@ -23,7 +23,7 @@ which the scanner calls once a changed path has been quiet. Valid ones are
 committed as ``disk`` writes; invalid ones stay in the working tree,
 uncommitted and flagged (:meth:`problems`), and ``HEAD`` stays in effect.
 
-A long operation (a curation pass) holds its paths as *owned* without holding
+A long operation (an open transaction) holds its paths as *owned* without holding
 the lock: a settle never commits an owned path, and another operation's
 compare against ``HEAD`` refuses it until the owner commits.
 """

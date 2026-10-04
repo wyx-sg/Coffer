@@ -106,21 +106,21 @@ A **skill** is a folder containing a `SKILL.md` in the [AgentSkills](https://age
 
 Guide: [Skills](/guides/skills).
 
-## Knowledge collections and curation
+## Knowledge collections and tidying
 
-A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you, your agents and Coffer write together. A document's path is its identity. You can edit documents in the web UI or in any editor, and agents read and edit them with their own file tools, finding them through the catalogue in `coffer-guide`. To add knowledge, an agent writes a Markdown file into the collection's hidden `.inbox/`; an upload or a channel lands there too. A **curation** pass run by Coffer's own model then fills any frontmatter the file lacks and folds it into the existing documents. Where two statements disagree, the newer one wins unless the older is shown to be right, whoever wrote either. With no model configured, each item becomes a document on its own.
+A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and your agents write together. A document's path is its identity. You can edit documents in the web UI or in any editor, and agents read and edit them with their own file tools, finding them through the catalogue in `coffer-guide`. To add knowledge, an agent writes a document straight into the collection; an upload becomes a document as it stands. The `coffer-guide` skill tells the agent where a fact belongs and how to tidy a collection: merge documents on one subject, split a long one, correct a stale statement. Coffer runs no model of its own over your documents. **Tidy** on a collection hands that job to your default agent, in a new conversation.
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 
 ## Memory partitions
 
-Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It distils what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/derived/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. You can edit a note in the web UI or on disk, and it stays until newer evidence revises it; rebuilding the derived tree loses such edits. If you install a delivery hook for an agent, Coffer hands that agent the index at session start and the few notes each prompt names. A turn that arrives from a channel carries the index in its system prompt instead.
+Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It turns what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/derived/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. You can edit a note in the web UI or on disk, and it stays until newer evidence revises it; rebuilding the derived tree loses such edits. If you install a delivery hook for an agent, Coffer hands that agent the index at session start and the few notes each prompt names. A turn that arrives from a channel carries the index in its system prompt instead.
 
 Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 
 ## Providers
 
-A **provider** is a model-provider profile: a wire protocol, a base URL and one secret ref. **Switching** to a provider writes it into the native config of each agent in its scope, so you change gateways once instead of once per agent. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for Coffer's own model, which curation, memory distillation and transcription run on.
+A **provider** is a model-provider profile: a wire protocol, a base URL and one secret ref. **Switching** to a provider writes it into the native config of each agent in its scope, so you change gateways once instead of once per agent. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for speech to text, which transcribes voice messages.
 
 Guide: [Model providers](/guides/providers).
 

@@ -163,7 +163,7 @@ flowchart LR
 - **Add Codex.** Connect Codex on the **Agents** page. Codex gets the same servers and skills with no further setup. See [Agents](/guides/agents).
 - **Curate tools.** Switch off tools you do not want agents to see, or restrict a server to particular agents. See [MCP servers](/guides/mcp-servers).
 - **Store a key.** Register a server that needs an API key, using a secret ref. See [Secret store](/guides/secret-store).
-- **Share knowledge.** Create a collection on the Knowledge page and add Markdown files to it, or ask an agent to write one into the collection's `.inbox/` folder. See [Knowledge](/guides/knowledge).
+- **Share knowledge.** Create a collection on the Knowledge page and add Markdown files to it, or ask an agent to write a document into the collection. See [Knowledge](/guides/knowledge).
 - **Switch providers.** Point both agents at the same model gateway in one step. See [Model providers](/guides/providers).
 - **Learn the model.** [Core concepts](/start/concepts) explains the terms used throughout these docs.
 

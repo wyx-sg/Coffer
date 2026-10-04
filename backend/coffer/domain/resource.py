@@ -171,7 +171,7 @@ class Kind:
     # the config alone, so the store can answer it for a row it is creating.
     storage_row: Callable[[dict[str, Any]], StorageClass] | None = None
     # Config flags at most one resource of the kind may hold (``provider``'s
-    # ``internal_default``). The service keeps every write it makes to one
+    # ``transcribe_default``). The service keeps every write it makes to one
     # holder; the vault validator refuses any commit — a hand edit, a merge —
     # that would leave two, which is what a unique index did in SQL.
     exclusive_flags: tuple[str, ...] = ()

@@ -54,4 +54,8 @@ test("the Memory page shows the partitions area", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /update memory/i }),
   ).toHaveCount(1);
+  // Tidy all hands every partition to the agent (Copy prompt with no managed agent).
+  await expect(
+    page.getByRole("button", { name: /^(Tidy all|Copy prompt)$/ }).first(),
+  ).toBeVisible();
 });

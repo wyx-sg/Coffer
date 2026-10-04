@@ -1,10 +1,7 @@
 // frontend/src/lib/api/internalEngine.ts — Coffer's own operating settings
-// (spec internal-engine): the MODEL its
-// internal engine runs (its endpoint + key come from the `internal_default`
-// connection), the switch and interval of every pass it runs unattended, how
-// long ONE call to that model may take, and the model it transcribes speech
-// with (whose endpoint comes from the separate `transcribe_default`
-// connection — nothing falls back between the two).
+// (spec internal-engine): the switch and interval of each unattended pass, how
+// long ONE model call may take, and the model it transcribes speech with
+// (whose endpoint comes from the `transcribe_default` connection).
 // Wire types from the internal-engine contract; transport via the typed
 // client (.agents/frontend.md §4).
 import { getApiClient, unwrap } from "@/lib/api/client";
@@ -14,44 +11,16 @@ export type InternalEngineConfig = components["schemas"]["InternalEngineConfigOu
 export type UpkeepSetting = components["schemas"]["UpkeepSettingOut"];
 export type UpkeepUpdate = components["schemas"]["UpkeepUpdate"];
 
-/**
- * The passes Coffer runs on its own behalf, in the order they run.
- *
- * `curate` was `tidy` until the knowledge layer became two lanes: the pass no
- * longer rewrites the files the user wrote, it reads them and derives the
- * documents agents read (spec knowledge "Curate through a
- * fenced four-tool pass"). Read off the contract rather
- * than spelled here, so the two cannot drift.
- */
+/** The passes Coffer runs on its own behalf (aggregate and distil), read off the
+ *  contract rather than spelled here, so the two cannot drift. */
 export type UpkeepPass = UpkeepUpdate["pass"];
 
 export const internalEngineApi = {
   get: () => unwrap(getApiClient().GET("/internal-engine-config")),
-  setModel: (model: string | null) =>
-    unwrap(getApiClient().PUT("/internal-engine-config", { body: { model } })),
   // One pass per call, each half left alone when it is not sent — so toggling
   // a switch cannot write back a stale copy of another pass's interval.
   setUpkeep: (body: UpkeepUpdate) =>
     unwrap(getApiClient().PUT("/internal-engine-config/upkeep", { body })),
-  /** Name the one machine allowed to run the curation pass; `null` clears the
-   *  owner and returns the vault to curating wherever the setting is read.
-   *
-   *  Its own call for the reason `setUpkeep` is: one setting per request, so
-   *  taking curation over cannot write back a stale copy of a pass's switch.
-   *  The id is not checked against the registry here — a vault that has never
-   *  converged has no registry and must still be able to name its own
-   *  machine. */
-  setCurationOwner: (machineId: string | null) =>
-    unwrap(
-      getApiClient().PUT("/internal-engine-config/curation-owner", {
-        body: { machine_id: machineId },
-      }),
-    ),
-  /** Bound one call to Coffer's own model; `null` returns it to the built-in
-   *  default, which is the only way back — the server keeps the number. Out of
-   *  range is refused rather than clamped, so the caller hears about a typo. */
-  setModelTimeout: (seconds: number | null) =>
-    unwrap(getApiClient().PUT("/internal-engine-config/timeout", { body: { seconds } })),
   /** The speech-to-text model; `null` stops transcription, which is a real
    *  answer rather than an unset one. */
   setTranscribeModel: (model: string | null) =>

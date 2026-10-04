@@ -910,12 +910,12 @@ export interface components {
         UpkeepRunOut: {
             /**
              * Done
-             * @description For a run that works through several items one pass at a time (knowledge's Curate now, memory's Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.
+             * @description For a run that works through several items one pass at a time (memory's Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.
              */
             done: number | null;
             /**
              * Kind
-             * @description The kind whose pass this is: `memory` or `knowledge`.
+             * @description The kind whose pass this is: `memory`.
              */
             kind: string;
             /**

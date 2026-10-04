@@ -24,6 +24,7 @@ export const GLOBAL: PartitionOut = {
   waiting_entries: 0,
   waiting_agents: [],
   updated_at: "2026-09-30T09:00:00Z",
+  tidy_handoff: { prompt: "Tidy the global memory partition." },
 };
 
 export const COFFER: PartitionOut = {
@@ -38,6 +39,7 @@ export const COFFER: PartitionOut = {
   waiting_entries: 0,
   waiting_agents: [],
   updated_at: "2026-09-30T09:00:00Z",
+  tidy_handoff: { prompt: "Tidy the coffer memory partition." },
 };
 
 /** A partition whose repository has been deleted from disk. */
@@ -53,6 +55,7 @@ export const GONE: PartitionOut = {
   waiting_entries: 0,
   waiting_agents: [],
   updated_at: "2026-09-30T09:00:00Z",
+  tidy_handoff: { prompt: "Tidy the old-prototype memory partition." },
 };
 
 const NOTE_BASE = {

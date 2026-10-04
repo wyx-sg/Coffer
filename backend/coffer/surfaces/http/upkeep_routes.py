@@ -21,8 +21,6 @@ like that kind's rows on ``/api/v1/resources`` (spec experimental-features
 "Close every surface of a switched-off feature").
 
 Read-only. A pass is started by the kind's own route: ``POST
-/api/v1/knowledge/collections/{uid}/curate`` refuses a second concurrent pass
-over the same collection with ``UPKEEP_ALREADY_RUNNING`` (409), and ``POST
 /api/v1/memory/sync`` skips a partition whose pass is already running and
 reports it as skipped.
 """
@@ -48,7 +46,7 @@ router = APIRouter(
 class UpkeepRunOut(BaseModel):
     """One pass in flight."""
 
-    kind: str = Field(description="The kind whose pass this is: `memory` or `knowledge`.")
+    kind: str = Field(description="The kind whose pass this is: `memory`.")
     name: str = Field(
         description="The uid of the partition or collection being rewritten, or `update` "
         "for a memory Update memory action as a whole."
@@ -57,7 +55,7 @@ class UpkeepRunOut(BaseModel):
     done: int | None = Field(
         default=None,
         description="For a run that works through several items one pass at a time "
-        "(knowledge's Curate now, memory's Update memory): the items finished so far. "
+        "(memory's Update memory): the items finished so far. "
         "Null for a single pass, and for Update memory while it is still reading.",
     )
     total: int | None = Field(

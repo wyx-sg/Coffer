@@ -5,7 +5,7 @@ The case that forced it: a ``feedback`` entry once filed into ``global`` is now
 filed into its repository's partition. Aggregation moves the raw entry, but the
 note distil had already written into ``global`` stayed — so the same lesson was
 served from two partitions. The sweep runs on every pass, the mechanical one
-included, and its record excludes nothing: nobody judged the note untrue.
+and its record excludes nothing: nobody judged the note untrue.
 """
 
 from __future__ import annotations
@@ -27,13 +27,9 @@ from coffer.infrastructure.memory.raw_store import (
     write_raw_entry,
 )
 from tests.unit.memory.conftest import (
-    ExplodingCompletion,
     FakeAudit,
     FakeReader,
     FakeResources,
-    NoModelSelector,
-    ScriptedCompletion,
-    StubModelSelector,
     memory_service,
     raw_entry,
 )
@@ -46,11 +42,7 @@ def _repository(tmp_path: pathlib.Path, name: str) -> pathlib.Path:
 
 
 async def _mechanical(partition: str):  # type: ignore[no-untyped-def]
-    return await distil_partition(
-        partition,
-        completion=ExplodingCompletion(),  # type: ignore[arg-type]
-        model_selector=NoModelSelector(),  # type: ignore[arg-type]
-    )
+    return await distil_partition(partition)
 
 
 def _stored(partition: str, title: str, *, anchor: str = "") -> StoredRawEntry:
@@ -132,7 +124,7 @@ async def test_a_global_feedback_note_leaves_once_aggregation_refiles_its_entry(
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="memory", scenario="a sources-gone retirement excludes nothing later")
-async def test_a_sources_gone_record_is_not_handed_to_routing_and_its_subject_can_return() -> None:
+async def test_a_sources_gone_record_excludes_nothing_and_its_subject_can_return() -> None:
     kept_a = _stored("coffer", "Keep A")
     kept_b = _stored("coffer", "Keep B")
     gone = _stored("coffer", "Gone")
@@ -142,51 +134,19 @@ async def test_a_sources_gone_record_is_not_handed_to_routing_and_its_subject_ca
     delete_raw_entry("coffer", kept_b.entry_id)
     delete_raw_entry("coffer", gone.entry_id)
     # Keep A is accounted for by "partial", so the first pass has nothing new.
-    first = await distil_partition(
-        "coffer", completion=ScriptedCompletion([]), model_selector=StubModelSelector()
-    )
+    first = await distil_partition("coffer")
     assert first.retired == 1
     assert sorted(n.slug for n in store.list_notes("coffer")) == ["partial", "unsourced"]
 
-    returning = _stored("coffer", "Orphan", anchor="returned")
-    completion = ScriptedCompletion(
-        [
-            json.dumps(
-                {"actions": [{"entry": returning.entry_id, "action": "open", "title": "Orphan"}]}
-            ),
-            json.dumps({"title": "Orphan", "description": "Back again.", "body": "Returned."}),
-        ]
-    )
-    second = await distil_partition(
-        "coffer", completion=completion, model_selector=StubModelSelector()
-    )
+    _stored("coffer", "Orphan", anchor="returned")
+    second = await distil_partition("coffer")
 
-    routing_request = json.loads(completion.calls[0]["user"])
-    assert routing_request["retired_subjects"] == []
     assert second.opened == 1
-    assert "Back again." in store.read_index("coffer")
+    assert "Orphan" in store.read_index("coffer")
     partial = store.read_note("coffer", "partial")
     assert [o.key for o in partial.origins] == [kept_a.entry_id, kept_b.entry_id]
     # The earlier record is still there, untouched, beside nothing new.
     assert [r.sources_gone for r in store.read_retired("coffer")] == [True]
-
-
-@pytest.mark.asyncio
-async def test_a_contradiction_retirement_is_still_an_excluded_subject() -> None:
-    """Only ``sources_gone`` records are left off routing's exclusion list."""
-    store.write_retired(
-        "coffer",
-        [
-            RetiredNote(slug="old", title="Judged untrue", reason="Contradicted."),
-            RetiredNote(slug="gone", title="Sourceless", reason="x", sources_gone=True),
-        ],
-    )
-    _stored("coffer", "New entry")
-    completion = ScriptedCompletion([])
-
-    await distil_partition("coffer", completion=completion, model_selector=StubModelSelector())
-
-    assert json.loads(completion.calls[0]["user"])["retired_subjects"] == ["Judged untrue"]
 
 
 def test_sources_gone_round_trips_through_retired_md_and_is_absent_when_unset() -> None:

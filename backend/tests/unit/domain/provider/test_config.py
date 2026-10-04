@@ -20,7 +20,19 @@ def test_valid_config_defaults() -> None:
         secret_ref="provider/acme/key",
     )
     assert c.protocol is Protocol.ANTHROPIC
-    assert c.internal_default is False
+    assert c.transcribe_default is False
+
+
+def test_a_stored_internal_default_is_accepted_and_ignored() -> None:
+    c = ProviderConfig.model_validate(
+        {
+            "protocol": "openai",
+            "base_url": "https://x",
+            "secret_ref": "provider/acme/key",
+            "internal_default": True,
+        }
+    )
+    assert "internal_default" not in c.model_dump()
 
 
 def test_unknown_protocol_member_is_valid() -> None:

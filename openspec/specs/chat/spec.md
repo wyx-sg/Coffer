@@ -15,7 +15,7 @@ through. The decision the page rests on is recorded in
 [Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md).
 Chat talks to **managed** agents only — the former `builtin` chat persona is
 retired, see
-[Coffer's Model Is an Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md).
+[Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md).
 
 What the platform promises as outcomes: adding a third agent takes one registry
 entry and one adapter and touches no conversation schema, orchestrator code or
@@ -102,7 +102,7 @@ through a port rather than an import.
 - **WHEN** the platform is asked which agents it offers,
 - **THEN** the managed agents (`claude_code`, `codex`) are listed, each with a
   display name and an availability flag, the `builtin` agent is **not** among
-  them ([Coffer's Model Is an Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)),
+  them ([Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md)),
   and the list is reachable from the REST API.
 
 ### Requirement: Offer and run only managed agents

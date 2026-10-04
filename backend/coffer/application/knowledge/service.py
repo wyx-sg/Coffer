@@ -1,14 +1,12 @@
 """The knowledge layer's one service.
 
 Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``. A
-collection is one tree of documents that a person and Coffer's curation pass write
-together (spec knowledge "Store each collection as one tree of Markdown files"). What
-this layer adds on top of the directory is the one rule about *how new knowledge
-arrives*: every entrance — an upload, an agent's inbox file, a channel's ``/kb`` — submits
-**material**, which waits in the collection's hidden inbox until a pass folds it into
-the documents (see "Submit every entrance's input as material"). With no internal model
-to fold it, the material becomes a document of its own on the spot (see "Promote
-material directly when no model is configured").
+collection is one tree of documents that a person and the agents write together (spec
+knowledge "Store each collection as one tree of Markdown files"). What this layer adds on
+top of the directory is the one rule about *how new knowledge arrives*: an upload
+submits **material**, which becomes a document at the collection root on the spot
+(see "Promote submitted material at once"). A file an agent drops into a collection's
+hidden ``.inbox/`` is promoted the same way by the next sweep.
 
 What it does *not* add is a gate of any kind on the corpus. Every registered
 collection is served to every caller, agent or person alike (see "Serve every
@@ -20,7 +18,6 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import pathlib
 from collections.abc import Awaitable, Callable
 
 from coffer.application.audit_service import AuditService
@@ -32,14 +29,12 @@ from coffer.domain.knowledge.entry import (
     CatalogueLevel,
     CollectionEntry,
     FileEntry,
-    GrepOutcome,
     KnowledgeFile,
     Submission,
 )
 from coffer.domain.knowledge.errors import (
     CollectionExists,
     CollectionNotFound,
-    KnowledgeFileNotFound,
 )
 from coffer.domain.knowledge.history import (
     OP_CREATE,
@@ -48,13 +43,11 @@ from coffer.domain.knowledge.history import (
     OP_REMOVE,
     OP_RENAME,
     OP_SAVE,
-    OP_SUBMIT,
     WRITER_USER,
 )
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import catalogue, curation_state, fs, inbox, paths
-from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSearch
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 logger = logging.getLogger(__name__)
@@ -62,12 +55,6 @@ logger = logging.getLogger(__name__)
 #: Called when the set of collections changes, so the skill that carries
 #: the catalogue can be re-rendered (spec knowledge "Deliver the guide as the shared-master link").
 CatalogueChanged = Callable[[], Awaitable[object]]
-
-#: Whether a curation pass could merge material now — an internal model is configured.
-#: When it cannot, material is promoted to a document as it stands rather than waiting
-#: for a connection that may never come (see "Promote material directly when no model is
-#: configured").
-MergeAvailable = Callable[[], Awaitable[bool]]
 
 
 KIND_KNOWLEDGE = "knowledge"
@@ -79,35 +66,31 @@ class KnowledgeService:
         *,
         resources: ResourceService,
         audit: AuditService,
-        search: RipgrepSearch | None = None,
         on_catalogue_changed: CatalogueChanged | None = None,
-        merge_available: MergeAvailable | None = None,
         history: KnowledgeHistory | None = None,
         announce: Callable[[str], None] | None = None,
     ) -> None:
         # Told a collection's uid when its files change outside a resource write.
         self._announce = announce
-        self._merge_available = merge_available
         # Every write below is one commit naming its writer (see "Keep every
-        # document's history and undo a pass as a whole"); None records nothing.
+        # document's history"); None records nothing.
         self.history = history
         self._resources = resources
         self._audit = audit
-        self._search = search or RipgrepSearch()
         # Fired when the set of collections changes, so Coffer's own skill —
         # which carries the catalogue — is re-rendered rather than going stale
-        # until the next boot or curation pass. Injected, because what renders
+        # until the next boot or sweep. Injected, because what renders
         # it lives outside this kind.
         self._on_catalogue_changed = on_catalogue_changed
 
     def announce(self, collection_uid: str) -> None:
-        """Say that a collection's inbox or documents changed."""
+        """Say that a collection's documents changed."""
         if self._announce is not None:
             self._announce(collection_uid)
 
     @property
     def audit(self) -> AuditService:
-        """The audit port, for the passes that record what they did."""
+        """The audit port, for the sweep that records what it adopted."""
         return self._audit
 
     # ----- collections -------------------------------------------------
@@ -127,8 +110,8 @@ class KnowledgeService:
     async def collection(self, uid: str) -> Resource:
         """One collection's row, by the identity that survives a rename.
 
-        The way anything inside the daemon reaches a collection: a pass, a
-        worker and a route all hold the uid and read the directory name off the
+        The way anything inside the daemon reaches a collection: the
+        sweep and a route all hold the uid and read the directory name off the
         row they get back. Raises ``ResourceNotFound`` for an absent uid, and
         ``CollectionNotFound`` for a row of another kind.
         """
@@ -215,28 +198,14 @@ class KnowledgeService:
     # ----- reading, for the human surfaces -----------------------------
 
     async def list_level(self, relpath: str) -> CatalogueLevel:
-        """One level of one collection (or its ``.inbox``, see "Hide dot-prefixed
-        entries except the inbox"), for the page and the CLI — never an agent's
+        """One level of one collection, for the page and the CLI — never an agent's
         retrieval path (see "Expose exactly one knowledge tool")."""
-        in_inbox = paths.inbox_parts(relpath)
-        if in_inbox is not None:
-            collection, item = in_inbox
-            await self.require_collection(collection)
-            if item is not None:
-                raise KnowledgeFileNotFound(relpath)
-            return catalogue.list_inbox(collection)
         await self.require_collection(relpath)
         return catalogue.list_level(relpath)
 
     async def read(self, relpath: str) -> KnowledgeFile:
-        """A document, or an item waiting in a collection's inbox (read-only)."""
-        in_inbox = paths.inbox_parts(relpath)
-        if in_inbox is not None:
-            collection, item = in_inbox
-            await self.require_collection(collection)
-            if item is None:
-                raise KnowledgeFileNotFound(relpath)
-            return inbox.read_material(collection, item)
+        """A document, for the human surfaces. A hidden path, the inbox included,
+        is refused by the path guard."""
         await self.require_collection(relpath)
         return fs.read_file(relpath)
 
@@ -246,8 +215,8 @@ class KnowledgeService:
         """Replace a document's body from the web UI, keeping its frontmatter.
 
         See "Save a document edited in the web UI". ``require_collection`` runs
-        the path through the guard first, so an inbox item — or anything else
-        hidden — is refused before the file is looked at.
+        the path through the guard first, so anything hidden, the inbox included, is
+        refused before the file is looked at.
         """
         collection = await self.require_collection(relpath)
         meta = CommitMeta(WRITER_USER, OP_SAVE, f"Edit {relpath}", actor=actor)
@@ -290,63 +259,38 @@ class KnowledgeService:
         actor_kind: str = ACTOR_AGENT,
         actor: str,
     ) -> Submission:
-        """Add new knowledge to a collection (see "Submit every entrance's input as
-        material").
+        """Add new knowledge to a collection (see "Promote submitted
+        material at once").
 
-        The material goes into the collection's inbox for a curation pass to fold into
-        the documents. When no pass could — there is no internal model — it is promoted
-        to a document of its own immediately, because knowledge that sits in a hidden
-        directory waiting for a connection nobody configured is knowledge no agent can
-        read (see "Promote material directly when no model is configured").
+        The material becomes a document at the collection root on the spot:
+        knowledge that sits in a hidden directory is knowledge no agent can read.
         """
         row = await self.require_collection(collection)
-        can_merge = await self._can_merge()
         meta = CommitMeta(
             writer_of(actor_kind),
-            OP_SUBMIT if can_merge else OP_PROMOTE,
-            f"{'Submit' if can_merge else 'Add'} {title}",
+            OP_PROMOTE,
+            f"Add {title}",
             actor=actor,
             agent=actor if actor_kind == ACTOR_AGENT else None,
             collection=row.name,
         )
-        document: KnowledgeFile | None = None
         async with recording(self.history, meta) as tx:
             name = inbox.submit_material(
                 row.name, title=title, description=description, body=body, actor=actor_kind
             )
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
-            if not can_merge:
-                document = inbox.promote(row.name, name)
-                tx.touch(document.path)
+            document = inbox.promote(row.name, name)
+            tx.touch(document.path)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,
             actor=actor,
-            details={
-                "title": title,
-                # The inbox item, so a pass can name the agent who wrote it.
-                "item": name,
-                "path": document.path if document else None,
-                "pending": document is None,
-            },
+            details={"title": title, "path": document.path},
         )
         self.announce(row.uid)
-        if document is not None:
-            # A promoted document is a new entry in the catalogue the skill carries.
-            await self.catalogue_changed()
-            return Submission(collection=row.name, title=title, document=document)
-        return Submission(collection=row.name, title=title, pending=name)
-
-    async def _can_merge(self) -> bool:
-        if self._merge_available is None:
-            return False
-        try:
-            return await self._merge_available()
-        except Exception:
-            # Unable to tell is treated as unable to merge: promoting keeps the
-            # material readable, and a later edit is still curated by a sweep.
-            logger.warning("knowledge.merge_available_failed", exc_info=True)
-            return False
+        # A new document is a new entry in the catalogue the skill carries.
+        await self.catalogue_changed()
+        return Submission(collection=row.name, title=title, document=document)
 
     async def delete_document(self, relpath: str, *, actor: str) -> None:
         """Remove a document. A person's action — no agent-facing tool deletes."""
@@ -362,21 +306,6 @@ class KnowledgeService:
             actor=actor,
             details={"path": relpath},
         )
-
-    # ----- candidate selection, for curation ---------------------------
-
-    async def match_documents(
-        self,
-        pattern: str,
-        *,
-        collection: str,
-        max_matches: int = DEFAULT_MAX_MATCHES,
-    ) -> GrepOutcome:
-        """Literal matches among one collection's documents — curation's candidate
-        selection (see "Assemble a pass from a bounded context"); the inbox is
-        never searched, and no caller outside this process reaches it."""
-        roots: list[pathlib.Path] = [paths.collection_dir(collection)]
-        return await self._search.grep(roots, pattern, max_matches=max_matches)
 
     # ----- lifecycle ---------------------------------------------------
 
@@ -397,4 +326,3 @@ class KnowledgeService:
             tx.touch(old_name)
             fs.rename_collection_dir(old_name, new_name)
             tx.touch(new_name)
-        curation_state.move(old_name, new_name)  # the documents moved unchanged

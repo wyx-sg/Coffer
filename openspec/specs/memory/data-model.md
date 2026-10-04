@@ -19,11 +19,11 @@ always enabled.
 Everything under `~/.coffer/derived/memory/` is **derived** ("Keep the memory
 tree derived and local"), and so are the partitions' resource files: nothing of
 it is in the vault repository, and deleting `derived/` is safe. Delete it, run aggregation and distil, and an
-**equivalent** set comes back: the same subjects from the same sources, not
-necessarily the same wording, because the product is a distillation rather
-than a copy. That is a weaker guarantee than this layer used to make, and it
-is the price of the notes being Coffer's own writing. `.raw/` is the part that
-*is* byte-reproducible, and it is what a note's provenance points at.
+**equivalent** set comes back: the same subjects from the same sources, each
+note being its raw entry as it stands. What an agent or a person did to the
+notes afterwards — a merge, an edit, a retirement mark — is not reproduced.
+`.raw/` is the part that *is* byte-reproducible, and it is what a note's
+provenance points at.
 
 ## On-disk layout
 
@@ -46,16 +46,16 @@ is the price of the notes being Coffer's own writing. `.raw/` is the part that
     └── .raw/
 ```
 
-Four files, four jobs, **one writer each** — which is what makes "Keep distil
-out of the raw directory" checkable by reading the call sites rather than by
+Four files, four jobs, **one writer each** — which is what makes "Leave the
+raw directory to aggregation" checkable by reading the call sites rather than by
 trusting a comment:
 
 | Path | Written by | Read by |
 |---|---|---|
 | `.raw/` | aggregation, and only aggregation | the distil pass only — the file tree leaves it out and its read route refuses it |
-| `notes/` | the distil pass | delivery, prompt-time retrieval, the file tree, and any agent holding the path |
+| `notes/` | the distil pass, and an agent or person tidying or editing a note | delivery, prompt-time retrieval, the file tree, and any agent holding the path |
 | `MEMORY.md` | the distil pass | delivery, and a human opening the folder |
-| `RETIRED.md` | the distil pass, and a hand deletion from the web UI | **the next distil pass**, and a human |
+| `RETIRED.md` | the distil pass (including for a note an agent marked retired), and a hand deletion from the web UI | **the next distil pass**, and a human |
 
 - `~/.coffer/derived/memory/` is the root, resolved from `HOME` at every call;
   there is no override. Path construction lives in exactly one module,
@@ -102,7 +102,7 @@ global").
    clones land in one partition.
 4. **No repository above the directory means no partition** ("Create no
    partition for a non-repository directory"). The entry is still aggregated;
-   the distil pass decides on its merits whether it belongs in `global` or
+   placement decides on its merits whether it belongs in `global` or
    nowhere. Six of sixteen partitions on the maintainer's live vault were
    dated scratch folders created this way under the previous design.
 
@@ -137,29 +137,31 @@ shape of the user's disk into a place it does not belong.
 
 ## Note
 
-One note is one topic, written by Coffer, at `<partition>/notes/<slug>.md`: a
-YAML frontmatter block, then Coffer's own prose underneath.
+One note is one topic, written by the distil pass from one raw entry, at
+`<partition>/notes/<slug>.md`: a YAML frontmatter block, then the entry's body
+underneath. An agent that tidies the partition may rewrite or merge it.
 
 | Field | Type | Notes |
 |---|---|---|
 | `slug` | string | Also the file name. From the title, deduplicated within the partition. |
-| `title` | string | Coffer's, not a source's. |
+| `title` | string | The raw entry's title. |
 | `description` | string | **One line, written to be read on its own** — it *is* the index entry, and the index is what a session is given ("Store each note as one Markdown file with frontmatter", "Write each index line to stand on its own"). |
 | `type` | `user` \| `feedback` \| `project` | As above. |
-| `body` | string | Coffer's own writing, distilled from one or more raw entries ("Write notes in Coffer's own words"). Not a quote. |
+| `body` | string | The raw entry's body as it stands ("Distil each raw entry into a note mechanically"); an agent that merges notes rewrites it. |
 | `partition` | string | `global` or a repository slug. |
-| `origins` | list of Origin | Every raw entry this note was built from, and through them every contributing agent ("Record provenance and merge by meaning"). |
+| `origins` | list of Origin | Every raw entry this note was built from, and through them every contributing agent ("Store each note as one Markdown file with frontmatter"). A merge appends the merged note's origins to the survivor's ("Teach tidying in the coffer-guide's memory section"). |
 | `search_terms` | list of string | Carried up from the entries that supplied them, and restated in the index line so the next agent does not have to guess a word. |
-| `created_at` / `updated_at` | string | A note accumulates; `updated_at` moves when a later pass rewrites it or a person saves an edit. |
+| `created_at` / `updated_at` | string | `updated_at` moves when an agent rewrites the note or a person saves an edit. |
+| `retired` / `replaced_by` | string | Optional. Written by an agent to retire the note: `retired` carries the reason, `replaced_by` the surviving note's slug. The next distil pass records the note in `RETIRED.md`, deletes its file and re-renders the index ("Retire a note an agent marked retired"). |
 
 A note's read also carries a `fingerprint` (sha256 of the file's bytes). It is
 not stored in the file: it is what a save in the web UI sends back, so a note
-changed since the read (by distil or on disk) is refused instead of overwritten
-(see "Edit a memory in the web UI or on disk").
+changed since the read (by an agent or on disk) is refused instead of overwritten
+(see "Edit a memory in the web UI or in an editor").
 
-There is **no** `status`, no `superseded_by` and no `conflicts_with`. A note a
-later one contradicts does not sit in `notes/` marked dead — it leaves, and
-the fact of its leaving is recorded in `RETIRED.md`. The previous design kept
+There is **no** `status`, no `superseded_by` and no `conflicts_with`. A note
+marked `retired` is only transiently in `notes/`: the next distil pass removes
+it and records its leaving in `RETIRED.md`. The previous design kept
 superseded facts in place and then handed them back from `recall` anyway,
 which made 11 dead facts on the live vault answerable as if current.
 
@@ -178,21 +180,21 @@ second origin on a later pass keeps the identity it had.
 
 ## Retirement
 
-`RETIRED.md` is a list: one record per retired note, and one per entry a
-pass kept nothing from (empty `slug`). A note is retired because a later
-entry contradicted it, because every raw entry it was built from is gone
-("Retire a note whose raw entries are all gone"), or because a person deleted
-it by hand ("Delete a memory by hand"):
+`RETIRED.md` is a list: one record per retired note. A note is retired because
+an agent marked it `retired` ("Retire a note an agent marked retired"), because
+every raw entry it was built from is gone ("Retire a note whose raw entries are
+all gone"), or because a person deleted it by hand ("Delete a memory by
+hand"):
 
 | Field | Notes |
 |---|---|
-| `slug` | The file name the note had under `notes/`; empty on a record that accounts for a dropped entry rather than for a note. |
+| `slug` | The file name the note had under `notes/`. |
 | `title` | So the record reads as prose rather than as filenames. |
-| `reason` | Why it is no longer true, in Coffer's words; `Deleted by hand` on a note a person deleted, whose `entry_ids` are the note's own origin entries so the next distil pass does not recreate it. |
+| `reason` | Why it is no longer true, as the agent that marked it wrote it; `Deleted by hand` on a note a person deleted, whose `entry_ids` are the note's own origin entries so the next distil pass does not recreate it. |
 | `replaced_by` | The slug of the note that replaced it, or empty when the subject was simply dropped. |
 | `retired_at` | When. |
-| `entry_ids` | The raw entries the record accounts for — the retired note's own sources, or the one entry kept nothing from — so no later pass routes them to the model again. What the distil pass matches on. |
-| `sources_gone` | Present and `true` only on a note retired because its raw entries are all gone. Such a record names no `entry_ids` and its title is not handed to routing as an excluded subject — nobody judged the note untrue, so material that comes back is distilled afresh. |
+| `entry_ids` | The raw entries the record accounts for — the retired note's own sources — so no later pass distils them again. What the distil pass matches on. |
+| `sources_gone` | Present and `true` only on a note retired because its raw entries are all gone. Such a record names no `entry_ids` — nobody judged the note untrue, so material that comes back is distilled afresh. |
 
 It is not a bin. **It is the mechanism** ("Record retirements so they stick"):
 the sources a note was built from still live in the agents' own memory, so
@@ -220,37 +222,31 @@ everything else completes ("Fail a broken reader loudly and in isolation").
 
 ## The distil pass
 
-Two stages, driven by the internal connection ("Distil incrementally in two
-stages"), arranged so that **no single request carries the partition's
-bodies**:
+Mechanical, with no model call ("Distil each raw entry into a note
+mechanically"). Over a partition the pass does four things, in order:
 
-| Stage | Carries | Returns |
-|---|---|---|
-| Routing | this round's new raw entries, the partition's **index**, and `RETIRED.md` — no note body at all | one action per entry |
-| Writing | one note's body plus the entries routed to it, one request per note actually touched | that note, rewritten |
+1. Retires each note none of whose `origins` is still under `.raw/`, recording
+   it with `sources_gone` ("Retire a note whose raw entries are all gone").
+   Aggregation removes a raw entry when its source stops producing it or files
+   it into another partition, so this is what keeps a partition's notes derived
+   from what it actually holds.
+2. Processes each note whose frontmatter carries `retired:` — a record in
+   `RETIRED.md` with the note's origin entry ids, the reason and `replaced_by`,
+   the file deleted ("Retire a note an agent marked retired").
+3. Turns each raw entry no note and no retirement record accounts for into one
+   note as it stands: title, description, type, body, search terms and origin.
+4. Renders `MEMORY.md` from the notes' frontmatter.
 
-A partition of a hundred notes that gained three entries therefore costs one
-routing request over a hundred index lines and at most three small writing
-requests. The routing stage's **output** is confined to four actions per
-entry:
+Merging notes about one subject and judging which statement is stale are the
+agent's work, taught by the `coffer-guide` memory section and started from a
+partition's Tidy hand-off ("Hand a partition's tidying to the agent").
 
-| Action | Effect |
-|---|---|
-| merge | an existing note's body is rewritten to cover the entry; its `origins` gains the entry; `updated_at` moves |
-| open | a new note file |
-| retire | a note leaves `notes/` and gains a record in `RETIRED.md` |
-| keep nothing | no note is written; a `RETIRED.md` record names the entry so no later pass re-routes it; the entry stays in `.raw/` |
+## Tidy hand-off
 
-Before routing, every pass — the mechanical one included — retires each note
-none of whose `origins` is still under `.raw/`, recording it with
-`sources_gone` ("Retire a note whose raw entries are all gone"). Aggregation
-removes a raw entry when its source stops producing it or files it into
-another partition, so this is what keeps a partition's notes derived from
-what it actually holds.
-
-With no internal connection configured, no model is called: each raw entry
-becomes a note of its own and `MEMORY.md` is written from their frontmatter
-("Distil mechanically with no internal connection"). Thinner, not absent.
+Reading one partition carries `tidy_handoff`: a prompt that names the partition,
+its absolute directory and the `coffer-guide` section to follow. It is computed
+on read from the partition and stored nowhere ("Hand a partition's tidying to
+the agent").
 
 ## Delivery payload
 
@@ -342,7 +338,7 @@ every kind shares.
 | Event | Recorded when |
 |---|---|
 | `memory_aggregated` | an aggregation pass completes, with the actor distinguishing a scheduled pass from a requested one |
-| `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
+| `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with the counts of notes written and notes retired |
 | `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by applying its drift item |
 | `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it |
 | `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start` or `prompt`), the `session_id` and the `notes` it carried; never their text ("Audit every delivery fire") |

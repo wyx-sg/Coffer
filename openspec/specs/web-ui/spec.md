@@ -995,12 +995,11 @@ MUST carry six tabs, in this order, in every build, grouped by what they manage
 rather than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences (the interface language
-  and the theme, the default page size and the preferred external editor), the
-  **Coffer's model** section: the
-  model Coffer's own engine runs on and the speech-to-text model (see "Choose
-  Coffer's model in Settings › General"). It carries no experimental-features
-  card; the switches are on the Features tab. While `models` is off the
-  connection choice for Coffer's model is left out.
+  and the theme, the default page size and the preferred external editor), and a
+  **Speech-to-text** section: the connection and model that transcribe voice
+  messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
+  It carries no experimental-features card; the switches are on the Features
+  tab. While `models` is off the connection choice for speech-to-text is left out.
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives — in a signed release its Keychain access
   group; in a development build the file `~/.coffer/master.key` or the login
@@ -1111,9 +1110,8 @@ machine only is a setting shown on the tab it belongs to:
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache,
   both under `~/.coffer/derived/`, which Coffer rebuilds on its own: one **Clear** action,
   behind a confirmation saying that memory is rebuilt from the agents' own
-  memory on the next update, that an equivalent rebuild needs Coffer's model
-  (without it each entry becomes a note of its own), and that notes whose
-  sources are gone do not come back.
+  memory on the next update, each entry becoming a note as it stands, and that
+  notes whose sources are gone do not come back.
 
 Edits auto-save, like every settings surface: there is no Save button.
 
@@ -1751,36 +1749,6 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 - **WHEN** the result is shown
 - **THEN** the result callout shows the error with View log and Copy prompt beside it, and the header still offers Test
 
-### Requirement: Offer the hand-off a knowledge refusal carries beside it
-When the daemon refuses a knowledge operation with a hand-off in the error's details
-(`details.handoff.prompt`), the Knowledge page MUST offer that prompt as one **Ask an agent ▾**
-control — Ask an agent opens a draft conversation with the prompt, and its menu holds Copy prompt,
-which is the only action when no managed agent is available — passing the prompt on as served and
-never assembling it. A History tab or Recent changes that cannot be read because git is not
-installed MUST say so in one neutral row — **History needs git** or **Recent changes needs git**,
-*Install git on this Mac to see versions. The document itself is fine.* — with **Check again** and
-the hand-off, and no Retry or Open Activity. A refused **Undo this pass** MUST say in one sentence
-which document was changed since and offer **Open its History**, which opens that document's
-History tab, where the person restores a single version; it carries no hand-off. The page MUST NOT
-show an install command.
-
-#### Scenario: a refused pass undo points at the document's history
-- **GIVEN** a curation pass whose undo the daemon refuses because a document it wrote was edited since
-- **WHEN** the user undoes the pass from its page
-- **THEN** one sentence names the document edited since and Open its History opens that document's History tab
-- **AND** nothing is written and no prompt is shown
-
-#### Scenario: a history that needs git offers the prompt for installing it
-- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
-- **WHEN** a document's History tab opens
-- **THEN** it shows the row *History needs git* with Check again and Ask an agent ▾, whose menu copies the served prompt, and names no install command
-- **AND** it offers no Retry and no Open Activity
-
-#### Scenario: recent changes that need git offer the same row
-- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
-- **WHEN** Recent changes opens
-- **THEN** it shows the row *Recent changes needs git* with Check again and Ask an agent ▾
-
 ### Requirement: Show, copy and rotate the access token on Settings › Security
 Settings › Security MUST be the one place in the web UI that shows the daemon's access token. It
 MUST be hidden until **Show** is chosen, offer **Copy**, and offer **Rotate**, which asks for
@@ -1952,36 +1920,6 @@ never stands down on its own.
 - **THEN** one request is sent carrying `login_service_installed: true` and no idle window
 - **AND** the card offers no idle-window or stand-down control
 - **AND** when a later request fails, the switch goes back to what the daemon last reported and the error is shown beside it
-
-### Requirement: Choose Coffer's model in Settings › General
-Settings › General MUST carry a **Coffer's model** section that sets what Coffer's
-own machinery runs on (spec [internal-engine](../internal-engine/spec.md) "Show and change Coffer's model in Settings › General").
-It is machine-level configuration of Coffer itself rather than of any agent, so
-it is a Settings section, not a tab of the Model providers page, whose tabs are Providers and Usage. The section
-MUST carry two pickers — **Engine model** and **Speech to text** — each choosing
-a provider first and then a model from that provider's list, and a **Test**
-action for each that tries the chosen pair and shows the result beside it. Each
-picker MUST show its state inline: *not set* (saying what Coffer does without
-it — no internal pass runs; voice messages reach the agent as audio files),
-*set*, or *failing* (the last test or call failed, with the error). The Model
-providers page MUST carry no Coffer's model tab. Coffer has no embedding
-configuration (search is literal-only), and the second picker is Speech to text.
-
-#### Scenario: coffer's model is chosen in settings general
-- **GIVEN** two connections, each with a list of models
-- **WHEN** the user opens `/settings/general` and, in the Engine model picker, chooses a provider and then one of its models
-- **THEN** the model list offers only the chosen provider's models, and the choice is saved without a Save button
-
-#### Scenario: an unset picker says what coffer does without it
-- **GIVEN** no speech-to-text model chosen
-- **WHEN** the Coffer's model section renders
-- **THEN** the Speech to text picker reads as not set and says voice messages reach the agent as audio files
-
-#### Scenario: testing a picker shows a failing pair inline
-- **GIVEN** an engine model chosen on a connection whose endpoint rejects the key
-- **WHEN** the user chooses Test beside the Engine model picker
-- **THEN** the picker reads as failing with the endpoint's error beside it
-- **AND** the chosen pair is kept as it was
 
 ### Requirement: Show and manage the daemon on Settings → Daemon
 The Daemon tab MUST show the daemon's state and carry the controls a user needs
@@ -2543,19 +2481,18 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 ### Requirement: Show a knowledge document's history on its History tab
 A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**, neither
 with a count. History is the version-history split of "Show every version history as one split": the
-document's versions on the left, newest first — who wrote each (the user, Coffer's curation naming the
-agent whose item it curated, or sync), when, and its added and removed line counts — and the chosen
+document's versions on the left, newest first — who wrote each (the user, an agent, an edit found on disk, or sync; a version an
+earlier curation pass wrote keeps its curation label), when, and its added and removed line counts — and the chosen
 version on the right, the newest chosen when the tab opens. The right side MUST carry a switch between
 **Changes in this version** (against the one before) and **Compare with current**, **Restore this
 version** on every version but the current one, which writes a new version rather than rewriting the
-past (spec [knowledge](../knowledge/spec.md) "Keep every document's history and undo a pass as a
-whole"), a **See the pass** link on a curation's version, and the diff. A history that cannot be read
+past, and the diff. A history that cannot be read
 MUST say so in one **Load error** row inside the tab — *Couldn't load the history*, the reason,
 **Retry** and **Open Activity** — leaving the Document tab working; without git the row is *History
-needs git* (see "Offer the hand-off a knowledge refusal carries beside it").
+needs git* (see "Offer a knowledge refusal's hand-off as one Ask an agent control").
 
 #### Scenario: the history tab lists versions with their writers
-- **GIVEN** a document the user created, that curation then changed from a Codex item
+- **GIVEN** a document the user created, that an agent then changed
 - **WHEN** the user opens its History tab and chooses the older version's row
 - **THEN** the tab lists both versions newest first with their writers, its diff shows on the right beside the list, and Restore this version is offered on it and not on the current version
 - **AND** restoring it writes it back as a new version
@@ -2564,34 +2501,6 @@ needs git* (see "Offer the hand-off a knowledge refusal carries beside it").
 - **GIVEN** the history read failing
 - **WHEN** the user opens the History tab
 - **THEN** the tab shows one Load error row with Retry and Open Activity, and the Document tab still renders
-
-### Requirement: Follow knowledge changes in Recent changes
-The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
-first, of curation passes and of documents people and agents wrote or deleted, with the items still
-waiting — also newest submitted first — and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
-on a sweep and on demand"). It MUST be filtered with **Collection** and **Author** filter pills and a
-**Clear filters** control, the choice kept in the URL. A delete carries **Restore**. Choosing a pass
-MUST show what it changed — each document it wrote or retired, with a diff — and offer **Undo this
-pass**, which asks first and undoes the whole pass, reporting a refusal that names the document
-changed since (see "Offer the hand-off a knowledge refusal carries beside it"). What became of each
-item a manual Curate now could not curate is written on that change's row. An empty Inbox reads as one
-quiet line. The wording is Curate / Curation (整理) throughout.
-
-#### Scenario: recent changes shows a cross-collection timeline with waiting items
-- **GIVEN** a pass in one collection, a person's edit in another, and an item waiting
-- **WHEN** the user opens Recent changes
-- **THEN** both changes are listed, each linking the documents it wrote, and the waiting item is shown with Curate now
-
-#### Scenario: the filter pills narrow the timeline and live in the URL
-- **GIVEN** changes in two collections by the user and by an agent
-- **WHEN** the user picks one collection in the Collection pill and the agent in the Author pill, then chooses Clear filters
-- **THEN** the timeline lists only that collection's changes by that agent and the URL carries both choices, and Clear filters empties both and the URL
-
-#### Scenario: a pass is inspected and undone as a whole
-- **GIVEN** a pass that changed two documents
-- **WHEN** the user opens it from Recent changes, reviews the diffs and chooses Undo this pass
-- **THEN** the pass's page lists each document it changed with its diff and a link to that document's history
-- **AND** Undo this pass asks first, writes nothing until confirmed, and confirming undoes the whole pass in one request
 
 ### Requirement: Show memory delivery on the Memory page
 The Memory page MUST show what each partition delivers, and the agent detail page MUST show only
@@ -3098,3 +3007,43 @@ restarted daemon answers, with no manual reload.
 - **WHEN** the person presses Check again
 - **THEN** the page asks the daemon to look again, and on `ready: true` restarts the daemon
 - **AND** when git is still missing the screen stays and says it checked again
+
+### Requirement: Offer a knowledge refusal's hand-off as one Ask an agent control
+When the daemon refuses a knowledge operation with a hand-off in the error's details
+(`details.handoff.prompt`), the Knowledge page MUST offer that prompt as one **Ask an agent ▾**
+control — Ask an agent opens a draft conversation with the prompt, and its menu holds Copy prompt,
+which is the only action when no managed agent is available — passing the prompt on as served and
+never assembling it. A History tab or Recent changes that cannot be read because git is not
+installed MUST say so in one neutral row — **History needs git** or **Recent changes needs git**,
+*Install git on this Mac to see versions. The document itself is fine.* — with **Check again** and
+the hand-off, and no Retry or Open Activity. The page MUST NOT
+show an install command.
+
+#### Scenario: a history that needs git offers the prompt for installing it
+- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
+- **WHEN** a document's History tab opens
+- **THEN** it shows the row *History needs git* with Check again and Ask an agent ▾, whose menu copies the served prompt, and names no install command
+- **AND** it offers no Retry and no Open Activity
+
+#### Scenario: recent changes that need git offer the same row
+- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
+- **WHEN** Recent changes opens
+- **THEN** it shows the row *Recent changes needs git* with Check again and Ask an agent ▾
+
+### Requirement: List recent knowledge changes across collections
+The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
+first, of documents people and agents wrote or deleted. A version an earlier curation pass wrote
+keeps its curation label. It MUST be filtered with **Collection** and **Author** filter pills and a
+**Clear filters** control, the choice kept in the URL. A delete carries **Restore**. The view has no
+waiting items and no pass to inspect or undo; a refusal because git is not installed is handled as in
+"Offer a knowledge refusal's hand-off as one Ask an agent control".
+
+#### Scenario: recent changes shows a cross-collection timeline
+- **GIVEN** an agent's write in one collection and a person's edit in another
+- **WHEN** the user opens Recent changes
+- **THEN** both changes are listed, newest first, each linking the document it wrote, and the view shows no waiting items and no Curate now
+
+#### Scenario: the filter pills narrow the timeline and live in the URL
+- **GIVEN** changes in two collections by the user and by an agent
+- **WHEN** the user picks one collection in the Collection pill and the agent in the Author pill, then chooses Clear filters
+- **THEN** the timeline lists only that collection's changes by that agent and the URL carries both choices, and Clear filters empties both and the URL

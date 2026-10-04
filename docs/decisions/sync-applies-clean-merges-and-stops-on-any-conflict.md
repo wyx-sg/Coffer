@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Local-First — the user-owned sync remote exception; "Not a hosted sync service"), research note [multi-machine sync](../research/multi-machine-sync.md), spec vault-sync "Run a round as pull, merge, guard, check out, push", spec vault-sync "Never overwrite a person's unsettled edit", spec vault-sync "Keep the pointer local", spec vault-sync "Snapshot before checking out and roll a round back from it", spec vault-sync "Guard both directions", spec vault-sync "Let the fresher secret ciphertext win", spec vault-sync "Stop the round on any conflict", spec vault-sync "Answer each conflicting file and continue the round", spec vault-sync "Show a conflict as a banner"
+**Related**: [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Local-First — the user-owned sync remote exception; "Not a hosted sync service"), research note [multi-machine sync](../research/multi-machine-sync.md), spec vault-sync "Run a round as pull, merge, guard, check out, push", spec vault-sync "Never overwrite a person's unsettled edit", spec vault-sync "Keep the pointer local", spec vault-sync "Snapshot before checking out and roll a round back from it", spec vault-sync "Guard both directions", spec vault-sync "Let the fresher secret ciphertext win", spec vault-sync "Stop the round on any conflict", spec vault-sync "Answer each conflicting file and continue the round", spec vault-sync "Show a conflict as a banner"
 
 ## Context
 
@@ -343,11 +343,12 @@ Rules a future change must respect:
 - Git's three-way merge is the only merge. A new "newest wins" or model-driven
   resolver for anything other than secret ciphertext is a regression to
   Option A or C.
-- One lock covers every rewriter of vault content, which knowledge curation
-  shares ([Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md)).
-- Unattended rewrites run on a single owner machine, because a clean merge
-  would still duplicate two machines' curation silently
-  ([An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md)).
+- One lock covers every rewriter of vault content, the knowledge sweep
+  included.
+- Nothing on a timer rewrites synced content by meaning, because a clean merge
+  would silently duplicate two machines' independent rewrites of the same
+  material ([Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)).
+  A rewriter that did would need one named owner machine.
 - Reach never travels, and derived output never travels
   ([Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md)).
 - The push token reaches git through a per-invocation credential helper with
@@ -359,9 +360,6 @@ Rules a future change must respect:
 - The only egress is `git fetch` / `git push` to the user's own remote.
 - [A Sync Round That Would Lose Too Much Is Held](sync-deletion-breaker.md)
   counts uids for resource files.
-- [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md)
-  has no "an edit beats a curation deletion" fallback: a curation deletion that
-  meets an edit elsewhere is a conflict the person resolves.
 - A git version check (2.40: the merge passes `--merge-base` to `git
   merge-tree --write-tree`) runs at boot and in `coffer sync status`.
 - A vault that needs a human (stopped, held, failing to push, or waiting to

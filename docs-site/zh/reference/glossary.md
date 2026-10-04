@@ -1,6 +1,6 @@
 ---
 title: 术语表
-description: Coffer 所用术语的定义，从生效范围、类型到同步轮次和一轮整理，每条都链接到详细讲解它的页面。
+description: Coffer 所用术语的定义，从生效范围、类型到同步轮次和整理，每条都链接到详细讲解它的页面。
 outline: 2
 pageClass: glossary
 ---
@@ -59,7 +59,7 @@ Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具�
 
 ### 知识集（Collection） {#collection}
 
-一棵知识树：`~/.coffer/vault/knowledge/<collection>/` 下的一个 Markdown 文档目录，由你和 Coffer 共同编写。知识集是类型为 `knowledge` 的[资源](#resource)。见[知识](/zh/guides/knowledge)。
+一棵知识树：`~/.coffer/vault/knowledge/<collection>/` 下的一个 Markdown 文档目录，由你和你的智能体编写。知识集是类型为 `knowledge` 的[资源](#resource)。见[知识](/zh/guides/knowledge)。
 
 ### `coffer-guide` {#coffer-guide}
 
@@ -72,14 +72,6 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 ### 连接（Connection） {#connection}
 
 一份模型提供商配置：一种传输协议、一个 base URL 和一个密钥。为某个智能体打开连接，就会把它[投影](#projection)进该智能体的配置。连接是类型为 `provider` 的[资源](#resource)。见[模型提供商](/zh/guides/providers)。
-
-### 整理所有者（Curation owner） {#curation-owner}
-
-唯一允许自动运行[一轮整理](#curation-pass)的机器，这样两台同步的机器永远不会同时改写同一个知识集。在知识页页头的**自动**弹出框里用**整理运行在**设置。见[知识](/zh/architecture/knowledge#the-owner-machine)。
-
-### 一轮整理（Curation pass） {#curation-pass}
-
-[内部引擎](#internal-engine)对一个[知识集](#collection)做的一次有边界的改写：取一个待处理项（来自[收件箱](#inbox)的新[材料](#material)，或自上次整理以来被编辑过的文档），把它整理进知识集的文档，最多写八个文件。它按定时器运行，也可按需运行。见[知识](/zh/architecture/knowledge#the-curation-pass)。
 
 ## D {#d}
 
@@ -109,7 +101,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 提炼任务（Distil pass） {#distil-pass}
 
-一种[维护任务](#upkeep-pass)，把一个[分区](#partition)的[原始条目](#raw-entry)变成[笔记](#note)，并重写它的索引 `MEMORY.md`。见[记忆](/zh/architecture/memory#the-distil-pass)。
+一种[维护任务](#upkeep-pass)，把一个[分区](#partition)的每个新[原始条目](#raw-entry)原样变成一条[笔记](#note)，渲染分区的索引 `MEMORY.md`，并删除智能体标了 `retired:` 的笔记（记入 `RETIRED.md`）。它不调用任何模型。见[记忆](/zh/architecture/memory#the-distil-pass)。
 
 ## E {#e}
 
@@ -121,11 +113,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 收件箱（Inbox） {#inbox}
 
-知识集中隐藏的 `.inbox/` 目录，新[材料](#material)在这里等待[一轮整理](#curation-pass)。这是 Coffer 在知识集里写入的唯一一个隐藏目录。见[知识](/zh/architecture/knowledge)。
-
-### 内部引擎（Internal engine） {#internal-engine}
-
-Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)：整理知识和提炼记忆。它运行在你标为内部引擎默认值的那个[连接](#connection)上。没有这样的连接时，整理会把新知识原样存档，提炼任务会把每个原始条目各自变成一条笔记。见[模型提供商](/zh/guides/providers)。
+知识集中隐藏的 `.inbox/` 目录，一个投放区：智能体或另一台机器放在这里的文件，会被下一次[扫描](#upkeep-pass)收编并升格为文档。见[知识](/zh/architecture/knowledge)。
 
 ### 调用日志（Invocation log） {#invocation-log}
 
@@ -159,7 +147,7 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 ### 材料（Material） {#material}
 
-提交给知识集的新知识，包括智能体写进[收件箱](#inbox)的 Markdown 文件、上传内容或消息渠道带来的内容。材料在[收件箱](#inbox)里等待，直到[一轮整理](#curation-pass)把它整理进文档。见[知识](/zh/guides/knowledge)。
+提交给知识集的新知识：上传内容，或留在[收件箱](#inbox)里的文件。它会立即原样成为一篇文档。见[知识](/zh/guides/knowledge)。
 
 ### MCP 网关（MCP gateway） {#mcp-gateway}
 
@@ -266,6 +254,10 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 在某个[目的地](#destination)接收密钥的东西，以人能在[审批](#approval)中读懂的方式写出：stdio 服务器的完整命令行及其工作目录和其他环境变量、HTTP 服务器的 URL、git 远端的 URL、消息渠道的机器人或应用。接收方改变时会再次询问。见[密钥](/zh/guides/secrets#approvals)。
 
+### 整理（Tidy） {#tidy}
+
+[知识集](#collection)或记忆[分区](#partition)上的按钮（列表页上还有**整理全部**），它会用你的默认托管智能体新开一个对话，并发送一条提示，让它按 `coffer-guide` 技能合并、拆分和纠正其中的内容。没有可用的托管智能体时，它提供可复制的提示。整理由你的智能体来做，Coffer 自己从不主动整理。见[知识](/zh/guides/knowledge)和[记忆](/zh/guides/memory)。
+
 ### 分层（Tiering） {#tiering}
 
 网关的列表预算：上游工具数量超过预算时，`tools/list` 携带最常用的工具（每个服务器至少一个），其余每个工具仍可按名称调用，并能通过 `coffer__search_tools` 找到。见 [MCP 工具](/zh/reference/mcp-tools#tiering)。
@@ -294,7 +286,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的工作：记忆的 `aggregate` 和 `distil`，知识的 `curate`。每项都能在知识和记忆页面的**自动**控件里关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的机械性工作：记忆的 `aggregate` 和 `distil`，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、提交磁盘上的编辑）。它们都不调用模型。每项都能在知识和记忆页面的**自动**控件里关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
 
 ## V {#v}
 
@@ -314,4 +306,4 @@ Coffer 按定时器、无需要求就做的工作：记忆的 `aggregate` 和 `d
 
 ### 写入者（Writer） {#writer}
 
-[保险库](#vault)中一次提交的作者，写在它的 `Coffer-Writer` trailer 里：`user`（你，通过 Coffer 的某个界面）、`disk`（在编辑器、shell 或智能体自己的文件工具中编辑的文件）、`agent`、`daemon`、`curation` 或 `sync`。技能的**历史**标签页会显示它。见[手动编辑保险库](/zh/guides/vault-files)。
+[保险库](#vault)中一次提交的作者，写在它的 `Coffer-Writer` trailer 里：`user`（你，通过 Coffer 的某个界面）、`disk`（在编辑器、shell 或智能体自己的文件工具中编辑的文件）、`agent`、`daemon`、`curation`（只见于较早的历史）或 `sync`。技能的**历史**标签页会显示它。见[手动编辑保险库](/zh/guides/vault-files)。

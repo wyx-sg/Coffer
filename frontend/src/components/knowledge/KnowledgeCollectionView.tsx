@@ -3,7 +3,9 @@
 // A collection with no document open (boards 5.1.10, 5.1.11, 5.1.14). The pane
 // bar is the collection's name with a ⋯ menu — Reveal in Finder · Copy path ·
 // Rename… (a dialog; the folder moves with the name, board 5.1.31) · Delete
-// collection…, which runs at once with an Undo toast. The body is one
+// collection…, which runs at once with an Undo toast; beside it **Tidy**, which
+// hands the collection to the default managed agent and sends the prompt at
+// once (spec knowledge "Hand a tidy to the agent"). The body is one
 // 720-wide page: the folder name as the heading, its description — the opening
 // paragraph of its README — edited in place (click, then blur or ⌘Enter saves,
 // Esc cancels, and the success toast offers Undo), and its properties
@@ -15,6 +17,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { useDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeRenameDialog } from "@/components/knowledge/KnowledgeRenameDialog";
@@ -29,17 +32,16 @@ import { useDescribeCollection } from "@/lib/hooks/useKnowledgeHistory";
 
 interface Props {
   collection: CollectionOut;
-  modelSet: boolean | undefined;
 }
 
-export function KnowledgeCollectionView({ collection, modelSet }: Props) {
+export function KnowledgeCollectionView({ collection }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { reveal } = useFsActions();
   const deleteCollection = useDeleteCollection(collection);
   const [editing, setEditing] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const empty = collection.document_count === 0 && collection.pending_count === 0;
+  const empty = collection.document_count === 0;
 
   const revealFolder = () =>
     void reveal(collection.folder_path).catch(() => toast.error(t("fileActions.revealFailed")));
@@ -54,26 +56,38 @@ export function KnowledgeCollectionView({ collection, modelSet }: Props) {
       <KnowledgePaneBar
         crumbs={[{ label: collection.name, mono: true }]}
         actions={
-          <ActionMenu
-            label={t("knowledge.collection.more", { name: collection.name })}
-            actions={[
-              {
-                key: "reveal",
-                label: t("fileActions.reveal"),
-                onSelect: revealFolder,
-                disabled: !collection.folder_path,
-              },
-              { key: "copy", label: t("knowledge.collection.copyPath"), onSelect: copyPath },
-              { key: "rename", label: t("knowledge.rename.menu"), onSelect: () => setRenaming(true) },
-              {
-                key: "delete",
-                label: t("knowledge.deleteCollection.menu"),
-                onSelect: deleteCollection,
-                destructive: true,
-                separated: true,
-              },
-            ]}
-          />
+          <>
+            <AgentHandoff
+              prompt={collection.tidy_handoff.prompt}
+              autoSend={{ label: t("knowledge.tidy.one") }}
+              size="sm"
+              help={false}
+            />
+            <ActionMenu
+              label={t("knowledge.collection.more", { name: collection.name })}
+              actions={[
+                {
+                  key: "reveal",
+                  label: t("fileActions.reveal"),
+                  onSelect: revealFolder,
+                  disabled: !collection.folder_path,
+                },
+                { key: "copy", label: t("knowledge.collection.copyPath"), onSelect: copyPath },
+                {
+                  key: "rename",
+                  label: t("knowledge.rename.menu"),
+                  onSelect: () => setRenaming(true),
+                },
+                {
+                  key: "delete",
+                  label: t("knowledge.deleteCollection.menu"),
+                  onSelect: deleteCollection,
+                  destructive: true,
+                  separated: true,
+                },
+              ]}
+            />
+          </>
         }
       />
       <KnowledgeRenameDialog collection={collection} open={renaming} onOpenChange={setRenaming} />
@@ -99,7 +113,7 @@ export function KnowledgeCollectionView({ collection, modelSet }: Props) {
               </button>
             )}
           </div>
-          <KnowledgeStatsLine collection={collection} modelSet={modelSet} />
+          <KnowledgeStatsLine collection={collection} />
           {empty ? (
             <p className="flex flex-wrap items-center gap-x-1 text-sm text-text-muted">
               {t("knowledge.collection.emptyLine")}

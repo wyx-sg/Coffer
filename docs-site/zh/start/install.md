@@ -18,7 +18,6 @@ description: 通过一行安装脚本、macOS 桌面应用、发布压缩包或�
 | **Apple 芯片（arm64）的 macOS**，用于预编译构建 | 桌面应用、一行安装脚本和发布压缩包只为它构建。其他机器请[从源码安装](#from-source)。 |
 | **git 2.40 或更高版本**（必需） | 保险库是一个 git 仓库：每次改动都是一次提交，历史、撤销和同步都跑在 git 上（同步的合并需要 2.40）。没有它 Coffer 也能启动，但会一直显示 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)，直到装好 git。用 `git --version` 检查。 |
 | **一个要连接的编程智能体**：Claude Code 或 Codex | Coffer 把 MCP 服务器、技能等提供给你的智能体。可以先装 Coffer，之后再连接智能体。 |
-| **ripgrep（`rg`）**（可选） | 让知识搜索更快。没有它时，Coffer 会对同样的文件用较慢的内置搜索。 |
 | **从源码安装：** Python 3.12 或更高版本，以及 Node.js 20 | Python 运行守护进程和 CLI；Node.js 构建 Web 界面（CI 用 Node.js 20 构建）。 |
 
 ## 让你的智能体来安装 {#let-your-agent-install-it}
@@ -135,7 +134,7 @@ export PATH="$HOME/.coffer/bin:$PATH"          # add to your shell profile
 
 ## 从源码 {#from-source}
 
-除了 git，从源码安装还需要 Python 3.12 或更高版本、构建 Web 界面用的 Node.js 20，另外推荐安装 [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）；见[系统要求](#requirements)。
+除了 git，从源码安装还需要 Python 3.12 或更高版本、构建 Web 界面用的 Node.js 20；见[系统要求](#requirements)。
 
 ```sh
 git clone https://github.com/wyx-sg/Coffer.git

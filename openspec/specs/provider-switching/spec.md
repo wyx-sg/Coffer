@@ -3,13 +3,12 @@
 ## Purpose
 An LLM connection is a credentialed endpoint — a name, a base URL, a detected protocol, an encrypted
 secret and a curated set of the models it offers. One connection is used both ways: projected
-into the native config file of each agent it reaches, and borrowed as the endpoint Coffer's own
-internal engine runs on ([internal-engine](../internal-engine/spec.md)). Claude Code and Codex each
+into the native config file of each agent it reaches, and the one flagged for speech-to-text is the endpoint Coffer transcribes voice on ([internal-engine](../internal-engine/spec.md)). Claude Code and Codex each
 read provider settings from their own native config file (`~/.claude/settings.json`,
 `~/.codex/config.toml`) with their own keys and base URLs; switching providers by hand means editing
 several files, storing keys in plaintext and losing any record of what changed, and a key configured
-for an agent could not be reused by Coffer's own engine. Coffer centralises the connection: configure
-once, route it at the agents you mean, mark one as the internal engine's default, audit everything.
+for an agent could not be reused by Coffer's own transcription. Coffer centralises the connection: configure
+once, route it at the agents you mean, mark one for speech-to-text if you want voice transcription, audit everything.
 Its differentiator over per-tool switching scripts is governance — Fernet-encrypted secrets
 ([secret](../secret/spec.md)), a full audit trail, and one registry that converges across
 the user's machines. From a fresh install a user can add a connection, bind a model, switch an agent
@@ -19,16 +18,15 @@ A connection is an optional override. An agent with nothing projected runs on it
 login, and no surface may block on "no connection" — the chat surface offers the agent's own models
 and runs. A connection answers "which gateway account"; which model an agent runs is a property of
 the use, not of the account, so the model is chosen at the point of use — the per-agent binding, the
-conversation, or the internal engine's own setting.
+conversation, or the speech-to-text setting.
 
 This capability owns the `provider` resource kind, its secret handling, the projection into
 agents' native config, the switch / activate / use-builtin operations, per-connection key
-resolution, the internal-engine and speech-to-text default flags, and the curated model set with its
+resolution, the speech-to-text default flag, and the curated model set with its
 modalities. It relies on [agent-registry](../agent-registry/spec.md) for `AgentType`, `AgentConfig`,
 agent CRUD, the per-agent model binding the projection reads, the catalogue of what models an agent
 can be put on, and the config-file store every
-projection write goes through. What the flagged connections are used for — the engine's model, the
-speech-to-text model, the unattended passes and the rule that drops a model when a flag moves — is
+projection write goes through. What the flagged connection is used for — the speech-to-text model and the rule that drops it when the flag moves — is
 [internal-engine](../internal-engine/spec.md)'s. Coffer is a single-user tool, so no access control
 applies beyond the daemon's `X-Coffer-Token` gate. It also owns the local model proxy every
 API-key and local connection is reached through — the per-agent proxy tokens, the relay to
@@ -58,8 +56,9 @@ kind declares `supports_scope`, and its `enabled` switch is the framework's.
 
 ### Requirement: Validate connection config against the provider schema
 The system MUST validate a connection's config against a kind-specific schema over
-`{protocol, base_url, secret_ref, models, internal_default, transcribe_default, local_runtime}`,
-rejecting any other key. The config MUST NOT carry a model the connection runs (no `model`, no
+`{protocol, base_url, secret_ref, models, transcribe_default, local_runtime}`,
+rejecting any other key. The one retired key, `internal_default`, is accepted and ignored
+(see "Ignore a stored internal-default flag"). The config MUST NOT carry a model the connection runs (no `model`, no
 `fast_model`), nor the agents it reaches — reach is the resource row's per-agent `scope` — nor a
 manually chosen wire format or a `wire_api`: Codex loads only `responses`, so the Codex block writes that
 fixed value and nothing stores it.
@@ -81,7 +80,7 @@ pure").
 
 ### Requirement: Never return the raw secret in a connection
 `ProviderOut` MUST NEVER include the raw secret. `secret_ref`, `compatible_agents` (the
-configured reach, read-only), `models`, `enabled`, `internal_default` and
+configured reach, read-only), `models`, `enabled` and
 `transcribe_default` MUST be included. `ProviderOut` carries no switched-on flag: which agents run on
 a connection is read from the agents' `connection_uid` ([agent-registry](../agent-registry/spec.md)
 "Carry the connection an agent runs on on the agent record"), and `AgentOut` carries it.
@@ -362,20 +361,21 @@ keys Coffer left in the file of an agent that runs on none.
 - **THEN** the agent's file carries the edited projection, and an agent that runs on no connection is left as it was
 
 ### Requirement: Record provider operations as their own audit events
-`PROVIDER_SWITCHED` (`"provider_switched"`), `PROVIDER_INTERNAL_DEFAULT_SET`
-(`"provider_internal_default_set"`), `PROVIDER_TRANSCRIBE_DEFAULT_SET`
+`PROVIDER_SWITCHED` (`"provider_switched"`), `PROVIDER_TRANSCRIBE_DEFAULT_SET`
 (`"provider_transcribe_default_set"`) and `PROVIDER_PROJECTION_REFUSED`
 (`"provider_projection_refused"`) MUST be in `AuditEventType` and emitted from the switch, the
-internal-default operation, the speech-to-text-default operation and a refused projection.
+speech-to-text-default operation and a refused projection. `PROVIDER_INTERNAL_DEFAULT_SET`
+(`"provider_internal_default_set"`) MUST stay a member, though nothing emits it, so an audit row
+written earlier keeps rendering.
 `resource_created` / `resource_updated` / `resource_deleted` / `resource_renamed` are emitted
 automatically by `ResourceService` with kind-redacted config; the provider kind declares no redactor,
 because its config holds no secret.
 
 #### Scenario: each provider operation records its own audit event
 - **GIVEN** two connections and a registered Claude Code agent one of them reaches
-- **WHEN** the user switches that agent onto the connection, marks one connection the internal-engine default and the other the speech-to-text default
-- **THEN** the audit log holds a `provider_switched`, a `provider_internal_default_set` and a `provider_transcribe_default_set` entry, each naming the connection it acted on
-- **AND** all four provider event values, `provider_projection_refused` included, are members of `AuditEventType`
+- **WHEN** the user switches that agent onto the connection, marks one connection the speech-to-text default
+- **THEN** the audit log holds a `provider_switched` and a `provider_transcribe_default_set` entry, each naming the connection it acted on
+- **AND** the three emitted provider event values, `provider_projection_refused` included, and `provider_internal_default_set` are members of `AuditEventType`
 
 ### Requirement: Refuse to move the wire of a live connection
 A connection's `protocol` MUST be correctable — the probe that guessed the wire can be wrong, and
@@ -444,7 +444,7 @@ The web UI's **Change model** dialog (Overview › Model › Change…, or `?cha
 - **THEN** no test runs, no test line is shown and Review changes is on
 
 ### Requirement: Review what deleting a connection changes
-Deleting a connection that agents run on MUST put each of those agents back on its built-in login first — the same de-projection "Revert an agent type to its built-in login" performs, audited the same way — and only then delete the connection, its owned secret and the engine settings that named it; a de-projection refused because a file was edited on disk aborts the delete and keeps the connection. `GET /api/v1/providers/{uid}/delete-preview` MUST answer, per agent running on the connection, which of its files the delete would change and exactly the lines it would remove or the file it would remove, and write nothing; it is a 404 for a connection that does not exist. On the web, deleting a connection nothing uses asks once and returns to the list; deleting one in use is not blocked but opens a review — what will happen to each user of the connection (an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted) beside the daemon's own lines for each agent file — and **Delete** applies it. The lines shown are the daemon's dry run, never drawn by the page.
+Deleting a connection that agents run on MUST put each of those agents back on its built-in login first — the same de-projection "Revert an agent type to its built-in login" performs, audited the same way — and only then delete the connection, its owned secret and the speech-to-text model chosen for it; a de-projection refused because a file was edited on disk aborts the delete and keeps the connection. `GET /api/v1/providers/{uid}/delete-preview` MUST answer, per agent running on the connection, which of its files the delete would change and exactly the lines it would remove or the file it would remove, and write nothing; it is a 404 for a connection that does not exist. On the web, deleting a connection nothing uses asks once and returns to the list; deleting one in use is not blocked but opens a review — what will happen to each user of the connection (an agent goes back to its own login, speech to text turns off, the key is deleted) beside the daemon's own lines for each agent file — and **Delete** applies it. The lines shown are the daemon's dry run, never drawn by the page.
 
 #### Scenario: deleting a provider an agent runs on is a review of its config diff, and Delete applies it
 - **GIVEN** a connection a Codex agent runs on, with Coffer's model, provider table and catalogue pointer in its `config.toml`
@@ -461,7 +461,7 @@ Deleting a connection that agents run on MUST put each of those agents back on i
 The `ollama` protocol is internal-only: such a connection MUST reach no agent whatever its scope
 says, MUST never be an agent's connection, and switching an agent onto it MUST write no native config: the switch is
 refused with `409 PROVIDER_INTERNAL_ONLY` before anything is touched. It has no key to
-write and is used solely by Coffer's internal engine. The rule is enforced in
+write and is never written into an agent's config. The rule is enforced in
 `application/provider/targets.py::scoped_targets`, which answers `[]` for `ollama` BEFORE the scope
 is read — it is a rule about projection, not about the config's shape, and scope lives outside the
 config.
@@ -483,32 +483,7 @@ rule (see "Store an inline secret under a minted opaque ref") stands.
 #### Scenario: create an ollama connection without a secret
 - **GIVEN** no connection named `local-llm` exists,
 - **WHEN** the user creates one with `protocol="ollama"`, a `base_url`, and neither `secret_value` nor `secret_ref`,
-- **THEN** it persists with `secret_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `internal_default=false`.
-
-### Requirement: Set the internal-engine default
-`POST /api/v1/providers/{uid}/internal-default` (which Settings › General calls)
-MUST set the named connection as the internal-engine default (applying "Keep at most one
-internal-engine default"), emit a `provider_internal_default_set` audit event, and return the
-updated `ProviderOut`. Which connection carries the flag, or that none does, is read from
-`GET /api/v1/providers`. No operation clears the flag without moving it: it moves by naming another
-connection.
-Setting the internal default MUST notify the engine so it can apply its own drop rule
-([internal-engine](../internal-engine/spec.md) "Drop the engine model when its connection moves"); the notification is a port, not an import, so this operation never
-reads or writes the engine's own settings row, which lives under `/api/v1/internal-engine-config`. A
-connection may be both an agent's connection (projected into that agent) and the internal default — one
-key, two uses; an `ollama` connection is only ever the second. The engine picks the model it runs on
-the flagged connection from a setting of its own ([internal-engine](../internal-engine/spec.md) "Resolve the engine's connection and model together").
-
-#### Scenario: set a connection as the internal engine default
-- **GIVEN** two connections exist and none is the internal default,
-- **WHEN** the user sets the second as the internal default,
-- **THEN** its `internal_default` becomes true, the other stays false, and a `provider_internal_default_set` audit entry is recorded.
-
-#### Scenario: the internal engine's connection is named over REST
-- **GIVEN** the daemon is running with two connections, `alpha` flagged as the internal default and `beta` unflagged,
-- **WHEN** a client calls `POST /api/v1/providers/{beta uid}/internal-default`, then `GET /api/v1/providers`,
-- **THEN** `beta` carries the flag, `alpha` no longer does, and a `provider_internal_default_set` entry names `beta`,
-- **AND** the list shows `beta` as the only connection flagged.
+- **THEN** it persists with `secret_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `transcribe_default=false`.
 
 ### Requirement: Introspect an unsaved connection with an inline secret
 The endpoint-introspection routes MUST remain available to callers holding a connection that is not
@@ -723,20 +698,17 @@ default.
 - **THEN** it offers a fixed dropdown with no free-text "Custom…" entry and no text input: the agent's own catalogue (`GET /api/v1/agent-providers/{agent_key}/models`) when it is on its built-in login, and, when a connection overrides it, that connection's curated `text` ids served by the same route — never a model field stored on the connection, which carries none (TypeScript acceptance test).
 
 ### Requirement: Keep an independent speech-to-text default
-`transcribe_default` MUST be a config field of the same shape as `internal_default`: at most one
-connection globally carries it, and `set_transcribe_default` MUST clear it everywhere else before
-setting the target, emit `provider_transcribe_default_set`, and notify the engine so it can apply its
+At most one connection globally MUST carry the config field `transcribe_default`, and
+`set_transcribe_default` MUST clear it everywhere else before
+setting the target, emit `provider_transcribe_default_set`, and notify the engine settings so they can apply their
 own drop rule ([internal-engine](../internal-engine/spec.md) "Drop the speech-to-text model when its connection moves"); what the flagged connection is used for is
-[internal-engine](../internal-engine/spec.md) "Transcribe speech on its own connection and model". The two flags MUST move independently — setting one MUST NOT read, write
-or clear the other, and neither MUST fall back to the other at resolution time — and one connection
-MAY carry both. It is a second flag because the two name different models: a gateway serving chat
-completions commonly serves no `/audio/transcriptions` at all, so borrowing the engine's connection
-aimed every voice message at a 404. `POST /api/v1/providers/{uid}/transcribe-default`, which Settings › General calls, MUST be the
+[internal-engine](../internal-engine/spec.md) "Transcribe speech on its own connection and model". It is a connection of its own because a gateway serving chat
+completions commonly serves no `/audio/transcriptions` at all, so no chat connection is borrowed for speech.
+`POST /api/v1/providers/{uid}/transcribe-default`, which Settings › General calls, MUST be the
 surface, returning the updated `ProviderOut`. Which connection carries the flag, or that none does,
-is read from `GET /api/v1/providers`, and no operation clears the flag without moving it, as for the
-internal-engine default (see "Set the internal-engine default").
+is read from `GET /api/v1/providers`, and no operation clears the flag without moving it.
 
-Like the internal-engine default, the flag is declared in the kind's exclusive flags, so the
+The flag is declared in the kind's exclusive flags, so the
 vault's validation refuses any document that flags a second connection, and a generic resource
 write (`PATCH /api/v1/resources/{uid}`, `POST /api/v1/resources`) that would
 set it while another connection holds it MUST be refused before anything is written with 409
@@ -748,16 +720,16 @@ set it while another connection holds it MUST be refused before anything is writ
 - **THEN** the answer is 409 `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` naming A, and A keeps the flag while B stays unflagged
 
 #### Scenario: marking a speech-to-text default moves only its own flag
-- **GIVEN** connection A is both the internal-engine default and the speech-to-text default, and connection B carries neither flag
+- **GIVEN** connection A is the speech-to-text default, and connection B carries no flag
 - **WHEN** the user marks B as the speech-to-text default
 - **THEN** B's `transcribe_default` becomes true and A's becomes false, and a `provider_transcribe_default_set` entry is audited
-- **AND** A is still the internal-engine default and B still is not
+- **AND** no other connection carries the flag
 
 #### Scenario: the speech-to-text connection is named over REST
-- **GIVEN** the daemon is running with connection A flagged as both the internal-engine and the speech-to-text default, and connection B carrying neither,
+- **GIVEN** the daemon is running with connection A flagged as the speech-to-text default, and connection B carrying no flag,
 - **WHEN** a client calls `POST /api/v1/providers/{B uid}/transcribe-default`, then `GET /api/v1/providers`,
 - **THEN** B carries `transcribe_default`, the list shows B as the only one flagged, and a `provider_transcribe_default_set` entry names B,
-- **AND** A is still the internal-engine default.
+- **AND** A no longer carries the flag.
 
 ### Requirement: Revert an agent type to its built-in login
 `POST /api/v1/providers/use-builtin/{agent_type}` MUST
@@ -1209,55 +1181,6 @@ the refresh's state; the Models section's price-source line reads "bundled with 
 - **WHEN** the refresh's schedule comes round
 - **THEN** nothing is fetched and prices come from the bundled snapshot
 
-### Requirement: Keep at most one internal default connection
-At most one connection globally MUST have `internal_default=true`. `set_internal_default` MUST clear
-the flag on all others, then set the target (sequential clear-then-set, serialised by the
-single-process daemon); it is the one operation that moves the flag on this machine. Nothing else
-makes a second one:
-
-- **Any other write** that would set the flag while a different connection holds it — the generic
-  `PATCH /api/v1/resources/{uid}` or `POST /api/v1/resources` — MUST be refused before anything is
-  written with 409 `PROVIDER_INTERNAL_DEFAULT_TAKEN`, naming the connection that holds the flag. The
-  holder keeps the flag, the refused write changes nothing, and the answer is never a 500. Writing
-  the flag back onto the connection that already holds it is not a second one.
-- **A sync round** whose merged tree would flag a connection other than the one flagged here MUST
-  NOT check that tree out: the vault's validation refuses a tree holding two flagged connections,
-  so the round stops on the file and the person answers it like any other
-  ([vault-sync](../vault-sync/spec.md) "Stop the round on any conflict") — keeping this machine's
-  version or taking the other machine's. A tree that moves the flag, clearing it on one connection
-  and setting it on another, holds one and is checked out like any change. No tie-break picks one
-  silently: which connection Coffer's own model borrows is the person's decision.
-
-The invariant MUST be enforced by the vault's validation as well. `internal_default` is an ordinary
-config field, and a live vault was found holding two flagged connections, which makes "which
-connection does the internal engine use?" a question with no defined answer. The rule over the
-provider files ([vault-storage](../vault-storage/spec.md) "Admit every vault write through one compare-and-swap path")
-makes a second one unrepresentable in the vault, whatever writes it — a surface, a hand edit or a
-round; the refusal above keeps every surface write from reaching it.
-
-#### Scenario: setting a new internal default clears the previous one
-- **GIVEN** connection A is the internal default,
-- **WHEN** the user sets connection B as the internal default,
-- **THEN** B's `internal_default` becomes true and A's becomes false (one internal default globally, enforced by the vault's validation as well as by the operation).
-
-#### Scenario: a second internal default outside the dedicated route is refused
-- **GIVEN** connection A is the internal default,
-- **WHEN** `PATCH /api/v1/resources/{B}` sets B's `internal_default` true, or `POST /api/v1/resources` creates a provider with it true,
-- **THEN** the answer is 409 `PROVIDER_INTERNAL_DEFAULT_TAKEN` naming A, A keeps the flag, B stays unflagged and no connection is created,
-- **AND** `POST /api/v1/providers/{B}/internal-default` still moves the flag to B.
-
-#### Scenario: a file flagging a second internal default is refused by the vault
-- **GIVEN** a connection file that flags `internal_default` in the vault
-- **WHEN** a second connection file flagging it is written, and separately a change clears the first file's flag while setting the second's
-- **THEN** the second file alone is refused as an invalid config naming the file that already holds the flag
-- **AND** the change that moves the flag is accepted
-
-#### Scenario: two machines that each set a different internal default stop the round
-- **GIVEN** two machines in sync, and within one sync interval machine 1 sets connection X as the internal default and machine 2 sets connection Y
-- **WHEN** machine 1's round pushes and machine 2's round then merges
-- **THEN** machine 2's round stops on the connection files instead of checking out a tree with two internal defaults
-- **AND** machine 2's vault is left as it was, holding only its own flag, until the person answers
-
 ### Requirement: Show metered usage on a Usage tab of Model providers
 The Model providers page MUST carry two tabs under one header — **Providers** and **Usage**. The
 header is the title with the Experimental tag, the line "Where your agents’ models come from, and
@@ -1378,22 +1301,21 @@ agents reach a connection through the local model proxy, which injects the key i
 API-key and local connections through the local model proxy"). Reverting is
 `POST /api/v1/providers/use-builtin/{agent_type}`, offered by the agent's Change model dialog as its
 built-in login: a surface that can put an agent onto a Coffer connection and not take it off again is
-half an operation. Which connection the internal engine and speech-to-text run on is chosen in
-Settings › General (see "Set the internal-engine default" and "Keep an independent speech-to-text
+half an operation. Which connection speech-to-text runs on is chosen in
+Settings › General (see "Keep an independent speech-to-text
 default"), not on the connection's own page.
 
 The web surfaces:
 
 - **Model providers** (route `/model-providers`, in the sidebar's Agents group, beside the agents whose models it serves) is
-  one page under one header — the title, an Experimental tag, a one-line description and the page's one primary button, **Add provider** — over two tabs, **Providers** and **Usage** ("Show metered usage on a Usage tab of Model providers"). Providers is the connection library: a list of connections beside the open one. It has no view of which agent runs on what and no Coffer's model tab, because an agent's connection is shown and changed in that agent's Overview › Model and Coffer's own is chosen in Settings › General. The page opens on the first connection, and with none it is a welcome panel. Each row shows
+  one page under one header — the title, an Experimental tag, a one-line description and the page's one primary button, **Add provider** — over two tabs, **Providers** and **Usage** ("Show metered usage on a Usage tab of Model providers"). Providers is the connection library: a list of connections beside the open one. It has no view of which agent runs on what and no Coffer's model tab, because an agent's connection is shown and changed in that agent's Overview › Model and the speech-to-text connection is chosen in Settings › General. The page opens on the first connection, and with none it is a welcome panel. Each row shows
   the connection's vendor mark, its name, its protocol and what it offers (its curated model count,
   or all models), and the marks of the agents running on it, read from the agents' `connection_uid`; a filter narrows the list over name,
   title, endpoint and description, and the list is sorted by name, with no order heading and no drag handle on a row. It has no per-row switch, because activation is per agent, and no
   per-row reach or delete: both are on the open connection's header. A row MUST say what Coffer
-  ITSELF uses the connection for: the `internal_default` connection carries a "Coffer · background
-  model" badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with
-  a hint naming Settings › General as where it is changed, and the connection's Used by repeats
-  them. The labels lead with Coffer because a bare "Speech to text" reads as a capability of the
+  ITSELF uses the connection for: the `transcribe_default` connection carries a "Coffer · speech to
+  text" badge with a hint naming Settings › General as where it is changed, and the connection's Used by repeats
+  it. The label leads with Coffer because a bare "Speech to text" reads as a capability of the
   provider rather than a job Coffer gives it; an agent's mark on a row is a different fact — that
   agent is switched to the connection. The vendor mark is derived from `base_url` by matching the
   preset list (an unmatched endpoint gets Coffer's neutral provider glyph); the name is the user's
@@ -1406,8 +1328,8 @@ The web surfaces:
 - The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens), the protocol, the host and, when the endpoint answered, how long it took, and the shared
   scope control — the single place the connection's reach and its enabled state are both shown and
   changed — with Test, Edit and a menu holding Delete provider ("Review what deleting a connection changes"). **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
-  with the model it runs, as a link reading "<Agent> › Change model" that opens that agent's page with its Change model dialog already open (`/agents/<type>?change-model=1`); and Coffer's engine and Speech to text
-  when the connection is flagged for them, each reading "Settings › General" and opening it. Used by carries no
+  with the model it runs, as a link reading "<Agent> › Change model" that opens that agent's page with its Change model dialog already open (`/agents/<type>?change-model=1`); and Speech to text
+  when the connection is flagged for it, reading "Settings › General" and opening it. Used by carries no
   switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing).
 - Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and, with the `models` feature on, carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that reach that agent and narrowed by `enabled`: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
   other model setting — no output-limit, subagent, thinking or fast-mode
@@ -1430,9 +1352,9 @@ The web surfaces:
 - **THEN** it lists both connections, marks the one an agent runs on with that agent's mark, and shows the open connection's endpoint and its reach in the header's shared control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per agent in its Change model dialog (TypeScript acceptance test).
 
 #### Scenario: the library names the connections Coffer itself uses
-- **GIVEN** connection A is the internal-engine default, connection B is the speech-to-text default, and connection C carries neither flag
+- **GIVEN** connection A is the speech-to-text default, and connection B carries no flag
 - **WHEN** the Model providers library is opened
-- **THEN** A's row carries the "Coffer · background model" badge, B's row the "Coffer · speech to text" badge, and C's row neither (TypeScript acceptance test)
+- **THEN** A's row carries the "Coffer · speech to text" badge and B's row carries none (TypeScript acceptance test)
 
 #### Scenario: the provider library has no tabs
 - **GIVEN** the Model providers page
@@ -1440,9 +1362,9 @@ The web surfaces:
 - **THEN** its only tab strip is the page header's Providers | Usage, and the library itself has no view of which agent runs on which connection and no Coffer's model tab (TypeScript acceptance test)
 
 #### Scenario: a provider's used-by list is read-only
-- **GIVEN** a connection that Claude Code runs on (its `connection_uid`) with a chosen model, and that is flagged `internal_default`
+- **GIVEN** a connection that Claude Code runs on (its `connection_uid`) with a chosen model, and that is flagged `transcribe_default`
 - **WHEN** its detail page renders
-- **THEN** Used by lists Claude Code with its model, as a link "Claude Code › Change model" to `/agents/claude_code?change-model=1`, and Coffer's engine, opening `/settings/general`
+- **THEN** Used by lists Claude Code with its model, as a link "Claude Code › Change model" to `/agents/claude_code?change-model=1`, and Speech to text, opening `/settings/general`
 - **AND** Used by carries no switch, activate or revert control (TypeScript acceptance test)
 
 #### Scenario: the Change model dialog shows only provider, model and tiers
@@ -1465,3 +1387,25 @@ it on the curated entry; on the web it is not edited after that, only over REST.
 - **GIVEN** a connection whose curated model `gpt-x` records no window
 - **WHEN** the user patches its curated models with a 200000-token window for `gpt-x`
 - **THEN** the connection reports it on `gpt-x`
+
+### Requirement: Ignore a stored internal-default flag
+The system MUST accept a connection whose stored config still carries
+`internal_default` and MUST ignore it: the key changes no behaviour, raises no
+validation error, appears in no `ProviderOut`, and is dropped from the file by
+the connection's next write. A file holding `internal_default` on several
+connections MUST be accepted the same way, because the key means nothing.
+
+#### Scenario: ignore a stored internal-default flag when a connection is read
+- **GIVEN** a connection file whose config carries `internal_default: true` beside valid fields,
+- **WHEN** the connection is listed with `GET /api/v1/providers`,
+- **THEN** it is returned with its valid fields and no `internal_default` field, and no validation error is raised.
+
+#### Scenario: drop a stored internal-default flag on the next write
+- **GIVEN** a connection file whose config carries `internal_default: true`,
+- **WHEN** the connection is edited with `PATCH /api/v1/providers/{uid}`,
+- **THEN** the rewritten file carries no `internal_default` key and the edited field is as patched.
+
+#### Scenario: accept two connection files that both carry the retired flag
+- **GIVEN** two connection files that both carry `internal_default: true`,
+- **WHEN** the vault is read and a sync round checks out a tree holding both,
+- **THEN** neither file is refused and the round does not stop on them.

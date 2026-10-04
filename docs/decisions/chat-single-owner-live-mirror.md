@@ -4,7 +4,6 @@
 **Date**: 2026-06-20
 **Deciders**: Yuxing Wu
 **Related**: spec chat ("Send fire-and-return and stream output over one subscription", "Replay the in-flight turn to late subscribers", "Queue messages sent during a turn", "Pause the pending queue on interrupt", "Show every conversation on the Conversations page", "Sweep streaming rows left by a crashed daemon"); spec channels;
-[Coffer Model Is an Internal Engine](coffer-model-is-an-internal-engine.md) (chat talks to managed agents only),
 [Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md) (no approval seat),
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md) (the channel turn seam),
 [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md),

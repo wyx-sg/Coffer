@@ -6,9 +6,11 @@
 // on in mono — a worktree and a second clone are one partition ("Identify a
 // partition by its repository") — how many memories it holds and when it was
 // distilled; a partition whose repository is gone says so ("Report
-// unresolvable partitions"). Its actions: Update memory, secondary (spinning
-// while the daemon reports a distil pass over THIS partition, by uid, so
-// leaving mid-pass and coming back still reads busy) and the ⋯ menu. Boards
+// unresolvable partitions"). Its actions: Tidy (hands the partition to the
+// default managed agent and sends the prompt at once; spec memory "Hand a
+// partition's tidying to the agent"), Update memory, secondary (spinning while
+// the daemon reports a distil pass over THIS partition, by uid, so leaving
+// mid-pass and coming back still reads busy) and the ⋯ menu. Boards
 // 5.2.06–5.2.09.
 //
 // Two tabs in the path: Memories (default) and Delivered. There is no status
@@ -20,6 +22,7 @@ import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { PartitionDeliveredTab } from "@/components/memory/PartitionDeliveredTab";
 import { PartitionMemoriesTab } from "@/components/memory/PartitionMemoriesTab";
 import { PartitionMenu } from "@/components/memory/PartitionMenu";
@@ -83,6 +86,11 @@ export function MemoryDetailPage() {
         subtitle={subtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <AgentHandoff
+              prompt={row.tidy_handoff.prompt}
+              autoSend={{ label: t("memory.tidy.one") }}
+              help={false}
+            />
             <MemoryUpdateButton variant="outline" running={running} />
             <PartitionMenu partition={row} />
           </div>

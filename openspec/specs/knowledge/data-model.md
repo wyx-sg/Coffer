@@ -1,10 +1,9 @@
 # Data Model — Knowledge Layer
 
 The layer's state is a directory. This document describes what is on disk —
-one tree of documents per collection, the hidden inbox new material waits in,
-the frontmatter contract, the naming rule — plus the one resource file a
-collection has, curation's machine-local record, and the in-memory value
-objects the surfaces answer with. Authority is [`spec.md`](spec.md) and
+one tree of documents per collection, the hidden `.inbox/` drop zone, the
+frontmatter contract, the naming rule — plus the one resource file a
+collection has and the in-memory value objects the surfaces answer with. Authority is [`spec.md`](spec.md) and
 [Knowledge Is Plain Files](../../../docs/decisions/knowledge-is-plain-files.md).
 
 ## There is no schema
@@ -16,12 +15,11 @@ full-text index, no embeddings — therefore no content hash to compare, no
 reindex, and no reconciliation of any kind (see "Store each collection as one
 tree of Markdown files").
 
-Curation needs two answers, and neither is a table. What is still waiting to
-be merged is a file in the collection's hidden `.inbox/`. What a person has
-edited since curation last saw it is a document whose blob at the vault's
-`HEAD` differs from the blob curation last settled it as — recorded in
-`~/.coffer/local/curation.json` — and whose newest commit is not a `curation`
-or `sync` write. Modification time never decides.
+The sweep needs no record either. What it adopts is a file in a collection's
+hidden `.inbox/`; what it commits is whatever differs on disk from the vault's
+`HEAD`. Nothing remembers which content any pass last saw, because no pass
+exists: judgement over documents is the agent's, done through its own file
+tools (see "Teach writing and tidying in the guide").
 
 Beyond its tree, a collection is one resource file,
 `vault/resources/knowledge/<name>.json` (spec resource-framework), carrying the
@@ -35,11 +33,11 @@ every agent"): the kind is non-toggleable, and it is always enabled.
 ~/.coffer/vault/knowledge/
 ├── shopee/                         # a collection = a top-level folder = one Resource
 │   ├── README.md                   # first paragraph = the collection's description; not a document
-│   ├── account/                    # nesting chosen by a person or by curation
+│   ├── account/                    # nesting chosen by whoever files a document
 │   │   └── login-sessions.md
-│   ├── gateway-routing.md          # a document: read by agents, edited by people and curation
-│   └── .inbox/                     # hidden: items waiting to be curated
-│       └── q3-review.md            # an upload's extracted text, deleted once curated
+│   ├── gateway-routing.md          # a document: read by agents, edited by people and agents
+│   └── .inbox/                     # hidden drop zone: the next sweep promotes what is dropped here
+│       └── q3-review.md
 └── coffer/
     ├── README.md
     └── release-process.md
@@ -51,39 +49,33 @@ every agent"): the kind is non-toggleable, and it is always enabled.
   outside the vault would be a tree its history cannot see. Path construction
   lives in exactly one module,
   `infrastructure/knowledge/paths.py` (see "Guard every path through one
-  module"), which also owns the inbox name.
+  module"), which also owns the inbox name the sweep reads.
 - A **collection** is a top-level subdirectory *and* one `knowledge` Resource.
   It is created deliberately, as one directory, and nothing provisions one from
   a read, a write, or an agent's working directory (see "Create collections only
   deliberately"). There is no `global`, no `project-<ULID>`, no git-root
   resolution and no scope-to-project-root table (see "Derive no boundary from
   the working directory").
-- **A collection is one tree of documents**, co-written by people and the
-  curation pass (see "Store each collection as one tree of Markdown files").
+- **A collection is one tree of documents**, co-written by people and
+  agents (see "Store each collection as one tree of Markdown files").
   There is no directory that means "who may write here": a person edits any
-  document in their own editor, an agent may edit one with its own file tools,
-  and curation rewrites documents as it merges new material. The nesting is free
+  document in their own editor and an agent edits one with its own file tools.
+  The nesting is free
   and the system neither requires nor creates one — whoever files a document
   chooses where (see "Allow nesting without giving it meaning").
-- **Dot-prefixed entries are invisible** (see "Hide dot-prefixed entries except
-  the inbox"), and Coffer writes exactly one of its own: `.inbox/`, where
-  submitted material waits until a pass folds it in, and from which each item is
-  deleted the moment it has been. It is hidden because it is not knowledge yet —
-  no catalogue or count of documents includes it; the collection list reports
-  it separately as `pending_count`. It is
-  the one hidden entry a surface shows, read-only: the tree lists a
-  collection root's non-empty `.inbox` as a directory and its items as files,
-  and the read route reads an item, each marked `inbox: true`. Every other
-  hidden segment is still *refused* by the path guard rather than merely
-  skipped. Coffer's own surfaces never write or delete an inbox item (a pass
-  deletes one once folded in); an agent adds one by writing a Markdown file there
-  with its own file tools, and the sweep normalises its frontmatter (see
-  "Submit material by writing a file into the inbox").
+- **Dot-prefixed entries are invisible** (see "Hide every dot-prefixed entry").
+  Coffer's own surfaces list none of them and the read route refuses every
+  hidden segment, through the path guard rather than by skipping. `.inbox/` is
+  one of them: an ordinary hidden entry, a drop zone where an agent, another
+  machine or an older guide may leave a Markdown file. The next sweep normalises
+  its frontmatter and promotes it to a document at the collection root (see
+  "Adopt a file dropped into the inbox"), and no surface shows or counts what
+  waits there.
 
 ### `README.md`
 
 A collection describes itself in a `README.md` at its own root, which is not a
-document: it is never curated, listed as content or counted (see "Keep the
+document: it is never listed as content or counted (see "Keep the
 collection README out of the corpus"). Its first paragraph is the collection's
 one-line description everywhere one is shown (see "Read a collection's
 description from its README"), read off disk on every listing so it cannot drift
@@ -97,7 +89,7 @@ collection an agent never recognises.
 
 ## The file
 
-Every document and every inbox item carries a `---`-fenced YAML frontmatter
+Every document carries a `---`-fenced YAML frontmatter
 block, written and read only by `infrastructure/knowledge/frontmatter.py` (the
 one place PyYAML lives).
 
@@ -116,18 +108,14 @@ Login state is owned by `account.session`.
 | Key | Type | Notes |
 | --- | --- | --- |
 | `title` | `str` | Human-readable. Also the source of the file name on creation. |
-| `description` | `str` | **Required** (see "Carry title, description and actor in frontmatter"). It is what curation reads first when deciding where material belongs, and what an agent chooses by in the catalogue. |
-| `actor` | `agent` \| `user` | Who last wrote it. From the `X-Coffer-Actor` header on a submission, or the tool's own actor. |
+| `description` | `str` | **Required** (see "Carry title, description and actor in frontmatter"). It is what an agent chooses by in the catalogue, so it says what question the document answers. |
+| `actor` | `agent` \| `user` | Who last wrote it. From the `X-Coffer-Actor` header on a submission, the actor a dropped file reports, or `agent` for a document an agent wrote. |
 | `created_at` | ISO-8601 `str` | Preserved across a rewrite, so a document keeps its own history even though nothing but the file records it. |
 | `updated_at` | ISO-8601 `str` | Set on every write Coffer makes. |
 
-When curation last had a document in front of it is **not** in the document:
-it is `local/curation.json` (below), so settling a document changes no file and
-makes no commit.
-
 These are the keys **Coffer writes**, not the only keys a document may carry. A
 person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
-rewrite Coffer makes — a pass's `write_document` — renders the known keys in a fixed order and then everything else unharmed,
+rewrite Coffer makes — a body saved from the web UI — renders the known keys in a fixed order and then everything else unharmed,
 values carried through as parsed rather than stringified. There is still no `id`
 — the path is the identity (see "Use the file path as a document's identity") —
 and none of the keys that described retired machinery (`lane`, `source_path`,
@@ -138,52 +126,26 @@ Frontmatter parsing degrades rather than raising: a file with no fence, or with
 malformed YAML inside one, yields empty frontmatter and its body, so one
 hand-edited file with a stray colon cannot break a whole collection walk.
 
-### What the sweep owes a collection, and curation's one local file
+### What the sweep does
 
-`curate.pending_items` answers it from the disk, in this order (see "Run
-curation on a sweep and on demand"):
+The knowledge sweep runs on a timer and does three mechanical things, calling no
+model (see "Sweep the knowledge root on three mechanical duties"):
 
-1. **Inbox material**, oldest first by modification time (`inbox.inbox_items`).
-   Material first, because until it is merged it is knowledge no agent can read.
-2. **Edited documents** (`curation_state.edited_documents`): every visible
-   Markdown document whose blob at `HEAD` differs from the one
-   `local/curation.json` settled — or that curation never settled, like a
-   document a person wrote from scratch — and whose newest commit's writer is
-   not `curation` or `sync`, oldest change first. Edits still on disk are
-   committed first as `disk` writes, so an edit in any editor is judged by the
-   same `HEAD`; the next sweep hands the document to a pass, which carries the
-   edit into the rest of the collection as a newer statement (see "Let the newer or
-   better-evidenced statement win"). Nothing has to be told, and a
-   checkout, a restore from backup or a clock change that only moves
-   modification times makes nothing pending.
+1. **Re-render and re-seed the guide**, so a document added by hand is
+   catalogued.
+2. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
+   `.inbox/` is normalised and promoted (`inbox.promote`) to a document at the
+   collection root, recorded with one `KNOWLEDGE_WRITTEN` audit event.
+3. **Commit edits found on disk** as `disk` writes, so an edit in any editor is
+   a version of its own and is never counted as Coffer's.
 
-`~/.coffer/local/curation.json` is machine-local (it can be rebuilt by letting
-curation look at everything once), never committed and never synced:
+The sweep takes no lock against a sync round: what it promotes is written
+through the vault's ordinary writer, and it keeps no machine-local record.
 
-```json
-{ "documents": { "<collection>/<path>.md": { "blob": "<git blob id>", "at": "<iso time>" } } }
-```
-
-A collection rename moves its documents' entries with it.
-
-Two consequences keep this honest:
-
-- **Curation's own output does not come back.** A pass's `write_document` writes
-  with `curated=True`, which records the blob it wrote in `local/curation.json`,
-  and its commit's writer is `curation` — either is enough to keep the document
-  out of the next sweep.
-- **An item is settled only after its pass completes** (see "Settle an item only
-  after its pass completes"). Material is deleted from the inbox
-  (`inbox.discard_material`) and an edited document recorded as settled
-  (`fs.mark_curated`) after the loop returns; a pass that raises leaves both as they were, so a
-  later sweep retries rather than losing what one half-ran over.
-
-With no internal model configured there is nothing to merge with, so material
-does not wait (see "Promote material directly when no model is configured"):
-`KnowledgeService.submit` promotes it on the spot (`inbox.promote` — a document of
-its own at the collection root, recorded as settled), and a pass run with no model
-promotes whatever is still in the inbox and reports `no_model` with the
-`promoted` paths.
+`KnowledgeService.submit` promotes at once as well (see "Promote submitted
+material at once"): an upload becomes a document of its own
+at the collection root, with frontmatter filled from its opening prose, and is
+never left waiting.
 
 ### Naming
 
@@ -198,8 +160,8 @@ owns it:
   characters. **CJK is kept, never transliterated** — a romanized name would be
   one neither party recognises. An empty result becomes `untitled`.
 - `unique_name` appends `-2`, `-3`, … only when `<slug>.md` is already taken.
-  Inbox items are named the same way and never written onto an existing item:
-  two submissions of the same title are two pieces of material.
+  A promoted file is named the same way and never written onto an existing
+  document: two submissions of the same title are two documents.
 
 ### The traversal guard
 
@@ -207,11 +169,8 @@ Every segment that becomes a path component passes `paths.check_segment` (see
 "Guard every path through one module"): non-empty, not all dots, not
 dot-prefixed, and matching `[A-Za-z0-9._\- ]` or CJK. A path that must name a
 document additionally passes `paths.require_document`, which refuses the
-collection itself and its `README.md`; the inbox is out of reach already,
-because it is dot-prefixed. The one allowance is `paths.inbox_parts`, which
-recognises `<collection>/.inbox` and `<collection>/.inbox/<item>` for the tree
-and read routes alone — spelled out beside the guard rather than made by
-loosening it, so every write, delete and settle still refuses the inbox. A
+collection itself and its `README.md`; the inbox is out of reach for every
+surface, because it is dot-prefixed. A
 violation is `UnsafeKnowledgePath`
 (`KNOWLEDGE_PATH_UNSAFE`, HTTP 400). The resolved path is checked against the
 root too, on its nearest existing ancestor, so a symlink inside the root cannot
@@ -226,30 +185,22 @@ of them is persisted and none of them can be stale.
 
 | Type | Fields | What it is |
 | --- | --- | --- |
-| `CollectionEntry` | `uid`, `name`, `description`, `document_count`, `pending_count` | One collection. `document_count` is what an agent can read today; `pending_count` is material still in the inbox — counted apart because it is exactly what an agent cannot see yet. |
-| `DirectoryEntry` | `path`, `name`, `file_count`, `inbox` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. `inbox` marks a collection's `.inbox`. |
-| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `inbox` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. `inbox` marks an item waiting in the inbox. |
+| `CollectionEntry` | `uid`, `name`, `description`, `document_count` | One collection. `document_count` is what an agent can read today. |
+| `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
+| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `curated_at`, `fingerprint`, `inbox` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); `curated_at` is empty for a document curation has never seen; `fingerprint` is the sha256 of the file's bytes, which a save hands back (see "Save a document edited in the web UI"); `inbox` marks an inbox item, which is read-only. |
-| `Pending` | `material` \| `document` | One item a pass can take — exactly one field set. `material` is an inbox item's file name, never a path a caller could aim elsewhere; `document` is a knowledge-root-relative document path. |
-| `GrepMatch` | `path`, `line_number`, `line` | One literal hit. |
-| `GrepOutcome` | `matches`, `truncated` | A bounded run of them. |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `fingerprint` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); `fingerprint` is the sha256 of the file's bytes, which a save hands back (see "Save a document edited in the web UI"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
 `KnowledgeService.submit` answers with a `Submission` (`collection`, `title`,
-and exactly one of `document` — the `KnowledgeFile` it was promoted into — or
-`pending`, the inbox item's name). `IngestService.ingest` answers with an
-`IngestedDocument` (`path` or `None`, `title`, `description`, `converter`,
-`pending`).
+and the `document` — the `KnowledgeFile` it was promoted into). `IngestService.ingest`
+answers with an `IngestedDocument` (`path`, `title`, `description`,
+`converter`).
 
-The two grep types survive the removal of `coffer__grep` because ripgrep
-survives it as an **internal** mechanism: `KnowledgeService.match_documents` is
-how a curation pass finds which existing documents a new item might belong to
-(see "Assemble a pass from a bounded context"), and it is reachable by nothing
-outside the process. It never searches the inbox — ripgrep skips hidden
-directories, and material there is not a document yet. There is no `SearchHit`,
-`SearchOutcome` or `SearchService` any more.
+Locating a document by literal text is an ordinary file search the agent does
+with its own tools; no part of Coffer ranks or matches documents for it. There is
+no `SearchHit`, `SearchOutcome`, `SearchService` or grep value object.
 
 `Conversion` (`domain/knowledge/converter.py`) is what a converter returns for
 an uploaded document: the `markdown`, a `title` (the document's first H1,
@@ -259,20 +210,16 @@ on disk.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:
-`CollectionCreate`; `MaterialIn` (`collection`, `title`, `description`, `body`)
-and `SubmissionOut` (`status` `pending` | `written`, `collection`, `title`, and
-`path` when written); `CurationRequest` (an optional `document`) and
-`CurationOut` (`status`, `collection`, `item`, `model`, `written`, `retired`,
-`refused`, `documents_before`, `documents_after`, `limit`, `promoted`,
-`gave_up`, `stamped`), one per pass, inside the `CurationRunOut` the curate
-route answers (`collection`, `status` `ok` | `failed` | `no_model` |
-`up_to_date`, `total`, `passes`); and
-`IngestedDocumentOut` (`path` or null, `title`, `description`, `converter`,
-`pending`). The one write-a-document model is `FileSave` (`path`, `body`,
-`expected_fingerprint`): a person's edited body, saved over a document whose
-frontmatter is kept verbatim, refused with `KNOWLEDGE_FILE_CONFLICT` when the
-file's fingerprint moved since the read (see "Save a document edited in the web
-UI"). Every other entrance submits material. The mirroring is
+`CollectionCreate`; `MaterialIn` (`collection`, `title`, `description`, `body`);
+`HandoffOut` (`prompt` and the facts it was written from), carried on a
+collection's read as `tidy_handoff`, and answered by `GET /knowledge/tidy-handoff` for
+all collections (see "Hand a tidy to the agent"); and
+`IngestedDocumentOut` (`path`, `title`, `description`, `converter`). The one
+write-a-document model is `FileSave` (`path`, `body`, `expected_fingerprint`): a
+person's edited body, saved over a document whose frontmatter is kept verbatim,
+refused with `KNOWLEDGE_FILE_CONFLICT` when the file's fingerprint moved since
+the read (see "Save a document edited in the web UI"). Every other entrance
+submits material, which becomes a document at once. The mirroring is
 deliberate rather than redundant: the domain types describe what is on disk and
 the wire models describe what a client is promised, so removing a field from the
 wire never means hiding one from the layer.
@@ -313,21 +260,19 @@ already holding the root withholds nothing at all.
 ## The history
 
 Every accepted write to a collection is one commit, naming its writer, in the
-vault repository (see "Keep every document's history and undo a pass as a
-whole"; ADR every-vault-write-is-a-validated-commit-naming-its-writer): the
+vault repository (see "Keep every document's history"; ADR every-vault-write-is-a-validated-commit-naming-its-writer): the
 knowledge history is the vault's history pathspec-limited to `knowledge/`, with
 every path handed back knowledge-root-relative (`KnowledgeHistory`,
 `infrastructure/knowledge/history.py`, a view over the process's one vault
 writer). The vault's `.git/info/exclude` ignores every
-hidden entry under `knowledge/` except `.inbox/`, so a submission is a commit
-and the text a pass consumed stays in history after the inbox file is deleted.
+hidden entry under `knowledge/`, so a promoted file's document is the commit and
+the hidden drop zone is never versioned.
 
 There is still no table and no index: the history is git's, read back through
 `git log` when a surface asks.
 
-**One commit per operation.** A person's save, delete, restore or undo; material
-promoted on arrival; a collection created, renamed or removed; one curation pass
-(everything it wrote and retired). Before any of them, whatever changed under
+**One commit per operation.** A person's save, delete or restore; material
+promoted on arrival; a collection created, renamed or removed. Before any of them, whatever changed under
 `knowledge/` that no open operation owns is committed first as a `disk` write,
 so a person's own editor is never counted as Coffer's; the sweep and every
 history read do the same. A sync round's merge is a `sync` commit by
@@ -338,25 +283,25 @@ construction.
 
 | Trailer | Value |
 | --- | --- |
-| `Coffer-Writer` | `user`, `agent`, `curation`, `sync` or `disk` |
-| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `pass`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove`, `baseline` |
+| `Coffer-Writer` | `user`, `agent`, `sync` or `disk`; `curation` on commits an earlier version of Coffer made |
+| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `baseline`; `pass` and `undo` on commits an earlier version made |
 | `Coffer-Actor` | the audit actor of the operation |
 | `Coffer-Machine` | the machine that made the commit |
-| `Coffer-Agent` | an agent writer's name; for a pass, who submitted the item — from its `knowledge_written` event, which names the inbox `item` |
+| `Coffer-Agent` | an agent writer's name |
 | `Coffer-Collection` | the collection's name |
-| `Coffer-Item` | the item a pass curated (an inbox path or a document) |
-| `Coffer-Status` | the pass's outcome status |
-| `Coffer-Restored-From`, `Coffer-Undoes` | the commit a restore or an undo reverses to |
+| `Coffer-Restored-From` | the commit a restore reverses to |
+
+Commits an earlier version of Coffer made as curation passes keep their
+`Coffer-Item`, `Coffer-Status` and `Coffer-Undoes` trailers in the history and
+are read back under their writer's label.
 
 The value objects a surface reads back — `Change`, `DocumentChange`,
-`DocumentVersion`, `DocumentDiff`, `ChangeDetail`, `WaitingItem`,
-`ChangesPage` — are in `backend/coffer/domain/knowledge/history.py`. A change's
+`DocumentVersion`, `DocumentDiff`, `ChangeDetail`, `ChangesPage` — are in `backend/coffer/domain/knowledge/history.py`. A change's
 `version` is its commit id.
 
 ## Errors
 
-The failure modes are a directory's, plus curation's two, plus the ones its one
-external binary and its converter library have. `domain/knowledge/errors.py`
+The failure modes are a directory's, plus the ones its converter library has. `domain/knowledge/errors.py`
 holds the first group:
 
 | Class | Code | HTTP |
@@ -369,16 +314,13 @@ holds the first group:
 | `UploadTooLarge` | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 |
 | `KnowledgeHistoryUnavailable` | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 |
 | `KnowledgeVersionNotFound` | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 |
-| `KnowledgeNotAPass` | `KNOWLEDGE_NOT_A_PASS` | 400 |
-| `KnowledgeUndoConflict` | `KNOWLEDGE_UNDO_CONFLICT` | 409 |
 | `KnowledgeError` (base) | `KNOWLEDGE_ERROR` | 400 |
 
 `KNOWLEDGE_COLLECTION_NOT_FOUND` answers a name no registered collection holds.
 `KNOWLEDGE_FILE_CONFLICT` answers a save whose `expected_fingerprint` no longer
 matches the file's bytes; the file is left untouched, and `details` carries
 `saved: false` with the document's `current_body` and `current_fingerprint`.
-`KNOWLEDGE_UNDO_CONFLICT` names, in `details.document`, the document a later
-commit changed, and `details.later_version` that commit. A uid-addressed route given a uid no resource answers to gives the generic
+A uid-addressed route given a uid no resource answers to gives the generic
 `RESOURCE_NOT_FOUND` (404) instead.
 
 `UnsafeKnowledgePath` carries the document rule as well as the traversal one,
@@ -387,19 +329,11 @@ collection's `README.md` and a path aimed at `../etc/passwd` are both a caller
 asking for something it may not reach, and a single guard is one that cannot be
 forgotten by one surface.
 
-The two curation refusals (a document naming another knowledge file, "Refuse
-file-name references in documents", and the eight-write ceiling, "Bound a pass to
-eight writes") are not errors: they are enforced in the curation tools
-(`application/knowledge/curate_tools.py`) and returned to the model as tool
-results, so a pass reports what it was stopped from doing without an error
-code.
-
-`domain/kb_errors.py` holds two more, re-exported through `domain/errors.py`:
+`domain/kb_errors.py` holds one more, re-exported through `domain/errors.py`:
 
 | Class | Code | HTTP | When |
 | --- | --- | --- | --- |
-| `GrepPatternInvalid` | `GREP_PATTERN_INVALID` | 400 | the matcher rejected the pattern (ripgrep exit 2, or a regex the fallback cannot compile). Now reachable only through candidate selection, where without it an `rg` failure would masquerade as "no candidates" |
-| `EngineUnavailable` | `ENGINE_UNAVAILABLE` | 503 | a binary or converter library the call needs is absent — `ripgrep` with no Python fallback available, or one of MarkItDown's format backends. The daemon stays up and the caller gets a per-format answer |
+| `EngineUnavailable` | `ENGINE_UNAVAILABLE` | 503 | a converter library the call needs is absent — one of MarkItDown's format backends. The daemon stays up and the caller gets a per-format answer |
 
 And the two ingest refusals are not `CofferError`s at all. `UnsupportedDocument`
 and `EmptyConversion` (`domain/knowledge/converter.py`) carry the *rejected
@@ -407,51 +341,25 @@ type* rather than a code, and the upload route turns both into `INGEST_REJECTED`
 / 400, distinguished by `details.reason` — `unsupported_type`, or `scanned_pdf`
 / `empty_conversion` — so a surface can name the format it will not take and,
 for a PDF with no text layer, say something actionable about why. Either way
-nothing is submitted: no inbox item, no document (see "Bound uploads and leave
+nothing is submitted: no document (see "Bound uploads and leave
 nothing behind on failure").
-
-A pass requested while one is already in flight over the same collection answers
-`UPKEEP_ALREADY_RUNNING` / 409 (see "Run one pass per collection at a time"). It
-is refused rather than queued because the caller asked to *start* a pass, and no
-pass is going to start.
 
 ## Audit and invocation records
 
 Unchanged in shape and still database-backed, because they are not knowledge —
-they are Coffer's own bookkeeping. Every submission — an inbox file an agent
-wrote (recorded by the sweep when it first sees the file), an upload or a
+they are Coffer's own bookkeeping. Every submission — an inbox file dropped by an
+agent (recorded by the sweep when it adopts the file), an upload or a
 channel — records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller
-(`actor_reported: true` when the actor came from the file's own frontmatter), with the
-inbox `item`, the document path when it was promoted and `pending`
-when it waits (see "Submit material by writing a file into the inbox"); a save from the web UI records
-`KNOWLEDGE_EDITED` with the path, and so do a restore (with `restored_from`)
-and an undo (with `undo` and its `documents`); a delete records
-`KNOWLEDGE_DELETED`. A
-completed curation pass records `KNOWLEDGE_CURATED` with the item, the model and
-its counts.
+(`actor_reported: true` when the actor came from the file's own frontmatter),
+with the document path it was promoted to (see "Adopt a file dropped into the
+inbox"); a save from the web UI records
+`KNOWLEDGE_EDITED` with the path, and so does a restore (with `restored_from`)
+a delete records `KNOWLEDGE_DELETED`. `KNOWLEDGE_CURATED` rows an
+earlier version of Coffer recorded for curation passes stay in the audit log and
+keep rendering under their label.
 
 Losing the read tools lost the invocation record for reads, and with it the
 ability to answer "is this layer being used" from `mcp_invocations`. That is a
 deliberate cost: the replacement measurement is the agents' own transcripts,
 which Coffer already reads for other reasons and which are retroactive, so
 nothing is lost by not having built it yet.
-
-## The installation-wide curation setting
-
-The one setting the layer has is not the layer's. Three fields of the engine's
-settings document, `vault/state/settings/internal-engine.json` (spec
-internal-engine), carry it (see "Curate on one owner machine only"):
-
-| field | notes |
-| --- | --- |
-| `upkeep.curate.enabled` | the switch, **default true** — curation is what merges new material into the documents and carries a person's edit through the rest of the collection, so an installation where it never runs has material waiting in the inbox forever |
-| `upkeep.curate.interval_s` | the timer; null means the built-in cadence (one hour); a stored value is kept as chosen |
-| `curate_owner_machine_id` | the one machine allowed to run the sweep. Null means a single-machine vault, where "here" is the only answer there is |
-
-The switch and the owner are read **together, on every sweep**, so the setting
-means *on, here* rather than merely *on*. All three govern only the background
-worker, which re-reads them every tick so a change needs no daemon restart; the
-manual trigger consults none of them. A sweep runs at most five passes per
-collection, one item each, and stops a collection's sweep early on `no_model` or
-`failed`. The document is in the vault, so every machine agrees on who the
-owner is.

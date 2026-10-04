@@ -37,7 +37,7 @@ async def set_agent_config(
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> AgentConfigOut:
     """Set a managed agent's own model for a conversation (ADR
-    coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
+    chat-single-owner-live-mirror → ADR model-catalogue-read-from-the-agent).
 
     Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
     ``session_id`` are preserved, and a body that does not mention ``model``

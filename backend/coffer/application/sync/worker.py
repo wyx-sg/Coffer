@@ -6,8 +6,7 @@ One round shortly after the daemon starts, then one every
 changed interval is believed without a restart. Nothing runs while no remote
 is configured or the remote is paused. A round that raises is logged and never
 ends the loop; every other outcome is a recorded round the service already
-reported. The round shares the vault's one lock with the curation pass, so
-the timer waits for a pass rather than running beside it.
+reported.
 """
 
 from __future__ import annotations

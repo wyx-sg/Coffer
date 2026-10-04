@@ -33,26 +33,23 @@ _EXPECTED_ROUTES = {
     ("DELETE", "/api/v1/knowledge/file"),
     # The one document write: a person's edited body, kept frontmatter, and a
     # fingerprint guard (see "Save a document edited in the web UI"). New
-    # knowledge arrives as material: an upload, or a file an agent writes into
-    # a collection's inbox (see "Submit every entrance's input as material").
-    # There is no material route and no route that creates a document at a path
+    # knowledge arrives as material: an upload (see "Promote submitted
+    # material at once"). There is no material route and no route that creates a document at a path
     # (see "Manage knowledge in the web UI").
     ("PUT", "/api/v1/knowledge/file"),
-    # The collection by its uid — a pass runs for minutes and must keep meaning
-    # the same collection across a rename. The file routes above stay
-    # name-addressed on purpose: their arguments are filesystem paths.
-    ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
+    # The prompt that hands tidying every collection to the person's agent. The
+    # file routes above stay name-addressed on purpose: their arguments are
+    # filesystem paths.
+    ("GET", "/api/v1/knowledge/tidy-handoff"),
     ("POST", "/api/v1/knowledge/upload"),
-    # History (see "Keep every document's history and undo a pass as a whole",
-    # "Follow knowledge changes across collections"): a document's versions and
+    # History (see "Keep every document's history",
+    # "Follow edits across collections in one feed"): a document's versions and
     # one version's diff, restoring one, the recent changes and one change in
-    # full, and undoing a curation pass. None creates a document at a path.
+    # full. None creates a document at a path.
     ("GET", "/api/v1/knowledge/history"),
     ("GET", "/api/v1/knowledge/history/diff"),
     ("POST", "/api/v1/knowledge/history/restore"),
     ("GET", "/api/v1/knowledge/changes"),
-    ("GET", "/api/v1/knowledge/changes/{version}"),
-    ("POST", "/api/v1/knowledge/changes/{version}/undo"),
     # One version's body, for Compare with current; putting back what a delete
     # removed (see "Restore a deleted collection or document from Recent
     # changes"); and a collection's description, its README's opening
@@ -123,27 +120,22 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
 
 def test_an_ingested_document_names_no_original() -> None:
     """Neither the uploaded bytes nor a separate extracted file is kept, so
-    there is no original to report — only the document the upload became, or
-    that it is still pending (see "Convert uploads into material without
-    keeping them")."""
+    there is no original to report — only the document the upload became (see
+    "Convert uploads into documents without keeping the original")."""
     fields = set(schemas.IngestedDocumentOut.model_fields)
-    assert {"path", "pending", "title", "description", "converter"} == fields
+    assert {"path", "title", "description", "converter"} == fields
     assert not fields & {"original_path", "raw_path"}
 
 
-def test_a_collection_reports_documents_and_pending_material_apart() -> None:
-    """Material waiting in the inbox is what an agent cannot read yet, and a
-    single total would hide exactly that (see "Hide dot-prefixed entries except
-    the inbox")."""
+def test_a_collection_reports_its_documents_and_a_tidy_handoff() -> None:
     fields = set(schemas.CollectionOut.model_fields)
-    assert {"document_count", "pending_count"} <= fields
-    assert not fields & {"file_count", "source_count", "topic_count"}
+    assert {"document_count", "tidy_handoff"} <= fields
+    assert not fields & {"pending_count", "file_count", "source_count", "topic_count"}
 
 
-def test_a_curation_report_names_its_item_and_what_it_promoted() -> None:
-    fields = set(schemas.CurationOut.model_fields)
-    assert {"item", "documents_before", "documents_after", "promoted"} <= fields
-    assert schemas.CurationRequest.model_fields.keys() == {"document"}
+def test_no_curation_wire_model_remains() -> None:
+    for gone in ("CurationRequest", "CurationOut", "CurationRunOut"):
+        assert not hasattr(schemas, gone), gone
 
 
 def test_collection_config_carries_nothing() -> None:

@@ -40,9 +40,9 @@ Two things the line always carries beyond the conclusion:
   previous design's retrieval to guesswork.
 
 Pure and synchronous: no filesystem, no model. Keeping the render incapable of I/O is
-what guarantees the path "Distil mechanically with no internal connection" describes —
-an installation with **no** internal connection still gets a real index, ordered and
-readable, because nothing here can silently depend on a model having run first.
+what guarantees the index is the same ordered, readable text on every installation
+(see "Distil each raw entry into a note mechanically"): nothing here can depend on
+anything having run first.
 
 Retired notes need no filtering here. A retirement takes the note's file out of
 ``notes/`` and records it in ``RETIRED.md`` (see "Record retirements so they stick"), so

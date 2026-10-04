@@ -4,24 +4,21 @@
 // the viewer stay thin views (agents/frontend.md §3). The keys are
 // hierarchical under one `["knowledge"]` root, so a write can invalidate the
 // whole subtree with a prefix — the tree is fetched one directory per key and a
-// curation pass may rewrite any level of it.
+// write may change any level of it.
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 
 import { useToast } from "@/components/ui/toast";
-import { ApiError, translateApiError } from "@/lib/api/errors";
+import { translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
-  curateCollection,
   deleteFile,
   getFile,
   getTree,
   listCollections,
   saveFile,
   uploadFile,
-  type CurationRunOut,
   type FileSave,
 } from "@/lib/api/knowledge";
 import {
@@ -32,10 +29,8 @@ import {
   knowledgeKey,
   knowledgeTreeKey,
   knowledgeTreeRootKey,
-  upkeepRunsKey,
 } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
-import { curateOutcome } from "@/lib/hooks/curateToast";
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -95,9 +90,9 @@ export function useKnowledgeFile(path: string | null) {
  *
  * On success the saved file goes straight into its cache entry, so the pane
  * renders the new body without waiting on a refetch, and every tree level is
- * invalidated: a document's title comes from its frontmatter, and the next
- * sweep may rewrite the rest. Resolves with the new fingerprint, so a second
- * save in the same session does not 409 against the first.
+ * invalidated: a document's title comes from its frontmatter. Resolves with
+ * the new fingerprint, so a second save in the same session does not 409
+ * against the first.
  *
  * No toast either way: `FileEditor` says "saved" itself and renders a refusal
  * in place, where the draft still is.
@@ -117,96 +112,6 @@ export function useSaveKnowledgeFile() {
     },
     [qc],
   );
-}
-
-/** Announce a finished Curate now: one summary toast, or one error toast with
- *  an Activity action to look into it. */
-function useAnnounceCurated() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const navigate = useNavigate();
-  const toActivity = {
-    label: t("nav.activity"),
-    onClick: () => navigate("/activity"),
-  };
-  return {
-    done: (passes: CurationRunOut["passes"]) => {
-      const out = curateOutcome(passes);
-      if (out.kind === "error") {
-        toast.error(t(out.key), { action: toActivity });
-        return;
-      }
-      toast.success(
-        out.key === "knowledge.curate.summary"
-          ? t(out.key, {
-              items: t("knowledge.curate.items", { count: out.vars.count }),
-              documents: t("knowledge.curate.documents", { count: out.vars.documents }),
-            })
-          : t(out.key, out.vars),
-      );
-    },
-    failed: (error: unknown) => toast.error(translateApiError(t, error), { action: toActivity }),
-  };
-}
-
-/**
- * Curate one collection now: passes one at a time until nothing is pending,
- * stopping at the first that fails (see "Run curation on a sweep and on
- * demand"). It rewrites the collection's documents and drains its inbox, so
- * every cached level, body, count and change under `["knowledge"]` is
- * invalidated afterwards. Progress (n of m) is the daemon's, on the in-flight
- * list (`useUpkeepRun`), so a page that remounts mid-run still shows it.
- *
- * A 409 gets NO toast on purpose: the control reads it off `mutation.error`
- * and says a pass is already running in place, where the click was.
- */
-export function useCurateCollection(collectionUid: string) {
-  const qc = useQueryClient();
-  const announce = useAnnounceCurated();
-  return useMutation({
-    mutationFn: (document?: string | null) => curateCollection(collectionUid, document),
-    onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: knowledgeKey });
-      announce.done(result.passes);
-    },
-    onError: (error) => {
-      if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
-      announce.failed(error);
-    },
-    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
-  });
-}
-
-/**
- * Curate several collections now, one after another — Recent changes' Curate
- * now over every collection with items waiting. A collection already being
- * curated is skipped rather than failing the rest; any other refusal stops
- * the run and is toasted.
- */
-export function useCurateCollections() {
-  const qc = useQueryClient();
-  const announce = useAnnounceCurated();
-  return useMutation({
-    mutationFn: async (uids: string[]) => {
-      const results: CurationRunOut[] = [];
-      for (const uid of uids) {
-        try {
-          results.push(await curateCollection(uid, null));
-        } catch (error) {
-          if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") continue;
-          throw error;
-        }
-        void qc.invalidateQueries({ queryKey: upkeepRunsKey });
-      }
-      return results;
-    },
-    onSuccess: (results) => {
-      void qc.invalidateQueries({ queryKey: knowledgeKey });
-      if (results.length > 0) announce.done(results.flatMap((r) => r.passes));
-    },
-    onError: (error) => announce.failed(error),
-    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
-  });
 }
 
 /**
@@ -235,19 +140,17 @@ export function useDeleteKnowledgeFile() {
 }
 
 /**
- * Convert one uploaded document into material for a collection. It either
- * waits in the inbox (the collection's `pending_count` goes up) or becomes a
- * document on the spot (a tree level and `document_count` change), so success
- * invalidates the whole `["knowledge"]` subtree rather than guessing which of
- * the two happened. Which one it was is the caller's toast to report, and a
- * refusal (an unsupported type, a file too large) is rendered in the upload
- * dialog, where the file still is — so no `onError` toast here.
+ * Convert one uploaded document into a document of a collection (a tree level
+ * and `document_count` change), so success invalidates the whole
+ * `["knowledge"]` subtree. A refusal (an unsupported type, a file too large) is
+ * rendered in the upload dialog, where the file still is — so no `onError`
+ * toast here.
  */
 export function useUploadKnowledgeFile() {
   const qc = useQueryClient();
   return useMutation({
     // `collection` is the collection's NAME here, not its uid: an upload lands
-    // material in a directory, and the directory is named after the collection.
+    // in a directory, and the directory is named after the collection.
     mutationFn: (vars: { collection: string; file: File; signal?: AbortSignal }) =>
       uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),

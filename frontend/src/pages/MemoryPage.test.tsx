@@ -20,7 +20,9 @@ vi.mock("@/lib/api/memory", () => ({
   listPartitions: vi.fn(),
   getReading: vi.fn(),
   sync: vi.fn(),
+  getTidyHandoff: vi.fn(),
 }));
+vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
@@ -30,6 +32,7 @@ const api = await import("@/lib/api/memory");
 const { listUpkeepRuns } = await import("@/lib/api/upkeep");
 const { internalEngineApi } = await import("@/lib/api/internalEngine");
 const { agentsApi } = await import("@/lib/api/agents");
+const { agentProvidersApi } = await import("@/lib/api/agentProviders");
 const { agentNativeMemoryApi } = await import("@/lib/api/agentNativeMemory");
 
 const MINUTE = 60_000;
@@ -58,7 +61,6 @@ describe("MemoryPage", () => {
     vi.mocked(api.getReading).mockResolvedValue({ read_at: ago(14), failures: [] });
     vi.mocked(listUpkeepRuns).mockResolvedValue({ runs: [] });
     vi.mocked(internalEngineApi.get).mockResolvedValue({
-      model: "m",
       upkeep: {
         aggregate: {
           enabled: true,
@@ -79,13 +81,15 @@ describe("MemoryPage", () => {
     vi.mocked(agentsApi.list).mockResolvedValue({ items: [] } as unknown as Awaited<
       ReturnType<typeof agentsApi.list>
     >);
+    vi.mocked(agentProvidersApi.list).mockResolvedValue({ agents: [] });
+    vi.mocked(api.getTidyHandoff).mockResolvedValue({ prompt: "Tidy every partition." });
   });
 
   test("says what memory is, with one Update memory button", async () => {
     stub([GLOBAL, COFFER]);
     renderPage();
     await screen.findByRole("table");
-    expect(screen.getByText(/distilled into one memory per subject\./i)).toBeInTheDocument();
+    expect(screen.getByText(/kept as memories for each repository\./i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
   });
@@ -213,19 +217,23 @@ describe("MemoryPage", () => {
     },
   );
 
-  acceptance("web-ui", "the Memory page shows the partitions with a search and no delivery block", async () => {
-    stub([GLOBAL, COFFER, GONE]);
-    renderPage();
-    const section = await screen.findByTestId("memory-partitions");
-    const table = await within(section).findByRole("table");
-    const search = within(section).getByPlaceholderText("Search partitions");
-    fireEvent.change(search, { target: { value: "work/coffer" } });
-    const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveTextContent("coffer");
-    expect(screen.queryByTestId("memory-deliveries")).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Partitions" })).toBeNull();
-  });
+  acceptance(
+    "web-ui",
+    "the Memory page shows the partitions with a search and no delivery block",
+    async () => {
+      stub([GLOBAL, COFFER, GONE]);
+      renderPage();
+      const section = await screen.findByTestId("memory-partitions");
+      const table = await within(section).findByRole("table");
+      const search = within(section).getByPlaceholderText("Search partitions");
+      fireEvent.change(search, { target: { value: "work/coffer" } });
+      const rows = within(table).getAllByRole("row").slice(1);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toHaveTextContent("coffer");
+      expect(screen.queryByTestId("memory-deliveries")).toBeNull();
+      expect(screen.queryByRole("heading", { name: "Partitions" })).toBeNull();
+    },
+  );
 
   test("with no partitions the first run lists what it found and carries one Update memory", async () => {
     stub([]);

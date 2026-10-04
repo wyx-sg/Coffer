@@ -1,27 +1,9 @@
 """Wiring for the one ``memory`` kind (spec memory).
 
-Mirrors ``knowledge_wiring.py`` + ``curation_wiring.py`` combined: one service for
+Mirrors ``knowledge_wiring.py``: one service for
 the derived tree and its two passes (``MemoryService``), the memory root the
 gateway's handshake names, and the delivery hook half (``DeliveryService``),
 which the agent's Coffer connection installs.
-
-**The three internal-engine arguments on ``MemoryService`` are the point of
-this module.** The distil pass reaches a model through the same injected ports
-every other internal-LLM consumer here uses — a completion port, a
-``ModelSelectorPort`` over Coffer's own engine, and a **secret resolver**.
-All three default to ``None`` on the service, and that default is the
-mechanical pass of "Distil mechanically with no internal connection": each raw
-entry becomes a note of its own and the index is still written. Which means a
-resolver forgotten here does not fail loudly; it degrades every pass to "wrote
-the index only" and says nothing, the model call having failed for want of a
-key it was never given. ``curation_wiring.wire_curation``
-takes the resolver as a required parameter for the same reason, and this module
-follows it exactly: ``wire_memory_kind`` cannot be called without one.
-
-The selector is **handed in** rather than derived here, now that resolving the
-internal connection is Coffer's own engine's job
-(``application.engine.resolve``) and not something each kind's wiring works out
-from the provider service for itself.
 
 The kind exposes no MCP tool (spec memory "Expose no memory tool and name the
 memory root at session start"): it registers the memory root as an agent
@@ -30,9 +12,8 @@ distil sweep it starts is on by default, because it only
 ever rewrites a tree that can be rebuilt from the agents' own memories (see
 ``distil_worker.py``).
 
-Nothing here can fail to build: with no internal connection configured the
-selector just resolves to ``None`` per call, and ``MemoryService`` /
-``DeliveryService`` need no internal connection at all.
+Nothing here calls a model: the distil pass is mechanical, and the judgement over
+the notes belongs to the agent a person hands a partition to.
 """
 
 from __future__ import annotations
@@ -45,7 +26,6 @@ from typing import TYPE_CHECKING
 
 from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
-from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
@@ -77,9 +57,7 @@ from coffer.domain.features import MEMORY
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.domain.reconcile import Outcome, Trigger
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory import paths as memory_paths
-from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.event_dependencies import announce_change
 from coffer.surfaces.http.guide_wiring import BuiltinGuide, follow_guide_features
 from coffer.surfaces.http.memory.dependencies import (
@@ -183,8 +161,6 @@ def wire_memory_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
-    models: ModelSelectorPort,
-    secret_resolver: Callable[[str], str],
     agent_service: AgentService,
     agent_catalog: AgentCatalog,
 ) -> MemoryWiring:
@@ -195,16 +171,6 @@ def wire_memory_kind(
         agent_source_resolver=_agent_source,
         # The agents' memory-reader facets.
         readers=agent_catalog.memory_readers(),
-        # The distil pass's model half. All three travel together or not at
-        # all: a completion port with no secret resolver behind it reaches
-        # the provider and is refused the key, which "Distil mechanically with no
-        # internal connection" then reads as "no internal connection" and
-        # answers with the mechanical pass. See the module docstring — this is
-        # the silent degradation the trio prevents.
-        completion=LangchainLlmCompletion(),
-        model_selector=models,
-        secret_resolver=secret_resolver,
-        read_timeout=read_internal_engine_timeout,
         announce=lambda uid: announce_change(KIND_MEMORY, uid),
     )
     set_memory_service(service)

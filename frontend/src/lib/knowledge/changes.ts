@@ -2,14 +2,15 @@
 //
 // How the Knowledge page words and groups CHANGES — commits in the vault's
 // history, each naming its writer (spec knowledge "Keep every document's
-// history and undo a pass as a whole"). Pure functions over the wire shape, so
+// history"). Pure functions over the wire shape, so
 // the timeline, the change page and a document's History tab say the same
 // thing about the same change and are unit-tested without a component.
 //
 // The daemon's own `summary` is a commit subject in English; the page words a
 // change from its structured fields instead (writer, operation, agent, the
 // documents it touched) and falls back to the summary only for an operation it
-// has no words for.
+// has no words for — a change an earlier curation pass made reads as its
+// summary, under the writer's curation label.
 import type { TFunction } from "i18next";
 
 import { agentTypeLabel } from "@/lib/agents/display";
@@ -19,13 +20,10 @@ import { pathInCollection } from "@/lib/knowledge/routes";
 
 /** Operations the page has words for (`knowledge.changes.op.<operation>`). */
 const WORDED_OPERATIONS = new Set([
-  "pass",
   "save",
   "delete",
   "promote",
-  "submit",
   "restore",
-  "undo",
   "edit",
   "sync",
   "create",
@@ -58,8 +56,7 @@ export function writerLabel(t: TFunction, change: ChangeOut): string {
   }
 }
 
-/** One sentence for what a change did, e.g. "Curated Codex's item into
- *  daemon/port.md". */
+/** One sentence for what a change did, e.g. "Codex added daemon/port.md". */
 export function changeSentence(t: TFunction, change: ChangeOut): string {
   if (!WORDED_OPERATIONS.has(change.operation)) return change.summary;
   const first = change.documents[0];
@@ -71,7 +68,7 @@ export function changeSentence(t: TFunction, change: ChangeOut): string {
 }
 
 /** What a version did to the one document whose History lists it, e.g.
- *  "Curated Codex's item", "Edited in Coffer" (board 5.1.03). */
+ *  "Saved by Codex", "Edited in Coffer" (board 5.1.03). */
 export function versionSentence(t: TFunction, change: ChangeOut): string {
   if (!WORDED_OPERATIONS.has(change.operation)) return change.summary;
   return t(`knowledge.changes.version.${change.operation}`, {
@@ -80,8 +77,8 @@ export function versionSentence(t: TFunction, change: ChangeOut): string {
 }
 
 /** Operations whose timeline row names no document: they are about the
- *  collection, or about an item not yet a document. */
-const COLLECTION_OPERATIONS = new Set(["create", "baseline", "submit", "remove"]);
+ *  collection. */
+const COLLECTION_OPERATIONS = new Set(["create", "baseline", "remove"]);
 
 /** Whether a restore brought back a whole collection: it put back the
  *  collection's own README, which only a deleted collection loses. */
@@ -95,7 +92,7 @@ function isCollectionRestore(change: ChangeOut): boolean {
 }
 
 /** A timeline row's words (board 5.1.07): the verb after the writer's name,
- *  and the document it links to — "curated Codex's item into" ·
+ *  and the document it links to — "saved" ·
  *  `daemon/port.md` — or, for a change about a whole collection (deleted,
  *  restored), the collection instead. `more` counts the other documents a
  *  change touched. */
@@ -128,7 +125,7 @@ export const ANY_AUTHOR = "any";
 
 /** Who a change is by, as a filter value: `user`, `curation`, `sync`, `disk`,
  *  or `agent:<name>` for an agent's own write (its resource name, so two agents
- *  never merge). A curation pass is Curation's, whoever submitted the item. */
+ *  never merge). */
 export function authorKey(change: ChangeOut): string {
   return change.writer === "agent" ? `agent:${change.agent ?? "agent"}` : change.writer;
 }
@@ -184,11 +181,6 @@ export function groupByDay(changes: ChangeOut[], now = new Date()): [string, Cha
     groups.set(key, list);
   }
   return [...groups.entries()];
-}
-
-/** A pass that a later change has undone — the version the undo names. */
-export function undoneVersions(changes: ChangeOut[]): Set<string> {
-  return new Set(changes.map((c) => c.undoes).filter((v): v is string => Boolean(v)));
 }
 
 /** A change's time as the boards write it (5.1.03): "Today 12:04",

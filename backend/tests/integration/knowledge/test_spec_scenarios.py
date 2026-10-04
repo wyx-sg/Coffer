@@ -108,9 +108,5 @@ def test_the_layer_adds_no_table_and_writes_only_under_its_root(home: pathlib.Pa
     assert [(r.kind, r.name) for r in registry.rows] == [(KIND_KNOWLEDGE, "shopee")]
     written = set(_files(home)) - before
     assert written
-    # The documents, and the one machine-local record of what curation settled
-    # (the promoted document is settled as it stands).
-    assert all(
-        path.startswith(".coffer/vault/knowledge/") or path == ".coffer/local/curation.json"
-        for path in written
-    ), written
+    # Only the documents.
+    assert all(path.startswith(".coffer/vault/knowledge/") for path in written), written

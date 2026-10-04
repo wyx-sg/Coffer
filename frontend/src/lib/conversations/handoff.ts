@@ -4,8 +4,9 @@
 // The prompt rides in the router's location STATE, never the URL — it is the
 // daemon's text for this machine and must not land in history or a shared link.
 // useChatController reads it once on `/conversations/new`, seeds the draft's
-// agent and folder and the composer, then clears the state. Nothing is ever
-// sent from here: the person reads the prompt and presses Send.
+// agent and folder and the composer, then clears the state. A hand-off is
+// sent only by the person pressing Send, except one marked `autoSend` (Tidy):
+// the controller sends its prompt once the draft is seeded.
 import type { NavigateFunction } from "react-router-dom";
 
 /** The draft's route. */
@@ -17,6 +18,8 @@ export interface ConversationHandoff {
   /** The folder the turn runs in; null is Coffer's own workspace. */
   cwd: string | null;
   prompt: string;
+  /** Send the prompt at once instead of leaving it in the composer. */
+  autoSend?: boolean;
 }
 
 /** Open the draft with `handoff` pre-filled. */
@@ -29,11 +32,11 @@ export function readHandoffState(state: unknown): ConversationHandoff | null {
   if (typeof state !== "object" || state === null || !("handoff" in state)) return null;
   const handoff: unknown = state.handoff;
   if (typeof handoff !== "object" || handoff === null) return null;
-  const { agentKey, cwd, prompt } = handoff as Record<string, unknown>;
+  const { agentKey, cwd, prompt, autoSend } = handoff as Record<string, unknown>;
   if (typeof agentKey !== "string" || !agentKey) return null;
   if (typeof prompt !== "string" || !prompt) return null;
   if (cwd !== null && cwd !== undefined && typeof cwd !== "string") return null;
-  return { agentKey, cwd: cwd || null, prompt };
+  return { agentKey, cwd: cwd || null, prompt, ...(autoSend === true ? { autoSend } : {}) };
 }
 
 /** The location state that opens the draft on one agent with an empty composer — an agent page's
@@ -53,7 +56,7 @@ function readDraftAgentState(state: unknown): string | null {
  *  page's New conversation (agent only — `cwd` undefined keeps the last folder, no prompt). */
 export function readDraftSeed(
   state: unknown,
-): { agentKey: string; cwd?: string | null; prompt: string | null } | null {
+): { agentKey: string; cwd?: string | null; prompt: string | null; autoSend?: boolean } | null {
   const handoff = readHandoffState(state);
   if (handoff) return handoff;
   const agentKey = readDraftAgentState(state);

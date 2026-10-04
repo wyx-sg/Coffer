@@ -1,6 +1,6 @@
-"""Reading a collection's history, restoring a version, undoing a pass, and
-the recent-changes feed (spec knowledge "Keep every document's history and
-undo a pass as a whole", "Follow knowledge changes across collections").
+"""Reading a collection's history, restoring a version, and the recent-changes
+feed (spec knowledge "Keep every document's history",
+"Follow edits across collections in one feed").
 
 The history is the vault repository's, under ``knowledge/``
 (``infrastructure.knowledge.history``); this service is what the surfaces ask.
@@ -8,22 +8,14 @@ Every read first commits what changed outside Coffer as ``disk`` writes, so
 what it reports is the tree as it is, not as Coffer last wrote it.
 
 Two writes live here, and both are a person's: **restore** puts one version of
-one document back as a new commit, which the sweep carries outward like any
-edit; **undo** puts every document one curation pass wrote or retired back
-exactly as it was before the pass, as one commit — refused, naming the
-document, when a later commit changed any of them. Undo records each restored
-document as settled by curation, so the sweep does not read the undo as an
-edit and redo the pass. A pass that merged nothing (``no_model``, ``too_large`` or
-one that gave up) turned its item into a document as it stood, so undoing it puts
-that item back in the inbox: removing the document would otherwise lose the
-knowledge. A pass that merged its item leaves the item gone; its text stays in
-the history.
+one document back as a new commit, and **restore a delete** puts back what a
+delete removed. A commit a retired ``curation`` pass wrote stays in the history
+and is restored the same way as any other.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import dataclasses
 from collections.abc import Callable
 
@@ -31,34 +23,25 @@ from coffer.application.audit_service import AuditService
 from coffer.application.knowledge import collection_writes
 from coffer.application.knowledge.recording import recording, settle
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.application.knowledge.undo_handoff import undo_pass_handoff
 from coffer.domain.audit import AuditEventType
 from coffer.domain.git_handoff import git_missing_details
 from coffer.domain.knowledge.entry import CollectionEntry, KnowledgeFile
 from coffer.domain.knowledge.errors import (
-    KnowledgeFileNotFound,
     KnowledgeHistoryUnavailable,
-    KnowledgeNotAPass,
-    KnowledgeUndoConflict,
     KnowledgeVersionNotFound,
 )
 from coffer.domain.knowledge.history import (
-    OP_PASS,
     OP_RESTORE,
-    OP_UNDO,
     REMOVED,
     WRITER_USER,
     Change,
-    ChangeDetail,
     ChangesPage,
     DocumentDiff,
     DocumentVersion,
-    WaitingItem,
 )
 from coffer.domain.pagination import decode_cursor, encode_cursor
-from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import collection_files, fs, inbox, paths
+from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -68,11 +51,6 @@ _FEED = "knowledge_changes"
 #: How many commits one read of git asks for while filling a page.
 _BATCH = 100
 _INBOX_SEGMENT = f"/{paths.INBOX_DIR_NAME}/"
-
-
-#: The pass outcomes that promoted the item as it stood instead of merging it
-#: (spec knowledge "Report every pass outcome as a status").
-_PROMOTING_STATUSES = frozenset({"no_model", "too_large", "truncated"})
 
 
 def _is_document(path: str) -> bool:
@@ -208,13 +186,11 @@ class KnowledgeHistoryService:
     async def changes(
         self, *, collection: str | None = None, limit: int = 50, cursor: str | None = None
     ) -> ChangesPage:
-        """Recent changes newest first, with the items still waiting."""
+        """Recent changes newest first."""
         filters = {"collection": collection}
         position = decode_cursor(cursor, list_tag=_FEED, filters=filters)
-        names = await self._knowledge.collection_names()
         if collection is not None:
             await self._knowledge.require_collection(collection)
-            names = [collection]
         history = await self._settled()
         found = await asyncio.to_thread(
             self._fill, history, collection, str(position[0]) if position else None, limit
@@ -223,7 +199,6 @@ class KnowledgeHistoryService:
         more = len(found) > limit
         return ChangesPage(
             changes=tuple(page),
-            waiting=tuple(await self._waiting(names)),
             next_cursor=encode_cursor(_FEED, filters, [page[-1].version]) if more else None,
         )
 
@@ -232,9 +207,8 @@ class KnowledgeHistoryService:
     ) -> list[Change]:
         """Up to ``limit + 1`` visible changes after ``after``, in log order.
 
-        A submission still waiting touches only the inbox, and is a waiting
-        item rather than a change, so a commit left with no document is not
-        listed; inbox paths are dropped from a pass's documents too.
+        A commit that touched only the inbox changed no document, so it is not
+        listed; inbox paths are dropped from every change's documents.
         """
         start = f"{after}^" if after else None
         spec = (collection,) if collection else ()
@@ -255,141 +229,6 @@ class KnowledgeHistoryService:
                 if documents:
                     out.append(dataclasses.replace(change, documents=documents))
         return out
-
-    async def _waiting(self, names: list[str]) -> list[WaitingItem]:
-        out: list[WaitingItem] = []
-        for name in names:
-            items = await asyncio.to_thread(inbox.inbox_items, name)
-            if not items:
-                continue
-            authors = await self._authors(await self._knowledge.require_collection(name))
-            for item in items:
-                with contextlib.suppress(KnowledgeFileNotFound):
-                    found = await asyncio.to_thread(inbox.read_material, name, item)
-                    out.append(
-                        WaitingItem(
-                            collection=name,
-                            path=found.path,
-                            title=found.title,
-                            submitted_by=authors.get(item, found.actor),
-                            submitted_at=found.created_at,
-                        )
-                    )
-        # Newest submitted first across every collection, like the timeline beside
-        # it; the inbox's own oldest-first order is curation's, not the reader's.
-        out.sort(key=lambda w: w.submitted_instant, reverse=True)
-        return out
-
-    async def _authors(self, row: Resource) -> dict[str, str]:
-        """Inbox item name -> who submitted it, from the audit log."""
-        try:
-            entries = await self._audit.query(
-                resource=row,
-                event_type=AuditEventType.KNOWLEDGE_WRITTEN.value,
-                limit=500,
-            )
-        except Exception:
-            return {}
-        out: dict[str, str] = {}
-        for entry in reversed(entries):
-            item = (entry.details or {}).get("item")
-            if item:
-                out[str(item)] = entry.actor
-        return out
-
-    async def change(self, version: str) -> ChangeDetail:
-        """One change in full: every document it touched, with its diff."""
-        history = await self._settled()
-        change = await self._change(history, version)
-        documents = tuple(d for d in change.documents if _is_document(d.path))
-        diffs = []
-        for doc in documents:
-            text = await asyncio.to_thread(history.diff, change.version, doc.path)
-            diffs.append(
-                DocumentDiff(
-                    path=doc.path,
-                    status=doc.status,
-                    diff=text,
-                    added=doc.added,
-                    removed=doc.removed,
-                )
-            )
-        return ChangeDetail(
-            change=dataclasses.replace(change, documents=documents), diffs=tuple(diffs)
-        )
-
-    # --- undo ---------------------------------------------------------------
-
-    async def undo(self, version: str, *, actor: str) -> Change:
-        """Put back every document the pass ``version`` wrote or retired."""
-        history = await self._settled()
-        change = await self._change(history, version)
-        if change.meta.operation != OP_PASS:
-            raise KnowledgeNotAPass(version)
-        documents = [d.path for d in change.documents if _is_document(d.path)]
-        # What a promoting pass took out of the inbox goes back, so undoing it
-        # loses nothing.
-        items = (
-            [d.path for d in change.documents if not _is_document(d.path) and d.status == REMOVED]
-            if change.meta.status in _PROMOTING_STATUSES
-            else []
-        )
-        changed_since: dict[str, str] = {}
-        for relpath in documents:
-            later = await asyncio.to_thread(history.later, change.version, relpath)
-            if later is not None:
-                changed_since[relpath] = later
-        if changed_since:
-            document, later = next(iter(changed_since.items()))
-            raise KnowledgeUndoConflict(
-                change.version,
-                document,
-                later,
-                handoff=undo_pass_handoff(
-                    root=paths.knowledge_root(),
-                    repo=history.writer().repo.root,
-                    prefix=paths.VAULT_PREFIX,
-                    change=change,
-                    documents=documents,
-                    changed_since=changed_since,
-                ),
-            )
-        meta = CommitMeta(
-            WRITER_USER,
-            OP_UNDO,
-            f"Undo curation: {change.meta.summary}",
-            actor=actor,
-            collection=change.meta.collection,
-            item=change.meta.item,
-            undoes=change.version,
-        )
-        async with recording(history, meta) as tx:
-            for relpath in documents:
-                tx.touch(relpath)
-                before = await asyncio.to_thread(history.show, f"{change.version}^", relpath)
-                if before is None:
-                    with contextlib.suppress(KnowledgeFileNotFound):
-                        await asyncio.to_thread(fs.delete_file, relpath)
-                else:
-                    await asyncio.to_thread(fs.write_bytes, relpath, before, settled=True)
-            for relpath in items:
-                raw = await asyncio.to_thread(history.show, f"{change.version}^", relpath)
-                if raw is not None:
-                    tx.touch(relpath)
-                    await asyncio.to_thread(collection_files.restore_file, relpath, raw)
-        if change.meta.collection:
-            with contextlib.suppress(Exception):
-                row = await self._knowledge.require_collection(change.meta.collection)
-                await self._audit.record(
-                    AuditEventType.KNOWLEDGE_EDITED.value,
-                    resource=row,
-                    actor=actor,
-                    details={"undo": change.version, "documents": documents, "items": items},
-                )
-        await self._knowledge.catalogue_changed()
-        if tx.version is None:
-            raise KnowledgeVersionNotFound(version)
-        return await self._change(history, tx.version)
 
 
 __all__ = ["KnowledgeHistoryService"]

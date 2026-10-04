@@ -375,7 +375,7 @@ Coffer ships one skill of its own, `coffer-guide`. It is the manual an agent rea
 
 - Coffer's own MCP tools and when to reach for each.
 - That tools hidden from the agent's tool list are still callable through `coffer__search_tools`.
-- [Knowledge](/guides/knowledge): where the knowledge root is, how to read it with the agent's own file tools, how to add to it by writing a file into a collection's `.inbox/`, and a catalogue of every document in every collection, with its path, title and description.
+- [Knowledge](/guides/knowledge): where the knowledge root is, how to read it with the agent's own file tools, how to write into it and tidy it, and a catalogue of every document in every collection, with its path, title and description.
 - [Memory](/guides/memory): that Coffer reads the agent's memory and never writes it, and that Coffer's notes are Markdown under the memory root, which the agent greps with its own file tools.
 - [CLIs](/guides/clis#what-your-agents-see): that `coffer cli list` prints the command-line tools Coffer manages — what each is for, who needs it and whether it is ready here.
 - That no Coffer tool waits on a human approval.
@@ -386,7 +386,7 @@ In every other respect it is an ordinary skill. It lives at `~/.coffer/derived/s
 
 ### It is regenerated, so edits do not survive
 
-Coffer rewrites `coffer-guide` from the running build at every daemon start and whenever the knowledge catalogue changes (after a curation pass, when a collection is created or deleted, and on each curation sweep so hand-added documents are picked up). A rewrite is skipped when the content is already identical. Because of this:
+Coffer rewrites `coffer-guide` from the running build at every daemon start and whenever the knowledge catalogue changes (when a collection is created or deleted, and on each knowledge sweep so hand-added documents are picked up). A rewrite is skipped when the content is already identical. Because of this:
 
 - Its files are read-only in the web UI.
 - Any edit you make on disk is replaced at the next rewrite.

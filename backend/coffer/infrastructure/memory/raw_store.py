@@ -2,7 +2,7 @@
 
 Kept apart from :mod:`coffer.infrastructure.memory.store` for the reason the two
 halves exist at all. A partition's four files have **one writer each** (see
-"Keep distil out of the raw directory"), and the sharpest way to keep that
+"Leave the raw directory to aggregation"), and the sharpest way to keep that
 checkable is for the one directory only aggregation may touch to be the one
 module only aggregation imports: "does the distil pass write ``.raw/``?" is then
 answered by reading its import list, not by trusting a comment.

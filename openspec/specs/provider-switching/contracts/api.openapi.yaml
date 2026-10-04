@@ -687,59 +687,6 @@ paths:
       summary: Delete Preview
       tags:
       - providers
-  /api/v1/providers/{uid}/internal-default:
-    post:
-      description: |-
-        Make this connection Coffer's internal-engine default (≤1 globally).
-
-        Clears the flag on every other connection first, so setting a new default
-        moves it off the previous one. 404 if the connection is absent.
-      operationId: set_internal_default_provider_api_v1_providers__uid__internal_default_post
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Set Internal Default Provider
-      tags:
-      - providers
   /api/v1/providers/{uid}/prices:
     post:
       description: |-
@@ -796,11 +743,10 @@ paths:
       description: |-
         Make this connection the one Coffer transcribes speech on (≤1 globally).
 
-        The twin of the route above, and deliberately a SECOND flag rather than a
-        reuse of it: the two are different models, and a chat gateway commonly
-        serves no ``/audio/transcriptions`` at all. Nothing falls back between
-        them — with no connection marked here, Coffer transcribes nothing and hands
-        the agent the audio file untouched. 404 if the connection is absent.
+        A chat gateway commonly serves no ``/audio/transcriptions`` at all, so
+        nothing falls back: with no connection marked here, Coffer transcribes
+        nothing and hands the agent the audio file untouched. Clears the flag on
+        every other connection first. 404 if the connection is absent.
       operationId: set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post
       parameters:
       - in: path
@@ -1832,8 +1778,7 @@ components:
         to every agent, including one registered tomorrow — and the user narrows
         from there; ``unknown`` means the probe was inconclusive, and the
         conservative answer to that is "ask", not "guess". ``ollama`` is
-        internal-only: it starts scoped to NO agent and is used solely by Coffer's
-        internal LLM engine.
+        internal-only: it starts scoped to NO agent.
       enum:
       - anthropic
       - openai
@@ -1993,11 +1938,9 @@ components:
         curated set of models this connection offers to every downstream picker, each
         carrying its modality; EMPTY means no restriction — the endpoint's whole
         catalogue. A picker takes the entries of the modality it serves, so a chat
-        dropdown never offers an embedding or image model. ``internal_default``
-        marks the connection Coffer's internal engine uses (at most one globally),
-        ``transcribe_default`` the one it transcribes speech on — a separate flag
-        because they are separate models and neither falls back to the other. A
-        connection may carry either, both or neither. Which agents run on it is not a
+        dropdown never offers an embedding or image model. ``transcribe_default``
+        marks the one connection Coffer transcribes speech on (at most one
+        globally). Which agents run on it is not a
         field here: it is each agent's ``connection_uid``.
 
         ``uid`` is the connection's identity and what every route here takes; the
@@ -2027,9 +1970,6 @@ components:
           title: Description
         enabled:
           title: Enabled
-          type: boolean
-        internal_default:
-          title: Internal Default
           type: boolean
         local_runtime:
           anyOf:
@@ -2074,7 +2014,6 @@ components:
       - secret_ref
       - compatible_agents
       - models
-      - internal_default
       - transcribe_default
       - enabled
       - description

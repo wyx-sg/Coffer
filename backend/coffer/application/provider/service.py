@@ -25,12 +25,6 @@ from uuid import uuid4
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.delete_ops import delete as _delete_op
 from coffer.application.provider.delete_ops import preview as _delete_preview_op
-from coffer.application.provider.internal_default_ops import (
-    internal_default_connection as _internal_default_connection_op,
-)
-from coffer.application.provider.internal_default_ops import (
-    set_internal_default as _set_internal_default_op,
-)
 from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult, DeletePreview
@@ -110,11 +104,11 @@ class ProviderService:
             if proxy_root is not None
             else ProviderProjector(config_store, agents=agent_catalog)
         )
-        # Coffer's internal engine, told when the connection it runs on moves (spec
-        # internal-engine "Drop the engine model when its connection moves"). The
-        # engine's model is not this kind's to reason about, so what happens to it
-        # arrives as a port the composition root satisfies; ``None`` is the
-        # test-convenience construction, where there is no engine to tell.
+        # Coffer's settings, told when the speech-to-text connection moves (spec
+        # internal-engine "Drop the speech-to-text model when its connection
+        # moves"). The model is not this kind's to reason about, so what happens
+        # to it arrives as a port the composition root satisfies; ``None`` is the
+        # test-convenience construction, where there is nothing to tell.
         self._engine = engine
         # The reconciler's hold: a switch is several writes (project, then move
         # the flags), and no periodic pass may judge the state in between.
@@ -321,31 +315,12 @@ class ProviderService:
             raise SecretMissing(ref)
         return value
 
-    async def set_internal_default(self, uid: str, *, actor: str = "api") -> Resource:
-        """Make this the global internal-engine default — the connection
-        Coffer's own LLM engine uses.
-
-        A thin delegate: the flag's single-global invariant and the fate of the
-        internal-engine model when the connection moves both live in
-        ``internal_default_ops``, so BOTH callers — the HTTP route and
-        the Settings page's engine choice — get them.
-        """
-        return await _set_internal_default_op(self, uid, actor=actor)
-
-    async def internal_default_connection(self, model: str) -> ResolvedConnection | None:
-        """The connection marked ``internal_default``, paired with ``model``.
-
-        Satisfies ``application.engine.resolve.InternalDefaultConnectionPort``.
-        """
-        return await _internal_default_connection_op(self, model)
-
     async def set_transcribe_default(self, uid: str, *, actor: str = "api") -> Resource:
         """Make this the global speech-to-text connection.
 
-        The twin of :meth:`set_internal_default`, delegating for the same
-        reason: the single-global invariant and the fate of the transcription
-        model when the connection moves belong to both callers, the HTTP route
-        and the Settings page's transcription choice.
+        A thin delegate: the single-global invariant and the fate of the
+        transcription model when the connection moves belong to both callers,
+        the HTTP route and the Settings page's transcription choice.
         """
         return await _set_transcribe_default_op(self, uid, actor=actor)
 

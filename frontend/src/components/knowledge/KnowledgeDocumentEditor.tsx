@@ -1,11 +1,10 @@
 // frontend/src/components/knowledge/KnowledgeDocumentEditor.tsx
 //
-// The body-only editor (boards 5.1.03, 5.1.04; spec knowledge "Present a
-// collection as one tree in the web UI", "Save a document edited in the web
-// UI"). The title and description are the document's frontmatter: a read-only
-// key / value grid above the text, "Kept by curation" top right — curation
-// keeps them current — and never in the textarea, so a save sends the body
-// alone with the fingerprint the read carried. Discard and Save, and the
+// The body-only editor (boards 5.1.03, 5.1.04; spec knowledge "Show a
+// collection as one tree of documents in the web UI", "Save a document edited
+// in the web UI"). The title and description are the document's frontmatter: a
+// read-only key / value grid above the text, never in the textarea, so a save
+// sends the body alone with the fingerprint the read carried. Discard and Save, and the
 // unsaved state, sit in the pane's bar (KnowledgeDocumentPane owns the draft).
 //
 // A save refused as stale (409 `KNOWLEDGE_FILE_CONFLICT`) puts a danger banner
@@ -19,7 +18,6 @@
 // ⌘S / Ctrl+S saves and Escape discards while the textarea has focus — keys on
 // the editor, not global handlers; the buttons' tooltips name them.
 import { useTranslation } from "react-i18next";
-import { Lock } from "lucide-react";
 
 import { FileTextEditor } from "@/components/files/FileTextEditor";
 import type { FileOut } from "@/lib/api/knowledge";
@@ -67,23 +65,15 @@ export function KnowledgeDocumentEditor({
         onReload,
       }}
       header={
-        <dl className="grid shrink-0 grid-cols-[96px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 border-b border-border-subtle bg-surface-sunken px-4 py-2.5">
+        <dl className="grid shrink-0 grid-cols-[96px_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1 border-b border-border-subtle bg-surface-sunken px-4 py-2.5">
           <dt className="font-mono text-2xs text-text-subtle">title</dt>
           <dd className="text-xs text-text">{file.title}</dd>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap text-2xs text-text-subtle">
-            <Lock className="size-3" aria-hidden />
-            {t("knowledge.editor.keptByCuration")}
-          </span>
           <dt className="font-mono text-2xs text-text-subtle">description</dt>
           <dd className="text-xs text-text">{file.description}</dd>
         </dl>
       }
       onSave={draft.save}
       onDiscard={onDiscard}
-    >
-      {!draft.conflict ? (
-        <p className="shrink-0 text-xs text-text-muted">{t("knowledge.editor.editStands")}</p>
-      ) : null}
-    </FileTextEditor>
+    />
   );
 }

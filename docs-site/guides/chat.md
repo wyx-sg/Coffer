@@ -171,7 +171,7 @@ How the agent receives an attachment depends on its kind, whichever way it arriv
 
 - **Images** — Claude Code receives a PNG, JPEG, GIF or WEBP image inline, as an image it can see, when it is at most 5 MB once encoded for sending (about 3.75 MB on disk). A larger image, or one in another format, reaches Claude Code as its file path instead, so the turn still runs. Codex always receives the file path.
 - **Documents** (PDF, office formats, epub, rtf) — extracted to text and folded into the prompt, so every agent reads the content. If extraction is unavailable or fails, the agent receives the file path.
-- **Audio** — transcribed to text when you have turned on **Speech to text** under **Settings › General → Coffer's model**. With transcription off, nothing leaves your machine and the agent receives the audio file.
+- **Audio** — transcribed to text when you have turned on **Speech to text** under **Settings › General → Speech to text**. With transcription off, nothing leaves your machine and the agent receives the audio file.
 
 The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Conversations page are kept in `~/.coffer/content/chat-media`, and files a channel received in `~/.coffer/content/channel-media`; both are pruned after the **Attachments** retention window (30 days after they were last modified by default; change it, or keep them forever, under **Settings → Data → Local content**). After that the thread still shows the chip, but the agent can no longer open the file.
 

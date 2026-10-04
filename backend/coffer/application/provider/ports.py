@@ -7,7 +7,7 @@ REST shape and the SSRF guard all live behind it in
 application-no-infrastructure contracts. The service that drives the port is
 ``application.provider.introspection.ModelIntrospectionService``.
 
-``EngineNotifyPort`` is the outbound seam onto Coffer's own engine, declared
+``EngineNotifyPort`` is the outbound seam onto Coffer's settings, declared
 HERE, by the caller, rather than imported from ``application.engine``: this kind
 must not acquire an import of the engine, or every consumer of the engine would
 acquire one of this kind in return and four cross-kind contracts would fail.
@@ -101,18 +101,9 @@ class ProviderIntrospectionPort(Protocol):
 
 
 class EngineNotifyPort(Protocol):
-    """What this kind tells Coffer's internal engine when a connection the
-    engine runs on moves (spec internal-engine "Drop the engine model when its connection moves",
-    "Drop the speech-to-text model when its connection moves").
-
-    Two connections, two methods: the one Coffer thinks with and the one it
-    transcribes speech with. They are told apart rather than folded together
-    because a move of one must not forget the other's model.
-    """
-
-    async def drop_model_unless_curated(
-        self, curated_ids: Collection[str], *, actor: str
-    ) -> None: ...
+    """What this kind tells Coffer's engine when the connection it transcribes
+    speech with moves (spec internal-engine "Drop the speech-to-text model when
+    its connection moves")."""
 
     async def drop_transcribe_model_unless_curated(
         self, curated_ids: Collection[str], *, actor: str

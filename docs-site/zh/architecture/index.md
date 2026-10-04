@@ -48,7 +48,7 @@ Coffer 是一个本地进程，把这些资产只存一份，再通过智能体�
 | HTTP API | `/api/v1/*` 下的 FastAPI 路由：所有客户端共用的管理面。 |
 | MCP 网关 | `/mcp` 端点。它把每个启用的上游 MCP 服务器聚合到一个端点后面，加上 Coffer 的内置工具，并按生效范围过滤每个智能体能看到的内容。见 [MCP 网关](/zh/architecture/mcp-gateway)。 |
 | 资源框架与各类型 | 与类型无关的核心，给每个用户管理的东西（一个 MCP 服务器、一个技能、一个消息渠道）同一套身份、生命周期、审计轨迹和生效范围，外加接入它的七种类型。见 [资源框架](/zh/architecture/resource-framework)。 |
-| 后台 worker | 进程内的 asyncio 循环：保留期清理、知识整理、记忆聚合与提炼、保险库同步轮次、对话记录缓存预热、MCP 会话回收，以及承载 Telegram 轮询和 SeaTalk websocket 连接的消息渠道运行时。完整列表和运行周期见 [守护进程与进程](/zh/architecture/daemon#background-work)。 |
+| 后台 worker | 进程内的 asyncio 循环：保留期清理、知识清扫、记忆聚合与提炼、保险库同步轮次、对话记录缓存预热、MCP 会话回收，以及承载 Telegram 轮询和 SeaTalk websocket 连接的消息渠道运行时。完整列表和运行周期见 [守护进程与进程](/zh/architecture/daemon#background-work)。 |
 | `vault/` | `~/.coffer` 下的一个 git 仓库，是配置和内容的记录系统：每个资源一个 JSON 文件、状态文档、知识集、技能文件夹和密钥密文。每一次被接受的写入都是一次经过校验、写明写入者的提交。它旁边，`local/` 存只对本机成立的东西，`content/` 存媒体和对话工作目录，`derived/` 存可以重建的东西，比如记忆树。见 [持久化](/zh/architecture/persistence)。 |
 | `runs.db` | SQLite，只存历史：审计日志、MCP 调用、对话和消息、同步轮次、用量。 |
 | 上游 MCP 服务器 | 你注册的服务器（stdio 子进程或 HTTP 端点），按客户端会话启动。 |
@@ -131,9 +131,9 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 同样的决策也排除了一些方向，知道它们可以省得再去提议：
 
 - **不是托管服务。** 没有 Coffer 账号，也没有云端点。唯一的远端是你自己拥有的 git 仓库，任何一台机器都能重建它。
-- **不是智能体。** Coffer 自己的模型调用都是内部流程（整理、提炼、生成描述）。对话页面驱动的是你安装的智能体；Coffer 没有自己的对话人格。
+- **不是智能体。** Coffer 不会用模型处理你的知识或记忆；整理它们是你的智能体的工作，由**整理**按钮发起。它唯一的模型调用是可选的语音转文字。对话页面驱动的是你安装的智能体；Coffer 没有自己的对话人格。
 - **不是检索引擎。** Coffer 不做任何 embedding，也不保存向量或全文索引。一条导入契约禁止代码库使用 embedding 库。
-- **不是策略引擎。** Coffer 不逐个审批工具调用。整理是事先做好的，靠按工具的开关和生效范围；消息渠道只听从它已配对的所有者。
+- **不是策略引擎。** Coffer 不逐个审批工具调用。管控是事先做好的，靠按工具的开关和生效范围；消息渠道只听从它已配对的所有者。
 - **不是插件平台。** 各类型在组合根显式接线。插件契约需要好几个具体实现来作为设计依据，而一个单用户工具没有需要服务的生态。
 
 这一切背后的规则及其理由，写在 [设计原则](/zh/architecture/design-principles) 里。
@@ -150,7 +150,6 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 | 持久化 | git；SQLAlchemy 2.0（async）基于 aiosqlite，Alembic 1.18 | 保险库仓库；历史数据库及其迁移。 |
 | 密钥 | `cryptography`（Fernet）、`keyring` 25 | 信封加密；`keyring` 只用于可选的钥匙串主密钥。 |
 | MCP | `mcp` SDK 2.2 | 网关既作为 MCP 服务器，又作为上游服务器的客户端。 |
-| Coffer 自己的模型调用 | LangChain 1.3、LangGraph 1.2（`langchain-anthropic`、`-openai`、`-ollama`） | 知识整理、记忆提炼、生成描述。 |
 | 智能体轮次 | Claude Agent SDK 0.2、Codex app-server | 在 Claude Code 或 Codex 里跑一个对话轮次。 |
 | 文档 | MarkItDown 0.1 | 把上传的文档和消息渠道附件转成 Markdown 或文本。 |
 | CLI | Typer 0.26、Rich | `coffer` 命令。 |

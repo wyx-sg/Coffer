@@ -95,7 +95,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** A derived index has to be reconciled with its source, and every reconciliation is a place to be wrong. Plain files are live the moment you save them in your own editor, readable by every agent's own `Read` and `Grep`, diffable in git, and survive Coffer entirely. Measured usage showed agents never reached for a retrieval tool they had to remember to call, while they read files constantly.
 
-**In the code.** The knowledge layer owns no table: a collection is a resource file plus a directory. Retrieval is the agent's own file tools against absolute paths; ripgrep survives only as the in-process candidate selector the curation pass uses. An import contract bans vector-store and embedding libraries from the codebase. See [Knowledge](/architecture/knowledge) and [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md).
+**In the code.** The knowledge layer owns no table: a collection is a resource file plus a directory. Retrieval is the agent's own file tools against absolute paths; An import contract bans vector-store and embedding libraries from the codebase. See [Knowledge](/architecture/knowledge) and [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md).
 
 **Rules out.** A documents table; FTS or vector indexes; an embedding sidecar; a second copy of a document in any other store. Literal matching is a placeholder rather than a verdict: semantic retrieval may return, but not as a copy of the files.
 

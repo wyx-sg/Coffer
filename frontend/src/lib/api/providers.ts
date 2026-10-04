@@ -148,14 +148,8 @@ export const providersApi = {
   detectLocal: (baseUrl: string | null) =>
     unwrap(getApiClient().POST("/providers/detect-local", { body: { base_url: baseUrl } })),
 
-  /** Make this connection Coffer's internal-engine default (clears the flag on
-   * all others). Returns the updated connection. */
-  setInternalDefault: (uid: string) =>
-    unwrap(getApiClient().POST("/providers/{uid}/internal-default", { params: { path: { uid } } })),
-
   /** Make this connection the one Coffer transcribes speech on (clears the flag
-   * on all others). The twin of `setInternalDefault`, never a substitute for
-   * it: nothing falls back between the two. */
+   * on all others). */
   setTranscribeDefault: (uid: string) =>
     unwrap(
       getApiClient().POST("/providers/{uid}/transcribe-default", { params: { path: { uid } } }),

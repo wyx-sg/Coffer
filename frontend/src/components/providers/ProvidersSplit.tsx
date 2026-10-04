@@ -136,7 +136,6 @@ export function ProvidersSplit({
               endpoint={endpoint}
               status={status}
               latencyMs={latency}
-              engineModel={engine.data?.model ?? null}
               transcribeModel={engine.data?.transcribe_model ?? null}
               focusModel={uid ? model : null}
             />

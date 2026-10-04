@@ -9,7 +9,7 @@
 // through tabs.
 //
 // The tabs hold the settings pages' existing content (their redesign is later
-// work in change revise-web-ui-ia): General with the Coffer's model section,
+// work in change revise-web-ui-ia): General with the Speech-to-text section,
 // Security, Data, Daemon (with Start at login, moved from General), About and Features.
 import { Navigate, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";

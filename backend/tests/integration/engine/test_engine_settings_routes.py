@@ -9,7 +9,6 @@ root wires together.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import pathlib
 from collections.abc import AsyncIterator
@@ -18,13 +17,12 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
-from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-internal-engine"
-_PASSES = ("aggregate", "distil", "curate")
+_PASSES = ("aggregate", "distil")
 
 
 @pytest.fixture
@@ -73,15 +71,6 @@ async def _config(c: AsyncClient) -> dict:
 _DOC = "state/settings/internal-engine.json"
 
 
-def _store_timeout(seconds: int) -> None:
-    """A hand edit of the vault document, settled the way the scanner would."""
-    path = vault_root() / _DOC
-    doc = json.loads(path.read_text())
-    doc["model_timeout_s"] = seconds
-    path.write_text(json.dumps(doc, indent=2) + "\n")
-    vault_writer().settle([_DOC])
-
-
 def _doc() -> dict:
     """The settings document at HEAD; absent means every default."""
     raw = vault_writer().repo.read("HEAD", _DOC)
@@ -99,12 +88,8 @@ def _upkeep(doc: dict, name: str) -> dict:
 async def test_every_write_is_audited_with_its_actor_and_the_value_after_it(
     api: AsyncClient,
 ) -> None:
-    assert (await api.put("/internal-engine-config", json={"model": "  m1  "})).status_code == 200
     assert (
-        await api.put("/internal-engine-config/upkeep", json={"pass": "curate", "enabled": False})
-    ).status_code == 200
-    assert (
-        await api.put("/internal-engine-config/timeout", json={"seconds": 120})
+        await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "enabled": False})
     ).status_code == 200
     assert (
         await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
@@ -113,52 +98,43 @@ async def test_every_write_is_audited_with_its_actor_and_the_value_after_it(
     r = await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
     assert r.status_code == 200, r.text
     entries = r.json()["entries"]
-    assert len(entries) == 4
+    assert len(entries) == 2
     assert {e["actor"] for e in entries} == {"tester"}
     details = [e["details"] for e in entries]
-    # The value AFTER the write: the model trimmed, the switch off, the numbers stored.
-    assert any(d.get("model") == "m1" for d in details)
-    assert any(d.get("auto_curate_enabled") is False for d in details)
-    assert any(d.get("model_timeout_s") == 120 for d in details)
+    # The value AFTER the write: the switch off, the model stored.
+    assert any(d.get("auto_distil_enabled") is False for d in details)
     assert any(d.get("transcribe_model") == "hears" for d in details)
 
 
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="pair the flagged connection with the chosen engine model",
-)
-async def test_the_engine_resolves_the_flagged_connection_with_the_chosen_model(
+@pytest.mark.acceptance(spec="internal-engine", scenario="read the engine settings")
+async def test_the_settings_read_reports_the_stored_values_beside_the_defaults(
     api: AsyncClient,
 ) -> None:
-    from coffer.surfaces.http.engine_config_composition import internal_engine_connection
-    from coffer.surfaces.http.provider_dependencies import get_provider_service
+    assert (
+        await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
+    ).status_code == 200
+    assert (
+        await api.put(
+            "/internal-engine-config/upkeep", json={"pass": "aggregate", "enabled": False}
+        )
+    ).status_code == 200
 
-    await _connection(api, "other", protocol="anthropic", curated=["other-model"])
-    flagged = await _connection(api, "thinks", protocol="openai", curated=[])
-    assert (await api.post(f"/providers/{flagged}/internal-default")).status_code == 200
+    body = await _config(api)
 
-    engine = internal_engine_connection(get_provider_service())
-    # Built once, BEFORE a model is chosen: the answer must follow the row.
-    assert await engine.get_default() is None
-
-    await api.put("/internal-engine-config", json={"model": "brain-1"})
-    resolved = await engine.get_default()
-    assert resolved is not None
-    assert resolved.model == "brain-1"
-    assert resolved.config.base_url == "https://thinks.example/v1"
-    assert resolved.config.protocol.value == "openai"
-
-    await api.put("/internal-engine-config", json={"model": "brain-2"})
-    again = await engine.get_default()
-    assert again is not None
-    assert again.model == "brain-2"
+    assert body["transcribe_model"] == "hears"
+    assert body["updated_at"]
+    assert set(body["upkeep"]) == set(_PASSES)
+    assert body["upkeep"]["aggregate"]["enabled"] is False
+    assert body["upkeep"]["distil"]["enabled"] is True
+    assert "model" not in body and "curate_owner_machine_id" not in body
+    assert "model_timeout_s" not in body and "default_model_timeout_s" not in body
 
 
 @pytest.mark.acceptance(
     spec="internal-engine",
-    scenario="report a switch and interval for each of the three passes",
+    scenario="report a switch and interval for each of the two unattended passes",
 )
-async def test_the_upkeep_block_names_exactly_the_three_passes(api: AsyncClient) -> None:
+async def test_the_upkeep_block_names_exactly_the_two_timed_passes(api: AsyncClient) -> None:
     upkeep = (await _config(api))["upkeep"]
     assert set(upkeep) == set(_PASSES)
     for name in _PASSES:
@@ -213,7 +189,7 @@ async def test_an_unchosen_interval_is_reported_beside_its_default(
 async def test_a_floor_breaking_interval_and_an_unknown_pass_are_refused(
     api: AsyncClient,
 ) -> None:
-    await api.put("/internal-engine-config/upkeep", json={"pass": "curate", "enabled": False})
+    await api.put("/internal-engine-config/upkeep", json={"pass": "aggregate", "enabled": False})
     await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "interval_s": 3600})
     before = (await _config(api))["upkeep"]
 
@@ -233,44 +209,17 @@ async def test_a_fresh_vault_ships_every_pass_switched_on(
     api: AsyncClient, tmp_path: pathlib.Path
 ) -> None:
     upkeep = (await _config(api))["upkeep"]
-    assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True, True]
+    assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True]
 
-    # The first write carries only a model; the document it creates still runs all three.
-    assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 200
+    # The first write carries only one value; the document it creates still runs both.
+    assert (
+        await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
+    ).status_code == 200
     upkeep = (await _config(api))["upkeep"]
-    assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True, True]
+    assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True]
     doc = _doc()
-    assert doc["model"] == "m"
-    assert [_upkeep(doc, name).get("enabled", True) for name in _PASSES] == [True, True, True]
-
-
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="a stored bound outside the range is clamped by a pass",
-)
-async def test_a_stored_bound_out_of_range_is_clamped_by_a_pass_and_refused_at_the_route(
-    api: AsyncClient, tmp_path: pathlib.Path
-) -> None:
-    from coffer.application.engine_timeout import (
-        MAX_MODEL_TIMEOUT_S,
-        MIN_MODEL_TIMEOUT_S,
-        resolve_timeout,
-    )
-    from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
-
-    # A value a surface would never have written — an older build, a hand edit.
-    assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 200
-    for stored, runs_under in ((1, MIN_MODEL_TIMEOUT_S), (6000, MAX_MODEL_TIMEOUT_S)):
-        # Off the event loop: the app's own background passes write this file
-        # through the loop, and a blocking write here would wait on a lock only
-        # the loop it is blocking can release.
-        await asyncio.to_thread(_store_timeout, stored)
-        assert await read_internal_engine_timeout() == stored
-        # The reader the passes are wired with, read per call: clamped, not raised.
-        assert await resolve_timeout(read_internal_engine_timeout) == float(runs_under)
-
-        r = await api.put("/internal-engine-config/timeout", json={"seconds": stored})
-        assert r.status_code == 422, r.text
+    assert doc["transcribe_model"] == "hears"
+    assert [_upkeep(doc, name).get("enabled", True) for name in _PASSES] == [True, True]
 
 
 @pytest.mark.acceptance(
@@ -286,7 +235,6 @@ async def test_moving_the_transcribe_flag_drops_an_uncurated_model_only(
 
     assert (await api.post(f"/providers/{a}/transcribe-default")).status_code == 200
     await api.put("/internal-engine-config/transcribe-model", json={"model": "whisper-x"})
-    await api.put("/internal-engine-config", json={"model": "brain"})
 
     # Re-marking the connection that already carries the flag changes nothing,
     # although A does not curate the model.
@@ -297,21 +245,18 @@ async def test_moving_the_transcribe_flag_drops_an_uncurated_model_only(
     assert (await api.post(f"/providers/{b}/transcribe-default")).status_code == 200
     assert (await _config(api))["transcribe_model"] == "whisper-x"
 
-    # C does not: dropped. The engine's own model is another row's business.
+    # C does not: dropped.
     assert (await api.post(f"/providers/{c}/transcribe-default")).status_code == 200
-    body = await _config(api)
-    assert body["transcribe_model"] is None
-    assert body["model"] == "brain"
+    assert (await _config(api))["transcribe_model"] is None
 
 
 @pytest.mark.acceptance(
     spec="internal-engine",
-    scenario="the bound and the speech-to-text model change one value at a time",
+    scenario="the speech-to-text model changes without touching the rest of the row",
 )
-async def test_the_bound_and_the_transcribe_model_leave_the_rest_of_the_row_alone(
+async def test_the_transcribe_model_leaves_the_rest_of_the_row_alone(
     api: AsyncClient,
 ) -> None:
-    await api.put("/internal-engine-config", json={"model": "brain"})
     await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "enabled": False})
     audit_before = len(
         (
@@ -319,20 +264,10 @@ async def test_the_bound_and_the_transcribe_model_leave_the_rest_of_the_row_alon
         ).json()["entries"]
     )
 
-    r = await api.put("/internal-engine-config/timeout", json={"seconds": 90})
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["model_timeout_s"] == 90
-    assert body["transcribe_model"] is None
-    assert body["model"] == "brain"
-    assert body["upkeep"]["distil"]["enabled"] is False
-
     r = await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["transcribe_model"] == "hears"
-    assert body["model_timeout_s"] == 90
-    assert body["model"] == "brain"
     assert body["upkeep"]["distil"]["enabled"] is False
 
     audit_after = len(
@@ -340,37 +275,25 @@ async def test_the_bound_and_the_transcribe_model_leave_the_rest_of_the_row_alon
             await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
         ).json()["entries"]
     )
-    assert audit_after == audit_before + 2
+    assert audit_after == audit_before + 1
 
 
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="the route names and clears the curation owner",
-)
-async def test_the_curation_owner_route_names_and_clears_the_owner(api: AsyncClient) -> None:
-    await api.put("/internal-engine-config", json={"model": "brain"})
-    assert (await _config(api))["curate_owner_machine_id"] is None
+async def test_the_call_bound_route_is_gone(api: AsyncClient) -> None:
+    assert (await api.put("/internal-engine-config/timeout", json={"seconds": 90})).status_code in (
+        404,
+        405,
+    )
 
-    # Not validated against the registry: this vault has none, and the id is
-    # still written.
-    r = await api.put("/internal-engine-config/curation-owner", json={"machine_id": "laptop-1"})
-    assert r.status_code == 200, r.text
-    assert r.json()["curate_owner_machine_id"] == "laptop-1"
-    after_set = await _config(api)
-    assert after_set["curate_owner_machine_id"] == "laptop-1"
-    assert after_set["model"] == "brain"
 
-    r = await api.put("/internal-engine-config/curation-owner", json={"machine_id": None})
-    assert r.status_code == 200, r.text
-    assert r.json()["curate_owner_machine_id"] is None
-    assert (await _config(api))["model"] == "brain"
-
-    entries = (
-        await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
-    ).json()["entries"]
-    owner_writes = [e for e in entries if set(e["details"]) == {"curate_owner_machine_id"}]
-    assert {e["actor"] for e in owner_writes} == {"tester"}
-    assert sorted((e["details"]["curate_owner_machine_id"] or "") for e in owner_writes) == [
-        "",
-        "laptop-1",
-    ]
+async def test_the_retired_routes_and_keys_are_gone(api: AsyncClient) -> None:
+    assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 405
+    assert (
+        await api.put("/internal-engine-config/curation-owner", json={"machine_id": "m"})
+    ).status_code == 404
+    assert (
+        await api.put("/internal-engine-config/upkeep", json={"pass": "curate", "enabled": False})
+    ).status_code == 422
+    body = await _config(api)
+    assert "model" not in body
+    assert "curate_owner_machine_id" not in body
+    assert set(body["upkeep"]) == set(_PASSES)

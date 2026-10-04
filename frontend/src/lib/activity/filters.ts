@@ -60,7 +60,7 @@ export function changeCategory(entry: AuditEntry): ChangeCategory {
   }
   for (const [pattern, area] of EVENT_AREAS) if (pattern.test(entry.event_type)) return area;
   // Everything else Coffer records without a resource is a change to its own
-  // settings: the access token, retention, residency, Coffer's model, the cache.
+  // settings: the access token, retention, residency, speech to text, the cache.
   return "settings";
 }
 

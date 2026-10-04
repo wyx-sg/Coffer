@@ -1,15 +1,15 @@
 // frontend/src/lib/hooks/useKnowledgeHistory.ts
 //
 // The queries and mutations over knowledge's HISTORY — the vault's git log read
-// as changes (spec knowledge "Keep every document's history and undo a pass as
-// a whole"): the cross-collection timeline Recent changes shows, one change in
-// full, a document's versions and one version's diff, and the two writes that
-// put the past back — restoring a version and undoing a curation pass. Both
-// write a NEW version naming the user; nothing here rewrites what happened.
+// as changes (spec knowledge "Keep every document's history"): the
+// cross-collection timeline Recent changes shows, a
+// document's versions and one version's diff, and the writes that put the past
+// back — restoring a version or a deleted document. Both write a NEW version
+// naming the user; nothing here rewrites what happened.
 //
 // Kept apart from `useKnowledge.ts` only for size (one hook file per feature is
 // the rule, .agents/frontend.md §2; this is its second half). Every key hangs
-// off `["knowledge"]`, so a curation pass or a save that invalidates the
+// off `["knowledge"]`, so a write that invalidates the
 // knowledge prefix refreshes the timeline and the open History tab with it.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -18,17 +18,14 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
   describeCollection,
-  getChange,
   getHistory,
   getVersionBody,
   getVersionDiff,
   listChanges,
   restoreDeleted,
   restoreVersion,
-  undoPass,
 } from "@/lib/api/knowledge";
 import {
-  knowledgeChangeKey,
   knowledgeChangesKey,
   knowledgeFileKey,
   knowledgeHistoryKey,
@@ -41,22 +38,12 @@ import {
  *  the last seven days on the page. */
 const TIMELINE_LIMIT = 200;
 
-/** Recent changes across every collection (`null`) or one (its NAME), with
- *  the items still waiting in each inbox. */
+/** Recent changes across every collection (`null`) or one (its NAME). */
 export function useKnowledgeChanges(collection: string | null, enabled = true) {
   return useQuery({
     queryKey: knowledgeChangesKey(collection),
     queryFn: () => listChanges({ collection, limit: TIMELINE_LIMIT }),
     enabled,
-  });
-}
-
-/** One change in full: every document it touched, each with its diff. */
-export function useKnowledgeChange(version: string | null) {
-  return useQuery({
-    queryKey: knowledgeChangeKey(version ?? ""),
-    queryFn: () => getChange(version as string),
-    enabled: Boolean(version),
   });
 }
 
@@ -112,21 +99,8 @@ export function useRestoreVersion() {
 }
 
 /**
- * Undo a curation pass as a whole. No `onError` toast: the only caller is the
- * undo dialog, which says in place which document was changed since and
- * stays open (a refusal writes nothing).
- */
-export function useUndoPass() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (version: string) => undoPass(version),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
-  });
-}
-
-/**
  * Put back what a delete removed — a document, or a whole collection with its
- * documents, README and waiting items (spec knowledge "Restore a deleted
+ * documents and README (spec knowledge "Restore a deleted
  * collection or document from Recent changes"). No `onError` toast: Recent
  * changes says in place, on the row, why a restore was refused (the path or
  * the collection's name is taken again).

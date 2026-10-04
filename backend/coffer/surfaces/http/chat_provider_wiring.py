@@ -31,7 +31,6 @@ from coffer.surfaces.http.agent_dependencies import (
     get_agent_service,
 )
 from coffer.surfaces.http.engine_config_composition import (
-    read_internal_engine_timeout,
     read_transcribe_model,
 )
 from coffer.surfaces.http.provider_dependencies import get_provider_service
@@ -91,7 +90,7 @@ def build_agent_provider_registry(
     ``transcribe_default``, on the model they chose for it. Without the
     resolver, without such a connection, or without a model, audio is handed to
     the agent untouched and nothing leaves the machine. That is the default,
-    and there is no fallback to the engine's own connection (spec
+    and there is no fallback to another connection (spec
     internal-engine "Transcribe speech on its own connection and model").
 
     ``resolve_channel`` turns the channel UID a conversation stores into the
@@ -128,7 +127,6 @@ def build_agent_provider_registry(
                 read_model=read_transcribe_model, connections=get_provider_service()
             ),
             secret_resolver,
-            read_internal_engine_timeout,
         )
         if secret_resolver is not None
         else None

@@ -175,12 +175,12 @@ sequenceDiagram
 | 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
 | 智能体 | `agent_config_file_written`、`agent_config_file_deleted`、`agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
-| 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted`、`knowledge_curated` |
+| 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
 | 记忆 | `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_trigger_added`、`memory_trigger_proposed`、`memory_trigger_armed`、`memory_trigger_disarmed`、`memory_trigger_deleted` |
 | 消息渠道 | `channel_pairing_issued`、`channel_paired` |
 | 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交）、`vault_file_restored` |
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |
-| 提供商 | `provider_switched`、`provider_internal_default_set`、`provider_transcribe_default_set`、`provider_projection_refused` |
+| 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused` |
 
 没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
 

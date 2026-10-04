@@ -21,14 +21,12 @@ import { FILE_PANE_COLUMN, useFillToBottom } from "@/components/filePane";
 import { MemoryList, RetiredGroup } from "@/components/memory/MemoryList";
 import { MemoryPane } from "@/components/memory/MemoryPane";
 import { RetiredPane } from "@/components/memory/RetiredPane";
-import { NoModelNotice } from "@/components/memory/NoModelNotice";
 import { SplitView } from "@/components/SplitView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { agentTypeOfOrigin } from "./memoryAgents";
-import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useMemoryNotes, useMemoryRetired } from "@/lib/hooks/useMemory";
 
 /** The search param naming the selected memory. */
@@ -51,7 +49,6 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
   const [params, setParams] = useSearchParams();
   const notes = useMemoryNotes(uid);
   const retired = useMemoryRetired(uid);
-  const modelSet = useCofferModelSet();
   const fill = useFillToBottom();
 
   const memories = notes.data ?? [];
@@ -78,8 +75,6 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
     setParams(next, { replace: true });
   };
 
-  const notice = modelSet === false ? <NoModelNotice /> : null;
-
   if (notes.isPending) {
     return (
       <div className="space-y-2" aria-busy="true">
@@ -101,7 +96,6 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
   if (memories.length === 0) {
     return (
       <div className="space-y-4">
-        {notice}
         <EmptyState
           icon={Brain}
           title={t("memory.memories.emptyTitle", { name })}
@@ -123,7 +117,6 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      {notice}
       <div ref={fill.ref} style={fill.style} className="flex min-h-0">
         <SplitView
           storageKey="memory-partition"

@@ -63,9 +63,9 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `resources/<kind>/<name>.json` | One JSON file per resource: `uid`, `kind`, `format_version`, `name`, an optional `title`, `description`, `config`. Identity is the `uid` inside, not the path. | you, daemon | Yes | No: the resource is gone on every machine that syncs. |
 | `state/mcp-preferences/<server>.json` | The tools, prompts and resources you switched off on one MCP server, with that server's uid. | you, daemon | Yes | Yes: everything on that server is switched back on. |
 | `state/channel-peers/<channel>.json` | The identities paired with one channel, including the owner. | daemon | Yes | The pairings are lost. |
-| `state/settings/internal-engine.json` | Coffer's model, the curation owner machine, the per-call timeout, the transcription model and each upkeep pass's switch and interval. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
-| `knowledge/<collection>/` | A collection: Markdown documents in any nesting, plus a `README.md` describing it. You, your agents and Coffer's curation pass all edit these files. | you, daemon | Yes | **No.** This is written knowledge. |
-| `knowledge/<collection>/.inbox/` | Items waiting to be curated into the documents: extracted upload text, a Markdown file an agent wrote there, a document added on the Knowledge page. | daemon | Yes | No: items not yet curated are lost. |
+| `state/settings/internal-engine.json` | The per-call model timeout, the speech-to-text model, and the aggregate and distil switches and intervals. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
+| `knowledge/<collection>/` | A collection: Markdown documents in any nesting, plus a `README.md` describing it. You and your agents edit these files; a Tidy hands the merging and correcting to an agent. | you, daemon | Yes | **No.** This is written knowledge. |
+| `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is adopted and promoted to a document by the next sweep (within a minute), then the file is gone. | you, your agents, daemon | Yes | No: a file not yet promoted is lost. |
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | you, daemon | Yes | **No.** Deleting a folder breaks the links delivered to agents. |
 | `secret/<ref>.enc` | One secret's Fernet ciphertext, mode `0600`. Never the key. Excluded from the repository unless the sync remote carries secrets. | daemon | Only with `--with-secret` | **No.** The secret is gone. |
 | `machines/<machine id>.json` | One descriptor per machine that syncs: name, OS, hostname, Coffer version, last round, last converged commit, key fingerprint, agents and their plugins. | sync (each machine writes only its own) | Yes | Retire another machine with **Retire** in the **Sync** page's machine list. |
@@ -77,9 +77,8 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | This machine's agents, one resource file each. | daemon | Never | The agent is unregistered here. |
 | `local/reach.json` | Every resource's reach on this machine: enabled, and for which agents. | daemon | Never | Every resource returns to its kind's default reach. |
-| `local/engine.json` | When this machine last changed Coffer's engine settings. | daemon | Never | Yes. |
+| `local/engine.json` | When this machine last changed Coffer's settings document (the model timeout, speech-to-text and upkeep). | daemon | Never | Yes. |
 | `local/retention.json` | Each prunable table's retention and when it was last pruned. | daemon | Never | Yes: the defaults apply. |
-| `local/curation.json` | The content each knowledge document had when curation last settled it, so a person's later edit is noticed. | daemon | Never | Curation re-reads every document once. |
 | `local/skill-source-status.json` | What this machine last found at each Git-imported skill's source. | daemon | Never | Yes: the next check fills it in. |
 | `local/secret/` | Machine-local ciphertext, such as the model proxy's tokens. | daemon | Never | The proxy tokens are minted again; agents on a provider re-read theirs. |
 | `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here. | daemon | Never | Every secret waits for approval again. |

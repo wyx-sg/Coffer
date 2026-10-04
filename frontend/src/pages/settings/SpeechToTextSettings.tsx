@@ -1,15 +1,14 @@
 // frontend/src/pages/settings/SpeechToTextSettings.tsx
 //
-// The "Speech to text" picker of the Coffer's model section: the connection
+// The "Speech to text" picker of the Speech-to-text section: the connection
 // and model Coffer transcribes voice with (spec internal-engine "Transcribe
 // speech on its own connection and model", spec provider-switching
-// `transcribe_default`).
+// "Keep an independent speech-to-text default").
 //
-// It is a picker of its own rather than a borrowing of the engine's because
-// the two halves are deliberately independent: transcription runs on a SECOND
-// connection flag, and nothing falls back between them. A gateway that serves
-// chat completions commonly serves no `/audio/transcriptions` at all, so
-// borrowing the engine's connection would aim every voice message at a 404.
+// Transcription runs on its own connection flag, `transcribe_default`. A
+// gateway that serves chat completions commonly serves no
+// `/audio/transcriptions` at all, so the connection is chosen for this job
+// alone.
 //
 // Not set is the safe default rather than a fault: with no connection marked
 // or no model chosen, Coffer transcribes nothing and hands the agent the audio

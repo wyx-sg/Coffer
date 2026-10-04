@@ -1,11 +1,11 @@
 // frontend/src/pages/settings/SpeechToTextSettings.test.tsx
 //
-// Settings › General › Coffer's model › Speech to text: the connection and
-// model Coffer transcribes voice with.
+// Settings › General › Speech-to-text: the connection and model Coffer
+// transcribes voice with.
 //
 // The picker's first job is to make an unset state legible. Transcription has two
-// halves — a connection flagged `transcribe_default` and a model — and no
-// fallback to the engine's connection, so a vault with neither half set
+// halves — a connection flagged `transcribe_default` and a model — so a vault
+// with neither half set
 // transcribes nothing and hands the agent the audio file untouched. That is the
 // safe default, not a fault, and these assert that the card says so in words
 // rather than rendering two empty dropdowns and leaving the reader to guess.
@@ -66,7 +66,6 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     local_runtime: null,
     compatible_agents: ["codex"],
     title: null,
-    internal_default: false,
     transcribe_default: false,
     models: [],
     enabled: true,
@@ -116,10 +115,10 @@ describe("SpeechToTextSettings", () => {
     expect(screen.getByRole("button", { name: /test speech to text/i })).toBeEnabled();
   });
 
-  test("the picker names a second connection rather than borrowing the engine's", () => {
-    // The reason the flag exists at all: a chat gateway commonly serves no
-    // transcription endpoint, so nothing falls back to the engine's connection.
-    providers = [makeProvider({ name: "a", internal_default: true })];
+  test("the picker names the connection flagged for transcription", () => {
+    // A chat gateway commonly serves no transcription endpoint, so the flag
+    // sits on a connection of its own; with none flagged the picker is unset.
+    providers = [makeProvider({ name: "a" })];
     render(<SpeechToTextSettings />);
 
     expect(screen.getByRole("combobox", { name: /transcription provider/i })).toHaveTextContent(

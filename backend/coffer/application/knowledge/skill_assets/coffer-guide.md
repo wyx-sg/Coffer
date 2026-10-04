@@ -2,8 +2,8 @@
 
 Coffer is this machine's local vault. It stands between you and the MCP servers
 this developer registered, it holds what they have written down about their
-working environment, and it holds the notes distilled from what every agent on
-this machine has learned. This is the manual: what Coffer will do for you, and
+working environment, and it holds a note for everything every agent on this
+machine has learned. This is the manual: what Coffer will do for you, and
 what it will not.
 
 ## Coffer's own tools
@@ -36,8 +36,8 @@ so this only ever concerns upstream tools.
 ## Knowledge is a directory of files, and you read it yourself
 
 The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`: one
-tree of Markdown documents per collection, which the developer and Coffer's own
-model write together.
+tree of Markdown documents per collection, which the developer and agents like
+you write together.
 
 **There is no Coffer tool for reading, listing, searching or grepping it.** Use
 your own file tools on those paths. The full catalogue of what exists is at the
@@ -53,23 +53,57 @@ down.
 
 When you learn something durable — a fact about a service, a convention this
 developer follows, a decision and the reason behind it, a trap and how to avoid
-it — write a Markdown file into `<KNOWLEDGE_ROOT>/<collection>/.inbox/`, under
-any name ending in `.md`. Frontmatter is optional: `title`, `description` and
-`actor` (who you are, for example `claude-code`). Coffer fills in whatever is
-missing, then its model merges the file into the collection's documents,
-integrating it with what is already there. Write the fact plainly; you do not
-have to work out where it belongs or check whether it repeats something. The
-collection must already exist: only the developer creates one, so a file under
-any other directory is ignored.
+it — put it into the collection's documents yourself, with your own file tools.
+Coffer does not rewrite what you write: where a fact ends up is your decision,
+so make it the right one.
 
-To correct or extend a document you have read, edit the file itself with your
-own tools, as the developer does in their editor. Coffer's model notices the
-edit and carries it into the rest of the collection as a newer statement. Where
-two statements disagree the newer wins unless the older is shown right by a
-source, a date, a command's output or the code, whoever wrote either.
+1. **Find its home.** Read the catalogue at the bottom of this file and grep the
+   collection for the subject. If a document already answers the question this
+   fact belongs to, read that document in full and fold the fact into the
+   section it belongs in. Only when no document owns the subject, create a new
+   file at a slug of its title (`session-ownership.md`).
+2. **Lose nothing.** Integrate; never regenerate. Every fact already in a
+   document you rewrite must survive your edit.
+3. **Organise by subject, never by provenance.** A reader wants the document to
+   be about the thing. Never add sections like "Added today" or "From the
+   ticket" — put the fact where a reader would look for it.
+4. **Where two statements disagree, the newer wins unless the older one is
+   shown to be right** — by a source, a date, a command's output or the code.
+   Whoever wrote either, the developer included. Keep the superseded statement
+   legible where the corrected fact is: "(previously recorded as X; corrected
+   YYYY-MM-DD)".
+5. **Never name another knowledge file.** Paths move as the collection is
+   reorganised; name the subject in prose. The catalogue is how a reader finds
+   the file.
+6. **Give every document frontmatter**: a `title`, a one-line `description`
+   saying what *question* the document answers (it is the only thing a future
+   reader chooses by), and `actor: agent`. Leave any other key a person added
+   alone.
 
-Never run git inside the vault: Coffer records every change itself, and a
-commit of your own would be attributed to nobody.
+The collection must already exist: only the developer creates one. Coffer
+commits every change it finds on disk to the vault's history, so a bad edit can
+be restored; never run git inside the vault yourself, because a commit of your
+own would be attributed to nobody.
+
+### Tidying a collection
+
+When the developer asks you to tidy, organise or clean up knowledge (整理知识),
+work through one collection at a time:
+
+1. Read its README and every document's title and description, then read the
+   documents in full before changing them.
+2. **Merge** documents that answer the same question into one, keeping every
+   fact; delete the ones you merged away.
+3. **Split** a document that answers several unrelated questions, one subject
+   per file.
+4. **Fix** what is wrong or contradictory by rule 4 above, and rewrite a
+   description that does not say what question its document answers.
+5. Move a document into a subfolder only if that makes the tree easier for a
+   person to browse; folders carry no meaning to Coffer.
+6. Report what you merged, split, corrected and deleted, so the developer can
+   check it against the history in Coffer's Knowledge page.
+
+Change nothing that does not need changing.
 
 <!-- end:knowledge -->
 <!-- when:memory -->
@@ -77,8 +111,9 @@ commit of your own would be attributed to nobody.
 
 Coffer reads the native memory of every registered agent — your own memory
 files, in your own format — and modifies nothing there: not a file, not a
-format, not your memory setting. What it reads it distils into its own notes
-under `<MEMORY_ROOT>`, which are derived and are Coffer's to own.
+format, not your memory setting. Each memory it reads becomes one note of its
+own under `<MEMORY_ROOT>`, copied as it stands; merging what several agents
+learned about the same subject is the tidying below.
 
 <!-- when:knowledge -->
 The practical consequence: **you cannot ask Coffer to write a memory for you.**
@@ -93,6 +128,40 @@ partition per repository plus `global`. Your session opened with the index of
 this repository's partition and of `global`. For a note from another project,
 search `<MEMORY_ROOT>` with your own tools — grep for a distinctive word or
 phrase — and read the file you find. There is no Coffer tool for this.
+
+### Tidying memory
+
+Two agents rarely phrase the same lesson the same way, so a partition collects
+near-duplicates: one note per memory each agent wrote. When the developer asks
+you to tidy, merge or clean up memory (整理记忆), work through one partition at
+a time under `<MEMORY_ROOT>/<partition>/notes/`:
+
+1. Read the partition's `MEMORY.md`, then the notes in full before you change
+   them.
+2. **Merge** notes about the same subject into one. Rewrite the surviving
+   note's body in your own words so it holds every fact of both, and **append
+   every entry of the merged note's `origins:` list to the survivor's
+   `origins:`**, unchanged. Then delete the merged note's file. The `origins`
+   are how Coffer knows a memory is already accounted for: drop one and the
+   next update brings the merged note back.
+3. **Retire** a note that is no longer true — a newer note contradicts it, or
+   it describes something that has since been removed. Do not delete its file:
+   the memory it came from still lives in an agent's own memory, so a deleted
+   note comes back on the next update. Instead add `retired:` with the reason
+   to its frontmatter, and `replaced_by:` with the surviving note's file name
+   when there is one. Coffer records the retirement and removes the file on
+   its next update, and never recreates it.
+4. Where two notes disagree, the newer statement wins unless the older one is
+   shown to be right by a source, a date, a command's output or the code —
+   whoever wrote either.
+5. Keep one topic per note, and a `description` that says what the note is
+   about in one line: the index a session receives is built from it.
+6. Report what you merged and retired.
+
+Leave everything else in the partition alone: `.raw/` is Coffer's verbatim
+copy of what the agents wrote, and `MEMORY.md` and `RETIRED.md` are rewritten
+by Coffer on every update. Never edit an agent's own memory files to tidy
+Coffer's notes.
 
 <!-- end:memory -->
 ## Nothing here waits on a human

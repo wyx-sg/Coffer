@@ -236,7 +236,7 @@ The registered policies, their defaults and the worker's cadence are listed in [
 
 ## Passes in flight
 
-Long, model-driven rewrites — knowledge curation over a collection, memory distillation over a partition — are tracked in an in-process registry keyed by kind and name, so a second pass never starts on the same target: a curation request is refused with `UPKEEP_ALREADY_RUNNING`, and Update memory and the timers skip a busy target. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
+A long rewrite — memory's distil pass over a partition — is tracked in an in-process registry keyed by kind and name, so a second pass never starts on the same target: a request is refused with `UPKEEP_ALREADY_RUNNING`, and Update memory and the timers skip a busy target. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
 
 ## Trade-offs and alternatives
 

@@ -246,6 +246,55 @@ def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
         assert bad.status_code == 422, bad.text
 
 
+def _store_retired_flag(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A hand edit of the one connection file, settled the way the scanner would:
+    its config carries the retired ``internal_default`` flag."""
+    from coffer.infrastructure.vault.instance import vault_writer
+
+    [path] = (tmp_path / ".coffer" / "vault" / "resources" / "provider").glob("*.json")
+    doc = json.loads(path.read_text())
+    doc["config"]["internal_default"] = True
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([f"resources/provider/{path.name}"])
+    return path
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="ignore a stored internal-default flag when a connection is read",
+)
+def test_a_stored_internal_default_flag_is_ignored_on_read(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59762)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body())
+        _store_retired_flag(tmp_path)
+
+        r = c.get("/api/v1/providers")
+        assert r.status_code == 200, r.text
+        [row] = r.json()["providers"]
+        assert row["uid"] == uid and row["base_url"] == "https://gw/anthropic"
+        assert "internal_default" not in row
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="drop a stored internal-default flag on the next write",
+)
+def test_a_stored_internal_default_flag_is_dropped_on_the_next_write(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59764)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body())
+        path = _store_retired_flag(tmp_path)
+        assert "internal_default" in json.loads(path.read_text())["config"]
+
+        r = c.patch(f"/api/v1/providers/{uid}", json={"base_url": "https://gw/anthropic/v3"})
+        assert r.status_code == 200, r.text
+
+        config = json.loads(path.read_text())["config"]
+        assert "internal_default" not in config
+        assert config["base_url"] == "https://gw/anthropic/v3"
+
+
 @pytest.mark.acceptance(spec="provider-switching", scenario="list provider profiles")
 def test_list_profiles(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59760)
@@ -640,53 +689,12 @@ def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path,
         assert not (cfg / "settings.json").exists()
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="set a connection as the internal engine default",
-)
-def test_set_internal_default(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59860)
-    with _client(app) as c:
-        uid = _new(c, _anthropic_body(name="acme"))
-        r = c.post(f"/api/v1/providers/{uid}/internal-default")
-        assert r.status_code == 200, r.text
-        assert r.json()["internal_default"] is True
-        # the flag persists on the connection
-        assert c.get(f"/api/v1/providers/{uid}").json()["internal_default"] is True
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="setting a new internal default clears the previous one",
-)
-def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59870)
-    with _client(app) as c:
-        first = _new(c, _anthropic_body(name="first"))
-        second = _new(
-            c,
-            {
-                "name": "second",
-                "protocol": "openai",
-                "base_url": "https://gw/v1",
-                "secret_value": "sk-2",
-            },
-        )
-        c.post(f"/api/v1/providers/{first}/internal-default")
-        assert c.get(f"/api/v1/providers/{first}").json()["internal_default"] is True
-
-        # Switching the default to another connection clears it off the first.
-        c.post(f"/api/v1/providers/{second}/internal-default")
-        assert c.get(f"/api/v1/providers/{second}").json()["internal_default"] is True
-        assert c.get(f"/api/v1/providers/{first}").json()["internal_default"] is False
-
-
 @pytest.mark.asyncio
-async def test_a_second_internal_default_cannot_be_written_behind_the_service(
+async def test_a_second_transcribe_default_cannot_be_written_behind_the_service(
     tmp_path, monkeypatch
 ):
-    """The single-internal-default invariant is enforced by the vault, not
-    only by ``set_internal_default``.
+    """The single-transcribe-default invariant is enforced by the vault, not
+    only by ``set_transcribe_default``.
 
     A live vault was found with two connections flagged, because the flag is an
     ordinary config field and a write that goes round the service sets it
@@ -711,64 +719,21 @@ async def test_a_second_internal_default_cannot_be_written_behind_the_service(
                 "secret_value": "sk-2",
             },
         )
-        c.post(f"/api/v1/providers/{first}/internal-default")
+        c.post(f"/api/v1/providers/{first}/transcribe-default")
 
         path = "resources/provider/second.json"
         doc = json.loads((vault_root() / path).read_text())
-        doc["config"]["internal_default"] = True
+        doc["config"]["transcribe_default"] = True
         (vault_root() / path).write_text(json.dumps(doc, indent=2) + "\n")
         vault_writer().settle([path])
 
         codes = [f.code for f in vault_writer().problems()[path]]
         assert codes == [FindingCode.CONFIG_INVALID]
         head = json.loads(vault_writer().repo.read("HEAD", path) or b"{}")
-        assert head["config"].get("internal_default") is not True
+        assert head["config"].get("transcribe_default") is not True
         listed = c.get("/api/v1/providers").json()["providers"]
-        flagged = [p["name"] for p in listed if p["internal_default"]]
+        flagged = [p["name"] for p in listed if p["transcribe_default"]]
         assert flagged == ["first"]
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="choose the model the internal engine runs on",
-)
-async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
-    from httpx import ASGITransport, AsyncClient
-
-    from coffer.surfaces.http.dependencies import get_audit_service
-    from coffer.surfaces.http.engine_config_composition import internal_engine_connection
-    from coffer.surfaces.http.provider_dependencies import get_provider_service
-
-    app = _app(tmp_path, monkeypatch, 59880)
-    set_active_token(TOKEN)
-    async with (
-        app.router.lifespan_context(app),
-        AsyncClient(
-            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
-        ) as c,
-    ):
-        made = await c.post(
-            "/api/v1/providers", json=_anthropic_body(name="acme", model="conn-model")
-        )
-        uid = made.json()["uid"]
-        await c.post(f"/api/v1/providers/{uid}/internal-default")
-
-        # Setting the internal-engine model returns it and persists.
-        r = await c.put("/api/v1/internal-engine-config", json={"model": "picked-model"})
-        assert r.status_code == 200, r.text
-        assert r.json()["model"] == "picked-model"
-        assert (await c.get("/api/v1/internal-engine-config")).json()["model"] == "picked-model"
-
-        # It is audited as internal_engine_model_set.
-        events = await get_audit_service().query(event_type="internal_engine_model_set")
-        assert len(events) >= 1
-
-        # The engine's resolution overlays the chosen model onto the flagged
-        # connection (whose own model is "conn-model").
-        resolved = await internal_engine_connection(get_provider_service()).get_default()
-        assert resolved is not None
-        assert resolved.model == "picked-model"
 
 
 @pytest.mark.asyncio
@@ -777,12 +742,7 @@ async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
     scenario="switch off and re-time the passes Coffer runs unattended",
 )
 async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
-    """The three passes Coffer runs on its own behalf, made visible.
-
-    Two of them had no switch anywhere, the third's could only be changed by
-    hand-editing a synced document, and all three intervals were constants
-    compiled into the workers.
-    """
+    """The two timed passes Coffer runs on its own behalf, made visible."""
     from httpx import ASGITransport, AsyncClient
 
     app = _app(tmp_path, monkeypatch, 59884)
@@ -793,24 +753,20 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
             transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
         ) as c,
     ):
-        # Out of the box every pass runs — each writes only derived files, so
-        # none of them is the exception the tidy pass used to be — and none has
-        # a chosen interval, so each reports the default it actually runs at.
+        # Out of the box every pass runs — each writes only derived files — and
+        # none has a chosen interval, so each reports the default it actually
+        # runs at.
         upkeep = (await c.get("/api/v1/internal-engine-config")).json()["upkeep"]
-        assert [upkeep[k]["enabled"] for k in ("aggregate", "distil", "curate")] == [
-            True,
-            True,
-            True,
-        ]
+        assert [upkeep[k]["enabled"] for k in ("aggregate", "distil")] == [True, True]
         assert all(upkeep[k]["interval_s"] is None for k in upkeep)
         assert upkeep["aggregate"]["default_interval_s"] == 3600
 
         # One pass at a time, and each half independent of the other.
         r = await c.put(
-            "/api/v1/internal-engine-config/upkeep", json={"pass": "curate", "enabled": False}
+            "/api/v1/internal-engine-config/upkeep", json={"pass": "distil", "enabled": False}
         )
         assert r.status_code == 200, r.text
-        assert r.json()["upkeep"]["curate"]["enabled"] is False
+        assert r.json()["upkeep"]["distil"]["enabled"] is False
 
         r = await c.put(
             "/api/v1/internal-engine-config/upkeep",
@@ -818,7 +774,7 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
         )
         assert r.json()["upkeep"]["aggregate"]["interval_s"] == 900
         # ...and the pass it did not name is exactly as it was left.
-        assert r.json()["upkeep"]["curate"]["enabled"] is False
+        assert r.json()["upkeep"]["distil"]["enabled"] is False
 
         # Back to the pass's own interval — which a null cannot say.
         r = await c.put(
@@ -835,7 +791,7 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
         # the model over the user's files.
         r = await c.put(
             "/api/v1/internal-engine-config/upkeep",
-            json={"pass": "distil", "interval_s": 5},
+            json={"pass": "aggregate", "interval_s": 5},
         )
         assert r.status_code == 422, r.text
 
@@ -1155,221 +1111,17 @@ def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatc
         assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == []
 
 
-async def _flags(uid: str) -> tuple[bool, bool]:
-    """``(internal_default, transcribe_default)`` as the connection stores them.
+async def _flag(uid: str) -> bool:
+    """``transcribe_default`` as the connection stores it.
 
-    Read off the service rather than the wire because ``ProviderOut`` reports
-    only the internal-engine flag: the transcription one has no page yet, and a
-    test that could not see it could not tell "the flag moved" from "the route
-    did nothing". By uid, like every other read: the service takes no label.
+    Read off the service. By uid, like every other read: the service takes no
+    label.
     """
     from coffer.domain.provider.config import ProviderConfig
     from coffer.surfaces.http.provider_dependencies import get_provider_service
 
     cfg = ProviderConfig.model_validate((await get_provider_service().get(uid)).config)
-    return cfg.internal_default, cfg.transcribe_default
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="bound how long one call to Coffer's own model may take",
-)
-async def test_model_timeout_is_bounded_and_null_returns_the_default(tmp_path, monkeypatch):
-    """The bound on one call to Coffer's own model, chosen and given back.
-
-    Out of range is REFUSED rather than clamped: this is the operator asking
-    for a number, and a request silently turned into a different number is
-    worse than a rejection they can read. The background passes clamp instead,
-    so a row an older build wrote cannot take a pass down.
-    """
-    from httpx import ASGITransport, AsyncClient
-
-    app = _app(tmp_path, monkeypatch, 59950)
-    set_active_token(TOKEN)
-    async with (
-        app.router.lifespan_context(app),
-        AsyncClient(
-            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
-        ) as c,
-    ):
-        # Nothing chosen: the row says so, and says what runs meanwhile — so a
-        # surface can name the default instead of showing a blank.
-        body = (await c.get("/api/v1/internal-engine-config")).json()
-        assert body["model_timeout_s"] is None
-        assert body["default_model_timeout_s"] == 60
-
-        r = await c.put("/api/v1/internal-engine-config/timeout", json={"seconds": 120})
-        assert r.status_code == 200, r.text
-        assert r.json()["model_timeout_s"] == 120
-
-        for refused in (1, 6000):
-            r = await c.put("/api/v1/internal-engine-config/timeout", json={"seconds": refused})
-            assert r.status_code == 422, r.text
-        # ...and a refused write left the chosen bound exactly as it stood.
-        assert (await c.get("/api/v1/internal-engine-config")).json()["model_timeout_s"] == 120
-
-        # null is the way back to the default, and the only one: the default
-        # lives in one place so raising it later reaches every vault that never
-        # chose rather than none of them.
-        r = await c.put("/api/v1/internal-engine-config/timeout", json={"seconds": None})
-        assert r.status_code == 200, r.text
-        assert r.json()["model_timeout_s"] is None
-        assert r.json()["default_model_timeout_s"] == 60
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="speech-to-text runs on its own connection and its own model",
-)
-async def test_transcribe_model_is_chosen_and_cleared_by_an_empty_string(tmp_path, monkeypatch):
-    """Choosing the speech-to-text model, and stopping transcription.
-
-    Stopping is a real answer rather than a failure: with no model, a turn
-    carrying audio hands the agent the file untouched and the recording never
-    leaves this machine. An empty string means it as clearly as a null does,
-    because a form field a user emptied sends one.
-    """
-    from httpx import ASGITransport, AsyncClient
-
-    app = _app(tmp_path, monkeypatch, 59960)
-    set_active_token(TOKEN)
-    async with (
-        app.router.lifespan_context(app),
-        AsyncClient(
-            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
-        ) as c,
-    ):
-        assert (await c.get("/api/v1/internal-engine-config")).json()["transcribe_model"] is None
-
-        r = await c.put(
-            "/api/v1/internal-engine-config/transcribe-model", json={"model": "hears-things"}
-        )
-        assert r.status_code == 200, r.text
-        assert r.json()["transcribe_model"] == "hears-things"
-
-        r = await c.put("/api/v1/internal-engine-config/transcribe-model", json={"model": "   "})
-        assert r.status_code == 200, r.text
-        assert r.json()["transcribe_model"] is None
-
-        await c.put(
-            "/api/v1/internal-engine-config/transcribe-model", json={"model": "hears-things"}
-        )
-        r = await c.put("/api/v1/internal-engine-config/transcribe-model", json={"model": None})
-        assert r.json()["transcribe_model"] is None
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="speech-to-text runs on its own connection and its own model",
-)
-async def test_setting_a_new_transcribe_default_clears_the_previous_one(tmp_path, monkeypatch):
-    """At most one connection globally is the one speech is transcribed on."""
-    from httpx import ASGITransport, AsyncClient
-
-    app = _app(tmp_path, monkeypatch, 59970)
-    set_active_token(TOKEN)
-    async with (
-        app.router.lifespan_context(app),
-        AsyncClient(
-            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
-        ) as c,
-    ):
-        first = (await c.post("/api/v1/providers", json=_anthropic_body(name="first"))).json()[
-            "uid"
-        ]
-        second = (
-            await c.post(
-                "/api/v1/providers",
-                json={
-                    "name": "second",
-                    "protocol": "openai",
-                    "base_url": "https://gw/v1",
-                    "secret_value": "sk-2",
-                },
-            )
-        ).json()["uid"]
-
-        r = await c.post(f"/api/v1/providers/{first}/transcribe-default")
-        assert r.status_code == 200, r.text
-        assert await _flags(first) == (False, True)
-
-        r = await c.post(f"/api/v1/providers/{second}/transcribe-default")
-        assert r.status_code == 200, r.text
-        assert await _flags(second) == (False, True)
-        assert await _flags(first) == (False, False)
-
-        # The move is audited under its own event type, so "why is voice going
-        # somewhere else" has an answer that names both ends. Both ends are
-        # LABELS — the entry is written for a human to read, and the row it
-        # belongs to travels as the resource, so the trail survives a rename of
-        # either connection.
-        events = (
-            await c.get("/api/v1/audit", params={"event_type": "provider_transcribe_default_set"})
-        ).json()["entries"]
-        assert {"from": "first", "to": "second"} in [e["details"] for e in events]
-
-        # A connection this vault does not have is a 404, not a silent no-op.
-        assert (
-            await c.post("/api/v1/providers/0123456789abcdef0123456789abcdef/transcribe-default")
-        ).status_code == 404
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="internal-engine",
-    scenario="speech-to-text runs on its own connection and its own model",
-)
-async def test_the_two_default_flags_never_move_each_other(tmp_path, monkeypatch):
-    """Transcription and the internal engine are told apart, both ways.
-
-    They look like one setting and are not: the endpoints serve different
-    models, and a gateway that answers chat completions commonly serves no
-    ``/audio/transcriptions`` at all. A route that moved both would aim voice
-    at a 404 the moment an operator chose an engine.
-    """
-    from httpx import ASGITransport, AsyncClient
-
-    app = _app(tmp_path, monkeypatch, 59980)
-    set_active_token(TOKEN)
-    async with (
-        app.router.lifespan_context(app),
-        AsyncClient(
-            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
-        ) as c,
-    ):
-        thinks = (await c.post("/api/v1/providers", json=_anthropic_body(name="thinks"))).json()[
-            "uid"
-        ]
-        hears = (
-            await c.post(
-                "/api/v1/providers",
-                json={
-                    "name": "hears",
-                    "protocol": "openai",
-                    "base_url": "https://gw/v1",
-                    "secret_value": "sk-2",
-                },
-            )
-        ).json()["uid"]
-
-        await c.post(f"/api/v1/providers/{thinks}/internal-default")
-        await c.post(f"/api/v1/providers/{hears}/transcribe-default")
-        assert await _flags(thinks) == (True, False)
-        assert await _flags(hears) == (False, True)
-
-        # Re-marking each flag on the connection that already carries the OTHER
-        # one leaves that other one alone: the flags are independent, so one
-        # connection may carry both without either route touching the twin.
-        await c.post(f"/api/v1/providers/{thinks}/transcribe-default")
-        assert await _flags(thinks) == (True, True)
-        assert await _flags(hears) == (False, False)
-
-        await c.post(f"/api/v1/providers/{hears}/internal-default")
-        assert await _flags(hears) == (True, False)
-        assert await _flags(thinks) == (False, True)
+    return cfg.transcribe_default
 
 
 def test_provider_out_carries_the_resource_title(tmp_path, monkeypatch):

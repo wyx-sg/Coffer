@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu
-**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), spec vault-sync, spec channels, PRs #66, #381
+**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), spec vault-sync, spec channels, PRs #66, #381
 
 ## Context
 
@@ -17,10 +17,8 @@ whole life:
   vault). The two need opposite treatment, and the only way to tell them apart
   is whether the remote already knows this machine.
 - **Bindings that name a machine.** A channel's `runs_on`
-  (spec channels "Bind each channel to the one machine that runs it") and the
-  curation owner
-  ([An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md))
-  are machine ids inside documents every machine holds.
+  (spec channels "Bind each channel to the one machine that runs it") is a
+  machine id inside a document every machine holds.
 - **A registry the user can read**: which machines share this vault, when each
   last converged, and whether each holds the same master key.
 
@@ -159,7 +157,7 @@ machine that has not joined applies and pushes nothing.
 ## Consequences
 
 - A reinstalled machine rejoins as itself: its descriptor is updated rather
-  than duplicated, and channel and curation-owner bindings keep resolving.
+  than duplicated, and channel bindings keep resolving.
 - The commit published in a descriptor is a record for that machine's own
   recovery, never an input to another machine's round.
 - A machine on the fallback id is warned in the machines table that deleting
@@ -169,4 +167,4 @@ machine that has not joined applies and pushes nothing.
   changes.
 - Bindings that name a machine must distinguish "another machine in the
   registry" from "a machine the registry does not hold"; the second is a fault
-  to report, which both the channel binding and the curation owner do.
+  to report, as the channel binding does.

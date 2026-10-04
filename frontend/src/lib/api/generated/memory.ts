@@ -41,6 +41,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/partitions/{uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Partition
+         * @description One partition, with the hand-off that tidies it (spec memory "Hand a
+         *     partition's tidying to the agent"). An unknown uid is 404.
+         */
+        get: operations["get_partition_api_v1_memory_partitions__uid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory/partitions/{uid}/delivered": {
         parameters: {
             query?: never;
@@ -122,8 +143,8 @@ export interface paths {
         get: operations["get_note_api_v1_memory_partitions__uid__notes__slug__get"];
         /**
          * Save Note
-         * @description A person's edit from the page's editor ("Edit a memory in the web UI or
-         *     on disk"): the body is replaced, the frontmatter kept, ``updated_at``
+         * @description A person's edit from the page's editor ("Edit a memory in the web UI or in an editor"): the
+         *     body is replaced, the frontmatter kept, ``updated_at``
          *     stamped, and a stale fingerprint is a 409 ``MEMORY_NOTE_CONFLICT`` that
          *     carries the note as it is now and leaves the file alone.
          */
@@ -205,6 +226,26 @@ export interface paths {
          *     workers' scheduled passes.
          */
         post: operations["sync_api_v1_memory_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/tidy-handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tidy Handoff
+         * @description The prompt that hands every partition's tidying to the person's agent.
+         */
+        get: operations["tidy_handoff_api_v1_memory_tidy_handoff_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -325,6 +366,15 @@ export interface components {
             root: components["schemas"]["FileNodeOut"];
         };
         /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
+        /**
          * HookFireIn
          * @description One fire of Coffer's memory hook, as ``coffer memory hook`` relays the
          *     agent's own hook input.
@@ -370,8 +420,8 @@ export interface components {
          * NoteOut
          * @description One note, whole: Coffer's own text and the entries behind it.
          *
-         *     ``body`` is Coffer's writing, not a quote of any source ("Write notes in
-         *     Coffer's own words") — the
+         *     ``body`` is Coffer's writing, not a quote of any source ("Distil each raw entry into a note
+         *     mechanically") — the
          *     sources are named in ``origins`` and kept verbatim under the partition's
          *     ``.raw/``, which is what keeps a paraphrase traceable.
          */
@@ -505,6 +555,7 @@ export interface components {
             repository_path: string;
             /** Sources */
             sources: string[];
+            tidy_handoff: components["schemas"]["HandoffOut"];
             /** Uid */
             uid: string;
             /** Unresolvable */
@@ -655,6 +706,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartitionListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_partition_api_v1_memory_partitions__uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartitionOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1035,6 +1128,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AggregationResultOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    tidy_handoff_api_v1_memory_tidy_handoff_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

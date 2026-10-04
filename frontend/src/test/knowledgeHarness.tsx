@@ -1,10 +1,9 @@
 // frontend/src/test/knowledgeHarness.tsx — renders the Knowledge page for tests.
 //
 // Test-only (imported by `*.test.tsx` files, never by the app): the page at a
-// real address inside the four routes it answers to, with a fresh query
-// client, the toast and tooltip providers the shell mounts, and the network
-// boundary — `@/lib/api/knowledge`, the engine config and the in-flight list —
-// answered from `knowledgeTestData.ts`. Each test file mocks those modules
+// real address inside the routes it answers to, with a fresh query client, the
+// toast and tooltip providers the shell mounts, and the network boundary —
+// `@/lib/api/knowledge` — answered from `knowledgeTestData.ts`. Each test file mocks those modules
 // itself (vi.mock is hoisted per file) and calls `answerFromFixtures` to wire
 // the default answers.
 import { render } from "@testing-library/react";
@@ -15,8 +14,7 @@ import { vi } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import * as knowledgeApi from "@/lib/api/knowledge";
-import { internalEngineApi } from "@/lib/api/internalEngine";
-import * as upkeepApi from "@/lib/api/upkeep";
+import { readHandoffState } from "@/lib/conversations/handoff";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 
 import {
@@ -24,7 +22,6 @@ import {
   DIFF,
   EDIT,
   FILES,
-  ITEM,
   OTHER,
   PASS,
   TREES,
@@ -36,6 +33,19 @@ import {
 function Where() {
   const location = useLocation();
   return <output data-testid="where">{`${location.pathname}${location.search}`}</output>;
+}
+
+/** The draft a hand-off opens, rendered as what it carries (agent, prompt, whether it sends itself). */
+// eslint-disable-next-line react-refresh/only-export-components
+function Draft() {
+  const handoff = readHandoffState(useLocation().state);
+  return (
+    <output data-testid="draft">
+      {handoff
+        ? `${handoff.agentKey}|${handoff.autoSend ? "send" : "draft"}|${handoff.prompt}`
+        : "empty"}
+    </output>
+  );
 }
 
 export function renderKnowledge(path: string) {
@@ -50,9 +60,9 @@ export function renderKnowledge(path: string) {
           <MemoryRouter initialEntries={[path]}>
             <Routes>
               <Route path="/knowledge" element={page} />
-              <Route path="/knowledge/changes/:version" element={page} />
               <Route path="/knowledge/:uid" element={page} />
               <Route path="/knowledge/:uid/:tab" element={page} />
+              <Route path="/conversations/new" element={<Draft />} />
               <Route path="/settings/:tab" element={<p>settings open</p>} />
               <Route path="/activity" element={<p>activity open</p>} />
             </Routes>
@@ -65,8 +75,8 @@ export function renderKnowledge(path: string) {
   return qc;
 }
 
-/** The mocked modules' default answers: the fixtures, a model set, nothing in flight. */
-export function answerFromFixtures({ modelSet = true }: { modelSet?: boolean } = {}) {
+/** The mocked module's default answers: the fixtures. */
+export function answerFromFixtures() {
   const api = vi.mocked(knowledgeApi);
   api.listCollections.mockResolvedValue({ collections: [COLLECTION, OTHER] });
   api.getTree.mockImplementation(
@@ -79,20 +89,7 @@ export function answerFromFixtures({ modelSet = true }: { modelSet?: boolean } =
   });
   api.listChanges.mockResolvedValue({
     changes: [PASS, EDIT],
-    waiting: [
-      {
-        collection: COLLECTION.name,
-        path: ITEM.path,
-        title: ITEM.title,
-        submitted_by: "codex",
-        submitted_at: new Date().toISOString(),
-      },
-    ],
     next_cursor: null,
-  });
-  api.getChange.mockResolvedValue({
-    change: PASS,
-    diffs: PASS.documents.map((d) => ({ ...d, diff: DIFF })),
   });
   api.getHistory.mockResolvedValue({ path: "", versions: [] });
   api.getVersionDiff.mockImplementation(async (path: string, version: string) => ({
@@ -103,14 +100,4 @@ export function answerFromFixtures({ modelSet = true }: { modelSet?: boolean } =
     removed: 1,
     diff: DIFF,
   }));
-  vi.mocked(internalEngineApi.get).mockResolvedValue({
-    model: modelSet ? "claude-haiku" : null,
-    curate_owner_machine_id: null,
-    default_model_timeout_s: 60,
-    model_timeout_s: null,
-    transcribe_model: null,
-    updated_at: null,
-    upkeep: {},
-  });
-  vi.mocked(upkeepApi.listUpkeepRuns).mockResolvedValue({ runs: [] });
 }

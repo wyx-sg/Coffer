@@ -2,7 +2,7 @@
 //
 // The rule that is the channel's own (spec channels, "Bind each channel to the one machine that runs it"):
 // the daemon's `runs_here` outranks anything this code could work out for
-// itself. The four states and the pick-list they share with the curation owner
+// itself. The four states and the pick-list they share
 // are tested in `src/lib/machineBinding.test.ts`; what is left here is only
 // what `runs_here` changes, plus proof that it does not change the rest.
 import { describe, expect, test } from "vitest";

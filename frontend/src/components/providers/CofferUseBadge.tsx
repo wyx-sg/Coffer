@@ -1,20 +1,19 @@
 // src/components/providers/CofferUseBadge.tsx — the badge that says Coffer ITSELF runs on a provider.
 //
-// The `internal_default` provider carries "Coffer · background model", the
-// `transcribe_default` one "Coffer · speech to text" (spec provider-switching
-// "Offer every connection operation over REST and in the web UI"). Each flag sits on
-// one provider with no fallback, so the library must answer "which one does
-// Coffer use?" without a trip to Settings. In the narrow list pane the badge
+// The `transcribe_default` provider carries "Coffer · speech to text" (spec
+// provider-switching "Offer every connection operation over REST and in the
+// web UI"). The flag sits on one provider, so the library must answer "which
+// one does Coffer use?" without a trip to Settings. In the narrow list pane the badge
 // is a small chip beside the agent marks; its name is its accessible label and
 // its tooltip, which also says where it is changed: Settings › General.
 import { useTranslation } from "react-i18next";
-import { Cpu, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type CofferUse = "engine" | "transcribe";
+export type CofferUse = "transcribe";
 
-const ICON = { engine: Cpu, transcribe: Mic } as const;
+const ICON = { transcribe: Mic } as const;
 
 export function CofferUseBadge({ use }: { use: CofferUse }) {
   const { t } = useTranslation();

@@ -75,7 +75,7 @@ Coffer 保留三类设计文本，各司其职：
 | 工具过多：列出按用量排序的一部分，其余靠搜索 | [`tool-overload-tier-the-list-search-the-rest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md) |
 | 评测：选择性捕获、人工整理，以及确定性的回归门禁 | [`eval-capture-and-regression-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md) |
 
-## 智能体、提供商与内部引擎 {#agents-providers-the-internal-engine}
+## 智能体与提供商 {#agents-providers}
 
 详见：[智能体](/zh/guides/agents)、[模型提供商](/zh/guides/providers)、[智能体切面](/zh/architecture/agent-facets)、[模型代理](/zh/architecture/model-proxy)。
 
@@ -89,8 +89,7 @@ Coffer 保留三类设计文本，各司其职：
 | API 密钥类提供商经由一个独立的本地模型代理访问，代理原样转发字节 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
 | 用量在代理处计量；订阅制智能体不计量 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
 | 模型目录从已安装的智能体读回 | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
-| Coffer 自己的模型是内部引擎，不是角色，也不是工具 | [`coffer-model-is-an-internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-model-is-an-internal-engine.md) |
-| 引擎拥有自己的模型；它的接入地址借自一个被标记的连接 | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
+| 语音转文字的模型是一项设置；它的接入地址借自一个被标记的连接 | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
 
 ## 对话与消息渠道 {#chat-channels}
 
@@ -120,7 +119,7 @@ Coffer 保留三类设计文本，各司其职：
 | 技能以指向唯一主目录的目录链接到达智能体 | [`cross-platform-skill-delivery`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cross-platform-skill-delivery.md) |
 | Coffer 把自己的说明书作为技能资源随包发布 | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
 | 知识是一个 Markdown 文件目录，而不是索引 | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
-| 知识整理把新材料合并进文档 | [`knowledge-curation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-curation.md) |
+| 整理知识与记忆是智能体的工作 | [`tidying-knowledge-and-memory-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md) |
 | 聚合智能体的记忆，从不写回 | [`aggregate-agent-memory-never-write-it`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) |
 | 记忆在三个时刻进入会话：开始时一份索引、每次提示时检索、踩到已知陷阱前一道防护 | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) |
 
@@ -133,7 +132,6 @@ Coffer 保留三类设计文本，各司其职：
 | 同步只拉取和推送保险库仓库；干净的合并直接应用，任何冲突都停下来交给人 | [`sync-applies-clean-merges-and-stops-on-any-conflict`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md) |
 | 会丢失过多内容的一轮同步会被保留，双向都是如此，统计的是丢失而不是移动 | [`sync-deletion-breaker`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md) |
 | 机器由其主机自身 ID 的哈希标识，并在目录树中拥有一个描述文件 | [`sync-machine-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-machine-identity.md) |
-| 无人值守地改写已同步内容的任务，只在一台指定的所有者机器上运行 | [`single-owner-machine-for-unattended-rewrites`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/single-owner-machine-for-unattended-rewrites.md) |
 | 同步不携带派生输出；每台机器自己渲染 | [`sync-withholds-derived-output`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-withholds-derived-output.md) |
 | 主密钥存放在只有 Coffer 签名二进制能读取的钥匙串访问组中；密钥在保险库里仍以信封加密保存 | [`master-key-lives-in-the-macos-keychain`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md) |
 | 资源以不透明引用来引用密钥，只在使用的那一刻解析 | [`credential-references`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credential-references.md) |

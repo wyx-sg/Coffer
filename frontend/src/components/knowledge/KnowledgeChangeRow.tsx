@@ -1,10 +1,9 @@
 // frontend/src/components/knowledge/KnowledgeChangeRow.tsx
 //
 // One change on the Recent changes timeline (boards 5.1.21–5.1.23): the
-// writer's mark, who and what in words — "Curation curated Codex's item into
-// `daemon/port.md`" — its time, and a line under it saying more where the
-// change's fields allow. A curation pass links to what it did (See the pass,
-// where it can be undone) and is marked once undone. A delete — a document or
+// writer's mark, who and what in words — "Codex edited `daemon/port.md`" — its
+// time, and a line under it saying more where the change's fields allow. A
+// change an earlier curation pass made keeps its curation label. A delete — a document or
 // a whole collection — carries Restore, which puts back exactly what it
 // removed as a new change by you; it is refused in place, on the row, when the
 // path or the collection's name is taken again (spec knowledge "Restore a
@@ -17,64 +16,36 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChangeOut, CollectionOut } from "@/lib/api/knowledge";
-import {
-  feedTime,
-  feedWords,
-  isRestorableDelete,
-  whenLabel,
-  writerLabel,
-} from "@/lib/knowledge/changes";
-import {
-  changePath,
-  collectionOfPath,
-  collectionPath,
-  pathInCollection,
-} from "@/lib/knowledge/routes";
+import { feedTime, feedWords, isRestorableDelete, writerLabel } from "@/lib/knowledge/changes";
+import { collectionOfPath, collectionPath, pathInCollection } from "@/lib/knowledge/routes";
 import { useRestoreDeleted } from "@/lib/hooks/useKnowledgeHistory";
 
 interface Props {
   change: ChangeOut;
   collections: CollectionOut[];
-  /** A later change undid this pass. */
-  undone: boolean;
   /** A later change restored what this delete removed. */
   restored: boolean;
 }
 
 /** The line under a row, from the change's own fields. */
-function detailOf(
-  t: ReturnType<typeof useTranslation>["t"],
-  change: ChangeOut,
-  locale: string,
-): string | null {
+function detailOf(t: ReturnType<typeof useTranslation>["t"], change: ChangeOut): string | null {
   switch (change.operation) {
     case "delete":
       return t("knowledge.recent.detail.delete");
     case "remove":
       return t("knowledge.recent.detail.remove", { count: change.documents.length });
-    case "undo":
-      return t("knowledge.recent.detail.undo");
     case "restore":
       return t("knowledge.recent.detail.restore");
     case "sync": {
       const lines = change.documents.reduce((n, d) => n + d.added + d.removed, 0);
       return t("knowledge.recent.detail.sync", { count: lines });
     }
-    case "pass":
-      // How an item that could not go through the model ended, from the pass's
-      // status: too large for one pass, or cut off until it gave up (only a
-      // pass that gave up leaves a change behind for `truncated`).
-      if (change.status === "too_large") return t("knowledge.recent.detail.too_large");
-      if (change.status === "truncated") return t("knowledge.recent.detail.gave_up");
-      return change.item
-        ? t("knowledge.recent.detail.pass", { when: whenLabel(t, change.time, locale) })
-        : null;
     default:
       return null;
   }
 }
 
-export function KnowledgeChangeRow({ change, collections, undone, restored }: Props) {
+export function KnowledgeChangeRow({ change, collections, restored }: Props) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const restore = useRestoreDeleted();
@@ -82,8 +53,7 @@ export function KnowledgeChangeRow({ change, collections, undone, restored }: Pr
   const uidOf = new Map(collections.map((c) => [c.name, c.uid]));
   const docUid = document ? uidOf.get(collectionOfPath(document)) : undefined;
   const removed = change.documents.every((d) => d.status === "removed");
-  const isPass = change.operation === "pass";
-  const detail = detailOf(t, change, i18n.language);
+  const detail = detailOf(t, change);
   const collectionName = change.collections[0] ?? "";
 
   const docLabel = document ? pathInCollection(document) : null;
@@ -118,19 +88,6 @@ export function KnowledgeChangeRow({ change, collections, undone, restored }: Pr
               </span>
             ) : null}
             <span className="ml-auto flex shrink-0 items-baseline gap-3">
-              {isPass && undone ? (
-                <span className="rounded-sm bg-chip px-1.5 text-2xs text-text-muted">
-                  {t("knowledge.pass.undone")}
-                </span>
-              ) : null}
-              {isPass ? (
-                <Link
-                  to={changePath(change.version)}
-                  className="text-xs font-label text-accent-text"
-                >
-                  {t("knowledge.recent.seePass")}
-                </Link>
-              ) : null}
               {isRestorableDelete(change) ? (
                 restored ? (
                   <span className="text-xs text-text-muted">{t("knowledge.recent.restored")}</span>

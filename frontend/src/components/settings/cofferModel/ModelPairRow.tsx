@@ -1,8 +1,8 @@
-// src/components/settings/cofferModel/ModelPairRow.tsx — one picker of the Coffer's model section.
+// src/components/settings/cofferModel/ModelPairRow.tsx — one picker of the Speech-to-text section.
 //
 // A provider, then a model from that provider's list, a Test button, and the
-// picker's state on one line under its description (spec web-ui "Choose
-// Coffer's model in Settings › General"):
+// picker's state on one line under its description (spec internal-engine
+// "Show the speech-to-text pair in Settings › General"):
 //
 //   • not set — either half missing; the caller says what Coffer does without it
 //   • set     — both halves chosen, not tested in this visit
@@ -58,8 +58,6 @@ export interface ModelPairRowProps {
   failingTail: string;
   /** How Test checks the pair: a chat request, or the endpoint's model list. */
   testMode?: PairTestMode;
-  /** Rendered under the row (the engine's call bound). */
-  children?: ReactNode;
 }
 
 export function ModelPairRow(props: ModelPairRowProps) {
@@ -151,7 +149,6 @@ export function ModelPairRow(props: ModelPairRowProps) {
           {test.isPending ? t("settings.cofferModel.testing") : t("settings.cofferModel.test")}
         </Button>
       </SettingRow>
-      {props.children}
     </div>
   );
 }

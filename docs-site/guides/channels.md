@@ -223,7 +223,7 @@ Send photos, files, voice messages and other media as you would to a person. Eac
 | --- | --- |
 | A photo or sticker | Claude Code sees the image. Codex gets the file path. |
 | A PDF, office document, epub or rtf | The extracted text, in a `[Document: <name>]` block. If extraction is unavailable, the file path. |
-| A voice message or audio | A transcript, when **Speech to text** is on under **Settings › General → Coffer's model**. Otherwise the audio file. |
+| A voice message or audio | A transcript, when **Speech to text** is on under **Settings › General → Speech to text**. Otherwise the audio file. |
 | Any other file | The file path. |
 | A location, a contact card | Nothing to download: the bot asks for text, a photo or a file. |
 

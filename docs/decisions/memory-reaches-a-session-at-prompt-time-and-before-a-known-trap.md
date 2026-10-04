@@ -7,7 +7,7 @@
 
 ## Context
 
-Coffer's memory layer reads what Claude Code and Codex learned, distils it into
+Coffer's memory layer reads what Claude Code and Codex learned, turns it into
 notes of its own, and hands them back
 ([Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)).
 The first design handed back one thing: the **whole index at session start**,
@@ -107,7 +107,7 @@ the strongest mechanism in the eval, and it was tried in the product: a person c
 command in a session was denied once with the note as the reason. In use it
 never operated. Over thirty days on the maintainer's machine memory was
 delivered **414 times, a command was held zero times, and no trigger was ever
-armed**. Four triggers existed, all proposed by the distil pass; the web UI
+armed**. Four triggers existed, all proposed by the model-driven distil pass Coffer then ran; the web UI
 had no place to arm one, so nothing a person could reach turned a proposal
 into a guard. One of the four matched browser tool names against shell
 commands, where it could never match what it meant. The 18/18 above is a

@@ -16,15 +16,16 @@ surface no one asked for.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
+
+from coffer.application.knowledge.tidy_handoff import collection_tidy_prompt
+from coffer.domain.knowledge.entry import CollectionEntry
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
 class CollectionOut(BaseModel):
-    #: The collection's identity — what the curate route and every other
-    #: collection-addressed route take. Carried on the list payload so a page
-    #: can act on a row it has just rendered without a second lookup.
+    #: The collection's identity — what every collection-addressed route takes. Carried on the list
+    #: payload so a page can act on a row it has just rendered without a second lookup.
     uid: str
     #: A mutable label, and also the name of the directory on disk. Editable
     #: through PATCH, which moves the directory with it.
@@ -32,18 +33,29 @@ class CollectionOut(BaseModel):
     #: First paragraph of the collection's ``README.md`` ("Read a collection's
     #: description from its README").
     description: str
-    #: Documents an agent can read today, and material still waiting in the
-    #: inbox to be merged into them ("Hide dot-prefixed entries except the
-    #: inbox") — counted apart because the second
-    #: is exactly what an agent cannot see yet.
+    #: Documents an agent can read.
     document_count: int = 0
-    pending_count: int = 0
     #: The collection directory's absolute path — what Reveal folder opens
     #: ("Return absolute paths on reads").
     folder_path: str = ""
     #: When a document in the collection was last written (ISO 8601, UTC);
     #: ``null`` when it holds none — the Overview's "edited today 13:30".
     updated_at: str | None = None
+    #: The prompt that hands tidying this collection to the person's agent ("Hand a
+    #: tidy to the person's agent").
+    tidy_handoff: HandoffOut
+
+
+def collection_out(entry: CollectionEntry) -> CollectionOut:
+    return CollectionOut(
+        uid=entry.uid,
+        name=entry.name,
+        description=entry.description,
+        document_count=entry.document_count,
+        folder_path=entry.folder_path,
+        updated_at=entry.updated_at,
+        tidy_handoff=HandoffOut(prompt=collection_tidy_prompt(entry)),
+    )
 
 
 class CollectionListOut(BaseModel):
@@ -59,10 +71,6 @@ class DirectoryOut(BaseModel):
     path: str
     name: str
     file_count: int
-    #: True for the collection's ``.inbox`` and what waits in it — material a
-    #: person may read but not edit or delete ("Hide dot-prefixed entries
-    #: except the inbox").
-    inbox: bool = False
 
 
 class FileSummaryOut(BaseModel):
@@ -71,10 +79,6 @@ class FileSummaryOut(BaseModel):
     description: str
     actor: str
     updated_at: str
-    #: True for the collection's ``.inbox`` and what waits in it — material a
-    #: person may read but not edit or delete ("Hide dot-prefixed entries
-    #: except the inbox").
-    inbox: bool = False
 
 
 class TreeOut(BaseModel):
@@ -95,18 +99,10 @@ class FileOut(BaseModel):
     #: absolute paths on reads").
     file_path: str
     folder_path: str
-    #: When curation last settled this document as it now reads; empty when it
-    #: never has, or the document changed since ("Settle an item only after its
-    #: pass completes") — which is what the sweep comes back for.
-    curated_at: str = ""
     #: sha256 hex of the file's bytes as read; hand it back as
     #: ``expected_fingerprint`` to save an edit ("Save a document edited in the
     #: web UI").
     fingerprint: str
-    #: True for the collection's ``.inbox`` and what waits in it — material a
-    #: person may read but not edit or delete ("Hide dot-prefixed entries
-    #: except the inbox").
-    inbox: bool = False
 
 
 class FileSave(BaseModel):
@@ -121,89 +117,10 @@ class FileSave(BaseModel):
     expected_fingerprint: str = Field(min_length=1)
 
 
-class CurationRequest(BaseModel):
-    #: One document to curate, knowledge-root-relative: exactly one pass runs,
-    #: over it. Omitted, Curate now runs a pass per pending item — inbox items
-    #: oldest first, then documents edited since curation last settled them —
-    #: until none is left ("Run curation on a sweep and on demand").
-    document: str | None = None
-
-
-class CurationOut(BaseModel):
-    #: ``ok`` | ``truncated`` | ``no_model`` | ``up_to_date`` | ``too_large`` |
-    #: ``failed``. ``truncated`` is a pass the recursion limit cut off: it
-    #: carries the same counters as ``ok`` but its item stays pending ("Bound a
-    #: pass to eight writes", "Settle an item only after its pass completes") —
-    #: unless ``gave_up`` is set.
-    #: Every one of them is a 200: a collection with no model configured, or
-    #: with nothing pending, is an ordinary state of the feature and not a
-    #: fault of the request.
-    status: Literal["ok", "truncated", "no_model", "up_to_date", "too_large", "failed"]
-    #: The collection's NAME, not its uid. The caller sent the uid and still
-    #: holds it; what a pass report adds is something to render — "curated
-    #: shopee" — and that is the label (spec knowledge's contract,
-    #: ``CurationOut.collection``).
-    collection: str
-    #: The item the pass took, when it took one: an inbox item or a document.
-    item: str = ""
-    #: The internal model that ran it, so a surprising rewrite is traceable to
-    #: a model rather than to Coffer.
-    model: str = ""
-    written: int = 0
-    retired: int = 0
-    #: Writes the pass refused — a document naming another file ("Refuse
-    #: file-name references in documents"), or the eight-write bound ("Bound a
-    #: pass to eight writes"). Reported rather than swallowed, because a
-    #: pass that hit its bound has more to absorb than it managed.
-    refused: int = 0
-    documents_before: int = 0
-    documents_after: int = 0
-    #: The item-size ceiling, present only with ``status`` ``too_large``. Such
-    #: an item is never shown to the model and never left pending: material is
-    #: promoted as it stands (``promoted``), an edited document is settled
-    #: as seen (``stamped``).
-    limit: int = 0
-    #: Documents material was promoted into as it stood: the whole inbox with
-    #: ``status`` ``no_model`` ("Promote material directly when no model is
-    #: configured"), the one oversized item with ``status`` ``too_large``, or the
-    #: one item a pass gave up on (``gave_up``).
-    promoted: list[str] = Field(default_factory=list)
-    #: With ``status`` ``truncated``: this was the item's third cut-off in a
-    #: row, so the pass settled it instead of leaving it owed — material
-    #: promoted as it stood, an edited document settled ("Bound a pass to
-    #: eight writes").
-    gave_up: bool = False
-    #: The edited document settled as seen without a pass, present only with
-    #: ``status`` ``too_large`` when the oversized item was a document — there
-    #: is nothing to promote, and settling it stops the sweep re-offering it.
-    stamped: str = ""
-
-
-class CurationRunOut(BaseModel):
-    """What Curate now did: every pass it ran, in order (spec knowledge "Report
-    every pass outcome as a status")."""
-
-    #: The collection's NAME, as in each pass's report.
-    collection: str
-    #: ``up_to_date`` — nothing was pending and no pass ran; ``no_model`` — the
-    #: inbox was promoted as it stands; ``failed`` — the run stopped at a pass
-    #: that failed, the rest left pending; ``ok`` — it worked through
-    #: everything that was pending when it started.
-    status: Literal["ok", "failed", "no_model", "up_to_date"]
-    #: How many items were pending when the run started — the *m* of its
-    #: progress, which ``GET /api/v1/upkeep/runs`` reports as it goes.
-    total: int
-    #: Each pass's own outcome, in the order it ran.
-    passes: list[CurationOut]
-
-
 class IngestedDocumentOut(BaseModel):
-    #: The document the upload became when it was promoted on the spot (no
-    #: internal model to merge it); ``None`` while it waits to be merged.
-    path: str | None = None
+    #: The document the upload became.
+    path: str
     title: str
     description: str
     #: Which converter produced the Markdown.
     converter: str
-    #: True when the upload waits in the inbox for a pass to merge it.
-    pending: bool

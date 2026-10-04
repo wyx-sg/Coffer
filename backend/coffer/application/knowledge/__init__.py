@@ -1,7 +1,7 @@
 """Application layer for the one ``knowledge`` resource kind.
 
-One tree of Markdown documents per collection, which a person and the curation
-pass write together and an agent reads with its own tools. There is no
+One tree of Markdown documents per collection, which a person and the agents write
+together and an agent reads with its own tools. There is no
 retrieval facade and no reindex routine to re-export, because there is neither
 an index nor a knowledge tool (spec knowledge "Expose no knowledge tool").
 """

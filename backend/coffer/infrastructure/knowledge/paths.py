@@ -4,23 +4,21 @@ One root, one tree per collection: ``~/.coffer/vault/knowledge/<collection>/…`
 — inside the vault repository (ADR storage-is-five-classes-by-nature), so a
 collection's history is the vault's history under ``knowledge/``.
 Everything visible under a collection is a **document** — Markdown a person and
-Coffer's curation pass write together, in whatever nesting either of them
+Coffer and its agents write together, in whatever nesting either of them
 chooses (spec knowledge "Store each collection as one tree of Markdown files",
 "Allow nesting without giving it meaning"). The collection's ``README.md``
 sits at its root and describes it rather than being content in it (see "Keep
 the collection README out of the corpus").
 
-There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, where
-new material waits to be merged into the documents — an upload's extracted
-text, a file an agent wrote there, a migrated file. It is hidden because it is
-not knowledge yet: no count or catalogue names it, and each item is deleted the
-moment a pass has folded it in (see "Hide dot-prefixed entries except the
-inbox"). A person may still *look* at it — the tree lists a collection's inbox
-and the read route reads an item — and that one allowance is
-:func:`inbox_parts`, spelled out here rather than made by loosening the dot rule
-in :func:`check_segment`: :func:`resolve` and :func:`require_document` still
-refuse every hidden segment, so no write or delete reaches the inbox
-through them. Every other hidden entry is never addressable.
+There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, the drop
+zone where material lands before it is a document — an upload's extracted
+text, a file an agent wrote there. It is hidden because it is not knowledge
+yet: no count, listing or catalogue names it, and the next sweep promotes each
+item into a document (see "Hide dot-prefixed entries except the inbox").
+:func:`resolve` and :func:`require_document` refuse every hidden segment, so no
+read, write or delete reaches the inbox through them. The one exception is
+:func:`inbox_parts`, which lets a restore put back an inbox file a deleted
+collection held. Every other hidden entry is never addressable.
 
 There is no override: the root is resolved from ``HOME`` at every call, and a
 tree outside the vault would be a tree its history cannot see. Every segment
@@ -41,7 +39,7 @@ README_NAME = "README.md"
 #: The knowledge root's path inside the vault repository.
 VAULT_PREFIX = "knowledge"
 
-#: Where material waits to be merged into a collection's documents.
+#: Where material lands before it is promoted into a collection's documents.
 INBOX_DIR_NAME = ".inbox"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
@@ -172,7 +170,7 @@ def readme_path(collection: str) -> pathlib.Path:
 
 
 def inbox_dir(collection: str) -> pathlib.Path:
-    """Where a collection's unmerged material waits."""
+    """Where a collection's unpromoted material lands."""
     return collection_dir(collection) / INBOX_DIR_NAME
 
 
@@ -180,10 +178,9 @@ def inbox_parts(relpath: str) -> tuple[str, str | None] | None:
     """``(collection, item)`` when ``relpath`` names a collection's inbox, else ``None``.
 
     ``<collection>/.inbox`` gives ``item`` ``None``; ``<collection>/.inbox/<name>``
-    gives the item's file name. This is the one hidden path any surface may
-    address, and only to list or read it (see "Hide dot-prefixed entries except
-    the inbox"): the other segments go through the same guard as any path, and
-    the inbox holds no folders, so anything deeper is refused.
+    gives the item's file name. Only a restore addresses this path: the other
+    segments go through the same guard as any path, and the inbox holds no
+    folders, so anything deeper is refused.
     """
     cleaned = (relpath or "").strip().strip("/")
     segments = [s for s in cleaned.split("/") if s]

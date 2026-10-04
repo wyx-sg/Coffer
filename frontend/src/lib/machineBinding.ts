@@ -2,20 +2,15 @@
 // The pure half of "which machine does this?" — what a stored machine id IS
 // from where you are standing, and the option list a picker may offer for it.
 //
-// It started as the channel binding's own helper (spec channels "Bind each
-// channel to the one machine that runs it"). It lives in `lib/` now because a
-// second feature asks the same question of the same registry: the curation
-// pass names one machine allowed to rewrite the derived documents (spec
-// knowledge), and a vault whose owner is a machine nobody claims is dead in
-// exactly the way a channel bound to one is. Two copies of this rule would let
-// one surface call that a fault and the other call it normal.
+// It is the channel binding's helper (spec channels "Bind each channel to the
+// one machine that runs it"): a channel bound to a machine nobody claims is
+// dead, and every surface that reports or changes a binding resolves a stored
+// id by this one rule.
 //
-// What it deliberately does NOT carry is what each feature MEANS by the four
+// What it deliberately does NOT carry is what a feature MEANS by the four
 // states. A channel with no binding runs NOWHERE — answering a platform twice
-// cannot be walked back, so it fails closed. Curation with no owner runs
-// HERE — a vault that never named one is a vault with one machine, and being
-// wrong costs a duplicated document, not a bot talking to itself. The states
-// are shared; the labels and the consequences belong to the feature.
+// cannot be walked back, so it fails closed. The states are shared; the labels
+// and the consequences belong to the feature.
 //
 // It is also not reach. Reach (`enabled` + `scope`) says which AGENTS a
 // resource may drive and is set per machine; a binding says which MACHINE
@@ -70,10 +65,6 @@ export function bindingState(
   // rebuilt. Reporting "no machine claims this" from "we cannot say" is
   // overclaiming, and it overclaims the one state that is a fault.
   //
-  // Same rule, statement for statement, as
-  // `GlobalInternalEngineConfig.curation_owner` in the backend domain. Two
-  // facts of one shape resolving by two rules would leave a reader working out
-  // which surface to believe.
   if (known.length === 0) return "other";
   return known.includes(boundId) ? "other" : "unknown";
 }

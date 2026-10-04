@@ -95,7 +95,7 @@ Coffer 是**保管者，而不是所有者**。它把你的资产保存在你的
 
 **理由。** 派生索引必须和它的源头调和，而每次调和都是一个可能出错的地方。普通文件在你用自己的编辑器保存的那一刻就生效，每个智能体自己的 `Read` 和 `Grep` 都能读，能在 git 里 diff，Coffer 整个没了它们也还在。实测用量显示，智能体从不去用一个需要记着调用的检索工具，却一直在读文件。
 
-**在代码中。** 知识层不拥有任何表：一个知识集就是一个资源文件加一个目录。检索就是智能体自己的文件工具对绝对路径的操作；ripgrep 只作为一轮整理所用的进程内候选筛选器保留下来。一条导入契约禁止代码库引入向量存储和 embedding 库。见[知识](/zh/architecture/knowledge)和 [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)。
+**在代码中。** 知识层不拥有任何表：一个知识集就是一个资源文件加一个目录。检索就是智能体自己的文件工具对绝对路径的操作。一条导入契约禁止代码库引入向量存储和 embedding 库。见[知识](/zh/architecture/knowledge)和 [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)。
 
 **排除了。** 文档表；全文检索或向量索引；embedding 旁路服务；在任何其他存储里放一份文档副本。字面匹配只是占位，不是定论：语义检索可能会回来，但不会以文件副本的形式。
 

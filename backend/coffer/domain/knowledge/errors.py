@@ -45,7 +45,7 @@ class KnowledgeFileConflict(KnowledgeError):  # noqa: N818
     """A document changed on disk after the editor read it.
 
     Spec knowledge "Save a document edited in the web UI". The save is refused
-    and the file left as it is: a person's editor or a curation pass wrote it
+    and the file left as it is: a person's editor or an agent wrote it
     in between, and overwriting that silently would lose their change.
     """
 
@@ -103,28 +103,11 @@ class UploadTooLarge(KnowledgeError):  # noqa: N818
         self.limit = limit
 
 
-class KnowledgeCurationHeld(KnowledgeError):  # noqa: N818
-    """Curate now was refused because a sync round waits for a person.
-
-    Spec knowledge "Curate on one owner machine only" and vault-sync "Never
-    overlap a curation pass and a round": a rewrite is never piled onto the very
-    files a person is deciding between. Surfaces map this to 409.
-    """
-
-    code = "KNOWLEDGE_CURATION_HELD"
-
-    def __init__(self) -> None:
-        super().__init__(
-            "curation is held while a sync round waits for you — resolve the conflict "
-            "or confirmation in Sync, then run it again"
-        )
-
-
 class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818
     """No history can be read: git is not installed, or the knowledge root has
     no repository it could create.
 
-    Spec knowledge "Keep every document's history and undo a pass as a whole".
+    Spec knowledge "Keep every document's history".
     Writes never fail for this — they are simply not recorded — so only the
     history reads raise it.
     """
@@ -151,51 +134,6 @@ class KnowledgeVersionNotFound(KnowledgeError):  # noqa: N818
         super().__init__(f"no version {version!r}{where} in the knowledge history")
         self.version = version
         self.path = path
-
-
-class KnowledgeNotAPass(KnowledgeError):  # noqa: N818
-    """An undo aimed at a change that is not a curation pass. Any single
-    version is restored instead (spec knowledge "Keep every document's history
-    and undo a pass as a whole")."""
-
-    code = "KNOWLEDGE_NOT_A_PASS"
-
-    def __init__(self, version: str) -> None:
-        super().__init__(
-            f"{version!r} is not a curation pass; restore a document's version instead"
-        )
-        self.version = version
-
-
-class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
-    """Undoing a pass would overwrite a later change to one of its documents.
-
-    Refused, naming the document, rather than overwriting what came after
-    (spec knowledge "Keep every document's history and undo a pass as a
-    whole"). Nothing is written.
-    """
-
-    code = "KNOWLEDGE_UNDO_CONFLICT"
-
-    def __init__(
-        self, version: str, document: str, later: str, *, handoff: str | None = None
-    ) -> None:
-        super().__init__(
-            f"cannot undo this curation pass: {document!r} has changed since "
-            "(undo would overwrite that change)"
-        )
-        self.version = version
-        self.document = document
-        self.later = later
-        self.error_details: dict[str, object] = {
-            "version": version,
-            "document": document,
-            "later_version": later,
-        }
-        if handoff is not None:
-            # Undoing it by hand while keeping the later edits, as a prompt for
-            # the person's agent (application/knowledge/undo_handoff.py).
-            self.error_details["handoff"] = {"prompt": handoff}
 
 
 class KnowledgeNotADelete(KnowledgeError):  # noqa: N818

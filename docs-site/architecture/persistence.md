@@ -66,7 +66,7 @@ Which class a resource belongs to is declared by its kind, with a per-row refine
 ├── resources/<kind>/<name>.json        mcp_server, skill, channel, provider, knowledge
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
 ├── state/channel-peers/<channel>.json  paired identities per channel
-├── state/settings/internal-engine.json Coffer's model and upkeep settings (absent = defaults)
+├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
@@ -109,7 +109,6 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ├── reach.json                    {uid: {enabled, agents, projects}}
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
-├── curation.json                 the content each knowledge document had when curation settled it
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
 ├── secret/                       machine-local ciphertext (proxy tokens)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
@@ -169,7 +168,7 @@ Every connection runs this pragma suite:
 
 ## The one write path into the vault
 
-Three writers change the vault: you (an editor, a shell, an agent's file tools), the daemon (a save in the web UI, a CLI or API change, a curation pass) and sync. Every change any of them makes is admitted the same way, by the one vault writer:
+Three writers change the vault: you (an editor, a shell, an agent's file tools), the daemon (a save in the web UI, a CLI or API change) and sync. Every change any of them makes is admitted the same way, by the one vault writer:
 
 ```mermaid
 flowchart LR
@@ -184,7 +183,7 @@ flowchart LR
 1. **Compare.** A write states what it expects the file to hold: the fingerprint of the bytes it read, "absent", or "what `HEAD` holds". Under the lock the file is re-read and compared. A mismatch is `VAULT_FILE_STALE` (409). There is no unconditional mode, and a modification time never decides anything. The content APIs (saving a skill file, a knowledge document, a restore) require the fingerprint.
 2. **Write** a sibling temp file and rename it into place.
 3. **Validate** every touched path with the same rules a hand edit and a sync merge meet. A blocking finding puts every file back.
-4. **Commit** exactly the touched paths as one commit. Its trailers name the writer (`Coffer-Writer: user`, `disk`, `agent`, `daemon`, `curation` or `sync`), the operation, and where relevant the actor, the agent, the machine, or the version a restore came from.
+4. **Commit** exactly the touched paths as one commit. Its trailers name the writer (`Coffer-Writer: user`, `disk`, `agent`, `daemon` or `sync`), the operation, and where relevant the actor, the agent, the machine, or the version a restore came from.
 
 A hand edit is found, not intercepted. File events are a hint (debounced until the path has been quiet for a second), a scan every 60 seconds and at boot is the truth. A valid edit is committed as a `disk` write and audited as `vault_file_edited` by a human. An invalid one stays in the working tree, uncommitted, and is flagged on the attention list and in `coffer vault problems`, while `HEAD` stays in effect. The effective state is always `HEAD`: the stores read documents from a cache loaded from `HEAD` and refreshed after each commit.
 

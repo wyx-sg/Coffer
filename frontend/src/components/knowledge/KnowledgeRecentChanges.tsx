@@ -1,14 +1,12 @@
 // frontend/src/components/knowledge/KnowledgeRecentChanges.tsx
 //
-// Recent changes (boards 5.1.21–5.1.24; spec web-ui "Follow knowledge changes
-// in Recent changes"): one timeline across every collection, newest first, of
-// curation passes and of documents people and agents wrote, restored or
-// deleted — the last seven days, grouped by day. Filtered by Collection and
-// Author pills whose choice lives in the address (`?collection=` `?author=`),
-// with Clear filters once either is set. Above the timeline, the items still
-// waiting to be curated with a quiet Curate now. A pass opens what it did and
-// can be undone from there; a delete — of a document or of a whole collection —
-// carries Restore (spec knowledge "Restore a deleted collection or document
+// Recent changes (boards 5.1.21–5.1.24; spec web-ui "List recent knowledge
+// changes across collections"): one timeline across every collection, newest
+// first, of documents people and agents wrote, restored or deleted — the last
+// seven days, grouped by day; a version an earlier curation pass wrote keeps its
+// curation label. Filtered by Collection and Author pills whose choice lives in
+// the address (`?collection=` `?author=`), with Clear filters once either is
+// set. A delete — of a document or of a whole collection — carries Restore (spec knowledge "Restore a deleted collection or document
 // from Recent changes"). Without git the region says so and hands installing it
 // to an agent; any other failed read is the one Load error row.
 import { useSearchParams, Link } from "react-router-dom";
@@ -20,7 +18,6 @@ import { EmptyState } from "@/components/EmptyState";
 import { LoadErrorRow } from "@/components/LoadErrorRow";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeChangeRow } from "@/components/knowledge/KnowledgeChangeRow";
-import { KnowledgeWaitingList } from "@/components/knowledge/KnowledgeWaitingList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorHandoff } from "@/lib/api/errorHandoff";
@@ -31,7 +28,6 @@ import {
   groupByDay,
   matchesAuthor,
   restoredVersions,
-  undoneVersions,
   withinDays,
 } from "@/lib/knowledge/changes";
 import { useKnowledgeChanges } from "@/lib/hooks/useKnowledgeHistory";
@@ -40,10 +36,9 @@ const ANY_COLLECTION = "any";
 
 interface Props {
   collections: CollectionOut[];
-  modelSet: boolean | undefined;
 }
 
-export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
+export function KnowledgeRecentChanges({ collections }: Props) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const collection = params.get("collection");
@@ -62,7 +57,6 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
     );
 
   const all = changes.data?.changes ?? [];
-  const undone = undoneVersions(all);
   const restored = restoredVersions(all);
   const shown = all.filter((c) => withinDays(c.time, 7) && matchesAuthor(c, author));
   // The authors the data names; a chosen author with no change here stays listed.
@@ -111,10 +105,6 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
 
       <div className="min-h-0 flex-1 overflow-auto px-8 pb-7 pt-3.5">
         <div className="flex max-w-[760px] flex-col gap-[18px]">
-          {modelSet !== false && changes.data ? (
-            <KnowledgeWaitingList waiting={changes.data.waiting} collections={collections} />
-          ) : null}
-
           {changes.isPending ? (
             <div className="space-y-2" aria-busy>
               <Skeleton className="h-10 w-full" />
@@ -166,7 +156,6 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
                       key={c.version}
                       change={c}
                       collections={collections}
-                      undone={undone.has(c.version)}
                       restored={restored.has(c.version)}
                     />
                   ))}

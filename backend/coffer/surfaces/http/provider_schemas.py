@@ -107,11 +107,9 @@ class ProviderOut(BaseModel):
     curated set of models this connection offers to every downstream picker, each
     carrying its modality; EMPTY means no restriction — the endpoint's whole
     catalogue. A picker takes the entries of the modality it serves, so a chat
-    dropdown never offers an embedding or image model. ``internal_default``
-    marks the connection Coffer's internal engine uses (at most one globally),
-    ``transcribe_default`` the one it transcribes speech on — a separate flag
-    because they are separate models and neither falls back to the other. A
-    connection may carry either, both or neither. Which agents run on it is not a
+    dropdown never offers an embedding or image model. ``transcribe_default``
+    marks the one connection Coffer transcribes speech on (at most one
+    globally). Which agents run on it is not a
     field here: it is each agent's ``connection_uid``.
 
     ``uid`` is the connection's identity and what every route here takes; the
@@ -134,7 +132,6 @@ class ProviderOut(BaseModel):
     secret_ref: str | None
     compatible_agents: list[AgentType]
     models: list[ProviderModel]
-    internal_default: bool
     transcribe_default: bool
     enabled: bool
     description: str | None

@@ -6,7 +6,7 @@
 **Related**: spec channels ("Hand inbound photos and files to the agent", "Persist inbound attachments as references", "Give documents to every agent as extracted text", "Transcribe inbound voice only when the user opted in", "Download the media a thread's messages carry");
 spec chat ("Re-materialise attachments from persisted history", "Extract document attachments to text", "Transcribe audio attachments when transcription is configured");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md),
-[Audit and Retention](audit-and-retention.md), [Internal Engine Settings](internal-engine-settings.md),
+[Audit and Retention](audit-and-retention.md), [Speech-to-Text Settings](internal-engine-settings.md),
 [Chat Attachment Uploads](chat-attachment-uploads.md) (the web Chat page's entrance to the same path);
 PRs #241, #265, #268
 

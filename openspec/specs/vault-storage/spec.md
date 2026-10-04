@@ -145,7 +145,7 @@ its last valid version. The reasoning is
 - **THEN** it reads the fields it knows and refuses to write the file
 
 ### Requirement: Admit every vault write through one compare-and-swap path
-Every write to the vault — by the daemon for any surface, by sync, by curation —
+Every write to the vault — by the daemon for any surface, by sync, by the knowledge sweep —
 SHALL go through one write path that, under the vault's single write lock,
 re-reads each file and compares it with what the writer expects (the
 fingerprint of the bytes it read, "absent", or "whatever `HEAD` holds"),

@@ -161,7 +161,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 
-### Agents, providers & the internal engine
+### Agents & providers
 
 | ADR | Decision |
 | --- | --- |
@@ -173,8 +173,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](api-key-providers-are-reached-through-a-separate-local-model-proxy.md) | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged |
 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered |
 | [`model-catalogue-read-from-the-agent`](model-catalogue-read-from-the-agent.md) | The Model Catalogue Is Read Back From the Installed Agent |
-| [`coffer-model-is-an-internal-engine`](coffer-model-is-an-internal-engine.md) | Coffer's Own Model Is an Internal Engine, Not a Persona or a Tool |
-| [`internal-engine-settings`](internal-engine-settings.md) | The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection |
+| [`internal-engine-settings`](internal-engine-settings.md) | The Speech-to-Text Model Is a Setting; Its Endpoint Is Borrowed From a Flagged Connection |
 
 ### Chat & channels
 
@@ -200,7 +199,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Skills Reach an Agent as a Directory Link to One Master Folder |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
-| [`knowledge-curation`](knowledge-curation.md) | Knowledge Curation Merges New Material Into the Documents |
+| [`tidying-knowledge-and-memory-is-the-agents-job`](tidying-knowledge-and-memory-is-the-agents-job.md) | Tidying Knowledge and Memory Is the Agent's Job |
 | [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the Agents' Memory; Never Write It |
 | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names |
 
@@ -211,7 +210,6 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`sync-applies-clean-merges-and-stops-on-any-conflict`](sync-applies-clean-merges-and-stops-on-any-conflict.md) | Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person |
 | [`sync-deletion-breaker`](sync-deletion-breaker.md) | A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves |
 | [`sync-machine-identity`](sync-machine-identity.md) | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree |
-| [`single-owner-machine-for-unattended-rewrites`](single-owner-machine-for-unattended-rewrites.md) | An Unattended Rewriter of Synced Content Runs on One Named Owner Machine |
 | [`sync-withholds-derived-output`](sync-withholds-derived-output.md) | Sync Withholds Derived Output; Each Machine Renders Its Own |
 | [`master-key-lives-in-the-macos-keychain`](master-key-lives-in-the-macos-keychain.md) | The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault |
 | [`credential-references`](credential-references.md) | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use |

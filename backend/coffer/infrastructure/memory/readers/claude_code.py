@@ -27,7 +27,7 @@ itself (see "Read Claude Code and Codex memory with their search terms").
 What comes back is a `RawEntry`, and a raw entry is **the input layer, not the
 product** (see "Keep raw entries verbatim and hidden"): it is written verbatim
 under the partition's `.raw/`, and the distil pass is what turns entries into
-Coffer's own notes (see "Write notes in Coffer's own words"). So this reader is
+Coffer's own notes (see "Distil each raw entry into a note mechanically"). So this reader is
 not trying to produce anything a person will read, even though Claude Code hands
 it a perfectly good title — it carries the source's words across intact and
 leaves the writing to the pass. The verbatim rule that used to govern what

@@ -57,7 +57,7 @@ calls it:
 | `toggleable` | Whether the kind has an enabled switch at all; `False` refuses enable and disable with `RESOURCE_NOT_TOGGLEABLE` | `False` for `knowledge`, `memory` |
 | `storage` | The storage class the kind's resource files live in (`vault`, `local`, `derived`), which is also the sync policy | `local` for `agent`, `derived` for `memory`, `vault` otherwise |
 | `storage_row(config)` | Per-row refinement of `storage`, decided by the config alone | `skill` (files `coffer-guide` as derived) |
-| `exclusive_flags` | Config flags at most one resource of the kind may hold; the vault validator refuses a commit that leaves two | `provider` (`internal_default`) |
+| `exclusive_flags` | Config flags at most one resource of the kind may hold; the vault validator refuses a commit that leaves two | `provider` (`transcribe_default`) |
 | `name_fixed`, `name_fixed_resets` | The name cannot change once registered, because it is quoted outside Coffer; a rename is refused with `NAME_IMMUTABLE` before any hook runs | `mcp_server`, `skill`, `agent` |
 | `name_from_config(config)` | The one name a row may carry, derived from its config | `agent` |
 | `titled` | Whether rows carry the optional display `title` | `False` for `agent`, `mcp_server`, `skill`, `knowledge` |

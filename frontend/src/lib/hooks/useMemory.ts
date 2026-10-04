@@ -65,8 +65,8 @@ export function useMemoryNote(uid: string, slug: string | null) {
   });
 }
 
-/** Save one memory's body (spec memory "Edit a memory in the web UI or on
- *  disk"). Resolves with the new fingerprint, so the editor's next save does
+/** Save one memory's body (spec memory "Edit a memory in the
+ *  web UI or in an editor"). Resolves with the new fingerprint, so the editor's next save does
  *  not conflict with its own previous one. The saved note replaces the cached
  *  read, so the page shows the new body and update time at once; the list and
  *  the partition rows (newest update) are refetched. A refused save is the

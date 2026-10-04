@@ -31,8 +31,8 @@ point, where the asking identity is known (mcp-gateway at the per-session capabi
 listing, skill-manager at delivery); a second central gate would be unreachable. The
 invocation log is mcp-gateway's; it registers here as a prunable table and nothing more.
 Whether the passes this spec reports run on a timer is internal-engine's, and what each
-pass does is memory's and knowledge's. `GET /api/v1/upkeep/runs`, the read of the passes
-in flight, is a live, read-only status the web UI polls so a Knowledge or Memory page's
+pass does is memory's. `GET /api/v1/upkeep/runs`, the read of the passes
+in flight, is a live, read-only status the web UI polls so the Memory page's
 run-now button shows a pass the timer or another page started as already running; a terminal
 reads the same list in `coffer daemon status`. The passes' switches and timers are
 changed on the Settings page, not by command.
@@ -435,8 +435,8 @@ are older than `n` days, and deletes nothing.
 - **THEN** the answer carries 4 now and 2 to delete, and every file is still there
 
 ### Requirement: Report the passes in flight in one cross-kind read
-The system MUST answer, in one cross-kind read, which long model-driven passes this
-daemon is running right now — each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
+The system MUST answer, in one cross-kind read, which long passes this
+daemon is running right now — memory's aggregate and distil passes, each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
 so that a surface can tell whether a pass is under way without every kind growing a
 near-identical endpoint of its own. The read MUST start nothing, and the registry MUST
 NOT outlive the process: a restart ends any pass it was running and the list comes back
@@ -447,13 +447,13 @@ of `coffer daemon status`, which prints the same list, says so when nothing is r
 carries the list under `--json`.
 
 #### Scenario: the daemon names the passes in flight
-- **GIVEN** a long, model-driven pass over one kind's target is running,
+- **GIVEN** a long pass over one memory partition is running,
 - **WHEN** any surface reads the in-flight list,
 - **THEN** that pass is named with its kind, its target and when it started,
 - **AND** a target absent from the list has no pass running, and the read starts nothing.
 
 #### Scenario: the command line reads the passes in flight
-- **GIVEN** a pass over a knowledge collection and a pass over a memory partition are running
+- **GIVEN** passes over two memory partitions are running
 - **WHEN** the operator runs `coffer daemon status --json`, and again once both have ended
 - **THEN** the first lists both passes with their kind, target and start time, oldest first,
 - **AND** the second lists none, and the table form of `coffer daemon status` says that no pass is running.

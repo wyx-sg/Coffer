@@ -1,7 +1,7 @@
 // src/components/providers/ProviderUsedBy.tsx — the read-only Used by list of a provider.
 //
 // One bordered list of like rows: each agent switched to the provider, then
-// Coffer's engine and speech to text when the provider is flagged for them.
+// speech to text when the provider is flagged for it.
 // Every row says where it is changed, as a link — "Codex › Change model" opens
 // that agent's page with its Change model dialog; "Settings › General" opens
 // Settings. Healthy rows carry no status word and no chevron; a provider's
@@ -9,7 +9,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Cpu, Mic, type LucideIcon } from "lucide-react";
+import { Mic, type LucideIcon } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { Section } from "@/components/Section";
@@ -72,12 +72,6 @@ export function ProviderUsedBy({ use }: { use: ProviderUse }) {
     </>
   );
   const coffer = [
-    use.engine && {
-      key: "engine",
-      icon: Cpu,
-      name: t("providers.usedBy.engine"),
-      model: use.engine.model,
-    },
     use.transcribe && {
       key: "transcribe",
       icon: Mic,

@@ -22,8 +22,9 @@ model is chosen at the point of use.
 | `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `local_runtime` | `LocalRuntime \| None` | Set when the endpoint is a model runtime on this machine (see "Local runtime" below); absent otherwise. |
-| `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Declared in the kind's `exclusive_flags`, so the vault validator refuses any commit — an API write, a hand edit, a sync merge — that would leave two flagged connections. |
-| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Declared in the kind's `exclusive_flags` like `internal_default`, so the vault validator refuses a second one, and a direct write that would make one is refused with `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN`. |
+| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Declared in the kind's `exclusive_flags`, so the vault validator refuses a second one, and a direct write that would make one is refused with `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN`. |
+
+A stored `internal_default` key is retired: it is accepted on read, never reported, and dropped on the connection's next write (see "Ignore a stored internal-default flag").
 
 There is no switched-on flag. Which agent runs on which connection is
 `AgentConfig.connection_uid` ([agent-registry](../agent-registry/data-model.md)),
@@ -92,9 +93,8 @@ pre-fills. Nothing infers at load time: a stored entry is taken as written.
 
 A frozen dataclass pairing a `ProviderConfig` with the `model` to run on it.
 The model lives apart from the connection, so the two travel together whenever a
-caller needs both. Its one consumer is Coffer's own engine, which does the
-pairing and builds a chat model from the result (spec
-[internal-engine](../internal-engine/spec.md)); this kind only declares the
+caller needs both. Its one consumer is speech-to-text transcription, which does the
+pairing (spec [internal-engine](../internal-engine/spec.md)); this kind only declares the
 value object.
 
 ### Errors (`domain/provider/errors.py`)
@@ -105,7 +105,6 @@ value object.
 | `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection some agent runs on (see "Refuse to move the wire of a live connection") |
 | `ProviderDoesNotReachAgent` | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | switching an agent onto a connection it is not reached by: the connection is switched off, or the connection's scope does not name the agent (see "Switch one agent at a time") |
 | `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | switching an agent onto an `ollama` connection (see "Keep ollama connections internal-only") |
-| `ProviderInternalDefaultTaken` | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | a resource write that would flag a second internal-engine default (see "Keep at most one internal default connection") |
 | `ProviderTranscribeDefaultTaken` | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | a resource write that would flag a second speech-to-text default (see "Keep an independent speech-to-text default") |
 
 ### Projection functions (`domain/provider/projection.py`)
@@ -192,32 +191,20 @@ pointer is dropped before the file is deleted, so Codex never reads a
 `model_catalog_json` path that is not there. The pointer is removed only when it
 names the Coffer-owned filename.
 
-### The internal-engine default flag (`application/provider/`)
-
-`set_internal_default(uid)` clears the flag on every other connection then sets
-it on the target (serialised by the single-process daemon), emits
-`provider_internal_default_set`, and notifies the engine that the connection
-moved. `internal_default` is a field in the provider's config and the kind
-declares it exclusive (`exclusive_flags`), which is why both are here: the
-vault's resource rule refuses any write — a surface's, a hand edit or a sync
-round's merged tree — that would leave two connection files flagged, and names
-the file that already holds it.
-
-What the flagged connection is USED for — the model paired with it, the chat
-model built from the pair, the settings document, and the rule that drops a
-model the new connection does not curate — is spec
-[internal-engine](../internal-engine/spec.md). Nothing about that document is
-stored, read or migrated by this kind.
-
 ### The speech-to-text default flag (`application/provider/transcribe_default_ops.py`)
 
-`set_transcribe_default(uid)` is the twin of the operation above — clear
-everywhere else, set the target, emit `provider_transcribe_default_set`, notify
-the engine — kept in a module beside it rather than folded into it, because the
-two flags are not the same flag and nothing here falls back to the other one.
-`transcribe_connection(model)` answers WHICH connection carries this flag and
-mints the `ResolvedConnection`; whether there is a model to pair at all is the
-engine's question, asked in `application/engine/resolve.py`.
+`set_transcribe_default(uid)` clears the flag on every other connection then sets
+it on the target (serialised by the single-process daemon), emits
+`provider_transcribe_default_set` and notifies the engine settings that the
+connection moved. `transcribe_default` is a field in the provider's config and
+the kind declares it exclusive (`exclusive_flags`), so the vault's resource rule
+refuses any write — a surface's, a hand edit or a sync round's merged tree —
+that would leave two connection files flagged, and names the file that already
+holds it. `transcribe_connection(model)` answers WHICH connection carries this
+flag and mints the `ResolvedConnection`; whether there is a model to pair at all
+is the settings' question, asked in `application/engine/resolve.py`. What the
+flagged connection is USED for, and the rule that drops the model the new
+connection does not curate, is spec [internal-engine](../internal-engine/spec.md).
 
 ## Reuse anchors
 
@@ -277,8 +264,8 @@ carries it by merging commits; nothing in this kind serialises or applies it.
 
 | Component | Path | Used for |
 |---|---|---|
-| `AuditEventType` | `backend/coffer/domain/audit.py` | `PROVIDER_SWITCHED`, `PROVIDER_INTERNAL_DEFAULT_SET`, `PROVIDER_TRANSCRIBE_DEFAULT_SET`, `PROVIDER_PROJECTION_REFUSED` |
-| `AuditService.record` | `backend/coffer/application/audit_service.py` | emit them from the switch / internal-default / transcribe-default / projection paths |
+| `AuditEventType` | `backend/coffer/domain/audit.py` | `PROVIDER_SWITCHED`, `PROVIDER_TRANSCRIBE_DEFAULT_SET`, `PROVIDER_PROJECTION_REFUSED` (and `PROVIDER_INTERNAL_DEFAULT_SET`, kept so earlier rows render, never emitted) |
+| `AuditService.record` | `backend/coffer/application/audit_service.py` | emit them from the switch / transcribe-default / projection paths |
 
 ## Storage
 
@@ -291,9 +278,9 @@ resource-framework). **No tables.**
 | Value | When emitted |
 |---|---|
 | `provider_switched` | a successful `POST /providers/{uid}/activate` (details `{from, to, protocol, agent_type, agents}`) or `POST /providers/use-builtin/{agent_type}` (details `{from, to: null, agent_type, agents}`) |
-| `provider_internal_default_set` | a successful `POST /providers/{uid}/internal-default`; details `{from, to}` |
 | `provider_transcribe_default_set` | a successful `POST /providers/{uid}/transcribe-default`; details `{from, to}` |
 | `provider_projection_refused` | a native-config write refused because the file changed under Coffer |
+| `provider_internal_default_set` | never emitted; rows written earlier keep rendering with their label |
 
 `resource_created` / `resource_updated` / `resource_deleted` / `resource_renamed`
 come from `ResourceService`; a change to the curated model set rides
@@ -314,8 +301,7 @@ kind declares no redactor because its config holds no secret).
 | `deactivate(agent_type) -> DeactivateResult` | Revert that agent to its built-in login: de-project its file and clear its `connection_uid`; idempotent; touches no other agent. |
 | `_key_of` -> `build_proxy_state(service, tokens) -> ProxyState` (`application/provider/proxy_state.py`) | What the local model proxy serves: each agent's token digest and, for each agent whose `connection_for_agent` is a connection, the one connection that serves it. The key is decrypted by the private `_key_of` through the secret boundary, and only while the state is built; it is the only consumer of a connection's key. |
 | `ProxyTokenService.token_for(agent_uid)` / `rotate` / `revoke` (`application/provider/proxy_tokens.py`) | The agent's local proxy token, minted on first ask; `rotate` replaces it; `revoke` deletes it when the agent is removed. |
-| `set_internal_default(uid) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
-| `set_transcribe_default(uid) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |
+| `set_transcribe_default(uid) -> Resource` | The global speech-to-text flag: clear-then-set, the audit event, and the notification that lets the settings apply their drop rule. |
 
 Decrypted values are returned to the caller and never logged.
 
@@ -379,9 +365,8 @@ catalogue.
 - The projection transforms MUST be pure; they return the new text.
 - Key resolution MUST NOT log the decrypted value.
 - An agent runs on at most one connection because the choice is one field of the
-  agent record; the single global internal default is additionally enforced by the vault
-  validator on every commit, while the single global speech-to-text default
-  rests on the operation alone
+  agent record; the single global speech-to-text default is additionally enforced by the vault
+  validator on every commit
   (see "Keep an independent speech-to-text default").
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.
 

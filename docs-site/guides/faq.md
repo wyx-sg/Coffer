@@ -12,7 +12,7 @@ Short answers to the questions people ask most before and after installing Coffe
 Not by Coffer's own doing, unless you configure it to. The daemon listens only on `127.0.0.1`, has no telemetry, and keeps its state under `~/.coffer`. Network traffic happens only through things you set up:
 
 - **MCP servers you register.** Coffer starts a stdio server and connects to an HTTP server at the URL you gave; what they contact is up to each server.
-- **Model providers.** If you choose a provider for **Coffer's model** or **Speech to text**, Coffer sends those requests to it. Your agents talk to their own providers as they always do.
+- **Model providers.** If you choose a provider for **Speech to text**, Coffer sends voice messages to it for transcription. Your agents talk to their own providers as they always do.
 - **Vault sync.** If you configure a remote, rounds push to and pull from that git repository. Secrets travel only as ciphertext and only if you opt in; the master key never does.
 - **Channels.** A Telegram or SeaTalk channel exchanges messages with that platform.
 
@@ -32,13 +32,13 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 ## Does Coffer run a language model?
 
-No model runs inside Coffer. A few of Coffer's own background passes need one (folding new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages), and they call a model provider you pick under **Settings › General → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), and voice messages reach the agent as audio files.
+No model runs inside Coffer, with one optional exception: transcribing voice messages, which calls a model provider you pick under **Settings › General → Speech to text**. Until you pick one, voice messages reach the agent as audio files. Tidying knowledge and memory is your agent's job: **Tidy** on a knowledge collection or a memory partition opens a conversation with your default agent and sends it the instructions.
 
 Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge and memory notes with their own file tools, and nothing is embedded. See [Model providers](/guides/providers).
 
 ## What does it cost?
 
-Coffer is free and open source under the MIT license. The only costs are the ones you already have: the model providers your agents and Coffer's own passes call, and any hosting for a sync remote you choose.
+Coffer is free and open source under the MIT license. The only costs are the ones you already have: the model providers your agents (and speech to text, if you set it up) call, and any hosting for a sync remote you choose.
 
 ## How is this different from listing MCP servers in each agent's config?
 

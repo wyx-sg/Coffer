@@ -10,10 +10,6 @@ service the surfaces call::
         → SyncService (remote file, runs.db history, push token through the
           secret boundary, master key, plugin inventory)
         → SyncWorker
-
-The service's lock is the vault-write lock the curation pass takes too, so a
-round never runs beside a pass (spec vault-sync "Never overlap a curation pass
-and a round").
 """
 
 from __future__ import annotations
@@ -58,7 +54,6 @@ from coffer.infrastructure.vault.git import git_available
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import VaultWriter
-from coffer.surfaces.http.knowledge.curation_state import set_curation_hold, set_vault_write_lock
 from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver
 from coffer.surfaces.http.sync_dependencies import set_sync_service
 
@@ -66,8 +61,7 @@ _log = logging.getLogger(__name__)
 
 
 class SyncWiring(NamedTuple):
-    """The service the surfaces call; the curation worker reads its lock,
-    this machine's id and whether a round waits for a person."""
+    """The service the surfaces call."""
 
     service: SyncService
 
@@ -179,8 +173,7 @@ def start_sync(
     secret_store: EncryptedSecretStore,
     platform: PlatformPort,
 ) -> SyncWiring:
-    """Wire sync and publish it: the routes' service, and the vault-write lock
-    the curation pass takes (timer and button alike)."""
+    """Wire sync and publish the routes' service."""
     wiring = wire_sync(
         resources=resources,
         audit=audit,
@@ -190,8 +183,6 @@ def start_sync(
         platform=platform,
     )
     set_sync_service(wiring.service)
-    set_vault_write_lock(wiring.service.lock)
-    set_curation_hold(wiring.service.divergence_outstanding)
     return wiring
 
 
