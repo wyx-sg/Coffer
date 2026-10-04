@@ -4161,7 +4161,6 @@
         "setDefaultAria": "把 {{path}} 设为默认",
         "unsetDefault": "取消默认",
         "unsetDefaultAria": "新对话不再从 {{path}} 开始",
-        "remove": "移除",
         "removeAria": "移除 {{path}}",
         "add": "添加目录…",
         "tooMany": "最多 {{max}} 个目录。"

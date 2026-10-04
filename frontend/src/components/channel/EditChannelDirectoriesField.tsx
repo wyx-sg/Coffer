@@ -3,13 +3,13 @@
 // "Choose the working directory from chat": one list of folders, which /dir may
 // switch a chat into (each also admits the folders under it; with none, /dir is
 // off), and one of which may be the Default new conversations start in (with
-// none marked, Coffer's workspace). Rows carry Set as default / Remove; a long
+// none marked, Coffer's workspace). Rows carry Set as default and a remove ✕; a long
 // list scrolls inside its box instead of growing the page.
 import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
 
 import { FolderPicker } from "@/components/FolderPicker";
 import { SettingRow } from "@/components/settings/SettingsLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DIRECTORIES_MAX, normaliseDirectory } from "@/lib/channels/editChannel";
 
@@ -50,7 +50,9 @@ export function EditChannelDirectoriesField({ directories, defaultDirectory, onC
                     {path}
                   </span>
                   {isDefault ? (
-                    <Badge variant="secondary">{t("channels.edit.directories.defaultTag")}</Badge>
+                    <span className="shrink-0 text-xs text-text-muted">
+                      {t("channels.edit.directories.defaultTag")}
+                    </span>
                   ) : null}
                   <span className="ml-auto flex shrink-0 items-center">
                     <Button
@@ -71,11 +73,11 @@ export function EditChannelDirectoriesField({ directories, defaultDirectory, onC
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
                       aria-label={t("channels.edit.directories.removeAria", { path })}
                       onClick={() => remove(path)}
                     >
-                      {t("channels.edit.directories.remove")}
+                      <X aria-hidden />
                     </Button>
                   </span>
                 </li>

@@ -4161,7 +4161,6 @@
         "setDefaultAria": "Set {{path}} as the default",
         "unsetDefault": "Unset default",
         "unsetDefaultAria": "Stop starting new conversations in {{path}}",
-        "remove": "Remove",
         "removeAria": "Remove {{path}}",
         "add": "Add directory…",
         "tooMany": "At most {{max}} directories."
