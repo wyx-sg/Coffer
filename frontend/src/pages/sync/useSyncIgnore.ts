@@ -2,7 +2,7 @@
 //
 // A banner's × is the same Ignore as on Overview: the daemon keeps it under
 // the attention item's key (`sync:<fingerprint>:<reason_code>`), so the
-// sidebar badge, the menu bar and this page agree, and the banner returns by
+// menu bar and this page agree, and the banner returns by
 // itself when the situation changes (the fingerprint changes with it). The
 // page header says "ignored on Overview" while one is ignored.
 import { useAttention } from "@/lib/hooks/useAttention";

@@ -208,7 +208,6 @@
     "modelProviders": "Model providers",
     "sync": "Sync",
     "experimentalLabel": "{{label}} · Experimental",
-    "needsAttention": "Needs your attention",
     "overview": "Overview",
     "conversations": "Conversations",
     "customTools": "Custom tools",
@@ -216,8 +215,6 @@
     "secrets": "Secrets",
     "search": "Search or jump to…",
     "resizeSidebar": "Resize the sidebar",
-    "attentionCount_one": "{{count}} needs you",
-    "attentionCount_other": "{{count}} need you",
     "update": {
       "title": "Update ready",
       "body": "is available. Restart downloads it, checks its signature and reopens Coffer.",

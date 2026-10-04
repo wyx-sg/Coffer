@@ -1,6 +1,6 @@
 ---
 title: App shell
-description: How the web UI's frame is organised — the sidebar grouped by intent, one list of names and routes, Settings as an addressable modal, the title bar and its history arrows, the connection states, the navigation-only palette, attention badges, resizable splits and tab addresses — and why each works the way it does.
+description: How the web UI's frame is organised — the sidebar grouped by intent, one list of names and routes, Settings as an addressable modal, the title bar and its history arrows, the connection states, the navigation-only palette, resizable splits and tab addresses — and why each works the way it does.
 ---
 
 # App shell
@@ -13,7 +13,7 @@ The app shell is the frame every page of the web UI sits in: the sidebar, the co
 - **One name, one route, everywhere.** A surface is named and addressed once, and every place that shows it reads that one definition.
 - **Every view is an address.** What you are looking at — a page, a tab, the Settings window over a page — is in the URL, so a refresh, a bookmark or the Back button brings it back.
 - **One source per fact.** The reconnecting bar and the offline page read the same daemon status; the palette reads the same lists the pages read. Two readings of one fact would eventually disagree.
-- **The shell renders; capabilities decide.** The shell draws attention badges, gates experimental entries and lays out splits, but whether something needs attention or is switched on is decided by the capability that owns it.
+- **The shell renders; capabilities decide.** The shell gates experimental entries and lays out splits, but whether something needs attention or is switched on is decided by the capability that owns it.
 
 ## The sidebar is grouped by what you come to do
 
@@ -85,11 +85,9 @@ A daemon that restarts, or a laptop waking from sleep, drops the connection for 
 - **Pages never need the daemon.** They come from the one list of names and routes, so the palette is useful even while the daemon is offline; it then lists Pages only and says that objects need the daemon.
 - **It respects feature switches.** Pages and objects of a switched-off experimental feature do not appear.
 
-## Attention signals belong to their capability
+## The sidebar carries no attention marks
 
-An entry whose kind needs you carries a count badge — always the same red, capped at **9+** — and on the collapsed rail a dot of the same colour, with the count in the icon's tooltip. The sidebar speaks only through these badges, and only for things that need you: failures, drift, a held vault, a required CLI that is missing; items you ignored on Overview are not counted. An informational count — how many servers there are, how many documents wait in a knowledge collection's inbox — never becomes a badge, because a sidebar full of numbers stops saying where to look.
-
-The shell owns only the drawing. Whether a kind needs attention, and what clears it, is decided by the capability that owns the kind: Agents, MCP servers, Skills and Channels count what the daemon's cross-kind attention list (the list Overview's **Needs you** shows) reports for them — for Agents that is an agent that needs repair, one whose config directory is left behind and one whose memory hook the agent has not approved or has never run, and not one that is merely not connected; Sync keeps its own signal, cleared by visiting Sync; CLIs count the required commands that need you. The shell keeps one map from sidebar entry to signal, and a kind that wants a badge adds its signal to that map; the sidebar then marks it with the same badge and no other change. A signal that has not loaded, or whose read failed, simply shows no badge — the sidebar is never the place an error surfaces.
+The sidebar says where you can go, never what is wrong. It carries no count badges, no dots and no tooltip text about problems: everything you must act on is listed once, on **Overview** under **Needs you**, and the desktop app's menu bar shows the same count. A kind that needs you adds its item to the daemon's cross-kind attention list, and that list is the only place the web UI reads it from; the sidebar is never the place a count or an error surfaces.
 
 ## Split views are resizable, per browser
 

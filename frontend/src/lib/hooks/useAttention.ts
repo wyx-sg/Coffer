@@ -4,9 +4,8 @@
 // resource-framework "Report what needs a person across every kind"). A page
 // that shows it live mounts `useDaemonEvents`: a change in what the list
 // reports arrives on the daemon's event stream as a `change` of kind
-// `attention`, which invalidates this key. The sidebar's count badges read the
-// same query on every page, where no stream may be open, so they pass a slow
-// `refetchInterval` (lib/hooks/useAttentionSignals.ts).
+// `attention`, which invalidates this key. A reader on a page with no stream
+// open passes a slow `refetchInterval`.
 import { useQuery } from "@tanstack/react-query";
 
 import { attentionApi, type AttentionItem } from "@/lib/api/attention";

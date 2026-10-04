@@ -11,8 +11,7 @@
 // store, by name only), its Git source cannot be reached, an update is waiting.
 //
 // Everything except the waiting update is a PROBLEM: it files the skill under
-// "Needs attention" in the library, tints the header pill and counts toward
-// the sidebar badge (`skillsNeedingAttention` is the one count both read).
+// "Needs attention" in the library, tints the header pill.
 import type { Cli } from "@/lib/api/clis";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 
@@ -94,8 +93,7 @@ export function skillProblems(
   return skill.builtin ? [] : skillAttention(skill, clis, entries).filter(isProblem);
 }
 
-/** The skills with at least one problem — the library's "Needs attention" group
- *  and the sidebar badge count the same set. */
+/** The skills with at least one problem — the library's "Needs attention" group. */
 export function skillsNeedingAttention(
   skills: readonly SkillOut[],
   clis: readonly Cli[],

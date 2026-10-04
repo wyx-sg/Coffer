@@ -966,12 +966,12 @@ While an agent type's program is not found on the agent's real `PATH` — detect
 ### Requirement: List the supported agents as fixed rows on the Agents page
 The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as its Coffer state ("Show the Coffer connection on the agent pages") with its config directory and version; an `installed_never_run` type reads Not connected too, with its config directory marked as not created, and offers Connect, whose review names the directory it creates and the only entries Coffer needs in it; a `config_only` type reads as config left behind — program not found — and a `missing` type as not installed, each with no button and the daemon's prompt that hands reinstalling or installing it to an agent (see "Hand installing an agent's program to an agent") at the head of its ⋯ menu — Copy prompt, then Ask an agent while another agent can run it. A row whose program is missing shows no version, and its second line says "Not on this Mac" or what is left in the directory. The page MUST NOT show an install command, and carries no Remove action. On first run, with neither agent connected and both connectable, the page MUST offer **Connect both**, which reviews and connects every connectable agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
 
-The sidebar's Agents entry carries a count badge only for agents that need the person: an agent that needs repair, one whose config directory is left behind, and one whose Coffer memory hook needs the person ("Report an agent whose Coffer hook needs the person"). Not installed, Not connected and a first run raise none.
+Overview's Needs you lists only agents that need the person: an agent that needs repair, one whose config directory is left behind, and one whose Coffer memory hook needs the person ("Report an agent whose Coffer hook needs the person"). Not installed, Not connected and a first run raise none.
 
 #### Scenario: the agents page shows both supported agents on first run
 - **GIVEN** a fresh Coffer with Claude Code and Codex both installed and neither connected
 - **WHEN** the user opens the Agents page
-- **THEN** it shows exactly two rows, Claude Code then Codex, each reading Not connected with a Connect action, and a Connect both action, and the sidebar's Agents entry carries no badge
+- **THEN** it shows exactly two rows, Claude Code then Codex, each reading Not connected with a Connect action, and a Connect both action, and Overview lists neither as needing the person
 - **AND** choosing Connect both reviews the writes for both agents and, on apply, registers and connects both
 
 #### Scenario: an agent that is not installed shows how to install it
@@ -989,7 +989,7 @@ The sidebar's Agents entry carries a count badge only for agents that need the p
 - **GIVEN** `~/.codex` present and the Codex program not on the agent's `PATH`
 - **WHEN** the Agents page renders
 - **THEN** the Codex row reads as config left behind — program not found — with no button, its ⋯ menu offering Copy prompt with the daemon's reinstall prompt, no install command, and no Connect action
-- **AND** the sidebar's Agents entry counts it
+- **AND** Overview's Needs you lists it
 
 #### Scenario: a row's menu offers a different config directory
 - **GIVEN** a Claude Code row on the Agents page
@@ -1029,7 +1029,7 @@ On **Hooks**, Coffer's part is Coffer's memory hook and the agent's own is its o
 - **THEN** only the skill that reaches every agent is listed
 
 ### Requirement: Report an agent whose Coffer hook needs the person
-The attention list ([resource-framework](../resource-framework/spec.md) "Report what needs a person across every kind") MUST carry an `agent_hook_attention` item, at warning severity with the action of checking the agent, for a connected agent whose connection is otherwise complete when Coffer's memory hook is current but is not doing its job: the agent has not approved it, or approved an earlier command (trust `untrusted` or `modified`), or it has never fired while the agent runs hooks it finds or has approved. An agent that has switched hooks off (trust `disabled`), whose hook is trusted and has fired, or that carries no memory hook produces no such item. The item is read from Coffer's own hook alone, without reading every hook file or plugin of the agent, and is the signal that gives the sidebar's Agents entry its badge for a hook problem. It never replaces the more basic items: a partial connection or a missing program is reported first, one item per agent.
+The attention list ([resource-framework](../resource-framework/spec.md) "Report what needs a person across every kind") MUST carry an `agent_hook_attention` item, at warning severity with the action of checking the agent, for a connected agent whose connection is otherwise complete when Coffer's memory hook is current but is not doing its job: the agent has not approved it, or approved an earlier command (trust `untrusted` or `modified`), or it has never fired while the agent runs hooks it finds or has approved. An agent that has switched hooks off (trust `disabled`), whose hook is trusted and has fired, or that carries no memory hook produces no such item. The item is read from Coffer's own hook alone, without reading every hook file or plugin of the agent, and is what lists a hook problem on Overview. It never replaces the more basic items: a partial connection or a missing program is reported first, one item per agent.
 
 #### Scenario: a hook the agent has not approved is a warning
 - **GIVEN** a connected Codex agent whose Coffer memory hook is current but unapproved

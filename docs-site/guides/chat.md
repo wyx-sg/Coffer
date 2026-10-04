@@ -81,7 +81,7 @@ The turn runs as a detached task in the daemon. Closing the tab, losing Wi-Fi or
 
 ## Answer a question from the agent {#answer-a-question}
 
-When an agent needs a decision it asks through `coffer__ask` (or Claude Code's own `AskUserQuestion`), and its turn pauses until you answer. The reply's header reads **Waiting for you**, the conversation's row in the list shows **Needs you**, and the sidebar's **Conversations** entry carries a red count of the conversations waiting on you.
+When an agent needs a decision it asks through `coffer__ask` (or Claude Code's own `AskUserQuestion`), and its turn pauses until you answer. The reply's header reads **Waiting for you**, the conversation's row in the list shows **Needs you**, and Overview lists it under **Needs you**.
 
 A **Needs you** card sits at the end of the reply, above the reply box. It shows the agent's context (Markdown — a summary, a diff, a path), the question, and up to four options as equal buttons, each with its description under the label, and the line "Claude Code is waiting for your answer." In a channel conversation it adds that the question was also asked in that chat.
 

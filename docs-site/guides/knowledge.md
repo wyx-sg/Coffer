@@ -79,7 +79,7 @@ This creates `~/.coffer/vault/knowledge/payments/` and a `README.md` holding the
 
 To rename a collection, choose **⋯ → Rename…** on its page and enter the new name. Its folder moves with it (`~/.coffer/vault/knowledge/<new-name>/`), the page stays on the same collection, and agents find it under the new name from the next catalogue. A name another collection already has, or that is not a valid folder name, is refused under the field and nothing changes.
 
-The **Knowledge** page's tree lists every collection, each with its number of documents and, under it, its **Inbox** with how many items wait. That count is the only place items waiting show up: the sidebar has no badge for them.
+The **Knowledge** page's tree lists every collection, each with its number of documents and, under it, its **Inbox** with how many items wait. That count is the only place items waiting show up: the sidebar shows no count for them.
 
 ## Add knowledge
 

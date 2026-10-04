@@ -62,7 +62,7 @@ The page is a list beside one detail page for the command you choose. The list p
 
 The page's one action is **Check again**, which probes every command afresh (a banner's own **Check again** probes just that one). **Add CLI** takes a command name or the path to an executable, with an optional title, minimum version, description and login check, for a tool you want checked that no skill or server declares. Only a CLI you added by hand has **Edit** and, in its **⋯** menu, **Remove**; Remove stops Coffer checking it and leaves the tool installed on this machine. A CLI that a skill or server requires has nothing on the right of its header and cannot be removed here, because it is listed for as long as something needs it.
 
-A skill's own page has a **Requires** tab listing what that skill declares, each command linking to its place here and offering the same hand-off when it needs you. And while any required command is missing, too old or not logged in, **Overview** lists it under what needs you, and the **CLIs** entry in the sidebar carries a count. A launcher only MCP servers need is listed on Overview once, as the server's own "launcher isn't found on this machine" item, not a second time as a CLI.
+A skill's own page has a **Requires** tab listing what that skill declares, each command linking to its place here and offering the same hand-off when it needs you. And while any required command is missing, too old or not logged in, **Overview** lists it under what needs you. A launcher only MCP servers need is listed on Overview once, as the server's own "launcher isn't found on this machine" item, not a second time as a CLI.
 
 ## Hand the install to your agent
 

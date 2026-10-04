@@ -173,10 +173,6 @@ export const chatApi = {
   deleteConversation: (id: string): Promise<void> =>
     unwrapVoid(getApiClient().DELETE("/chat/conversations/{id}", conv(id))),
 
-  // How many conversations wait on an answer (the sidebar's Conversations badge).
-  needsYouCount: (): Promise<{ count: number }> =>
-    unwrap(getApiClient().GET("/chat/conversations/needs-you-count")),
-
   // Answer the question's next unanswered question. `index` names the one being
   // answered, so a late answer is refused (409 QUESTION_CLOSED) instead of landing
   // on the next one. Free text goes as `text` with no `selected`.

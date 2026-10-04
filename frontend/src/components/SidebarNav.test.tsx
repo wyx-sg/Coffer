@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
-import { fireEvent, render, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, within } from "@testing-library/react";
 import { isValidElement } from "react";
 import { MemoryRouter, Navigate, matchRoutes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -13,17 +13,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarNav } from "./SidebarNav";
 import { appRoutes } from "@/router";
-
-// The Sync entry carries an attention dot, which asks the daemon for the
-// vault's last round. Stub it; the dot's own rules live in
-// `lib/hooks/useSyncAttention`.
-const syncStatus = vi.fn<(enabled?: boolean) => { data: unknown; isError: boolean }>(() => ({
-  data: undefined,
-  isError: false,
-}));
-vi.mock("@/lib/hooks/useSync", () => ({
-  useSyncStatus: (enabled?: boolean) => syncStatus(enabled),
-}));
 
 // The four experimental features (knowledge, memory, sync, models) own five of
 // the fourteen entries. All are on unless a test says otherwise, so every other
@@ -45,8 +34,6 @@ vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
 }));
 
 afterEach(() => {
-  syncStatus.mockReset();
-  syncStatus.mockReturnValue({ data: undefined, isError: false });
   features.mockReturnValue(ALL_ON);
   localStorage.clear();
 });
@@ -237,107 +224,6 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
     expect(href).not.toMatch(/^\/settings/);
   }
   expect(document.body.textContent ?? "").not.toMatch(/coming soon|not yet implemented/i);
-});
-
-// --- the attention dot (spec vault-sync "Say a vault needs a human where the user
-// already is") ---
-//
-// It replaced a banner that floated over whatever page the user was on. The
-// dot has to keep the property that mattered — a vault nobody is looking at
-// still gets noticed — without the one that did not: arguing on every page
-// until the underlying state changes.
-
-/** A configured, joined remote that is switched on — a paused one never raises the dot. */
-const ON = {
-  remote: { enabled: true },
-  joined: true,
-  conflicts: 0,
-  held: 0,
-  join_choices: 0,
-  problem: null,
-};
-
-const HELD = { status: "held", conflicts: 0, held: 3, detail: null };
-
-describe("the Sync attention dot", () => {
-  test("is absent while the vault is converging", () => {
-    syncStatus.mockReturnValue({
-      data: { ...ON, last_round: { status: "pulled", conflicts: 0, held: 0, detail: null } },
-      isError: false,
-    } as never);
-    const { queryByTestId } = renderNav();
-    expect(queryByTestId("nav-dot-sync")).toBeNull();
-  });
-
-  test("appears when the last round needs answering", async () => {
-    syncStatus.mockReturnValue({
-      data: { ...ON, held: 3, last_round: HELD },
-      isError: false,
-    } as never);
-    const { findByTestId } = renderNav();
-    expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
-  });
-
-  // The badge scenarios' markers: SidebarNavAttention.test.tsx.
-  test("only an entry whose kind declares a signal carries the dot, with an accessible name", async () => {
-    syncStatus.mockReturnValue({
-      data: { ...ON, held: 3, last_round: HELD },
-      isError: false,
-    } as never);
-    const { findByTestId } = renderNav();
-    const dot = await findByTestId("nav-dot-sync");
-    expect(dot).toHaveAccessibleName("Needs your attention");
-    expect(document.querySelectorAll('[data-testid^="nav-dot-"]')).toHaveLength(1);
-  });
-
-  acceptance("vault-sync", "a held vault says so where the user already is", async () => {
-    syncStatus.mockReturnValue({
-      data: { ...ON, held: 3, last_round: HELD },
-      isError: false,
-    } as never);
-    // On /sync the user is looking at the thing itself: no dot over their own
-    // reading, and the situation is marked seen.
-    const onPage = renderNav("/sync");
-    expect(onPage.queryByTestId("nav-dot-sync")).toBeNull();
-    await waitFor(() => expect(localStorage.getItem("coffer.sync.attentionSeen")).not.toBeNull());
-    onPage.unmount();
-
-    // Back on any other page, the same situation no longer asks.
-    const elsewhere = renderNav("/agents");
-    await waitFor(() => expect(elsewhere.queryByTestId("nav-dot-sync")).toBeNull());
-  });
-
-  test("is not read at all while Sync is switched off", () => {
-    features.mockReturnValue({ ...ALL_ON, sync: false });
-    syncStatus.mockReturnValue({
-      data: { ...ON, held: 3, last_round: HELD },
-      isError: false,
-    } as never);
-    const { queryByTestId } = renderNav();
-    // The hook is asked only to stand down, and a cached round raises nothing.
-    expect(syncStatus.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
-    expect(queryByTestId("nav-dot-sync")).toBeNull();
-  });
-
-  test("a daemon that cannot answer raises no sync dot", () => {
-    // That is the offline banner's job, and a stale cached round must not
-    // outlive it into a second claim on the same screen.
-    syncStatus.mockReturnValue({
-      data: { ...ON, held: 3, last_round: HELD },
-      isError: true,
-    } as never);
-    const { queryByTestId } = renderNav();
-    expect(queryByTestId("nav-dot-sync")).toBeNull();
-  });
-
-  test("survives a collapsed rail, where the label is gone", async () => {
-    syncStatus.mockReturnValue({
-      data: { ...ON, held: 3, last_round: HELD },
-      isError: false,
-    } as never);
-    const { findByTestId } = renderNav("/", true);
-    expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
-  });
 });
 
 // --- experimental features (spec experimental-features "Make a switched-off

@@ -208,7 +208,6 @@
     "modelProviders": "模型提供商",
     "sync": "同步",
     "experimentalLabel": "{{label}} · 实验",
-    "needsAttention": "有待处理的事项",
     "overview": "总览",
     "conversations": "对话",
     "customTools": "自定义工具",
@@ -216,8 +215,6 @@
     "secrets": "密钥",
     "search": "搜索或跳转…",
     "resizeSidebar": "调整侧边栏宽度",
-    "attentionCount_one": "{{count}} 项待处理",
-    "attentionCount_other": "{{count}} 项待处理",
     "update": {
       "title": "更新已就绪",
       "body": "可以安装。重启会下载它、校验签名并重新打开 Coffer。",

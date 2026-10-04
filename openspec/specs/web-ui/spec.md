@@ -1611,8 +1611,8 @@ the same tab.
 Every row of Needs you — whatever its severity — MUST carry a ⋯ menu whose last entry is
 **Ignore**. The daemon MUST remember an ignored item on this machine, by the item's stable key
 (its kind, resource and reason), and audit each ignore and each stop: `GET /api/v1/attention` then
-lists it under `ignored`, out of `items` and `counts_by_kind`, so Needs you, the Agents health tile,
-the sidebar's badges and the menu bar's count all leave it out alike. Overview MUST NOT list ignored
+lists it under `ignored`, out of `items` and `counts_by_kind`, so Needs you, the Agents health tile
+and the menu bar's count all leave it out alike. Overview MUST NOT list ignored
 items or count them. A banner on the page an item belongs to MUST carry an **×** that is the same
 Ignore, so ignoring from the page and from Overview are one act with one key; an
 ignored item returns by itself when the situation it describes changes (a
@@ -1632,7 +1632,7 @@ names no item in the list is refused with `ATTENTION_NOT_IGNORABLE`.
 #### Scenario: a page banner's × ignores the item on Overview too
 - **GIVEN** a page banner for an item that Overview also lists
 - **WHEN** the user presses the banner's ×
-- **THEN** the banner goes, Overview and the sidebar badge stop listing and counting the item, and the page's header reads "… — ignored on Overview" with Show it again
+- **THEN** the banner goes, Overview stops listing and counting the item, and the page's header reads "… — ignored on Overview" with Show it again
 - **AND** when the situation changes the item is listed again
 
 #### Scenario: an ignored item can be shown again from its own page
@@ -2285,63 +2285,6 @@ secret capability's, specified with it.
 - **WHEN** the page renders, and then the user chooses Reveal value on that row and confirms
 - **THEN** no value is shown until the reveal is confirmed, and then only that secret's value is asked for and shown
 - **AND** the page says the reveal is recorded as `secret_revealed`
-
-### Requirement: Mark a sidebar entry whose kind needs attention
-A sidebar entry MUST carry a count badge while the kind or tool behind it has
-things that need the user, so they are seen from wherever the user is. The
-sidebar speaks only through these badges, and only for things that need the
-user — failures, drift, a held vault, a required CLI that is missing, too old or
-not logged in; an informational count (how many servers, how many documents
-waiting in a knowledge collection's inbox) MUST NOT become a badge. The badge
-shows how many things need the user in the one danger-strong tone, capped at
-"9+", rendered by one shared component with an accessible name that says the
-entry needs attention. An item the user chose to ignore MUST NOT count. On the
-collapsed icon rail it MUST shrink to a dot of the same colour on the icon, and
-the row's tooltip carries the count ("MCP servers · 1 needs you").
-
-What raises a signal and what clears it belongs to the capability that owns the
-kind: the entries of Agents, Model providers, MCP servers, Skills and Channels
-count the non-informational items the cross-kind attention list reports for their kind — so Agents counts an agent that needs repair, one whose config directory is left behind and one whose Coffer hook needs the person, and not one that is merely not connected
-(spec [resource-framework](../resource-framework/spec.md) "Report what needs a
-person across every kind"); Sync keeps its own signal, one situation cleared by
-visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
-human where the user already is"); CLIs counts the required commands that need
-the user; Skills counts the skills on its Needs attention list plus the folders
-in the skills store that no skill claims. Knowledge and Memory carry no badge. An entry whose kind declares no
-signal MUST NOT carry a badge, and a signal that has not loaded, or whose read
-failed, MUST leave no badge rather than an error in the sidebar.
-
-#### Scenario: an entry whose kind needs attention carries a count badge
-- **GIVEN** a sync round held for confirmation, and two MCP servers the attention list reports, one of them failing
-- **WHEN** the user is on any page other than Sync
-- **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a badge of 2, both in the danger-strong tone, each with an accessible name saying it needs attention
-- **AND** no other entry carries one
-
-#### Scenario: the Skills badge counts skills needing attention plus folders no skill claims
-- **GIVEN** a skill whose master folder is gone, one whose required tool is off, one that is fine, one with only a Git update waiting and a folder in the skills store that no skill claims
-- **WHEN** the sidebar renders
-- **THEN** the Skills entry carries a badge of 3, and none while the skills list has not answered
-
-#### Scenario: the badge count caps at 9+
-- **GIVEN** an entry whose kind reports twelve things that need the user
-- **WHEN** the sidebar renders expanded
-- **THEN** its badge reads "9+" in the danger-strong tone
-
-#### Scenario: the attention dot stays on the collapsed rail
-- **GIVEN** the MCP servers entry carrying a badge for one failing server
-- **WHEN** the sidebar is collapsed to its icon rail
-- **THEN** the MCP servers icon carries a dot of the same colour, and its tooltip reads "MCP servers · 1 needs you"
-
-#### Scenario: an entry without a signal never carries a badge
-- **GIVEN** every attention signal the kinds declare is raised, and documents waiting in a knowledge collection's inbox
-- **WHEN** the sidebar renders
-- **THEN** only the entries whose kinds declare a signal carry a badge, and Knowledge carries none
-- **AND** an informational item of the attention list raises no badge
-
-#### Scenario: an unreadable signal leaves no badge
-- **GIVEN** the route behind a kind's attention signal failing, or not yet answered
-- **WHEN** the sidebar renders
-- **THEN** that entry carries no badge and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen

@@ -119,7 +119,6 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
         .getByRole("button")
         .filter({ has: page.locator(".font-mono", { hasText: /^sh$/ }) }),
     ).toBeVisible();
-    await expect(page.getByTestId("nav-dot-clis")).toBeVisible();
 
     // 2. Its pane: the banner names the skill it breaks, and the header's one
     //    action hands the fix to an agent — nothing installs.
