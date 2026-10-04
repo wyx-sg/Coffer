@@ -11,8 +11,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { modelSwitchTestKey } from "@/lib/api/queryKeys";
 import { modelProbeApi, type Provider } from "@/lib/api/providers";
+
+/** One run per pair and endpoint (kept here: queryKeys.ts is at its size limit). */
+const modelSwitchTestKey = (pair: string | null, baseUrl?: string | null, ref?: string | null) =>
+  ["model-switch-test", pair, baseUrl, ref] as const;
 
 const DEBOUNCE_MS = 400;
 

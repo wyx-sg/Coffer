@@ -84,13 +84,6 @@ export const agentTranscriptsKey = <P extends object>(uid: string, params?: P) =
 export const agentTranscriptSessionKey = (uid: string, sourcePath: string, offset: number) =>
   ["agents", uid, "conversations", "session", sourcePath, offset] as const;
 
-/** The Change model dialog's connection test: one run per pair and endpoint. */
-export const modelSwitchTestKey = (
-  pair: string | null,
-  baseUrl?: string | null,
-  ref?: string | null,
-) => ["model-switch-test", pair, baseUrl, ref] as const;
-
 // --- agentProviders — the turn platform's agent registry (/agent-providers) ---
 
 export const agentProvidersKey = ["agentProviders"] as const;
