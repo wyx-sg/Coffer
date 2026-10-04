@@ -337,12 +337,6 @@ class AnswerQuestionIn(BaseModel):
     index: int | None = Field(default=None, ge=0)
 
 
-class NeedsYouCountOut(BaseModel):
-    """How many conversations wait on an answer."""
-
-    count: int
-
-
 class PendingQueueIn(BaseModel):
     """Body for PUT /conversations/{id}/pending — replaces the ordered queue."""
 

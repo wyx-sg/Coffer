@@ -1,6 +1,6 @@
 """The web side of a question the agent asked the owner: the answer route, the
-Needs-you mark on a conversation and the sidebar count (spec chat "Pause a turn
-on a question for the owner", "Show which conversations wait on you").
+Needs-you mark on a conversation (spec chat "Pause a turn on a question for the
+owner").
 
 A real turn orchestrator runs a scripted adapter that asks through the same
 function the Claude Code hook and ``coffer__ask`` use; the routes are driven in
@@ -214,7 +214,7 @@ async def test_a_question_index_guards_against_answering_the_next_card() -> None
     assert [a["selected"] for a in last.json()["answers"]] == [["staging"], ["api"]]
 
 
-async def test_a_waiting_conversation_is_marked_and_counted_until_it_is_answered() -> None:
+async def test_a_waiting_conversation_is_marked_until_it_is_answered() -> None:
     app, chat, orchestrator = _app(YES_NO)
     waiting = await chat.create_conversation(agent_key="builtin")
     other = await chat.create_conversation(agent_key="builtin")
@@ -222,18 +222,15 @@ async def test_a_waiting_conversation_is_marked_and_counted_until_it_is_answered
     block = await _pending(waiting.id)
 
     async with _client(app) as client:
-        count = await client.get(f"{_BASE}/conversations/needs-you-count")
         listing = (await client.get(f"{_BASE}/conversations")).json()["conversations"]
         one = await client.get(f"{_BASE}/conversations/{waiting.id}")
         await client.post(
             _answer_url(waiting.id, block.question_id), json={"answers": [{"selected": ["Yes"]}]}
         )
         await _drain(queue)
-        after = await client.get(f"{_BASE}/conversations/needs-you-count")
         after_one = await client.get(f"{_BASE}/conversations/{waiting.id}")
 
-    assert count.status_code == 200 and count.json() == {"count": 1}
     flags = {c["id"]: c["needs_you"] for c in listing}
     assert flags == {waiting.id: True, other.id: False}
     assert one.json()["needs_you"] is True
-    assert after.json() == {"count": 0} and after_one.json()["needs_you"] is False
+    assert after_one.json()["needs_you"] is False

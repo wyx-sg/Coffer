@@ -247,41 +247,6 @@ paths:
       summary: Batch Conversations
       tags:
       - chat
-  /api/v1/chat/conversations/needs-you-count:
-    get:
-      description: How many conversations have a question waiting on the owner.
-      operationId: needs_you_count_api_v1_chat_conversations_needs_you_count_get
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NeedsYouCountOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Needs You Count
-      tags:
-      - chat
   /api/v1/chat/conversations/{id}:
     delete:
       description: |-
@@ -1778,16 +1743,6 @@ components:
       - created_at
       - finished_at
       title: MessageOut
-      type: object
-    NeedsYouCountOut:
-      description: How many conversations wait on an answer.
-      properties:
-        count:
-          title: Count
-          type: integer
-      required:
-      - count
-      title: NeedsYouCountOut
       type: object
     PendingQueueIn:
       description: Body for PUT /conversations/{id}/pending — replaces the ordered queue.

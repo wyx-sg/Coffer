@@ -1,11 +1,9 @@
 """/api/v1/chat — answering a question the agent asked the owner (spec chat
-"Pause a turn on a question for the owner", "Show which conversations wait on you").
+"Pause a turn on a question for the owner").
 
 ``POST .../questions/{question_id}/answer`` is the web half of one answering
 function (:func:`coffer.application.chat.questions.answer_question`) the channels
 call as well: the first answer wins and a later one is ``QUESTION_CLOSED``.
-``GET /conversations/needs-you-count`` feeds the sidebar badge. This router is
-mounted before the conversation routes so the literal path is not read as an id.
 """
 
 from __future__ import annotations
@@ -18,7 +16,6 @@ from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.dependencies import get_chat_service
 from coffer.surfaces.http.chat.schemas import (
     AnswerQuestionIn,
-    NeedsYouCountOut,
     QuestionOut,
     question_out,
 )
@@ -29,12 +26,6 @@ router = APIRouter(
     tags=["chat"],
     dependencies=[Depends(require_token)],
 )
-
-
-@router.get("/conversations/needs-you-count", response_model=NeedsYouCountOut)
-async def needs_you_count() -> NeedsYouCountOut:
-    """How many conversations have a question waiting on the owner."""
-    return NeedsYouCountOut(count=len(questions.needs_you_conversations()))
 
 
 @router.post(

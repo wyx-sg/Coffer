@@ -43,7 +43,7 @@ function renderRow(c: Conversation) {
 }
 
 describe("ConversationRow status", () => {
-  acceptance("chat", "a waiting conversation is marked and counted", () => {
+  acceptance("chat", "a waiting conversation is marked", () => {
     renderRow(conv({ running: true, needs_you: true }));
     // Waiting on the owner outranks Running.
     expect(screen.getByText("Needs you")).toBeInTheDocument();
