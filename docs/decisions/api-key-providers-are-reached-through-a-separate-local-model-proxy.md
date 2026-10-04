@@ -201,7 +201,8 @@ agent never holds
   with `base_url = http://127.0.0.1:<port>/openai/v1`,
   `wire_api = "responses"`, `supports_websockets = false`,
   `requires_openai_auth = false` and
-  `auth = {command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"]}`.
+  `auth = {command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"], timeout_ms = 30000}`
+  (Codex's 5 s default cuts off a cold `proxy token`, which hangs the first turn).
   A terminal Codex then works with no export, because it runs the command
   itself. The command-backed `auth` table (`ModelProviderAuthInfo`) needs Codex
   0.155.1 or later, the version it was confirmed on; no process's environment

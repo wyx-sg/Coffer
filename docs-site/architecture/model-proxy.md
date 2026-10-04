@@ -45,7 +45,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 **Codex** (`config.toml`):
 
 - `[model_providers.coffer]` has `base_url = "http://127.0.0.1:<port>/openai/v1"`, `wire_api = "responses"`, `supports_websockets = false` and `requires_openai_auth = false`.
-- `auth = { command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"] }`, so a Codex started in any terminal fetches its own token and nothing has to be exported. The command-backed `auth` table needs Codex 0.155.1 or later.
+- `auth = { command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"], timeout_ms = 30000 }`, so a Codex started in any terminal fetches its own token and nothing has to be exported. `timeout_ms` is there because Codex gives the command 5 seconds by default and a cold start (the CLI unpacking itself, the daemon still starting) can take longer. The command-backed `auth` table needs Codex 0.155.1 or later.
 
 Neither file names the connection. Switching an agent from one API-key connection to another changes the proxy's **route** and leaves the agent's file alone. Switching between a connection and the agent's own login is still a file write.
 

@@ -5,9 +5,10 @@ provider-switching "Project into Codex config without overwriting it").
 Codex gets top-level ``model`` + ``model_provider = "coffer"`` and a
 ``[model_providers.coffer]`` table. Codex authenticates to that provider with
 its ``auth`` command (``auth.command`` / ``auth.args``), which prints the
-agent's local model-proxy token, with ``supports_websockets = false`` and
-``requires_openai_auth = false`` — so a Codex the user starts in their own
-terminal needs nothing exported, and no key rides its environment.
+agent's local model-proxy token (``timeout_ms`` gives it time to start cold), with
+``supports_websockets = false`` and ``requires_openai_auth = false`` — so a Codex
+the user starts in their own terminal needs nothing exported, and no key rides
+its environment.
 
 When the connection curates a model set, ``model_catalog_json`` points at a
 Coffer-owned catalogue whose entries carry each model's context window, a 90%
@@ -34,6 +35,13 @@ from coffer.domain.provider.model_binding import ProjectedModel
 #: instead of being a setting.
 CODEX_WIRE_API = "responses"
 CODEX_PROVIDER_ID = "coffer"
+#: How long Codex lets the ``auth`` command run, in milliseconds. Codex's own
+#: default is 5 000, and ``coffer proxy token`` can exceed it on a cold start:
+#: the frozen CLI unpacks itself, the daemon may still be starting, and Codex is
+#: launching its MCP servers at the same time. A timeout leaves Codex's first
+#: turn hanging ("Task creation is not yet confirmed"), so the command gets
+#: far more room than a warm call (about 1 s) ever needs.
+CODEX_AUTH_TIMEOUT_MS = 30_000
 #: Filename of the model catalogue Coffer writes next to an agent's
 #: ``config.toml``. The name doubles as the OWNERSHIP MARKER: de-projection
 #: drops ``model_catalog_json`` iff the path it holds ends in this filename.
@@ -162,6 +170,7 @@ def apply_codex_provider(
     auth_table = tomlkit.inline_table()
     auth_table["command"] = auth.command
     auth_table["args"] = list(auth.args)
+    auth_table["timeout_ms"] = CODEX_AUTH_TIMEOUT_MS
     block["auth"] = auth_table
     doc["model_providers"][provider_id] = block
     return tomlkit.dumps(doc)
@@ -190,6 +199,7 @@ def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) ->
 
 
 __all__ = [
+    "CODEX_AUTH_TIMEOUT_MS",
     "CODEX_CATALOG_TRUNCATION_LIMIT",
     "CODEX_MODEL_CATALOG_FILENAME",
     "CODEX_MODEL_CATALOG_KEY",

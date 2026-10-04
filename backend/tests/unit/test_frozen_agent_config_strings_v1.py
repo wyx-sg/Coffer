@@ -129,7 +129,8 @@ def test_codex_provider_block_is_frozen() -> None:
         'wire_api = "responses"\n'
         "supports_websockets = false\n"
         "requires_openai_auth = false\n"
-        f'auth = {{command = "{_CLI}", args = ["proxy", "token", "--agent-uid", "{_AGENT_UID}"]}}\n'
+        f'auth = {{command = "{_CLI}", '
+        f'args = ["proxy", "token", "--agent-uid", "{_AGENT_UID}"], timeout_ms = 30000}}\n'
     )
 
 

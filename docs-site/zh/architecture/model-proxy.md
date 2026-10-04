@@ -45,7 +45,7 @@ Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────
 **Codex**（`config.toml`）：
 
 - `[model_providers.coffer]` 包含 `base_url = "http://127.0.0.1:<port>/openai/v1"`、`wire_api = "responses"`、`supports_websockets = false` 和 `requires_openai_auth = false`。
-- `auth = { command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"] }`，所以在任何终端里启动的 Codex 都会自己取令牌，不需要导出任何东西。基于命令的 `auth` 表需要 Codex 0.155.1 或更高版本。
+- `auth = { command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"], timeout_ms = 30000 }`，所以在任何终端里启动的 Codex 都会自己取令牌，不需要导出任何东西。`timeout_ms` 是因为 Codex 默认只给这条命令 5 秒，而冷启动（CLI 自解压、daemon 还在启动）可能更久。基于命令的 `auth` 表需要 Codex 0.155.1 或更高版本。
 
 两个文件都不写连接的名字。把智能体从一个 API 密钥 连接切换到另一个，改变的是代理的**路由**，智能体的文件不动。在连接和智能体自己的登录态之间切换，仍然是一次文件写入。
 
