@@ -1,28 +1,22 @@
-// src/components/agents/detail/AgentDetailHeader.tsx — the agent page's header: mark, name, status pill, New conversation, ⋯.
+// src/components/agents/detail/AgentDetailHeader.tsx — the agent page's header: mark, name, status pill, ⋯.
 //
 // One fixed header for every state: the agent's mark ),
-// its name, one StatusPill, then New conversation and the ⋯ menu on the right.
-// An agent whose program is not on this Mac has nothing to converse with, so it
-// shows ⋯ only. The header never changes into a fix button: Connect, Repair,
+// its name, one StatusPill, then the ⋯ menu on the right. The header never changes into a fix button: Connect, Repair,
 // and Check again live in the Overview's Connection section. There is
 // no meta line; the version is in Overview's Details. Rotate proxy token is in
 // ⋯, only while the agent routes through Coffer's proxy.
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { MessageSquarePlus } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
 import { AgentPendingStatus } from "@/components/agents/list/AgentPendingStatus";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/status/StatusPill";
-import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { agentTypeLabel } from "@/lib/agents/display";
-import { DRAFT_PATH, draftAgentState } from "@/lib/conversations/handoff";
 import { hookNotApproved } from "@/lib/agents/hookRows";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
-import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
+import { agentRowStateKey, agentRowTone } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentHooks } from "@/lib/hooks/useAgents";
 import { useRotateProxyAction } from "./useRotateProxyToken";
@@ -33,9 +27,6 @@ interface Props {
   typeRow: AgentTypeOut;
   rowActions: RowActions;
 }
-
-/** States with no program to talk to: the header offers ⋯ only. */
-const NO_PROGRAM: readonly AgentRowState[] = ["not_installed", "config_left_behind", "not_found"];
 
 export function AgentDetailHeader({ typeRow, rowActions }: Props) {
   const { t } = useTranslation();
@@ -74,19 +65,9 @@ export function AgentDetailHeader({ typeRow, rowActions }: Props) {
         )
       }
       actions={
-        <div className="flex items-center gap-2">
-          {NO_PROGRAM.includes(state) ? null : (
-            <Button variant="outline" size="sm" asChild>
-              <Link to={DRAFT_PATH} state={draftAgentState(typeRow.type)}>
-                <MessageSquarePlus aria-hidden className="size-3.5" />
-                {t("agents.detail.newConversation")}
-              </Link>
-            </Button>
-          )}
-          {actions.length > 0 ? (
-            <ActionMenu label={t("agents.detail.moreActions", { name })} actions={actions} />
-          ) : null}
-        </div>
+        actions.length > 0 ? (
+          <ActionMenu label={t("agents.detail.moreActions", { name })} actions={actions} />
+        ) : null
       }
     />
   );

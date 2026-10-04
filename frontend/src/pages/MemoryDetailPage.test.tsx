@@ -28,7 +28,6 @@ import {
   RETIRED,
 } from "@/components/memory/memoryTestData";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
-import { readHandoffState } from "@/lib/conversations/handoff";
 import { ApiError } from "@/lib/api/errors";
 import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
 import { MemoryPage } from "@/pages/MemoryPage";
@@ -97,18 +96,6 @@ function stub({
   vi.mocked(api.getTidyHandoff).mockResolvedValue({ prompt: "Tidy every partition." });
 }
 
-/** The draft a hand-off opens: agent, whether it sends itself, and the prompt. */
-function DraftProbe() {
-  const handoff = readHandoffState(useLocation().state);
-  return (
-    <div data-testid="draft">
-      {handoff
-        ? `${handoff.agentKey}|${handoff.autoSend ? "send" : "draft"}|${handoff.prompt}`
-        : "empty"}
-    </div>
-  );
-}
-
 function LocationProbe() {
   const location = useLocation();
   return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
@@ -124,7 +111,6 @@ function renderAt(path: string) {
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/memory/:uid" element={<MemoryDetailPage />} />
             <Route path="/memory/:uid/:tab" element={<MemoryDetailPage />} />
-            <Route path="/conversations/new" element={<DraftProbe />} />
             <Route path="*" element={null} />
           </Routes>
           <LocationProbe />
@@ -286,13 +272,12 @@ describe("MemoryDetailPage", () => {
     },
   );
 
-  acceptance("memory", "Tidy sends the prompt to the default managed agent", async () => {
+  // Until a hand-off starts the agent in a terminal, Tidy is Copy prompt even with a managed agent.
+  test("with a managed agent the page still offers Copy prompt only", async () => {
     stub({ managedAgent: true });
     renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
-    expect(await screen.findByTestId("draft")).toHaveTextContent(
-      `claude_code|send|${COFFER.tidy_handoff.prompt}`,
-    );
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
   });
 
   acceptance("memory", "with no managed agent the page offers Copy prompt only", async () => {
@@ -302,22 +287,17 @@ describe("MemoryDetailPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
     expect(writeText).toHaveBeenCalledWith(COFFER.tidy_handoff.prompt);
     expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
-    expect(screen.queryByTestId("draft")).toBeNull();
   });
 
-  acceptance(
-    "memory",
-    "Tidy all hands every partition to the agent in one conversation",
-    async () => {
-      stub({ managedAgent: true, partitions: [GLOBAL, COFFER] });
-      renderAt("/memory");
-      fireEvent.click(await screen.findByRole("button", { name: "Tidy all" }));
-      expect(await screen.findByTestId("draft")).toHaveTextContent(
-        "claude_code|send|Tidy every partition.",
-      );
-      expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
-    },
-  );
+  test("Tidy all is Copy prompt, which fetches the all-partitions prompt", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    stub({ managedAgent: true, partitions: [GLOBAL, COFFER] });
+    renderAt("/memory");
+    fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Tidy every partition."));
+    expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
+  });
 
   // Delivered lives at /memory/<uid>/delivered with an agent switch.
   acceptance("memory", "a partition has a memories tab and a delivered tab", async () => {

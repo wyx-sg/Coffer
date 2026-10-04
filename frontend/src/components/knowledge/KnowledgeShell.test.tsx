@@ -61,8 +61,9 @@ function tree() {
 describe("the header", () => {
   acceptance("knowledge", "the page's one primary action is Upload", async () => {
     renderKnowledge(`/knowledge/${UID}`);
+    // Until a hand-off starts the agent in a terminal, Tidy all is Copy prompt.
     const tidyAll = await within(screen.getByRole("banner")).findByRole("button", {
-      name: "Tidy all",
+      name: "Copy prompt",
     });
     expect(within(screen.getByRole("banner")).getByRole("heading")).toHaveTextContent("Knowledge");
     expect(screen.getByText("Experimental")).toBeInTheDocument();
@@ -84,7 +85,7 @@ describe("the header", () => {
 
   test("Upload drops to secondary while a document is being edited", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    await screen.findByRole("button", { name: "Tidy all" });
+    await screen.findAllByRole("button", { name: "Copy prompt" });
     act(() => setEditingDocument(GATEWAY.path));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Upload" }).className).not.toMatch(/bg-accent/),

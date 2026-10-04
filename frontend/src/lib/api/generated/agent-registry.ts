@@ -520,7 +520,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agents/{uid}/transcripts": {
+    "/api/v1/agents/{uid}/sessions": {
         parameters: {
             query?: never;
             header?: never;
@@ -528,17 +528,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Transcripts
-         * @description List an agent's transcript sessions with search, filter, and sort.
-         *
-         *     Searches title + project path (``q``), filters by exact ``project``, and
-         *     sorts by ``sort``/``order`` with ``session_id`` as the tie-break. Backed by
-         *     the reader's mtime-aware cache, so an agent with thousands of past sessions
-         *     stays responsive. Paged by ``limit`` and the answer's ``next_cursor``
-         *     alongside the matched total — a cursor, not an offset, because the agent
-         *     keeps writing sessions while a reader pages.
+         * List Agent Sessions
+         * @description The agent's sessions, most recent activity first.
          */
-        get: operations["list_transcripts_api_v1_agents__uid__transcripts_get"];
+        get: operations["list_agent_sessions_api_v1_agents__uid__sessions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -547,31 +540,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agents/{uid}/transcripts/session": {
+    "/api/v1/agents/{uid}/sessions/{session_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Read Transcript Session
-         * @description Render one of the agent's conversations: its summary and a page of turns.
-         *
-         *     Bounded twice over, because a single transcript can be tens of megabytes:
-         *     at most ``limit`` turns come back (500 ceiling), and each turn's text is cut
-         *     at the domain's per-turn cap with ``truncated`` set. Every turn is
-         *     secret-scrubbed before it leaves the parser — a prompt is where a pasted key
-         *     would be. ``path`` must resolve inside this agent's own sessions directory;
-         *     anything else is 404 rather than a file read.
-         */
-        get: operations["read_transcript_session_api_v1_agents__uid__transcripts_session_get"];
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Agent Session
+         * @description Delete the session from the agent's own store (permanent).
+         */
+        delete: operations["delete_agent_session_api_v1_agents__uid__sessions__session_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename Agent Session
+         * @description Rename the session in the agent's own store.
+         */
+        patch: operations["rename_agent_session_api_v1_agents__uid__sessions__session_id__patch"];
         trace?: never;
     };
 }
@@ -685,6 +675,55 @@ export interface components {
             tier_models?: {
                 [key: string]: string;
             } | null;
+        };
+        /**
+         * AgentSessionListResponse
+         * @description Response for GET /api/v1/agents/{uid}/sessions.
+         */
+        AgentSessionListResponse: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Sessions */
+            sessions: components["schemas"]["AgentSessionOut"][];
+            /** Total */
+            total: number | null;
+        };
+        /**
+         * AgentSessionOut
+         * @description One of the agent's sessions as the list shows it.
+         */
+        AgentSessionOut: {
+            channel_binding: components["schemas"]["SessionChannelOut"] | null;
+            /** Conversation Id */
+            conversation_id: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Cwd */
+            cwd: string | null;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /**
+             * Needs You
+             * @default false
+             */
+            needs_you: boolean;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * AgentSessionRename
+         * @description Body of PATCH /api/v1/agents/{uid}/sessions/{session_id}.
+         */
+        AgentSessionRename: {
+            /** Title */
+            title: string;
         };
         /**
          * AgentType
@@ -1505,6 +1544,38 @@ export interface components {
             /** Uid */
             uid: string | null;
         };
+        /**
+         * SessionChannelOut
+         * @description The IM channel a session's conversation is driven from.
+         */
+        SessionChannelOut: {
+            /** Channel */
+            channel: string | null;
+            /** Channel Uid */
+            channel_uid: string;
+            /** Chat Id */
+            chat_id: string;
+            place: components["schemas"]["SessionPlaceOut"] | null;
+            /** Platform */
+            platform: ("telegram" | "seatalk") | null;
+        };
+        /**
+         * SessionPlaceOut
+         * @description Which chat and thread of its channel a conversation lives in.
+         */
+        SessionPlaceOut: {
+            /** Chat Kind */
+            chat_kind: ("direct" | "group") | null;
+            /** Chat Name */
+            chat_name: string | null;
+            /** Parallel Mark */
+            parallel_mark: string | null;
+            /**
+             * Thread
+             * @default false
+             */
+            thread: boolean;
+        };
         /** SkillFileContentOut */
         SkillFileContentOut: {
             /** Abs Path */
@@ -1552,92 +1623,6 @@ export interface components {
         /** SkillFileTreeOut */
         SkillFileTreeOut: {
             root: components["schemas"]["SkillFileNodeOut"];
-        };
-        /**
-         * TranscriptMessageOut
-         * @description One conversational turn, as the session page renders it.
-         */
-        TranscriptMessageOut: {
-            /** Role */
-            role: string;
-            /** Text */
-            text: string;
-            /** Timestamp */
-            timestamp: string | null;
-            /**
-             * Truncated
-             * @default false
-             */
-            truncated: boolean;
-        };
-        /**
-         * TranscriptSessionDetailResponse
-         * @description Response for GET /api/v1/agents/{uid}/transcripts/session.
-         *
-         *     The summary fields are the listing's, so a page reached by deep link shows
-         *     the same title and project the row did. ``message_count`` is the WHOLE
-         *     file's turn count while ``messages`` is the ``limit`` turns from
-         *     ``offset`` — a reader must be able to tell "200 of 812" from "all 200".
-         */
-        TranscriptSessionDetailResponse: {
-            /** Last Activity At */
-            last_activity_at: string | null;
-            /** Limit */
-            limit: number;
-            /** Message Count */
-            message_count: number;
-            /** Messages */
-            messages: components["schemas"]["TranscriptMessageOut"][];
-            /** Offset */
-            offset: number;
-            /** Project Path */
-            project_path: string | null;
-            /** Session Id */
-            session_id: string;
-            /** Source Path */
-            source_path: string;
-            /** Started At */
-            started_at: string | null;
-            /** Title */
-            title: string | null;
-        };
-        /**
-         * TranscriptSessionListResponse
-         * @description Response for GET /api/v1/agents/{uid}/transcripts.
-         *
-         *     ``sessions`` is one page; ``total`` is the number of sessions matching the
-         *     search/filter, so the UI can show "N of total". ``next_cursor`` reads the
-         *     page after this one and is null on the last page.
-         */
-        TranscriptSessionListResponse: {
-            /** Limit */
-            limit: number;
-            /** Next Cursor */
-            next_cursor: string | null;
-            /** Sessions */
-            sessions: components["schemas"]["TranscriptSessionSummary"][];
-            /** Total */
-            total: number;
-        };
-        /**
-         * TranscriptSessionSummary
-         * @description One transcript session as the list shows it.
-         */
-        TranscriptSessionSummary: {
-            /** Last Activity At */
-            last_activity_at: string | null;
-            /** Message Count */
-            message_count: number;
-            /** Project Path */
-            project_path: string | null;
-            /** Session Id */
-            session_id: string;
-            /** Source Path */
-            source_path: string;
-            /** Started At */
-            started_at: string | null;
-            /** Title */
-            title: string | null;
         };
     };
     responses: never;
@@ -3265,18 +3250,14 @@ export interface operations {
             };
         };
     };
-    list_transcripts_api_v1_agents__uid__transcripts_get: {
+    list_agent_sessions_api_v1_agents__uid__sessions_get: {
         parameters: {
             query?: {
-                limit?: number;
-                /** @description The previous page's next_cursor. Bound to the search, filter and sort it was issued with; any other value is 400 CURSOR_INVALID. */
-                cursor?: string | null;
-                /** @description Search title or project path. */
+                /** @description Case-insensitive search (Codex: title only). */
                 q?: string | null;
-                /** @description Filter to this exact project_path. */
-                project?: string | null;
-                sort?: "started_at" | "last_activity_at" | "message_count";
-                order?: "asc" | "desc";
+                limit?: number;
+                /** @description The previous page's next_cursor. Bound to the agent and search it was issued with; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -3294,7 +3275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TranscriptSessionListResponse"];
+                    "application/json": components["schemas"]["AgentSessionListResponse"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -3317,32 +3298,71 @@ export interface operations {
             };
         };
     };
-    read_transcript_session_api_v1_agents__uid__transcripts_session_get: {
+    delete_agent_session_api_v1_agents__uid__sessions__session_id__delete: {
         parameters: {
-            query: {
-                /** @description Absolute source_path of a session, as the listing gave it. */
-                path: string;
-                limit?: number;
-                offset?: number;
-            };
+            query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
             };
             path: {
                 uid: string;
+                session_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TranscriptSessionDetailResponse"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rename_agent_session_api_v1_agents__uid__sessions__session_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSessionRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

@@ -16,7 +16,6 @@ import type { SettingsTabId } from "@/lib/navigation";
 export const OBJECT_KINDS = [
   "agent",
   "provider",
-  "conversation",
   "channel",
   "mcpServer",
   "customTool",
@@ -72,7 +71,6 @@ export interface PaletteItem {
 export const KIND_PAGE: Record<ObjectKind, string> = {
   agent: "/agents",
   provider: "/model-providers",
-  conversation: "/conversations",
   channel: "/channels",
   mcpServer: "/mcp-servers",
   customTool: "/custom-tools",
@@ -102,7 +100,7 @@ const ADDRESSED_BY_NAME: ReadonlySet<ObjectKind> = new Set([
 ]);
 
 /** An object's detail route: by type for agents (one agent per type), by name
- *  where the kind's name is fixed, by uid (a conversation's id) where it can be
+ *  where the kind's name is fixed, by uid where it can be
  *  renamed. A secret has no detail page, so it opens the Secrets page. */
 export function objectPath(kind: ObjectKind, obj: PaletteObject): string {
   if (kind === "secret") return KIND_PAGE.secret;

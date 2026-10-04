@@ -144,37 +144,33 @@ describe("useAgentRowActions", () => {
     },
   );
 
-  acceptance(
-    "web-ui",
-    "ask an agent is offered only while another managed agent is available",
-    async () => {
-      const row = typeRow({
-        type: "claude_code",
-        state: "config_only",
-        addable: false,
-        version: null,
-        install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
-      });
-      // The missing agent itself cannot run a turn; Codex can.
-      const d = use(
-        fakeDaemon({
-          types: [row],
-          providers: [
-            { agent_key: "claude_code", display_name: "Claude Code", available: false },
-            { agent_key: "codex", display_name: "Codex", available: true },
-          ],
-        }),
-      );
-      renderWithDaemon(<Harness row={row} />);
-      // The split button, beside the ⋯, never inside it.
-      fireEvent.click(await screen.findByRole("button", { name: "Ask an agent" }));
-      // Straight to the draft: no dialog, and nothing written.
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(writes(d)).toEqual([]);
-    },
-  );
+  // Until a hand-off starts the agent in a terminal, another managed agent changes nothing:
+  // the row offers Copy prompt, and nothing is written.
+  test("with another managed agent available the row still offers Copy prompt only", async () => {
+    const row = typeRow({
+      type: "claude_code",
+      state: "config_only",
+      addable: false,
+      version: null,
+      install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
+    });
+    const d = use(
+      fakeDaemon({
+        types: [row],
+        providers: [
+          { agent_key: "claude_code", display_name: "Claude Code", available: false },
+          { agent_key: "codex", display_name: "Codex", available: true },
+        ],
+      }),
+    );
+    renderWithDaemon(<Harness row={row} />);
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(writes(d)).toEqual([]);
+  });
 
-  test("with only the missing agent itself managed, Ask an agent is not offered", async () => {
+  test("with only the missing agent itself managed, Copy prompt is the only hand-off", async () => {
     const row = typeRow({
       type: "claude_code",
       state: "config_only",

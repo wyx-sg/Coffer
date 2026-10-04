@@ -38,6 +38,8 @@ interface Args<T> {
   keepPrevious?: boolean;
   /** How long a read page stays fresh (ms); `Infinity` for a list that changes only when the reader asks. */
   staleTime?: number;
+  /** Read the pages again when the window regains focus (default off). */
+  refetchOnFocus?: boolean;
 }
 
 /** @ui-only What a list surface renders from. */
@@ -69,6 +71,7 @@ export function useInfiniteList<T>({
   refetchInterval,
   keepPrevious = true,
   staleTime,
+  refetchOnFocus = false,
 }: Args<T>): InfiniteList<T> {
   const query = useInfiniteQuery({
     queryKey,
@@ -81,8 +84,8 @@ export function useInfiniteList<T>({
     staleTime,
     refetchIntervalInBackground: false,
     // A page that is on screen changes when the reader asks, or on the
-    // caller's interval — not because the window regained focus.
-    refetchOnWindowFocus: false,
+    // caller's interval — and on focus only for a list that asks for it.
+    refetchOnWindowFocus: refetchOnFocus,
   });
   const items = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
   // The first page's total is the freshest the server gave for this query.

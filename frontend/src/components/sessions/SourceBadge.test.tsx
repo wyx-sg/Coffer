@@ -1,10 +1,10 @@
-// components/chat/SourceBadge.test.tsx
+// components/sessions/SourceBadge.test.tsx
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import i18n from "@/i18n";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { makeBinding, makeConversation } from "@/test/conversationFixtures";
+import { makeBinding } from "@/test/conversationFixtures";
 import { sourceText } from "@/lib/conversations/sourceText";
 import { SourceBadge } from "./SourceBadge";
 
@@ -16,17 +16,9 @@ const place = (p: Partial<NonNullable<ReturnType<typeof makeBinding>["place"]>>)
   chat_name: null,
   ...p,
 });
-const text = (binding: Parameters<typeof makeBinding>[0] | null) =>
-  sourceText(
-    t,
-    makeConversation({ channel_binding: binding === null ? null : makeBinding(binding) }),
-  );
+const text = (binding: Parameters<typeof makeBinding>[0]) => sourceText(t, makeBinding(binding));
 
 describe("sourceText", () => {
-  test("Coffer for a conversation opened in Coffer", () => {
-    expect(text(null)).toBe("Coffer");
-  });
-
   test("a direct chat, its parallel thread and a thread in it", () => {
     expect(text({ place: place({}) })).toBe("SeaTalk · DM");
     expect(text({ place: place({ parallel_mark: "🧵#2 deploy check", thread: true }) })).toBe(
@@ -61,7 +53,7 @@ describe("SourceBadge", () => {
   test("marks the platform beside the text", () => {
     render(
       <TooltipProvider>
-        <SourceBadge conversation={makeConversation({ channel_binding: makeBinding() })} />
+        <SourceBadge channel={makeBinding()} />
       </TooltipProvider>,
     );
     expect(document.querySelector('[data-platform="seatalk"] img')).not.toBeNull();

@@ -29,14 +29,15 @@ afterEach(() => {
 const requestAt = (n: number) => fetchSpy.mock.calls[n][0] as Request;
 
 describe("chatApi.listConversations", () => {
-  test("reads one page by limit, cursor, archived flag and title search", async () => {
+  test("reads one page by limit, cursor, search, channels and agents", async () => {
     fetchSpy.mockResolvedValueOnce(json({ conversations: [row("a")], next_cursor: "c1" }));
 
     const out = await chatApi.listConversations({
-      archived: true,
       limit: 50,
       cursor: "c0",
       q: "deploy",
+      source: ["ch1", "ch2"],
+      agent: ["codex"],
     });
 
     expect(out.conversations.map((c) => c.id)).toEqual(["a"]);
@@ -44,8 +45,10 @@ describe("chatApi.listConversations", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const url = new URL(requestAt(0).url);
     expect(url.pathname).toBe("/api/v1/chat/conversations");
-    expect(url.searchParams.get("archived")).toBe("true");
+    expect(url.searchParams.has("archived")).toBe(false);
     expect(url.searchParams.get("limit")).toBe("50");
+    expect(url.searchParams.get("source")).toBe("ch1,ch2");
+    expect(url.searchParams.get("agent")).toBe("codex");
     expect(url.searchParams.get("cursor")).toBe("c0");
     expect(url.searchParams.get("q")).toBe("deploy");
   });
@@ -56,7 +59,6 @@ describe("chatApi.listConversations", () => {
     await chatApi.listConversations({ limit: 30 });
 
     const url = new URL(requestAt(0).url);
-    expect(url.searchParams.get("archived")).toBe("false");
     expect(url.searchParams.has("cursor")).toBe(false);
     expect(url.searchParams.has("q")).toBe(false);
   });
@@ -89,36 +91,16 @@ describe("chatApi.listConversations", () => {
 });
 
 describe("chatApi requests", () => {
-  test("setPending PUTs the queue and returns the stored one", async () => {
-    fetchSpy.mockResolvedValue(json({ pending: ["b"] }));
+  test("renameConversation PATCHes the title", async () => {
+    fetchSpy.mockResolvedValue(json({ id: "c1", title: "New name" }));
 
-    const out = await chatApi.setPending("c1", ["b"]);
+    const out = await chatApi.renameConversation("c1", "New name");
 
-    expect(out).toEqual({ pending: ["b"] });
+    expect(out.title).toBe("New name");
     const req = requestAt(0);
-    expect(req.method).toBe("PUT");
-    expect(new URL(req.url).pathname).toBe("/api/v1/chat/conversations/c1/pending");
-    expect(await req.clone().json()).toEqual({ pending: ["b"] });
-  });
-
-  test("sendMessage carries attachment ids only when there are some", async () => {
-    fetchSpy.mockImplementation(async () => json({ queued: false, mirror: null }, 202));
-
-    await chatApi.sendMessage("c1", "hi");
-    await chatApi.sendMessage("c1", "hi", ["a1"]);
-
-    expect(await requestAt(0).clone().json()).toEqual({ text: "hi" });
-    expect(await requestAt(1).clone().json()).toEqual({ text: "hi", attachment_ids: ["a1"] });
-  });
-
-  test("uploadAttachment sends the file as multipart form data", async () => {
-    fetchSpy.mockResolvedValue(json({ id: "u1", name: "a.txt" }));
-
-    await chatApi.uploadAttachment(new File(["hi"], "a.txt", { type: "text/plain" }));
-
-    const req = requestAt(0);
-    expect(req.method).toBe("POST");
-    expect(req.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/);
+    expect(req.method).toBe("PATCH");
+    expect(new URL(req.url).pathname).toBe("/api/v1/chat/conversations/c1");
+    expect(await req.clone().json()).toEqual({ title: "New name" });
   });
 
   test("deleteConversation and interruptTurn resolve on 204", async () => {

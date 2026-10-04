@@ -369,12 +369,11 @@ acceptance("channels", "a channel links to its conversations instead of showing 
   ]);
   expect(screen.queryByRole("tab", { name: /conversation|message|history/i })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
-  // What it does show is a short "recent" list whose rows are links, not a list to read in place.
-  expect(await screen.findByTestId("channel-recent-conversations")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Standup thread/ })).toHaveAttribute(
-    "href",
-    "/conversations/conv-1",
-  );
+  // What it does show is a short "recent" list of titles, not a list to read in place: a
+  // conversation has no page of its own to link to.
+  const recent = await screen.findByTestId("channel-recent-conversations");
+  expect(within(recent).getByText("Standup thread")).toBeInTheDocument();
+  expect(within(recent).queryByRole("link")).toBeNull();
 });
 
 test("the Overview has no Commands section: the list lives in the reference docs", async () => {

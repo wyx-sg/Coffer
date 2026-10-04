@@ -2,10 +2,10 @@
 //
 // Every hand-off in the app is the `AgentHandoff` split button; this hook is
 // its logic. The verbs: copy the daemon's prompt as given (a "Prompt
-// copied" toast says so), or open the draft (New conversation) with the prompt
-// in its composer — sent only when the person presses Send, unless the caller
-// asks for `autoSend` (Tidy), which sends it at once. `canAsk` is false while no
-// managed agent is available, and the caller then offers Copy prompt only.
+// copied" toast says so), or ask an agent. `canAsk` is false — the draft
+// conversation Ask an agent used to open is gone with the web chat, and a
+// hand-off to the agent in a terminal replaces it — so every caller offers
+// Copy prompt only.
 //
 // The prompt may also be a function: a hand-off that is a request in itself
 // (it records the files as handed over) is made only when the person picks a
@@ -14,7 +14,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { useToast } from "@/components/ui/toast";
-import { defaultDraftAgent } from "@/lib/conversations/draftMemory";
 import { openHandoffDraft } from "@/lib/conversations/handoff";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
@@ -38,7 +37,7 @@ export function useAgentHandoff(
   const { toast } = useToast();
   const navigate = useNavigate();
   const { data: agents = [] } = useAgentProviders();
-  const agentKey = defaultDraftAgent(agents);
+  const agentKey = agents.find((a) => a.available)?.agent_key ?? "";
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? null;
   const failed = (error: unknown) => toast.error(translateApiError(t, error));
   const copied = (text: string) => {
@@ -58,7 +57,8 @@ export function useAgentHandoff(
   };
   return {
     copy: () => run(null, copied),
-    canAsk: agentKey !== "",
+    // Asking an agent from here is gone with the web chat; handing off to a terminal replaces it.
+    canAsk: false,
     ask: () => run(agentName, opened),
   };
 }

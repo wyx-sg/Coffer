@@ -14,7 +14,6 @@ import { vi } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import * as knowledgeApi from "@/lib/api/knowledge";
-import { readHandoffState } from "@/lib/conversations/handoff";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 
 import {
@@ -35,19 +34,6 @@ function Where() {
   return <output data-testid="where">{`${location.pathname}${location.search}`}</output>;
 }
 
-/** The draft a hand-off opens, rendered as what it carries (agent, prompt, whether it sends itself). */
-// eslint-disable-next-line react-refresh/only-export-components
-function Draft() {
-  const handoff = readHandoffState(useLocation().state);
-  return (
-    <output data-testid="draft">
-      {handoff
-        ? `${handoff.agentKey}|${handoff.autoSend ? "send" : "draft"}|${handoff.prompt}`
-        : "empty"}
-    </output>
-  );
-}
-
 export function renderKnowledge(path: string) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -62,7 +48,6 @@ export function renderKnowledge(path: string) {
               <Route path="/knowledge" element={page} />
               <Route path="/knowledge/:uid" element={page} />
               <Route path="/knowledge/:uid/:tab" element={page} />
-              <Route path="/conversations/new" element={<Draft />} />
               <Route path="/settings/:tab" element={<p>settings open</p>} />
               <Route path="/activity" element={<p>activity open</p>} />
             </Routes>

@@ -484,21 +484,6 @@ The system MUST expose a read-only **native-memory store read** that returns one
 - **WHEN** the user opens that store by the `memory_dir` the listing gave and then reads one file in it
 - **THEN** Coffer returns the store directory as a tree (directories before files, paths relative to the store) and the file's contents with the absolute path that backs open / reveal, while a directory that is not one of this agent's stores — its sibling project directory included — and a path escaping the store are both rejected as `not_found` (404); read-only, emitting no audit event and writing nothing
 
-### Requirement: Lead a transcript turn with the person's own words
-**Readable means the person's words lead.** A "user turn" in a transcript is not only what the user typed: every harness prepends its own blocks to the same turn — reminders, task notifications, environment dumps. The conversation MUST read the turn as the person's, not the harness's: it MUST lead with their words, with the prepended blocks folded away rather than dropped — the blocks are part of the record and a view that discarded them would be claiming the turn said less than it did. A turn made only of harness blocks MUST still render, as what it is. Blocks are identified by SHAPE, not by a list of block names: naming them one at a time never finishes, and prose that merely contains a `<` is not markup. The person's turns MUST also be set apart from the agent's at a glance: the person's words sit in a right-aligned bubble, consistent with the Chat page, and the agent's replies stay unboxed on the other side under its mark; a turn made only of harness blocks is never put in the person's bubble.
-
-#### Scenario: lead a turn with the person's words, not the harness's blocks
-- **GIVEN** an opened conversation whose user turns include one led by a harness reminder block before the person's question, and one made only of harness blocks
-- **WHEN** the conversation renders
-- **THEN** the first turn leads with the person's question and the reminder block is folded behind it, not dropped
-- **AND** the turn made only of harness blocks renders as harness text, with no empty bubble of the person's
-
-#### Scenario: set the person's turns apart from the agent's
-- **GIVEN** an opened conversation with a user turn, an assistant turn and a user turn made only of harness blocks
-- **WHEN** the conversation renders
-- **THEN** the person's words are in a right-aligned bubble and the agent's reply is unboxed under its name
-- **AND** the harness-only turn is not in the person's bubble
-
 ### Requirement: Open config files in an external editor or reveal them
 For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from "List an agent's config files with their locations" and "Read allowlisted config files without creating them". Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).
 

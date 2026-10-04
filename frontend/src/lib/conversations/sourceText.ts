@@ -1,14 +1,14 @@
 // src/lib/conversations/sourceText.ts
-// The words of a conversation's source badge (components/chat/SourceBadge):
-// "Coffer" for one opened in Coffer's own UI, else the platform and the place
-// in its chat — "SeaTalk · DM · Thread 2", "SeaTalk · coffer-dev › thread",
-// "Telegram · Personal" (the channel's name when the chat is not known).
+// The words of a channel badge (components/sessions/SourceBadge): the platform
+// and the place in its chat — "SeaTalk · DM · Thread 2",
+// "SeaTalk · coffer-dev › thread", "Telegram · Personal" (the channel's name
+// when the chat is not known).
 import type { TFunction } from "i18next";
 
-import type { Conversation } from "@/lib/api/chat";
-import { platformName } from "@/lib/chat/mirror";
+import type { SessionChannel } from "@/lib/sessions/rows";
+import { platformName } from "@/lib/channels/platformName";
 
-type Binding = NonNullable<Conversation["channel_binding"]>;
+type Binding = SessionChannel;
 
 /** "🧵#2 deploy check" → "Thread 2": the number is the mark, the title is the row's. */
 function threadMark(t: TFunction, mark: string): string {
@@ -34,9 +34,7 @@ function placeText(t: TFunction, binding: Binding): string | null {
 }
 
 /** The badge's text, e.g. "SeaTalk · DM · Thread 2". */
-export function sourceText(t: TFunction, conversation: Conversation): string {
-  const binding = conversation.channel_binding;
-  if (!binding) return t("conversations.source.coffer");
+export function sourceText(t: TFunction, binding: SessionChannel): string {
   const platform = binding.platform
     ? platformName(binding.platform)
     : t("conversations.source.channel");

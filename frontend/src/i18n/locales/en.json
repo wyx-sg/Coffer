@@ -126,7 +126,6 @@
     },
     "couldntDelete": "Couldn’t delete {{name}}",
     "couldntDeleteSelected": "Couldn’t delete the selection",
-    "couldntDeleteConversation": "Couldn’t delete the conversation",
     "bulk": {
       "selected": "{{count}} selected",
       "selectedOf": "{{count}} of {{total}} selected",
@@ -1175,17 +1174,6 @@
           "unit_one": "call",
           "unit_other": "calls"
         },
-        "conversations_archive": {
-          "name": "Auto-archive idle chats",
-          "description": "Archive conversations with no new message for this many days."
-        },
-        "conversations": {
-          "name": "Conversations",
-          "description": "Archived conversations and channel threads, counted from when they were archived",
-          "shortenTitle": "Keep conversations for {{days}} days?",
-          "unit_one": "conversation",
-          "unit_other": "conversations"
-        },
         "attachments": {
           "name": "Attachments",
           "description": "Files and images sent in conversations and channels",
@@ -1967,7 +1955,6 @@
     "detail": {
       "back": "Back to agents",
       "notFound": "No such agent",
-      "newConversation": "New conversation",
       "connect": "Connect",
       "moreActions": "More actions for {{name}}",
       "notAdded": {
@@ -2458,41 +2445,12 @@
       "moreFor": "More for {{name}}"
     },
     "sessionsTab": {
-      "rowMeta_one": "{{project}} · {{count}} message",
-      "rowMeta_other": "{{project}} · {{count}} messages",
-      "untitled": "Untitled session",
-      "noMatch": "No sessions match.",
-      "loadMore": "Load more",
-      "age": {
-        "now": "now",
-        "minutes": "{{count}}m",
-        "hours": "{{count}}h",
-        "days": "{{count}}d",
-        "weeks": "{{count}}w"
-      },
-      "pick": "Pick a session to read it.",
-      "messages_one": "{{count}} message",
-      "messages_other": "{{count}} messages",
-      "turnRange": "Turns {{from}}–{{to}} of {{total}}",
-      "earlier": "Earlier turns",
-      "later": "Later turns",
-      "readOnly": "Read-only",
-      "roleUser": "You",
-      "noTurns": "This session has no conversational turns.",
-      "turnTruncated": "This turn is too long to show in full. Open the file to read the rest.",
-      "harnessPrefix": "Harness context",
-      "loadFailed": "Couldn’t load this session",
-      "loadFailedBody": "The file was moved or deleted after the list was read.",
-      "refreshList": "Refresh list",
+      "ariaLabel": "Sessions",
       "listFailed": "Couldn’t read the sessions",
       "emptyTitle": "No sessions yet",
       "emptyBody": "{{agent}} keeps its sessions in {{dir}}. Run {{program}} in a project and it shows up here.",
-      "search": "Search sessions",
-      "project": "Project",
-      "projectChosen": "Project: {{project}}",
-      "allProjects": "All projects",
-      "searchProjects": "Search projects",
-      "noProjects": "No matching project"
+      "noMatch": "No sessions match.",
+      "search": "Search titles and directories"
     },
     "changeModel": {
       "title": "Change {{name}}’s model",
@@ -3465,223 +3423,53 @@
     }
   },
   "conversations": {
-    "subtitle": "Every conversation, from Coffer and your channels.",
-    "bulk": {
-      "label": "Selected conversations",
-      "selectRow": "Select {{title}}",
-      "deleteTitle_one": "Delete {{count}} conversation?",
-      "deleteTitle_other": "Delete {{count}} conversations?",
-      "deleteBody": "These conversations and their messages are removed from Coffer; files the agents changed stay.",
-      "deleteConfirm_one": "Delete {{count}} conversation",
-      "deleteConfirm_other": "Delete {{count}} conversations",
-      "showing": "Showing {{shown}} of {{count}}",
-      "showAll": "Show all",
-      "done": {
-        "archive_one": "Archived {{count}} conversation",
-        "archive_other": "Archived {{count}} conversations",
-        "unarchive_one": "Unarchived {{count}} conversation",
-        "unarchive_other": "Unarchived {{count}} conversations",
-        "delete_one": "Deleted {{count}} conversation",
-        "delete_other": "Deleted {{count}} conversations"
-      },
-      "partial": "{{ok}} done, {{skipped}} skipped",
-      "noneDone_one": "{{count}} conversation was skipped",
-      "noneDone_other": "{{count}} conversations were skipped",
-      "runningSkipped_one": "{{count}} conversation is still running and was left as it is.",
-      "runningSkipped_other": "{{count}} conversations are still running and were left as they are."
-    },
+    "subtitle": "The conversations your channels started.",
     "title": "Conversations",
-    "thinking": "Thinking…",
-    "history": {
-      "rename": "Rename",
-      "delete": "Delete…",
-      "unarchive": "Unarchive",
-      "unarchived": "Conversation unarchived",
-      "archive": "Archive",
-      "archivedEmpty": "No archived conversations"
-    },
-    "thread": {
-      "empty": "Send a message to start the conversation.",
-      "notFoundTitle": "Conversation not found",
-      "notFoundBody": "It may have been deleted, or the link may be stale.",
-      "notFoundCta": "Start a new conversation"
-    },
-    "archivedThread": {
-      "notice": "This conversation is archived.",
-      "unarchive": "Unarchive to continue",
-      "unarchiving": "Unarchiving…"
-    },
-    "composer": {
-      "placeholder": "Message {{agent}}…",
-      "ariaLabel": "Message input",
-      "send": "Send",
-      "stop": "Stop",
-      "attach": "Attach files",
-      "dropHint": "Drop to attach",
-      "placeholderAny": "Type a message…",
-      "replyPlaceholder": "Reply…",
-      "queuePlaceholder": "Reply — it queues until this turn finishes"
-    },
-    "queue": {
-      "label": "Queued:",
-      "edit": "Edit queued message",
-      "remove": "Remove from queue"
-    },
-    "toolCard": {
-      "unknown": "unknown tool",
-      "running": "Running",
-      "done": "Done",
-      "doneIn": "Done · {{duration}}",
-      "stopped": "Stopped",
-      "lost": "Unknown",
-      "error": "Error",
-      "input": "Input",
-      "result": "Result",
-      "errorLabel": "Error",
-      "toggleAria": "Toggle tool call {{name}}"
-    },
-    "tools": {
-      "group_one": "Ran {{count}} tool call",
-      "group_other": "Ran {{count}} tool calls",
-      "failed": "{{count}} failed"
-    },
-    "newConversation": {
-      "agent": "Agent"
-    },
-    "modelPicker": {
-      "label": "Agent model",
-      "placeholder": "Model (optional)",
-      "inheritNoModel": "Default"
-    },
-    "draft": {
-      "line": "New conversation with {{agent}} in <mono>{{dir}}</mono> — send a message to start.",
-      "handoffNote": "Nothing is sent until you press Send.",
-      "noAgentTitle": "No agent connected",
-      "noAgentBody": "Conversations run on an agent Coffer manages. Connect Claude Code or Codex on the Agents page first.",
-      "openAgents": "Open Agents",
-      "workspace": "Coffer’s workspace",
-      "workspaceFull": "Coffer’s workspace (~/.coffer/content/workspace)",
-      "workspacePicker": {
-        "label": "Workspace",
-        "choose": "Choose…",
-        "typePath": "Type or paste a folder path",
-        "use": "Use"
-      }
-    },
-    "delete": {
-      "title": "Delete “{{title}}”?",
-      "body": "“{{title}}” and its messages are removed from Coffer; files the agent changed stay. To keep it out of the way instead, archive it.",
-      "confirm": "Delete conversation"
-    },
-    "jumpToLatest": "Jump to latest",
-    "attachment": "Attachment",
-    "errors": {
-      "agentNotLoggedIn": "Claude Code isn't logged in on this machine. Run `claude` in a terminal and complete /login, then retry."
-    },
-    "attachments": {
-      "uploading": "Uploading…",
-      "remove": "Remove {{name}}",
-      "notAttached": "{{name}} was not attached: {{reason}}. Up to 10 files, 20 MB each.",
-      "tooLarge": "it is over 20 MB",
-      "tooMany": "this message already has 10 files",
-      "listLabel": "Attached files"
-    },
-    "mirror": {
-      "staysInCoffer": "Replies stay in Coffer",
-      "reason": {
-        "group_main": "This conversation is a group's main chat, which never receives replies sent from here.",
-        "not_located": "This conversation is not linked to a chat thread Coffer can write to.",
-        "chat_kind_unknown": "This conversation is not linked to a chat thread Coffer can write to.",
-        "channel_deleted": "The channel this conversation came from has been deleted."
-      },
-      "notDelivered": "Not delivered to {{platform}} yet · will retry"
-    },
-    "source": {
-      "coffer": "Coffer",
-      "channel": "Channel",
-      "dm": "DM",
-      "group": "Group",
-      "thread": "thread",
-      "threadN": "Thread {{n}}",
-      "topic": "topic"
-    },
     "group": {
       "today": "Today",
       "yesterday": "Yesterday",
       "earlier": "Earlier"
     },
     "list": {
-      "running": "Running",
       "ariaLabel": "Conversations",
-      "needsYou": "Needs you",
       "loadFailed": "Couldn’t load conversations",
       "emptyTitle": "No conversations yet",
-      "emptyBody": "Start one here, or message one of your channels from SeaTalk or Telegram.",
+      "emptyBody": "Conversations appear here when you message one of your channels from SeaTalk or Telegram.",
       "noMatches": "No conversations match",
       "clearFilters": "Clear filters"
     },
     "filters": {
-      "view": "View",
-      "source": "Source",
+      "channel": "Channel",
       "agent": "Agent",
-      "search": "Search titles and messages",
-      "showArchived": "Archived",
-      "showActive": "Active"
+      "search": "Search titles and directories"
     },
-    "new": {
-      "action": "New conversation",
-      "title": "New conversation"
-    },
-    "header": {
-      "more": "More actions",
-      "titleAria": "Conversation title",
-      "renameHint": "Enter to save · Esc to cancel"
-    },
-    "files": {
-      "title": "Files changed"
-    },
-    "diff": {
-      "position": "{{n}} of {{total}}",
-      "previous": "Previous file",
-      "next": "Next file",
-      "binary": "This file is binary",
-      "tooLarge": "This file is too large to show (over 1 MB)",
-      "empty": "Nothing to show for this file"
-    },
-    "question": {
+    "source": {
+      "channel": "Channel",
+      "dm": "DM",
+      "group": "Group",
+      "thread": "thread",
+      "threadN": "Thread {{n}}",
+      "topic": "topic"
+    }
+  },
+  "sessions": {
+    "row": {
+      "rename": "Rename",
+      "delete": "Delete…",
+      "titleAria": "Title",
       "needsYou": "Needs you",
-      "progress": "Question {{current}} of {{total}}",
-      "submit": "Submit",
-      "waitingFor": "{{agent}} is waiting for your answer.",
-      "alsoAsked": "Also asked in {{platform}}.",
-      "placeholder": "Reply, or answer with the buttons above",
-      "answered": "Answered:",
-      "inPlatform": "in {{platform}}",
-      "notAnswered": "Not answered"
+      "running": "Running",
+      "stop": "Stop",
+      "stopAria": "Stop {{title}}",
+      "moreActions": "More actions for {{title}}"
     },
-    "turn": {
-      "working": "Working · {{duration}}",
-      "workingNoTime": "Working",
-      "waiting": "Waiting for you",
-      "stopped": "Stopped",
-      "stoppedAfter": "Stopped after {{duration}}",
-      "failedWord": "Failed",
-      "failedAfter": "Failed after {{duration}}",
-      "stoppedByYou": "Stopped by you.",
-      "editNotFinished": "The edit was not finished; send a message to continue.",
-      "commandNotFinished": "The command was not finished; send a message to continue.",
-      "copyReply": "Copy reply",
-      "failed": "The turn failed: {{reason}}",
-      "failedHint": "Retry sends the same message again."
-    },
-    "queueHeld": {
-      "message": "A queued message could not start, so the queue is on hold: {{error}}",
-      "resume": "Resume queue"
-    },
-    "streamLost": {
-      "title": "Lost the live stream from the daemon",
-      "body": "Five reconnect attempts failed. The turn may still be running — reloading shows everything it has written so far.",
-      "reload": "Reload conversation"
+    "delete": {
+      "title": "Delete “{{title}}”?",
+      "conversationBody": "The conversation is deleted from the agent as well and cannot be recovered. Files the agent changed stay.",
+      "conversationConfirm": "Delete conversation",
+      "sessionBody": "The session is deleted from the agent and cannot be recovered. Files the agent changed stay.",
+      "sessionConfirm": "Delete session",
+      "failed": "Couldn’t delete it"
     }
   },
   "channels": {
@@ -6030,13 +5818,11 @@
       "customTool": "Custom tool",
       "cli": "CLI",
       "page": "Page",
-      "conversation": "Conversation",
       "secret": "Secret"
     },
     "bestMatch": "Best match",
     "recent": "Recent",
     "noResultsHint": "Check the spelling. {{shortcut}} finds pages, servers, skills, secrets and conversations by name.",
-    "untitled": "Untitled conversation",
     "usedBy_one": "used by {{name}}",
     "usedBy_other": "used by {{name}} +{{more}}",
     "status": {

@@ -3,12 +3,12 @@
 // logos, as supplied by their sites), or two letters for a platform with none, the way the
 // Channels list, a channel's header and a conversation's source badge all show
 // it. Colour stays reserved for state, so the tile is the same for every
-// platform; the name beside it says which one (lib/chat/mirror `platformName`).
+// platform; the name beside it says which one (lib/channels/platformName).
 import seatalkUrl from "@/assets/brand/seatalk-logo.png";
 import telegramUrl from "@/assets/brand/telegram-logo.svg";
 import { cn } from "@/lib/utils";
 
-import { platformName } from "@/lib/chat/mirror";
+import { platformName } from "@/lib/channels/platformName";
 
 const MARKS: Record<string, string> = { seatalk: seatalkUrl, telegram: telegramUrl };
 const INITIALS: Record<string, string> = { seatalk: "ST", telegram: "TG" };

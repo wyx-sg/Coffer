@@ -1,46 +1,57 @@
-// src/components/chat/ConversationsIndex.tsx — `/conversations`: the page opens
-// on the list, never on a welcome or suggestions page (spec chat "Show every
-// conversation on the Conversations page"). A header with New conversation as
-// the primary action, the filter row, then every conversation of every source
-// grouped by day; with none at all, one quiet empty state.
-import { useEffect, useMemo, useState } from "react";
+// src/components/conversations/ConversationsIndex.tsx — `/conversations`: the
+// conversations IM channels opened, as a list and nothing else (spec chat
+// "Show channel conversations on the Conversations page"). A header with no
+// primary action, the filter row, then the conversations grouped by day; with
+// none at all, one quiet empty state. Rows are the shared SessionRow.
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquare, Plus } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { useTableSelection } from "@/components/DataTableSelection";
+import { channelHeading } from "@/components/channel/channelLabels";
+import { DeleteSessionDialog } from "@/components/sessions/DeleteSessionDialog";
+import { SessionList } from "@/components/sessions/SessionList";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LoadMoreFooter } from "@/components/ui/load-more";
 import { translateApiError } from "@/lib/api/errors";
-import type { Conversation } from "@/lib/api/chat";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { clearFilters, isFiltered } from "@/lib/conversations/filters";
+import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChannels } from "@/lib/hooks/useChannels";
-import type { ChatController } from "@/lib/hooks/useChatController";
-import { useConversationBatch } from "@/lib/hooks/useConversationBatch";
-import { useDeleteConversation } from "@/lib/hooks/useConversations";
-import { channelHeading } from "@/components/channel/channelLabels";
-import { ConversationsBulkBar } from "./ConversationsBulkBar";
+import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
+import { useConversationList } from "@/lib/hooks/useConversationList";
+import {
+  useDeleteConversation,
+  useInterruptConversation,
+  useRenameConversation,
+} from "@/lib/hooks/useConversations";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { conversationRow, type SessionRowData } from "@/lib/sessions/rows";
 import { ConversationsFilterBar, type SourceChannel } from "./ConversationsFilterBar";
-import { ConversationsList } from "./ConversationsList";
 
 interface Props {
-  c: ChatController;
-  onNew: () => void;
-  agentNames: ReadonlyMap<string, string>;
+  /** What pressing a row does. Left out, a row does nothing. */
+  onPrimaryAction?: (row: SessionRowData) => void;
 }
 
-const rowKey = (c: { id: string }) => c.id;
-
-export function ConversationsIndex({ c, onNew, agentNames }: Props) {
+export function ConversationsIndex({ onPrimaryAction }: Props) {
   const { t } = useTranslation();
-  const sel = useTableSelection(c.listConversations, rowKey);
-  const batch = useConversationBatch();
-  const deleteConv = useDeleteConversation();
-  const [deleting, setDeleting] = useState<Conversation | null>(null);
+  const { filters, setFilters } = useConversationFilters();
+  // Typing is the URL's, instantly; the request follows once it settles.
+  const q = useDebouncedValue(filters.q.trim());
+  const list = useConversationList({ q, source: filters.source, agent: filters.agent });
+  const { data: agents = [] } = useAgentProviders();
   const { data: channelRows } = useChannels();
+  const rename = useRenameConversation();
+  const remove = useDeleteConversation();
+  const stop = useInterruptConversation();
+  const [deleting, setDeleting] = useState<SessionRowData | null>(null);
+
+  const agentNames = useMemo(
+    () => new Map(agents.map((a) => [a.agent_key, a.display_name])),
+    [agents],
+  );
   const channels: SourceChannel[] = useMemo(
     () =>
       (channelRows ?? []).map((r) => ({
@@ -50,62 +61,23 @@ export function ConversationsIndex({ c, onNew, agentNames }: Props) {
       })),
     [channelRows],
   );
+  const rows = useMemo(() => list.items.map(conversationRow), [list.items]);
 
-  // A different view (filters, archived) starts with nothing ticked.
-  const { filters } = c;
-  const { clear } = sel;
-  useEffect(() => clear(), [filters, clear]);
-  // Every filter is the server's, so a page holds only matching rows: the list
-  // reads the next page only when the reader scrolls to its end.
-  const { listLoading, hasMore, isLoadingMore, loadMore } = c;
-  const drained = c.listConversations.length === 0;
+  const onRename = useCallback(
+    (row: SessionRowData, title: string) => rename.mutateAsync({ id: row.id, title }),
+    [rename],
+  );
+  const onStop = useCallback((row: SessionRowData) => stop.mutate(row.id), [stop]);
+
   const narrowed = isFiltered(filters);
-  const none = !listLoading && drained && !narrowed && !c.listError;
-  const total = c.total ?? c.listConversations.length;
-
-  const noMatches = !listLoading && drained && !hasMore && !c.listError && narrowed;
-
-  // Select all means every conversation the view holds: the pages not read
-  // yet are read first, then everything is ticked. Ticked again, it clears.
-  const { listConversations, loadAll } = c;
-  const { setMany } = sel;
-  const [selectingAll, setSelectingAll] = useState(false);
-  const shownIds = useMemo(() => listConversations.map(rowKey), [listConversations]);
-  const tickedShown = sel.selectedRows.length;
-  const allTicked = tickedShown > 0 && tickedShown === shownIds.length && !hasMore;
-  const toggleAll = () => {
-    if (allTicked || selectingAll) {
-      setSelectingAll(false);
-      clear();
-      return;
-    }
-    setMany(shownIds, true);
-    if (hasMore) {
-      setSelectingAll(true);
-      void loadAll();
-    }
-  };
-  useEffect(() => {
-    if (!selectingAll || hasMore || isLoadingMore) return;
-    setMany(shownIds, true);
-    setSelectingAll(false);
-  }, [selectingAll, hasMore, isLoadingMore, shownIds, setMany]);
-  useEffect(() => setSelectingAll(false), [filters]);
-
-  const newButton = (
-    <Button onClick={onNew}>
-      <Plus aria-hidden /> {t("conversations.new.action")}
-    </Button>
-  );
+  const drained = rows.length === 0;
+  const none = !list.isLoading && drained && !narrowed && !list.error;
+  const noMatches = !list.isLoading && drained && !list.hasMore && !list.error && narrowed;
   const header = (
-    <PageHeader
-      title={t("conversations.title")}
-      subtitle={t("conversations.subtitle")}
-      actions={newButton}
-    />
+    <PageHeader title={t("conversations.title")} subtitle={t("conversations.subtitle")} />
   );
 
-  if (none && !filters.archived) {
+  if (none) {
     return (
       <div className="space-y-5">
         {header}
@@ -118,102 +90,71 @@ export function ConversationsIndex({ c, onNew, agentNames }: Props) {
     );
   }
 
-  const archive = (conv: Conversation) =>
-    void batch.run(filters.archived ? "unarchive" : "archive", [conv.id]);
-
   return (
     <div className="space-y-5">
       {header}
-      {sel.selectedRows.length > 0 ? (
-        <ConversationsBulkBar
-          selected={sel.selectedRows}
-          total={Math.max(total, sel.selectedRows.length)}
-          archivedView={filters.archived}
-          onClear={sel.clear}
-        />
-      ) : (
-        <ConversationsFilterBar
-          filters={filters}
-          onChange={c.setFilters}
-          agents={c.agents}
-          channels={channels}
-          clearInList={noMatches}
-        />
-      )}
-      {c.listError && drained ? (
+      <ConversationsFilterBar
+        filters={filters}
+        onChange={setFilters}
+        agents={agents}
+        channels={channels}
+        clearInList={noMatches}
+      />
+      {list.error && drained ? (
         <EmptyState
           tone="error"
           title={t("conversations.list.loadFailed")}
-          description={translateApiError(t, c.listError)}
+          description={translateApiError(t, list.error)}
           action={
-            <Button variant="outline" size="sm" onClick={c.refetchList}>
+            <Button variant="outline" size="sm" onClick={list.refetch}>
               {t("common.retry")}
             </Button>
           }
         />
-      ) : !listLoading && drained && !hasMore ? (
+      ) : noMatches ? (
         <EmptyState
           icon={MessageSquare}
-          title={
-            filters.archived && !narrowed
-              ? t("conversations.history.archivedEmpty")
-              : t("conversations.list.noMatches")
-          }
+          title={t("conversations.list.noMatches")}
           action={
-            narrowed ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => c.setFilters(clearFilters(filters))}
-              >
-                {t("conversations.list.clearFilters")}
-              </Button>
-            ) : undefined
+            <Button variant="outline" size="sm" onClick={() => setFilters(clearFilters())}>
+              {t("conversations.list.clearFilters")}
+            </Button>
           }
         />
       ) : (
         <>
           <div className="overflow-x-auto">
-            <ConversationsList
-              conversations={c.listConversations}
-              isLoading={listLoading}
-              loadingMore={isLoadingMore}
+            <SessionList
+              rows={rows}
+              ariaLabel={t("conversations.list.ariaLabel")}
+              isLoading={list.isLoading}
+              loadingMore={list.isLoadingMore}
+              grouped
+              showChannel
               agentNames={agentNames}
-              hrefFor={c.pathFor}
-              archivedView={filters.archived}
-              selection={{ selected: sel.keys, setMany: sel.setMany }}
-              selectAll={{
-                checked: allTicked,
-                indeterminate: !allTicked && (tickedShown > 0 || selectingAll),
-                onToggle: toggleAll,
-              }}
-              onArchive={archive}
+              stoppingId={stop.isPending ? (stop.variables ?? null) : null}
+              onPrimaryAction={onPrimaryAction}
+              onRename={onRename}
               onDelete={setDeleting}
+              onStop={onStop}
             />
           </div>
           <LoadMoreFooter
-            loaded={c.listConversations.length}
-            hasMore={hasMore}
-            loading={isLoadingMore}
-            onMore={loadMore}
+            loaded={rows.length}
+            hasMore={list.hasMore}
+            loading={list.isLoadingMore}
+            onMore={list.loadMore}
             autoLoad
           />
         </>
       )}
 
-      {/* Only Coffer's copy goes: the agent's own files and session stay. */}
-      <ConfirmDialog
-        open={deleting !== null}
-        onOpenChange={(open) => !open && setDeleting(null)}
-        title={t("conversations.delete.title", { title: deleting?.title ?? "" })}
-        description={t("conversations.delete.body", { title: deleting?.title ?? "" })}
-        confirmLabel={t("conversations.delete.confirm")}
-        pendingLabel={t("common.deleting")}
-        errorTitle={t("common.couldntDeleteConversation")}
-        pending={deleteConv.isPending}
-        onConfirm={() => {
-          if (deleting) deleteConv.mutate(deleting.id, { onSuccess: () => setDeleting(null) });
-        }}
+      <DeleteSessionDialog
+        row={deleting}
+        kind="conversation"
+        pending={remove.isPending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={(row) => remove.mutateAsync(row.id)}
       />
     </div>
   );

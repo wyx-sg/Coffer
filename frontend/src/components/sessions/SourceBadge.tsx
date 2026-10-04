@@ -1,44 +1,35 @@
-// src/components/chat/SourceBadge.tsx — where a conversation came from, as the
-// Conversations page shows it on every row and above the open thread (spec chat
-// "Show every conversation on the Conversations page"): Coffer for one opened in
-// Coffer's own UI, else the channel's platform logo and the place in its chat —
-// "SeaTalk · DM · Thread 2", "SeaTalk · coffer-dev › thread", "Telegram · Personal".
-// The channel's own name is the badge's text only when the chat and thread are
-// not known. Long text is cut with its full words in a tooltip.
+// src/components/sessions/SourceBadge.tsx — which channel a conversation came
+// from, as the Conversations page and an agent's Sessions tab show it on a row
+// (spec chat "Show channel conversations on the Conversations page"): the
+// channel's platform logo and the place in its chat — "SeaTalk · DM · Thread 2",
+// "SeaTalk · coffer-dev › thread", "Telegram · Personal". The channel's own
+// name is the badge's text only when the chat and thread are not known. Long
+// text is cut with its full words in a tooltip.
 import { useTranslation } from "react-i18next";
 
-import { CofferMark } from "@/components/brand/CofferMark";
 import { PlatformMark } from "@/components/channel/PlatformMark";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import type { Conversation } from "@/lib/api/chat";
 import { sourceText } from "@/lib/conversations/sourceText";
+import type { SessionChannel } from "@/lib/sessions/rows";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  conversation: Conversation;
+  channel: SessionChannel;
   className?: string;
 }
 
-export function SourceBadge({ conversation, className }: Props) {
+export function SourceBadge({ channel, className }: Props) {
   const { t } = useTranslation();
-  const binding = conversation.channel_binding;
-  const text = sourceText(t, conversation);
   return (
     <span
       className={cn(
         "inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs text-text",
         className,
       )}
-      data-source={binding ? (binding.platform ?? "channel") : "coffer"}
+      data-source={channel.platform ?? "channel"}
     >
-      {binding ? (
-        <PlatformMark platform={binding.platform ?? "channel"} />
-      ) : (
-        <span className="inline-flex h-[18px] w-[22px] shrink-0 items-center justify-center rounded-sm bg-chip">
-          <CofferMark size={12} className="text-text-muted" />
-        </span>
-      )}
-      <TruncatedText text={text} />
+      <PlatformMark platform={channel.platform ?? "channel"} />
+      <TruncatedText text={sourceText(t, channel)} />
     </span>
   );
 }

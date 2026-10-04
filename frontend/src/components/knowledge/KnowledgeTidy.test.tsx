@@ -54,18 +54,17 @@ afterEach(() => {
 });
 
 describe("Tidy on a collection's page", () => {
-  acceptance(
-    "knowledge",
-    "Tidy sends the prompt to the default managed agent at once",
-    async () => {
-      withAgent(true);
-      renderKnowledge(`/knowledge/${UID}`);
-      fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
-      expect(await screen.findByTestId("draft")).toHaveTextContent(
-        `claude_code|send|${COLLECTION.tidy_handoff.prompt}`,
-      );
-    },
-  );
+  // Until a hand-off starts the agent in a terminal, Tidy is Copy prompt even with a managed agent.
+  test("with a managed agent the page still offers Copy prompt only", async () => {
+    withAgent(true);
+    renderKnowledge(`/knowledge/${UID}`);
+    // The page header's Tidy all is a Copy prompt too; the collection's is the one in its pane.
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Copy prompt" })).toHaveLength(2),
+    );
+    expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+  });
 
   acceptance("knowledge", "Tidy offers only Copy prompt with no managed agent", async () => {
     withAgent(false);
@@ -77,16 +76,15 @@ describe("Tidy on a collection's page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Copy prompt" }).at(-1) as HTMLElement);
     expect(writeText).toHaveBeenCalledWith(COLLECTION.tidy_handoff.prompt);
     expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
-    expect(screen.queryByTestId("draft")).toBeNull();
   });
 });
 
 describe("Tidy all in the page header", () => {
-  acceptance("knowledge", "Tidy all sends the prompt like Tidy does", async () => {
+  test("Copy prompt fetches the all-collections prompt and copies it", async () => {
     withAgent(true);
     renderKnowledge("/knowledge");
-    fireEvent.click(await screen.findByRole("button", { name: "Tidy all" }));
-    expect(await screen.findByTestId("draft")).toHaveTextContent(`claude_code|send|${ALL_PROMPT}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(ALL_PROMPT));
     expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
   });
 
@@ -95,6 +93,5 @@ describe("Tidy all in the page header", () => {
     renderKnowledge("/knowledge");
     fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(ALL_PROMPT));
-    expect(screen.queryByTestId("draft")).toBeNull();
   });
 });

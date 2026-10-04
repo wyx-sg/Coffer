@@ -56,8 +56,3 @@ export function agentMemoryStorePath(type: string, dir: string, project?: string
   if (project) params.set("project", project);
   return `${agentBasePath(type)}/memory/store?${params.toString()}`;
 }
-
-/** The Sessions tab with one transcript open, addressed by its file (its identity). */
-export function agentSessionPath(type: string, sessionPath: string): string {
-  return `${agentTabPath(type, "sessions")}?${new URLSearchParams({ session: sessionPath })}`;
-}
