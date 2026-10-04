@@ -15,7 +15,7 @@ from tests.integration.model_proxy.conftest import (
     member,
     state,
 )
-from tests.integration.model_proxy.harness import sse_reply, wait_for
+from tests.integration.model_proxy.harness import free_port, json_reply, sse_reply, wait_for
 
 #: A recorded Anthropic stream: pings, comments, CRLF and LF line endings, a
 #: multi-line data field and a trailing unknown event.
@@ -123,6 +123,40 @@ def test_unknown_headers_and_body_fields_reach_the_upstream_untouched(
     assert "local-claude-token" not in json.dumps(
         [(k.decode(), v.decode()) for k, v in rec.headers]
     )
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="an upstream error reaches the agent as sent",
+)
+def test_an_upstream_error_reaches_the_agent_as_sent(proxy: Proxy, upstreams) -> None:
+    error = {"type": "error", "error": {"type": "overloaded_error", "message": "busy"}}
+    up, server = upstreams()
+    up.script = json_reply(503, error, headers={"retry-after": "5"})
+    other, _ = upstreams()
+    proxy.push(state(member(server, "a")))
+    r = proxy.client.post(
+        "/anthropic/v1/messages", content=b'{"model":"m1"}', headers=claude_headers()
+    )
+    assert r.status_code == 503
+    assert r.json() == error and r.headers["retry-after"] == "5"
+    assert len(up.requests) == 1 and other.requests == []
+    [rec] = proxy.records(1)
+    assert rec["outcome"] == "upstream_error" and rec["status"] == 503
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="an unreachable upstream is answered with 502",
+)
+def test_an_unreachable_upstream_is_answered_with_502(proxy: Proxy) -> None:
+    proxy.push(state(member(f"http://127.0.0.1:{free_port()}", "a")))
+    r = proxy.client.post(
+        "/anthropic/v1/messages", content=b'{"model":"m1"}', headers=claude_headers()
+    )
+    assert r.status_code == 502 and r.json()["type"] == "error"
+    [rec] = proxy.records(1)
+    assert rec["outcome"] == "connect_error"
 
 
 @pytest.mark.acceptance(
