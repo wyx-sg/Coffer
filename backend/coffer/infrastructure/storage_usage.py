@@ -12,7 +12,8 @@ through ``infrastructure.vault.home`` like every other reader of them:
 - **local content** — chat uploads and channel media under ``content/``,
   which never sync;
 - **history** — ``runs.db`` (with its WAL), or the database ``COFFER_DB_URL``
-  names;
+  names, together with the log directory (``COFFER_LOG_DIR`` honoured): logs
+  are records of what happened too, pruned by the same retention pass;
 - **rebuildable cache** — the memory tree (fully derived from the agents' own
   memory; spec memory "Keep the memory tree derived and local") and the
   transcript summary cache, both under ``derived/``. Clearing it deletes the
@@ -34,6 +35,7 @@ from dataclasses import dataclass
 from coffer.infrastructure.agent.paths import agent_state_root
 from coffer.infrastructure.channel.media_root import default_media_dir
 from coffer.infrastructure.chat.media_store import default_chat_media_dir
+from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.vault.home import content_root, runs_db_path, vault_root
 
@@ -136,11 +138,14 @@ def measure() -> StorageUsage:
         bytes=sum(tree_bytes(p) for p in media),
     )
     db = database_path()
+    db_bytes = (
+        sum(tree_bytes(pathlib.Path(f"{db}{suffix}")) for suffix in ("", "-wal", "-shm"))
+        if db is not None
+        else 0
+    )
     history = Measured(
         path=str(db) if db is not None else "",
-        bytes=sum(tree_bytes(pathlib.Path(f"{db}{suffix}")) for suffix in ("", "-wal", "-shm"))
-        if db is not None
-        else 0,
+        bytes=db_bytes + tree_bytes(log_dir()),
     )
     return StorageUsage(
         vault=vault,

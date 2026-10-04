@@ -440,6 +440,10 @@ def test_another_conversations_or_a_pruned_attachment_is_404(env: _Env) -> None:
 
 
 @pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="attachments are kept for thirty days unless the user chose otherwise",
+)
+@pytest.mark.acceptance(
     spec="chat", scenario="the chat-media prune deletes stale uploads and keeps fresh ones"
 )
 async def test_full_prune_sweeps_chat_media_by_age(
@@ -468,7 +472,47 @@ async def test_full_prune_sweeps_chat_media_by_age(
         await engine.dispose()
 
     # The upload's two files (bytes + record) go; the fresh upload stays whole.
-    assert result["chat_media"] == 2
-    assert result["channel_media"] == 0
+    assert result["attachments"] == 2
     assert await store.resolve(stale.id) is None
     assert await store.resolve(fresh.id) is not None
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a changed attachments window decides what is deleted"
+)
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="attachments kept forever are never swept"
+)
+async def test_attachments_policy_is_adjustable_and_kept_forever_skips_the_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    store = FileChatMediaStore(tmp_path / ".coffer" / "content" / "chat-media")
+    stale = await store.save(data=b"old", filename="old.txt", mime="text/plain")
+    now = datetime.now(tz=UTC)
+    old_ts = (now - timedelta(days=10)).timestamp()
+    for name in (f"{stale.id}.txt", f"{stale.id}.json"):
+        os.utime(store.root / name, (old_ts, old_ts))
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    try:
+        svc = build_retention_service(
+            session_maker(engine), audit=AuditService(SqlAlchemyAuditRepo(session_maker(engine)))
+        )
+        await svc.initialize_defaults()
+        policy = next(p for p in await svc.list_policies() if p.name == "attachments")
+        assert policy.retention_days == 30
+        assert await svc.preview("attachments", 7, now=now) == (2, 2)
+        assert await svc.preview("attachments", 30, now=now) == (2, 0)
+
+        await svc.set_retention("attachments", None, actor="t")
+        assert (await svc.prune(now=now))["attachments"] == 0
+        assert await store.resolve(stale.id) is not None
+
+        await svc.set_retention("attachments", 7, actor="t")
+        assert (await svc.prune("attachments", now=now)) == {"attachments": 2}
+        assert await store.resolve(stale.id) is None
+    finally:
+        await engine.dispose()

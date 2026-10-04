@@ -1258,8 +1258,9 @@ reading them back from the last user message in history (not a threaded param),
 so materialization survives a daemon restart and stays consistent with what the
 web shows; scope is within the conversation (no cross-session / agent-switch
 full-history replay). The path stays inside the daemon: only the agent adapter,
-which must read the bytes, ever sees it. The media dir is bounded by a 30-day
-mtime retention prune on the retention cadence (bytes are re-downloadable; no
+which must read the bytes, ever sees it. The media dir is bounded by the `attachments` retention policy
+([resource-framework](../resource-framework/spec.md) "Retain attachments on an adjustable policy"):
+an mtime prune on the retention cadence, 30 days by default and the user's to change (bytes are re-downloadable; no
 size cap). See
 [Channel Attachments](../../../docs/decisions/channel-attachments.md).
 
@@ -1285,7 +1286,7 @@ size cap). See
   and no `path` field is present on the wire
 
 #### Scenario: the media dir prune deletes stale files and keeps fresh ones
-- **GIVEN** the channel-media dir with one file older than 30 days and one recent
+- **GIVEN** the channel-media dir with one file older than the attachments window (30 days by default) and one recent
 - **WHEN** the retention sweep runs
 - **THEN** the stale file is deleted and the recent one is kept
 

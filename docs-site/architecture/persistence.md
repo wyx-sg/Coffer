@@ -121,7 +121,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 
 ### Content
 
-`content/chat-media/` (files attached on the Conversations page), `content/channel-media/` (attachments downloaded from chat platforms) and `content/workspace/` (the default working directory for chat turns). Both media folders are pruned by age. Content is your only copy and does not sync.
+`content/chat-media/` (files attached on the Conversations page), `content/channel-media/` (attachments downloaded from chat platforms) and `content/workspace/` (the default working directory for chat turns). Both media folders are pruned by age, on the `attachments` retention policy (30 days by default; adjustable, or keep forever). Content is your only copy and does not sync.
 
 ### runs.db
 

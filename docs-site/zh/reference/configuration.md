@@ -218,17 +218,18 @@ COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 
 保留策略决定各类行保留多久。保留任务在启动时清理一次，之后每 6 小时一次。策略只属于本机，保存在 `~/.coffer/local/retention.json`。
 
-窗口在**设置 → 数据 → 历史记录**里设置，那里只显示三项策略；另外两项保持默认值，只能通过 REST（`/api/v1/retention/policies`）修改。
+窗口在**设置 → 数据 → 历史记录**里设置，那里只显示三项策略（**附件**在**本地内容**下）；另外两项保持默认值，只能通过 REST（`/api/v1/retention/policies`）修改。
 
 | 策略 | 键 | 默认值 | 作用 |
 | --- | --- | --- | --- |
 | **改动** | `audit_log` | 365 天 | 删除早于窗口的审计条目。 |
 | **MCP 调用** | `mcp_invocations` | 30 天 | 删除网关调用日志行。 |
 | **对话** | `conversations` | 30 天 | 在归档后这么久删除已归档的对话及其消息。 |
+| **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
 | 仅 REST | `sync_runs` | 90 天 | 删除同步轮次的历史。 |
 | 仅 REST | `conversations_archive` | 7 天 | 归档这么久没有新消息的对话。 |
 
-两条聊天策略都作用于 `conversations` 表。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中超过 30 天的文件，以及超过 7 天的旧 shim 日志和上游日志。
+两条聊天策略都作用于 `conversations` 表。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除超过 7 天的旧 shim 日志和上游日志。
 
 ### 设置 → 安全 {#settings-→-security}
 

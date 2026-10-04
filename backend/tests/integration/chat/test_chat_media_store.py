@@ -78,7 +78,7 @@ async def test_prune_deletes_by_age(tmp_path: Path) -> None:
     for name in (f"{old.id}.txt", f"{old.id}.json"):
         os.utime(tmp_path / name, (ts, ts))
 
-    deleted = store.prune(now)
+    deleted = store.prune(now, 30)
 
     assert sorted(deleted) == sorted(
         [str(tmp_path / f"{old.id}.txt"), str(tmp_path / f"{old.id}.json")]
@@ -87,7 +87,7 @@ async def test_prune_deletes_by_age(tmp_path: Path) -> None:
 
 
 def test_prune_of_a_missing_dir_is_a_no_op(tmp_path: Path) -> None:
-    assert FileChatMediaStore(tmp_path / "never-created").prune(datetime.now(tz=UTC)) == []
+    assert FileChatMediaStore(tmp_path / "never-created").prune(datetime.now(tz=UTC), 30) == []
 
 
 def test_default_dir_is_beside_channel_media_under_home(

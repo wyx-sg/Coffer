@@ -44,7 +44,7 @@ thread to a conversation id; that pointer is soft, may dangle, and chat neither
 maintains nor validates it. Attachment bytes never enter chat's database. A
 file a channel downloaded lives in that channel's media directory, whose prune
 belongs to [channels](../channels/spec.md); a file attached on the Conversations page is
-chat's own, uploaded to `~/.coffer/content/chat-media` and pruned by the same age rule.
+chat's own, uploaded to `~/.coffer/content/chat-media` and pruned by the same attachments retention policy.
 Either way a conversation persists only the reference and reads the bytes at
 turn time.
 
@@ -929,8 +929,8 @@ persisted message is re-sent with
 `POST /api/v1/chat/conversations/{id}/messages/{message_id}/resend`, which
 rebuilds it from its row and persists a new user message exactly as a send
 does; a message whose row has not landed yet is re-sent as it was sent, with
-its files' upload ids. A file the message referenced that the 30-day media
-sweep has since deleted MUST refuse the retry with `ATTACHMENT_EXPIRED` (410),
+its files' upload ids. A file the message referenced that the attachments
+retention sweep has since deleted MUST refuse the retry with `ATTACHMENT_EXPIRED` (410),
 naming the file, and nothing is persisted or queued — a retry is never sent
 without a file the original carried. An id naming no user message of the
 conversation is `MESSAGE_NOT_FOUND` (404).
@@ -1223,18 +1223,20 @@ never fails the turn. A channel's images take the same path.
 
 ### Requirement: Prune uploaded chat media on the retention cadence
 The web composer's uploads MUST NOT accumulate without bound. On the retention
-cadence, `~/.coffer/content/chat-media` MUST be swept by the same rule as the channel
-media directory: a file whose mtime is more than 30 days old is deleted, with
+cadence, `~/.coffer/content/chat-media` MUST be swept by the `attachments` retention policy
+([resource-framework](../resource-framework/spec.md) "Retain attachments on an adjustable policy"),
+together with the channel media directory: a file whose mtime is older than the policy's
+window (30 days unless the user changed it; nothing is deleted under keep forever) is deleted, with
 no size cap and no reference check. A full prune reports the count under
-`chat_media`, beside `channel_media`. A reference whose file is gone degrades
+`attachments`. A reference whose file is gone degrades
 to a note that the file could not be read, and sending its id again is refused
 as unknown.
 
 #### Scenario: the chat-media prune deletes stale uploads and keeps fresh ones
-- **GIVEN** `~/.coffer/content/chat-media` holding one upload older than 30 days and one recent one
+- **GIVEN** `~/.coffer/content/chat-media` holding one upload older than the attachments window (30 days by default) and one recent one
 - **WHEN** a full retention prune runs
 - **THEN** the stale upload is deleted and the recent one is kept
-- **AND** the prune result reports one deleted file under `chat_media`
+- **AND** the prune result reports the deleted files under `attachments`
 
 ### Requirement: Attach files from the Conversations page composer
 The Conversations page's composer MUST let the owner attach files three ways: an attach

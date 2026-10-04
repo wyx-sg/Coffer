@@ -204,7 +204,7 @@ give the status each code is actually sent with.
 | `QUESTION_CLOSED` | 409 | An answer to a question the agent asked that is no longer waiting: it was already answered (the first answer wins), cancelled, or its turn ended. Nothing changed. | Refresh the conversation; the card shows the answer that was taken. |
 | `ATTACHMENT_UNAVAILABLE` | 404 | The file attached to a message is not available: the id is not referenced by a message of that conversation, or the file was pruned by retention. | Nothing to do; the thread shows the attachment without its preview. |
 | `QUESTION_ANSWER_INVALID` | 422 | An answer that does not fit its question: an option the question does not offer, several options on a single-choice question, or no answer at all. | Choose from the options, or type an answer. |
-| `ATTACHMENT_EXPIRED` | 410 | A message being sent again (Retry) carried a file the 30-day media sweep has since deleted; nothing was sent. | Attach the file again and send a new message. |
+| `ATTACHMENT_EXPIRED` | 410 | A message being sent again (Retry) carried a file the attachments retention sweep has since deleted; nothing was sent. | Attach the file again and send a new message. |
 | `ATTACHMENT_NOT_FOUND` | 422 | A message names an attachment no upload stored: it was never uploaded, or its file was pruned. Nothing was sent. | Upload the file again. |
 | `ATTACHMENT_TOO_LARGE` | 413 | An upload from the web composer is over the per-file limit the message names. | Attach a smaller file. |
 | `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | No agent can use a file of that type from a turn (video, archives, executables and other binaries). | Attach an image, a document, audio or a text file. |

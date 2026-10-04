@@ -232,6 +232,7 @@ class LocalContentUsageOut(BaseModel):
 class HistoryUsageOut(BaseModel):
     #: The database file holding the records; empty for a non-SQLite database.
     path: str
+    #: The database (with its WAL) and the log directory together.
     bytes: int
 
 

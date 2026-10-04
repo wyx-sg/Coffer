@@ -38,8 +38,9 @@ class RetentionPolicy:
 # dead reference degrades to a text note on a later read, so a plain mtime age
 # prune (no per-conversation reference check) is sufficient.
 
-#: 30-day window by file mtime, no size cap.
-MEDIA_RETENTION_DAYS = 30
+#: The attachments policy's default window (by file mtime, no size cap). The
+#: user can change it or keep attachments forever (Settings > Data > Local content).
+DEFAULT_ATTACHMENT_RETENTION_DAYS = 30
 
 
 def files_to_prune(

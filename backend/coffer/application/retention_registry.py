@@ -12,7 +12,9 @@ constructing :class:`PrunableTable` instances and calling
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from coffer.domain.errors import CofferError
 
@@ -72,6 +74,24 @@ class PrunableTable:
     def sql_table(self) -> str:
         """The actual SQL table this policy acts on (``name`` unless overridden)."""
         return self.target_table or self.name
+
+
+@dataclass(frozen=True)
+class FilePolicy:
+    """A retention policy over files on disk rather than a SQL table.
+
+    ``sweeps`` delete files older than ``max_age_days`` (each takes ``now`` and
+    the window and returns the paths it deleted); ``count`` is the matching
+    preview, ``(files kept now, files a window would delete)``. Both are bound at
+    the composition root, so the application layer never imports the file I/O.
+    """
+
+    name: str
+    display_name: str
+    description: str
+    default_retention_days: int | None
+    sweeps: Sequence[Callable[[datetime, int], Sequence[str]]]
+    count: Callable[[datetime, int], tuple[int, int]]
 
 
 class PrunableRegistry:

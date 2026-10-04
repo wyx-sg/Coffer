@@ -89,7 +89,7 @@ allowlist derived from the same registry and checks table and column against it
 before building any statement, so no user-supplied identifier reaches SQL.
 `RetentionWorker` prunes on start and every 6 hours, on the same cadence as
 the shim and upstream log files and the two attachment media directories
-(`content/chat-media/`, `content/channel-media/`); the Data tab and
+(`content/chat-media/`, `content/channel-media/`, one `attachments` policy, 30 days by default and adjustable); the Data tab and
 `POST …/prune` run it on demand; changing a policy is itself audited.
 
 Pros: one queryable answer to "what happened" across every kind; the actor

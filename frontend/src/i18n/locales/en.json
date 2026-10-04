@@ -1158,7 +1158,7 @@
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
       "pruneConfirmTitle": "Clear expired data now?",
-      "pruneConfirmBody": "Rows older than each policy's retention window are deleted permanently.",
+      "pruneConfirmBody": "Records and attachments older than each policy's retention window are deleted permanently.",
       "pruneRow": "Removed {{rows}} rows from {{name}}",
       "pruneNothing": "Nothing to clear",
       "policy": {
@@ -1186,6 +1186,15 @@
           "shortenTitle": "Keep conversations for {{days}} days?",
           "unit_one": "conversation",
           "unit_other": "conversations"
+        },
+        "attachments": {
+          "name": "Attachments",
+          "description": "Files and images sent in conversations and channels",
+          "shortenTitle": "Keep attachments for {{days}} days?",
+          "shortenBody": "The next prune will delete older attachments.",
+          "pruneRow": "Removed {{rows}} files from {{name}}",
+          "unit_one": "file",
+          "unit_other": "files"
         },
         "sync_runs": {
           "name": "Sync rounds",
@@ -1463,7 +1472,6 @@
       "intro": "What Coffer keeps, where it lives, and for how long.",
       "openFolder": "Open folder",
       "showInFinder": "Reveal in Finder",
-      "location": "Location",
       "notSaved": "Not saved",
       "saveFailedTitle": "Couldn't save the new retention",
       "lastCleared": "Last cleared {{when}} — {{rows}} rows",
@@ -1477,9 +1485,9 @@
       },
       "local": {
         "title": "Local content",
-        "description": "Not synced — back it up yourself (include this folder in your own backups).",
-        "attachments": "Conversation and channel attachments",
-        "attachmentsHelp": "Files and images sent in conversations and channels"
+        "description": "Include this folder in your own backups.",
+        "descriptionDays_one": "Attachments are deleted automatically after {{count}} day.",
+        "descriptionDays_other": "Attachments are deleted automatically after {{count}} days."
       },
       "history": {
         "title": "History",

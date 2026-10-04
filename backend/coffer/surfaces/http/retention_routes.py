@@ -33,10 +33,10 @@ async def list_policies(
     return RetentionPolicyListOut(
         policies=[
             RetentionPolicyOut(
-                table_name=v.table.name,
-                display_name=v.table.display_name,
-                description=v.table.description,
-                default_retention_days=v.table.default_retention_days,
+                table_name=v.name,
+                display_name=v.display_name,
+                description=v.description,
+                default_retention_days=v.default_retention_days,
                 retention_days=v.retention_days,
                 last_pruned_at=v.last_pruned_at,
                 last_pruned_rows=v.last_pruned_rows,
@@ -63,12 +63,12 @@ async def update_policy(
     )
     # Re-read so the returned view reflects the change
     for v in await svc.list_policies():
-        if v.table.name == table_name:
+        if v.name == table_name:
             return RetentionPolicyOut(
-                table_name=v.table.name,
-                display_name=v.table.display_name,
-                description=v.table.description,
-                default_retention_days=v.table.default_retention_days,
+                table_name=v.name,
+                display_name=v.display_name,
+                description=v.description,
+                default_retention_days=v.default_retention_days,
                 retention_days=v.retention_days,
                 last_pruned_at=v.last_pruned_at,
                 last_pruned_rows=v.last_pruned_rows,

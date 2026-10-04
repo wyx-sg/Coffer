@@ -5,6 +5,7 @@ import pytest
 
 from coffer.application.audit_service import AuditService
 from coffer.application.retention_registry import (
+    FilePolicy,
     PrunableRegistry,
     PrunableTable,
     UnknownPrunableTable,
@@ -52,7 +53,7 @@ async def test_initialize_defaults_seeds_policies(tmp_path):
     svc, _, engine = await _service(tmp_path)
     await svc.initialize_defaults()
     policies = await svc.list_policies()
-    names = {p.table.name for p in policies}
+    names = {p.name for p in policies}
     assert names == {"audit_log"}
     p = policies[0]
     assert p.retention_days == 365
@@ -292,36 +293,58 @@ async def test_conversation_archive_disabled_when_days_none(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_full_prune_runs_every_media_sweep_and_isolates_a_failing_one(tmp_path):
-    """Each media dir is its own sweep keyed by its result name; one that
-    raises is logged and skipped, and neither the table prune nor the other
-    dir's sweep is lost. A single-table prune runs no media sweep."""
+async def test_full_prune_runs_the_attachment_sweeps_with_the_stored_window(tmp_path):
+    """The attachments policy sweeps both dirs with its stored window; a sweep
+    that raises is logged and skipped, and neither the table prune nor the other
+    sweep is lost. A single-table prune runs no attachment sweep."""
     service, _sm, engine = await _service(tmp_path)
-    calls: list[str] = []
+    calls: list[tuple[str, int]] = []
 
-    def _broken(now: datetime) -> list[str]:
-        calls.append("broken")
+    def _broken(now: datetime, days: int) -> list[str]:
+        calls.append(("broken", days))
         raise OSError("disk went away")
 
-    def _two(now: datetime) -> list[str]:
-        calls.append("two")
+    def _two(now: datetime, days: int) -> list[str]:
+        calls.append(("two", days))
         return ["a", "b"]
 
     service = RetentionService(
         registry=service._registry,
         repo=service._repo,
         audit=service._audit,
-        media_sweeps={"channel_media": _broken, "chat_media": _two},
+        file_policy=FilePolicy(
+            name="attachments",
+            display_name="Attachments",
+            description="files",
+            default_retention_days=30,
+            sweeps=(_broken, _two),
+            count=lambda now, days: (10, 4),
+        ),
     )
     await service.initialize_defaults()
 
     full = await service.prune()
-    assert full["chat_media"] == 2
-    assert "channel_media" not in full
+    assert full["attachments"] == 2
     assert "audit_log" in full
-    assert calls == ["broken", "two"]
+    assert calls == [("broken", 30), ("two", 30)]
 
     single = await service.prune("audit_log")
     assert set(single) == {"audit_log"}
-    assert calls == ["broken", "two"]
+    assert len(calls) == 2
+
+    only = await service.prune("attachments")
+    assert only == {"attachments": 2}
+
+    await service.set_retention("attachments", 7, actor="t")
+    assert await service.preview("attachments", 3) == (10, 4)
+    calls.clear()
+    await service.prune()
+    assert calls == [("broken", 7), ("two", 7)]
+    view = next(v for v in await service.list_policies() if v.name == "attachments")
+    assert (view.retention_days, view.last_pruned_rows) == (7, 2)
+
+    await service.set_retention("attachments", None, actor="t")
+    calls.clear()
+    assert (await service.prune())["attachments"] == 0
+    assert calls == []
     await engine.dispose()

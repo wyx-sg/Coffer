@@ -188,7 +188,7 @@ async def test_chat_retention_windows_are_ordinary_registry_entries(tmp_path) ->
     try:
         svc = _retention(sm)
         await svc.initialize_defaults()
-        policies = {p.table.name: p.retention_days for p in await svc.list_policies()}
+        policies = {p.name: p.retention_days for p in await svc.list_policies()}
         assert policies["conversations_archive"] == 7
         assert policies["conversations"] == 30
 

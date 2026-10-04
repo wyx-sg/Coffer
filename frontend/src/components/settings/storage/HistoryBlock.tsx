@@ -2,23 +2,26 @@
 //
 // Spec web-ui "Group the Data tab by what kind of data it is": the retention
 // of each record kind — changes, MCP calls and conversations — Keep forever or
-// a number of days, cleaned up nightly, with Clear expired now. Every row
-// auto-saves; a shortening asks first (RetentionPolicySection); a failed save
-// says so above the blocks with Try again, and the row reads "Not saved".
+// a number of days, cleaned up nightly, with Clear expired now (which also
+// clears expired attachments, a row of Local content). Every row auto-saves; a
+// shortening asks first (RetentionPolicySection); a failed save is announced
+// by RetentionSaveFailed above the blocks, and the row reads "Not saved".
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, TriangleAlert } from "lucide-react";
+import { FolderOpen } from "lucide-react";
 
 import { LoadError } from "@/components/LoadError";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
 import {
   usePruneNow,
   useRetentionPolicies,
-  useUpdateRetentionPolicy,
+  type useUpdateRetentionPolicy,
 } from "@/lib/hooks/useRetention";
 import { formatMoment } from "@/lib/time";
 import { RetentionPolicySection } from "./RetentionPolicySection";
@@ -29,13 +32,16 @@ const SHOWN = ["audit_log", "mcp_invocations", "conversations"] as const;
 
 interface Props {
   size: string | null;
+  /** The records' folder, named in the reveal button's tooltip. */
+  path?: string;
   onReveal?: () => void;
+  /** The save mutation, shared with the attachments row so one notice covers both. */
+  update: ReturnType<typeof useUpdateRetentionPolicy>;
 }
 
-export function HistoryBlock({ size, onReveal }: Props) {
+export function HistoryBlock({ size, path, onReveal, update }: Props) {
   const { t, i18n } = useTranslation();
   const policies = useRetentionPolicies();
-  const update = useUpdateRetentionPolicy();
   const prune = usePruneNow();
   const [confirmPrune, setConfirmPrune] = useState(false);
   const [pruneResult, setPruneResult] = useState<string | null>(null);
@@ -44,19 +50,6 @@ export function HistoryBlock({ size, onReveal }: Props) {
     policies.data?.policies.find((p) => p.table_name === name),
   ).filter((p): p is NonNullable<typeof p> => p !== undefined);
   const failedTable = update.isError ? update.variables?.tableName : undefined;
-  // "MCP calls are still kept for 30 days." — what the refused save left in place.
-  const failedPolicy = rows.find((p) => p.table_name === failedTable);
-  const stillKept = failedPolicy
-    ? t("settings.data.stillKept", {
-        name: t(`settings.retention.policy.${failedPolicy.table_name}.name`, {
-          defaultValue: failedPolicy.display_name,
-        }),
-        window:
-          failedPolicy.retention_days === null
-            ? t("settings.retention.foreverLower")
-            : t("settings.retention.forDays", { count: failedPolicy.retention_days }),
-      })
-    : null;
 
   const pruned = rows.filter((p) => p.last_pruned_at);
   const lastAt = pruned
@@ -71,9 +64,13 @@ export function HistoryBlock({ size, onReveal }: Props) {
     const lines = Object.entries(tables)
       .filter(([, n]) => n > 0)
       .map(([table, n]) =>
-        t("settings.retention.pruneRow", {
+        t(`settings.retention.policy.${table}.pruneRow`, {
           rows: n,
           name: t(`settings.retention.policy.${table}.name`, { defaultValue: table }),
+          defaultValue: t("settings.retention.pruneRow", {
+            rows: n,
+            name: t(`settings.retention.policy.${table}.name`, { defaultValue: table }),
+          }),
         }),
       );
     return lines.length > 0 ? lines.join("; ") : t("settings.retention.pruneNothing");
@@ -81,31 +78,6 @@ export function HistoryBlock({ size, onReveal }: Props) {
 
   return (
     <>
-      {update.isError ? (
-        <div
-          role="alert"
-          className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3 py-2.5"
-          data-testid="settings-data-save-failed"
-        >
-          <TriangleAlert aria-hidden className="mt-px size-[15px] shrink-0 text-danger" />
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-sm font-label text-text">
-              {t("settings.data.saveFailedTitle")}
-            </span>
-            <span className="text-xs text-text-muted">
-              {translateApiError(t, update.error)}
-              {stillKept ? ` ${stillKept}` : null}
-            </span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => update.variables && update.mutate(update.variables)}
-          >
-            {t("settings.data.tryAgain")}
-          </Button>
-        </div>
-      ) : null}
       <DataBlock
         title={t("settings.data.history.title")}
         size={size}
@@ -113,9 +85,16 @@ export function HistoryBlock({ size, onReveal }: Props) {
         testId="settings-data-history"
         action={
           onReveal ? (
-            <Button size="sm" variant="outline" onClick={onReveal}>
-              <FolderOpen aria-hidden /> {t("settings.data.showInFinder")}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="outline" onClick={onReveal}>
+                  <FolderOpen aria-hidden /> {t("settings.data.showInFinder")}
+                </Button>
+              </TooltipTrigger>
+              {path ? (
+                <TooltipContent className="font-mono">{abbreviateHomePath(path)}</TooltipContent>
+              ) : null}
+            </Tooltip>
           ) : null
         }
       >

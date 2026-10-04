@@ -882,7 +882,8 @@ history and how many versions it holds; no version count before the repository h
 **local content** (chat uploads and channel media under `~/.coffer/content/`, which never sync:
 their locations, the one folder to open, and their size), the **history** (the database file
 holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
-its size) and the **rebuildable cache** (the memory tree and the transcript summary cache under
+its size together with the log directory's, `~/.coffer/logs/` unless `COFFER_LOG_DIR` names
+another) and the **rebuildable cache** (the memory tree and the transcript summary cache under
 `~/.coffer/derived/`, and their size). Every path MUST come from the same place its owner
 resolves it, so an override the owner honours is honoured here.
 
@@ -896,7 +897,7 @@ bytes freed.
 #### Scenario: the storage summary reports the four kinds
 - **GIVEN** a vault repository of three commits, chat and channel media, a database with its WAL, a memory tree and a transcript summary cache
 - **WHEN** `GET /api/v1/storage` is called
-- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with both media locations under `~/.coffer/content` and their size, the history as `runs.db` with its WAL, and the cache as the size of the memory tree and the transcript cache
+- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with both media locations under `~/.coffer/content` and their size, the history as `runs.db` with its WAL plus the log directory, and the cache as the size of the memory tree and the transcript cache
 - **AND** before the vault repository has been created it reports the vault with no version count
 
 #### Scenario: clearing the cache leaves everything else
