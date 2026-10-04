@@ -70,7 +70,8 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     }
     # Untouched neighbouring state preserved; prior file backed up.
     assert data["oauthAccount"] == {"id": "x"}
-    assert (tmp_path / ".claude.json.bak").exists()
+    assert ConfigFileStore().latest_backup(tmp_path / ".claude.json") is not None
+    assert not (tmp_path / ".claude.json.bak").exists()
 
     rows = await agent_bundle.audit.query(
         resource=agent, event_type=AuditEventType.AGENT_MCP_INSTALLED.value

@@ -163,3 +163,65 @@ class SecretBoundarySettingsOut(BaseModel):
 
 class SecretBoundarySettingsIn(BaseModel):
     require_approval: bool
+
+
+class SecretScanFindingOut(BaseModel):
+    """Where one plaintext secret is and what it would become — never its value."""
+
+    id: str
+    source: Literal["skill", "mcp_server"]
+    #: The skill's or the server's name.
+    resource: str
+    resource_uid: str | None = None
+    #: A skill's file and line.
+    path: str | None = None
+    line: int | None = None
+    #: A server's ``env`` or ``header``.
+    field: Literal["env", "header"] | None = None
+    key: str
+    #: A skill's standalone secret name; a server's ref is minted on import.
+    proposed_name: str | None = None
+
+
+class SecretScanOut(BaseModel):
+    findings: list[SecretScanFindingOut]
+    #: How many skill files and MCP servers the scan read.
+    files_checked: int = 0
+    servers_checked: int = 0
+
+
+class SecretImportIn(BaseModel):
+    #: Finding ids to move; omitted moves every finding.
+    ids: list[str] | None = None
+    dry_run: bool = False
+
+
+class SecretImportMovedOut(BaseModel):
+    id: str
+    source: Literal["skill", "mcp_server"]
+    resource: str
+    #: A skill's standalone secret name.
+    name: str | None = None
+    #: The ref the value is (or, for a skill, would be) stored under; absent
+    #: in a server's dry run, where it is minted on import.
+    ref: str | None = None
+    #: `coffer://secret/<name>`, for a skill's value.
+    uri: str | None = None
+
+
+class SecretImportSkippedOut(BaseModel):
+    id: str
+    source: Literal["skill", "mcp_server"]
+    resource: str
+    reason: str
+    #: The secret the value was stored as, when it was stored.
+    name: str | None = None
+    #: The value is in the store, but its file could not be rewritten and
+    #: still holds it; moving the finding again retries the file.
+    stored: bool = False
+
+
+class SecretImportOut(BaseModel):
+    moved: list[SecretImportMovedOut]
+    skipped: list[SecretImportSkippedOut]
+    dry_run: bool

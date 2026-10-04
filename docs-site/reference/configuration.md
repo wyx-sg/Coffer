@@ -226,6 +226,7 @@ The window is set in **Settings → Data → History**, which shows four policie
 | **MCP calls** | `mcp_invocations` | 30 days | Deletes gateway invocation log rows. |
 | **Conversations** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
 | **Skill working files** | `skill_data` | 30 days | Deletes files anywhere under `~/.coffer/skill-data` whose last-modified time is older than the window, then the folders left empty (never `skill-data` itself). |
+| **Config backups** | `config_backups` | 30 days | Deletes files under `~/.coffer/config-backups` whose last-modified time is older than the window, except the newest backup of each config file, which is always kept so the last write can be undone; folders left empty are removed. |
 | **Attachments** | `attachments` | 30 days | Deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` whose last-modified time is older than the window. Shown under **Local content**. |
 | REST only | `sync_runs` | 90 days | Deletes the history of sync rounds. |
 | REST only | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |

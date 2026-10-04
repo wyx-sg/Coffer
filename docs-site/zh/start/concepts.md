@@ -76,7 +76,7 @@ scope 适用于 MCP 服务器（哪些智能体能看到该服务器的工具）
 
 ## 智能体 {#agent}
 
-**智能体**是一个已注册的本地编程智能体：Claude Code（`claude_code`）或 Codex（`codex`）。一台机器上每种类型最多一个智能体，名字就是它的类型：`claude-code` 或 `codex`。注册智能体就是告诉 Coffer 它的配置目录在哪里，默认是该类型的标准目录（`~/.claude`、`~/.codex`）。不会自动注册任何东西：**智能体**页面只列出候选项。智能体自己的文件仍是事实来源。Coffer 在需要时读取它的配置、MCP 条目、插件、记忆和对话记录；写入时只写允许列表内的条目，写入是原子的并带 `.bak` 备份。
+**智能体**是一个已注册的本地编程智能体：Claude Code（`claude_code`）或 Codex（`codex`）。一台机器上每种类型最多一个智能体，名字就是它的类型：`claude-code` 或 `codex`。注册智能体就是告诉 Coffer 它的配置目录在哪里，默认是该类型的标准目录（`~/.claude`、`~/.codex`）。不会自动注册任何东西：**智能体**页面只列出候选项。智能体自己的文件仍是事实来源。Coffer 在需要时读取它的配置、MCP 条目、插件、记忆和对话记录；写入时只写允许列表内的条目，写入是原子的，并在 Coffer 自己的文件夹（`~/.coffer/config-backups`）里留一份备份副本。
 
 指南：[智能体](/zh/guides/agents)。架构：[资源框架](/zh/architecture/resource-framework)。
 

@@ -225,7 +225,7 @@ describe("AgentMcpServersTab", () => {
     expect(within(dialog).getByText("Remove linear from ~/.claude.json?")).toBeInTheDocument();
     expect(
       within(dialog).getByText(
-        "Claude Code loses this server in its next session. A .bak is kept, and nothing in Coffer changes.",
+        "Claude Code loses this server in its next session. A backup copy is kept in Coffer’s folder, and nothing in Coffer changes.",
       ),
     ).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));

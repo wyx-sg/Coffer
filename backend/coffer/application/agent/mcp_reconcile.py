@@ -241,7 +241,7 @@ class McpEntryTarget:
         )
 
     def _restore(self, path: pathlib.Path, before: str | None) -> Undo:
-        """Put back what the write replaced (the content its ``.bak`` holds),
+        """Put back what the write replaced (the content it backed up),
         or remove a file the write created."""
 
         async def _undo() -> None:

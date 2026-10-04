@@ -18,6 +18,7 @@ from coffer.domain.errors import (
     ConfigFileNotAllowed,
     ResourceNotFound,
 )
+from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 
 pytestmark = pytest.mark.asyncio
 
@@ -130,11 +131,11 @@ async def test_write_valid_atomic_with_backup_and_audit(agent_bundle, tmp_path, 
         agent.uid, "settings", '{"theme": "dark"}', actor="cli"
     )
 
-    # File holds the new content; a .bak preserves the prior version.
+    # File holds the new content; a backup in Coffer's folder preserves the prior version.
     assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
-    assert (tmp_path / ".claude" / "settings.json.bak").read_text(
-        encoding="utf-8"
-    ) == '{"theme": "light"}'
+    backup = ConfigFileStore().latest_backup(settings)
+    assert backup is not None and backup.read_text(encoding="utf-8") == '{"theme": "light"}'
+    assert not (tmp_path / ".claude" / "settings.json.bak").exists()
     # Returned metadata reflects the refreshed file.
     assert info.key == "settings"
     assert info.exists is True
@@ -164,9 +165,9 @@ async def test_write_malformed_rejected_file_unchanged(agent_bundle, tmp_path, m
     with pytest.raises(ConfigFileFormatInvalid):
         await agent_bundle.config_files.write_file(agent.uid, "settings", "{not json")
 
-    # The on-disk file is untouched and no .bak was created.
+    # The on-disk file is untouched and no backup was created.
     assert settings.read_text(encoding="utf-8") == '{"theme": "light"}'
-    assert not (tmp_path / ".claude" / "settings.json.bak").exists()
+    assert ConfigFileStore().latest_backup(settings) is None
     # No audit entry for the rejected write.
     entries = await agent_bundle.audit.query(
         event_type=AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value

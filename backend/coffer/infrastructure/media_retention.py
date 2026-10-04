@@ -112,20 +112,42 @@ def _remove_empty_dirs(root: pathlib.Path) -> None:
             continue
 
 
+def _without_newest_per_dir(
+    entries: list[tuple[str, datetime]],
+) -> list[tuple[str, datetime]]:
+    """``entries`` minus the newest file of each directory (ties broken by path).
+
+    A directory is one subject's history (``config-backups/<file>/``): its newest
+    file is what an undo wants, so it never counts as expired.
+    """
+    newest: dict[str, tuple[datetime, str]] = {}
+    for path, mtime in entries:
+        parent = str(pathlib.Path(path).parent)
+        if parent not in newest or (mtime, path) > newest[parent]:
+            newest[parent] = (mtime, path)
+    keep = {path for _mtime, path in newest.values()}
+    return [e for e in entries if e[0] not in keep]
+
+
 def prune_media_tree(
     root: pathlib.Path,
     *,
     max_age_days: int,
     now: datetime,
+    keep_newest_per_dir: bool = False,
 ) -> list[str]:
     """Delete files anywhere under ``root`` older than ``max_age_days`` (by mtime).
 
     The recursive sweep for a directory whose owners keep subfolders (skill
     working files, ``skill-data/<skill>/``). Directories left empty are removed,
-    never ``root`` itself; symlinks are left alone. Returns the files deleted.
+    never ``root`` itself; symlinks are left alone. With ``keep_newest_per_dir`` the
+    newest file of each directory is kept however old it is. Returns the files deleted.
     """
+    entries = _stat_tree(root)
+    if keep_newest_per_dir:
+        entries = _without_newest_per_dir(entries)
     deleted: list[str] = []
-    for path in files_to_prune(_stat_tree(root), max_age_days=max_age_days, now=now):
+    for path in files_to_prune(entries, max_age_days=max_age_days, now=now):
         try:
             pathlib.Path(path).unlink()
         except OSError:
@@ -143,10 +165,12 @@ def count_media_tree(
     *,
     max_age_days: int,
     now: datetime,
+    keep_newest_per_dir: bool = False,
 ) -> tuple[int, int]:
     """``(files under root, files older than max_age_days)``: what a tree sweep would delete."""
     entries = _stat_tree(root)
-    return len(entries), len(files_to_prune(entries, max_age_days=max_age_days, now=now))
+    candidates = _without_newest_per_dir(entries) if keep_newest_per_dir else entries
+    return len(entries), len(files_to_prune(candidates, max_age_days=max_age_days, now=now))
 
 
 __all__ = ["count_media_dir", "count_media_tree", "prune_media_dir", "prune_media_tree"]

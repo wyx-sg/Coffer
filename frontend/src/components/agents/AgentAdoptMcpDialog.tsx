@@ -2,7 +2,7 @@
 //
 // Spec agent-registry "Adopt a direct MCP entry into Coffer". The dialog says
 // what will happen — Coffer serves the server to every agent and then takes
-// the entry out of the agent's file, keeping a .bak — and shows the name it
+// the entry out of the agent's file, keeping a backup in Coffer's folder — and shows the name it
 // will have in Coffer, the command, and every env / header key with how it will
 // be stored. A secret-looking key's value moves into the encrypted vault under
 // a secret reference (prefilled `mcp/{agent}/{entry}/{KEY}`: an address a

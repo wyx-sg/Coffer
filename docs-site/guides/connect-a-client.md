@@ -49,7 +49,7 @@ args = ["--agent-uid", "bc0eff325c015d279faab81ce63e50b2"]
 
 :::
 
-For a Claude Code agent registered with a custom config directory, the entry goes into `<config_dir>/.claude.json` instead — the file Claude Code reads when started with `CLAUDE_CONFIG_DIR`. The write is atomic, keeps a `.bak`, and is audited. Restart the agent afterwards.
+For a Claude Code agent registered with a custom config directory, the entry goes into `<config_dir>/.claude.json` instead — the file Claude Code reads when started with `CLAUDE_CONFIG_DIR`. The write is atomic, keeps a backup copy in `~/.coffer/config-backups`, and is audited. Restart the agent afterwards.
 
 Installing through Coffer is better than a hand-written entry for two reasons: the path is absolute, so it works for agents launched from a GUI that does not inherit your shell `PATH`; and `--agent-uid` identifies the agent, so [per-agent reach](#agent-identity) applies. See [Agents](/guides/agents#connect-an-agent-to-coffer) for how the shim path is resolved.
 

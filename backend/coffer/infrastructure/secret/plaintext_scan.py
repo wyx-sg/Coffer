@@ -19,7 +19,7 @@ import re
 from coffer.domain.plaintext_shape import MaskedValue, mask, shape_of
 from coffer.domain.secrets import SECRET_URI_PREFIX, cited_secret_names
 
-_SECRET_KEY = re.compile(
+SECRET_KEY = re.compile(
     r"(?i)(password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key)"
 )
 #: ``NAME = value`` / ``name: value`` with a secret-sounding name and a value
@@ -28,26 +28,24 @@ _SECRET_KEY = re.compile(
 _ASSIGNMENT = re.compile(
     r"""(?P<key>[A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]\s*(?P<q>["']?)(?P<value>[^\s"'#`]{8,})(?P=q)"""
 )
-_TOKEN_SHAPES = re.compile(
+TOKEN_SHAPES = re.compile(
     r"\b(?P<value>(?:ghp|gho|ghu|ghs)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|"
     r"sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b"
 )
 #: An unquoted value holding call, index or list punctuation is code
 #: (``token = m.group(0)``, ``password=password,``), never a literal secret.
 _CODE = re.compile(r"[()\[\],;]")
-_PLACEHOLDER = re.compile(r"(?i)^(x{3,}|\*{3,}|<.*>|your[-_].*|changeme|example.*|placeholder.*)$")
-_SKILL_SUFFIXES = {".md", ".sh", ".py", ".env", ".json", ".yaml", ".yml", ".toml", ".txt"}
-_MAX_BYTES = 1_000_000
+PLACEHOLDER = re.compile(r"(?i)^(x{3,}|\*{3,}|<.*>|your[-_].*|changeme|example.*|placeholder.*)$")
+SKILL_SUFFIXES = {".md", ".sh", ".py", ".env", ".json", ".yaml", ".yml", ".toml", ".txt"}
+MAX_BYTES = 1_000_000
 
 
-def _usable(value: str) -> bool:
+def usable(value: str) -> bool:
     v = value.strip()
-    return (
-        bool(v) and not v.startswith((SECRET_URI_PREFIX, "$", "{{")) and not _PLACEHOLDER.match(v)
-    )
+    return bool(v) and not v.startswith((SECRET_URI_PREFIX, "$", "{{")) and not PLACEHOLDER.match(v)
 
 
-def _line_hits(raw: str) -> list[tuple[str, str, int, int]]:
+def line_hits(raw: str) -> list[tuple[str, str, int, int]]:
     """``(key, value, start, end)`` for each plaintext value on one line: an
     assignment whose name says secret, or a well-known token shape."""
     if "coffer run" in raw:
@@ -57,14 +55,14 @@ def _line_hits(raw: str) -> list[tuple[str, str, int, int]]:
     seen: list[tuple[int, int]] = []
     for m in _ASSIGNMENT.finditer(raw):
         key, value = m.group("key"), m.group("value")
-        if not _SECRET_KEY.search(key) or not _usable(value):
+        if not SECRET_KEY.search(key) or not usable(value):
             continue
         if not m.group("q") and _CODE.search(value):
             continue
         span = (m.start("value"), m.end("value"))
         seen.append(span)
         out.append((key, value, *span))
-    for m in _TOKEN_SHAPES.finditer(raw):
+    for m in TOKEN_SHAPES.finditer(raw):
         span = (m.start("value"), m.end("value"))
         if any(s <= span[0] < e for s, e in seen):
             continue
@@ -79,7 +77,7 @@ def find_in_text(text: str) -> list[tuple[int, str]]:
     return [
         (n, key or "token")
         for n, raw in enumerate(text.splitlines(), start=1)
-        for key, _value, _s, _e in _line_hits(raw)
+        for key, _value, _s, _e in line_hits(raw)
     ]
 
 
@@ -87,7 +85,7 @@ def mask_line(raw: str) -> tuple[str, tuple[MaskedValue, ...]]:
     """``raw`` with each plaintext value on it masked, and where each one is
     with its shape. The masked text keeps ``raw``'s length; the value itself
     is not returned."""
-    hits = sorted(_line_hits(raw), key=lambda h: h[2])
+    hits = sorted(line_hits(raw), key=lambda h: h[2])
     out: list[MaskedValue] = []
     text = raw
     for key, value, start, end in hits:
@@ -107,9 +105,9 @@ def skills_citing_secrets(skills_root: pathlib.Path) -> dict[str, set[str]]:
         rel = path.relative_to(skills_root)
         if (
             not path.is_file()
-            or path.suffix not in _SKILL_SUFFIXES
+            or path.suffix not in SKILL_SUFFIXES
             or any(part.startswith(".") for part in rel.parts)
-            or path.stat().st_size > _MAX_BYTES
+            or path.stat().st_size > MAX_BYTES
         ):
             continue
         try:

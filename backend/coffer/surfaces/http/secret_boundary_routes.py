@@ -51,6 +51,7 @@ from coffer.surfaces.http.secret_composition import (
     get_master_key_manager,
     get_secret_store,
 )
+from coffer.surfaces.http.secret_plaintext_routes import router as plaintext_router
 from coffer.surfaces.http.secret_schemas import (
     MasterKeyExportIn,
     MasterKeyExportOut,
@@ -69,6 +70,7 @@ router = APIRouter(
     dependencies=[Depends(require_token)],
 )
 router.include_router(approval_router)
+router.include_router(plaintext_router)
 
 
 # --- presence ------------------------------------------------------------------

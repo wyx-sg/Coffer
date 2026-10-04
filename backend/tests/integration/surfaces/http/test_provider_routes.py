@@ -17,6 +17,7 @@ from starlette.testclient import TestClient
 
 from coffer.domain.model_proxy.state import ProxyState
 from coffer.domain.provider.projection import is_managed_api_key_helper
+from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.proxy_dependencies import get_proxy_facade
@@ -506,7 +507,8 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
         data = json.loads((cfg / "settings.json").read_text())
         assert data["theme"] == "dark"  # unrelated key preserved
         _assert_proxy_form(data)
-        assert (cfg / "settings.json.bak").exists()  # prior version backed up
+        assert ConfigFileStore().latest_backup(cfg / "settings.json") is not None  # prior backed up
+        assert not (cfg / "settings.json.bak").exists()  # nothing beside the file
 
 
 @pytest.mark.acceptance(

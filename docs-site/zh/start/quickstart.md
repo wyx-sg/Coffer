@@ -41,7 +41,7 @@ Coffer 从不自行注册智能体；由你在**智能体**页面上选择。每
 
 打开**智能体 → claude-code**，点击**连接**。智能体列表上该智能体的 **Coffer** 状态会从**未接入**变为**已接入**。
 
-连接会在 `~/.claude.json` 的 `mcpServers` 中添加一条条目（同时往 `~/.claude/settings.json` 写入 Coffer 的记忆 Hook，共四条，从会话开始覆盖到每条 shell 命令，见[记忆](/zh/guides/memory)）。Coffer 以原子方式写入文件，并把上一个版本保存为 `.bak`：
+连接会在 `~/.claude.json` 的 `mcpServers` 中添加一条条目（同时往 `~/.claude/settings.json` 写入 Coffer 的记忆 Hook，共四条，从会话开始覆盖到每条 shell 命令，见[记忆](/zh/guides/memory)）。Coffer 以原子方式写入文件，并把上一个版本复制到 `~/.coffer/config-backups`：
 
 ```json
 {

@@ -23,6 +23,7 @@ from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.agent.model_catalogue import AgentModel
 from coffer.domain.agent.types import AgentType
+from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http import feature_dependencies
@@ -217,7 +218,8 @@ def test_write_a_config_file_over_rest(home: pathlib.Path) -> None:
         )
         assert ok.status_code == 200, ok.text
         assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
-        assert (home / ".claude" / "settings.json.bak").read_text() == '{"theme": "light"}'
+        backup = ConfigFileStore().latest_backup(settings)
+        assert backup is not None and backup.read_text() == '{"theme": "light"}'
         assert "agent_config_file_written" in _audit_types(c, uid)
 
         bad = c.put(f"/api/v1/agents/{uid}/config-files/settings", json={"content": "{not json"})
@@ -260,7 +262,8 @@ def test_remove_a_direct_mcp_entry_over_rest_and_refuse_the_coffer_entry(
         r = c.delete("/api/v1/agents/claude-code/mcp-entries/github")
         assert r.status_code == 204, r.text
         assert "github" not in _claude_json(home)["mcpServers"]
-        assert (home / ".claude.json.bak").read_text(encoding="utf-8") == prior
+        backup = ConfigFileStore().latest_backup(home / ".claude.json")
+        assert backup is not None and backup.read_text(encoding="utf-8") == prior
         assert "agent_mcp_entry_removed" in _audit_types(c, uid)
 
         kept = (home / ".claude.json").read_text(encoding="utf-8")

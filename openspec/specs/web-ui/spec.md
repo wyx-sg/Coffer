@@ -1099,17 +1099,14 @@ machine only is a setting shown on the tab it belongs to:
   every History row, and shortening it asks first, counting the files the shorter
   window deletes.
 - **History** — the retention of each record kind — changes, MCP calls,
-  conversations and **Skill working files** (the logs, journals and temporary
-  files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a
-  row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
+  conversations, **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
   MUST say how many records the shorter window deletes at the next cleanup and
   how many the table holds now and would hold after, counted by the daemon
-  without deleting anything. **Clear expired now** also removes attachments past
-  their window and reports them, and skill working files past theirs, as files. A refused save MUST say so above the blocks with
+  without deleting anything. **Clear expired now** also removes attachments past their window and reports them, and skill working files and config backups past theirs, as files. A refused save MUST say so above the blocks with
   **Try again**, name the window still in place, and mark the row "Not saved".
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache,
   both under `~/.coffer/derived/`, which Coffer rebuilds on its own: one **Clear** action,
@@ -1128,7 +1125,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, MCP calls, conversations and skill working files with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, MCP calls, conversations, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
@@ -1159,6 +1156,12 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **WHEN** the user chooses Clear in Rebuildable cache
 - **THEN** a confirmation says the next memory update rebuilds memory from the agents' own memory and that notes whose sources are gone do not come back, and nothing is cleared until the user confirms
 - **AND** once confirmed only the memory tree and the transcript summary cache are cleared, with no vault or local content touched
+
+#### Scenario: config backups are kept for a chosen window
+- **GIVEN** the `config_backups` policy at 30 days
+- **WHEN** the user opens `/settings/data`
+- **THEN** History has a Config backups row at 30 days, after Skill working files, whose help text says the newest backup of each file is always kept
+- **AND** shortening it asks first and the confirmation counts files, not records
 
 ### Requirement: Switch language from the sidebar
 The English / 简体中文 switch MUST be reachable from every screen in Settings ›
@@ -2272,6 +2275,9 @@ The page MUST carry:
 - **Missing values** — a banner counting the secrets this Mac has no value for,
   with **Add values** (spec [secret](../secret/spec.md) "Show a secret this Mac
   cannot open as missing on this Mac"); it offers no master-key import.
+- **Find plaintext keys** — the entry point that moves plaintext secrets out of
+  what Coffer manages and into the store (spec [secret](../secret/spec.md)
+  "Move plaintext secrets in managed resources into the store").
 - **Approvals** — a banner counting the changes waiting for approval, with
   **Review**, which opens the one approvals table (spec
   [secret](../secret/spec.md) "Approve several bindings in one confirmation").
@@ -2286,7 +2292,8 @@ banner returns when the set changes. The help icon beside the title is gone: how
 to run a command with a secret is in the documentation, not on the page.
 
 This requirement fixes the page's place and its parts. What the store enumerates,
-and how each operation behaves are the secret capability's, specified with it.
+how each operation behaves, and the steps of finding plaintext keys are the
+secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
@@ -2305,6 +2312,11 @@ and how each operation behaves are the secret capability's, specified with it.
 - **WHEN** the page renders, and then the user chooses Reveal value on that row and confirms
 - **THEN** no value is shown until the reveal is confirmed, and then only that secret's value is asked for and shown
 - **AND** the page says the reveal is recorded as `secret_revealed`
+
+#### Scenario: the secrets page offers to find plaintext keys
+- **GIVEN** the Secrets page
+- **WHEN** it is opened, with secrets and with none
+- **THEN** its header offers Find plaintext keys beside Add secret, and the empty page offers both
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen

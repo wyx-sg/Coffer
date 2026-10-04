@@ -21,6 +21,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── runs.db                       # history (SQLite, WAL mode)
 ├── runs.db-wal, runs.db-shm      # SQLite write-ahead log and shared memory
 ├── runs.db.pre-<revision>        # copy taken before a schema migration (newest 3 kept)
+├── config-backups/               # copies of agent config files made before Coffer rewrites them: never synced, pruned by retention (each file's newest is kept)
 ├── skill-data/                   # logs, journals and temp files skill scripts write, one folder per skill: never synced, pruned by retention
 ├── derived/                      # rebuilt from the rest: always safe to delete
 ├── master.key                    # secret master key (when stored as a file)
@@ -146,6 +147,12 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | --- | --- | --- | --- | --- |
 | `skill-data/<skill-name>/` | Where a skill's scripts keep the logs, operation journals and temporary files they generate. It sits outside the vault, so none of it syncs, and `coffer path skill-data` prints the directory. Files whose last-modified time is older than the **Skill working files** retention window (30 days by default) are deleted, folders left empty with them. | skills' scripts; daemon prunes | No | Yes. Anything a skill needs for good does not belong here. |
 
+### Config backups
+
+| Path | Purpose | Owner | Syncs | Safe to delete |
+| --- | --- | --- | --- | --- |
+| `config-backups/<file>-<hash>/<name>.coffer-backup-<UTC time>` | The previous content of an agent's config file (`~/.codex/config.toml`, `~/.claude/settings.json`, `~/.claude.json`, a memory or subagent file), copied here before Coffer rewrites or deletes it. One folder per file, named for the file and a short hash of its full path; each backup is named by the UTC time it was taken. It sits outside the vault, so none of it syncs. Backups older than the **Config backups** retention window (30 days by default) are deleted, except that **the newest backup of each file is always kept**, so the last write can always be undone. | daemon (the config writer); daemon prunes | No | Yes, but you lose the undo. |
+
 ### Logs
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
@@ -173,7 +180,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 
 ## Inside an agent's config directory
 
-Coffer writes into a registered agent's own config directory only for things you asked for: connecting it to Coffer, delivering a skill, switching a model provider, or editing a config file from the agent's page. Every write is atomic, and the previous version of an edited file is kept as `<file>.bak`, `<file>.bak.1` and `<file>.bak.2`.
+Coffer writes into a registered agent's own config directory only for things you asked for: connecting it to Coffer, delivering a skill, switching a model provider, or editing a config file from the agent's page. Every write is atomic, and the previous version of an edited file is first copied to `~/.coffer/config-backups`, never next to the file (see [Config backups](#config-backups)).
 
 The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by default. An agent registered with another directory gets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` set on every process Coffer starts for it.
 

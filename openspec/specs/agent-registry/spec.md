@@ -5,7 +5,7 @@ The agent registry decides which locally-installed AI coding agents Coffer knows
 
 This spec holds what the two types share. Everything that differs by type — where the config directory is, which files are allowlisted, the MCP entry shape, the plugin inventory, the model catalogue's sources, the native-memory layout, the transcript location — lives in a child spec: [`agent-registry/claude-code`](claude-code/spec.md) and [`agent-registry/codex`](codex/spec.md), each the reading of one `AGENT_DESCRIPTORS` record, the single per-type table in the code. Adding a product is one enum value, one descriptor record and one child spec.
 
-Beyond registering agents, the user views and edits each agent's known config files (or opens them in an external editor), installs Coffer's own MCP server into an agent with one click, and sees which models that agent can be put on. The registry also reaches into the agent's real on-disk workspace — the MCP servers configured in its own files, its installed plugins, directory-type config entries, its own native memory and its session transcripts — following **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway; the master skill store of skill-manager) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; the agents' internal state files are read as inputs where needed and never written. Config files are surfaced as raw text with a validate + atomic-write + `.bak` safety net on every save; open-in-external-editor stays alongside as the escape hatch for the long tail, and recurring structured needs graduate into facets.
+Beyond registering agents, the user views and edits each agent's known config files (or opens them in an external editor), installs Coffer's own MCP server into an agent with one click, and sees which models that agent can be put on. The registry also reaches into the agent's real on-disk workspace — the MCP servers configured in its own files, its installed plugins, directory-type config entries, its own native memory and its session transcripts — following **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway; the master skill store of skill-manager) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; the agents' internal state files are read as inputs where needed and never written. Config files are surfaced as raw text with a validate + atomic-write + backup safety net on every save; open-in-external-editor stays alongside as the escape hatch for the long tail, and recurring structured needs graduate into facets.
 
 The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement. The registry relies on the Resource framework, audit log and immutable-`uid` identity of resource-framework, and renders inside the web-ui application shell. A `coffer-hook` binary with a session-context rules route and a `disable_native_memory` switch once lived here and was removed because it was never installed; session-start delivery is now memory's own, marker-scoped install, which this registry only supports by supplying the agent record, its config directory, its allowlisted settings file and the atomic-write machinery.
 
@@ -159,15 +159,21 @@ The system MUST expose a write (save) for the content of any allowlisted config 
 #### Scenario: reject malformed config-file content
 - **GIVEN** a registered agent whose `settings.json` (a `json` file) exists
 - **WHEN** the user writes malformed content (e.g. invalid JSON) to that key through the in-app editor or the REST API
-- **THEN** Coffer responds `unprocessable_entity` (422), leaves the on-disk file unchanged, writes no `.bak`, and records no write audit entry
+- **THEN** Coffer responds `unprocessable_entity` (422), leaves the on-disk file unchanged, writes no backup, and records no write audit entry
 
 ### Requirement: Write config files atomically with a backup and an audit entry
-Writes MUST be atomic (temp file + rename) and MUST keep a `.bak` copy of the prior content so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (see "Back up and audit Coffer MCP install and uninstall") reuse the same atomic-write + `.bak` machinery.
+Writes MUST be atomic (temp file + rename) and MUST copy the prior content, before the replace, to a timestamped backup under `~/.coffer/config-backups/` (Coffer's own folder: machine-local, outside the vault, and never beside the agent's file) so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (see "Back up and audit Coffer MCP install and uninstall") reuse the same atomic-write + backup machinery. Backups are named by their UTC time and cleaned by the `config_backups` retention policy ([resource-framework](../resource-framework/spec.md) "Retain config backups on an adjustable policy"), which always keeps the newest backup of each file.
 
 #### Scenario: save a config file with valid content
 - **GIVEN** a registered agent whose `settings.json` exists
 - **WHEN** the user writes new, well-formed content to that config-file key through the in-app editor or the REST API
-- **THEN** Coffer validates the content against the file's format, writes it atomically while keeping a `.bak` of the prior version, records an `agent_config_file_written` audit entry, and the new content reads back on the next read
+- **THEN** Coffer validates the content against the file's format, writes it atomically while copying the prior version to a backup under `~/.coffer/config-backups/` (nothing is written next to the file), records an `agent_config_file_written` audit entry, and the new content reads back on the next read
+
+#### Scenario: a config write leaves its backup in Coffer's folder and nothing beside the file
+- **GIVEN** `~/.claude/settings.json` holds content, and an older write already left a backup of it
+- **WHEN** Coffer writes new content to that file twice
+- **THEN** each write copied the prior content to its own timestamped file under `~/.coffer/config-backups/`, in a folder named for that one config file, and the newest backup holds the content the last write replaced
+- **AND** no `.bak` file, backup or temporary file is left in the agent's own directory, and nothing under `~/.coffer/vault` was written
 
 ### Requirement: Address config files only by allowlisted key
 Config-file read and write MUST be addressable only by allowlisted `key` (never by caller-supplied path); an unknown key returns `not_found` (404) and performs no filesystem access.
@@ -244,12 +250,12 @@ Disconnecting an agent from Coffer ("Disconnect an agent from Coffer") MUST unin
 - **AND** `GET /api/v1/agents/{uid}/coffer-connection` reports the state as `disconnected`
 
 ### Requirement: Back up and audit Coffer MCP install and uninstall
-Install and uninstall MUST reuse the atomic-write + `.bak` machinery of "Write config files atomically with a backup and an audit entry" and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
+Install and uninstall MUST reuse the atomic-write + backup machinery of "Write config files atomically with a backup and an audit entry" and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
 
 #### Scenario: uninstall Coffer's MCP from an agent
 - **GIVEN** an agent that has Coffer's MCP installed
 - **WHEN** the user uninstalls it
-- **THEN** the `coffer` entry is removed from the agent's MCP config, the file is backed up to `.bak`, an `agent_mcp_uninstalled` audit entry is recorded, and status reports `installed=false`
+- **THEN** the `coffer` entry is removed from the agent's MCP config, the file is backed up under `~/.coffer/config-backups/`, an `agent_mcp_uninstalled` audit entry is recorded, and status reports `installed=false`
 
 ### Requirement: List the MCP entries in the agent's own config files
 The system MUST parse and list the MCP server entries configured in the agent's own files, reading the source files that type's child spec names and labelling each entry with the file it came from. Each entry carries name, source, transport (stdio command or HTTP URL), the `enabled` flag where the format defines one, `is_coffer` for Coffer's own gateway entry, and `matches_resource` naming an equivalent registered `mcp_server` resource when one exists. Entries are derived at read time, never stored; Coffer keeps no copy. Coffer's own `coffer` entry is rendered specially and managed by the install/uninstall operations, never as a plain direct entry.
@@ -289,17 +295,17 @@ The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry
 - **AND** its footer offers Remove and Adopt around Close, and closing it leaves the user on the MCP servers tab
 
 ### Requirement: Remove a direct MCP entry from its source file
-Users MUST be able to remove a direct MCP entry — from the agent's page or the REST route (`DELETE /api/v1/agents/{uid}/mcp-entries/{entry}`). Removal edits only the entry's source file, reuses the atomic-write + `.bak` machinery of "Write config files atomically with a backup and an audit entry", and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by "Install Coffer's MCP server into an agent in one action" and "Uninstall Coffer's MCP server from an agent".
+Users MUST be able to remove a direct MCP entry — from the agent's page or the REST route (`DELETE /api/v1/agents/{uid}/mcp-entries/{entry}`). Removal edits only the entry's source file, reuses the atomic-write + backup machinery of "Write config files atomically with a backup and an audit entry", and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by "Install Coffer's MCP server into an agent in one action" and "Uninstall Coffer's MCP server from an agent".
 
 #### Scenario: remove a direct MCP entry
 - **GIVEN** a registered agent with a direct (non-Coffer) MCP entry
 - **WHEN** the user removes that entry (carrying the source file where the type's entries may come from more than one)
-- **THEN** the entry is deleted from exactly its source file via an atomic write with a `.bak` of the prior content, an `agent_mcp_entry_removed` audit entry is recorded, and the next listing no longer shows it
+- **THEN** the entry is deleted from exactly its source file via an atomic write with a backup of the prior content under `~/.coffer/config-backups/`, an `agent_mcp_entry_removed` audit entry is recorded, and the next listing no longer shows it
 
 #### Scenario: remove a direct MCP entry over REST and refuse the coffer entry
 - **GIVEN** a registered agent `claude-code` whose own config defines a direct entry `github`
 - **WHEN** the user sends `DELETE /api/v1/agents/claude-code/mcp-entries/github`
-- **THEN** the entry is gone from its source file, a `.bak` holds the prior content, and an `agent_mcp_entry_removed` audit entry is recorded
+- **THEN** the entry is gone from its source file, the newest backup under `~/.coffer/config-backups/` holds the prior content, and an `agent_mcp_entry_removed` audit entry is recorded
 - **AND** `DELETE /api/v1/agents/claude-code/mcp-entries/coffer` is refused and leaves the file unchanged
 
 ### Requirement: Adopt a direct MCP entry into Coffer
@@ -308,7 +314,7 @@ Users MUST be able to adopt a direct MCP entry into Coffer, so that it is served
 #### Scenario: adopt a direct MCP entry into Coffer
 - **GIVEN** a registered agent with a direct stdio MCP entry whose name collides with no existing resource
 - **WHEN** the user adopts the entry
-- **THEN** Coffer first registers an equivalent `mcp_server` resource (schema-validated, audited), verifies it reads back, then removes the direct entry from the agent's config (atomic + `.bak`), records an `agent_mcp_entry_adopted` audit entry, and the upstream is now served to all agents through the gateway
+- **THEN** Coffer first registers an equivalent `mcp_server` resource (schema-validated, audited), verifies it reads back, then removes the direct entry from the agent's config (atomic + backup), records an `agent_mcp_entry_adopted` audit entry, and the upstream is now served to all agents through the gateway
 
 #### Scenario: reject adoption on resource name conflict
 - **GIVEN** an `mcp_server` resource already exists with the same name as a direct entry
@@ -380,7 +386,7 @@ A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): i
 - **THEN** Coffer returns the entry with `kind=directory` and its files (entry-relative path, size, modified time); a missing directory lists as `exists=false` with no files and is not created by the read
 
 ### Requirement: Read, write and delete files inside a directory entry
-Users MUST be able to read individual files inside a directory entry; this read backs the UI's editor, . Write (create-on-write) and delete of individual files are available through the in-app editor and the REST API (`PUT` and `DELETE /api/v1/agents/{uid}/config-files/{key}/files/{relpath}`). Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension — a containment violation is `not_found` (404) and a disallowed extension `unprocessable_entity` (422). Writes reuse the machinery of "Write config files atomically with a backup and an audit entry"; deletion preserves the prior content as `.bak`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
+Users MUST be able to read individual files inside a directory entry; this read backs the UI's editor, . Write (create-on-write) and delete of individual files are available through the in-app editor and the REST API (`PUT` and `DELETE /api/v1/agents/{uid}/config-files/{key}/files/{relpath}`). Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension — a containment violation is `not_found` (404) and a disallowed extension `unprocessable_entity` (422). Writes reuse the machinery of "Write config files atomically with a backup and an audit entry"; deletion preserves the prior content as a backup under `~/.coffer/config-backups/`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
 
 #### Scenario: create a file inside a directory entry
 - **GIVEN** a registered agent with a directory config entry
@@ -390,7 +396,7 @@ Users MUST be able to read individual files inside a directory entry; this read 
 #### Scenario: delete a file inside a directory entry
 - **GIVEN** a directory entry containing a file
 - **WHEN** the user deletes that file through the REST API
-- **THEN** the file is removed with its prior content preserved as `.bak`, an `agent_config_file_deleted` audit entry is recorded, and the next listing no longer shows it
+- **THEN** the file is removed with its prior content preserved as a backup under `~/.coffer/config-backups/`, an `agent_config_file_deleted` audit entry is recorded, and the next listing no longer shows it
 
 #### Scenario: reject directory file paths outside the entry
 - **GIVEN** a registered agent with a directory config entry
@@ -398,7 +404,7 @@ Users MUST be able to read individual files inside a directory entry; this read 
 - **THEN** the request is rejected before any filesystem access with `not_found` (404) for containment violations or `unprocessable_entity` (422) for a disallowed extension
 
 ### Requirement: Reject stale config-file writes by fingerprint
-Config-file reads (single files and directory children) MUST return a content fingerprint. A write MAY carry that fingerprint back; a write that carries one MUST be rejected with `conflict` (409, `CONFIG_FILE_STALE`) when the on-disk content changed since the read, leaving the file untouched. A write that carries none is applied as sent, for scripted REST use. The in-app editor MUST always send the fingerprint of the read it started from, because it holds the file open for as long as the user edits — exactly the window another writer lands in. The agent's own process may rewrite a file between Coffer's read and write; the user then re-reads and retries, and the `.bak` of every Coffer write keeps the prior content recoverable in the reverse race.
+Config-file reads (single files and directory children) MUST return a content fingerprint. A write MAY carry that fingerprint back; a write that carries one MUST be rejected with `conflict` (409, `CONFIG_FILE_STALE`) when the on-disk content changed since the read, leaving the file untouched. A write that carries none is applied as sent, for scripted REST use. The in-app editor MUST always send the fingerprint of the read it started from, because it holds the file open for as long as the user edits — exactly the window another writer lands in. The agent's own process may rewrite a file between Coffer's read and write; the user then re-reads and retries, and the backup of every Coffer write keeps the prior content recoverable in the reverse race.
 
 #### Scenario: reject stale config-file writes
 - **GIVEN** a config file (or directory child) read by the user, then modified on disk by another process
@@ -408,7 +414,7 @@ Config-file reads (single files and directory children) MUST return a content fi
 #### Scenario: write a config file over REST
 - **GIVEN** a registered agent with an existing `json` config file under the allowlisted key `<key>`, and well-formed JSON content to write
 - **WHEN** the user writes that content with `PUT /api/v1/agents/{uid}/config-files/<key>`
-- **THEN** the config file holds the written content, a `.bak` holds the prior content, and an `agent_config_file_written` audit entry is recorded
+- **THEN** the config file holds the written content, the newest backup under `~/.coffer/config-backups/` holds the prior content, and an `agent_config_file_written` audit entry is recorded
 - **AND** the same request with malformed JSON is refused with `unprocessable_entity` (422) and leaves the config file unchanged
 
 ### Requirement: Carry the model binding on the agent record
@@ -759,7 +765,7 @@ Users MUST be able to connect an agent to Coffer in one action, from the REST AP
 - `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action", for every agent type;
 - `memory_hook` — the memory delivery hook of [memory](../memory/spec.md) "Install delivery hooks explicitly and removably", for every agent type with a hook adapter.
 
-The gateway entry MUST be installed first, so that a connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a `.bak` and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
+The gateway entry MUST be installed first, so that a connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a backup and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
 
 #### Scenario: connect installs every part that applies
 - **GIVEN** a registered Claude Code agent with neither the gateway entry nor the memory hook
@@ -927,7 +933,6 @@ The attention list ([resource-framework](../resource-framework/spec.md) "Report 
 - **GIVEN** a connected agent whose Coffer hook is trusted and has fired, and one with no memory hook
 - **WHEN** the attention list is read
 - **THEN** neither of them carries an `agent_hook_attention` item
-
 
 ### Requirement: Expose every agent operation over REST and on the Agents page
 Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the Agents page in the web UI. The command line carries none of them: it has no `agent` command group.

@@ -99,7 +99,7 @@ export const agentsApi = {
         params: { path: { uid, entry }, query: { source: source || undefined } },
       }),
     ),
-  // Deletes the entry from the agent's own config file (a .bak is written by
+  // Deletes the entry from the agent's own config file (a backup copy is written by
   // the daemon). `source` names which config file the entry came from — an
   // entry name can repeat across sources.
   removeMcpEntry: (uid: string, entry: string, source?: string) =>
@@ -157,7 +157,7 @@ export const agentsApi = {
         body,
       }),
     ),
-  // Deletes one file inside a directory entry (the daemon keeps a .bak).
+  // Deletes one file inside a directory entry (the daemon keeps a backup copy).
   deleteConfigChild: (uid: string, key: string, relpath: string) =>
     unwrapVoid(
       getApiClient().DELETE("/agents/{uid}/config-files/{key}/files/{relpath}", {

@@ -143,7 +143,7 @@ one this build would write.**
   registering an agent, aggregating memory or serving a turn. Install is
   idempotent; remove with nothing installed writes no file and records no event.
   Files are read and written through the agent's allowlisted config-file specs,
-  atomically, leaving a `.bak`.
+  atomically, after backing up the prior content in Coffer's folder.
 - **Audited.** `memory_delivery_installed`, `memory_delivery_removed` and one
   `memory_delivery_fired` per delivering fire. The per-agent status reports
   installation only, never a last-fired time.

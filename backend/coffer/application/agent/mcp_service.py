@@ -1,6 +1,6 @@
 """AgentMcpService — install / uninstall / status for Coffer's own MCP server.
 
-Reuses the config-file store (atomic write + ``.bak``) and the pure text
+Reuses the config-file store (atomic write + backup) and the pure text
 transforms in ``domain/agent/mcp_install.py``. The agent's MCP config file is
 itself an allowlisted config file:
 
