@@ -6,13 +6,14 @@ a ``PATH`` the test lays out — on a machine described as
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 
 import pytest
 from starlette.testclient import TestClient
 
 from coffer.application.skill.cli_requirements import CommandProbePort
+from coffer.domain.skill.cli_status import CofferNeed
 from coffer.surfaces.http import cli_wiring
 from tests.support.cli_requirements import FAKE_MACHINE, FakeCommandProbe
 
@@ -44,10 +45,14 @@ def boot_cli_daemon(
     monkeypatch: pytest.MonkeyPatch,
     *,
     probe: CommandProbePort | None = None,
+    coffer_needs: Sequence[CofferNeed] = (),
 ) -> Iterator[CliDaemon]:
+    """``coffer_needs`` stands in for the commands Coffer runs itself
+    (``COFFER_NEEDS``); none by default, so a test lists only what it adds."""
     fake_probe: CommandProbePort = probe or FakeCommandProbe()
     build_probe: Callable[[], CommandProbePort] = lambda: fake_probe  # noqa: E731
     monkeypatch.setattr(cli_wiring, "build_command_probe", build_probe)
     monkeypatch.setattr(cli_wiring, "machine_label", lambda: FAKE_MACHINE)
+    monkeypatch.setattr(cli_wiring, "COFFER_NEEDS", tuple(coffer_needs))
     for client in boot(tmp_path, monkeypatch):
         yield CliDaemon(client, fake_probe, tmp_path)

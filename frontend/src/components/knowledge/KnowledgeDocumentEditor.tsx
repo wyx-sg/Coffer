@@ -21,8 +21,7 @@
 import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react";
 
-import { FileConflictBanner } from "@/components/FileConflictBanner";
-import { translateApiError } from "@/lib/api/errors";
+import { FileTextEditor } from "@/components/files/FileTextEditor";
 import type { FileOut } from "@/lib/api/knowledge";
 import type { useFileDraft } from "@/lib/hooks/useFileDraft";
 
@@ -51,22 +50,23 @@ export function KnowledgeDocumentEditor({
   const { t } = useTranslation();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-8 pb-4 pt-5">
-      {draft.conflict ? (
-        <FileConflictBanner
-          title={t("knowledge.editor.conflictTitle")}
-          text={conflictText}
-          onCompare={onCompare}
-          onCopyMine={onCopyMine}
-          onReload={onReload}
-        />
-      ) : draft.error ? (
-        <p role="alert" className="shrink-0 text-sm text-danger">
-          {translateApiError(t, draft.error)}
-        </p>
-      ) : null}
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
+    <FileTextEditor
+      className="px-8 pb-4 pt-5"
+      value={draft.value}
+      onChange={draft.setDraft}
+      ariaLabel={t("knowledge.editor.label", { path: file.path })}
+      isConflict={draft.conflict}
+      dirty={draft.dirty}
+      saving={draft.saving}
+      error={draft.error}
+      conflict={{
+        title: t("knowledge.editor.conflictTitle"),
+        text: conflictText,
+        onCompare,
+        onCopyMine,
+        onReload,
+      }}
+      header={
         <dl className="grid shrink-0 grid-cols-[96px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-1 border-b border-border-subtle bg-surface-sunken px-4 py-2.5">
           <dt className="font-mono text-2xs text-text-subtle">title</dt>
           <dd className="text-xs text-text">{file.title}</dd>
@@ -77,27 +77,13 @@ export function KnowledgeDocumentEditor({
           <dt className="font-mono text-2xs text-text-subtle">description</dt>
           <dd className="text-xs text-text">{file.description}</dd>
         </dl>
-        <textarea
-          aria-label={t("knowledge.editor.label", { path: file.path })}
-          className="min-h-0 w-full flex-1 resize-none bg-surface-raised px-4 py-3.5 font-mono text-xs leading-[1.7] text-text outline-none"
-          value={draft.value}
-          spellCheck={false}
-          autoFocus
-          onChange={(e) => draft.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-              e.preventDefault();
-              if (draft.dirty && !draft.saving && !draft.conflict) draft.save();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              onDiscard();
-            }
-          }}
-        />
-      </div>
+      }
+      onSave={draft.save}
+      onDiscard={onDiscard}
+    >
       {!draft.conflict ? (
         <p className="shrink-0 text-xs text-text-muted">{t("knowledge.editor.editStands")}</p>
       ) : null}
-    </div>
+    </FileTextEditor>
   );
 }

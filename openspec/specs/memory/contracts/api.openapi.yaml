@@ -8,40 +8,6 @@ info:
 servers:
 - url: http://127.0.0.1:38470
 paths:
-  /api/v1/memory/deliveries:
-    get:
-      operationId: deliveries_api_v1_memory_deliveries_get
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeliveryOverviewOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Deliveries
-      tags:
-      - memory
   /api/v1/memory/hook:
     post:
       description: Answer one hook fire; every fire that delivers something is audited.
@@ -246,6 +212,51 @@ paths:
       tags:
       - memory
   /api/v1/memory/partitions/{uid}/notes/{slug}:
+    delete:
+      description: |-
+        Delete one memory by hand. The file leaves ``notes/`` and ``RETIRED.md``
+        gains a "Deleted by hand" record carrying the note's raw entry ids, so the
+        next distil pass does not re-open it. An unknown slug is a 404.
+      operationId: delete_note_api_v1_memory_partitions__uid__notes__slug__delete
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: slug
+        required: true
+        schema:
+          title: Slug
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Delete Note
+      tags:
+      - memory
     get:
       description: |-
         One note, whole. ``NoteNotFound`` (404) propagates to the app-wide
@@ -489,53 +500,6 @@ paths:
       - memory
 components:
   schemas:
-    AgentDeliveryStatsOut:
-      properties:
-        agent_name:
-          title: Agent Name
-          type: string
-        agent_type:
-          title: Agent Type
-          type: string
-        agent_uid:
-          title: Agent Uid
-          type: string
-        by_moment:
-          additionalProperties:
-            type: integer
-          title: By Moment
-          type: object
-        deliveries:
-          title: Deliveries
-          type: integer
-        last_delivered_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Last Delivered At
-        notes_read:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Notes Read
-        notes_read_status:
-          enum:
-          - available
-          - unavailable
-          title: Notes Read Status
-          type: string
-      required:
-      - agent_uid
-      - agent_name
-      - agent_type
-      - deliveries
-      - by_moment
-      - last_delivered_at
-      - notes_read
-      - notes_read_status
-      title: AgentDeliveryStatsOut
-      type: object
     AggregationResultOut:
       description: |-
         What one Update memory action did: its aggregation pass, then which
@@ -626,21 +590,6 @@ components:
       - event
       - text
       title: DeliveredTextOut
-      type: object
-    DeliveryOverviewOut:
-      properties:
-        agents:
-          items:
-            $ref: '#/components/schemas/AgentDeliveryStatsOut'
-          title: Agents
-          type: array
-        window_days:
-          title: Window Days
-          type: integer
-      required:
-      - window_days
-      - agents
-      title: DeliveryOverviewOut
       type: object
     ErrorDetail:
       properties:
@@ -1011,11 +960,6 @@ components:
         repository_path:
           title: Repository Path
           type: string
-        sample:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Sample
         sources:
           items:
             type: string
@@ -1049,7 +993,6 @@ components:
       - note_count
       - unresolvable
       - distilled_at
-      - sample
       - sources
       - waiting_entries
       - waiting_agents

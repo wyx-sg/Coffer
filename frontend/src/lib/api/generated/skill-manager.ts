@@ -868,6 +868,8 @@ export interface components {
             min_version: string | null;
             /** Needed By */
             needed_by: components["schemas"]["CliNeededByOut"][];
+            /** Needed By Coffer */
+            needed_by_coffer: ("vault_history" | "sync")[];
             /** Needed By Servers */
             needed_by_servers: components["schemas"]["CliServerOut"][];
             /** Path */

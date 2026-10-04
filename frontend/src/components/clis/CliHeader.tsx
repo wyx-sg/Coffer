@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { StatusPill } from "@/components/status/StatusPill";
 import type { Cli } from "@/lib/api/clis";
-import { cliTone, neededByCount } from "@/lib/clis/format";
+import { cliTone, neededByCount, neededTotal } from "@/lib/clis/format";
 import { cn } from "@/lib/utils";
 import { CliActions } from "./CliActions";
 
@@ -24,7 +24,7 @@ const TILE: Record<Cli["status"], { icon: LucideIcon; className: string }> = {
 
 export function CliHeader({ cli, onRemoved }: { cli: Cli; onRemoved: () => void }) {
   const { t } = useTranslation();
-  const needed = cli.needed_by.length + cli.needed_by_servers.length;
+  const needed = neededTotal(cli);
   const meta = [
     cli.title,
     needed === 0

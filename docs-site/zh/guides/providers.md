@@ -63,8 +63,9 @@ Coffer 写哪个文件由**智能体**决定，而不是由协议决定。对 `c
 1. 打开**智能体**，选择智能体，在它**总览**里的**模型**下点**更改…**。（从提供商的**使用方**列表点 **Codex › 更改模型**，打开的是同一个表单。）
 2. 选一个**提供商**。除了智能体的内置登录，只会提供已启用且对该智能体生效的提供商。
 3. 选一个**模型**；Claude Code 还有**各档位的模型**。默认预选接入地址返回的第一个模型，各档位预填建议值。
-4. 点**审阅改动**。Coffer 逐个文件列出它将写入的行——Claude Code 是 `settings.json`；Codex 是 `config.toml` 和 Coffer 自己的模型列表文件——同时用选中的模型测试提供商。测试失败只是警告，不会拦住你。
-5. 点**应用**。Coffer 写入这些文件，并一次性把模型和提供商记到智能体上。如果审阅画出之后某个文件变了，什么都不会写，审阅会提供**重新加载预览**。
+4. 看**模型**下面那一行：Coffer 会自动用选中的模型测试提供商，显示**连接正常**及用时，或**连接失败**及原因和**重试**。测试通过之前**审阅改动**不可用；内置登录不需要测试。
+5. 点**审阅改动**。Coffer 逐个文件列出它将写入的行——Claude Code 是 `settings.json`；Codex 是 `config.toml` 和 Coffer 自己的模型列表文件。
+6. 点**应用**。Coffer 写入这些文件，并一次性把模型和提供商记到智能体上。如果审阅画出之后某个文件变了，什么都不会写，审阅会提供**重新加载预览**。
 
 选择**内置登录**会把智能体切回它自己的登录；表单不再问别的。表单的细节见[更改智能体的模型](/zh/guides/agents#change-an-agent-s-model)。
 
@@ -124,7 +125,7 @@ base_url = "http://127.0.0.1:38471/openai/v1"
 wire_api = "responses"
 supports_websockets = false
 requires_openai_auth = false
-auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"] }
+auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"], timeout_ms = 30000 }
 ```
 
 文件用 `tomlkit` 编辑，所以你的注释和键顺序都会保留。Codex 自己运行 `auth` 命令获取令牌，所以你在自己终端里启动的 Codex 不需要导出任何变量，任何 Codex 进程的环境里都没有 key。基于命令的 `auth` 表需要 **Codex 0.155.1 或更高版本**。`supports_websockets = false` 让 Codex 不去先尝试 Responses WebSocket 传输，因为它在除 OpenAI 之外的任何 base URL 上都会卡住。

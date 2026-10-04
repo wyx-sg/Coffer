@@ -22,6 +22,7 @@ from coffer.application.skill.cli_requirements import (
 )
 from coffer.application.skill.cli_tools import CliToolService
 from coffer.application.skill.service import SkillService
+from coffer.domain.skill.cli_status import COFFER_NEEDS
 from coffer.infrastructure.platform.host import machine_label
 from coffer.infrastructure.platform.user_path import UserPath
 from coffer.infrastructure.skill.cli_tool_repo import LocalCliPaths, VaultCliToolRepo
@@ -58,6 +59,7 @@ def wire_cli_requirements(
         paths=paths,
         secret_set=secret_set,
         tools=tools,
+        coffer=COFFER_NEEDS,
         probe=probe,
         # The OS and architecture do not change while the daemon runs.
         machine=cache(machine_label),

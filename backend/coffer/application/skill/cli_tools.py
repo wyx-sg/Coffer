@@ -90,7 +90,10 @@ class CliToolService:
         added = any(t.command == command for t in self._declared.all())
         listing = await self._requirements.listing()
         required = any(
-            v.required.command == command and (v.required.needed_by or v.required.needed_by_servers)
+            v.required.command == command
+            and (
+                v.required.needed_by or v.required.needed_by_servers or v.required.needed_by_coffer
+            )
             for v in listing.items
         )
         return CliPreview(command, path, version, added, required)

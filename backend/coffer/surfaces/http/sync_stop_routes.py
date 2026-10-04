@@ -20,6 +20,7 @@ from coffer.surfaces.http.sync_dependencies import get_sync_service, router
 from coffer.surfaces.http.sync_projections import (
     change_out,
     conflict_out,
+    plaintext_context_out,
     preview_out,
     round_out,
     stopped_out,
@@ -35,6 +36,7 @@ from coffer.surfaces.http.sync_stop_schemas import (
     JoinChoicesIn,
     JoinChoicesOut,
     JoinPreviewOut,
+    PlaintextContextOut,
     RollbackPlanOut,
     StopStateOut,
 )
@@ -196,6 +198,20 @@ async def restore_hold() -> RoundOut:
 
 
 # --- a plaintext secret in what a round would push ---------------------------------------
+
+
+@router.get("/plaintext/context", response_model=PlaintextContextOut)
+async def plaintext_context(
+    path: str = Query(description="A file the last round found a plaintext secret in."),
+    line: int = Query(ge=1, description="The line it was found on."),
+) -> PlaintextContextOut:
+    """One place the last round found, in its file: the lines around it with
+    every plaintext value masked and its shape in its place, and the file's
+    masked change against the remote's copy. Computed when asked, never
+    stored, logged or audited. 409 ``SYNC_NO_PLAINTEXT_FOUND`` unless the last
+    round is ``plaintext_found``; 404 ``SYNC_PLAINTEXT_NOT_LISTED`` for a place
+    it did not find."""
+    return plaintext_context_out(await get_sync_service().plaintext_context(path, line))
 
 
 @router.post("/plaintext/push-anyway", response_model=RoundOut)

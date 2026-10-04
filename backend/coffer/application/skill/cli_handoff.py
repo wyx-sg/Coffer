@@ -5,9 +5,9 @@ Coffer does not install anything: a command that is missing or too old is
 handed to the person's agent, which chooses the install method that suits this
 machine. A command that is installed but not logged in is handed over only for
 help logging in — the person logs in themselves. The facts are the command,
-the skills that need it with the minimum each asked for, the MCP servers
-started with it, what was found, and the machine; ``domain/handoff.py``
-adds the rules every hand-off carries.
+what Coffer itself runs it for, the skills that need it with the minimum each
+asked for, the MCP servers started with it, what was found, and the machine;
+``domain/handoff.py`` adds the rules every hand-off carries.
 """
 
 from __future__ import annotations
@@ -15,7 +15,18 @@ from __future__ import annotations
 import shlex
 
 from coffer.domain.handoff import Handoff, render_handoff
-from coffer.domain.skill.cli_status import CliStatus, NeededBy, ProbeResult, RequiredCommand
+from coffer.domain.skill.cli_status import (
+    CliStatus,
+    CofferUse,
+    NeededBy,
+    ProbeResult,
+    RequiredCommand,
+)
+
+_COFFER_USES: dict[CofferUse, str] = {
+    CofferUse.VAULT_HISTORY: "keep the vault's history",
+    CofferUse.SYNC: "sync the vault",
+}
 
 
 def _named(row: RequiredCommand) -> str:
@@ -31,6 +42,9 @@ def _needed_by(row: RequiredCommand) -> tuple[str, ...]:
         )
 
     facts: list[str] = []
+    if row.needed_by_coffer:
+        uses = " and to ".join(_COFFER_USES[u] for u in row.needed_by_coffer)
+        facts.append(f"Coffer itself uses it to {uses}.")
     if row.needed_by:
         facts.append(
             "Needed by the Coffer skills: " + ", ".join(one(n) for n in row.needed_by) + "."

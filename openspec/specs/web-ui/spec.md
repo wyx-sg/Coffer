@@ -2583,32 +2583,38 @@ quiet line. The wording is Curate / Curation (整理) throughout.
 - **AND** Undo this pass asks first, writes nothing until confirmed, and confirming undoes the whole pass in one request
 
 ### Requirement: Show memory delivery on the Memory page
-The Memory page MUST show what memory delivery is doing, and the agent detail page MUST show only
+The Memory page MUST show what each partition delivers, and the agent detail page MUST show only
 the delivery hook's state:
 
-- The **Memory overview** MUST list, for each agent, its deliveries in the last seven days — counted
-  from the delivery-fire audit events (spec [memory](../memory/spec.md) "Audit every delivery fire")
-  — how many distinct memories its sessions read in that time, counted from the file paths its
-  transcripts record reading, never from their content, and when it was last delivered to. An agent
-  with no delivery in that time reads **not delivered in the last 7 days**, with no hook detail; a
-  count that cannot be computed reads as unavailable rather than zero.
+- The **Memory page** MUST show no per-agent delivery statistics: it lists the partitions in a table with no section title and a search box that filters the rows by partition name and path, each row carrying the partition's path, its memory count, its sources and its Distilled state (memory "Present a partition as its memories").
 - A **partition's page** has a **Delivered** tab (see memory "Present a partition as its memories")
   showing, read-only, the exact session-start text each agent receives in that partition's project
   (spec [memory](../memory/spec.md) "Deliver the index and the notes path at session start"), with a
-  switch between agents.
+  switch between agents. The text is shown as formatted Markdown by default, with a **Rendered** /
+  **Raw** toggle: Raw is the exact text, and **Copy** copies the raw text in either mode. In Rendered
+  mode each entry's title and file name link to that memory on its partition's page
+  (`/memory/<uid>?memory=<slug>`; entries under "Known about you" go to the `global` partition), an
+  entry whose partition is unknown stays plain text, and a hint says that editing a memory changes
+  what is delivered.
 - The delivery hook's state — installed and current, stale, missing, never fired, and Repair — MUST
   appear only on the agent detail page — on its Hooks tab, in the Overview's Coffer connection
   block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages") and, while the `memory` feature is on, in the **Coffer's memory** section that opens the agent's Memory tab, which links back to this page. Below that section the Memory tab lists the agent's own native memory stores.
 
-#### Scenario: the memory overview lists deliveries per agent
-- **GIVEN** Claude Code with 12 delivery fires in the last seven days, and transcripts recording reads of 5 distinct memories, and Codex with no delivery in that time
-- **WHEN** the user opens the Memory page
-- **THEN** Claude Code reads 12 deliveries, 5 memories read and when it was last delivered to, and Codex reads not delivered in the last 7 days with no hook detail
+#### Scenario: the Memory page shows the partitions with a search and no delivery block
+- **GIVEN** two partitions, `coffer` and `global`
+- **WHEN** the user opens the Memory page and types `coff` in the search box
+- **THEN** the page shows no delivery statistics and no section title above the table, and the table lists only the `coffer` row, with its path, memory count, sources and Distilled state and no sample memory column
 
 #### Scenario: a partition's delivered tab shows each agent's session-start text
 - **GIVEN** a partition for the `coffer` repository and both agents connected
 - **WHEN** the user opens the partition's Delivered tab and switches from Claude Code to Codex
 - **THEN** the tab shows, read-only, the exact session-start text each agent receives in that project
+- **AND** the Raw view shows that text exactly, and Copy copies it unchanged
+
+#### Scenario: a delivered entry links to the memory it came from on its partition's page
+- **GIVEN** a partition's Delivered tab showing an agent's session-start text in Rendered mode, with entries under "Known about you" and under a repository partition heading
+- **WHEN** the user clicks an entry's title or file name
+- **THEN** the app opens that memory on its partition's page, global for "Known about you" entries, an entry whose partition is unknown stays plain text, and a hint says that editing a memory changes what is delivered
 
 #### Scenario: hook state appears only on the agent page
 - **GIVEN** Claude Code's delivery hook stale
@@ -3029,3 +3035,17 @@ the gateway").
 - **GIVEN** the `billing` group with the tools `list_invoices`, `refund` and `void_invoice`
 - **WHEN** the user types `invoice` in the search above the tools table
 - **THEN** only `list_invoices` and `void_invoice` are listed, no row carries a reach control, and Add request sits beside the search above the table
+
+### Requirement: Show the commands Coffer itself runs on the CLIs page
+The CLIs page MUST list the commands Coffer runs itself (spec skill-manager
+"List the commands Coffer itself runs") like any other CLI, counting Coffer
+among who needs one — "Coffer", or "Coffer and 1 skill" when a skill needs it
+too. The detail's Needed by MUST show a Coffer row first, of kind Coffer, naming
+its uses (Vault history · Sync) and opening nothing, and the banner of a missing
+or outdated one MUST say what Coffer can't do without it ("Coffer can't keep the
+vault's history and sync the vault.").
+
+#### Scenario: git shows Coffer under Needed by
+- **GIVEN** `git` needed by Coffer alone and missing on this machine
+- **WHEN** the user opens `/clis/git`
+- **THEN** the list row reads "Not found · Coffer needs it", the banner says Coffer can't keep the vault's history and sync the vault, and Needed by shows one Coffer row naming Vault history · Sync

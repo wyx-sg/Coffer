@@ -2283,6 +2283,14 @@ components:
             $ref: '#/components/schemas/CliNeededByOut'
           title: Needed By
           type: array
+        needed_by_coffer:
+          items:
+            enum:
+            - vault_history
+            - sync
+            type: string
+          title: Needed By Coffer
+          type: array
         needed_by_servers:
           items:
             $ref: '#/components/schemas/CliServerOut'
@@ -2324,6 +2332,7 @@ components:
       - handoff
       - needed_by
       - needed_by_servers
+      - needed_by_coffer
       - checked_at
       title: CliOut
       type: object

@@ -63,8 +63,9 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 1. Open **Agents**, choose the agent, and under **Model** on its **Overview** click **Change…**. (From a provider's **Used by** list, **Codex › Change model** opens the same form.)
 2. Pick a **Provider**. Only enabled providers that reach this agent are offered, beside the agent's built-in login.
 3. Pick a **Model**; for Claude Code also the **Model per tier**. The first model the endpoint returns is pre-selected, and the tiers are prefilled with suggestions.
-4. Click **Review changes**. Coffer lists, file by file, the lines it will write — `settings.json` for Claude Code; `config.toml` and Coffer's model list file for Codex — and tests the provider with the chosen model while it does. A failed test is a warning, not a block.
-5. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**.
+4. Wait for the line under **Model**: Coffer tests the provider with the chosen model by itself, and it reads **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** stays off until the test passes; the built-in login needs none.
+5. Click **Review changes**. Coffer lists, file by file, the lines it will write — `settings.json` for Claude Code; `config.toml` and Coffer's model list file for Codex.
+6. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**.
 
 Picking the **Built-in login** puts the agent back on its own login; the form asks for nothing else. The details of the form are in [Change an agent's model](/guides/agents#change-an-agent-s-model).
 
@@ -124,10 +125,10 @@ base_url = "http://127.0.0.1:38471/openai/v1"
 wire_api = "responses"
 supports_websockets = false
 requires_openai_auth = false
-auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"] }
+auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"], timeout_ms = 30000 }
 ```
 
-The file is edited with `tomlkit`, so your comments and key order survive. Codex runs the `auth` command for its token itself, so a Codex you start in your own terminal needs nothing exported, and no key is in any Codex process's environment. The command-backed `auth` table needs **Codex 0.155.1 or later**. `supports_websockets = false` keeps Codex from trying the Responses WebSocket transport first, which stalls against any base URL but OpenAI's.
+The file is edited with `tomlkit`, so your comments and key order survive. Codex runs the `auth` command for its token itself, so a Codex you start in your own terminal needs nothing exported (`timeout_ms` raises Codex's 5 second default so a cold start is not cut off), and no key is in any Codex process's environment. The command-backed `auth` table needs **Codex 0.155.1 or later**. `supports_websockets = false` keeps Codex from trying the Responses WebSocket transport first, which stalls against any base URL but OpenAI's.
 
 When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, and an auto-compact limit at 90% of it, from what the provider records for the model. Coffer writes no `model_reasoning_effort`; one an earlier version wrote stays in your file as your own setting.
 

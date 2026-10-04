@@ -8,8 +8,8 @@
 //
 // What the page leaves out is the requirement too: no file tree, no
 // `MEMORY.md` / `RETIRED.md`, no `.raw/`, no native path and no agent's
-// original text, and no file action on a memory (the partition's ⋯ menu
-// reveals the folder); a memory's one action is Edit. A partition not distilled yet has no list column at all:
+// original text. A memory's own actions (Edit, Open in editor, Reveal, Delete…)
+// sit on the pane beside the list. A partition not distilled yet has no list column at all:
 // only the centred empty state, with no Update memory button (the header has
 // it; board 5.2.08).
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { FILE_PANE_COLUMN, useFillToBottom } from "@/components/filePane";
 import { MemoryList, RetiredGroup } from "@/components/memory/MemoryList";
 import { MemoryPane } from "@/components/memory/MemoryPane";
+import { RetiredPane } from "@/components/memory/RetiredPane";
 import { NoModelNotice } from "@/components/memory/NoModelNotice";
 import { SplitView } from "@/components/SplitView";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,9 @@ import { useMemoryNotes, useMemoryRetired } from "@/lib/hooks/useMemory";
 
 /** The search param naming the selected memory. */
 const MEMORY_PARAM = "memory";
+/** The search param naming the selected retired memory, by its index in
+ *  RETIRED.md's order (a slug can be empty: an entry that never became a note). */
+const RETIRED_PARAM = "retired";
 
 interface Props {
   uid: string;
@@ -52,10 +56,25 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
 
   const memories = notes.data ?? [];
   const wanted = params.get(MEMORY_PARAM);
-  const selected = memories.find((m) => m.slug === wanted)?.slug ?? memories[0]?.slug ?? null;
+  const retiredList = retired.data ?? [];
+  const wantedRetired = params.get(RETIRED_PARAM);
+  const retiredIndex =
+    wantedRetired !== null && /^\d+$/.test(wantedRetired) ? Number(wantedRetired) : null;
+  const selectedRetired =
+    retiredIndex !== null && retiredIndex < retiredList.length ? retiredIndex : null;
+  const selected =
+    selectedRetired !== null
+      ? null
+      : (memories.find((m) => m.slug === wanted)?.slug ?? memories[0]?.slug ?? null);
   const select = (slug: string) => {
     const next = new URLSearchParams(params);
     next.set(MEMORY_PARAM, slug);
+    next.delete(RETIRED_PARAM);
+    setParams(next, { replace: true });
+  };
+  const selectRetired = (index: number) => {
+    const next = new URLSearchParams(params);
+    next.set(RETIRED_PARAM, String(index));
     setParams(next, { replace: true });
   };
 
@@ -116,15 +135,23 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
             <div className="flex min-h-0 flex-1 flex-col">
               <MemoryList
                 memories={memories}
-                retired={retired.data ?? []}
+                retired={retiredList}
                 selected={selected}
                 onSelect={select}
+                selectedRetired={selectedRetired}
+                onSelectRetired={selectRetired}
                 sources={partition?.sources ?? []}
               />
             </div>
           }
           detail={
-            selected ? (
+            selectedRetired !== null ? (
+              <RetiredPane
+                record={retiredList[selectedRetired]}
+                memories={memories}
+                onSelectMemory={select}
+              />
+            ) : selected ? (
               <MemoryPane uid={uid} slug={selected} partitionName={name} />
             ) : (
               <p className="text-sm text-text-muted">{t("memory.memories.select")}</p>

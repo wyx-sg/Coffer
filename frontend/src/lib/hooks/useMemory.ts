@@ -16,8 +16,8 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
+  deleteNote,
   getDelivered,
-  getDeliveries,
   getNote,
   getReading,
   listNotes,
@@ -28,7 +28,6 @@ import {
 } from "@/lib/api/memory";
 import {
   memoryDeliveredKey,
-  memoryDeliveriesKey,
   memoryKey,
   memoryNoteKey,
   memoryNotesKey,
@@ -86,6 +85,28 @@ export function useSaveMemoryNote(uid: string, slug: string) {
   );
 }
 
+/** Delete one memory by hand (spec memory "Delete a memory by hand"). The
+ *  memory's own read is dropped before the lists refetch, so the pane that
+ *  showed it cannot refetch a 404; the list falls to the next memory and the
+ *  deleted one shows in the Retired group.
+ *
+ *  No `onError` toast: it runs from a ConfirmDialog, which stays open and shows
+ *  the failure itself. */
+export function useDeleteMemoryNote(uid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) => deleteNote(uid, slug),
+    onSuccess: (_data, slug) => {
+      qc.removeQueries({ queryKey: memoryNoteKey(uid, slug) });
+      void qc.invalidateQueries({ queryKey: memoryNotesKey(uid) });
+      void qc.invalidateQueries({ queryKey: memoryRetiredKey(uid) });
+      void qc.invalidateQueries({ queryKey: memoryPartitionsKey });
+      void qc.invalidateQueries({ queryKey: memoryPartitionFilesKey(uid) });
+      void qc.invalidateQueries({ queryKey: memoryDeliveredKey(uid) });
+    },
+  });
+}
+
 /** The memories the partition retired, each with its reason. */
 export function useMemoryRetired(uid: string) {
   return useQuery({
@@ -110,14 +131,6 @@ export function useMemoryDelivered(uid: string) {
  *  "Report the last read of the agents' memory"). */
 export function useMemoryReading() {
   return useQuery({ queryKey: memoryReadingKey, queryFn: getReading });
-}
-
-/** Per agent, the last seven days of memory delivery. */
-export function useMemoryDeliveries() {
-  return useQuery({
-    queryKey: memoryDeliveriesKey,
-    queryFn: getDeliveries,
-  });
 }
 
 /** Update memory: read every agent's latest native memory, then distil every

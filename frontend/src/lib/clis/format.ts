@@ -67,23 +67,40 @@ type T = (key: string, options?: Record<string, unknown>) => string;
 /** How the two places word who needs a command: the list row ("1 MCP server,
  *  1 skill") and the sentences ("1 MCP server and 1 skill"). */
 const NEEDED_STYLE = {
-  list: "clis.listPair",
-  sentence: "clis.neededPair",
+  list: { pair: "clis.listPair", coffer: "clis.withCofferList" },
+  sentence: { pair: "clis.neededPair", coffer: "clis.withCofferSentence" },
 } as const;
 
-/** Who needs the command, counted: "2 skills", "1 MCP server and 1 skill". */
+/** How many need the command: Coffer itself counts as one. */
+export function neededTotal(
+  cli: Pick<Cli, "needed_by" | "needed_by_servers" | "needed_by_coffer">,
+): number {
+  return (
+    cli.needed_by.length + cli.needed_by_servers.length + (cli.needed_by_coffer.length > 0 ? 1 : 0)
+  );
+}
+
+/** Who needs the command, counted: "2 skills", "1 MCP server and 1 skill",
+ *  "Coffer and 1 skill". */
 export function neededByCount(
   t: T,
-  cli: Pick<Cli, "needed_by" | "needed_by_servers">,
+  cli: Pick<Cli, "needed_by" | "needed_by_servers" | "needed_by_coffer">,
   style: keyof typeof NEEDED_STYLE = "sentence",
 ): string {
   const skills = cli.needed_by.length;
   const servers = cli.needed_by_servers.length;
   const skillPart = t("clis.skillCount", { count: skills });
-  if (servers === 0) return skillPart;
   const serverPart = t("clis.mcpServerCount", { count: servers });
-  if (skills === 0) return serverPart;
-  return t(NEEDED_STYLE[style], { servers: serverPart, skills: skillPart });
+  const rest =
+    servers === 0
+      ? skills === 0
+        ? null
+        : skillPart
+      : skills === 0
+        ? serverPart
+        : t(NEEDED_STYLE[style].pair, { servers: serverPart, skills: skillPart });
+  if (cli.needed_by_coffer.length === 0) return rest ?? skillPart;
+  return rest === null ? "Coffer" : t(NEEDED_STYLE[style].coffer, { rest });
 }
 
 /** "today at 14:32", or "3 Oct at 14:32" for an older probe, in the reader's language. */

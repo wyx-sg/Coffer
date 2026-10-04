@@ -204,7 +204,6 @@ export const memoryNoteKey = (uid: string, slug: string) =>
 export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "retired"] as const;
 export const memoryDeliveredKey = (uid: string) =>
   ["memory", "partitions", uid, "delivered"] as const;
-export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
 export const memoryReadingKey = ["memory", "reading"] as const;
 
 // --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---

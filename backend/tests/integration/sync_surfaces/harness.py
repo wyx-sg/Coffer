@@ -25,7 +25,7 @@ from coffer.domain.sync.rounds import RoundRecord
 from coffer.domain.vault.findings import Finding, FindingCode
 from coffer.domain.vault.writers import WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import Change, Expect, TreeReader, Verdict
-from coffer.infrastructure.secret.plaintext_scan import find_in_text
+from coffer.infrastructure.secret.plaintext_scan import find_in_text, mask_line
 from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
 from coffer.infrastructure.sync.machine_descriptor import HostMachine
 from coffer.infrastructure.sync.vault_git import VaultSyncGit
@@ -180,6 +180,7 @@ class Box:
             validate=json_documents if self.validate else None,
             cloud_folder=self.cloud,
             find_plaintext=find_in_text,
+            mask_plaintext=mask_line,
         )
         self.engine = RoundEngine(self.deps)
         self.history = MemoryHistory()

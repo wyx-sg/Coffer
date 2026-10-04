@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { acceptance } from "@/test/acceptance";
-import { MarkdownContent } from "./MarkdownContent";
+import { Markdown } from "@/components/Markdown";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MessageBubble } from "./MessageBubble";
+import { MessageBubble } from "./chat/MessageBubble";
 import { contentBlock } from "@/lib/chat/contentBlock";
 
-describe("MarkdownContent code-block copy", () => {
+describe("Markdown (chat) code-block copy", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -19,7 +19,11 @@ describe("MarkdownContent code-block copy", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-    render(<MarkdownContent content={"```js\nconst x = 1;\n```"} />);
+    render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"```js\nconst x = 1;\n```"}
+      </Markdown>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /^copy$/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("const x = 1;\n"));
@@ -32,14 +36,22 @@ describe("MarkdownContent code-block copy", () => {
   });
 
   test("inline code gets no copy button", () => {
-    render(<MarkdownContent content="use `foo()`" />);
+    render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"use `foo()`"}
+      </Markdown>,
+    );
     expect(screen.queryByRole("button", { name: /copy/i })).not.toBeInTheDocument();
   });
 });
 
-describe("MarkdownContent", () => {
+describe("Markdown (chat)", () => {
   test("renders bold/italic markup as real elements, not raw characters", () => {
-    const { container } = render(<MarkdownContent content="This is **bold** and *italic*." />);
+    const { container } = render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"This is **bold** and *italic*."}
+      </Markdown>,
+    );
     expect(container.querySelector("strong")?.textContent).toBe("bold");
     expect(container.querySelector("em")?.textContent).toBe("italic");
     expect(container.textContent).not.toContain("**");
@@ -49,14 +61,22 @@ describe("MarkdownContent", () => {
     // Agent output (e.g. the `/usage` report) lays facts out one per line with a
     // single newline. CommonMark collapses those into spaces; remark-breaks must
     // turn them into <br> so the lines stay visually separate.
-    const { container } = render(<MarkdownContent content={"line one\nline two\nline three"} />);
+    const { container } = render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"line one\nline two\nline three"}
+      </Markdown>,
+    );
     expect(container.querySelectorAll("br").length).toBeGreaterThanOrEqual(2);
     // Still one paragraph — the lines are joined by <br>, not split into many <p>.
     expect(container.querySelectorAll("p")).toHaveLength(1);
   });
 
   test("renders a bullet list as <li> items", () => {
-    const { container } = render(<MarkdownContent content={"- one\n- two"} />);
+    const { container } = render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"- one\n- two"}
+      </Markdown>,
+    );
     const items = container.querySelectorAll("li");
     expect(items).toHaveLength(2);
     expect(items[0].textContent).toBe("one");
@@ -64,7 +84,11 @@ describe("MarkdownContent", () => {
 
   test("renders a fenced code block with syntax-highlight classes", () => {
     const md = "```js\nconst x = 1;\n```";
-    const { container } = render(<MarkdownContent content={md} />);
+    const { container } = render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {md}
+      </Markdown>,
+    );
     const code = container.querySelector("pre code");
     expect(code).not.toBeNull();
     // rehype-highlight tags highlighted code with the hljs class.
@@ -72,7 +96,11 @@ describe("MarkdownContent", () => {
   });
 
   test("renders inline code distinct from a code block", () => {
-    const { container } = render(<MarkdownContent content="use the `foo()` call" />);
+    const { container } = render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"use the `foo()` call"}
+      </Markdown>,
+    );
     const inline = container.querySelector("code");
     expect(inline?.textContent).toBe("foo()");
     expect(inline?.closest("pre")).toBeNull();
@@ -80,13 +108,21 @@ describe("MarkdownContent", () => {
 
   test("renders a GFM table (remark-gfm enabled)", () => {
     const md = "| a | b |\n| - | - |\n| 1 | 2 |";
-    const { container } = render(<MarkdownContent content={md} />);
+    const { container } = render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {md}
+      </Markdown>,
+    );
     expect(container.querySelector("table")).not.toBeNull();
     expect(container.querySelectorAll("td")).toHaveLength(2);
   });
 
   test("links open safely in a new tab", () => {
-    render(<MarkdownContent content="[site](https://example.com)" />);
+    render(
+      <Markdown density="chat" highlight breaks copyableCode>
+        {"[site](https://example.com)"}
+      </Markdown>,
+    );
     const link = screen.getByRole("link", { name: "site" });
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));

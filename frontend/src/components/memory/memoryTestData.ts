@@ -1,11 +1,10 @@
 // frontend/src/components/memory/memoryTestData.ts — wire fixtures shared by the memory page tests.
 //
 // Test-only data (imported by `*.test.tsx` files, never by the app): a
-// partition set, one partition's memories, a retired memory, deliveries and
+// partition set, one partition’s memories, a retired memory and
 // the delivered text, in the generated wire shapes.
 import type {
   DeliveredOut,
-  DeliveryOverviewOut,
   MemoryFileTreeOut,
   NoteListOut,
   NoteOut,
@@ -21,7 +20,6 @@ export const GLOBAL: PartitionOut = {
   note_count: 12,
   unresolvable: false,
   distilled_at: "2026-09-30T09:00:00Z",
-  sample: "Prefers Chinese replies; docs and commits in English",
   sources: ["claude-code", "codex"],
   waiting_entries: 0,
   waiting_agents: [],
@@ -36,7 +34,6 @@ export const COFFER: PartitionOut = {
   note_count: 2,
   unresolvable: false,
   distilled_at: "2026-09-30T08:00:00Z",
-  sample: "Use Node 20 for frontend vitest",
   sources: ["claude-code", "codex"],
   waiting_entries: 0,
   waiting_agents: [],
@@ -52,7 +49,6 @@ export const GONE: PartitionOut = {
   note_count: 6,
   unresolvable: true,
   distilled_at: "2026-09-20T08:00:00Z",
-  sample: "Mock settlement server listens on 4010",
   sources: ["claude-code"],
   waiting_entries: 0,
   waiting_agents: [],
@@ -173,32 +169,6 @@ export const FILES: MemoryFileTreeOut = {
       },
     ],
   },
-};
-
-export const DELIVERIES: DeliveryOverviewOut = {
-  window_days: 7,
-  agents: [
-    {
-      agent_uid: "ag-codex",
-      agent_name: "Codex",
-      agent_type: "codex",
-      deliveries: 0,
-      by_moment: {},
-      last_delivered_at: null,
-      notes_read: null,
-      notes_read_status: "unavailable",
-    },
-    {
-      agent_uid: "ag-cc",
-      agent_name: "Claude Code",
-      agent_type: "claude_code",
-      deliveries: 12,
-      by_moment: { session_start: 12 },
-      last_delivered_at: "2026-09-30T08:00:00Z",
-      notes_read: 5,
-      notes_read_status: "available",
-    },
-  ],
 };
 
 export const DELIVERED: DeliveredOut = {

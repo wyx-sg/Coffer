@@ -86,7 +86,7 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
     assert block["base_url"] == "https://gw/v1"
     assert block["wire_api"] == "responses"
     assert "env_key" not in block
-    assert block["auth"] == {"command": _CLI, "args": list(_AUTH.args)}
+    assert block["auth"] == {"command": _CLI, "args": list(_AUTH.args), "timeout_ms": 30_000}
     assert block["name"] == "Coffer (acme)"
 
 
@@ -204,6 +204,16 @@ def test_remove_codex_empty_and_idempotent() -> None:
     assert tomllib.loads(once) == tomllib.loads(twice)
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the Codex auth table carries a timeout so a cold token command is not cut off",
+)
+def test_the_auth_table_outlasts_codexs_five_second_default() -> None:
+    out = apply_codex_provider("", base_url="u", model="m", display_name="x", auth=_AUTH)
+    timeout = tomllib.loads(out)["model_providers"][CODEX_PROVIDER_ID]["auth"]["timeout_ms"]
+    assert timeout == 30_000 > 5_000
+
+
 # --- the key never reaches the agent's shell commands --------------------------
 
 
@@ -228,6 +238,7 @@ def test_the_proxy_form_names_no_key_in_the_environment() -> None:
     assert block["auth"] == {
         "command": "/opt/coffer",
         "args": ["proxy", "token", "--agent-uid", "a1"],
+        "timeout_ms": 30_000,
     }
     assert block["supports_websockets"] is False and block["requires_openai_auth"] is False
     assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}

@@ -780,6 +780,7 @@
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "memory_distilled": "Distilled memory partition {{resource}}",
       "memory_note_edited": "Edited a memory in {{resource}}",
+      "memory_note_deleted": "Deleted a memory in {{resource}}",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_transcribe_default_set": "Made {{resource}} the provider Coffer transcribes speech on",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
@@ -1781,6 +1782,7 @@
     "SYNC_NOTHING_STOPPED": "No round is waiting for this answer.",
     "SYNC_NO_REMOTE": "No sync remote is set up on this machine.",
     "SYNC_NO_PLAINTEXT_FOUND": "The last round found no plaintext secret to push anyway.",
+    "SYNC_PLAINTEXT_NOT_LISTED": "The last round found no plaintext secret at that place.",
     "SYNC_REMOTE_FAILED": "The remote could not be reached, refused the credential, or refused the push.",
     "SYNC_REMOTE_INVALID": "That repository URL or branch can't be used.",
     "SYNC_ROUND_NOT_FOUND": "That round is not in this machine's history.",
@@ -2523,8 +2525,7 @@
         "staleBody": "It was saved after this preview was made, so nothing was written. Reload to preview against the current file.",
         "reload": "Reload preview",
         "note": "Only the lines shown change. Everything else in the file is left as it is, and a backup copy is kept in Coffer’s folder.",
-        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a backup copy of config.toml is kept in Coffer’s folder.",
-        "testFailed": "The connection test failed: {{message}} You can still apply."
+        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a backup copy of config.toml is kept in Coffer’s folder."
       },
       "provider": {
         "label": "Provider",
@@ -2537,6 +2538,14 @@
       "builtinNote": {
         "claude_code": "With its own login, {{agent}} picks its model itself (<code>/model</code>). Coffer sets it only for a provider you add.",
         "codex": "With its own login, {{agent}} picks its model itself (<code>/model</code>). Coffer sets it only for a provider you add."
+      },
+      "test": {
+        "testing": "Testing connection…",
+        "ok": "Connection OK · {{ms}} ms",
+        "failed": "Connection failed: {{message}}",
+        "retry": "Retry",
+        "blockedTesting": "Review changes unlocks once the connection test passes.",
+        "blockedFailed": "Fix the connection or pick another model to review the change."
       },
       "model": {
         "label": "Default model",
@@ -3473,25 +3482,10 @@
     "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
-    "deliveries": {
-      "title": "Delivered at session start",
-      "window_one": "Last day",
-      "window_other": "Last {{count}} days",
-      "delivered_one": "Delivered once in the last {{days}} days",
-      "delivered_other": "Delivered {{count}} times in the last {{days}} days",
-      "read_one": "{{count}} memory read",
-      "read_other": "{{count}} memories read",
-      "readUnavailable": "memories read unavailable",
-      "readUnavailableHint": "Coffer can't read this agent's transcripts, so it can't count which memories its sessions opened.",
-      "last": "last {{when}}",
-      "notDelivered": "Not delivered in the last {{days}} days",
-      "none": "No agent is connected to Coffer, so memory is delivered to nobody.",
-      "loadFailed": "Couldn't load deliveries."
-    },
     "partitions": {
-      "title": "Partitions",
       "memories_one": "{{count}} memory",
-      "memories_other": "{{count}} memories"
+      "memories_other": "{{count}} memories",
+      "search": "Search partitions"
     },
     "cols": {
       "name": "Partition",
@@ -3499,7 +3493,6 @@
       "global": "Every project",
       "memories": "Memories",
       "unresolvable": "Repository missing",
-      "sample": "Sample memory",
       "sources": "Sources",
       "distil": "Distilled"
     },
@@ -3545,7 +3538,16 @@
       "listLabel": "Memories",
       "retired": "Retired",
       "readOnly": "read-only",
+      "retiredListLabel": "Retired memories",
+      "retiredOn": "Retired {{date}}",
+      "replacedBy": "Replaced by {{title}} →",
       "learnedBy": "Learned by {{agents}} · updated {{date}}",
+      "more": "More actions for {{title}}",
+      "deleteMenu": "Delete…",
+      "deleteTitle": "Delete “{{title}}”?",
+      "deleteBody": "The memory leaves the list and no agent is given it at session start. Coffer keeps a record under Retired so the next update does not learn it again from the agents' own memory.",
+      "deleteConfirm": "Delete memory",
+      "deleted": "Deleted “{{title}}”",
       "updated": "Updated {{date}}",
       "select": "Select a memory to read it.",
       "loadFailed": "Couldn't load the memories.",
@@ -3560,13 +3562,17 @@
       "link": "Open Settings"
     },
     "delivered": {
+      "viewLabel": "View",
+      "rendered": "Rendered",
+      "raw": "Raw",
       "agentsLabel": "Agent",
       "intro": "What a session in {{path}} starts with · read-only",
       "introGlobal": "What every session starts with · read-only",
       "copy": "Copy",
       "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
       "loadFailed": "Couldn't load what is delivered.",
-      "size": "{{size}} characters · nothing trimmed"
+      "size": "{{size}} characters · nothing trimmed",
+      "editHint": "Edit a memory to change what is delivered"
     },
     "automatic": {
       "title": "Read memory automatically",
@@ -3575,8 +3581,6 @@
       "never": "Not read yet"
     },
     "allAgents": "All agents",
-    "waiting_one": "{{count}} entry read from {{agents}}, waiting to distil",
-    "waiting_other": "{{count}} entries read from {{agents}}, waiting to distil",
     "distil": {
       "done": "Distilled {{when}}",
       "never": "Never",
@@ -4316,6 +4320,27 @@
         "where": "{{path}}, line {{line}}",
         "key": "the value of {{key}}",
         "token": "a value shaped like a token",
+        "showPlace": "Show {{path}}, line {{line}} in its file",
+        "newFile": "New file",
+        "changedFile": "Changed file",
+        "onRemote": "This line is already on the remote",
+        "masked": "Values are masked: Coffer never shows them, only their shape.",
+        "shape": "{{length}} characters: {{classes}}",
+        "classes": {
+          "lower": "lowercase",
+          "upper": "uppercase",
+          "digit": "digits",
+          "symbol": "symbols"
+        },
+        "prefix": "starts with {{prefix}}",
+        "hints": {
+          "reference": "looks like code: names joined by dots, such as reading an environment variable",
+          "placeholder": "contains “{{word}}”, often an example or placeholder",
+          "repeated": "one or two characters repeated, often a placeholder"
+        },
+        "showChanges": "Show changes",
+        "hideChanges": "Hide changes",
+        "tooLarge": "Too large to show line by line",
         "pushAnyway": "Push anyway…",
         "confirmTitle": "Push these files anyway?",
         "confirmBody": "Coffer pushes the files as they are now, and records that you did in the audit log. Do this only if you checked each place is not a real secret: once pushed, the value is in the remote's history.",
@@ -5596,7 +5621,7 @@
       "version": "Version",
       "login": "Login",
       "checkedWith": "· checked with",
-      "neededByNote": "The skills and MCP servers that call it. Open one to see why.",
+      "neededByNote": "What calls it: Coffer itself, skills and MCP servers. Open a skill or server to see why.",
       "neededByNothing": "No skill or MCP server requires it — you added it by hand, so it stays listed until you remove it.",
       "cols": {
         "name": "Name",
@@ -5605,7 +5630,8 @@
       },
       "kind": {
         "server": "MCP server",
-        "skill": "Skill"
+        "skill": "Skill",
+        "coffer": "Coffer"
       },
       "startsWith": "starts with {{launcher}}",
       "neededBy": "needed by {{needed}}",
@@ -5665,7 +5691,8 @@
         "missing": "Hand the install to an agent, then check again.",
         "outdated": "Hand the update to an agent, then check again.",
         "logged_out": "Hand the login to an agent, then check again."
-      }
+      },
+      "cofferBody": "Coffer can’t {{uses}}."
     },
     "list": {
       "needsYou": "Needs you",
@@ -5682,7 +5709,17 @@
     "mcpServerCount_one": "{{count}} MCP server",
     "mcpServerCount_other": "{{count}} MCP servers",
     "listPair": "{{servers}}, {{skills}}",
-    "neededPair": "{{servers}} and {{skills}}"
+    "neededPair": "{{servers}} and {{skills}}",
+    "withCofferList": "Coffer, {{rest}}",
+    "withCofferSentence": "Coffer and {{rest}}",
+    "cofferUse": {
+      "vault_history": "keep the vault’s history",
+      "sync": "sync the vault"
+    },
+    "cofferUseShort": {
+      "vault_history": "Vault history",
+      "sync": "Sync"
+    }
   },
   "secretField": {
     "placeholder": "Choose a secret, or paste a new value",

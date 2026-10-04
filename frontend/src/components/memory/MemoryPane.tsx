@@ -5,23 +5,23 @@
 // "Present a partition as its memories"). The daemon hands the body without
 // its frontmatter, so frontmatter never renders as text; the provenance is
 // reduced to agent names — never a native path or an agent's original text.
-// The one per-memory action is Edit (spec memory "Edit a memory in the web UI
-// or on disk"): it swaps the body for MemoryEditor, with Discard and Save in
-// the header, and a save refused as changed on disk goes through the same
-// Compare / Copy my text / Reload way out the knowledge editor has. No delete
-// or file action: the partition's ⋯ menu reveals the folder. Title 15/600,
-// meta 12, body 13, 620 wide.
+// The body is a FindableMarkdown (⌘F find; `frontmatter={false}` because the
+// daemon already stripped it).
+// Edit (spec memory "Edit a memory in the web UI or on disk") swaps the body for
+// the shared FileTextEditor, with Discard and Save in the header, and a save
+// refused as changed on disk goes through the same Compare / Copy my text /
+// Reload way out the knowledge editor has. Read, it offers MemoryViewActions:
+// Edit, Open in editor, and a ⋯ menu with Reveal in Finder and Delete…. Title
+// 15/600, meta 12, body 13, 620 wide.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil } from "lucide-react";
 
 import { EditingActions } from "@/components/knowledge/KnowledgeDocumentActions";
 import { KnowledgeCompareView } from "@/components/knowledge/KnowledgeCompareView";
-import { FILE_PANE_SCROLL } from "@/components/filePane";
-import { Markdown } from "@/components/Markdown";
-import { MemoryEditor } from "@/components/memory/MemoryEditor";
+import { FileTextEditor } from "@/components/files/FileTextEditor";
 import { learnedByLabels } from "@/components/memory/memoryAgents";
-import { Button } from "@/components/ui/button";
+import { MemoryViewActions } from "@/components/memory/MemoryViewActions";
+import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -132,15 +132,16 @@ function LoadedMemory({ uid, slug, partitionName, memory: m, reload }: LoadedPro
   const date = formatDateTime(m.updated_at);
 
   const actions = !draft.editing ? (
-    <Button
-      variant="outline"
-      onClick={() => {
+    <MemoryViewActions
+      uid={uid}
+      slug={slug}
+      title={m.title}
+      filePath={m.file_path}
+      onEdit={() => {
         setStartedAt(new Date().toISOString());
         draft.startEditing();
       }}
-    >
-      <Pencil aria-hidden /> {t("common.edit")}
-    </Button>
+    />
   ) : comparing ? (
     <EditingActions
       dirty
@@ -179,23 +180,30 @@ function LoadedMemory({ uid, slug, partitionName, memory: m, reload }: LoadedPro
     );
   } else if (draft.editing) {
     body = (
-      <MemoryEditor
-        title={m.title}
-        draft={draft}
-        conflictText={t("knowledge.editor.conflictUnknown", { file: `${slug}.md` })}
-        onCompare={() => setComparing(true)}
-        onCopyMine={copyMine}
-        onReload={takeDisk}
+      <FileTextEditor
+        value={draft.value}
+        onChange={draft.setDraft}
+        ariaLabel={t("memory.editor.label", { title: m.title })}
+        isConflict={draft.conflict}
+        dirty={draft.dirty}
+        saving={draft.saving}
+        error={draft.error}
+        conflict={{
+          title: t("memory.editor.conflictTitle"),
+          text: t("knowledge.editor.conflictUnknown", { file: `${slug}.md` }),
+          onCompare: () => setComparing(true),
+          onCopyMine: copyMine,
+          onReload: takeDisk,
+        }}
+        onSave={draft.save}
         onDiscard={discard}
       />
     );
   } else {
     body = (
-      <div className={FILE_PANE_SCROLL}>
-        <div className="max-w-[620px] text-sm">
-          <Markdown>{m.body}</Markdown>
-        </div>
-      </div>
+      <FindableMarkdown fill frontmatter={false} className="text-sm">
+        {m.body}
+      </FindableMarkdown>
     );
   }
 
