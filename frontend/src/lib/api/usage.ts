@@ -1,4 +1,4 @@
-// src/lib/api/usage.ts — request functions for /api/v1/usage/*: the metered summary and its CSV.
+// src/lib/api/usage.ts — request functions for /api/v1/usage/*: the metered summary.
 //
 // Every wire type is an alias of the provider-switching contract's generated
 // schemas; transport is the typed openapi-fetch client (agents/frontend.md §4).
@@ -47,14 +47,4 @@ export async function fetchUsageSummary(q: UsageQuery): Promise<UsageSummary> {
   if (error) throwApiError(error, "INTERNAL_ERROR", "usage summary failed");
   if (!data) throw new ApiError("INTERNAL_ERROR", "empty usage summary");
   return data;
-}
-
-/** The same summary as CSV text. */
-export async function fetchUsageCsv(q: UsageQuery): Promise<string> {
-  const { data, error } = await getApiClient().GET("/usage/export.csv", {
-    params: { query: query(q) },
-    parseAs: "text",
-  });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "usage export failed");
-  return typeof data === "string" ? data : "";
 }

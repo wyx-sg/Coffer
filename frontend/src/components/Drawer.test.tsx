@@ -1,4 +1,4 @@
-// src/components/Drawer.test.tsx — the shared drawer: Esc / ✕ close, ↑ ↓ step, footer.
+// src/components/Drawer.test.tsx — the shared drawer: Esc / ✕ close, ↑ ↓ step, footer, resizable edge.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
@@ -57,5 +57,20 @@ describe("Drawer", () => {
   test("no stepping props, no step buttons", () => {
     setup({ onPrevious: undefined, onNext: undefined });
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  });
+
+  test("its left edge resizes it: ← widens, → narrows, double-click resets", () => {
+    window.localStorage.removeItem("coffer.split.drawer");
+    setup();
+    const dialog = screen.getByRole("dialog");
+    const edge = screen.getByRole("separator", { name: "Resize the drawer" });
+    expect(dialog.style.width).toBe("640px");
+    fireEvent.keyDown(edge, { key: "ArrowLeft" });
+    expect(dialog.style.width).toBe("656px");
+    fireEvent.keyDown(edge, { key: "ArrowRight" });
+    fireEvent.keyDown(edge, { key: "ArrowRight" });
+    expect(dialog.style.width).toBe("624px");
+    fireEvent.doubleClick(edge);
+    expect(dialog.style.width).toBe("640px");
   });
 });

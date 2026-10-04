@@ -453,23 +453,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/usage/export.csv": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Usage Export Csv */
-        get: operations["usage_export_csv_api_v1_usage_export_csv_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/usage/requests": {
         parameters: {
             query?: never;
@@ -2344,59 +2327,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProxyTokenRotatedOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    usage_export_csv_api_v1_usage_export_csv_get: {
-        parameters: {
-            query?: {
-                /** @description today | 24h | 7d | 30d | month | custom */
-                range?: string;
-                /** @description First local day (custom range) */
-                from?: string | null;
-                /** @description Last local day, inclusive (custom range) */
-                to?: string | null;
-                /** @description model | agent | day */
-                group_by?: components["schemas"]["GroupBy"];
-                /** @description Only requests this agent type sent */
-                agent_type?: string | null;
-                /** @description Only requests this connection served */
-                connection_uid?: string | null;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The summary as CSV. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/csv": unknown;
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

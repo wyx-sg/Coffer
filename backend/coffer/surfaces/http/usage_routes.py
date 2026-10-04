@@ -7,7 +7,6 @@ usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 * ``GET /requests`` — the per-request detail, newest first, paged by the
   shared opaque cursor (spec resource-framework "Page growing lists by an
   opaque cursor").
-* ``GET /export.csv`` — a summary as CSV.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
 
 from coffer.application.usage.ports import RequestFilters, StoredUsage
 from coffer.application.usage.query import (
@@ -166,31 +164,4 @@ async def usage_requests(
     page = await svc.requests(filters=filters, limit=limit, cursor=cursor)
     return UsageRequestListOut(
         requests=[_request(s) for s in page.items], next_cursor=page.next_cursor
-    )
-
-
-@router.get(
-    "/export.csv",
-    response_class=Response,
-    responses={200: {"content": {"text/csv": {}}, "description": "The summary as CSV."}},
-)
-async def usage_export_csv(
-    range_name: str = _RANGE,
-    start: date | None = _FROM,
-    end: date | None = _TO,
-    group_by: GroupBy = _GROUP,
-    agent_type: str | None = _AGENT,
-    connection_uid: str | None = _CONNECTION,
-    svc: UsageQueryService = Depends(get_usage_query_service),  # noqa: B008
-) -> Response:
-    filters = SummaryFilters(agent_type=agent_type, connection_uid=connection_uid)
-    try:
-        body = await svc.csv(range_name, start=start, end=end, group_by=group_by, filters=filters)
-    except InvalidRange as exc:
-        raise _bad_range(exc) from exc
-    filename = f"coffer-usage-{range_name}-{GroupBy(group_by).value}.csv"
-    return Response(
-        content=body,
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

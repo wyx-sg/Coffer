@@ -1290,8 +1290,7 @@ estimated cost, how many requests were unpriced or had unknown usage, and the ag
 the row's requests, most requests first. The summary MUST be narrowable to one agent type
 (`agent_type`) and to one connection (`connection_uid`); a filtered summary's rows and totals count
 only the requests that match every filter. `GET /api/v1/usage/requests`
-pages through the per-request detail, newest first. `GET /api/v1/usage/export.csv`
-returns the same summary, with the same filters, as CSV, and the Usage tab exports it. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
+pages through the per-request detail, newest first. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
 
 #### Scenario: usage by model names the connection
 - **GIVEN** usage of two models over two connections
@@ -1307,7 +1306,7 @@ returns the same summary, with the same filters, as CSV, and the Usage tab expor
 - **GIVEN** usage by Claude Code over one connection and by Codex over another
 - **WHEN** the summary is narrowed to Codex, then to the first connection, then to both at once
 - **THEN** it counts only Codex's requests, then only the first connection's, then nothing
-- **AND** each unfiltered row names the agent types that sent its requests, most requests first, and the CSV honours the same filters
+- **AND** each unfiltered row names the agent types that sent its requests, most requests first
 
 #### Scenario: a range resolves in local days
 - **GIVEN** a clock on a known local day
@@ -1318,11 +1317,6 @@ returns the same summary, with the same filters, as CSV, and the Usage tab expor
 - **GIVEN** requests 2 hours ago, 23 hours ago and 25 hours ago
 - **WHEN** the summary is read for the range `24h`
 - **THEN** it counts the first two requests and not the third
-
-#### Scenario: export usage as CSV
-- **GIVEN** usage in the range
-- **WHEN** the user exports it
-- **THEN** the CSV has a header row and one line per group with the same totals the summary reports
 
 ### Requirement: Push the proxy an approved key without a restart
 The model proxy MUST hold a connection's key only once the key may go to the connection's base
@@ -1480,8 +1474,7 @@ The tab is in the address: `/model-providers` and `/model-providers/<uid>` are P
 `/model-providers?tab=usage` is Usage. There MUST be no `/usage` page and no Usage sidebar entry.
 The Usage tab shows only what Coffer's proxy metered for API-key requests: a filter row with a
 date-only time range (Today, Last 7 days, Last 30 days, This month, or a custom range of days, up to
-90 days back), an **Agent** pill, a **Provider** pill, **Clear filters** while one is set and a ghost
-**Export CSV** button at the right; five tiles in one row — Cost (estimated), whose "?" holds the
+90 days back), an **Agent** pill, a **Provider** pill and **Clear filters** while one is set; five tiles in one row — Cost (estimated), whose "?" holds the
 note on which prices costed the range, with the request count under it and, when a model in the
 range has no known price, "N model(s) unpriced" as a link to that model on its provider
 (`/model-providers?provider=<uid>&model=<id>`) — the one place the count appears — then Input,
@@ -1503,12 +1496,12 @@ anywhere, nor offer a status-line wrapper for it; the data is Coffer's own, so t
 #### Scenario: the Usage tab keeps its range and filters in the address
 - **GIVEN** the Usage tab with metered requests
 - **WHEN** the user picks Last 30 days, the By agent view and an Agent and a Provider filter
-- **THEN** the address carries `range`, `by`, `agent` and `provider` beside `tab=usage`, the summary and the export are asked with the same range, grouping and filters, and a custom range is two days
+- **THEN** the address carries `range`, `by`, `agent` and `provider` beside `tab=usage`, the summary is asked with that range, grouping and filters, and a custom range is two days
 
 #### Scenario: the Usage tab has nothing to show before any usage
 - **GIVEN** no API-key request has ever been metered
 - **WHEN** the Usage tab is opened
-- **THEN** it shows "No API-key usage yet" and Open Providers, which switches to the Providers tab, and no time range, filter pills or Export CSV
+- **THEN** it shows "No API-key usage yet" and Open Providers, which switches to the Providers tab, and no time range or filter pills
 
 #### Scenario: Coffer shows no subscription quota
 - **GIVEN** agents on their own subscription logins

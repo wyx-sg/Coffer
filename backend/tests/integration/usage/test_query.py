@@ -1,9 +1,7 @@
-"""Usage summaries (model / agent / day), CSV, and the per-request cursor."""
+"""Usage summaries (model / agent / day) and the per-request cursor."""
 
 from __future__ import annotations
 
-import csv
-import io
 from datetime import UTC, date, timedelta
 from pathlib import Path
 
@@ -155,26 +153,6 @@ async def test_summary_filters_and_the_agents_behind_each_row(sm, tmp_path: Path
     by_day = {r.day: r for r in (await svc.summary("7d", group_by="day")).rows}
     assert by_day[NOW.date().isoformat()].agent_types == ("claude_code", "codex")
     assert by_day[(NOW.date() - timedelta(days=1)).isoformat()].agent_types == ()
-
-    text = await svc.csv("today", filters=SummaryFilters(agent_type="codex"))
-    assert [r["model"] for r in csv.DictReader(io.StringIO(text))] == ["acme-coder-1"]
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="export usage as CSV",
-)
-async def test_csv_export(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
-    svc = await _seed(sm, tmp_path)
-    text = await svc.csv("today", group_by="model")
-    rows = list(csv.DictReader(io.StringIO(text)))
-    assert list(rows[0].keys())[:3] == ["model", "connection_uid", "connection"]
-    assert "estimated_cost_usd" in rows[0]
-    by_model = {r["model"]: r for r in rows}
-    assert by_model["claude-sonnet-4-6"]["connection"] == "Anthropic"
-    assert by_model["claude-sonnet-4-6"]["unknown_usage_requests"] == "1"
-    day_csv = await svc.csv("today", group_by="day")
-    assert day_csv.splitlines()[0].startswith("day,requests,")
 
 
 async def test_requests_page_newest_first_by_cursor(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

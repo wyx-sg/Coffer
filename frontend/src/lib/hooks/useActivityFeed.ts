@@ -90,16 +90,12 @@ export interface ActivityFeed {
   isLoadingOlder: boolean;
   /** Re-read the audit log's newest page now. */
   refreshChanges: () => void;
-  /** The specs of the logs this tab reads, for the export. */
+  /** The specs of the logs this tab reads. */
   specs: SourceParams[];
-  /** The client-side predicate, for the export. */
-  keep: (r: ActivityRecord) => boolean;
   /** The newest-first time window's upper bound, for display. */
   until: string | undefined;
   /** Every daemon logger among the loaded records, for the logger filter. */
   loggers: string[];
-  /** The daemon log's file, when this tab reads it. */
-  logPath: string | undefined;
 }
 
 interface Args {
@@ -175,9 +171,7 @@ export function useActivityFeed({ tab, filters, t, agentNames }: Args): Activity
     isLoadingOlder: states.some((s) => s.isLoadingOlder),
     refreshChanges: change.refreshHead,
     specs: [changeSpec, callSpec, daemonSpec].filter((s) => active.has(s.source)),
-    keep,
     until,
     loggers: [...new Set(merged.map(recordLogger).filter(Boolean))].sort(),
-    logPath: active.has("daemon") ? daemon.path : undefined,
   };
 }

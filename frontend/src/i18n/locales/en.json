@@ -1083,20 +1083,10 @@
       "years_other": "{{count}} years"
     },
     "daemonLog": {
-      "following": "following",
-      "newestFirst": "newest first",
-      "reveal": "Open in Finder",
       "showCall": "Show the MCP call"
     },
     "reconnecting": "Reconnecting…",
-    "tabFailed": "Couldn't be loaded",
-    "export": {
-      "label": "Export",
-      "json": "JSON",
-      "csv": "CSV",
-      "done_one": "Exported {{count}} record",
-      "done_other": "Exported {{count}} records"
-    }
+    "tabFailed": "Couldn't be loaded"
   },
   "settings": {
     "title": "Settings",
@@ -5880,7 +5870,6 @@
     }
   },
   "usage": {
-    "exportCsv": "Export CSV",
     "noPrice": "—",
     "error": "Couldn't load API-key usage.",
     "presets": {
@@ -6457,13 +6446,13 @@
   },
   "drawer": {
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "resize": "Resize the drawer"
   },
   "filters": {
     "clear": "Clear",
     "clearLabel": "Clear {{label}}",
     "clearAll": "Clear filters",
-    "only": "Only",
     "noMatches": "No matches",
     "timeRange": {
       "label": "Time range",

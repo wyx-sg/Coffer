@@ -61,10 +61,6 @@ async def test_summary_route(wired) -> None:  # type: ignore[no-untyped-def]
         params={"range": "7d", "agent_type": "codex", "connection_uid": "conn-anthropic"},
     )
     assert narrowed.json()["totals"]["requests"] == 0
-    csv_text = await client.get(
-        "/api/v1/usage/export.csv", params={"range": "7d", "agent_type": "claude_code"}
-    )
-    assert len(csv_text.text.splitlines()) == 3  # header + two models
     bad = await client.get(
         "/api/v1/usage/summary", params={"range": "custom", "from": "2026-09-01"}
     )
@@ -83,14 +79,6 @@ async def test_requests_route_pages_by_cursor(wired) -> None:  # type: ignore[no
     assert (
         await client.get("/api/v1/usage/requests", params={"cursor": "junk"})
     ).status_code == 400
-
-
-async def test_csv_route(wired) -> None:  # type: ignore[no-untyped-def]
-    client, _ = wired
-    r = await client.get("/api/v1/usage/export.csv", params={"range": "today", "group_by": "agent"})
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("text/csv")
-    assert r.text.splitlines()[0].startswith("agent_uid,agent_type,requests")
 
 
 async def test_routes_require_the_token(wired) -> None:  # type: ignore[no-untyped-def]

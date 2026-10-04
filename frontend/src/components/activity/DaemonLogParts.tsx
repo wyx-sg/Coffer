@@ -1,8 +1,6 @@
-// src/components/activity/DaemonLogParts.tsx — the Daemon log tab's own pieces: the file line above the rows and a record opened in place.
+// src/components/activity/DaemonLogParts.tsx — the Daemon log tab's own piece: a record opened in place.
 //
-// Design 6.2.08: the tab names the file it reads ("~/.coffer/logs/daemon.log ·
-// newest first · following · Open in Finder"), and a row opens under its own
-// line with its traceback and a button row: Ask an agent (only for an error
+// Design 6.2.08: a row opens under its own line with its traceback and a button row: Ask an agent (only for an error
 // about the environment — the backend sends the prompt), a way to the MCP call
 // it is about, and Copy record.
 import { useTranslation } from "react-i18next";
@@ -13,44 +11,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { daemonContinuation, describeDaemonRecord } from "@/lib/activity/activityText";
 import type { ActivityRecord } from "@/lib/activity/records";
-import { abbreviateHomePath } from "@/lib/agents/display";
-import { translateApiError } from "@/lib/api/errors";
-import { useFsActions } from "@/lib/fsActions";
-
-/**
- * The file the tab reads, above its box: "~/.coffer/logs/daemon.log · newest
- * first · following · Open in Finder" (design 6.2.08). The link hands the
- * file's folder to the OS through the daemon (`POST /fs/reveal`).
- */
-export function DaemonLogLine({ path, following }: { path: string; following: boolean }) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const fs = useFsActions();
-  return (
-    <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-text-muted">
-      <span title={path} className="whitespace-nowrap font-mono">
-        {abbreviateHomePath(path)}
-      </span>
-      <span aria-hidden>·</span>
-      <span>{t("activity.daemonLog.newestFirst")}</span>
-      {following ? (
-        <>
-          <span aria-hidden>·</span>
-          <span>{t("activity.daemonLog.following")}</span>
-        </>
-      ) : null}
-      <span aria-hidden>·</span>
-      <Button
-        variant="link"
-        size="sm"
-        className="h-auto p-0 text-xs"
-        onClick={() => fs.reveal(path).catch((e: unknown) => toast.error(translateApiError(t, e)))}
-      >
-        {t("activity.daemonLog.reveal")}
-      </Button>
-    </div>
-  );
-}
 
 /**
  * The MCP call a daemon record is about, as the text the MCP calls tab's box

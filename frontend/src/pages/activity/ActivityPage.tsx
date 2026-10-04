@@ -29,7 +29,7 @@ import { ActivityBody, FirstRun } from "@/components/activity/ActivityBody";
 import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
 import { ActivityHeader } from "@/components/activity/ActivityHeader";
 import { NewRecordsStrip, PartialFailure } from "@/components/activity/ActivityNotices";
-import { DaemonLogLine, DaemonRecordOpen } from "@/components/activity/DaemonLogParts";
+import { DaemonRecordOpen } from "@/components/activity/DaemonLogParts";
 import { RecordDrawer } from "@/components/activity/RecordDrawer";
 import { filtersNarrow } from "@/lib/activity/filters";
 import type { ActivityTab } from "@/lib/activity/records";
@@ -125,9 +125,6 @@ export function ActivityPage() {
           onTab={(next) => setTab(next)}
           failedTabs={failedTabs}
           live={streamOpen}
-          empty={firstRun}
-          specs={feed.specs}
-          keep={feed.keep}
         />
         {firstRun ? null : (
           <ActivityFilterBar
@@ -139,9 +136,6 @@ export function ActivityPage() {
             loggers={feed.loggers}
           />
         )}
-        {daemon && feed.logPath && !firstRun ? (
-          <DaemonLogLine path={feed.logPath} following={streamOpen && live} />
-        ) : null}
         <PartialFailure feed={feed} />
         <NewRecordsStrip held={!live} feed={feed} onShowNew={showNew} />
       </div>
