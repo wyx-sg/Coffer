@@ -60,7 +60,7 @@ Four things describe the product, and **changing one means changing the others i
 | Spec | `openspec/specs/**` (requirements, scenarios, `data-model.md`, contracts) |
 | Code | `backend/`, `frontend/`, `desktop/` (and their tests) |
 | Docs, external | `README.md` + `README.zh-CN.md`, `docs-site/**` (English + `zh/`) |
-| Docs, internal | `docs/decisions/` ADRs, `docs/research/`, `docs/skill-library/`, `.agents/*`, `AGENTS.md`, `CONTRIBUTING.md` |
+| Docs, internal | `docs/decisions/` ADRs, `docs/research/`, `.agents/*`, `AGENTS.md`, `CONTRIBUTING.md` |
 | Design canvas | the Claude Design canvases listed below (UI boards, kept outside the repo; see `DesignSync`) |
 
 - A UI change (layout, copy, states, navigation, a new or removed screen) redraws the affected canvas boards in the same work item. If the code is the one that is wrong, change the code back to match the board instead.
