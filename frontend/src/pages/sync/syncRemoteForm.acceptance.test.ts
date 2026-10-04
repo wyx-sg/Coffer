@@ -13,7 +13,6 @@ const stored: SyncRemote = {
   url: "https://gitlab.com/me/vault.git",
   branch: "vault",
   secret_ref: "sync/gitlab-token",
-  username: "oauth2",
   include_secret: true,
   interval_seconds: 900,
   enabled: false,
@@ -22,14 +21,14 @@ const stored: SyncRemote = {
 describe("saving a stored remote again", () => {
   acceptance("vault-sync", "reconfiguring a paused remote keeps it paused", () => {
     const form = { ...formFromRemote(stored), intervalSeconds: 600 };
-    const sent = toRemoteInput(form, stored);
+    const sent = toRemoteInput(form);
     expect(sent.interval_seconds).toBe(600);
     expect(sent.enabled).toBe(false);
 
-    const first = toRemoteInput({ ...EMPTY_FORM, url: stored.url }, null);
+    const first = toRemoteInput({ ...EMPTY_FORM, url: stored.url });
     expect(first.enabled).toBe(true);
     expect(first.branch).toBe("main");
-    expect(first.username).toBe("coffer");
+    expect(first).not.toHaveProperty("username");
     expect(first.include_secret).toBe(false);
   });
 

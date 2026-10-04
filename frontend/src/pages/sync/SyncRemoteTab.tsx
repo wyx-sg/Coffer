@@ -30,8 +30,8 @@ import {
   type FormState,
 } from "./syncRemoteForm";
 
-function sameInput(a: FormState, b: FormState, stored: SyncStatus["remote"]): boolean {
-  return JSON.stringify(toRemoteInput(a, stored)) === JSON.stringify(toRemoteInput(b, stored));
+function sameInput(a: FormState, b: FormState): boolean {
+  return JSON.stringify(toRemoteInput(a)) === JSON.stringify(toRemoteInput(b));
 }
 
 export function SyncRemoteTab({ status }: { status: SyncStatus }) {
@@ -57,8 +57,8 @@ export function SyncRemoteTab({ status }: { status: SyncStatus }) {
     if (!commit) return;
     const found = validateRemote(next);
     setErrors(found);
-    if (found.url || sameInput(next, savedForm, stored)) return;
-    save.mutate(toRemoteInput(next, stored), {
+    if (found.url || sameInput(next, savedForm)) return;
+    save.mutate(toRemoteInput(next), {
       onSuccess: () => toast.success(t("common.saved")),
     });
   };

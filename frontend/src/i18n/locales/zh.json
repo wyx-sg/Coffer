@@ -4618,8 +4618,6 @@
       "secretMissing": "本机没有它的值",
       "secretPlaceholder": "选择一个密钥",
       "secretEmpty": "还没有密钥——先在「密钥」页面添加。",
-      "username": "用户名",
-      "usernameHint": "发送令牌时使用的用户名。GitLab 需要 oauth2 或你的账号名。留空则使用默认值。",
       "cadence": {
         "label": "同步频率",
         "minutes_one": "每 {{count}} 分钟",
@@ -4849,6 +4847,8 @@
       "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
     },
     "rounds": {
+      "loadedCount": "已加载 {{loaded}} 轮",
+      "loadedOfTotal": "已加载 {{loaded}} / {{total}} 轮",
       "today": "今天",
       "yesterday": "昨天",
       "title": "轮次",

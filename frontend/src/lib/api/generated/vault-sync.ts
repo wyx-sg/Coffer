@@ -1092,11 +1092,6 @@ export interface components {
             secret_ref?: string | null;
             /** Url */
             url: string;
-            /**
-             * Username
-             * @default coffer
-             */
-            username?: string;
         };
         /**
          * RemoteCheckOut
@@ -1279,11 +1274,6 @@ export interface components {
             secret_ref?: string | null;
             /** Url */
             url: string;
-            /**
-             * Username
-             * @default coffer
-             */
-            username?: string;
         };
         /** SyncRemoteOut */
         SyncRemoteOut: {
@@ -1299,8 +1289,6 @@ export interface components {
             secret_ref: string | null;
             /** Url */
             url: string;
-            /** Username */
-            username: string;
         };
         /** SyncRemoteStateOut */
         SyncRemoteStateOut: {

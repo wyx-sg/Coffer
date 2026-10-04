@@ -178,8 +178,9 @@ schedule or when the person asks ("Sync now"). A round:
 - **Remote failures are named**: `remote unreachable`, `sign-in refused` and
   `push failed` (applied here, refused by the remote) are distinct round
   results, and none of them loses anything. The push token is sent with a
-  username, `coffer` by default and settable per remote, because Bitbucket and
-  Azure DevOps need a particular one where GitHub and GitLab ignore it.
+  username derived from the remote's host (`x-token-auth` for Bitbucket,
+  `oauth2` for GitLab, `coffer` elsewhere), because Bitbucket and GitLab expect
+  a particular one where GitHub and Azure DevOps ignore it.
 
 Pros: no translation layer, no second working tree, no pointer table, no retry
 set and no automatic content resolver; a merge git can do cleanly is still

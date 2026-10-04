@@ -100,7 +100,6 @@ async def put_remote(body: SyncRemoteIn) -> SyncRemoteOut:
             url=body.url,
             branch=body.branch,
             secret_ref=body.secret_ref,
-            username=body.username,
             include_secret=body.include_secret,
             interval_seconds=body.interval_seconds,
             enabled=body.enabled,
@@ -129,9 +128,7 @@ async def restore_remote() -> SyncRemoteOut:
 @router.post("/remote/check", response_model=RemoteCheckOut)
 async def check_remote(body: RemoteCheckIn) -> RemoteCheckOut:
     """What a remote holds, before it is saved: nothing is kept."""
-    found = await get_sync_service().check_remote(
-        body.url, body.branch, body.secret_ref, body.username
-    )
+    found = await get_sync_service().check_remote(body.url, body.branch, body.secret_ref)
     return RemoteCheckOut(
         result=found.result,  # type: ignore[arg-type]
         tip=found.tip,

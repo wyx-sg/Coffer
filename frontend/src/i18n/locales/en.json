@@ -4618,8 +4618,6 @@
       "secretMissing": "No value on this Mac",
       "secretPlaceholder": "Choose a secret",
       "secretEmpty": "No secrets yet — add one in Secrets.",
-      "username": "User name",
-      "usernameHint": "The user name the token is sent with. GitLab needs oauth2 or your account name. Empty uses the default.",
       "cadence": {
         "label": "Run a round",
         "minutes_one": "Every {{count}} minute",
@@ -4849,6 +4847,8 @@
       "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
     },
     "rounds": {
+      "loadedCount": "Loaded {{loaded}} rounds",
+      "loadedOfTotal": "Loaded {{loaded}} of {{total}} rounds",
       "today": "Today",
       "yesterday": "Yesterday",
       "loadFailed": "Couldn't load the rounds",

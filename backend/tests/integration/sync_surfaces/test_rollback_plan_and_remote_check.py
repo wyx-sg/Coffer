@@ -33,22 +33,22 @@ def test_the_plan_names_what_it_reverses_and_changes_nothing(pair: tuple[Box, Bo
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a remote check sends the user name it is given"
 )
-def test_a_remote_check_sends_the_given_user_name_else_the_stored_one(
+def test_a_remote_check_sends_the_user_name_its_host_implies(
     pair: tuple[Box, Box], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mac, _mini = pair
-    seen: list[str] = []
-    check = mac.service.check_remote
+    seen: list[str | None] = []
 
-    async def spy(url, branch, secret_ref, username):  # type: ignore[no-untyped-def]
+    def probe(url, branch, token, username=None):  # type: ignore[no-untyped-def]
         seen.append(username)
-        return await check(url, branch, secret_ref, username)
+        return None
 
-    monkeypatch.setattr(mac.service, "check_remote", spy)
+    monkeypatch.setattr(mac.service._probe, "probe", probe)
     with client_for(mac) as c:
-        body = c.get("/sync/remote").json()["remote"]
-        base = {"url": body["url"], "branch": body["branch"]}
-        assert c.post("/sync/remote/check", json={**base, "username": "oauth2"}).status_code == 200
-        assert c.post("/sync/remote/check", json=base).status_code == 200
-    assert seen[0] == "oauth2"
-    assert seen[1] == body["username"]
+        for url in (
+            "https://gitlab.example.com/me/vault.git",
+            "https://bitbucket.org/me/vault.git",
+        ):
+            checked = c.post("/sync/remote/check", json={"url": url, "branch": "main"})
+            assert checked.status_code == 200, checked.text
+    assert seen == ["oauth2", "x-token-auth"]

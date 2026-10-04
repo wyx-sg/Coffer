@@ -6,7 +6,6 @@ import {
   EMPTY_FORM,
   formFromRemote,
   isGitRemoteUrl,
-  isHttpsUrl,
   toRemoteInput,
   validateRemote,
   type FormState,
@@ -16,7 +15,6 @@ const stored: SyncRemote = {
   url: "https://git.example.com/me/vault.git",
   branch: "main",
   secret_ref: "secret/gitlab-token",
-  username: "oauth2",
   include_secret: false,
   interval_seconds: 3600,
   enabled: true,
@@ -43,12 +41,6 @@ describe("isGitRemoteUrl", () => {
   );
 });
 
-test("only an https:// URL sends a user name", () => {
-  expect(isHttpsUrl("https://gitlab.com/me/v.git")).toBe(true);
-  expect(isHttpsUrl("git@github.com:me/v.git")).toBe(false);
-  expect(isHttpsUrl("ssh://git@github.com/me/v.git")).toBe(false);
-});
-
 test("validateRemote flags only a URL that is not a git remote", () => {
   expect(validateRemote(base)).toEqual({});
   expect(validateRemote({ ...base, url: "nope" })).toEqual({ url: "url" });
@@ -59,34 +51,16 @@ describe("formFromRemote", () => {
     expect(formFromRemote(null)).toEqual(EMPTY_FORM);
     expect(EMPTY_FORM).toMatchObject({ branch: "main", intervalSeconds: 3600, enabled: true });
   });
-
-  test("the default user name reads as empty; any other is kept", () => {
-    expect(formFromRemote({ ...stored, username: "coffer" }).username).toBe("");
-    expect(base.username).toBe("oauth2");
-  });
 });
 
 describe("toRemoteInput", () => {
   test("trims, defaults the branch, and sends no secret for an empty pick", () => {
-    const out = toRemoteInput(
-      { ...base, url: `  ${base.url} `, branch: " ", secretRef: "" },
-      stored,
-    );
+    const out = toRemoteInput({ ...base, url: `  ${base.url} `, branch: " ", secretRef: "" });
     expect(out).toMatchObject({ url: base.url, branch: "main", secret_ref: null });
   });
 
-  test("an empty user name on an HTTPS remote sends the default", () => {
-    expect(toRemoteInput({ ...base, username: "" }, stored).username).toBe("coffer");
-  });
-
-  test("a non-HTTPS remote keeps the stored user name, whatever the draft says", () => {
-    const ssh = { ...base, url: "git@github.com:me/vault.git", username: "typed" };
-    expect(toRemoteInput(ssh, stored).username).toBe("oauth2");
-    expect(toRemoteInput(ssh, null).username).toBe("coffer");
-  });
-
   test("Only when I press Sync now is enabled: false, the interval kept", () => {
-    expect(toRemoteInput({ ...base, enabled: false }, stored)).toMatchObject({
+    expect(toRemoteInput({ ...base, enabled: false })).toMatchObject({
       enabled: false,
       interval_seconds: 3600,
     });

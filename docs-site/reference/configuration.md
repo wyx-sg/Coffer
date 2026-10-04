@@ -100,7 +100,7 @@ Coffer never reads these from its own environment; it sets them for child proces
 | --- | --- | --- |
 | `CLAUDE_CONFIG_DIR` | Claude Code turns | Points Claude Code at a registered agent's config directory when it is not `~/.claude`. |
 | `CODEX_HOME` | Codex turns | Points Codex at a registered agent's config directory when it is not `~/.codex`. |
-| `COFFER_GIT_TOKEN`, `COFFER_GIT_USERNAME` | `git` during vault sync | The sync remote's token and the username sent with it, read by a credential helper at run time so the token never appears in `argv` or on disk. |
+| `COFFER_GIT_TOKEN`, `COFFER_GIT_USERNAME` | `git` during vault sync | The sync remote's token and the username derived from the remote's host, read by a credential helper at run time so the token never appears in `argv` or on disk. |
 | `PATH`, `HOME` | the login service | Captured from your login shell when you install the service, so the daemon can find `npx`, `uvx` and other upstream launchers. |
 
 The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~/.coffer` and to probe your login shell's `PATH`; it defines no variables of its own.
@@ -211,7 +211,6 @@ The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, s
 | --- | --- | --- |
 | **Run a round** | every hour | How often a round runs automatically (a list from every minute to every few days). Stored as seconds; at least `60`: a smaller value is refused over the API. |
 | **Secret** | none | The secret holding the push token. |
-| **User name** | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. |
 | **Include encrypted secrets** | off | Commit and push `vault/secret/` (ciphertext only, never the key). |
 | **Only when I press Sync now** (a choice under **Run a round**) | off | Pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. |
 

@@ -211,17 +211,17 @@ vault. Memory partitions are derived the same way.
 
 ### Requirement: Allow at most one user-owned sync remote
 A vault MUST have **at most one** sync remote: a git repository the user owns,
-configured with a URL, a branch, a push credential reference, the username an
-HTTPS token is sent with, an interval, whether secret ciphertext rides along
+configured with a URL, a branch, a push credential reference, an interval, whether secret ciphertext rides along
 (`include_secret`), and whether it is on. The remote is machine-local
 configuration, `local/sync/remote.json`. Sync MUST be off until the user
 configures it. The interval MUST be at least 60 seconds: a shorter one is
-refused before anything is stored. The username defaults to `coffer`; GitHub and
-GitLab ignore it for a token, while Bitbucket (for example `x-token-auth`) and
-Azure DevOps need a real one, and a username git cannot send — blank, or
-holding a space, `:`, `@` or `/` — MUST be refused. The username and the token
-reach git only through the credential helper's environment.
-
+refused before anything is stored. The username git sends with an
+HTTPS token is not configured: it follows the host of the remote's URL —
+`x-token-auth` for `bitbucket.org`, `oauth2` for a host whose name contains
+`gitlab`, and `coffer` for any other host (GitHub and Azure DevOps ignore it
+for a token). Bitbucket access tokens work; an App password, which needs the
+account's own name, is not supported. The username and the token reach git only
+through the credential helper's environment.
 #### Scenario: sync stays off until a remote is configured
 - **GIVEN** a vault with no sync remote configured
 - **WHEN** the worker ticks and a round is requested over REST
@@ -233,10 +233,9 @@ reach git only through the credential helper's environment.
 - **THEN** it is refused naming the 60-second floor, and 60 seconds is accepted
 
 #### Scenario: a token is sent with the username the remote names
-- **GIVEN** a remote with no username and another with `x-token-auth`
+- **GIVEN** remotes on `bitbucket.org`, on a host named `gitlab.example.com`, and on `github.com`
 - **WHEN** git is given the push token
-- **THEN** the first sends `coffer` and the second `x-token-auth`, both only through the credential helper's environment
-- **AND** a username with a space, `:`, `@` or `/` is refused
+- **THEN** they send `x-token-auth`, `oauth2` and `coffer` respectively, each only through the credential helper's environment
 
 ### Requirement: Refuse a URL or branch git would read as an option
 The URL and the branch become arguments to `git`, so neither MAY begin with `-`
@@ -637,7 +636,7 @@ outage that looks like silence.
 `GET /api/v1/sync/status` MUST also report the configured remote with every one of its settings
 beside this machine, the last round, what waits to push and anything waiting for the person. The
 settings are the URL, the branch, the interval, whether secret ciphertext travels, the push
-secret's ref, the username and whether the remote is on.
+secret's ref and whether the remote is on.
 
 The desktop shell's notification MUST be raised once for a condition, not once per
 poll, and MUST NOT return for the same situation. The rounds are timer-driven, so
@@ -969,7 +968,7 @@ time is stored enabled, with the defaults for every setting it is not given.
 - **AND** a remote set for the first time is sent switched on with the defaults
 
 #### Scenario: reconfiguring a remote changes only what it names
-- **GIVEN** a configured remote with a non-default branch, interval, push credential and username, carrying secret ciphertext
+- **GIVEN** a configured remote with a non-default branch, interval, push credential, carrying secret ciphertext
 - **WHEN** the remote is saved again changing only its interval
 - **THEN** every other setting is sent exactly as it was
 - **AND** saving it with secret sync switched off changes that setting and nothing else
@@ -1207,9 +1206,7 @@ older layout must upgrade.
 A person SHALL be able to ask what a remote holds before saving it — empty, a
 Coffer vault (with its layout), some other repository, unreachable or refused
 sign-in — through `POST /api/v1/sync/remote/check`
-and the set-up form's "Check repository". The check MUST send the user name the token
-goes with, as saving does: the form's User name field, else the stored remote's,
-else the default. Checking MUST keep
+and the set-up form's "Check repository". The check MUST send the token with the username its URL's host implies, as saving does. Checking MUST keep
 nothing: no remote is stored and the vault is not touched.
 
 #### Scenario: a remote is checked before it is saved
@@ -1219,9 +1216,9 @@ nothing: no remote is stored and the vault is not touched.
 - **AND** nothing about the stored remote changed
 
 #### Scenario: a remote check sends the user name it is given
-- **GIVEN** a stored remote
-- **WHEN** `POST /api/v1/sync/remote/check` is called with the user name `oauth2`, and then with none
-- **THEN** the first check sends the user name `oauth2` with the token, and the second sends the stored remote's
+- **GIVEN** a URL on `gitlab.example.com` and another on `bitbucket.org`
+- **WHEN** each is checked with a token through `POST /api/v1/sync/remote/check`
+- **THEN** the first check sends the username `oauth2` and the second `x-token-auth`, as saving would
 
 ### Requirement: Run the reconciler once after a round that applied changes
 What another machine changed is this machine's warrant to bring its own side
@@ -1364,7 +1361,7 @@ button, the branch and when rounds run. The title carries the Experimental mark.
 - **Machines** lists the machine registry. A user renames this machine and retires one that is
   gone, at once, with Undo. The machine that runs knowledge curation carries a read-only "Runs curation" tag.
 - **Remote** holds the remote's settings, each saved as it is changed:
-  - the URL, the branch, the push secret, and the user name an HTTPS token is sent with;
+  - the URL, the branch and the push secret;
   - when a round runs. "Only when I press Sync now" pauses the remote;
   - whether secret ciphertext travels, which asks first when switched on;
   - the vault's folder, with a warning when it sits in a synchronised folder;
@@ -1465,7 +1462,7 @@ remote drops what was kept.
 #### Scenario: stopping sync can be undone
 - **GIVEN** a joined machine with a remote, a push secret, a custom interval and a round stopped on a conflict
 - **WHEN** sync is stopped and then restored
-- **THEN** the remote has the same URL, branch, secret name, user name, interval and secret setting, the machine is still joined, and the stopped round is waiting again
+- **THEN** the remote has the same URL, branch, secret name, interval and secret setting, the machine is still joined, and the stopped round is waiting again
 - **AND** restoring a second time, or after setting another remote, is `SYNC_NOTHING_TO_RESTORE`
 
 ### Requirement: Move the vault out of a synchronised folder

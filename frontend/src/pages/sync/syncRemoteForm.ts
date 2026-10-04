@@ -17,8 +17,6 @@ export interface FormState {
   branch: string;
   /** A name in the secret store — never the secret. Empty: none. */
   secretRef: string;
-  /** The HTTPS user name the token is sent with. Empty: the daemon's default. */
-  username: string;
   includeSecret: boolean;
   intervalSeconds: number;
   /** False: rounds run only when the user presses Sync now. */
@@ -35,7 +33,6 @@ export const EMPTY_FORM: FormState = {
   url: "",
   branch: DEFAULT_BRANCH,
   secretRef: "",
-  username: "",
   includeSecret: false,
   intervalSeconds: DEFAULT_INTERVAL_SECONDS,
   enabled: true,
@@ -58,41 +55,25 @@ export function isGitRemoteUrl(value: string): boolean {
   }
 }
 
-/** Only an HTTPS remote sends a user name with its token. */
-export function isHttpsUrl(value: string): boolean {
-  return /^https:\/\//i.test(value.trim());
-}
-
-/** The form a stored remote opens as. The default user name reads as empty. */
+/** The form a stored remote opens as. */
 export function formFromRemote(remote: SyncRemote | null): FormState {
   if (!remote) return EMPTY_FORM;
   return {
     url: remote.url,
     branch: remote.branch,
     secretRef: remote.secret_ref ?? "",
-    username: remote.username === DEFAULT_USERNAME ? "" : remote.username,
     includeSecret: remote.include_secret,
     intervalSeconds: remote.interval_seconds,
     enabled: remote.enabled,
   };
 }
 
-/** What the daemon stores when no user name is sent (`SyncRemoteIn.username`). */
-const DEFAULT_USERNAME = "coffer";
-
-/**
- * The PUT body. The user name is the form's only for an HTTPS URL; any other
- * remote keeps the one stored (`stored`), since it has no field to change it.
- */
-export function toRemoteInput(form: FormState, stored: SyncRemote | null): SyncRemoteInput {
-  const username = isHttpsUrl(form.url)
-    ? form.username.trim() || DEFAULT_USERNAME
-    : (stored?.username ?? DEFAULT_USERNAME);
+/** The PUT body. */
+export function toRemoteInput(form: FormState): SyncRemoteInput {
   return {
     url: form.url.trim(),
     branch: form.branch.trim() || DEFAULT_BRANCH,
     secret_ref: form.secretRef.trim() || null,
-    username,
     include_secret: form.includeSecret,
     interval_seconds: form.intervalSeconds,
     enabled: form.enabled,

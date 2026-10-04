@@ -2289,13 +2289,6 @@ components:
           pattern: ^[^-\s]\S*$
           title: Url
           type: string
-        username:
-          default: coffer
-          maxLength: 128
-          minLength: 1
-          pattern: ^[^\s:@/]+$
-          title: Username
-          type: string
       required:
       - url
       title: RemoteCheckIn
@@ -2658,13 +2651,6 @@ components:
           pattern: ^[^-\s]\S*$
           title: Url
           type: string
-        username:
-          default: coffer
-          maxLength: 128
-          minLength: 1
-          pattern: ^[^\s:@/]+$
-          title: Username
-          type: string
       required:
       - url
       title: SyncRemoteIn
@@ -2691,14 +2677,10 @@ components:
         url:
           title: Url
           type: string
-        username:
-          title: Username
-          type: string
       required:
       - url
       - branch
       - secret_ref
-      - username
       - include_secret
       - interval_seconds
       - enabled

@@ -109,7 +109,6 @@ def test_a_refused_push_hands_its_diagnosis_to_an_agent(pair: tuple[Box, Box]) -
             mac.remotes.get() or SyncRemote(url=mac.url),
             url=https,
             secret_ref="sync/gitlab-token",
-            username="oauth2",
         )
     )
     problem = mac.run(mac.service.status()).problem

@@ -40,7 +40,7 @@ Four rules shape everything below:
 ### GitLab
 
 1. Create a private, empty project, then a **project access token** on it (**Settings › Access tokens**) with the **`write_repository`** scope and a role that may push to the branch (Developer or higher; Maintainer if the branch is protected). A personal access token with `write_repository` works too.
-2. Add the token as a secret on the **Secrets** page (**Add secret**), as for GitHub. GitLab's token is sent with the user name `oauth2` (or the account's user name), so on the **Sync** page enter the **Repository URL**, choose the token under **Secret**, set **User name** to `oauth2`, then press **Check repository**.
+2. Add the token as a secret on the **Secrets** page (**Add secret**), as for GitHub. On the **Sync** page enter the **Repository URL**, choose the token under **Secret**, then press **Check repository**. Coffer sends the user name GitLab expects (`oauth2`) on its own.
 
    For a self-managed GitLab, use your instance's host in place of `gitlab.com`.
 
@@ -48,15 +48,15 @@ Four rules shape everything below:
 
 ### The username sent with a token
 
-Git sends a username with every HTTPS token. Coffer sends `coffer` unless you fill in **User name** on the **Remote** tab (shown for an `https://` URL). It matters only where the host does not tell the user from the token:
+Git sends a username with every HTTPS token. You do not set it: Coffer picks it from the host in the remote's URL.
 
-| Host | Username |
+| Host | Username sent |
 | --- | --- |
-| GitHub | Ignored for a token; the default works. |
-| GitLab | `oauth2`, or the account's user name. |
-| Bitbucket | A fixed one such as `x-token-auth` for a repository or workspace access token. |
-| Azure DevOps | A real one: your user name. |
-| Any other git server | Whatever its HTTPS sign-in expects; leave the default when it takes the token alone. An SSH or `file://` remote sends no user name, and the option changes nothing for it. |
+| `bitbucket.org` | `x-token-auth`, which is what a Bitbucket repository or workspace access token expects. |
+| A host whose name contains `gitlab` (`gitlab.com`, a self-managed GitLab) | `oauth2`. |
+| Any other host, including GitHub and Azure DevOps | `coffer`; both ignore the name when given a token. |
+
+Bitbucket App passwords need your own account name, so they are not supported; use an access token. An SSH or `file://` remote sends no user name.
 
 ### Options
 
@@ -68,7 +68,6 @@ The **Remote** tab holds these fields. Each saves when you leave it.
 | **Run a round** | Every hour | How often a round runs automatically, from every minute to every few days, or **Only when I press Sync now**. |
 | **Include encrypted secrets** | off | Carry the encrypted secrets (`vault/secret/`). The master key is never carried under any setting. |
 | **Secret** | **None** | The push token in the secret store. |
-| **User name** | `coffer` | The user name sent with an HTTPS token, for a host that does not imply it (GitLab: `oauth2`). |
 
 **Check repository** tells you what a URL holds before you store it: empty, a Coffer vault (and its layout), another repository, unreachable, or refusing the token.
 
@@ -76,7 +75,7 @@ A token you stored a moment ago for this remote is used at once. Pointing a toke
 
 ### Join it
 
-Joining is always explicit, even on the first machine. The **Sync** page shows set-up until this machine has joined: **Repository URL**, **Branch**, **Secret**, **User name** (for an `https://` URL), **Run a round**, **Include encrypted secrets**, then **Check repository**. An empty repository offers **Push and start syncing**, which pushes everything this vault holds. One that already holds a vault shows the join preview (what comes down, what is the same, what differs, what goes up, and that nothing is deleted) with **Join and pull**; nothing applies until you press it.
+Joining is always explicit, even on the first machine. The **Sync** page shows set-up until this machine has joined: **Repository URL**, **Branch**, **Secret**, **Run a round**, **Include encrypted secrets**, then **Check repository**. An empty repository offers **Push and start syncing**, which pushes everything this vault holds. One that already holds a vault shows the join preview (what comes down, what is the same, what differs, what goes up, and that nothing is deleted) with **Join and pull**; nothing applies until you press it.
 
 ## Join another machine
 
@@ -138,7 +137,7 @@ Rounds run on the schedule set by **Run a round** on the **Remote** tab. To run 
 
 On the web, the **Sync** page's header says in one word where this Mac stands: **In sync**, **N changes to push**, **N changes pulled**, **Syncing**, **Stopped**, **Push failed**, **Remote unreachable**, **Sign-in failed** or **Paused**. Beside it is **Sync now**, always the page's primary button, and under the title the remote's URL with a copy button. The page has no help icon, and three tabs:
 
-- **Status** opens first. It shows what the status means with one grey line under it of what syncs (knowledge documents, skills, MCP server and tool definitions, and whether secrets are synced), the changes waiting to push (five, then **Show all**), any card that needs you, and every round this machine has run, as a table of when, the round, what it pulled and what it pushed. A problem card, such as sign-in failed or git missing, has an **×** that ignores it, like **Ignore** on Overview; it comes back when the problem changes. Consecutive rounds that ended the same way fold into one row. Click a round to see its safety snapshot, the commits it pulled, what it changed here and what it pushed.
+- **Status** opens first. It shows what the status means with one grey line under it of what syncs (knowledge documents, skills, MCP server and tool definitions, and whether secrets are synced), the changes waiting to push (five, then **Show all**), any card that needs you, and every round this machine has run, as a table of when, the round, what it pulled and what it pushed. A problem card, such as sign-in failed or git missing, has an **×** that ignores it, like **Ignore** on Overview; it comes back when the problem changes. Consecutive rounds that ended the same way fold into one row. The table footer always counts rounds rather than rows, for example **Loaded 38 of 38 rounds** or **Loaded 20 of 38 rounds**. Click a round to see its safety snapshot, the commits it pulled, what it changed here and what it pushed.
 - **Machines** lists the machines (see [Manage the machines](#manage-the-machines)).
 - **Remote** holds the remote's settings.
 
@@ -215,7 +214,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `join required`, nothing moves | This machine has not joined the remote. | Press **Join and pull** on the **Sync** page. |
-| `sign-in refused` | No usable secret (your git config and keychain helper are not consulted), the token lacks push rights, the host wants another user name (GitLab: **User name** `oauth2`), or a token for a new URL is waiting for approval. | Store a token with the right scope and choose it under **Secret**, approve it in the desktop app, or use an SSH key that needs no prompt. |
+| `sign-in refused` | No usable secret (your git config and keychain helper are not consulted), the token lacks push rights, or a token for a new URL is waiting for approval. | Store a token with the right scope and choose it under **Secret**, approve it in the desktop app, or use an SSH key that needs no prompt. |
 | `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
 | `plaintext found` | A file the round would push holds what looks like a plaintext secret; nothing was pushed. | Move the value into a secret (**Ask an agent**) and retry, or **Push anyway…** if it is not a secret. |

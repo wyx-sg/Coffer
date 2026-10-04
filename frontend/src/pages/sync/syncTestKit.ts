@@ -39,7 +39,6 @@ export function makeStatus(over: Partial<SyncStatus> = {}): SyncStatus {
       url: "https://git.example.com/me/vault.git",
       branch: "main",
       secret_ref: "sync.PUSH_TOKEN",
-      username: "coffer",
       include_secret: false,
       interval_seconds: 300,
       enabled: true,
