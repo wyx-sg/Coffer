@@ -183,7 +183,7 @@ flowchart LR
 
 ## 某一轮发现明文密钥时 {#when-a-round-finds-a-plaintext-secret}
 
-一轮在推送之前，会读一遍这次推送会发布的每个文件版本：远端还没有的每个提交里改过的每个文件。它用的检测是：赋给一个名字表明是密钥的变量的值（`DB_PASSWORD=…`、`api_key: …`），或者常见的令牌格式。代码不算值：没有引号、右边带括号、逗号或分号的赋值（`token = m.group(0)`、`password=password,`）会被跳过。加密的密钥文件（`secret/*.enc`）是密文，不会被读取。
+一轮在推送之前，会读一遍这次推送会发布的每个文件版本：远端还没有的每个提交里改过的每个文件。它用的检测是：赋给一个名字表明是密钥的变量的值（`DB_PASSWORD=…`、`api_key: …`），或者常见的令牌格式。代码不算值，没有引号、只说明密钥从哪里来的右边会被跳过：带括号、逗号或分号的（`token = m.group(0)`、`password=password,`），用点连起来的名字，比如读环境变量（`const token = process.env.SPACE_TOKEN || …`、`token = args.token or …`），以及跟在 `const`、`let`、`var` 或 `self.` 后面的单个名字（`const token = accessToken`）。`<your-api-key>`、`changeme`、`dummy-…` 这类占位符也会被跳过。带引号的值始终当作值来读；常见的令牌格式（`ghp_…`、`sk-…`、`AKIA…`、`xoxb-…`）不管所在行周围是不是代码，都会被报告。加密的密钥文件（`secret/*.enc`）是密文，不会被读取。
 
 推送到远端的值会留在它的历史里、每一份克隆里，以及这两者的每一份备份里，所以发现明文密钥的一轮**什么也不推送**，并记为 `plaintext found`。从其他机器拉取照常进行，只有这台机器的推送在等待。同步页面和概览的列表会按文件、行号和键名指出每一处，从不显示值。
 

@@ -4,7 +4,9 @@ format's public prefix and a hint — no other character of it."""
 
 from __future__ import annotations
 
-from coffer.domain.plaintext_shape import mask, shape_of
+import pytest
+
+from coffer.domain.plaintext_shape import is_reference, mask, shape_of
 
 # Built at runtime so the repository's own secret scanner never sees a
 # literal that looks like a key.
@@ -34,3 +36,21 @@ def test_hints_for_code_placeholders_and_repeats() -> None:
     example = shape_of("my-example-key-123")
     assert (example.hint, example.word) == ("placeholder", "example")
     assert shape_of("aaaaaaaaaa").hint == "repeated"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("process.env.SPACE_TOKEN", True),
+        ("process.env.SPACE_TOKEN?.trim", True),
+        ("args.token", True),
+        ("page.next_page_token", True),
+        ("api.v2", True),
+        ("SPACE_TOKEN", False),
+        ("eyJ" + "hbGciOi.eyJ" + "zdWIiOi.c2lnbmF0dXJl", False),
+        ("a1b2" + "c3d4.e5f6" + "g7h8", False),
+        ("api-key.example.com", False),
+    ],
+)
+def test_a_reference_is_names_joined_by_dots(value: str, expected: bool) -> None:
+    assert is_reference(value) is expected

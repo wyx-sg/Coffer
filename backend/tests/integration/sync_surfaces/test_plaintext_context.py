@@ -71,22 +71,22 @@ def test_a_new_files_finding_is_shown_masked_with_its_shape(pair: tuple[Box, Box
 )
 def test_a_modified_files_finding_shows_its_masked_change(pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
-    mac.put(DOC, "# Orders database\n\nconst token = process.env.ORDERS_TOKEN\n")
+    mac.put(DOC, "# Orders database\n\nAPI_KEY=my-example-key-123\n")
     first = mac.round()
     assert first.status is RoundStatus.PLAINTEXT_FOUND
-    # The person checks it is code, and pushes it anyway.
+    # The person checks it is an example, and pushes it anyway.
     assert mac.run(mac.service.push_anyway(actor="user")).status is RoundStatus.PUSHED
     mac.put(
         DOC,
-        f"# Orders database\n\nconst token = process.env.ORDERS_TOKEN\ntoken: {TOKEN}\n",
+        f"# Orders database\n\nAPI_KEY=my-example-key-123\ntoken: {TOKEN}\n",
     )
     assert mac.round().status is RoundStatus.PLAINTEXT_FOUND
     with client_for(mac) as c:
         old = c.get("/sync/plaintext/context", params={"path": DOC, "line": 3}).json()
         assert old["change"] == "modified" and old["on_remote"] is True
-        (ref,) = old["lines"][2]["values"]
-        assert ref["shape"]["hint"] == "reference"
-        assert "process.env" not in old["lines"][2]["text"]
+        (example,) = old["lines"][2]["values"]
+        assert (example["shape"]["hint"], example["shape"]["word"]) == ("placeholder", "example")
+        assert "example-key" not in old["lines"][2]["text"]
 
         new = c.get("/sync/plaintext/context", params={"path": DOC, "line": 4})
         assert TOKEN not in new.text

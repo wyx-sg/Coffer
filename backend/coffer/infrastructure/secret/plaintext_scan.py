@@ -16,7 +16,7 @@ from __future__ import annotations
 import pathlib
 import re
 
-from coffer.domain.plaintext_shape import MaskedValue, mask, shape_of
+from coffer.domain.plaintext_shape import MaskedValue, is_reference, mask, shape_of
 from coffer.domain.secrets import SECRET_URI_PREFIX, cited_secret_names
 
 SECRET_KEY = re.compile(
@@ -35,7 +35,15 @@ TOKEN_SHAPES = re.compile(
 #: An unquoted value holding call, index or list punctuation is code
 #: (``token = m.group(0)``, ``password=password,``), never a literal secret.
 _CODE = re.compile(r"[()\[\],;]")
-PLACEHOLDER = re.compile(r"(?i)^(x{3,}|\*{3,}|<.*>|your[-_].*|changeme|example.*|placeholder.*)$")
+#: One bare name: in a declaration (``const token = apiToken``) or a member
+#: assignment (``self.password = password_hash``) it is a variable, not a value.
+_NAME = re.compile(r"^[A-Za-z_$][\w$]*$")
+_DECLARED = re.compile(r"\b(?:const|let|var|final|val|auto)\s+$")
+_MEMBER_KEY = re.compile(r"^(?:self|this|cls)\.")
+PLACEHOLDER = re.compile(
+    r"(?i)^(x{3,}|\*{3,}|\.{3,}|<.*>|your[-_].*|changeme|example.*|placeholder.*"
+    r"|dummy.*|redacted|replace[-_]?me.*)$"
+)
 SKILL_SUFFIXES = {".md", ".sh", ".py", ".env", ".json", ".yaml", ".yml", ".toml", ".txt"}
 MAX_BYTES = 1_000_000
 
@@ -43,6 +51,19 @@ MAX_BYTES = 1_000_000
 def usable(value: str) -> bool:
     v = value.strip()
     return bool(v) and not v.startswith((SECRET_URI_PREFIX, "$", "{{")) and not PLACEHOLDER.match(v)
+
+
+def _is_code(raw: str, m: re.Match[str]) -> bool:
+    """Whether an unquoted assigned value is code that names a value instead
+    of holding one: call, index or list punctuation, a dotted reference such
+    as an environment-variable read (``process.env.SPACE_TOKEN``,
+    ``args.token``), or a bare name a declaration or a member assignment
+    gives."""
+    value, key = m.group("value"), m.group("key")
+    if _CODE.search(value) or is_reference(value):
+        return True
+    declared = _DECLARED.search(raw[: m.start("key")]) or _MEMBER_KEY.match(key)
+    return bool(declared) and bool(_NAME.match(value))
 
 
 def line_hits(raw: str) -> list[tuple[str, str, int, int]]:
@@ -57,7 +78,7 @@ def line_hits(raw: str) -> list[tuple[str, str, int, int]]:
         key, value = m.group("key"), m.group("value")
         if not SECRET_KEY.search(key) or not usable(value):
             continue
-        if not m.group("q") and _CODE.search(value):
+        if not m.group("q") and _is_code(raw, m):
             continue
         span = (m.start("value"), m.end("value"))
         seen.append(span)
