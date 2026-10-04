@@ -13,16 +13,19 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from coffer.application.agent.native_session_service import NativeSessionService
+from coffer.application.agent.service import AgentService
 from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_state import is_running
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.native_sessions import (
+    NativeSessionNotFound,
     SessionChannel,
     SessionConversation,
     SessionPlace,
 )
+from coffer.domain.agent.types import AgentType
 from coffer.domain.chat.errors import ConversationNotFound
 from coffer.surfaces.http.chat.conversation_views import channel_binding, conversation_extras
 from coffer.surfaces.http.chat.dependencies import get_channel_places
@@ -92,17 +95,57 @@ class ChatSessionConversations:
                 continue
 
 
+class AgentConversationSessions:
+    """``ConversationSessionsPort`` over the agent kind's sessions service.
+
+    The conversation names its agent by type key; the registered agent of that
+    type owns the sessions. The index row stays the chat kind's to change.
+    """
+
+    def __init__(self, *, agents: AgentService, sessions: NativeSessionService) -> None:
+        self._agents = agents
+        self._sessions = sessions
+
+    async def _agent_uid(self, agent_key: str) -> str | None:
+        try:
+            agent_type = AgentType(agent_key)
+        except ValueError:
+            return None
+        agent = await self._agents.find_by_type(agent_type)
+        return agent.uid if agent is not None else None
+
+    async def rename(self, agent_key: str, session_id: str, title: str) -> None:
+        uid = await self._agent_uid(agent_key)
+        if uid is None:
+            return
+        try:
+            await self._sessions.rename(uid, session_id, title, sync_index=False)
+        except NativeSessionNotFound:
+            return  # the agent no longer has it (its own clean-up): index only
+
+    async def delete(self, agent_key: str, session_id: str) -> None:
+        uid = await self._agent_uid(agent_key)
+        if uid is None:
+            return
+        try:
+            await self._sessions.delete(uid, session_id, sync_index=False)
+        except NativeSessionNotFound:
+            return
+
+
 def wire_session_conversations(
     sessions: NativeSessionService,
     *,
     chat: ChatService,
     orchestrator: TurnOrchestrator,
     resources: ResourceService,
+    agents: AgentService,
 ) -> None:
-    """Join the sessions service to the turn platform (after ``wire_chat``)."""
+    """Join the sessions service and the turn platform, both ways (after ``wire_chat``)."""
     sessions.link_conversations(
         ChatSessionConversations(chat=chat, orchestrator=orchestrator, resources=resources)
     )
+    chat.link_sessions(AgentConversationSessions(agents=agents, sessions=sessions))
 
 
-__all__ = ["ChatSessionConversations", "wire_session_conversations"]
+__all__ = ["AgentConversationSessions", "ChatSessionConversations", "wire_session_conversations"]

@@ -21,6 +21,7 @@ from typing import Any
 
 from coffer.application.chat.conversation_repo import EVERY, Narrowing, page_conversations
 from coffer.application.chat.conversation_repo import ConversationRepo as ConversationRepo
+from coffer.application.chat.ports import ConversationSessionsPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
@@ -47,6 +48,11 @@ class ChatService:
     ) -> None:
         self._conversations = conversations
         self._registry = registry
+        self._sessions: ConversationSessionsPort | None = None
+
+    def link_sessions(self, sessions: ConversationSessionsPort | None) -> None:
+        """Called by the composition root once the agent kind is wired."""
+        self._sessions = sessions
 
     # ------------------------------------------------------------------
     # Conversation CRUD
@@ -145,6 +151,40 @@ class ChatService:
         """Rename a conversation.  Raises ``ConversationNotFound`` if absent."""
         await self.get_conversation(conversation_id)  # existence check
         return await self._conversations.rename(conversation_id, new_title)
+
+    async def retitle_conversation(self, conversation_id: str, *, new_title: str) -> Conversation:
+        """Rename a conversation through its agent, then in the index.
+
+        The native session is renamed first; when the agent refuses, its error
+        propagates and the index row keeps its title. A conversation with no
+        session yet is renamed in the index only.
+        """
+        conv = await self.get_conversation(conversation_id)
+        session_id = conv.agent_config.session_id
+        if session_id and self._sessions is not None:
+            await self._sessions.rename(conv.agent_key, session_id, new_title)
+        return await self._conversations.rename(conversation_id, new_title)
+
+    async def remove_conversation(
+        self,
+        conversation_id: str,
+        *,
+        cancel_turn_fn: Callable[[str], object] | None = None,
+    ) -> None:
+        """Delete a conversation through its agent, then its index row.
+
+        The turn in flight is cancelled, the native session is deleted through
+        the agent and the index row goes last. When the agent refuses, its error
+        propagates and the index row stays (the turn was already cancelled). A
+        conversation with no session yet is deleted from the index only.
+        """
+        conv = await self.get_conversation(conversation_id)
+        session_id = conv.agent_config.session_id
+        if session_id and self._sessions is not None:
+            if cancel_turn_fn is not None:
+                cancel_turn_fn(conversation_id)
+            await self._sessions.delete(conv.agent_key, session_id)
+        await self.delete_conversation(conversation_id, cancel_turn_fn=cancel_turn_fn)
 
     async def get_agent_config(self, conversation_id: str) -> AgentConfig:
         """The provider-private agent config (cwd, session id, model) for a

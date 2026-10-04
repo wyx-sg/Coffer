@@ -148,13 +148,13 @@ async def update_conversation(
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     places: ChannelPlacesPort | None = Depends(get_channel_places),  # noqa: B008
 ) -> ConversationOut:
-    """Rename a conversation.
+    """Rename a conversation through its agent, then in the index.
 
     A body that names no ``title`` changes nothing and returns the conversation
     as it stands.
     """
     if body.title is not None:
-        conv = await svc.rename_conversation(id, new_title=body.title)
+        conv = await svc.retitle_conversation(id, new_title=body.title)
     else:
         conv = await svc.get_conversation(id)
     return await _one_out(conv, resources, places)
@@ -170,11 +170,11 @@ async def delete_conversation(
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
 ) -> Response:
-    """Delete a conversation.
+    """Delete a conversation through its agent, then its index row.
 
     Any in-flight turn for this conversation is cancelled (and discarded)
     before deletion so the background task does not keep running after the row
-    is gone.
+    is gone. An agent that refuses leaves the index row in place.
     """
-    await svc.delete_conversation(id, cancel_turn_fn=orchestrator.cancel_turn)
+    await svc.remove_conversation(id, cancel_turn_fn=orchestrator.cancel_turn)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

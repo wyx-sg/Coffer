@@ -24,6 +24,8 @@ from typing import Any
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    SESSION_IN_USE,
+    SESSION_IN_USE_MESSAGE,
     STREAM_ENDED,
     STREAM_ENDED_MESSAGE,
     AgentEvent,
@@ -65,6 +67,20 @@ _CLIENT_INFO = {"name": "coffer", "title": None, "version": "0"}
 
 class _ConnectError(Exception):
     """The app-server could not open a thread for this turn."""
+
+
+class _SessionBusyError(Exception):
+    """Another process holds the thread (``-32600`` "active writer")."""
+
+
+def _is_active_writer(exc: BaseException) -> bool:
+    """The app-server's refusal of a thread another process is writing to: JSON-RPC
+    error ``-32600`` whose message names the active writer."""
+    return (
+        isinstance(exc, CodexRpcError)
+        and exc.code == -32600
+        and "active writer" in exc.rpc_message.lower()
+    )
 
 
 class CodexAppServerAdapter:
@@ -188,7 +204,10 @@ class CodexAppServerAdapter:
                 )
                 self._note_model(thread, state)
                 return (thread.get("thread") or {}).get("id") or self._resume
-            except CodexRpcError:
+            except CodexRpcError as exc:
+                if _is_active_writer(exc):
+                    # Another process holds the thread: a fresh one would fork it.
+                    raise
                 _logger.warning(
                     "codex_agent.resume_failed_retrying_fresh",
                     extra={"resume": self._resume},
@@ -219,13 +238,20 @@ class CodexAppServerAdapter:
             await rpc.notify("initialized")
             thread_id = await self._open_thread(rpc, state)
         except Exception as exc:
+            if _is_active_writer(exc):
+                raise _SessionBusyError from exc
             raise _ConnectError(str(exc)) from exc
 
         turn_params: dict[str, Any] = {
             "threadId": thread_id,
             "input": [{"type": "text", "text": prompt, "text_elements": []}],
         }
-        turn = await rpc.request("turn/start", turn_params)
+        try:
+            turn = await rpc.request("turn/start", turn_params)
+        except CodexRpcError as exc:
+            if _is_active_writer(exc):
+                raise _SessionBusyError from exc
+            raise
         return (turn.get("turn") or {}).get("id") or ""
 
     async def _stream(
@@ -303,6 +329,12 @@ class CodexAppServerAdapter:
             pump_task = asyncio.create_task(pump(rpc))
             try:
                 turn_id = await self._drive_handshake(rpc, prompt, state)
+            except _SessionBusyError:
+                # Codex's own writer lock (spec chat "Run a session in one place
+                # at a time"): the same refusal as a session open in a terminal.
+                state.terminal_emitted = True
+                yield TurnError(code=SESSION_IN_USE, message=SESSION_IN_USE_MESSAGE)
+                return
             except _ConnectError as exc:
                 # No thread could be opened (a forgotten resume already had its
                 # one fresh retry): a turn error, not an unhandled raise.

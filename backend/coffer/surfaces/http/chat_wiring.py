@@ -41,6 +41,7 @@ from coffer.infrastructure.agent.model_discovery import (
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.persistence import ConversationRepo
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
+from coffer.infrastructure.chat.session_in_use import ProcessSessionInUse
 from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS, ProviderIntrospector
 from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
@@ -225,7 +226,10 @@ def wire_chat(
         registry=registry,
     )
     orchestrator = TurnOrchestrator(
-        chat_service=chat_svc, registry=registry, idle_timeout=_turn_idle_timeout()
+        chat_service=chat_svc,
+        registry=registry,
+        idle_timeout=_turn_idle_timeout(),
+        session_in_use=ProcessSessionInUse(),
     )
 
     # 6. Provider introspection (test-connection + list-models). The OpenAI-

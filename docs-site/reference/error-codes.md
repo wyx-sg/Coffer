@@ -140,6 +140,8 @@ give the status each code is actually sent with.
 | `PLUGIN_UNINSTALL_FAILED` | 422 | The agent's own uninstall command failed. | Read `message`; run the uninstall yourself. |
 | `FS_PATH_NOT_BROWSABLE` | 400 | A folder-picker path is missing, not a directory, or unreadable. | Pick another folder. |
 | `FS_PATH_NOT_OPENABLE` | 400 | An open or reveal target is not absolute, does not exist, or the launch failed. | Check the path and the preferred editor setting. |
+| `FS_TERMINAL_INVALID` | 400 | A request to open an agent session in a terminal cannot become a command: an unknown agent, a session id with characters other than letters, digits and dashes, a relative directory, both or neither of `resume` and `prompt`, or a terminal template without `{command}`. Nothing was started. | Fix the field `message` names; check the preferred terminal setting. |
+| `FS_TERMINAL_FAILED` | 502 | The terminal could not be started: the launcher is not installed, would not start, or the host has no terminal to use. | Read `message`; pick another terminal in the preferred terminal setting. |
 | `AGENT_TYPE_UNSUPPORTED` | 400 | This agent type has no native sessions Coffer can list, rename or delete. | None for this agent; open its sessions in the agent itself. |
 | `NATIVE_SESSION_NOT_FOUND` | 404 | The agent lists no session with that id. Nothing changed. | Refresh the Sessions tab; the session may already be deleted. |
 | `NATIVE_SESSION_INVALID` | 400 | The session id is not shaped like one, the new title is empty, or the agent refused the operation as malformed. Nothing changed. | Read `message`; pick a session from the list and give a non-empty title. |
@@ -197,6 +199,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | No conversation with that id. | Refresh the conversation list. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
+| `SESSION_IN_USE` | 409 | A turn would resume a session that is open in a terminal outside Coffer. Channels show this as a reply instead; the message is not retried. | Continue in that terminal, or send `/thread` to start a new conversation. |
 | `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add the agent on the Agents page. |
 | `QUESTION_CLOSED` | 409 | An answer to a question the agent asked that is no longer waiting: it was already answered (the first answer wins), cancelled, or its turn ended. Nothing changed. | Refresh the conversation; the card shows the answer that was taken. |
 | `QUESTION_ANSWER_INVALID` | 422 | An answer that does not fit its question: an option the question does not offer, several options on a single-choice question, or no answer at all. | Choose from the options, or type an answer. |

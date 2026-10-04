@@ -234,6 +234,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat=chat.chat_service,
         orchestrator=chat.orchestrator,
         resources=resource_svc,
+        agents=kinds.agent_skill.agent_service,
     )
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors

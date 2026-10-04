@@ -158,3 +158,30 @@ class ChannelPlacesPort(Protocol):
         a channel opened; the others are absent. A constant number of reads
         whatever the number of ids — the listing calls it once per page."""
         ...
+
+
+class ConversationSessionsPort(Protocol):
+    """A conversation's native session, renamed and deleted through its agent
+    (spec chat "Rename and delete a conversation through its agent").
+
+    Declared here, by the kind that consumes it; the composition root satisfies
+    it with the agent kind's sessions service, so chat never imports the agent
+    kind. Both operations act on the agent's own record only: the caller owns
+    the index row. A session the agent no longer has, or an agent that is not
+    registered, is a no-op (there is nothing to change on the agent's side); an
+    agent that refuses raises its own error, which the caller lets through.
+    """
+
+    async def rename(self, agent_key: str, session_id: str, title: str) -> None: ...
+
+    async def delete(self, agent_key: str, session_id: str) -> None: ...
+
+
+class SessionInUsePort(Protocol):
+    """Whether a native session is being continued somewhere else (spec chat
+    "Run a session in one place at a time")."""
+
+    async def in_use(self, session_id: str) -> bool:
+        """True when a process outside the daemon's own process tree has
+        ``session_id`` among its arguments."""
+        ...

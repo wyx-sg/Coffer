@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
 
+#: What the chat is told when a session is open in a terminal (spec chat "Run a
+#: session in one place at a time"), word for word.
+SESSION_IN_USE_MESSAGE = (
+    "This session is open in a terminal — continue there, or send /thread to start a new one."
+)
+
 
 class ConversationNotFound(CofferError):  # noqa: N818
     code = "CONVERSATION_NOT_FOUND"
@@ -16,6 +22,18 @@ class ConversationNotFound(CofferError):  # noqa: N818
     def __init__(self, conversation_id: str) -> None:
         super().__init__(f"conversation not found: {conversation_id!r}")
         self.conversation_id = conversation_id
+
+
+class SessionInUse(CofferError):  # noqa: N818
+    """A turn would resume a native session that is open outside the daemon (a
+    terminal); it is refused rather than forked (spec chat "Run a session in one
+    place at a time"). Raised only to a caller that has no chat to tell."""
+
+    code = "SESSION_IN_USE"
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(SESSION_IN_USE_MESSAGE)
+        self.session_id = session_id
 
 
 class UnknownAgent(CofferError):  # noqa: N818

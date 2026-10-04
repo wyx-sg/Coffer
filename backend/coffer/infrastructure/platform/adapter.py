@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coffer.application.platform_port import PlatformPort, PrivilegedPaths
-from coffer.infrastructure.platform import desktop, host, paths
+from coffer.application.platform_port import PlatformPort, PrivilegedPaths, TerminalLaunch
+from coffer.infrastructure.platform import desktop, host, paths, terminals
 
 
 class HostPlatform:
@@ -28,6 +28,12 @@ class HostPlatform:
 
     def editor_launch_value(self, *, app_bundle: str | None, command: str | None) -> str | None:
         return desktop.editor_launch_value(app_bundle=app_bundle, command=command)
+
+    def terminal_launch_value(self, *, app_bundle: str | None, command: str | None) -> str | None:
+        return terminals.terminal_launch_value(app_bundle=app_bundle, command=command)
+
+    def terminal_launch(self, launcher: str | None, *, command: str, cwd: str) -> TerminalLaunch:
+        return terminals.terminal_launch(launcher, command=command, cwd=cwd)
 
 
 def _conforms(p: HostPlatform) -> PlatformPort:

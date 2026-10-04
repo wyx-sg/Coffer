@@ -133,6 +133,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `PLUGIN_UNINSTALL_FAILED` | 422 | 智能体自己的卸载命令失败了。 | 阅读 `message`；自己运行卸载。 |
 | `FS_PATH_NOT_BROWSABLE` | 400 | 文件夹选择器的路径不存在、不是目录或不可读。 | 选另一个文件夹。 |
 | `FS_PATH_NOT_OPENABLE` | 400 | 要打开或显示的目标不是绝对路径、不存在，或启动失败。 | 检查路径和首选编辑器设置。 |
+| `FS_TERMINAL_INVALID` | 400 | 在终端里打开智能体会话的请求无法变成命令：智能体未知、会话 id 含字母、数字和连字符以外的字符、目录是相对路径、`resume` 与 `prompt` 同时给出或都没给，或终端模板里没有 `{command}`。没有启动任何东西。 | 修正 `message` 指出的字段；检查首选终端设置。 |
+| `FS_TERMINAL_FAILED` | 502 | 终端启动失败：启动器没有安装、无法启动，或这台机器上没有可用的终端。 | 阅读 `message`；在首选终端设置里换一个终端。 |
 | `AGENT_TYPE_UNSUPPORTED` | 400 | 这个类型的智能体没有 Coffer 能列出、重命名或删除的原生会话。 | 无；请在该智能体自己的界面里打开它的会话。 |
 | `NATIVE_SESSION_NOT_FOUND` | 404 | 该智能体没有列出这个 id 的会话。没有任何改动。 | 刷新「会话」标签页；该会话可能已被删除。 |
 | `NATIVE_SESSION_INVALID` | 400 | 会话 id 的格式不对、新标题为空，或智能体把该操作当作格式错误拒绝了。没有任何改动。 | 阅读 `message`；从列表中选一个会话，并给出非空标题。 |
@@ -190,6 +192,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | 没有这个 id 的对话。 | 刷新对话列表。 |
 | `UNKNOWN_AGENT` | 400 | 对话所用的智能体没有注册智能体提供方。 | 从 `GET /api/v1/agent-providers` 中选择一个智能体。 |
+| `SESSION_IN_USE` | 409 | 这一轮要恢复的会话正在 Coffer 之外的终端里打开。渠道会把它显示成一条回复；该消息不会重试。 | 在那个终端里继续，或发送 `/thread` 开始一个新对话。 |
 | `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加该智能体。 |
 | `QUESTION_CLOSED` | 409 | 对智能体所提问题的回答来晚了：该问题已被回答（先到的回答生效）、已取消，或其任务已结束。没有任何改动。 | 刷新对话；卡片会显示已采用的回答。 |
 | `QUESTION_ANSWER_INVALID` | 422 | 回答与问题不符：选了问题没有的选项、单选问题选了多个选项，或根本没有回答。 | 从选项中选择，或输入回答。 |
