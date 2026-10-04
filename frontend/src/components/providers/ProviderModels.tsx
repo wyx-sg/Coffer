@@ -24,7 +24,7 @@ import type { ProviderUse } from "@/lib/providers/usedBy";
 import { formatRelativeTime } from "@/components/agents/list/relativeTime";
 import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { providerPriceSource } from "@/lib/providers/priceSource";
 import { ModelPriceCell } from "./ModelPriceCell";
 import { ModelsRefresh } from "./ModelsRefresh";
@@ -170,12 +170,14 @@ export function ProviderModels({
                     {t("providers.models.turnAllOn")}
                   </Button>
                   {cur.wouldEmpty(rows) ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span tabIndex={0}>{offButton}</span>
-                      </TooltipTrigger>
-                      <TooltipContent>{t("providers.models.keepOne")}</TooltipContent>
-                    </Tooltip>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0}>{offButton}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("providers.models.keepOne")}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   ) : (
                     offButton
                   )}
