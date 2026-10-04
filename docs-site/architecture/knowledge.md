@@ -174,7 +174,7 @@ Code enforces none of these rules. They are prose in the skill, and the guard ag
 
 The daemon writes the prompt, from the same hand-off module every other hand-off uses. Reading a collection carries `tidy_handoff`, which names the collection, gives its absolute path and its document count, and tells the agent to follow the guide's "Tidying a collection" section. A second route returns the same kind of prompt for every collection at once: it names the knowledge root and each collection with its path and count, and asks the agent to tidy them one at a time.
 
-The web UI offers **Tidy** on a collection's page and **Tidy all** in the Knowledge page's header. Pressing either opens a new conversation on the default managed agent with that prompt and **sends it at once**, landing on the conversation. With no managed agent available the button offers **Copy prompt** only. Every other hand-off in the app seeds a draft and waits for the person to press send; Tidy is the one that sends, because the person pressed a button named for the job, the prompt only edits Coffer's own files, and the tree is recoverable from its history.
+The web UI offers **Tidy** on a collection's page and **Tidy all** in the Knowledge page's header. Pressing either starts the default hand-off agent in the preferred terminal with that prompt as its first message, through the same path as every other hand-off. With no managed agent available the button offers **Copy prompt** only. The person pressed a button named for the job, the prompt only edits Coffer's own files, and the tree is recoverable from its history.
 
 ### Nothing tidies unattended
 

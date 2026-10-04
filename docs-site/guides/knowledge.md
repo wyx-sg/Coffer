@@ -158,7 +158,7 @@ Knowledge → choose the collection → Tidy
 Knowledge → Tidy all   (every collection, one after another)
 ```
 
-**Tidy** opens a new conversation on your default managed agent, with a prompt that names the collection and its folder, and **sends it at once**. You land on the conversation and can watch the agent work. **Tidy all**, in the Knowledge page's header, sends one prompt that names every collection and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into whichever agent you use.
+**Tidy** starts your default hand-off agent in your preferred terminal, with a prompt that names the collection and its folder as its first message. You watch the agent work in the terminal. **Tidy all**, in the Knowledge page's header, sends one prompt the same way that names every collection and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into whichever agent you use.
 
 The prompt points the agent at the **Tidying a collection** section of the `coffer-guide` skill. Following it, the agent works through one collection at a time:
 
@@ -229,7 +229,7 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 Every change to a collection is kept as a version: your saves and deletes, an upload or dropped file that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools — which is how a tidy shows up. Each change names its **writer** — `user`, `agent`, `sync` or `disk` (and `curation` on versions an earlier Coffer wrote) — so you can always tell who changed what.
 
-The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the history reads are refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab (*History needs git*) and **Recent changes** (*Recent changes needs git*) show one row with **Check again** and **Ask an agent ▾** — its menu copies the prompt.
+The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the history reads are refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab (*History needs git*) and **Recent changes** (*Recent changes needs git*) show one row with **Check again** and **Hand off to &lt;Agent&gt; ▾** — its menu copies the prompt.
 
 ### Look at a document's history
 

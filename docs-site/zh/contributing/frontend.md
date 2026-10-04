@@ -42,7 +42,7 @@ src/i18n/locales/{en,zh}.json     copy under the top-level "x" key
 - 组件从不直接调用 `useQuery` 或 `useMutation`，而是调用 `src/lib/hooks/` 里的某个 hook。[`useSkills.ts`](https://github.com/wyx-sg/Coffer/blob/main/frontend/src/lib/hooks/useSkills.ts) 是一个紧凑的例子。
 - 各资源类型遵循同样的布局。没有按类型划分的注册表。
 - 导入只向下指：`pages` 到 `components` 再到 `lib`。`src/lib/**` 不得导入 `src/components/**` 或 `src/pages/**`，`src/components/**` 不得导入 `src/pages/**`，由 ESLint 强制。两层都要用的类型或纯函数（状态色调、触达模式、保存编排）放在 `lib/`。唯一的例外是 `useToast`，它是变更 hook 要调用的界面原语 hook。多个测试套件共用的测试工具放在 `src/test/`。
-- 共享原语放在 `src/components/ui/`，共享的界面组件（`PageHeader`、`DataTable`、`EmptyState`）放在 `src/components/`。复用已有的跨功能工具：`lib/agents/display.ts` 和 `lib/chat/turnErrors.ts`。
+- 共享原语放在 `src/components/ui/`，共享的界面组件（`PageHeader`、`DataTable`、`EmptyState`）放在 `src/components/`。复用已有的跨功能工具：`lib/agents/display.ts`。
 - 路由在 `router.tsx` 里用 `lazyPage()` 做代码分割。列表页立即加载。详情页，以及任何引入编辑器或 markdown 处理流水线的页面，在第一次访问时加载。
 - 出于历史原因保留了一个命名例外：MCP 服务器列表是 `pages/ResourcesPage.tsx`，路由为 `mcp-servers`。
 - 实验功能的页面包在 `FeatureGate` 里。当该功能在本机被关闭时，它渲染“未找到”页面，因为关闭的功能看起来就像不存在：它的侧边栏和命令面板入口通过同一份注册表被略去，没有提示，也没有“开启”按钮。见[实验功能](/zh/guides/experimental-features)。
@@ -59,8 +59,6 @@ src/i18n/locales/{en,zh}.json     copy under the top-level "x" key
 - **没有手写的传输类型。** `src/lib/api/x.ts` 中的传输类型是生成 schema 的别名，比如 `components["schemas"]["ProviderOut"]`。当契约与后端实际发送的内容不符时，修复后端模型并重新生成，永远不要改 TypeScript。`codegen:check` 会拒绝这些模块以及 `src/lib/hooks/` 下导出的 interface，或拼写出对象形状的 type，也拒绝 `unwrap*` 调用上的对象字面量类型参数。从不跨越传输层的类型要带一个 `@ui-only` 标签说明这一点；该标签是唯一的豁免。
 
 错误统一收敛到 `ApiError(code, message)`。用 `translateApiError(t, error)` 显示它们，它会在文案目录里查找 `errors.<CODE>`，找不到就退回到服务端的消息。永远不要显示原始错误字符串。
-
-聊天流式传输是唯一绕开 TanStack Query 的路径。它使用 `src/lib/chat/streamClient.ts` 中一个类型化的异步生成器。它的事件在 `useChatTurn` 和 `lib/hooks/chatTurnEvents.ts` 中归约成视图状态，而不是在组件里。
 
 ## Query key 与 hook {#query-keys-and-hooks}
 
@@ -133,7 +131,7 @@ token 来自 [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/bl
 | `DataTable` | 唯一的列表表格。传入 `isLoading`，让表头在骨架行上方保持挂载；传入 `emptyAction` 作为行动号召。每张表格上生效范围列的表头都是 `resources.cols.reach` |
 | 生效范围 | 处处是三种模式：**关闭**、**所有智能体**、**指定智能体**。控件在你修改时就保存，触发按钮显示徽标，从不显示“N / M 个智能体”。列表上没有生效范围筛选：行上显示徽标，列表按状态分组 |
 | 密钥 | 只来自 Coffer。`SecretField` 选一个已存的密钥，或接受一个粘贴的值并随表单存到密钥页面；请求头或环境变量的行（`KeyValueSecretRows`）是明文，字段末尾有 🔑 选择器。没有密钥/明文切换、没有替换按钮、没有“已存储”徽标 |
-| 交接 | 一个拆分按钮，**交给智能体 ▾**（`AgentHandoff`）：按钮打开一个草稿对话，▾ 菜单里是**复制提示词**。提示词始终来自守护进程。Coffer 自己能做的事（重试、测试、重新检查）从不使用它 |
+| 交接 | 一个拆分按钮，**交给 &lt;Agent&gt; ▾**（`AgentHandoff`）：按钮在首选终端里启动默认的交接智能体并把提示词作为第一条消息，▾ 菜单里是另一个智能体和**复制提示词**。提示词始终来自守护进程。Coffer 自己能做的事（重试、测试、重新检查）从不使用它 |
 | 抽屉 | 640 宽，从标题栏下方开始 |
 | 提示（toast） | 一个标题，可选再带第二行（`description`），说明保留了什么或添加了什么 |
 | `EmptyState` | 每一个空列表、未找到页面和零结果搜索：图标、标题、描述、操作 |
@@ -151,7 +149,7 @@ token 来自 [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/bl
 界面通过 `src/i18n/locales/en.json` 和 `zh.json` 提供英文和简体中文。英文是回退语言。这是一项产品功能。文档站和 README 也是双语的；仓库里的其他文档都只有英文（见[参与贡献](/zh/contributing/#docs-site-in-two-languages)）。
 
 - 每一个面向用户的字符串都经过 `t(...)`，包括 `aria-label`。
-- key 是功能顶层 key 下嵌套的 camelCase 路径，比如 `chat.composer.placeholder`。
+- key 是功能顶层 key 下嵌套的 camelCase 路径，比如 `handoff.promptCopied`。
 - 在同一个改动里把每个 key 同时加到**两份**文案目录。`src/i18n/locales.test.ts` 会让任何只存在于一份目录中的 key 失败。
 - 后端错误码和审计事件类型也需要条目：每个错误对应一个 `errors.<CODE>`。当你新增一个 `CofferError` 子类或 `AuditEventType` 时，重新生成对等测试读取的 fixture：
 

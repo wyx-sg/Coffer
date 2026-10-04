@@ -43,7 +43,7 @@ The time range offers **Last hour**, **Last 24 h**, **Last 7 days**, **Last 30 d
 
 On the **Daemon log** a row opens in place instead, under its own line, with its traceback, **Copy record** and, when the record names a server and a tool, **Show the tool call**, which switches to Tool calls searching for that call.
 
-**Handing a failure to an agent.** Only a failure that depends on this machine offers **Ask an agent ▾**: a call whose server never answered, in its drawer, and an opened daemon error about an external service or the environment. A denied call, an error the server itself returned and a Coffer-internal error offer no hand-off; such a daemon error offers **Copy record** alone.
+**Handing a failure to an agent.** Only a failure that depends on this machine offers **Hand off to &lt;Agent&gt; ▾**: a call whose server never answered, in its drawer, and an opened daemon error about an external service or the environment. A denied call, an error the server itself returned and a Coffer-internal error offer no hand-off; such a daemon error offers **Copy record** alone.
 
 **New records arrive on their own.** While you are at the top of the list with nothing open, new records appear at the top as they are written. Once you scroll down or open a record the list holds still, and an **↑ N new** button counts what is waiting; choose it, or scroll back to the top, to bring them in. There is no pause or refresh button. A tab whose log fails to load shows one warning banner with the error and **Retry** for that log only; the other records keep working, and on Everything the banner says which records below are complete.
 

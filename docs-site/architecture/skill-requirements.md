@@ -37,7 +37,7 @@ Coffer is AI-native: a chore that depends on the machine — installing, setting
 
 - **A hand-off is a task, some facts and some steps**, and one shared renderer, in the domain layer, turns it into the prompt. A feature supplies what it knows; the renderer writes one task sentence, the facts as `-` lines, the steps one per line, and then the rules every hand-off ends with — check with the person before anything that needs `sudo` or changes system settings, and leave any login to the person without handling their credentials.
 - **The prompt is built on the daemon** and served on the feature's own REST response as `handoff: {prompt}` (one schema shared by every feature) so the prompt a person copies is the one the page offers.
-- **The web UI shows it with one shared component**: **Ask an agent**, which opens a new conversation with a Coffer-managed agent with the prompt in the composer, and its menu's **Copy prompt**. The person presses Send; nothing is sent for them, because a managed agent runs with full permissions. With no managed agent available — the agent that is missing is the one that would be asked, or none is added yet — only Copy prompt is offered.
+- **The web UI shows it with one shared component**: **Hand off to &lt;Agent&gt;**, which starts the default hand-off agent in the preferred terminal with the prompt as its first message, and its menu's **Copy prompt**. The prompt travels in a private temporary file, and the agent runs in the person's terminal under its own permission mode. With no managed agent available — the agent that is missing is the one that would be asked, or none is added yet — only Copy prompt is offered.
 - **The attention list carries it too.** An attention item whose fix is a chore has an optional `handoff`, the same prompt its kind's page offers, and a reason sentence that names no command. The Overview's Needs you row offers it in the row's ⋯ menu.
 
 For a required command the facts are:
@@ -53,7 +53,7 @@ A `ready` command carries no prompt. Use a hand-off when the chore is open-ended
 ## Trade-offs
 
 - **The login check runs a declared subcommand on the user's machine.** It is the tool the skill already tells the agent to run, restricted to that tool and run without a shell; the alternative — never checking login — leaves the most common failure invisible.
-- **An agent installs with full permissions.** The prompt asks it to check with the person before anything elevated, and **Ask an agent** only fills the composer, so the person reads the request before it is sent.
+- **An agent installs in the person's terminal.** The prompt asks it to check with the person before anything elevated, and **Hand off to &lt;Agent&gt;** runs the agent under its own permission mode where the person can watch it and stop it with Esc or Ctrl-C.
 - **A minimum written unquoted in YAML** (`2.40`) is parsed as a number and would compare as `2.4`; Coffer refuses it with a warning instead of guessing.
 
 ## Related

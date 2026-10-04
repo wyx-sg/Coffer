@@ -217,7 +217,7 @@ While the memory feature is on, the guide's memory section tells the agent to wo
 
 The daemon writes the prompt. Reading a partition carries `tidy_handoff`, which names the partition, its absolute directory and the guide section to follow. `GET /api/v1/memory/tidy-handoff` returns one prompt for every partition: it names the memory root and each partition with its notes directory and note count, and asks the agent to tidy them one at a time.
 
-The web UI offers **Tidy** on a partition's page and **Tidy all** in the Memory page's header. Each opens a new conversation on the default managed agent with that prompt and sends it at once. With no managed agent available it offers **Copy prompt** only. Nothing tidies a partition unattended: the aggregate and distil timers keep running, but they never merge or retire a note on their own.
+The web UI offers **Tidy** on a partition's page and **Tidy all** in the Memory page's header. Each starts the default hand-off agent in the preferred terminal with that prompt as its first message, through the same path as every other hand-off. With no managed agent available it offers **Copy prompt** only. Nothing tidies a partition unattended: the aggregate and distil timers keep running, but they never merge or retire a note on their own.
 
 ## The index line
 

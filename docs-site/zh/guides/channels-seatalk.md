@@ -35,7 +35,7 @@ Coffer 通过**每个消息渠道一条出站 WebSocket 连接**接收 SeaTalk �
 ## 2. 提供 WebSocket SDK {#_2-supply-the-websocket-sdk}
 
 1. 从 SeaTalk 开放平台下载 SeaTalk 用于 WebSocket 事件回调的 Python SDK。包名是 `seatalk_oapi_sdk`；见 SeaTalk 的 [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) 文档。下载这一步由你来做，因为它在平台的登录之后。
-2. 其余的交给你的智能体。消息渠道登记好之后（第 3 步），等待 SDK 的消息渠道会显示**未安装 SeaTalk 的 Python SDK**，链接到 SeaTalk 的下载页面，并提供**交给智能体**（它的菜单可复制提示词；没有 Coffer 托管的智能体可用时只提供**复制提示词**）：一段让智能体把压缩包解压到 Coffer vendor 目录的提示词。放好之后点**重试**。
+2. 其余的交给你的智能体。消息渠道登记好之后（第 3 步），等待 SDK 的消息渠道会显示**未安装 SeaTalk 的 Python SDK**，链接到 SeaTalk 的下载页面，并提供**交给 &lt;Agent&gt;**（它的菜单可复制提示词；没有 Coffer 托管的智能体可用时只提供**复制提示词**）：一段让智能体把压缩包解压到 Coffer vendor 目录的提示词。放好之后点**重试**。
 
 Coffer 只在 SeaTalk 消息渠道启动时才导入 SDK，从不在守护进程启动时导入；SDK 缺失时它会一直重试。你可以在登记消息渠道之前或之后添加 SDK；已经在等待的消息渠道不用重启守护进程就能用上它。
 

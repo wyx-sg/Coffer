@@ -88,12 +88,12 @@ Check with me before running anything that needs sudo or changes system settings
 If a login is needed, tell me how and I will log in myself; do not handle my credentials.
 ```
 
-A launcher adds the servers that start with it (`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``). A command that is too old gets the same prompt asking for an update, with the version found and where. The prompt names no install command: choosing one is the agent's job. The command's page and the skill's **Requires** tab offer one split button, **Ask an agent ▾**:
+A launcher adds the servers that start with it (`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``). A command that is too old gets the same prompt asking for an update, with the version found and where. The prompt names no install command: choosing one is the agent's job. The command's page and the skill's **Requires** tab offer one split button, **Hand off to &lt;Agent&gt; ▾**:
 
-- **Ask an agent** — a new [conversation](/guides/chat) opens as a draft with the prompt already in the message box; its agent and folder are pickers in the reply box, defaulting to the last you used.
-- **Copy prompt**, in the ▾ menu — paste it into whichever agent you use, in a terminal or an IDE. A toast reads "Prompt copied".
+- **Hand off to &lt;Agent&gt;** — starts your default hand-off agent in your [preferred terminal](/guides/web-ui#settings) with the prompt as its first message. The prompt reaches the agent through a private temporary file, never the command line or shell history. Pick the agent and the terminal under **Settings › General**.
+- **Hand off to the other agent**, in the ▾ menu when it is available, and **Copy prompt** — paste it into whichever agent you use, in a terminal or an IDE. A toast reads "Prompt copied".
 
-The first one **Nothing is sent until you press Send**: a managed agent runs with full permissions, so read what it is about to be asked first. Without a managed agent on this machine only Copy prompt is offered.
+Pressing the button asks for no confirmation. The agent runs in your own terminal under its own permission mode, with the prompt in plain view, and Esc or Ctrl-C stops it. Without a managed agent on this machine only Copy prompt is offered.
 
 When the agent is done, press **Check again**.
 
