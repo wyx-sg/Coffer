@@ -1,6 +1,6 @@
 // src/components/secret/ApprovalsTable.tsx — the changes waiting for approval as one bordered table, and the same table with each one's result.
 //
-// Columns: [checkbox] · Change (New value / New secret / New use) · Secret · Goes to · Requested by
+// Columns: [checkbox] · Change (New use / Turn off protection) · Secret · Goes to · Requested by
 // · At — or, after approving, Change · Secret · Goes to · Result. The header box selects every
 // change. A change sent somewhere says where (kind, name and the slot it fills) and, when the
 // daemon names one, the target that receives it.
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import type { Approval, ApprovalBatchResult, SecretRef } from "@/lib/api/secret";
 import { formatClock, formatUsDay } from "@/lib/time";
-import { approvalSecretName, citersOf } from "./secretRows";
+import { approvalSecretName } from "./secretRows";
 import { useKindLabel } from "./useKindLabel";
 
 /** "14:03" for today, "Sep 29, 14:03" for another day. */
@@ -32,22 +32,11 @@ function when(iso: string, lang: string): string {
     : `${formatUsDay(d, lang, d.getFullYear() !== now.getFullYear())}, ${clock}`;
 }
 
-function useGoesTo(rows: readonly SecretRef[]) {
+function useGoesTo() {
   const { t } = useTranslation();
   const kindLabel = useKindLabel();
   return (a: Approval): { text: string; detail: string | null } => {
-    if (a.op === "add_secret") return { text: t("secrets.approvals.nothingYet"), detail: null };
     if (a.op === "disable_protection") return { text: "—", detail: null };
-    if (a.op === "replace_value") {
-      const row = rows.find((r) => r.ref === a.ref);
-      const names = row ? citersOf(row).map((c) => c.name) : [];
-      return {
-        text: names.length
-          ? t("secrets.approvals.usedBy", { names: names.join(", ") })
-          : t("secrets.usedBy.nothing"),
-        detail: null,
-      };
-    }
     const where = [a.destination_kind && kindLabel(a.destination_kind), a.destination_label]
       .filter(Boolean)
       .join(" ");
@@ -70,7 +59,7 @@ interface ListProps {
 
 export function ApprovalsList({ approvals, rows, selected, onToggle, onToggleAll }: ListProps) {
   const { t, i18n } = useTranslation();
-  const goesTo = useGoesTo(rows);
+  const goesTo = useGoesTo();
   const ticked = approvals.filter((a) => selected.has(a.id)).length;
   return (
     <div className="max-h-[56vh] overflow-hidden rounded-xl border border-border bg-surface-raised">
@@ -145,7 +134,7 @@ interface ResultProps {
 
 export function ApprovalsResult({ approvals, rows, results }: ResultProps) {
   const { t } = useTranslation();
-  const goesTo = useGoesTo(rows);
+  const goesTo = useGoesTo();
   return (
     <div className="max-h-[56vh] overflow-hidden rounded-xl border border-border bg-surface-raised">
       <Table containerClassName="max-h-[56vh]" className="table-fixed">

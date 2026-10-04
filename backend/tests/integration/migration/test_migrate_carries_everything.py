@@ -10,7 +10,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from cryptography.fernet import Fernet
 
 from coffer.domain.vault.document import ResourceDocument, parse_resource
 from coffer.domain.vault.writers import parse_meta
@@ -124,8 +123,8 @@ def test_the_boundary_keeps_bindings_approvals_and_switches(legacy: LegacyHome) 
     boundary = FileBoundaryStore(legacy.home)
     assert [b.approval_id for b in boundary.bindings("provider/anthropic")] == ["ap-1"]
     assert boundary.get_approval("ap-1").status == "approved"  # type: ignore[union-attr]
-    pending = boundary.pending_ciphertext("ap-2")
-    assert pending is not None and Fernet(legacy.key).decrypt(pending) == b"new"
+    # A value awaiting approval is stored at once now, so that approval is not carried.
+    assert boundary.get_approval("ap-2") is None
     assert boundary.get_setting("protection") == "on"
 
 
@@ -204,7 +203,7 @@ def test_history_rows_are_in_runs_db_keyed_to_uids(legacy: LegacyHome) -> None:
     _migrate(legacy)
     assert not legacy.db.exists()
     with sqlite3.connect(legacy.coffer / "runs.db") as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0145",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0146",)
         assert conn.execute("SELECT id, resource_uid FROM audit_log ORDER BY id").fetchall() == [
             (1, UIDS["github"]),
             (2, UIDS["tg"]),

@@ -57,18 +57,15 @@ def test_a_ciphertext_from_another_key_is_listed_as_locked(d: BoundaryDaemon) ->
 
 
 @pytest.mark.acceptance(
-    spec="secret", scenario="a value added for a locked secret replaces it once approved"
+    spec="secret", scenario="a value added for a locked secret replaces it at once"
 )
-def test_a_value_added_for_a_locked_secret_replaces_it_once_approved(d: BoundaryDaemon) -> None:
+def test_a_value_added_for_a_locked_secret_replaces_it_at_once(d: BoundaryDaemon) -> None:
     _plant_foreign_ciphertext(d, "secret/sentry-token")
 
     r = d.client.post("/api/v1/secrets", json={"ref": "secret/sentry-token", "value": "sntrys_new"})
 
-    assert r.status_code == 202, r.text
-    approval = r.json()["approval"]
-    assert approval["op"] == "replace_value"
-    assert _listed(d)["secret/sentry-token"]["locked"] is True
-    d.approve(approval["id"])
+    assert r.status_code == 204, r.text
+    assert d.pending() == []
     assert _listed(d)["secret/sentry-token"]["locked"] is False
     assert d.value("secret/sentry-token") == "sntrys_new"
 
@@ -103,12 +100,6 @@ def test_a_file_that_cannot_be_rewritten_keeps_its_key_and_says_so(d: BoundaryDa
     before = env.read_text()
     secrets.chmod(0o500)
     try:
-        # A new standalone secret waits for a person, so the first import only asks.
-        first = d.client.post("/api/v1/secrets/import", json={})
-        assert first.status_code == 200, first.text
-        assert "waits for approval" in first.json()["skipped"][0]["reason"]
-        for waiting in d.pending(op="add_secret"):
-            d.approve(waiting["id"])
         r = d.client.post("/api/v1/secrets/import", json={})
         assert r.status_code == 200, r.text
         out = r.json()

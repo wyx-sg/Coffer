@@ -2,7 +2,7 @@
 //
 // Pure and computed once per change over the whole set (the page batches only what it
 // renders), so search and filters answer instantly at a thousand secrets. The default order is
-// layout principle 12: what needs you (no value on this Mac, a change waiting) first, then by name.
+// layout principle 12: what needs you (no value on this Mac, a destination waiting) first, then by name.
 import type { SecretRef } from "@/lib/api/secret";
 import type { SecretListState, SecretStatus } from "@/lib/secrets/listState";
 import { citersOf, hasPendingBinding, isMissingHere, shortName } from "./secretRows";
@@ -11,17 +11,17 @@ import { citersOf, hasPendingBinding, isMissingHere, shortName } from "./secretR
 export interface SecretItem {
   row: SecretRef;
   short: string;
-  /** A new value, a new secret or a new destination waits for approval. */
+  /** A new destination waits for approval. */
   pending: boolean;
   /** This Mac has no value to hand out. */
   missing: boolean;
 }
 
-export function decorate(rows: readonly SecretRef[], waiting: ReadonlySet<string>): SecretItem[] {
+export function decorate(rows: readonly SecretRef[]): SecretItem[] {
   return rows.map((row) => ({
     row,
     short: shortName(row),
-    pending: waiting.has(row.ref) || hasPendingBinding(row),
+    pending: hasPendingBinding(row),
     missing: isMissingHere(row),
   }));
 }

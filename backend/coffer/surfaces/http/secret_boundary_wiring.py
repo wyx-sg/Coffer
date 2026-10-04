@@ -94,11 +94,6 @@ def optional_secret_boundary() -> SecretBoundary | None:
     return _boundary
 
 
-def awaiting_secret_value(ref: str) -> bool:
-    """Whether ``ref``'s new value waits for a person's approval (it may be cited meanwhile)."""
-    return _boundary is not None and _boundary.awaiting_value(ref)
-
-
 def get_presence_grants() -> PresenceGrants:
     if _grants is None:
         raise RuntimeError("presence grants not initialised")
@@ -265,7 +260,6 @@ __all__ = [
     "ResourceBindingSettler",
     "approval_applied",
     "approval_out",
-    "awaiting_secret_value",
     "boundary_resolver",
     "current_destinations",
     "get_presence_grants",

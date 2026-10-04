@@ -97,11 +97,10 @@ consulted from the synchronous resolve path.
 | Approval field | Notes |
 | -------------- | ----- |
 | `id` | the approval id |
-| `op` | `bind` \| `add_secret` \| `replace_value` \| `disable_protection` |
+| `op` | `bind` \| `disable_protection` |
 | `status` | `pending` \| `approved` \| `rejected` \| `superseded` |
 | `created_at`, `requested_by` | when and by whom |
 | `ref`, `destination_kind`, `destination_uid`, `destination_label`, `slot`, `target`, `target_fingerprint` | what the approval is for, written out so a person can read it |
-| `pending_ciphertext` | a new or replacement value, already sealed with the store's key, base64; removed on any decision |
 | `decided_at`, `decided_by` | set by the decision |
 
 A destination is identified by `(destination_kind, destination_uid)` — a

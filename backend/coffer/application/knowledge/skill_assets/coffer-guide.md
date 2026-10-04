@@ -133,7 +133,7 @@ plaintext secret left in `~/.coffer/secrets/` or in a skill, tell the developer:
 the Secrets page scans for them and offers to move each into a secret.
 
 A secret that would go somewhere it has not gone before — a new MCP server
-citing an existing token, a changed command line or URL, a replaced value —
+citing an existing token, a changed command line or URL —
 waits for the developer's approval in the Coffer app (a command that hits this
 prints `waiting for approval in the Coffer app` and exits `9`). That is not an
 error to retry or to route around: tell the developer what is waiting.

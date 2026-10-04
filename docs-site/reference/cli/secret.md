@@ -39,7 +39,6 @@ coffer secret set [OPTIONS] REF
 | --- | --- | --- | --- |
 | `REF` <span class="cli-chip">argument</span> | text | required | Secret reference key |
 | `--value` <span class="cli-chip">option</span> | text |  | Provide the secret on the command line (UNSAFE — visible in shell history; prefer stdin) |
-| `--wait` <span class="cli-chip">option</span> | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ## secret list
 

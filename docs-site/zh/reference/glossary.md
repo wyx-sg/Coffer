@@ -31,7 +31,7 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 ### 审批（Approval） {#approval}
 
-一项会扩大密钥去向的改动，在有人于桌面应用中答复之前一直被挂起：从新的[目的地](#destination)引用某个密钥，或把它发往新的[接收方](#target)；替换一个已经有东西在接收的值；或关闭这项保护。批准需要一次[在场授权](#presence-grant)；拒绝则不需要，在任何界面都能操作。改动需要等待审批的命令会打印 "waiting for approval in the Coffer app" 并以 `9` 退出。见[密钥](/zh/guides/secrets#approvals)。
+一项会扩大密钥去向的改动，在有人于桌面应用中答复之前一直被挂起：从新的[目的地](#destination)引用某个密钥，或把它发往新的[接收方](#target)；或关闭这项保护。批准需要一次[在场授权](#presence-grant)；拒绝则不需要，在任何界面都能操作。改动需要等待审批的命令会打印 "waiting for approval in the Coffer app" 并以 `9` 退出。见[密钥](/zh/guides/secrets#approvals)。
 
 ### 审计日志（Audit log） {#audit-log}
 

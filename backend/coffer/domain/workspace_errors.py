@@ -57,9 +57,8 @@ class AdoptSecretRefExists(CofferError):  # noqa: N818
     """An adopt names a secret ref that already holds a value, or a standalone name. Maps to 409.
 
     Adopting writes values, so it may only create refs: replacing one would
-    change what every server citing it receives, and a standalone name is added
-    only with a person's approval (spec secret "Hold a new standalone secret
-    until a person approves it").
+    change what every server citing it receives, and a standalone name is a
+    person's to name, not an adopt's.
     """
 
     code = "ADOPT_SECRET_REF_EXISTS"

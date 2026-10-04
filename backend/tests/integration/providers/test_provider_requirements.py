@@ -117,16 +117,10 @@ def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path)
         assert "sk-after-rotation" not in r.text
 
         assert c.get(f"/api/v1/providers/{uid}").json()["secret_ref"] == ref
-        # The connection's key was bound to its base URL by its registration, so
-        # the new value waits sealed for a person (spec secret "Hold a replaced
-        # value in use until a person approves it"); the old one stays in use.
-        assert get_secret_store().get(ref) == "sk-before-rotation"
-        [waiting] = [
-            a for a in get_secret_boundary().list(status="pending") if a.op == "replace_value"
-        ]
-        assert waiting.ref == ref
-        get_secret_boundary().approve(waiting.id, actor="desktop")
-        # No secret route returns a value; read the daemon's own store.
+        # A replacement is stored at once, with no approval (spec secret "Store a
+        # secret through the API"). No secret route returns a value; read the
+        # daemon's own store.
+        assert get_secret_boundary().list(status="pending") == []
         assert get_secret_store().get(ref) == "sk-after-rotation"
 
 

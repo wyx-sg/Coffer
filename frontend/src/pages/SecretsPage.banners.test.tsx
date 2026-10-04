@@ -92,7 +92,7 @@ const GITHUB = ref({
 function approval(id: string, over: Partial<Approval> = {}): Approval {
   return {
     id,
-    op: "replace_value",
+    op: "bind",
     status: "pending",
     description: "",
     created_at: "2026-09-30T08:00:00Z",
@@ -140,7 +140,7 @@ afterEach(() => vi.clearAllMocks());
 describe("Secrets banners", () => {
   test("missing sits above waiting, each with one action and an ×", async () => {
     api.pendingApprovals.mockResolvedValue({
-      approvals: [approval("a1"), approval("a2", { op: "add_secret", ref: "secret/npm" })],
+      approvals: [approval("a1"), approval("a2", { op: "disable_protection", ref: "secret/npm" })],
     });
     renderPage();
     const missing = await screen.findByTestId("secrets-missing-banner");
@@ -163,7 +163,7 @@ describe("Secrets banners", () => {
     renderPage();
     const waiting = await screen.findByTestId("pending-approvals-entry");
     expect(waiting).toHaveTextContent("1 change waiting for approval");
-    expect(waiting).toHaveTextContent("A new value for github-token.");
+    expect(waiting).toHaveTextContent("A new use of github-token.");
     act(() => {
       fireEvent.click(within(waiting).getByRole("button", { name: "Review" }));
     });

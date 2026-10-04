@@ -20,7 +20,7 @@ import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
 import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
 import { SecretsBanners } from "@/components/secret/SecretsBanners";
 import { SecretsBrowser } from "@/components/secret/SecretsBrowser";
-import { isMissingHere, refsWaiting } from "@/components/secret/secretRows";
+import { isMissingHere } from "@/components/secret/secretRows";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,6 @@ export function SecretsPage() {
   const secrets = useSecrets();
   const approvals = usePendingApprovals();
   const waitingApprovals = approvals.data?.approvals ?? [];
-  const waiting = refsWaiting(waitingApprovals);
   const [open, setOpen] = useState<Open>(null);
   const rows = secrets.data?.refs ?? [];
   const missing = rows.filter(isMissingHere);
@@ -104,7 +103,6 @@ export function SecretsPage() {
       ) : (
         <SecretsBrowser
           rows={rows}
-          waiting={waiting}
           isLoading={secrets.isPending}
           onAction={(dialog, row) => setOpen({ dialog, row })}
         />

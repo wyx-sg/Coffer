@@ -95,7 +95,7 @@ printf '%s' "$NEW_TOKEN" | coffer secret set github/token
 
 The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. On the Secrets page, the row's **Replace value…** does it for any ref.
 
-Replacing a value that something already receives — or any standalone `secret/<name>` — waits for your approval in the desktop app, because swapping a channel's bot token for someone else's, say, would redirect your conversations. Until you approve, the old value stays in use and the new one waits encrypted; `set` prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. A new ref, or one nothing receives, is stored at once.
+A replacement is stored at once and needs no approval, like any write: whoever supplies a value already has it. It is audited as a replacement, never with a value.
 
 ## Delete a secret
 
@@ -180,7 +180,7 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 | `SECRET_LOCKED` at startup | The keychain could not be read — it is locked or the prompt was dismissed | Unlock the keychain and start the daemon again. |
 | `SECRET_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
 | `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
-| `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before, or replaces a value in use | Approve it in the desktop app; the approvals dialog lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before | Approve it in the desktop app; the approvals dialog lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `PRESENCE_GRANT_INVALID` | A reveal, key backup or approval was attempted outside the desktop app | Do it in the desktop app. |
 | An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>`. |
 

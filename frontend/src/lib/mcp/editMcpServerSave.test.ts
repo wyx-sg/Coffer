@@ -162,24 +162,6 @@ function patchedRefs(): Record<string, string> {
   return body.body.config.transport.secret_refs;
 }
 
-describe("a secret that waits for approval", () => {
-  test("a 202 answer is reported as saved and awaiting approval", async () => {
-    // The daemon stores the value sealed until someone approves in the Coffer
-    // app; the save itself went through.
-    api.POST.mockResolvedValue({ data: { approval: { id: "apr-1" } }, error: undefined });
-    const out = await save([row({ value: { kind: "new", name: "gh-token", value: "ghp_new" } })]);
-
-    expect(out.awaitingApproval).toBe(true);
-    expect(api.PATCH).toHaveBeenCalled();
-  });
-
-  test("a plain 204 store is not", async () => {
-    const out = await save([row({ value: { kind: "new", name: "gh-token", value: "ghp_new" } })]);
-
-    expect(out.awaitingApproval).toBe(false);
-  });
-});
-
 describe("configTextFrom", () => {
   test("only plain rows land in env, and the working directory is written or cleared", () => {
     const stored = { transport: { type: "stdio", command: "npx", cwd: "/old", extra: 1 } };

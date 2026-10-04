@@ -320,7 +320,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `6` | Invalid input | 守护进程返回了 `400` 或 `422`。 |
 | `7` | Upstream test failed | `coffer mcp test` 无法初始化上游服务器。 |
 | `8` | Secret issue | 错误码为 `SECRET_MISSING` 或 `SECRET_LOCKED`。 |
-| `9` | Waiting for approval | 改动已保存，但其中的某个密钥正在 Coffer 桌面应用中等待审批（`SECRET_BINDING_PENDING`，或一个指明待审批的 `202`）。命令打印了 `waiting for approval in the Coffer app` 以及审批的 id。在应用中批准，或加 `--wait` 重新运行。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `9` | Waiting for approval | 改动已保存，但其中的某个密钥正在 Coffer 桌面应用中等待审批（`SECRET_BINDING_PENDING`）。命令打印了 `waiting for approval in the Coffer app` 以及审批的 id。在应用中批准，然后再运行一次该命令。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 
 出错时传 `--verbose`（`coffer -v …`）可以打印完整的 traceback 和 HTTP 上下文。
 

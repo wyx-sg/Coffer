@@ -87,18 +87,16 @@ function newSecretsOf(
 
 /**
  * Write every `new` secret among `values` to Secrets (call on submit, before
- * saving the form). Resolves `waiting: true` when any write is held for
- * approval (202); the caller toasts it. Rejects on the first failed write.
+ * saving the form). Resolves the names written. Rejects on the first failed
+ * write.
  */
 export async function persistNewSecrets(
   values: readonly (SecretFieldValue | RowValue)[],
-): Promise<{ names: string[]; waiting: boolean }> {
+): Promise<{ names: string[] }> {
   const names: string[] = [];
-  let waiting = false;
   for (const v of newSecretsOf(values)) {
-    const out = await secretsApi.set(secretRef(v.name), v.value);
-    if (out?.approval) waiting = true;
+    await secretsApi.set(secretRef(v.name), v.value);
     names.push(v.name);
   }
-  return { names, waiting };
+  return { names };
 }

@@ -3,7 +3,6 @@ spec secret "Hold a secret for a new destination until a person approves it").""
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import pathlib
@@ -83,7 +82,7 @@ def test_state_is_local_and_never_in_the_vault(
     store: FileBoundaryStore, tmp_path: pathlib.Path
 ) -> None:
     store.put_binding(_binding())
-    store.create_approval(_approval("a1", "2026-09-30T01:00:00"), b"sealed")
+    store.create_approval(_approval("a1", "2026-09-30T01:00:00"))
     store.set_setting("require_approval", "true")
     for name in ("bindings.json", "approvals.json", "settings.json"):
         path = _secrets(tmp_path) / name
@@ -92,17 +91,11 @@ def test_state_is_local_and_never_in_the_vault(
     assert not vault_root(tmp_path).exists()
 
 
-def test_a_pending_replacement_keeps_its_ciphertext_base64_until_decided(
+def test_deciding_an_approval_records_who_and_when(
     store: FileBoundaryStore, tmp_path: pathlib.Path
 ) -> None:
-    sealed = b"gAAAAB-ciphertext\x00\xff"
-    store.create_approval(_approval("a1", "2026-09-30T01:00:00", op="replace_value"), sealed)
-    raw = json.loads((_secrets(tmp_path) / "approvals.json").read_text())
-    assert raw["approvals"][0]["pending_ciphertext"] == base64.b64encode(sealed).decode()
-    assert store.pending_ciphertext("a1") == sealed
-
+    store.create_approval(_approval("a1", "2026-09-30T01:00:00"))
     assert store.decide("a1", "approved", by="user", at="2026-09-30T02:00:00") is True
-    assert store.pending_ciphertext("a1") is None
     decided = store.get_approval("a1")
     assert decided is not None
     assert (decided.status, decided.decided_by, decided.decided_at) == (
@@ -141,15 +134,15 @@ def test_queries_over_approvals(store: FileBoundaryStore) -> None:
     store.create_approval(_approval("a2", "2026-09-30T03:00:00", status="rejected"))
     store.create_approval(_approval("a3", "2026-09-30T02:00:00", destination_uid="u2"))
     store.create_approval(
-        _approval("a4", "2026-09-30T04:00:00", op="replace_value", ref="other/ref")
+        _approval("a4", "2026-09-30T04:00:00", op="disable_protection", ref="other/ref")
     )
 
     assert [a.id for a in store.list_approvals()] == ["a4", "a2", "a3", "a1"]
     assert [a.id for a in store.list_approvals(status="pending", limit=2)] == ["a4", "a3"]
     assert [a.id for a in store.list_approvals(destination_uid="u2")] == ["a3"]
     assert {a.id for a in store.pending_of_op("bind")} == {"a1", "a3"}
-    assert [a.id for a in store.pending_of_op("replace_value", "other/ref")] == ["a4"]
-    assert store.pending_of_op("replace_value", "gh/token") == []
+    assert [a.id for a in store.pending_of_op("disable_protection", "other/ref")] == ["a4"]
+    assert store.pending_of_op("disable_protection", "gh/token") == []
     # The newest pending-or-refused bind for exactly this binding and target.
     found = store.find_open_bind("gh/token", "mcp_server", "u1", "TOKEN", "fp1")
     assert found is not None and found.id == "a2"

@@ -46,12 +46,6 @@ class _FakeSecretStore:
     def created_at(self, ref: str) -> datetime | None:
         return datetime.now(tz=UTC) if ref in self.store else None
 
-    def seal(self, value: str) -> bytes:
-        return value.encode()[::-1]
-
-    def unseal(self, token: bytes) -> str:
-        return token[::-1].decode()
-
     def list_refs(self) -> list[tuple[str, str, str]]:
         now = datetime.now(tz=UTC).isoformat()
         return [(ref, now, now) for ref in sorted(self.store)]
@@ -150,7 +144,7 @@ async def test_set_secret_stores_value() -> None:
     assert len(audit_repo.entries) == 1
     set_entry = audit_repo.entries[0]
     assert set_entry.event_type == "secret_set"
-    assert set_entry.details == {"ref": "github.GITHUB_TOKEN"}
+    assert set_entry.details == {"ref": "github.GITHUB_TOKEN", "replaced": False}
     assert "ghp_secret" not in str(set_entry.details)
 
 

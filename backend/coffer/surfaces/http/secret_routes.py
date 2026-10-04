@@ -25,7 +25,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response, status
-from fastapi.responses import JSONResponse
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -51,9 +50,8 @@ from coffer.surfaces.http.schemas import (
     SecretRefOut,
     SecretSetIn,
 )
-from coffer.surfaces.http.secret_boundary_wiring import approval_out, get_secret_boundary
+from coffer.surfaces.http.secret_boundary_wiring import approval_applied, get_secret_boundary
 from coffer.surfaces.http.secret_composition import get_secret_store
-from coffer.surfaces.http.secret_schemas import SecretWriteOut
 
 router = APIRouter(
     prefix="/api/v1/secrets",
@@ -62,44 +60,29 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-    responses={202: {"model": SecretWriteOut, "description": "Waiting for approval"}},
-)
+@router.post("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def set_secret(
     body: SecretSetIn,
     store: Any = Depends(get_secret_store),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Store `value` under `ref` in the encrypted secret store.
+    """Store `value` under `ref` in the encrypted secret store, at once (204).
 
-    A new ref — or one nothing was ever sent to — is written at once (204).
-    Replacing the value of a secret an approved destination receives, or of a
-    standalone secret, waits for the desktop app (202, the value held as
-    ciphertext): the new value changes what that destination gets (spec
-    secret "Hold a replaced value in use until a person approves it").
+    Whoever supplies a value already has it, so a new ref and a replacement are
+    both written without approval (spec secret "Store a secret through the
+    API"). A replacement is audited as such, never with a value, and whatever
+    holds the old value, such as the model proxy, picks the new one up.
     """
-    boundary = get_secret_boundary()
     # to_thread: the store write is file IO and, for a vault ref, a git
     # commit under the vault's write lock — nothing for the event loop.
-    approval = await asyncio.to_thread(boundary.write, body.ref, body.value, actor=actor)
-    if approval is not None:
-        await audit.record(
-            AuditEventType.SECRET_APPROVAL_REQUESTED.value,
-            actor=actor,
-            details={"approval_id": approval.id, "op": approval.op, "ref": body.ref},
-        )
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content=SecretWriteOut(approval=approval_out(approval)).model_dump(),
-        )
+    replaced = await asyncio.to_thread(store.exists, body.ref)
+    await asyncio.to_thread(store.set, body.ref, body.value)
+    approval_applied()
     await audit.record(
         AuditEventType.SECRET_SET.value,
         actor=actor,
-        details={"ref": body.ref},
+        details={"ref": body.ref, "replaced": replaced},
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

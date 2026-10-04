@@ -20,7 +20,6 @@ class InMemoryBoundaryStore:
     def __init__(self) -> None:
         self.bindings_by_key: dict[tuple[str, str, str, str], SecretBinding] = {}
         self.approvals: dict[str, SecretApproval] = {}
-        self.sealed: dict[str, bytes] = {}
         self.settings: dict[str, str] = {}
 
     def get_binding(self, ref: str, kind: str, uid: str, slot: str) -> SecretBinding | None:
@@ -40,16 +39,11 @@ class InMemoryBoundaryStore:
         for key in [k for k in self.bindings_by_key if k[0] == ref]:
             del self.bindings_by_key[key]
 
-    def create_approval(self, approval: SecretApproval, ciphertext: bytes | None = None) -> None:
+    def create_approval(self, approval: SecretApproval) -> None:
         self.approvals[approval.id] = approval
-        if ciphertext is not None:
-            self.sealed[approval.id] = ciphertext
 
     def get_approval(self, approval_id: str) -> SecretApproval | None:
         return self.approvals.get(approval_id)
-
-    def pending_ciphertext(self, approval_id: str) -> bytes | None:
-        return self.sealed.get(approval_id)
 
     def find_open_bind(
         self, ref: str, kind: str, uid: str, slot: str, target_fingerprint: str
@@ -100,7 +94,6 @@ class InMemoryBoundaryStore:
             decided_at=at,
             decided_by=by,
         )
-        self.sealed.pop(approval_id, None)
         return True
 
     def get_setting(self, key: str) -> str | None:
@@ -142,9 +135,3 @@ class FakeSealedValues:
     def set(self, ref: str, value: str) -> None:
         self.created.setdefault(ref, datetime.now(tz=UTC))
         self.values[ref] = value
-
-    def seal(self, value: str) -> bytes:
-        return b"sealed:" + value.encode()[::-1]
-
-    def unseal(self, token: bytes) -> str:
-        return token.removeprefix(b"sealed:")[::-1].decode()

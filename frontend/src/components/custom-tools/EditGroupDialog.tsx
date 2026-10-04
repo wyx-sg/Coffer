@@ -16,7 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { agentPrefix } from "@/lib/customTools/groups";
@@ -32,7 +31,6 @@ interface Props {
 
 export function EditGroupDialog({ group, open, onOpenChange }: Props) {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const id = useId();
   const update = useUpdateCustomToolGroup(group.name);
   const [description, setDescription] = useState("");
@@ -62,8 +60,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
     setSaving(true);
     try {
       // A secret typed into a row is written to Secrets before the group names it.
-      const { waiting } = await persistNewSecrets(rows.map((r) => r.value));
-      if (waiting) toast.info(t("secrets.pending.toast"));
+      await persistNewSecrets(rows.map((r) => r.value));
     } catch (e) {
       setSaving(false);
       setFailure(e);

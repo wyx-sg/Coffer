@@ -53,12 +53,10 @@ export function AddValuesDialog({ open, onOpenChange, rows }: Props) {
     setSaving(true);
     const failed: Record<string, string> = {};
     let stored = 0;
-    let waiting = false;
     for (const row of filled) {
       try {
-        const out = await set.mutateAsync({ ref: row.ref, value: values[row.ref] });
+        await set.mutateAsync({ ref: row.ref, value: values[row.ref] });
         stored += 1;
-        waiting ||= Boolean(out?.approval);
         setValues((prev) => ({ ...prev, [row.ref]: "" }));
       } catch (e) {
         failed[row.ref] = translateApiError(t, e);
@@ -67,9 +65,7 @@ export function AddValuesDialog({ open, onOpenChange, rows }: Props) {
     setSaving(false);
     setErrors(failed);
     if (stored > 0) {
-      toast.success(
-        waiting ? t("secrets.pending.toast") : t("secrets.addValues.saved", { count: stored }),
-      );
+      toast.success(t("secrets.addValues.saved", { count: stored }));
     }
     if (Object.keys(failed).length === 0) onOpenChange(false);
   };

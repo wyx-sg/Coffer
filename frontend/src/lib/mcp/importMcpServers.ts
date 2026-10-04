@@ -8,11 +8,7 @@
 // mutation hook (useMcpServerMutations.ts) stays one line.
 import type { TFunction } from "i18next";
 
-import {
-  persistNewSecrets,
-  secretRef,
-  type KeyValueSecretRow,
-} from "@/lib/secretValue";
+import { persistNewSecrets, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
@@ -92,13 +88,13 @@ async function rollbackSecrets(refs: string[], name: string): Promise<void> {
   }
 }
 
-/** The refs the daemon holds for `uid` until a person approves them, or null
- *  when none. A registration that cites an existing secret, or one that is
- *  already in use elsewhere, records the approval with the registration. */
+/** The refs whose binding to server `uid` waits for a person to approve it, or
+ *  null when none does. A registration that cites an existing secret records
+ *  the pending `bind` approval with the registration. */
 async function pendingRefsFor(uid: string): Promise<string[] | null> {
   try {
     const { approvals } = await secretsApi.pendingApprovals();
-    const mine = approvals.filter((a) => a.destination_uid === uid);
+    const mine = approvals.filter((a) => a.op === "bind" && a.destination_uid === uid);
     return mine.length > 0 ? mine.map((a) => a.ref ?? "") : null;
   } catch {
     return null;
@@ -130,8 +126,8 @@ export interface FailedServer {
 export interface ImportReport {
   created: ImportedServer[];
   failed: FailedServer[];
-  /** Created servers one of whose secrets waits for approval, with the
-   *  environment variable / header each waiting secret is for. */
+  /** Created servers whose secret goes to a new place and waits for approval,
+   *  with the environment variable / header each waiting secret is for. */
   awaitingApproval: { name: string; secrets: string[] }[];
   /** Created servers whose reach could not be written (they reach every agent). */
   reachFailed: string[];
@@ -174,13 +170,12 @@ export async function importMcpServers({
     }
     const config = configOf(srv);
     let uid: string;
-    const waitingKeys: string[] = [];
     const written: string[] = [];
     try {
       for (const row of srv.env) {
         if (row.value.kind !== "new" || row.key.trim() === "") continue;
         written.push(secretRef(row.value.name));
-        if ((await persistNewSecrets([row.value])).waiting) waitingKeys.push(row.key.trim());
+        await persistNewSecrets([row.value]);
       }
       uid = await registerResource(srv, config);
     } catch (e) {
@@ -192,21 +187,19 @@ export async function importMcpServers({
       });
       continue;
     }
-    let waiting = waitingKeys.length > 0;
-    if (!waiting) {
-      const refs = await pendingRefsFor(uid);
-      if (refs) {
-        waiting = true;
-        const keyed = srv.env.filter(
-          (r) => r.value.kind !== "plain" && refs.includes(secretRef(r.value.name)),
-        );
-        const every = srv.env.filter((r) => r.value.kind !== "plain");
-        waitingKeys.push(...(keyed.length > 0 ? keyed : every).map((r) => r.key.trim()));
-      }
+    const refs = await pendingRefsFor(uid);
+    if (refs) {
+      const keyed = srv.env.filter(
+        (r) => r.value.kind !== "plain" && refs.includes(secretRef(r.value.name)),
+      );
+      const every = srv.env.filter((r) => r.value.kind !== "plain");
+      report.awaitingApproval.push({
+        name: srv.name,
+        secrets: (keyed.length > 0 ? keyed : every).map((r) => r.key.trim()),
+      });
     }
     created.set(srv.name, uid);
     report.created.push({ name: srv.name, uid });
-    if (waiting) report.awaitingApproval.push({ name: srv.name, secrets: waitingKeys });
     try {
       await applyReach(uid, reach);
     } catch {

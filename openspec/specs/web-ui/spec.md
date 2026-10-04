@@ -654,9 +654,9 @@ the person must act, such as a secret that is not stored. A failed save MUST sta
 in the dialog with every edit intact and the primary button reading **Retry**. A
 batch that only partly went in MUST stay on the review, say which servers were
 added and which were refused with the reason, and let Add retry only the refused
-ones. A secret held for a person's approval (202) MUST be said before the dialog
-lets go, naming the secret. A success is a toast that says what was kept or
-added.
+ones. A server whose secret cites one already sent elsewhere is added with its
+binding waiting for approval; that MUST be said before the dialog lets go,
+naming the secret. A success is a toast that says what was kept or added.
 
 #### Scenario: a failed save stays in the Edit dialog and Save becomes Retry
 - **GIVEN** the Edit dialog with changes and a daemon that refuses the save
@@ -668,8 +668,8 @@ added.
 - **WHEN** the user presses Add
 - **THEN** the review stays open saying two were added and naming the refused one with its reason, and Add retries only the refused server
 
-#### Scenario: a secret held for approval is said before the dialog lets go
-- **GIVEN** a form whose pasted secret the daemon holds for approval
+#### Scenario: a server citing an existing secret says it waits for approval before the dialog lets go
+- **GIVEN** a form whose server cites a secret already sent to another server
 - **WHEN** the server is added
 - **THEN** the dialog says the secret waits for approval before it closes
 
@@ -2232,10 +2232,9 @@ The page MUST carry:
 - **Used by** — for each secret, what cites it, by kind and current name, each
   opening that thing's page; a secret nothing cites reads Nothing and is found
   with the Not used filter.
-- **Add and replace** — store a new secret, or replace the value of one that
-  exists, without the value ever being shown back; a change that waits for a
-  person's approval says so (spec [secret](../secret/spec.md) "Hold a new
-  standalone secret until a person approves it").
+- **Add and replace** — store a new secret at once, or replace the value of one
+  that exists, at once and without the value ever being shown back (spec
+  [secret](../secret/spec.md) "Store a secret through the API").
 - **Reveal** — show one value behind an explicit, confirmed action, only in the
   desktop app, audited as `secret_revealed` (spec [secret](../secret/spec.md)
   "Release plaintext only to a present human in the desktop app"); in a

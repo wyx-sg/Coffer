@@ -8,7 +8,6 @@ desktop app's half — the presence check and the signed grant — is played by
 
 from __future__ import annotations
 
-import base64
 import json
 import pathlib
 from collections.abc import Iterator
@@ -321,14 +320,16 @@ def test_a_value_supplied_for_a_new_server_needs_no_approval(daemon: BoundaryDae
     assert d.resolve_for(server) == {"TOKEN": "fresh-value-123"}
 
 
-def test_a_server_may_cite_a_secret_still_waiting_for_approval(daemon: BoundaryDaemon) -> None:
+def test_a_new_standalone_secret_is_stored_at_once_and_may_be_cited(
+    daemon: BoundaryDaemon,
+) -> None:
     d = daemon
     r = d.client.post("/api/v1/secrets", json={"ref": "secret/late-key", "value": "late-value-123"})
-    assert r.status_code == 202 and r.json()["approval"]["op"] == "add_secret"
-    # The value is held sealed; the registration still goes through.
-    server = d.register_stdio("late", "server", {"TOKEN": "secret/late-key"})
-    assert d.value("secret/late-key") is None
-    # A ref nobody wrote, or waits for, is still refused.
+    assert r.status_code == 204, r.text
+    assert d.value("secret/late-key") == "late-value-123"
+    assert d.pending() == []
+    d.register_stdio("late", "server", {"TOKEN": "secret/late-key"})
+    # A ref nobody wrote is still refused.
     nobody = d.client.post(
         "/api/v1/resources",
         json={
@@ -340,7 +341,6 @@ def test_a_server_may_cite_a_secret_still_waiting_for_approval(daemon: BoundaryD
         },
     )
     assert nobody.status_code == 400
-    assert server["name"] == "late"
 
 
 @pytest.mark.acceptance(
@@ -384,26 +384,32 @@ def test_rejecting_needs_no_presence(daemon: BoundaryDaemon) -> None:
     assert len(d.audit("secret_approval_rejected")) == 1
 
 
-@pytest.mark.acceptance(spec="secret", scenario="replacing a value in use waits for approval")
-def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
+@pytest.mark.acceptance(spec="secret", scenario="adding a standalone secret stores it at once")
+def test_adding_a_standalone_secret_stores_it_at_once(daemon: BoundaryDaemon) -> None:
+    d = daemon
+
+    r = d.client.post("/api/v1/secrets", json={"ref": "secret/npm-publish-token", "value": "npm-v"})
+
+    assert r.status_code == 204, r.text
+    assert d.value("secret/npm-publish-token") == "npm-v"
+    assert d.pending() == []
+
+
+@pytest.mark.acceptance(spec="secret", scenario="replacing a value in use stores it at once")
+def test_replacing_a_value_in_use_stores_it_at_once(daemon: BoundaryDaemon) -> None:
     d = daemon
     _two_servers(d)
+    waiting_before = d.pending()
 
-    r = d.client.post("/api/v1/secrets", json={"ref": "gh/token", "value": "attacker-bot-token"})
+    r = d.client.post("/api/v1/secrets", json={"ref": "gh/token", "value": "new-bot-token"})
 
-    assert r.status_code == 202, r.text
-    approval = r.json()["approval"]
-    assert approval["op"] == "replace_value" and "attacker-bot-token" not in r.text
-    assert d.value("gh/token") == "ghp_boundary_value_1"
-    # The second server's own binding has waited since it was registered; only
-    # the replacement holds a sealed value.
-    [held] = [a for a in d.local_secrets("approvals")["approvals"] if a["op"] == "replace_value"]
-    assert held["pending_ciphertext"]
-    assert b"attacker-bot-token" not in base64.b64decode(held["pending_ciphertext"])
-    d.approve(approval["id"])
-    assert d.value("gh/token") == "attacker-bot-token"
-    replaced = [a for a in d.local_secrets("approvals")["approvals"] if a["op"] == "replace_value"]
-    assert [a["pending_ciphertext"] for a in replaced] == [None]
+    assert r.status_code == 204, r.text
+    assert d.value("gh/token") == "new-bot-token"
+    # Nothing new waits: only the second server's own binding, as before.
+    assert d.pending() == waiting_before
+    [entry] = d.audit("secret_set")[:1]
+    assert entry["details"]["ref"] == "gh/token" and entry["details"]["replaced"] is True
+    assert "new-bot-token" not in str(entry)
 
 
 @pytest.mark.acceptance(
@@ -534,7 +540,5 @@ def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
     ref = d.client.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
     rotated = d.client.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-replaced-2"})
     assert rotated.status_code == 200, rotated.text
-    assert d.value(ref) == "sk-provider-key-1"
-    [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
-    d.approve(replace["id"])
+    assert d.pending() == []
     assert d.value(ref) == "sk-replaced-2" and key_now() == "sk-replaced-2"

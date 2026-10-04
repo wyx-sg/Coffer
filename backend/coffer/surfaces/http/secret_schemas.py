@@ -76,7 +76,7 @@ class ApprovalOut(BaseModel):
     """A change waiting for a present human in the desktop app."""
 
     id: str
-    op: Literal["bind", "add_secret", "replace_value", "disable_protection"]
+    op: Literal["bind", "disable_protection"]
     status: Literal["pending", "approved", "rejected", "superseded"]
     description: str
     created_at: str
@@ -137,12 +137,6 @@ class BatchOut(BaseModel):
 
 class ApprovalListOut(BaseModel):
     approvals: list[ApprovalOut]
-
-
-class SecretWriteOut(BaseModel):
-    """202 answer to a write that replaces a value in use: it waits, sealed."""
-
-    approval: ApprovalOut
 
 
 class ResolveSecretsIn(BaseModel):

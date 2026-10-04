@@ -24,19 +24,17 @@ async function patchConfig(
 /**
  * Rotate the changed secrets, then PATCH the config. Returns the uid it wrote
  * and the name to say it wrote — the caller needs both, and they are no longer
- * the same string — and whether a rotated secret now waits for approval in the
- * Coffer app. Secrets-first matches registration: a config that references a
+ * the same string. Secrets-first matches registration: a config that references a
  * ref whose value just changed must see the new value, never a stale one.
  */
 export async function applyChannelEdit(
   plan: ChannelEditPlan,
-): Promise<{ uid: string; name: string; awaitingApproval: boolean }> {
-  let awaitingApproval = false;
+): Promise<{ uid: string; name: string }> {
   for (const s of plan.secrets) {
-    if (await writeSecret(s.ref, s.value)) awaitingApproval = true;
+    await writeSecret(s.ref, s.value);
   }
   await patchConfig(plan.uid, plan.config, plan.title);
-  return { uid: plan.uid, name: plan.name, awaitingApproval };
+  return { uid: plan.uid, name: plan.name };
 }
 
 /** Mutable edit-form inputs by channel type (secrets blank = "leave as-is"). */

@@ -1,10 +1,8 @@
 // src/components/secret/ReplaceSecretDialog.tsx — Replace value (or, for a secret missing on this Mac, Add value).
 //
 // Names the secret and what uses it, takes the new value without ever
-// showing the old one, and says the old value is destroyed. A value in use
-// waits for approval in the desktop app (202): the dialog closes on a toast
-// that says so rather than claiming it took effect (spec secret "Hold a
-// replaced value in use until a person approves it"). A secret missing on this
+// showing the old one, and says the old value is destroyed. The value is stored
+// at once (spec secret "Store a secret through the API"). A secret missing on this
 // Mac — cited but not stored, or stored under another Mac's master key — gets
 // its value here too (spec secret "Show a secret this Mac cannot open as
 // missing on this Mac").
@@ -59,12 +57,8 @@ export function ReplaceSecretDialog({ row, onOpenChange }: Props) {
   const submit = async () => {
     if (!value || set.isPending) return;
     try {
-      const out = await set.mutateAsync({ ref: row.ref, value });
-      toast.success(
-        out?.approval
-          ? t("secrets.pending.toast")
-          : t(storing ? "secrets.replace.stored" : "secrets.replace.replaced", { name }),
-      );
+      await set.mutateAsync({ ref: row.ref, value });
+      toast.success(t(storing ? "secrets.replace.stored" : "secrets.replace.replaced", { name }));
       onOpenChange(false);
     } catch {
       // Shown inline from the mutation's error.

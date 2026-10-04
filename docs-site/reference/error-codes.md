@@ -333,7 +333,7 @@ mapped by status.
 | `6` | Invalid input | The daemon answered `400` or `422`. |
 | `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server. |
 | `8` | Secret issue | The error code was `SECRET_MISSING` or `SECRET_LOCKED`. |
-| `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`, or a `202` naming a pending approval). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, or rerun with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, then run the command again. See [Secrets → Approvals](/guides/secrets#approvals). |
 
 Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.
 

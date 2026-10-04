@@ -28,13 +28,12 @@ export interface paths {
         put?: never;
         /**
          * Set Secret
-         * @description Store `value` under `ref` in the encrypted secret store.
+         * @description Store `value` under `ref` in the encrypted secret store, at once (204).
          *
-         *     A new ref — or one nothing was ever sent to — is written at once (204).
-         *     Replacing the value of a secret an approved destination receives, or of a
-         *     standalone secret, waits for the desktop app (202, the value held as
-         *     ciphertext): the new value changes what that destination gets (spec
-         *     secret "Hold a replaced value in use until a person approves it").
+         *     Whoever supplies a value already has it, so a new ref and a replacement are
+         *     both written without approval (spec secret "Store a secret through the
+         *     API"). A replacement is audited as such, never with a value, and whatever
+         *     holds the old value, such as the model proxy, picks the new one up.
          */
         post: operations["set_secret_api_v1_secrets_post"];
         delete?: never;
@@ -452,7 +451,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "bind" | "add_secret" | "replace_value" | "disable_protection";
+            op: "bind" | "disable_protection";
             /** Ref */
             ref: string | null;
             /** Requested By */
@@ -883,13 +882,6 @@ export interface components {
              */
             master_key_storage: "file" | "keychain" | "keychain_access_group";
         };
-        /**
-         * SecretWriteOut
-         * @description 202 answer to a write that replaces a value in use: it waits, sealed.
-         */
-        SecretWriteOut: {
-            approval: components["schemas"]["ApprovalOut"];
-        };
     };
     responses: never;
     parameters: never;
@@ -955,15 +947,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Waiting for approval */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SecretWriteOut"];
-                };
-            };
             /** @description Successful Response */
             204: {
                 headers: {

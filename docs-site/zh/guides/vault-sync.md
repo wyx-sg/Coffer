@@ -34,7 +34,7 @@ description: 把保险库的 git 仓库拉取和推送到你自己拥有的私�
 ### GitHub {#github}
 
 1. 创建一个私有的空仓库，以及一个对它有 **Contents: Read and write** 权限的 fine-grained personal access token。
-2. 在**密钥**页面点**添加密钥**，起个名字（例如 `github-sync-token`），把令牌粘贴为值，并在桌面应用里批准它。值不会再显示出来，也不会进入你的 shell 历史。
+2. 在**密钥**页面点**添加密钥**，起个名字（例如 `github-sync-token`），把令牌粘贴为值。值不会再显示出来，也不会进入你的 shell 历史。
 3. 在**同步**页面填入**仓库 URL**，在**密钥**里选择这个令牌，然后点**检查仓库**。
 
 ### GitLab {#gitlab}

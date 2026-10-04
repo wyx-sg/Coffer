@@ -61,21 +61,6 @@ def test_importing_moves_a_value_and_leaves_a_reference(d: BoundaryDaemon) -> No
     assert (env.read_text(), script.read_text()) == before
     assert d.value("secret/db.DB_PASSWORD") is None
 
-    # The protection is on, so each new standalone secret waits for a person:
-    # nothing is stored and no file is rewritten.
-    held = d.client.post("/api/v1/secrets/import", json={})
-    assert held.status_code == 200, held.text
-    assert (env.read_text(), script.read_text()) == before
-    assert d.value("secret/db.DB_PASSWORD") is None
-    waiting = d.pending(op="add_secret")
-    assert {a["ref"] for a in waiting} == {
-        "secret/db.DB_HOST",
-        "secret/db.DB_PASSWORD",
-        "secret/deploy.api_token",
-    }
-    for a in waiting:
-        d.approve(a["id"])
-
     moved = d.client.post("/api/v1/secrets/import", json={})
 
     assert moved.status_code == 200, moved.text

@@ -8,7 +8,7 @@
 // None of them returns a value. Approving — like revealing a value or writing
 // a key backup — needs a presence grant only the desktop shell can sign, so it
 // goes through `@/lib/tauri`, never through a request from here.
-import { getApiClient, unwrap, unwrapOptional, unwrapVoid } from "@/lib/api/client";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/secret";
 
 type Schemas = components["schemas"];
@@ -21,8 +21,6 @@ export type ApprovalBatchResult = Schemas["BatchResultOut"];
 
 /** One stored or cited ref: presence and what uses it, never a value. */
 export type SecretRef = Schemas["SecretRefOut"];
-/** The 202 answer to a write whose new value waits for approval. */
-export type SecretWrite = Schemas["SecretWriteOut"];
 export type SecretScan = Schemas["SecretScanOut"];
 export type SecretScanFinding = Schemas["SecretScanFindingOut"];
 export type SecretImport = Schemas["SecretImportOut"];
@@ -30,9 +28,9 @@ export type SecretImport = Schemas["SecretImportOut"];
 export const secretsApi = {
   /** Every stored ref and every ref a resource cites, with what uses it. */
   list: () => unwrap(getApiClient().GET("/secrets")),
-  /** Store a value: `undefined` when stored (204), the approval when it waits (202). */
-  set: (ref: string, value: string): Promise<SecretWrite | undefined> =>
-    unwrapOptional(getApiClient().POST("/secrets", { body: { ref, value } })),
+  /** Store a value; the daemon answers 204. */
+  set: (ref: string, value: string) =>
+    unwrapVoid(getApiClient().POST("/secrets", { body: { ref, value } })),
   /** Delete a ref; refused with `SECRET_IN_USE` while something cites it. */
   remove: (ref: string) =>
     unwrapVoid(getApiClient().DELETE("/secrets/{ref}", { params: { path: { ref } } })),

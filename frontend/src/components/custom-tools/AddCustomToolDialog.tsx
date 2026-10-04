@@ -92,8 +92,7 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
     setSaving(true);
     setSaveError(null);
     try {
-      const { waiting } = await persistNewSecrets(group.headers.map((h) => h.value));
-      if (waiting) toast.info(t("secrets.pending.toast"));
+      await persistNewSecrets(group.headers.map((h) => h.value));
       const made = await create.mutateAsync(build());
       if (group.reach.mode === "disabled") {
         await resourcesApi.disable(made.uid).catch((e) => toast.error(translateApiError(t, e)));

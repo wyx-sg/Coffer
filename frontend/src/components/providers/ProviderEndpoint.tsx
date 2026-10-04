@@ -2,10 +2,7 @@
 //
 // The key is never shown — only the secret reference it is stored under
 // (`coffer://secret/<ref>`), write-only, with Replace key — which a rejected
-// key moves into the problem box above the rows. A replaced key that is in
-// use waits for approval in the Coffer app before it takes effect (spec
-// secret "Hold a replaced value in use until a person approves it"), so
-// while that approval is pending the row says so and offers Review. The
+// key moves into the problem box above the rows. The
 // protocol is locked while an agent runs on the provider (spec
 // provider-switching "Refuse to move the wire of a live connection"). Route
 // says agents reach it through Coffer's proxy; Fallback is "Use as fallback
@@ -23,10 +20,8 @@ import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { Switch } from "@/components/ui/switch";
 import type { Provider } from "@/lib/api/providers";
-import { openApprovalsSheet, usePendingApprovals } from "@/lib/hooks/useApprovals";
 import { useProxyAddress } from "@/lib/hooks/useProviderFallback";
 import { useUpdateProvider } from "@/lib/hooks/useProviders";
-import { pendingReplaceFor } from "@/lib/providers/approvals";
 import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
@@ -65,8 +60,6 @@ export function ProviderEndpoint({
   onReplaceKey,
 }: Props) {
   const { t } = useTranslation();
-  const approvals = usePendingApprovals();
-  const pending = pendingReplaceFor(approvals.data?.approvals, provider.secret_ref);
   const lockedBy = useLockedBy(use);
   const runtime = provider.local_runtime;
   const proxy = useProxyAddress();
@@ -164,21 +157,6 @@ export function ProviderEndpoint({
             ) : (
               t("providers.key.none")
             )
-          }
-          status={
-            pending ? (
-              <span role="status" className="flex flex-wrap items-center gap-2">
-                <StatusWord tone="warn">{t("providers.key.pending")}</StatusWord>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto px-0"
-                  onClick={openApprovalsSheet}
-                >
-                  {t("providers.key.review")}
-                </Button>
-              </span>
-            ) : null
           }
         >
           {provider.secret_ref ? (

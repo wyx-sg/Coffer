@@ -44,8 +44,7 @@ never writes back into an agent's own memory. See [Memory](/architecture/memory#
 
 A change that would widen where a secret goes, held until a person answers it in the desktop
 app: a secret cited from a new [destination](#destination) or sent to a new
-[target](#target), a replaced value that something already receives, or switching the
-protection off. Approving takes a [presence grant](#presence-grant); rejecting does not, and
+[target](#target), or switching the protection off. Approving takes a [presence grant](#presence-grant); rejecting does not, and
 works from any surface. A command whose change waits prints
 "waiting for approval in the Coffer app" and exits `9`. See
 [Secrets](/guides/secrets#approvals).

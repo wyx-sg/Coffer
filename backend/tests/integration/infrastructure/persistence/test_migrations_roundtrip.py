@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0145"
+HEAD_REVISION = "0146"
 #: The last revision whose tables still hold the pre-vault state: a data test
 #: of an older revision reads them here, before 0136 drops them.
 PRE_LAYOUT_REVISION = "0135"
