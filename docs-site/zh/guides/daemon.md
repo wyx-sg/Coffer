@@ -39,7 +39,7 @@ port:    38470
 pid:     41822
 ```
 
-守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`。没有更早的阶段可看：守护进程启动完成后才打开端口。四个[实验功能](/zh/guides/experimental-features)在你开启之前都是关闭的。脚本里可加 `--json`。
+守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`，等待 git 时为 `setup`：这时命令还会打印原因和一段给智能体的提示词（见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)）。没有更早的阶段可看：守护进程启动完成后才打开端口。四个[实验功能](/zh/guides/experimental-features)在你开启之前都是关闭的。脚本里可加 `--json`。
 
 没有守护进程运行时，`coffer daemon status` 打印 `status:  not running`（`--json` 下为 `{"status": "stopped"}`），退出码为 3。它不会启动守护进程，所以它的回答不会改变它所报告的对象；要启动请用 `coffer daemon start`。
 

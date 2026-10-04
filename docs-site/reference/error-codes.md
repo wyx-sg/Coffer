@@ -284,10 +284,10 @@ These are raised while the daemon starts, before it serves requests. They appear
 | --- | --- | --- | --- |
 | `DB_SCHEMA_TOO_NEW` | 409 | `~/.coffer/runs.db` was migrated by a newer or different Coffer build. The status applies if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
 | `GIT_MISSING` | 500 | The vault needs `git` and none was found. A route that needs git answers with it too. | Install git the way that fits the machine; the error's `details.handoff` is a prompt for your agent. |
+| `GIT_NEEDED` | 503 | The daemon is waiting for git: none was found, or it is older than 2.40. Every route that needs the vault answers with it; `details.reason` is `git_missing` or `git_too_old`, with `found`, `needed` and `handoff`. | Install or update git (the prompt in `details.handoff`), then press **Check again**. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
 
-`MASTER_KEY_MISSING` can stop a start as well; see [Secrets](#secrets). A `git` older than
-2.40 stops the daemon with no code: the log names the version it found and carries a prompt
-you can give your agent to update git.
+`MASTER_KEY_MISSING` can stop a start as well; see [Secrets](#secrets). A missing `git`, or one
+older than 2.40, does not stop the daemon: it starts and waits for git, answering `GIT_NEEDED`.
 
 ## Chat turn errors
 
@@ -334,6 +334,7 @@ mapped by status.
 | `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server. |
 | `8` | Secret issue | The error code was `SECRET_MISSING` or `SECRET_LOCKED`. |
 | `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, then run the command again. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `10` | Waiting for git | The daemon is running but waits for git: none was found, or it is older than 2.40. The command printed why and a prompt for your agent before sending anything. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
 
 Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.
 

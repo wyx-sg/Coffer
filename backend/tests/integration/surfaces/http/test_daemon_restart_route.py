@@ -17,7 +17,7 @@ from coffer.surfaces.http import daemon_port, daemon_restart_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_restart_routes import SelfRestart, get_self_restart
-from coffer.surfaces.http.dependencies import get_audit_service
+from coffer.surfaces.http.dependencies import get_audit_service_optional
 
 _TOKEN = "restart-token"
 
@@ -60,7 +60,7 @@ def _app(restart: _Restart, audit: _Audit) -> FastAPI:
     app.dependency_overrides[get_self_restart] = lambda: SelfRestart(
         spawn_successor=restart.spawn, exit_self=restart.exit
     )
-    app.dependency_overrides[get_audit_service] = lambda: audit
+    app.dependency_overrides[get_audit_service_optional] = lambda: audit
     return app
 
 

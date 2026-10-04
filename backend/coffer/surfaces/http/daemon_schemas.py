@@ -55,8 +55,38 @@ class RuntimeHealthOut(BaseModel):
     last_crash: TaskCrashOut | None = None
 
 
+class DaemonSetupOut(BaseModel):
+    """What a daemon in its setup state is waiting for (spec daemon "Wait in a
+    setup state when git is missing or too old")."""
+
+    #: What is missing; git is the one thing a daemon waits for.
+    need: Literal["git"]
+    #: ``git_missing`` — no git on the daemon's or the login shell's ``PATH``;
+    #: ``git_too_old`` — the newest git found is older than ``needed``.
+    reason: Literal["git_missing", "git_too_old"]
+    #: The version of the newest git found (``2.39``); null when none was.
+    found: str | None
+    #: The oldest version the vault runs on (``2.40``).
+    needed: str
+    #: What is wrong, why Coffer needs git and what to do, as the CLI prints it.
+    message: str
+    #: The chore of installing or updating git, for the person's agent.
+    handoff: HandoffOut
+
+
+class DaemonSetupCheckOut(BaseModel):
+    """The answer to Check again: whether git is now there."""
+
+    #: git is now there: restart the daemon and it finishes its normal start.
+    ready: bool
+    #: What it still waits for; null once ``ready``.
+    setup: DaemonSetupOut | None = None
+
+
 class DaemonStatusOut(BaseModel):
-    status: Literal["ready", "draining"]
+    #: ``setup`` — serving, but waiting for git before it opens the vault;
+    #: ``setup`` below says why.
+    status: Literal["ready", "draining", "setup"]
     version: str
     #: The daemon process's ``sys.executable`` — the frozen binary or the
     #: interpreter — so a caller reporting version skew can name the build.
@@ -89,6 +119,8 @@ class DaemonStatusOut(BaseModel):
     #: and background task crashes on the status"). Null only from an app
     #: assembled without the daemon's runtime.
     runtime: RuntimeHealthOut | None = None
+    #: What the daemon waits for while ``status`` is ``setup``; null otherwise.
+    setup: DaemonSetupOut | None = None
 
 
 class FeatureOut(BaseModel):

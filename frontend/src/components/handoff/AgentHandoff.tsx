@@ -24,7 +24,8 @@ interface Props {
   /** The backend's hand-off text, passed on as is — never assembled by the caller;
    *  or a request for it, made when the person picks Ask an agent or Copy prompt. */
   prompt: PromptSource;
-  size?: "sm" | "default";
+  /** `lg` beside the other controls of a full-page state. */
+  size?: "sm" | "default" | "lg";
   /** The "?" beside it; off in a row that already says what the problem is
    *  (Knowledge and Memory failures, after their own Retry / Check again). */
   help?: boolean;
@@ -58,7 +59,7 @@ export function AgentHandoff({ prompt, size = "default", help = true }: Props) {
                 size={size}
                 aria-label={t("handoff.moreOptions")}
                 aria-haspopup="menu"
-                className={cn("rounded-l-none px-0", small ? "w-6" : "w-7")}
+                className={cn("rounded-l-none px-0", small ? "w-6" : size === "lg" ? "w-8" : "w-7")}
               >
                 <ChevronDown aria-hidden className="!size-3" />
               </Button>

@@ -277,7 +277,7 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 
 知识集的每一次改动都会作为一个版本保留：你的保存和删除、每轮整理、立刻成为文档的提交、保险库同步带进来的内容，以及在 Coffer 之外用你自己的编辑器或智能体文件工具做的编辑。每次改动都注明**写入者**：`user`、`agent`、`curation`（附带它整理的条目及提交者）、`sync` 或 `disk`，所以你总能知道谁改了什么。
 
-历史就是保险库仓库自己的历史：知识集位于 `~/.coffer/vault` 的 `knowledge/` 下，所以 `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` 读到的是同样的版本，[保险库同步](/zh/guides/vault-sync)会把它们带到你的其他机器上。Coffer 的保险库需要 `git`；没有 git，守护进程不会启动，并会说明安装步骤。如果守护进程运行期间 git 没了，所有写入照常工作，历史读取会被拒绝。这个拒绝附带一段提示词，让你的智能体按适合你机器的方式安装 git，并用 `git --version` 确认：历史标签页（*历史需要 git*）和**最近改动**（*最近改动需要 git*）会显示一行，带**重新检查**和**交给智能体 ▾**（菜单里可复制提示词）。
+历史就是保险库仓库自己的历史：知识集位于 `~/.coffer/vault` 的 `knowledge/` 下，所以 `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` 读到的是同样的版本，[保险库同步](/zh/guides/vault-sync)会把它们带到你的其他机器上。Coffer 的保险库需要 `git`；没有 git 时，应用会一直显示 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)，直到装好为止。如果守护进程运行期间 git 没了，所有写入照常工作，历史读取会被拒绝。这个拒绝附带一段提示词，让你的智能体按适合你机器的方式安装 git，并用 `git --version` 确认：历史标签页（*历史需要 git*）和**最近改动**（*最近改动需要 git*）会显示一行，带**重新检查**和**交给智能体 ▾**（菜单里可复制提示词）。
 
 ### 查看文档的历史 {#look-at-a-document-s-history}
 

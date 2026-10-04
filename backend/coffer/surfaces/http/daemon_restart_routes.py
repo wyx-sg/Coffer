@@ -32,7 +32,7 @@ from coffer.infrastructure.daemon import bootstrap, self_restart
 from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.daemon_schemas import DaemonRestartOut
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service
+from coffer.surfaces.http.dependencies import get_actor, get_audit_service_optional
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"], dependencies=[Depends(require_token)])
 
@@ -73,7 +73,10 @@ def reset_restart_state() -> None:
 async def restart_daemon(
     background: BackgroundTasks,
     restart: SelfRestart = Depends(get_self_restart),  # noqa: B008
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    # Optional: a daemon waiting in its setup state wires no audit store, and
+    # restarting is how it finishes booting once git is there (spec daemon
+    # "Wait in a setup state when git is missing or too old").
+    audit: AuditService | None = Depends(get_audit_service_optional),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> DaemonRestartOut:
     """Start a successor, then exit once this answer is sent.
@@ -96,11 +99,12 @@ async def restart_daemon(
         raise HTTPException(
             status_code=500, detail=f"could not start the replacement daemon: {exc}"
         ) from None
-    await audit.record(
-        AuditEventType.DAEMON_RESTARTED.value,
-        actor=actor,
-        details={"port": port, "successor_pid": successor},
-    )
+    if audit is not None:
+        await audit.record(
+            AuditEventType.DAEMON_RESTARTED.value,
+            actor=actor,
+            details={"port": port, "successor_pid": successor},
+        )
     background.add_task(restart.exit_self)
     return DaemonRestartOut(port=port)
 

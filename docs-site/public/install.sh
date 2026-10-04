@@ -29,6 +29,40 @@ err() {
     exit 1
 }
 
+warn() {
+    printf 'coffer-install: warning: %s\n' "$*" >&2
+}
+
+# Coffer needs git 2.40 or later: the vault is a git repository. Say so when
+# it is missing or older, but never fail the install — the daemon starts
+# anyway and shows what to do until git is there.
+check_git() {
+    _req="https://wyx-sg.github.io/Coffer/start/install#requirements"
+    if ! command -v git > /dev/null 2>&1; then
+        warn "git was not found. Coffer needs git 2.40 or later: the vault is a git repository."
+        warn "Install git, then start Coffer. See ${_req}"
+        return 0
+    fi
+    # `git version 2.39.5 (Apple Git-154)` -> 2 and 39. On a Mac without the
+    # developer tools, /usr/bin/git exists but answers nothing usable.
+    _gv="$(git --version 2> /dev/null | awk '{print $3}')" || _gv=""
+    _major="${_gv%%.*}"
+    _rest="${_gv#*.}"
+    _minor="${_rest%%.*}"
+    case "${_major}:${_minor}" in
+        *[!0-9:]* | :* | *:)
+            warn "git is installed but did not report a version. Coffer needs git 2.40 or later."
+            warn "Make 'git --version' work, then start Coffer. See ${_req}"
+            return 0
+            ;;
+    esac
+    if [ "$_major" -lt 2 ] || { [ "$_major" -eq 2 ] && [ "$_minor" -lt 40 ]; }; then
+        warn "git ${_major}.${_minor} is older than 2.40, which Coffer needs."
+        warn "Update git, then start Coffer. See ${_req}"
+    fi
+    return 0
+}
+
 need_cmd() {
     if ! command -v "$1" > /dev/null 2>&1; then
         err "required command not found: '$1' — please install it and try again"
@@ -160,6 +194,9 @@ See https://wyx-sg.github.io/Coffer/start/install for alternatives."
     install_binaries "$tmp" "$install_dir"
 
     say "installed coffer, coffer-daemon, coffer-mcp-shim to ${install_dir}"
+
+    # --- requirements: git 2.40+ (a warning, never a failure) ----------------
+    check_git
 
     # --- PATH setup ----------------------------------------------------------
     _on_path=0

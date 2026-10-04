@@ -96,3 +96,24 @@ def test_forward_401_envelope_emits_jsonrpc_error(
     assert payload["id"] == 21
     assert payload["error"]["code"] == -32603
     assert "HTTP 401" in payload["error"]["message"]
+
+
+def test_a_refusal_reaches_the_agent_with_its_message_and_handoff(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A daemon waiting for git refuses ``/mcp`` with the setup message and the
+    hand-off (spec daemon "Wait in a setup state when git is missing or too
+    old"): the agent is told both, whole, not the body's first 200 bytes."""
+    prompt = "Please install git on this machine.\n" + "x" * 400
+    body = {
+        "error": {
+            "code": "GIT_NEEDED",
+            "message": "Coffer needs git, and git isn't installed on this machine.",
+            "details": {"reason": "git_missing", "handoff": {"prompt": prompt}},
+        }
+    }
+    envelope = {"jsonrpc": "2.0", "id": 3, "method": "tools/list"}
+    forward_response(envelope, httpx.Response(503, text=json.dumps(body)))
+    message = json.loads(_read_line(capsys))["error"]["message"]
+    assert message.startswith("coffer gateway HTTP 503: Coffer needs git")
+    assert message.endswith(prompt)

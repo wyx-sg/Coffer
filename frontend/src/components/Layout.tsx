@@ -23,7 +23,9 @@
 // (boards 1.1.18 / 1.1.19): the bar sits right under the title strip; while
 // reconnecting the page stays under it,
 // dimmed and inert; once offline it makes way for the offline screen; when the
-// daemon answers again every query refetches and a toast says so.
+// daemon answers again every query refetches and a toast says so. A daemon
+// that answers but waits for git (status "setup") gets the setup screen in
+// place of every page (board 1.1.22).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useRoutes, type RouteObject } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -31,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { useHistoryNav } from "@/lib/hooks/useHistoryNav";
 import { useResizableWidth } from "@/lib/hooks/useResizableWidth";
 import { isSettingsPath } from "@/lib/navigation";
@@ -45,6 +48,7 @@ import { PendingApprovalsSheet } from "./secret/PendingApprovalsSheet";
 import { SplitDivider } from "./SplitDivider";
 import { CommandPalette } from "./palette/CommandPalette";
 import { useDaemonConnectionDriver } from "./shell/daemonConnection";
+import { GitSetupState } from "./shell/GitSetupState";
 import { SidebarFooter } from "./shell/SidebarFooter";
 import { SidebarSearch } from "./shell/SidebarSearch";
 import { usePaletteRequests } from "./shell/paletteRequest";
@@ -98,6 +102,8 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
   const { toast } = useToast();
   const daemon = useDaemonConnectionDriver(() => toast.success(t("daemon.reconnect.reconnected")));
   const phase = daemon.connection.phase;
+  const status = useDaemonStatus();
+  const setup = status.data?.status === "setup" ? (status.data.setup ?? null) : null;
   // A dimmed page must not take keystrokes either; `inert` is not a React prop yet.
   const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -209,6 +215,8 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="page-scroll">
             {phase === "offline" ? (
               <DaemonOfflineState connection={daemon.connection} onRetry={daemon.retryNow} />
+            ) : setup ? (
+              <GitSetupState setup={setup} />
             ) : (
               // Full-width — the content tracks the sidebar, so collapsing it
               // genuinely widens the working area.

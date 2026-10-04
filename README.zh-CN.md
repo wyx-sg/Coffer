@@ -26,6 +26,8 @@ Coffer 是运行在你机器上的一个守护进程，你的编程智能体都�
 
 ## 安装
 
+**系统要求：** git 2.40 或更高版本；一个要连接的编程智能体（Claude Code 或 Codex）。预编译构建只面向 Apple 芯片的 macOS；其他机器请从源码安装（Python 3.12+、Node.js 20）。ripgrep 可选。见[系统要求](https://wyx-sg.github.io/Coffer/zh/start/install#requirements)。
+
 把下面这段粘贴给一个能在你机器上执行命令的编程智能体：
 
 ```text

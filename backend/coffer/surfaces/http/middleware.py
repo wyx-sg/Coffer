@@ -6,7 +6,10 @@ ends up nearest the network. Each step's position is a correctness claim, not a
 preference, which is why they live together rather than being sprinkled through
 the composition root:
 
-1. :mod:`coffer.surfaces.http.cors` — innermost. It only answers preflights
+0. :mod:`coffer.surfaces.http.setup_state` — innermost. While the daemon waits
+   for git it refuses every route that needs the vault; it sits inside CORS so
+   the page served from another origin can still read the refusal.
+1. :mod:`coffer.surfaces.http.cors`. It only answers preflights
    and stamps headers on responses that got as far as a route.
 2. :mod:`coffer.surfaces.http.host_guard` — wraps CORS. A request naming an
    authority this daemon does not answer for is a DNS-rebinding attempt, and
@@ -22,11 +25,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from coffer.surfaces.http import cors, host_guard, trace
+from coffer.surfaces.http import cors, host_guard, setup_state, trace
 
 
 def install(app: FastAPI) -> None:
     """Add every middleware, innermost first. See the module docstring."""
+    setup_state.install(app)
     cors.install(app)
     host_guard.install(app)
     trace.install(app)

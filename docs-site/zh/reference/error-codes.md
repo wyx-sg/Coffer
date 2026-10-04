@@ -276,8 +276,9 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `DB_SCHEMA_TOO_NEW` | 409 | `~/.coffer/runs.db` 被更新或不同的 Coffer 构建迁移过。万一出现在响应中，就使用这个状态码。 | 升级 Coffer，或恢复数据库迁移前的备份。见[文件与目录](/zh/reference/filesystem)。 |
 | `GIT_MISSING` | 500 | 保险库需要 `git`，但没有找到。需要 git 的路由也会返回它。 | 按适合这台机器的方式安装 git；错误的 `details.handoff` 是给你的智能体的提示词。 |
+| `GIT_NEEDED` | 503 | 守护进程在等 git：没有找到，或版本低于 2.40。所有需要保险库的路由都返回它；`details.reason` 是 `git_missing` 或 `git_too_old`，并带有 `found`、`needed` 和 `handoff`。 | 安装或更新 git（`details.handoff` 里的提示词），然后点**重新检查**。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
 
-`MASTER_KEY_MISSING` 也可能让启动失败；见[密钥](#secrets)。低于 2.40 的 `git` 也会让守护进程停下，但没有错误码：日志会给出找到的版本，并附上一段可以交给你的智能体、让它升级 git 的提示词。
+`MASTER_KEY_MISSING` 也可能让启动失败；见[密钥](#secrets)。没有 `git` 或版本低于 2.40 不会让守护进程停下：它会启动并等待 git，对请求返回 `GIT_NEEDED`。
 
 ## 聊天轮次错误 {#chat-turn-errors}
 
@@ -321,6 +322,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `7` | Upstream test failed | `coffer mcp test` 无法初始化上游服务器。 |
 | `8` | Secret issue | 错误码为 `SECRET_MISSING` 或 `SECRET_LOCKED`。 |
 | `9` | Waiting for approval | 改动已保存，但其中的某个密钥正在 Coffer 桌面应用中等待审批（`SECRET_BINDING_PENDING`）。命令打印了 `waiting for approval in the Coffer app` 以及审批的 id。在应用中批准，然后再运行一次该命令。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `10` | Waiting for git | 守护进程在运行，但在等 git：没有找到，或版本低于 2.40。命令在发送任何请求之前打印了原因和一段给智能体的提示词。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
 
 出错时传 `--verbose`（`coffer -v …`）可以打印完整的 traceback 和 HTTP 上下文。
 

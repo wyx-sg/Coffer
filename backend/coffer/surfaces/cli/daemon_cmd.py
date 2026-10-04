@@ -133,6 +133,12 @@ def _start_daemon() -> None:
         raise typer.Exit(1)
 
     typer.echo(f"daemon started (pid={proc.pid})")
+    # Started, but waiting for git (spec daemon "Wait in a setup state when git
+    # is missing or too old"): say why now rather than at the next command.
+    info = _cli_client.discover()
+    setup = _cli_client.waiting_for_git(bootstrap.probe_status(info) if info else None)
+    if setup is not None:
+        _cli_client.print_waiting_for_git(setup)
 
 
 @app.command("start")
@@ -225,14 +231,18 @@ def status(
         else:
             typer.echo("status:  not running")
         raise typer.Exit(int(ExitCode.DAEMON_UNREACHABLE))
-    c, info = _cli_client.client_or_exit()
+    c, info = _cli_client.client_or_exit(allow_setup=True)
     with c:
         r = c.get("/daemon/status")
         _cli_client.check(r, verbose=verbose)
         data = r.json()
-        r = c.get("/upkeep/runs")
-        _cli_client.check(r, verbose=verbose)
-        runs: list[dict[str, Any]] = r.json()["runs"]
+        setup = _cli_client.waiting_for_git(data)
+        runs: list[dict[str, Any]] = []
+        # A daemon waiting for git runs no passes and refuses the route.
+        if setup is None:
+            r = c.get("/upkeep/runs")
+            _cli_client.check(r, verbose=verbose)
+            runs = r.json()["runs"]
     if output_json:
         typer.echo(
             _json.dumps({**data, "port": info.port, "pid": info.pid, "passes_in_flight": runs})
@@ -244,6 +254,10 @@ def status(
     typer.echo(f"pid:     {info.pid}")
     for line in _runtime_lines(data.get("runtime")):
         typer.echo(line)
+    if setup is not None:
+        typer.echo("")
+        _cli_client.print_waiting_for_git(setup)
+        return
     typer.echo("")
     typer.echo("passes in flight:")
     if not runs:

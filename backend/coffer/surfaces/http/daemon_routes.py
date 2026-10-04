@@ -47,6 +47,7 @@ from coffer.surfaces.http.schemas import (
     TokenRotationOut,
     UpstreamSummary,
 )
+from coffer.surfaces.http.setup_state import current_setup
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
 router.include_router(log_router)
@@ -139,6 +140,9 @@ async def get_status(
         data_dir=_display_path(coffer_home()),
         connected_agents=await _connected_agents(connection),
         runtime=runtime_health(),
+        # While the daemon waits for git (spec daemon "Wait in a setup state
+        # when git is missing or too old"): what is wrong and the hand-off.
+        setup=current_setup(),
     )
 
 

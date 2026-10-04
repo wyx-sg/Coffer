@@ -1,6 +1,6 @@
 """The hand-offs for a machine with no ``git``, or one too old (spec knowledge
 "Keep every document's history and undo a pass as a whole"; the skill Git
-import; spec vault-storage "Refuse to start on a git older than 2.40").
+import; spec daemon "Wait in a setup state when git is missing or too old").
 
 Coffer reads git history and Git repositories with the machine's own ``git``
 and does not install it: how git is installed depends on the machine, so the
@@ -15,10 +15,15 @@ so the page that shows the error can offer the prompt beside it.
 
 from __future__ import annotations
 
+from coffer.domain.error_base import CofferError
 from coffer.domain.handoff import Handoff, render_handoff
 
 #: ``details.reason`` of an error whose cause is that git is not installed.
 GIT_MISSING = "git_missing"
+#: ``details.reason`` when git is installed but older than the vault needs.
+GIT_TOO_OLD = "git_too_old"
+#: What the vault needs git for, as the prompts and messages word it.
+VAULT_NEEDS_GIT_FOR = "keeping the vault's history and syncing it"
 
 
 def git_install_handoff(machine: str, *, needed_for: str) -> str:
@@ -55,9 +60,9 @@ def git_update_handoff(machine: str, *, found: str, needed: str, needed_for: str
             ),
             steps=(
                 "Update it the way that fits this machine, and make sure the newer git "
-                "comes first on the PATH the Coffer daemon starts with.",
+                "comes first on the PATH of a login shell, which Coffer also searches.",
                 f"When you are done, run `git --version` to confirm it reports {needed} or later.",
-                "Then tell me to start Coffer again.",
+                "Then tell me to check again in Coffer.",
             ),
         )
     )
@@ -95,11 +100,60 @@ def git_missing_details(machine: str, *, needed_for: str) -> dict[str, object]:
     }
 
 
+def git_setup_message(*, found: str | None, needed: str) -> str:
+    """Why the daemon is waiting in its setup state: what is wrong, why Coffer
+    needs git, and what to do — the words the CLI prints and every refused
+    route carries."""
+    problem = (
+        "Coffer needs git, and git isn't installed on this machine."
+        if found is None
+        else f"Coffer needs git {needed} or later, and the git on this machine is {found}."
+    )
+    verb = "Install" if found is None else "Update"
+    return (
+        f"{problem} The vault keeps its history and syncs with git. {verb} git, then "
+        "check again: press Check again in Coffer, or run the command again."
+    )
+
+
+def git_setup_details(machine: str, *, found: str | None, needed: str) -> dict[str, object]:
+    """The setup state's details: the reason, the versions and the hand-off for
+    the person's agent (install when ``found`` is ``None``, else update)."""
+    prompt = (
+        git_install_handoff(machine, needed_for=VAULT_NEEDS_GIT_FOR)
+        if found is None
+        else git_update_handoff(machine, found=found, needed=needed, needed_for=VAULT_NEEDS_GIT_FOR)
+    )
+    return {
+        "reason": GIT_MISSING if found is None else GIT_TOO_OLD,
+        "found": found,
+        "needed": needed,
+        "handoff": {"prompt": prompt},
+    }
+
+
+class GitNeeded(CofferError):  # noqa: N818
+    """The daemon is waiting in its setup state for git, so it refuses what
+    needs the vault. Carries :func:`git_setup_message` and
+    :func:`git_setup_details`, so every surface says the same thing."""
+
+    code = "GIT_NEEDED"
+
+    def __init__(self, message: str, details: dict[str, object]) -> None:
+        super().__init__(message)
+        self.error_details = details
+
+
 __all__ = [
     "GIT_MISSING",
+    "GIT_TOO_OLD",
+    "VAULT_NEEDS_GIT_FOR",
+    "GitNeeded",
     "clone_failure_details",
     "git_clone_handoff",
     "git_install_handoff",
     "git_missing_details",
+    "git_setup_details",
+    "git_setup_message",
     "git_update_handoff",
 ]

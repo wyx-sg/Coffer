@@ -1,12 +1,13 @@
 // frontend/src/lib/hooks/useDaemon.ts
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { daemonApi } from "@/lib/api/daemon";
+import { daemonApi, type DaemonSetup, type DaemonStatus } from "@/lib/api/daemon";
 import {
   applyDaemonConnection,
   daemonVersionMatches,
   inDesktopShell,
   restartDaemon,
+  type RestartResult,
 } from "@/lib/tauri";
 import { restartFromBrowser } from "@/lib/daemonRestart";
 import { daemonStatusKey, daemonUpgradeKey, daemonVersionSkewKey } from "@/lib/api/queryKeys";
@@ -70,30 +71,76 @@ export function useDaemonOutOfDate(version: string | undefined) {
 export function useRestartDaemon() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      if (!inDesktopShell()) {
-        await restartFromBrowser();
-        return null;
-      }
-      // The daemon mints a fresh token on every start, so the secrets the
-      // shell handed over at launch are now revoked. The restart already
-      // waited for the replacement to answer and returned its connection, so
-      // swap that in before anything refetches — otherwise every request 401s
-      // until the app is relaunched.
-      //
-      // Installing what the restart returned, rather than asking for a
-      // connection again, is also what keeps a restart to ONE daemon: the
-      // second ask used to arrive before the new daemon had bound a port, and
-      // the handshake answers "no daemon running" by spawning one.
-      const result = await restartDaemon();
-      applyDaemonConnection(result);
-      return result;
-    },
+    mutationFn: restartFromPage,
     // The token changed, so every cached query (not just daemon/status) was
     // fetched with the revoked secrets — refetch the whole cache so the
     // app recovers in place.
     onSuccess: (result) => (result ? qc.invalidateQueries() : undefined),
   });
+}
+
+/** Restart the daemon the way this host can; the shell's new connection, or
+ *  null in a browser, which reloads from the successor and never settles. */
+async function restartFromPage(): Promise<RestartResult | null> {
+  if (!inDesktopShell()) {
+    await restartFromBrowser();
+    return null;
+  }
+  // The daemon mints a fresh token on every start, so the secrets the
+  // shell handed over at launch are now revoked. The restart already
+  // waited for the replacement to answer and returned its connection, so
+  // swap that in before anything refetches — otherwise every request 401s
+  // until the app is relaunched.
+  //
+  // Installing what the restart returned, rather than asking for a
+  // connection again, is also what keeps a restart to ONE daemon: the
+  // second ask used to arrive before the new daemon had bound a port, and
+  // the handshake answers "no daemon running" by spawning one.
+  const result = await restartDaemon();
+  applyDaemonConnection(result);
+  return result;
+}
+
+/** @ui-only what Check again found while git is still not there; never crosses the wire. */
+export interface GitStillMissing {
+  ready: false;
+  setup: DaemonSetup | null;
+  checkedAt: number;
+}
+
+/**
+ * Check again, on the setup screen (spec web-ui "Show a setup screen while the
+ * daemon waits for git"): the daemon looks for git again; once it is there the
+ * daemon is restarted the way this host restarts it and the successor starts
+ * normally. While git is still missing the status is updated in place.
+ */
+export function useCheckGitAgain() {
+  const qc = useQueryClient();
+  // Git was found and the restart is under way: the button says so.
+  const [restarting, setRestarting] = useState(false);
+  const mutation = useMutation({
+    mutationFn: async (): Promise<GitStillMissing | { ready: true }> => {
+      const found = await daemonApi.setupCheck();
+      if (!found.ready) {
+        const setup = found.setup ?? null;
+        if (setup) {
+          qc.setQueryData<DaemonStatus>(daemonStatusKey, (prev) =>
+            prev ? { ...prev, setup } : prev,
+          );
+        }
+        return { ready: false, setup, checkedAt: Date.now() };
+      }
+      setRestarting(true);
+      try {
+        await restartFromPage();
+      } finally {
+        setRestarting(false);
+      }
+      return { ready: true };
+    },
+    onSuccess: (result) => (result.ready ? qc.invalidateQueries() : undefined),
+  });
+  return { ...mutation, restarting };
 }
 
 /**

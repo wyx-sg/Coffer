@@ -15,7 +15,7 @@ description: 从源码安装 Coffer，用一次性保险库运行守护进程和
 | [uv](https://docs.astral.sh/uv/) | 较新的任意版本 | 安装锁定的依赖集，`make lock` |
 | Node.js + npm | 20，即每个 CI job 使用的版本 | Web 界面、OpenSpec CLI、Playwright |
 | ripgrep（`rg`） | 任意 | 知识整理，集成测试会用到（CI 会安装它） |
-| git | 2.40 或更高（`merge-tree --write-tree --merge-base`） | 保险库是一个 git 仓库：没有 git 守护进程拒绝启动，保险库和同步测试也要运行它 |
+| git | 2.40 或更高（`merge-tree --write-tree --merge-base`） | 保险库是一个 git 仓库：没有 git 守护进程会停在设置状态，保险库和同步测试也要运行它 |
 | Rust 工具链（[rustup](https://rustup.rs)）+ Xcode 命令行工具 | stable | 只有桌面壳（`make desktop*`）需要 |
 
 ::: warning 使用 Node 20

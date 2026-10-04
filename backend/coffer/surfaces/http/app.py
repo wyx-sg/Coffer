@@ -79,9 +79,7 @@ from coffer.surfaces.http.event_wiring import build_event_stream, start_attentio
 from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
 from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
-from coffer.surfaces.http.mcp.protocol_routes import (
-    start_session_reaper,
-)
+from coffer.surfaces.http.mcp.protocol_routes import start_session_reaper
 from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
 from coffer.surfaces.http.memory_wiring import (
     follow_memory_switch,
@@ -98,10 +96,8 @@ from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.secret_boundary_wiring import (
     remember_destination_sources,
 )
-from coffer.surfaces.http.secret_composition import (
-    init_secret_store,
-    make_secret_resolver,
-)
+from coffer.surfaces.http.secret_composition import init_secret_store, make_secret_resolver
+from coffer.surfaces.http.setup_lifespan import guarded
 from coffer.surfaces.http.vault_composition import build_vault_stores
 from coffer.surfaces.http.vault_wiring import start_vault_scanning
 
@@ -367,7 +363,9 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
         openapi_url=None,
         docs_url=None,
         redoc_url=None,
-        lifespan=_lifespan,
+        # Opens the vault only once git is there; waits in the setup state
+        # otherwise (spec daemon "Wait in a setup state when git is missing or too old").
+        lifespan=guarded(_lifespan),
     )
     app.state.kinds = kinds or {}
     # Register the agent Kind eagerly with no on_delete hook so tests that do

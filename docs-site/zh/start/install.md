@@ -11,6 +11,16 @@ description: 通过一行安装脚本、macOS 桌面应用、发布压缩包或�
 一行安装脚本、桌面 `.dmg` 和发布压缩包都从打过标签的 GitHub 发布版本下载。在第一个 `v*` 标签发布之前，这些下载都会返回 404。目前请[从源码安装](#from-source)。
 :::
 
+## 系统要求 {#requirements}
+
+| 需要什么 | 为什么 |
+| --- | --- |
+| **Apple 芯片（arm64）的 macOS**，用于预编译构建 | 桌面应用、一行安装脚本和发布压缩包只为它构建。其他机器请[从源码安装](#from-source)。 |
+| **git 2.40 或更高版本**（必需） | 保险库是一个 git 仓库：每次改动都是一次提交，历史、撤销和同步都跑在 git 上（同步的合并需要 2.40）。没有它 Coffer 也能启动，但会一直显示 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)，直到装好 git。用 `git --version` 检查。 |
+| **一个要连接的编程智能体**：Claude Code 或 Codex | Coffer 把 MCP 服务器、技能等提供给你的智能体。可以先装 Coffer，之后再连接智能体。 |
+| **ripgrep（`rg`）**（可选） | 让知识搜索更快。没有它时，Coffer 会对同样的文件用较慢的内置搜索。 |
+| **从源码安装：** Python 3.12 或更高版本，以及 Node.js 20 | Python 运行守护进程和 CLI；Node.js 构建 Web 界面（CI 用 Node.js 20 构建）。 |
+
 ## 让你的智能体来安装 {#let-your-agent-install-it}
 
 如果你已经在用某个编程智能体（Claude Code、Codex，或任何能在你机器上运行命令的智能体），把下面这段提示词粘贴给它：
@@ -19,8 +29,10 @@ description: 通过一行安装脚本、macOS 桌面应用、发布压缩包或�
 Install Coffer on this machine by following
 https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
 this machine (a release build if one is published for this OS and architecture,
-otherwise from source). Ask me before running anything with sudo or editing my
-shell profile. When it is installed, check it with `coffer daemon status`.
+otherwise from source). Check its Requirements first: if `git --version` is
+missing or older than 2.40, install or update git the way that fits this machine.
+Ask me before running anything with sudo or editing my shell profile. When it is
+installed, check it with `coffer daemon status`.
 Then tell me which coding agents it found here (claude-code, codex) and which
 config files each one's Connect button on the web UI's Agents page will change,
 so I can connect them myself. Do not handle any credentials: if a step needs a
@@ -38,7 +50,7 @@ login, tell me what to do instead.
 | [发布压缩包](#release-archive) | 手动安装，或没有图形界面的机器 | 同样的三个二进制，解压到你选的位置 |
 | [从源码](#from-source) | 贡献者、Linux 用户，以及想跟进 `main` 的人 | 一套 Python 安装，`PATH` 上有 `coffer` 和 `coffer-mcp-shim` |
 
-预编译二进制只面向 **Apple 芯片（arm64）的 macOS**。Intel Mac、Linux 和 Windows 没有发布构建，在这些机器上请从源码安装（Python 3.12 或更高版本）。
+预编译二进制只面向 **Apple 芯片（arm64）的 macOS**。Intel Mac、Linux 和 Windows 没有发布构建，在这些机器上请从源码安装。每种方式都需要 git 2.40 或更高版本，见[系统要求](#requirements)。
 
 每种方式装的都是完整的 Coffer。Web 界面由守护进程自己提供，所以装了 CLI 也就有了界面（在 `http://127.0.0.1:38470/`），装了桌面应用也就有了 CLI。
 
@@ -86,6 +98,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 2. 从 GitHub Releases 下载 `coffer-cli-aarch64-apple-darwin.tar.gz` 和该版本的 `SHA256SUMS`，然后校验压缩包的校验和。校验和不匹配，脚本就会停止。
 3. 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 装进安装目录。每个二进制先复制成旁边的一个临时名字，加上可执行权限，再重命名覆盖公开名字。所以当这个名字是指向某个版本目录的符号链接时（一旦从别处启动的守护进程，比如桌面应用，把它的构建部署到那里，就会是这样），被替换的是链接本身，上一个版本的二进制原样保留，可用于回滚。
 4. 如果该目录还不在你的 `PATH` 上，就往你的 shell 配置文件追加一行。配置文件取决于你的 shell：zsh 是 `~/.zshrc`（或 `$ZDOTDIR/.zshrc`），macOS 上的 bash 是 `~/.bash_profile`，fish 是 `~/.config/fish/config.fish`（以 `fish_add_path` 的形式），其他 shell 是 `~/.profile`。再次运行脚本不会重复添加这一行。
+5. 如果 `git` 不存在或低于 2.40，给出警告（不会失败），并指向[系统要求](#requirements)。
 
 打开一个新 shell，或者 `source` 脚本提到的配置文件，让 `coffer` 出现在 `PATH` 上。脚本最后会指引你到 Web 界面的**智能体**页面，用**连接**连接 Claude Code。
 见[快速上手](/zh/start/quickstart)。
@@ -122,7 +135,7 @@ export PATH="$HOME/.coffer/bin:$PATH"          # add to your shell profile
 
 ## 从源码 {#from-source}
 
-你需要 Python 3.12 或更高版本，以及 git。构建 Web 界面需要 Node.js，另外推荐安装 [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）。知识整理用 `rg` 挑选候选文档；没有它时会退回到较慢的内置搜索。
+除了 git，从源码安装还需要 Python 3.12 或更高版本、构建 Web 界面用的 Node.js 20，另外推荐安装 [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）；见[系统要求](#requirements)。
 
 ```sh
 git clone https://github.com/wyx-sg/Coffer.git
@@ -182,7 +195,7 @@ port:    38470
 pid:     48213
 ```
 
-你的版本号和 PID 会不一样。然后在浏览器里打开 `http://127.0.0.1:38470/`，或者打开桌面应用。守护进程提供的页面已经带上了 API 令牌，所以不用任何额外步骤就处于登录状态。
+你的版本号和 PID 会不一样。`status:  setup` 表示守护进程在等 git：同一条命令会打印原因和一段给智能体的提示词（见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)）。然后在浏览器里打开 `http://127.0.0.1:38470/`，或者打开桌面应用。守护进程提供的页面已经带上了 API 令牌，所以不用任何额外步骤就处于登录状态。
 
 ## 启动并保持守护进程运行 {#start-and-keep-the-daemon-running}
 
