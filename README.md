@@ -39,14 +39,6 @@ a login, tell me what to do instead.
 
 Or follow the [install guide](https://wyx-sg.github.io/Coffer/start/install) yourself.
 
-## Quickstart
-
-1. `coffer daemon start`, then open <http://127.0.0.1:38470/>.
-2. **Agents**: choose **Connect** on each agent and apply the change Coffer shows.
-3. **MCP servers**: **Add server**, paste a server's JSON, and its tools appear in every connected agent as `<server>__<tool>`.
-
-The [quickstart](https://wyx-sg.github.io/Coffer/start/quickstart) continues from there; the [architecture overview](https://wyx-sg.github.io/Coffer/architecture/) explains how it works.
-
 ## Contributing
 
 [`AGENTS.md`](./AGENTS.md) is the operating manual and [Contributing](https://wyx-sg.github.io/Coffer/contributing/) the guide; `make verify` is the gate a change must pass. Report security issues privately, as the [security policy](./SECURITY.md) describes.

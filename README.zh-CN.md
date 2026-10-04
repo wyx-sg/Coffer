@@ -39,14 +39,6 @@ a login, tell me what to do instead.
 
 也可以自己按[安装指南](https://wyx-sg.github.io/Coffer/zh/start/install)操作。
 
-## 快速开始
-
-1. 运行 `coffer daemon start`，然后打开 <http://127.0.0.1:38470/>。
-2. **智能体**页：在每个智能体上选 **Connect**，确认 Coffer 列出的改动后应用。
-3. **MCP 服务器**页：**Add server**，粘贴服务器的 JSON，它的工具就会以 `<server>__<tool>` 出现在每个已连接的智能体里。
-
-后续步骤见[快速上手](https://wyx-sg.github.io/Coffer/zh/start/quickstart)；工作原理见[架构概览](https://wyx-sg.github.io/Coffer/zh/architecture/)。
-
 ## 参与贡献
 
 [`AGENTS.md`](./AGENTS.md) 是操作手册，[贡献指南](https://wyx-sg.github.io/Coffer/zh/contributing/)讲流程；`make verify` 是每个改动必须通过的门禁。安全问题请按[安全策略](./SECURITY.md)私下报告。
