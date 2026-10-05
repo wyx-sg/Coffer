@@ -2023,7 +2023,7 @@ The page MUST carry:
   `/secrets/<id>` with the list on the left and the chosen secret on the
   right. A list row shows the secret's label — or, without one, the first
   citer's name and the slot, never a hex id — on one line with no description
-  (that is in the detail's header), its status (missing on this Mac, waiting for approval) and how
+  (that is in the detail's header), the row as tall as that one line, its status (missing on this Mac, waiting for approval) and how
   many things use it; search matches the label, description and id. The
   detail's header shows the label and, under it, the description as text
   (nothing when there is none); the header holds no field to type into. Beside

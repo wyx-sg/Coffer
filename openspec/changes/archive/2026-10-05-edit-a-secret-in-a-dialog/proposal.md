@@ -15,6 +15,8 @@ header, unlike the other detail pages, which edit through Edit and a dialog
 - The secret's header shows the name and description as text, with **Edit**
   beside Reveal value…. Edit opens one dialog for the name, description and
   value; the value field starts empty and, left empty, keeps the value.
+- A list row is one line tall: it kept the two-line height after its description
+  moved to the header, and read as padded.
 - Replace value… leaves the header: replacing (or, for a secret missing on this
   Mac, adding) the value is done in Edit.
 - Local access for `coffer run` stays on the overview's Access row: it is a
