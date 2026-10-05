@@ -6,6 +6,7 @@ import {
   EMPTY_FORM,
   formFromRemote,
   isGitRemoteUrl,
+  secretFromRef,
   toRemoteInput,
   validateRemote,
   type FormState,
@@ -55,8 +56,25 @@ describe("formFromRemote", () => {
 
 describe("toRemoteInput", () => {
   test("trims, defaults the branch, and sends no secret for an empty pick", () => {
-    const out = toRemoteInput({ ...base, url: `  ${base.url} `, branch: " ", secretRef: "" });
+    const out = toRemoteInput({ ...base, url: `  ${base.url} `, branch: " ", secret: null });
     expect(out).toMatchObject({ url: base.url, branch: "main", secret_ref: null });
+  });
+
+  test("a standalone secret round-trips by name, any other ref whole", () => {
+    expect(secretFromRef("secret/abc")).toEqual({ kind: "stored", name: "abc" });
+    expect(toRemoteInput({ ...base, secret: secretFromRef("secret/abc") }).secret_ref).toBe(
+      "secret/abc",
+    );
+    expect(secretFromRef("provider/x/key")).toEqual({ kind: "stored", name: "provider/x/key" });
+    expect(toRemoteInput({ ...base, secret: secretFromRef("provider/x/key") }).secret_ref).toBe(
+      "provider/x/key",
+    );
+    expect(secretFromRef("")).toBeNull();
+  });
+
+  test("a pasted token cites the secret it will be stored under", () => {
+    const secret = { kind: "new" as const, name: "f".repeat(32), label: "Sync", value: "tok" };
+    expect(toRemoteInput({ ...base, secret }).secret_ref).toBe(`secret/${"f".repeat(32)}`);
   });
 
   test("Only when I press Sync now is enabled: false, the interval kept", () => {

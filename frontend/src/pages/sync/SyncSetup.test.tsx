@@ -7,12 +7,24 @@
 // else is said under the form. A stored-but-unjoined remote opens on the
 // preview, whose Back forgets it.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render as rtlRender, screen } from "@testing-library/react";
 
 import { ToastProvider } from "@/components/ui/toast";
 import type { RemoteCheck, SyncStatus } from "@/lib/api/sync";
 import { SyncSetup } from "./SyncSetup";
 import { idleMutation, makeStatus } from "./syncTestKit";
+import type { FormState } from "./syncRemoteForm";
+
+/** The secret field's dialogs read the query cache. */
+const render = (ui: React.ReactElement) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrap = (node: React.ReactElement) => (
+    <QueryClientProvider client={qc}>{node}</QueryClientProvider>
+  );
+  const out = rtlRender(wrap(ui));
+  return { ...out, rerender: (next: React.ReactElement) => out.rerender(wrap(next)) };
+};
 
 vi.mock("@/lib/hooks/useSync", () => ({
   useCheckRemote: vi.fn(),
@@ -20,7 +32,17 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useClearSyncRemote: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useSyncStop", () => ({ useJoin: vi.fn(), useJoinPreview: vi.fn() }));
-vi.mock("@/lib/hooks/useSecrets", () => ({ useSecrets: vi.fn(() => ({ data: { refs: [] } })) }));
+/** Writing a pasted token to Secrets, as the store would: the form comes back citing it. */
+const storePushToken = vi.fn(async (form: FormState) =>
+  form.secret?.kind === "new"
+    ? { ...form, secret: { kind: "stored" as const, name: form.secret.name } }
+    : form,
+);
+vi.mock("./useStorePushToken", () => ({ useStorePushToken: () => storePushToken }));
+vi.mock("@/lib/hooks/useSecrets", async (original) => ({
+  ...(await original<object>()),
+  useSecrets: vi.fn(() => ({ data: { refs: [] } })),
+}));
 
 const sync = await import("@/lib/hooks/useSync");
 const stop = await import("@/lib/hooks/useSyncStop");

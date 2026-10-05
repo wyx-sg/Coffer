@@ -11,12 +11,20 @@
 import type { TFunction } from "i18next";
 
 import type { SyncRemote, SyncRemoteInput } from "@/lib/api/sync";
+import {
+  isValidSecretName,
+  persistNewSecrets,
+  SECRET_PREFIX,
+  secretRef,
+  type SecretFieldValue,
+} from "@/lib/secretValue";
 
 export interface FormState {
   url: string;
   branch: string;
-  /** A name in the secret store — never the secret. Empty: none. */
-  secretRef: string;
+  /** The push token as the one secret field holds it — a stored name (or a whole store ref
+   *  set elsewhere), or a new one written to Secrets when the form saves. Null: none. */
+  secret: SecretFieldValue;
   includeSecret: boolean;
   intervalSeconds: number;
   /** False: rounds run only when the user presses Sync now. */
@@ -32,7 +40,7 @@ export const CADENCES = [900, 3600, 21600, 86400] as const;
 export const EMPTY_FORM: FormState = {
   url: "",
   branch: DEFAULT_BRANCH,
-  secretRef: "",
+  secret: null,
   includeSecret: false,
   intervalSeconds: DEFAULT_INTERVAL_SECONDS,
   enabled: true,
@@ -55,13 +63,38 @@ export function isGitRemoteUrl(value: string): boolean {
   }
 }
 
+/** A stored `secret_ref` as the secret field's value: a standalone `secret/<name>` by its
+ *  name, any other ref (set from the CLI) whole. */
+export function secretFromRef(ref: string | null | undefined): SecretFieldValue {
+  const trimmed = ref?.trim() ?? "";
+  if (!trimmed) return null;
+  const name = trimmed.startsWith(SECRET_PREFIX) ? trimmed.slice(SECRET_PREFIX.length) : null;
+  return { kind: "stored", name: name !== null && isValidSecretName(name) ? name : trimmed };
+}
+
+/** The ref the remote stores for the field's value. */
+function refOfSecret(secret: SecretFieldValue): string | null {
+  if (secret === null) return null;
+  return secret.kind === "stored" && secret.name.includes("/")
+    ? secret.name
+    : secretRef(secret.name);
+}
+
+/** Write a pasted push token to Secrets (before the remote is checked or saved, since both
+ *  resolve it), and hand back the form citing it as a stored secret. */
+export async function withSecretStored(form: FormState): Promise<FormState> {
+  if (form.secret?.kind !== "new") return form;
+  await persistNewSecrets([form.secret]);
+  return { ...form, secret: { kind: "stored", name: form.secret.name } };
+}
+
 /** The form a stored remote opens as. */
 export function formFromRemote(remote: SyncRemote | null): FormState {
   if (!remote) return EMPTY_FORM;
   return {
     url: remote.url,
     branch: remote.branch,
-    secretRef: remote.secret_ref ?? "",
+    secret: secretFromRef(remote.secret_ref),
     includeSecret: remote.include_secret,
     intervalSeconds: remote.interval_seconds,
     enabled: remote.enabled,
@@ -73,7 +106,7 @@ export function toRemoteInput(form: FormState): SyncRemoteInput {
   return {
     url: form.url.trim(),
     branch: form.branch.trim() || DEFAULT_BRANCH,
-    secret_ref: form.secretRef.trim() || null,
+    secret_ref: refOfSecret(form.secret),
     include_secret: form.includeSecret,
     interval_seconds: form.intervalSeconds,
     enabled: form.enabled,

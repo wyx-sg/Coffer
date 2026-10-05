@@ -4102,9 +4102,7 @@
       "branch": "分支",
       "secret": "密钥",
       "secretNone": "不使用",
-      "secretMissing": "本机没有它的值",
-      "secretPlaceholder": "选择一个密钥",
-      "secretEmpty": "还没有密钥——先在「密钥」页面添加。",
+      "secretDefaultName": "Vault 同步推送令牌",
       "cadence": {
         "label": "同步频率",
         "minutes_one": "每 {{count}} 分钟",

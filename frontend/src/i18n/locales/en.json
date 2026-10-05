@@ -4102,9 +4102,7 @@
       "branch": "Branch",
       "secret": "Secret",
       "secretNone": "None",
-      "secretMissing": "No value on this Mac",
-      "secretPlaceholder": "Choose a secret",
-      "secretEmpty": "No secrets yet — add one in Secrets.",
+      "secretDefaultName": "Vault sync push token",
       "cadence": {
         "label": "Run a round",
         "minutes_one": "Every {{count}} minute",

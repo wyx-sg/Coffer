@@ -38,8 +38,13 @@ export function useSecretChoices() {
   );
   /** Names that exist; a chosen name outside it is Missing (once loaded). */
   const names = useMemo(() => new Set(options.map((o) => o.name)), [options]);
-  /** The row behind a name, including one cited but not stored here. */
-  const rowOf = (name: string) => query.data?.refs.find((r) => r.ref === `${SECRET_PREFIX}${name}`);
+  /** The row behind a name, including one cited but not stored here. A value with a `/` is
+   *  a whole store ref (a field that may cite any secret, like sync's push token), since a
+   *  standalone name never holds one. */
+  const rowOf = (name: string) => {
+    const ref = name.includes("/") ? name : `${SECRET_PREFIX}${name}`;
+    return query.data?.refs.find((r) => r.ref === ref);
+  };
   /** What a chosen secret is called: its display name, else the placeholder. */
   const displayOf = (name: string) => {
     const row = rowOf(name);
