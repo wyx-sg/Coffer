@@ -123,13 +123,6 @@ export function callTone(status: "ok" | "error" | "timeout" | "denied"): StatusT
         : "err";
 }
 
-/** A ref as the person knows it: a Secrets-page name, or the key a server's own ref ends in. */
-export function secretLabel(ref: string): string {
-  if (ref.startsWith("secret/")) return ref.slice("secret/".length);
-  const last = ref.split("/").pop();
-  return last || ref;
-}
-
 /** A duration the way the page says it: "412 ms", "1.2 s". */
 export function seconds(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;

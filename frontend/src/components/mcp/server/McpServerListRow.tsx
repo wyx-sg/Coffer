@@ -20,13 +20,7 @@ import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { toneTextClass } from "@/lib/statusColors";
 import { STATUS_TONE } from "@/lib/statusTone";
 import { cn } from "@/lib/utils";
-import {
-  serverState,
-  shortTime,
-  transportOf,
-  type ServerState,
-  secretLabel,
-} from "@/lib/mcp/serverState";
+import { serverState, shortTime, transportOf, type ServerState } from "@/lib/mcp/serverState";
 
 interface Props {
   resource: ResourceOut;
@@ -65,9 +59,7 @@ function Subline({
     return (
       <span className={warn}>
         {t("mcp.page.reason.secret", {
-          secret: detail?.missing_secret_ref
-            ? secretLabel(detail.missing_secret_ref)
-            : detail?.missing_secret,
+          secret: detail?.missing_secret,
         })}
       </span>
     );

@@ -91,19 +91,25 @@ vi.mock("@/lib/hooks/useAgents", () => ({
     ],
   }),
 }));
+const { SENTRY_REF, SHARED_REF } = vi.hoisted(() => ({
+  SENTRY_REF: `secret/${"d4".repeat(16)}`,
+  SHARED_REF: `secret/${"e5".repeat(16)}`,
+}));
 vi.mock("@/lib/api/secret", () => ({
   secretsApi: {
     list: vi.fn(async () => ({
       refs: [
         {
-          ref: "SENTRY_TOKEN",
+          ref: SENTRY_REF,
+          label: "Sentry token",
           present: true,
           cited_by: [{ uid: "u-sentry", kind: "mcp_server", name: "sentry" }],
           mentioned_by_skills: [],
           bindings: [],
         },
         {
-          ref: "SHARED",
+          ref: SHARED_REF,
+          label: "Shared key",
           present: true,
           cited_by: [{ uid: "u-sentry" }, { uid: "u-other" }],
           mentioned_by_skills: [],
@@ -142,7 +148,7 @@ const SENTRY = {
       type: "http",
       url: "https://mcp.sentry.dev/mcp",
       headers: {},
-      secret_refs: { Authorization: "SENTRY_TOKEN", "X-Shared": "SHARED" },
+      secret_refs: { Authorization: SENTRY_REF, "X-Shared": SHARED_REF },
     },
   },
 } as unknown as ResourceOut;
@@ -340,7 +346,8 @@ describe("McpServerPane", () => {
     api.status = {
       status: "healthy",
       missing_secret: "Authorization",
-      missing_secret_ref: "SENTRY_TOKEN",
+      missing_secret_ref: SENTRY_REF,
+      label: "Sentry token",
     };
     renderPane();
     const callout = await screen.findByTestId("mcp-callout-secret");
@@ -352,7 +359,7 @@ describe("McpServerPane", () => {
     expect(screen.queryByText("Credentials")).toBeNull();
     fireEvent.click(within(callout).getByRole("button", { name: "Add secret" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("SENTRY_TOKEN");
+    expect(dialog).toHaveTextContent("Sentry token");
     expect(dialog).not.toHaveTextContent("edit dialog");
   });
 
@@ -552,7 +559,7 @@ describe("McpServerPane", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /copy config as json/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     const copied = JSON.parse(writeText.mock.calls[0][0]);
-    expect(copied.sentry.transport.secret_refs.Authorization).toBe("SENTRY_TOKEN");
+    expect(copied.sentry.transport.secret_refs.Authorization).toBe(SENTRY_REF);
   });
 
   acceptance("web-ui", "Delete server says what it costs and offers its own secret", async () => {
@@ -569,9 +576,9 @@ describe("McpServerPane", () => {
     // Only a secret no other server uses can go with it; unticked by default.
     const box = await within(dialog).findByRole("checkbox");
     expect(box).not.toBeChecked();
-    expect(within(dialog).getByText("SENTRY_TOKEN")).toBeInTheDocument();
+    expect(within(dialog).getByText("Sentry token")).toBeInTheDocument();
     expect(within(dialog).getByText("No other server uses it.")).toBeInTheDocument();
-    expect(within(dialog).queryByText("SHARED")).toBeNull();
+    expect(within(dialog).queryByText("Shared key")).toBeNull();
     expect(within(dialog).getByText(/This can.t be undone/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: /delete server/i }));
     await waitFor(() => expect(resourcesApi.remove).toHaveBeenCalledWith("u-sentry"));
@@ -586,7 +593,7 @@ describe("McpServerPane", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(await within(dialog).findByRole("checkbox"));
     fireEvent.click(within(dialog).getByRole("button", { name: /delete server/i }));
-    await waitFor(() => expect(secretsApi.remove).toHaveBeenCalledWith("SENTRY_TOKEN"));
+    await waitFor(() => expect(secretsApi.remove).toHaveBeenCalledWith(SENTRY_REF));
   });
 
   acceptance("web-ui", "a refused delete stays open under its error title", async () => {
