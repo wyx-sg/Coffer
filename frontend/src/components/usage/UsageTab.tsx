@@ -6,6 +6,7 @@
 // so a refresh or Back keeps them. Before any API-key usage exists the tab is only its empty
 // state, with no controls to narrow nothing; an empty range after that says
 // only the range is empty. The data is Coffer's own, so there is no Refresh.
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { BarChart3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -175,7 +176,11 @@ export function UsageTab({ onOpenProviders }: Props) {
         <FilterPill
           mode="single"
           label={t("usage.filters.agent")}
-          options={agentTypes.map((a) => ({ value: a, label: agentTypeLabel(a) }))}
+          options={agentTypes.map((a) => ({
+            value: a,
+            label: agentTypeLabel(a),
+            icon: <AgentBadge type={a} size="sm" tooltip={false} />,
+          }))}
           value={query.agent_type ?? null}
           onChange={(a) => setQuery({ ...query, agent_type: a ?? undefined })}
         />

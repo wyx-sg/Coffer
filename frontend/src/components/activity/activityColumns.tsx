@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { describeDaemonRecord } from "@/lib/activity/activityText";
 import {
   recordLogger,
@@ -63,7 +64,7 @@ export function columnsFor(
           if (r.source !== "call") return null;
           const agent = r.call.agent_uid ? agents.get(r.call.agent_uid) : undefined;
           return agent ? (
-            <span className="block truncate text-xs text-text">{agent.name}</span>
+            <AgentBadge type={agent.type} name={agent.name} size="sm" showName tooltip={false} />
           ) : (
             <span className="text-xs text-text-subtle">—</span>
           );

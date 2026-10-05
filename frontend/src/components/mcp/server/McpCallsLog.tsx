@@ -85,7 +85,11 @@ export function McpCallsLog({
         <FilterPill
           mode="single"
           label={t("mcp.page.log.agent")}
-          options={agents.map((a) => ({ value: a.uid, label: a.display_name }))}
+          options={agents.map((a) => ({
+            value: a.uid,
+            label: a.display_name,
+            icon: <AgentBadge type={a.type} name={a.display_name} size="sm" tooltip={false} />,
+          }))}
           value={agent}
           onChange={setAgent}
         />
