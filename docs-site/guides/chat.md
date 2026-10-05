@@ -5,7 +5,7 @@ description: List every agent session wherever it started, resume one in your te
 
 # Conversations {#conversations}
 
-The **Conversations** page lists every session of every managed agent, Claude Code or Codex, wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: opening a row resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn or a waiting question means for opening, renaming and deleting, and where the conversation itself is kept.
+The **Conversations** page lists every session of every managed agent, Claude Code or Codex, wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: pressing a row's **Open in *terminal*** button resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn or a waiting question means for opening, renaming and deleting, and where the conversation itself is kept.
 
 ## What Conversations is for {#what-conversations-is-for}
 
@@ -28,7 +28,7 @@ You do **not** need a [model provider](/guides/providers). A provider is an opti
 
 ## Open a conversation in your terminal {#open-in-terminal}
 
-Click a row, or press **Open in *terminal*** on its split button, named after your preferred terminal; the **▾** beside it lists the other terminals and then **Copy command**. Coffer opens the terminal in the session's directory and runs the agent's own resume command:
+Press **Open in *terminal*** on a row's split button, named after your preferred terminal; the **▾** beside it lists the other terminals and then **Copy command**. Coffer opens the terminal in the session's directory and runs the agent's own resume command:
 
 - Claude Code: `claude --resume <session id>`
 - Codex: `codex resume <session id>`
@@ -97,7 +97,7 @@ The files are pruned after the **Attachments** retention window (30 days after t
 `/conversations` lists every session of every managed agent, wherever it was started: in a terminal, by a channel, or from **New conversation**. Newest activity first; a conversation moves to the top when a turn starts in it, not only when one ends. The list reads 30 sessions and loads more as you scroll, and it shows no total, because Codex cannot count its sessions without reading all of them. Above the rows sits a header naming the columns, **Title**, **Source**, **Agent**, **Directory** and **Last active**, and the rows are grouped under **Today**, **Yesterday** and **Earlier**. Each row shows:
 
 - the title, with a status word on a channel's conversation: **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer;
-- the **source**: for a channel's conversation the platform's logo and the place in its chat, such as `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread` or `Telegram · Group › topic`; a session you started yourself shows nothing here;
+- the **source**: for a channel's conversation the platform's logo and the place in its chat, such as `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread` or `Telegram · Group › topic`; a session no channel started shows **This Mac**;
 - the **agent**, the working **directory** and the **time of the last activity** (the clock for today and yesterday, a date such as `Sep 22` for earlier);
 - an inline **Stop** while a turn runs, the split button (**Open in *terminal* ▾**), and a **⋯** menu. These are always shown.
 
