@@ -15,6 +15,7 @@ import { KeyRound, Mic, type LucideIcon } from "lucide-react";
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { ChangePreview, type ChangePreviewState } from "@/components/change-preview/ChangePreview";
 import { Section } from "@/components/Section";
+import { SecretName, useSecretName } from "@/components/secret/SecretNameLink";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
@@ -74,7 +75,7 @@ function useConsequences(provider: Provider, use: ProviderUse, files: Map<string
       key: "key",
       lead: <Tile icon={KeyRound} />,
       title: t("providers.delete.keyTitle"),
-      body: <span className="font-mono">{provider.secret_ref}</span>,
+      body: <SecretName secretRef={provider.secret_ref} />,
     });
   }
   return out;
@@ -104,6 +105,7 @@ export function DeleteProviderDialog({ open, provider, use, onClose }: Props) {
   const navigate = useNavigate();
   const del = useDeleteProvider();
   const name = displayName(provider);
+  const secretName = useSecretName(provider.secret_ref ?? "");
   const inUse = isInUse(use);
   const preview = useDeletePreview(provider.uid, open && inUse);
   const items = previewItems(preview.data);
@@ -145,7 +147,7 @@ export function DeleteProviderDialog({ open, provider, use, onClose }: Props) {
         title={t("providers.delete.title", { name })}
         description={
           provider.secret_ref
-            ? t("providers.delete.confirmWithSecret", { name, ref: provider.secret_ref })
+            ? t("providers.delete.confirmWithSecret", { name, secret: secretName })
             : t("providers.delete.confirm", { name })
         }
         confirmLabel={t("providers.actions.delete")}

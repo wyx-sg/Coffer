@@ -2049,7 +2049,11 @@ The page MUST carry:
   with no tabs: the id and `coffer://secret/<id>`, each with Copy, whether this
   Mac holds it and whether local processes can read it, created and last used,
   and everything that uses it — by kind, current name and slot, each opening
-  its page — with the approvals it holds or waits for. Individual uses are not
+  its page — with the approvals it holds or waits for. Wherever another page
+  shows the secret a resource uses (a provider's API Key, a sync remote's push
+  secret, the secret a server or custom tool is missing), it shows that
+  secret's displayed name — never its id or URI — and the name opens
+  `/secrets/<ref>`. Individual uses are not
   listed on the page; they are audit entries, read in Activity.
 - **Find plaintext keys** — the entry point that moves plaintext secrets out of
   what Coffer manages and into the store (spec [secret](../secret/spec.md)

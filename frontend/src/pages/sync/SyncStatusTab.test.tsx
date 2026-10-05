@@ -7,6 +7,7 @@
 // the dialog states the plan.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -41,6 +42,25 @@ vi.mock("./SyncMoveVaultDialog", () => ({
 }));
 vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { reveal: vi.fn(() => Promise.resolve()) } }));
+// The push secret is stored under a minted id and named by its label.
+vi.mock("@/lib/api/secret", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/secret")>()),
+  secretsApi: {
+    list: vi.fn(async () => ({
+      refs: [
+        {
+          ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          label: "Deploy key",
+          present: true,
+          cited_by: [],
+          mentioned_by_skills: [],
+          bindings: [],
+        },
+      ],
+    })),
+  },
+}));
+
 // B's and C's cards have tests of their own; here they only need to be placed.
 vi.mock("./SyncStoppedCard", () => ({ SyncStoppedCard: () => <div>stopped card</div> }));
 vi.mock("./SyncJoinChoices", () => ({ SyncJoinChoices: () => <div>join choices</div> }));
@@ -110,17 +130,21 @@ function seedRollback(mutate = vi.fn(), error: unknown = null) {
 
 function renderTab(status: SyncStatus, { pending = false, onRecheck = vi.fn() } = {}) {
   return render(
-    <TooltipProvider>
-      <MemoryRouter>
-        <SyncStatusTab
-          status={status}
-          state={syncState(status, pending)}
-          startedAt={pending ? at(14, 32) : null}
-          onRecheck={onRecheck}
-          rechecking={false}
-        />
-      </MemoryRouter>
-    </TooltipProvider>,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <TooltipProvider>
+        <MemoryRouter>
+          <SyncStatusTab
+            status={status}
+            state={syncState(status, pending)}
+            startedAt={pending ? at(14, 32) : null}
+            onRecheck={onRecheck}
+            rechecking={false}
+          />
+        </MemoryRouter>
+      </TooltipProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -388,27 +412,29 @@ describe("SyncStatusTab — problems", () => {
     expect(within(card).getByTestId("handoff")).toHaveTextContent("check the network");
   });
 
-  test("sign-in failed: names the secret, Choose secret and Open in Secrets, no hand-off", () => {
+  test("sign-in failed: names the secret by a link to it, Choose secret, no hand-off", async () => {
     renderTab(
       makeStatus({
         problem: problem({
           kind: "auth_failed",
-          secret_ref: "github-deploy-key",
+          secret_ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
           message: "Permission denied (publickey).",
         }),
       }),
     );
     const card = screen.getByTestId("sync-problem");
     expect(card).toHaveTextContent("The remote refused the secret");
-    expect(card).toHaveTextContent("github-deploy-key was rejected by git.example.com.");
+    expect(await within(card).findByRole("link", { name: "Deploy key" })).toHaveAttribute(
+      "href",
+      "/secrets/secret%2Fb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    );
+    expect(card).toHaveTextContent("Deploy key was rejected by git.example.com.");
+    expect(card).not.toHaveTextContent("b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2");
     expect(within(card).getByRole("link", { name: "Choose secret" })).toHaveAttribute(
       "href",
       "/sync?tab=remote&focus=secret",
     );
-    expect(within(card).getByRole("link", { name: "Open in Secrets" })).toHaveAttribute(
-      "href",
-      "/secrets",
-    );
+    expect(within(card).queryByRole("link", { name: "Open in Secrets" })).toBeNull();
     expect(within(card).queryByTestId("handoff")).toBeNull();
   });
 

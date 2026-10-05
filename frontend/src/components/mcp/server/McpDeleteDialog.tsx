@@ -15,9 +15,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { ResourceOut } from "@/lib/api/resources";
-import { displayName } from "@/components/secret/secretRows";
 import { useDeleteSecret, useSecrets } from "@/lib/hooks/useSecrets";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
+import { SecretName } from "@/components/secret/SecretNameLink";
 
 interface Props {
   resource: ResourceOut;
@@ -51,11 +51,9 @@ export function McpDeleteDialog({
   const [alsoDelete, setAlsoDelete] = useState<ReadonlySet<string>>(new Set());
 
   // Secrets only this server cites: the others stay with whatever else uses them.
-  const ownRows = citedRefs(resource.config).flatMap((ref) => {
+  const own = citedRefs(resource.config).filter((ref) => {
     const row = secrets.data?.refs.find((r) => r.ref === ref);
-    return row && row.cited_by.length > 0 && row.cited_by.every((c) => c.uid === resource.uid)
-      ? [row]
-      : [];
+    return !!row && row.cited_by.length > 0 && row.cited_by.every((c) => c.uid === resource.uid);
   });
   const tools =
     toolCount > 0 ? t("mcp.page.itsTools", { count: toolCount }) : t("mcp.page.itsToolsAny");
@@ -98,16 +96,16 @@ export function McpDeleteDialog({
         )
       }
     >
-      {ownRows.map((row) => (
-        <label key={row.ref} className="flex items-start gap-2.5 text-sm text-text">
+      {own.map((ref) => (
+        <label key={ref} className="flex items-start gap-2.5 text-sm text-text">
           <Checkbox
             className="mt-0.5"
-            checked={alsoDelete.has(row.ref)}
+            checked={alsoDelete.has(ref)}
             onChange={(e) =>
               setAlsoDelete((prev) => {
                 const next = new Set(prev);
-                if (e.target.checked) next.add(row.ref);
-                else next.delete(row.ref);
+                if (e.target.checked) next.add(ref);
+                else next.delete(ref);
                 return next;
               })
             }
@@ -115,7 +113,9 @@ export function McpDeleteDialog({
           <span className="flex flex-col gap-0.5">
             <span>
               {t("mcp.page.delete.alsoSecret")}{" "}
-              <span className="font-mono text-xs font-label">{displayName(row)}</span>
+              <span className="text-xs font-label">
+                <SecretName secretRef={ref} />
+              </span>
             </span>
             <span className="text-xs text-text-muted">{t("mcp.page.delete.secretOnlyHere")}</span>
           </span>

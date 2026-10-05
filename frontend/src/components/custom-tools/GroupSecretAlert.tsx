@@ -25,7 +25,7 @@ interface Props {
 export function GroupSecretAlert({ group, onChooseAnother }: Props) {
   const { t } = useTranslation();
   const refresh = useRefreshCustomTools(group.name);
-  const { rowOf } = useSecretChoices();
+  const { rowOf, displayOf } = useSecretChoices();
   const [adding, setAdding] = useState(false);
   if (group.secret_state === "pending_approval") {
     const secret = secretInState(group, "pending_approval");
@@ -34,7 +34,7 @@ export function GroupSecretAlert({ group, onChooseAnother }: Props) {
         tint="warn"
         icon={KeyRound}
         testId="group-banner-approval"
-        title={t("customTools.alert.pendingTitle", { secret })}
+        title={t("customTools.alert.pendingTitle", { secret: displayOf(secret) })}
         actions={
           <Button size="sm" variant="outline" onClick={openApprovalsSheet}>
             {t("customTools.alert.openApprovals")}
@@ -53,7 +53,7 @@ export function GroupSecretAlert({ group, onChooseAnother }: Props) {
         tint="warn"
         icon={KeyRound}
         testId="group-banner-secret"
-        title={t("customTools.alert.missingTitle", { secret })}
+        title={t("customTools.alert.missingTitle", { secret: displayOf(secret) })}
         actions={
           <>
             <Button size="sm" variant="outline" onClick={() => setAdding(true)}>

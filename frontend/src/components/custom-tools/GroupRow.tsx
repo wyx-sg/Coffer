@@ -9,6 +9,7 @@ import { pickableAgents } from "@/lib/reach/reachState";
 import { StatusDot } from "@/components/status/StatusDot";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { healthTone, hostOf } from "@/lib/customTools/groups";
+import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import { secretInState } from "./headerRows";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { cn } from "@/lib/utils";
@@ -26,11 +27,14 @@ interface Props {
 /** The row's second line: the problem for a group that needs attention. */
 function useSubline(group: CustomToolGroup): { text: string; tone: "danger" | "warning" | null } {
   const { t } = useTranslation();
+  const { displayOf } = useSecretChoices();
   if (group.health === "attention" && group.secret_state === "pending_approval")
     return { text: t("customTools.list.approvalPending"), tone: "warning" };
   if (group.health === "attention")
     return {
-      text: t("customTools.list.secretMissing", { secret: secretInState(group, "missing") }),
+      text: t("customTools.list.secretMissing", {
+        secret: displayOf(secretInState(group, "missing")),
+      }),
       tone: "warning",
     };
   if (group.health === "failing")

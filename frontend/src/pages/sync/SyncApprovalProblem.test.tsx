@@ -5,12 +5,31 @@
 // approvals dialog.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { SyncProblemBanner } from "./SyncProblemBanner";
 import { primaryAction, syncState } from "./syncPageState";
 import { makeRound, makeStatus } from "./syncTestKit";
 
+// The push secret is stored under a minted id and named by its label.
+vi.mock("@/lib/api/secret", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/secret")>()),
+  secretsApi: {
+    list: vi.fn(async () => ({
+      refs: [
+        {
+          ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          label: "Sync token",
+          present: true,
+          cited_by: [],
+          mentioned_by_skills: [],
+          bindings: [],
+        },
+      ],
+    })),
+  },
+}));
 vi.mock("./useSyncIgnore", async (orig) => ({
   ...(await orig<typeof import("./useSyncIgnore")>()),
   useSyncIgnore: () => ({ isIgnored: () => false, ignorer: () => undefined }),
@@ -25,7 +44,7 @@ const STATUS = makeStatus({
   problem: {
     kind: "waiting_approval",
     message: "the push token sync-token is waiting for approval in the Coffer desktop app",
-    secret_ref: "sync-token",
+    secret_ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
     since: null,
     handoff: null,
     plaintext: [],
@@ -33,15 +52,17 @@ const STATUS = makeStatus({
 });
 
 describe("waiting for approval", () => {
-  test("the card names the cause and Review opens the approvals dialog", () => {
+  test("the card names the cause and Review opens the approvals dialog", async () => {
     render(
-      <MemoryRouter>
-        <SyncProblemBanner status={STATUS} runs={[]} onRecheck={vi.fn()} rechecking={false} />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <SyncProblemBanner status={STATUS} runs={[]} onRecheck={vi.fn()} rechecking={false} />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     const card = within(screen.getByTestId("sync-problem"));
     expect(card.getByText("The push token is waiting for your approval")).toBeInTheDocument();
-    expect(card.getByText("sync-token")).toBeInTheDocument();
+    expect(await card.findByRole("link", { name: "Sync token" })).toBeInTheDocument();
     // No Retry in a card: the header's Sync now is the one way to run a round.
     expect(card.queryByRole("button", { name: /retry|try again/i })).toBeNull();
     fireEvent.click(card.getByRole("button", { name: "Review" }));
