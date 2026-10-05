@@ -782,6 +782,37 @@ The three drift kinds no pass settles — a folder Coffer did not make at a skil
 - **THEN** the report entry's hand-off names where the master folder belongs, the backup folder under `~/.coffer/content/backup/skills/` and the skill's recorded source, and asks for a copy to be copied, not moved, back once the person agrees
 - **AND** the attention item carries the same prompt and its reason names no command
 
+### Requirement: Tell a skill that declares nothing from one that has not declared
+A skill whose SKILL.md and every `profiles/*.md` frontmatter lack a `requires` key MUST be **undeclared**: Coffer does not know what it needs, which is not the same as needing nothing. A `requires:` key anywhere — even an empty `[]` or `{}` — MUST make the skill **declared**, and an explicit empty declaration means it needs nothing. The skill's read model MUST carry `requires_declared` (`true` when declared), read from the master folder each time like the rest of `requires_*`. Being undeclared MUST NOT change delivery, add an attention item or mark the skill in the Skills list; the Requires tab alone says so (spec web-ui "Lay out the Skills page as the canvas draws it"). Declaring is the skill author's choice: Coffer never requires it.
+
+#### Scenario: a skill with no requires key has not declared
+- **GIVEN** a skill whose SKILL.md and profile files carry no `requires` key
+- **WHEN** it is read through `GET /api/v1/skills/{uid}`
+- **THEN** `requires_declared` is `false` and every `requires_*` list is empty
+
+#### Scenario: an empty requires is a declaration
+- **GIVEN** a SKILL.md declaring `requires: []`
+- **WHEN** its requirements are read
+- **THEN** the skill is declared and has no requirements
+
+#### Scenario: a profile's requires key makes the skill declared
+- **GIVEN** a SKILL.md with no `requires` key and a profile file whose frontmatter declares `requires: []`
+- **WHEN** the skill is read
+- **THEN** `requires_declared` is `true`
+
+### Requirement: Hand a skill's review to an agent
+`POST /api/v1/skills/conformance/handoff` with `{uids: [...]}` (at least one; an unknown uid is `404`) MUST answer `{prompt}`: one hand-off prompt (Principle IV, AI-Native) covering every named skill, built when asked from the master folders as they are, so it is never stale. Per skill the prompt MUST name the skill, its master folder (the only place to edit), whether it is undeclared or declared, and its source; for a Git-imported skill it MUST say that edits are recorded as local edits against the pinned commit and kept across updates, and suggest proposing the change upstream too. The prompt MUST ask the agent to read the coffer-guide skill and each skill's whole folder, then to review and propose what it would change and why, ask which proposals to apply, edit only what the person agrees to and the master folder only, show the diff and commit nothing. Everything in it is a suggestion the person can decline; Coffer never requires a skill to change. The only thing Coffer reads is `requires:`, so the prompt MUST say that a declaration, if wanted, lists only what the skill itself uses — the commands it runs (with `min_version`, `login_check` — a subcommand of the same command that exits 0 when logged in — `login` and `why`), the Coffer secrets it uses by id, and the MCP servers and tool groups it calls by their Coffer name — and never what another skill it delegates to needs; that `requires: []` says it needs nothing; and that `metadata.requires` stays for the skills it loads. The prompt MUST tell the agent not to restructure a skill, add a profiles folder or rename or move files for a library convention, and, where a file holds a secret's value or the person's own identity, to point it out and suggest Coffer's secret store or deriving it at run time while leaving it as it is when the person prefers. It MUST name no install command. A Built-in skill's prompt says not to edit it.
+
+#### Scenario: the review prompt names each skill's folder, declaration and source
+- **GIVEN** an undeclared Git-imported skill and a declared skill imported from a folder
+- **WHEN** one prompt is asked for both
+- **THEN** it names both master folders, says the first declares nothing and the second has a declaration, says edits to the Git-imported skill are kept across updates as local edits and suggests proposing them upstream
+
+#### Scenario: the review prompt offers suggestions and restructures nothing
+- **GIVEN** a prompt asked for one skill
+- **WHEN** its text is read
+- **THEN** it says everything is a suggestion the person can decline, asks the agent to ask which suggestions to apply, forbids restructuring, a profiles folder and renames, leaves secrets and identity as they are when the person prefers, tells the agent to commit nothing, and names the coffer-guide skill
+
 ### Requirement: Declare the secrets a skill requires
 The mapping form of a skill's `requires:` frontmatter MAY name the Coffer
 secrets the skill needs under `secrets:` — `requires: {commands: [...],

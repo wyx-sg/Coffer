@@ -113,6 +113,10 @@ export const skillsApi = {
     unwrap(
       getApiClient().POST("/skills/{uid}/source/handoff", { params: { path: skillPath(uid) } }),
     ),
+  /** The prompt that hands a review of these skills to an agent: suggestions only,
+   *  built from the folders as they are now. */
+  reviewHandoff: (uids: string[]) =>
+    unwrap(getApiClient().POST("/skills/conformance/handoff", { body: { uids } })),
   /** "I merged it": pin the skill to the commit the agent merged. */
   recordMerged: (uid: string, commit: string) =>
     unwrap(

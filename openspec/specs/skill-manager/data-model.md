@@ -113,6 +113,11 @@ requirements of a skill are the union of its SKILL.md and every
 `profiles/*.md` frontmatter (`requirements_of_skill`): a command several
 sources declare is one entry with the highest minimum and the profiles joined.
 
+`RequirementsParse.declared` is true when a `requires` key was written, even an
+empty one; the union is declared when SKILL.md or any profile is. False means
+the skill never said what it needs, which is not "needs nothing". On the wire it
+is `SkillOut.requires_declared` (`bool`, always emitted).
+
 ### Required-command row and check result (`domain/skill/cli_status.py`)
 
 `aggregate()` turns every managed skill's requirements into one

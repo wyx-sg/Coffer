@@ -28,6 +28,8 @@ from coffer.surfaces.http.skill_source_schemas import (
 
 @dataclass
 class RequiresView:
+    #: A ``requires:`` key is written in SKILL.md or a profile (even an empty one).
+    declared: bool = False
     commands: list[SkillRequirementOut] = field(default_factory=list)
     secrets: list[SkillSecretRequirementOut] = field(default_factory=list)
     tools: list[SkillToolRequirementOut] = field(default_factory=list)
@@ -100,6 +102,7 @@ async def requires_view(
     parsed = requirements_of_skill(text, _profile_texts(svc, skill.name))
     is_set = get_skill_secret_presence()
     view = RequiresView(
+        declared=parsed.declared,
         commands=[requirement_out(q) for q in parsed.requirements],
         secrets=[
             SkillSecretRequirementOut(

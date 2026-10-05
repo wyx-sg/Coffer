@@ -789,6 +789,46 @@ paths:
       summary: Bulk Delete Skills
       tags:
       - skills
+  /api/v1/skills/conformance/handoff:
+    post:
+      operationId: conformance_handoff_api_v1_skills_conformance_handoff_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillConformanceHandoffIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Conformance Handoff
+      tags:
+      - skills
   /api/v1/skills/import:
     post:
       operationId: import_skill_api_v1_skills_import_post
@@ -2671,6 +2711,18 @@ components:
       - subject
       title: SkillCommitOut
       type: object
+    SkillConformanceHandoffIn:
+      properties:
+        uids:
+          items:
+            type: string
+          minItems: 1
+          title: Uids
+          type: array
+      required:
+      - uids
+      title: SkillConformanceHandoffIn
+      type: object
     SkillCopyCompareOut:
       description: One agent's folder in the way of the skill's link, against master.
       properties:
@@ -2971,6 +3023,9 @@ components:
             $ref: '#/components/schemas/SkillRequirementOut'
           title: Requires
           type: array
+        requires_declared:
+          title: Requires Declared
+          type: boolean
         requires_secrets:
           items:
             $ref: '#/components/schemas/SkillSecretRequirementOut'
@@ -3033,6 +3088,7 @@ components:
       - created_at
       - updated_at
       - bindings
+      - requires_declared
       - requires
       - requires_secrets
       - requires_tools

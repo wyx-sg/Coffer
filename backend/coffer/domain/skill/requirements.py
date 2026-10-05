@@ -109,6 +109,11 @@ class RequirementsParse:
     warnings: tuple[str, ...] = ()
     #: For each secret, the profiles that declared it (absent: SKILL.md itself).
     secret_profiles: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: A ``requires:`` key was written (even an empty ``[]`` / ``{}``): the
+    #: skill said what it needs. False is "did not say", which is not "needs
+    #: nothing" (spec skill-manager "Tell a skill that declares nothing from
+    #: one that has not declared").
+    declared: bool = False
 
 
 class _SkipEntryError(ValueError):
@@ -140,7 +145,7 @@ def parse_requires(value: object) -> RequirementsParse:
         tools = _tools(value.get("tools"), warnings)
         value = value.get("commands")
     commands = _commands(value, warnings)
-    return RequirementsParse(commands, secrets, tools, tuple(warnings))
+    return RequirementsParse(commands, secrets, tools, tuple(warnings), declared=True)
 
 
 def _commands(value: object, warnings: list[str]) -> tuple[CommandRequirement, ...]:
