@@ -264,6 +264,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/conformance/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Conformance Handoff */
+        post: operations["conformance_handoff_api_v1_skills_conformance_handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills/import": {
         parameters: {
             query?: never;
@@ -1122,6 +1139,11 @@ export interface components {
             /** Subject */
             subject: string;
         };
+        /** SkillConformanceHandoffIn */
+        SkillConformanceHandoffIn: {
+            /** Uids */
+            uids: string[];
+        };
         /**
          * SkillCopyCompareOut
          * @description One agent's folder in the way of the skill's link, against master.
@@ -1289,6 +1311,8 @@ export interface components {
             name: string;
             /** Requires */
             requires: components["schemas"]["SkillRequirementOut"][];
+            /** Requires Declared */
+            requires_declared: boolean;
             /** Requires Secrets */
             requires_secrets: components["schemas"]["SkillSecretRequirementOut"][];
             /** Requires Skills */
@@ -2286,6 +2310,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillBulkDeleteOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    conformance_handoff_api_v1_skills_conformance_handoff_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillConformanceHandoffIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

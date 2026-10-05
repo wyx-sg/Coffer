@@ -12,6 +12,7 @@ export function gitSkill(status: Partial<SkillSourceStatus> | null = {}): SkillO
     scope: null,
     bindings: [],
     requires: [],
+    requires_declared: true,
     requires_secrets: [],
     requires_tools: [],
     requires_skills: [],

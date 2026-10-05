@@ -146,6 +146,11 @@ class SkillOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     bindings: list[SkillBindingOut]
+    #: Whether SKILL.md or a profile file wrote a ``requires:`` key (even an
+    #: empty one). False means the skill never said what it needs, which is not
+    #: the same as needing nothing (spec skill-manager "Tell a skill that
+    #: declares nothing from one that has not declared").
+    requires_declared: bool
     #: The commands its SKILL.md declares it needs, read from the master folder
     #: on each request (spec skill-manager "Show the commands a skill declares
     #: it needs").
@@ -286,6 +291,7 @@ async def _to_skill_out(
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
         bindings=[_binding_out(b, agents_by_uid) for b in bindings if b.enabled],
+        requires_declared=needs.declared,
         requires=needs.commands,
         requires_secrets=needs.secrets,
         requires_tools=needs.tools,

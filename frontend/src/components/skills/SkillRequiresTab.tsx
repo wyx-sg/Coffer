@@ -9,25 +9,25 @@
 // delivered to the same agents. A group with nothing in it is not drawn. The
 // fixes live in the banner above the tabs, never in a row: the commands'
 // hand-off is one button there (SkillDependencyBanners), and a missing command
-// never stops delivery.
+// never stops delivery. A skill that never declared what it needs reads as
+// unknown, not "nothing", and both states carry the agent check
+// (SkillReviewHandoff).
 import { Trans, useTranslation } from "react-i18next";
-import { RefreshCw, Terminal } from "lucide-react";
+import { HelpCircle, RefreshCw, Terminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { Section } from "@/components/Section";
 import { SkillRequireRow } from "@/components/skills/SkillRequireRow";
+import { Group, StateWord, profileNote } from "@/components/skills/SkillRequiresParts";
+import { SkillReviewHandoff } from "@/components/skills/SkillReviewHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
-import type { Cli } from "@/lib/api/clis";
 import type { SkillOut } from "@/lib/api/skills";
-import { cliTone, oldestCheck, relativeTime } from "@/lib/clis/format";
+import { oldestCheck, relativeTime } from "@/lib/clis/format";
 import { useCheckClis, useClis } from "@/lib/hooks/useClis";
 import { joinNames } from "@/lib/skills/names";
-import { requireColumns } from "@/lib/skills/requireColumns";
 import { toolHref } from "@/lib/skills/toolLinks";
 import type { StatusTone } from "@/lib/statusTone";
-import { cn } from "@/lib/utils";
 
 interface Props {
   skill: SkillOut;
@@ -38,65 +38,6 @@ const TOOL_TONE: Record<SkillOut["requires_tools"][number]["status"], StatusTone
   off: "warn",
   failing: "err",
 };
-
-type Translate = (key: string, options?: Record<string, unknown>) => string;
-
-/** A requirement's note, followed by the profiles that declare it ("profile
- *  shopee-account"); nothing extra when SKILL.md itself declares it. */
-function profileNote(
-  t: Translate,
-  profiles: readonly string[] | undefined,
-  note: string | null = null,
-): string | null {
-  const declared =
-    profiles && profiles.length > 0
-      ? t("skills.requires.inProfiles", { profiles: profiles.join(" · ") })
-      : null;
-  return [note, declared].filter(Boolean).join(" · ") || null;
-}
-
-function StateWord({ cli }: { cli: Cli | undefined }) {
-  const { t } = useTranslation();
-  if (!cli) return <StatusWord tone="off">{t("skills.requires.unknown")}</StatusWord>;
-  const word =
-    cli.status === "ready"
-      ? [t("skills.requires.found"), cli.version].filter(Boolean).join(" · ")
-      : cli.status === "outdated"
-        ? t("skills.requires.outdated", { version: cli.version, min: cli.min_version })
-        : t(`skills.requires.state.${cli.status}`);
-  return <StatusWord tone={cliTone(cli.status)}>{word}</StatusWord>;
-}
-
-/** A group: its title, the one sentence saying where it is declared, the rows. */
-function Group({
-  title,
-  intro,
-  actions,
-  testId,
-  withKind = false,
-  children,
-}: {
-  /** The group's rows carry a Kind column (tools). */
-  withKind?: boolean;
-  title: string;
-  intro: React.ReactNode;
-  actions?: React.ReactNode;
-  testId: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Section
-      title={title}
-      actions={actions}
-      gap="tight"
-      testId={testId}
-      className="mt-8 first:mt-0"
-    >
-      <p className="text-xs text-text-muted">{intro}</p>
-      <ul className={cn("mt-1.5", requireColumns(withKind))}>{children}</ul>
-    </Section>
-  );
-}
 
 export function SkillRequiresTab({ skill }: Props) {
   const { t, i18n } = useTranslation();
@@ -110,18 +51,53 @@ export function SkillRequiresTab({ skill }: Props) {
   const skills = skill.requires_skills ?? [];
   const code = <code className="font-mono" />;
 
-  if (commands.length + secrets.length + tools.length + skills.length === 0) {
+  const nothing = commands.length + secrets.length + tools.length + skills.length === 0;
+  const review = (
+    <SkillReviewHandoff
+      uids={[skill.uid]}
+      label={t(
+        skill.requires_declared
+          ? "skills.requires.reviewDeclared"
+          : "skills.requires.reviewUndeclared",
+      )}
+    />
+  );
+
+  // The skill never said what it needs: unknown, which is not "nothing".
+  if (!skill.requires_declared && nothing) {
+    return (
+      <EmptyState
+        icon={HelpCircle}
+        title={t("skills.requires.unknownTitle")}
+        description={t("skills.requires.unknownBody")}
+        action={review}
+      />
+    );
+  }
+  if (nothing) {
     return (
       <EmptyState
         icon={Terminal}
         title={t("skills.requires.emptyTitle")}
         description={t("skills.requires.emptyBody")}
+        action={review}
       />
     );
   }
 
   return (
     <div className="flex flex-col">
+      {skill.requires_declared ? (
+        <div className="mb-4 flex justify-end">{review}</div>
+      ) : (
+        <div
+          data-testid="skill-requires-unknown"
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+        >
+          <p className="text-xs text-text-muted">{t("skills.requires.unknownBody")}</p>
+          {review}
+        </div>
+      )}
       {commands.length > 0 ? (
         <Group
           title={t("skills.requires.commandsTitle")}

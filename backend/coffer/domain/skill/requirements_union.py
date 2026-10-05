@@ -27,7 +27,8 @@ def requirements_of_skill(skill_md: str, profiles: Sequence[tuple[str, str]]) ->
     An agent picks one profile at run time, which Coffer cannot know, so every
     profile counts. Each requirement says which profiles declared it; a command
     several sources declare is one requirement (highest minimum, first
-    non-empty text, profiles joined). Spec skill-manager "Read the requirements
+    non-empty text, profiles joined); the skill is declared when any source
+    wrote a ``requires:`` key. Spec skill-manager "Read the requirements
     profile files declare".
     """
     sources: list[tuple[str | None, RequirementsParse]] = [
@@ -60,7 +61,13 @@ def requirements_of_skill(skill_md: str, profiles: Sequence[tuple[str, str]]) ->
                 )
             )
     return RequirementsParse(
-        tuple(commands.values()), tuple(secrets), tuple(tools.values()), tuple(warnings), secrets
+        tuple(commands.values()),
+        tuple(secrets),
+        tuple(tools.values()),
+        tuple(warnings),
+        secrets,
+        # Declared once any source wrote a ``requires:`` key, even an empty one.
+        declared=any(parsed.declared for _, parsed in sources),
     )
 
 

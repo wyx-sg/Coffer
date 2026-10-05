@@ -7,6 +7,8 @@ description: Structure a library of Coffer-delivered skills so one body serves e
 
 A single skill is easy to write. A library of them, delivered to several agents and used across more than one organisation or project, needs rules. Without them the same method gets copied into five skills, a platform's command reference ends up pasted into a workflow, and every skill quietly hard-codes one company's hosts and naming conventions.
 
+The conventions here are recommendations, not requirements: Coffer enforces only its import limits (a `SKILL.md`, a valid `name`, a description within its length, no symlinks pointing outside the folder, a size cap) and never asks a skill to change.
+
 This page describes how to structure such a library: what kinds of skill there are, how environment differences are expressed, how a skill folder is laid out, and how a library is authored and delivered through Coffer. For the skill format itself and how Coffer stores and delivers skills, see [Skills](/guides/skills).
 
 ## Two kinds of skill
@@ -327,7 +329,7 @@ When a new domain replaces older single-purpose skills, remove the old ones (**â
 6. **Write one file per environment you use.** Each is complete on its own; add a sibling file only when a real second environment appears.
 7. **Pull shared method into a base skill.** If another domain already has the same rules, extract them, load them by name, and declare `metadata.requires`.
 8. **Write the body.** Keep `SKILL.md` to the Profile paragraph, routing and boundaries. Add the runtime rules: try the carrier before claiming it is missing, quote evidence, name what could not be resolved.
-9. **Declare what Coffer should see.** List the commands, secrets and tools the domain itself runs under its top-level `requires:`, and the environment-specific ones under each profile's `requires:`. Never list what a carrier it delegates to runs.
+9. **Declare what Coffer should see.** List the commands, secrets and tools the domain itself runs under its top-level `requires:`, and the environment-specific ones under each profile's `requires:`. Never list what a carrier it delegates to runs. Write `requires: []` when it truly needs nothing: a skill with no `requires:` key anywhere reads as unknown on its **Requires** tab, while an explicit empty one reads as needing nothing. The Skills page can hand a skill to an agent for a check; see [Declared or not](/guides/skills#declared-or-not).
 10. **Check it.** Tests pass, nothing organisation-specific sits outside `profiles/`, each environment file merged over `default.md` gives the values you expect, the folder has no venv, cache or secret, and required base skills reach the same agents. Then import and verify.
 
 ## Related

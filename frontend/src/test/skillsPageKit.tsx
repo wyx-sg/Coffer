@@ -30,6 +30,7 @@ export function makeSkill(over: Partial<SkillOut> = {}): SkillOut {
     updated_at: "2026-05-26T00:00:00Z",
     bindings: [],
     requires: [],
+    requires_declared: true,
     requires_secrets: [],
     requires_tools: [],
     requires_skills: [],

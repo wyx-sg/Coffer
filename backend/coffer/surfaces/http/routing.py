@@ -79,6 +79,7 @@ from coffer.surfaces.http.secret_notes_routes import router as secret_notes_rout
 from coffer.surfaces.http.secret_routes import router as secret_router
 from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.setup_state import router as setup_router
+from coffer.surfaces.http.skill_conformance_routes import router as skill_conformance_router
 from coffer.surfaces.http.skill_copy_routes import router as skill_copy_router
 from coffer.surfaces.http.skill_delete_routes import router as skill_delete_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
@@ -133,6 +134,7 @@ def include_all_routers(app: FastAPI) -> None:
         fs_router,
         fs_terminal_router,
         skill_copy_router,  # before skill_router: /skills/orphans is not a uid
+        skill_conformance_router,
         skill_delete_router,  # DELETE /skills/{uid} and the bulk delete
         skill_source_router,  # before skill_router: /skills/update-check is not a uid
         skill_router,

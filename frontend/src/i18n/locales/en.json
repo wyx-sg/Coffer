@@ -2682,6 +2682,7 @@
     "checkCopies": "Check copies",
     "bulk": {
       "label": "Selected skills",
+      "review": "Check with an agent",
       "deleteTitle_one": "Delete {{count}} skill?",
       "deleteTitle_other": "Delete {{count}} skills?",
       "deleteBody": "Deletes the master folders of {{names}} and removes their links from every agent that has them.",
@@ -2751,8 +2752,12 @@
       "orphan_master": "Not in your library"
     },
     "requires": {
+      "unknownTitle": "What this skill needs is unknown",
+      "unknownBody": "This skill doesn’t declare what it needs, so Coffer doesn’t know — have an agent suggest a declaration.",
+      "reviewDeclared": "Check with an agent",
+      "reviewUndeclared": "Add requires with an agent",
       "emptyTitle": "Nothing required",
-      "emptyBody": "This skill’s SKILL.md declares no commands, secrets, tools or skills.",
+      "emptyBody": "This skill says it needs no commands, secrets, tools or skills.",
       "commandsTitle": "Commands",
       "secretsTitle": "Secrets",
       "secretSet": "Set",

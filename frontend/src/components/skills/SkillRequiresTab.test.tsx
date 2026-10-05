@@ -39,6 +39,7 @@ function renderTab(
   const skill = {
     uid: skillUid,
     requires: requires.map((command) => ({ command, min_version: null, profiles: [] })),
+    requires_declared: true,
     requires_secrets: requiresSecrets,
     requires_tools: [],
     requires_skills: [],
@@ -110,7 +111,11 @@ describe("SkillRequiresTab", () => {
       renderTab("sk-gh-triage", ["jq", "gcloud"]);
       await screen.findByText("Not installed");
       expect(screen.queryByRole("button", { name: /Install/ })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Copy prompt" })).toBeNull();
+      expect(
+        within(screen.getByTestId("skill-requires-commands")).queryByRole("button", {
+          name: "Copy prompt",
+        }),
+      ).toBeNull();
       expect(screen.queryByText("gcloud auth login")).toBeNull();
       expect(screen.queryByText(/brew/)).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Check" }));

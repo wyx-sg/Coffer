@@ -308,3 +308,36 @@ def test_profile_requires_are_unioned_and_name_their_profile() -> None:
     assert parsed.secret_profiles == {"ACME_TOKEN": ("acme-team",)}
     assert parsed.tools == (ToolRequirement("github", None, ("acme-team",)),)
     assert parsed.warnings and parsed.warnings[0].startswith("profiles/x.md: ")
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a skill with no requires key has not declared"
+)
+def test_a_skill_with_no_requires_key_has_not_declared() -> None:
+    from coffer.domain.skill.requirements_union import requirements_of_skill
+
+    parsed = requirements_of_skill("---\nname: s\n---\n", [("p", "---\nnote: x\n---\n")])
+    assert parsed.declared is False
+    assert requirements_of_skill("no frontmatter", []).declared is False
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="an empty requires is a declaration")
+@pytest.mark.parametrize("empty", ["[]", "{}"])
+def test_an_explicit_empty_requires_is_declared(empty: str) -> None:
+    from coffer.domain.skill.requirements_union import requirements_of_skill
+
+    parsed = requirements_of_skill(f"---\nname: s\nrequires: {empty}\n---\n", [])
+    assert parsed.declared is True
+    assert parsed.requirements == ()
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a profile's requires key makes the skill declared"
+)
+def test_a_profile_requires_key_makes_the_skill_declared() -> None:
+    from coffer.domain.skill.requirements_union import requirements_of_skill
+
+    parsed = requirements_of_skill(
+        "---\nname: s\n---\n", [("a", "---\n---\n"), ("b", "---\nrequires: []\n---\n")]
+    )
+    assert parsed.declared is True
