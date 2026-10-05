@@ -24,7 +24,8 @@ header, unlike the other detail pages, which edit through Edit and a dialog
 - After a person refused that request, **Allow coffer run…** answered
   `SECRET_BINDING_REJECTED` forever and left an error toast on every press.
   Asking for the grant again now retires the refusal and puts a new request up;
-  `coffer run` alone still stays refused.
+  `coffer run` alone still stays refused. In the desktop app the press asks for
+  Touch ID at once and turns the grant on, like any save there.
 
 ## Impact
 

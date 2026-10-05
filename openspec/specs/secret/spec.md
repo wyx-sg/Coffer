@@ -669,7 +669,9 @@ grant MUST read no value, MUST start nothing, and MUST answer
 (`SECRET_BINDING_REJECTED` once a person refused it). `POST
 /api/v1/secrets/local-access/request {name}` MUST record that request without
 granting it — after a person refused one, asking this way retires the refusal
-and puts a new request up, while `coffer run` alone stays refused — and `POST /api/v1/secrets/local-access/revoke {name}` MUST withdraw
+and puts a new request up, while `coffer run` alone stays refused; asked from
+the desktop app, the request is approved on the spot under the presence check,
+as any save there is — and `POST /api/v1/secrets/local-access/revoke {name}` MUST withdraw
 the grant and any request at once, without a presence grant, and record
 `secret_local_access_revoked`. A request MUST keep waiting when approvals are
 brought up to the configuration, since no configuration asks for it. The values MUST be set only in the child's environment; the child's
@@ -702,6 +704,11 @@ only use stays without the grant and reaches its service through Coffer.
 - **WHEN** the grant is asked for again (Allow coffer run… on the Secrets page)
 - **THEN** a new request waits in the desktop app and no refusal is answered
 - **AND** a resolve still gets no value until the person approves it
+
+#### Scenario: allowing coffer run in the desktop app asks for Touch ID at once
+- **GIVEN** a standalone secret without the grant, open on the Secrets page in the desktop app
+- **WHEN** the person presses Allow coffer run…
+- **THEN** the presence prompt opens at once and approves exactly that request, with no approvals sheet to open
 
 #### Scenario: coffer run without a grant starts nothing and prints no value
 - **GIVEN** a standalone secret without the grant, named by `--secret` or by a `coffer://secret/` value in the environment

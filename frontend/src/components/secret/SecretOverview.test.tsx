@@ -6,9 +6,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { ToastProvider } from "@/components/ui/toast";
+import { acceptance } from "@/test/acceptance";
 import type { SecretRef } from "@/lib/api/secret";
 import { secretsApi } from "@/lib/api/secret";
+import { inlineApprovalMutationCache } from "@/lib/inlineApproval";
+import { approvePending } from "@/lib/tauri";
 import { SecretOverview } from "./SecretOverview";
+
+let inShell = false;
+vi.mock("@/lib/tauri", () => ({
+  presenceAvailable: () => inShell,
+  approvePending: vi.fn(async () => ({})),
+  approvePendingBatch: vi.fn(async () => ({ results: [] })),
+}));
 
 vi.mock("@/lib/api/secret", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/secret")>()),
@@ -16,7 +26,7 @@ vi.mock("@/lib/api/secret", async (orig) => ({
     requestLocalAccess: vi.fn(async () => ({ local_access: "pending", approval_id: "a1" })),
     revokeLocalAccess: vi.fn(async () => ({ local_access: "off", approval_id: null })),
     list: vi.fn(async () => ({ refs: [] })),
-    pendingApprovals: vi.fn(async () => []),
+    pendingApprovals: vi.fn(async () => ({ approvals: [] })),
   },
 }));
 
@@ -44,7 +54,10 @@ function row(over: Partial<SecretRef>): SecretRef {
 }
 
 function renderRow(r: SecretRef) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+    mutationCache: inlineApprovalMutationCache(),
+  });
   return render(
     <QueryClientProvider client={qc}>
       <ToastProvider>
@@ -57,14 +70,40 @@ function renderRow(r: SecretRef) {
 }
 
 describe("SecretOverview Access row", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    inShell = false;
+  });
 
   test("off: says only Coffer uses it and Allow requests the grant", async () => {
     renderRow(row({ local_access: "off" }));
     expect(screen.getByTestId("local-access-state").textContent).toMatch(/Only Coffer uses it/);
     fireEvent.click(screen.getByRole("button", { name: "Allow coffer run…" }));
     await waitFor(() => expect(secretsApi.requestLocalAccess).toHaveBeenCalledWith(NAME));
+    // In a browser there is no presence check: the request waits.
+    expect(approvePending).not.toHaveBeenCalled();
   });
+
+  acceptance(
+    "secret",
+    "allowing coffer run in the desktop app asks for Touch ID at once",
+    async () => {
+      inShell = true;
+      vi.mocked(secretsApi.pendingApprovals).mockResolvedValueOnce({
+        approvals: [
+          {
+            id: "a1",
+            op: "bind",
+            destination_uid: "coffer-run",
+            created_at: new Date().toISOString(),
+          },
+        ],
+      } as never);
+      renderRow(row({ local_access: "off" }));
+      fireEvent.click(screen.getByRole("button", { name: "Allow coffer run…" }));
+      await waitFor(() => expect(approvePending).toHaveBeenCalledWith("a1"));
+    },
+  );
 
   test("pending: waits for approval and offers no button", () => {
     renderRow(

@@ -144,7 +144,7 @@ On the Secrets page, a standalone secret's detail has an **Access** line:
 
 | Access | What you see | What it means |
 | --- | --- | --- |
-| **Off** | **Allow `coffer run`…** | `coffer run` cannot use the secret. The button records the request and opens it in the approvals dialog. |
+| **Off** | **Allow `coffer run`…** | `coffer run` cannot use the secret. In the desktop app the button asks for Touch ID or your login password right away and turns the access on; cancel the prompt and the request stays pending. In a browser it records the request for the app to approve. |
 | **Pending** | Waiting for approval in the Coffer app | Approve it there, or **Reject** it. |
 | **On** | **Revoke** | `coffer run` can use the secret. **Revoke** takes effect at once and needs no presence check, since it only narrows access. It is recorded as `secret_local_access_revoked`. |
 

@@ -71,8 +71,7 @@ export function useAddSecret() {
       label: string;
       value: string;
       description?: string;
-    }) =>
-      description ? secretsApi.add(label, value, description) : secretsApi.add(label, value),
+    }) => (description ? secretsApi.add(label, value, description) : secretsApi.add(label, value)),
     onSuccess: refresh,
   });
 }
@@ -87,17 +86,23 @@ export function useSecretNotes() {
   });
 }
 
-/** Ask to let `coffer run` hand a standalone secret to local programs (waits for an approval). */
+/** Ask to let `coffer run` hand a standalone secret to local programs. In the desktop app the
+ *  request is approved on the spot under Touch ID (`coffer-run` is the local-process
+ *  destination); in a browser, or if the prompt is cancelled, it waits for an approval. */
 export function useRequestLocalAccess() {
   const refresh = useRefreshSecrets();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
     mutationFn: (name: string) => secretsApi.requestLocalAccess(name),
+    meta: { secretDestination: () => LOCAL_PROCESS_UID },
     onSuccess: refresh,
     onError: (e) => toast.error(translateApiError(t, e)),
   });
 }
+
+/** The uid of the local-process destination `coffer run` hands secrets to. */
+const LOCAL_PROCESS_UID = "coffer-run";
 
 /** Withdraw that grant at once. */
 export function useRevokeLocalAccess() {
