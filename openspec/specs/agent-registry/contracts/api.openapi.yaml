@@ -633,283 +633,6 @@ paths:
       summary: List Config Files
       tags:
       - agents
-  /api/v1/agents/{uid}/config-files/{key}:
-    get:
-      operationId: read_config_file_api_v1_agents__uid__config_files__key__get
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: key
-        required: true
-        schema:
-          title: Key
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConfigFileContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Config File
-      tags:
-      - agents
-    put:
-      operationId: write_config_file_api_v1_agents__uid__config_files__key__put
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: key
-        required: true
-        schema:
-          title: Key
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConfigFileWrite'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConfigFileInfoOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Write Config File
-      tags:
-      - agents
-  /api/v1/agents/{uid}/config-files/{key}/files/{relpath}:
-    delete:
-      operationId: delete_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__delete
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: key
-        required: true
-        schema:
-          title: Key
-          type: string
-      - in: path
-        name: relpath
-        required: true
-        schema:
-          title: Relpath
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '204':
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Delete Config Dir File
-      tags:
-      - agents
-    get:
-      operationId: read_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__get
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: key
-        required: true
-        schema:
-          title: Key
-          type: string
-      - in: path
-        name: relpath
-        required: true
-        schema:
-          title: Relpath
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConfigFileContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Config Dir File
-      tags:
-      - agents
-    put:
-      operationId: write_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__put
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: key
-        required: true
-        schema:
-          title: Key
-          type: string
-      - in: path
-        name: relpath
-        required: true
-        schema:
-          title: Relpath
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConfigFileWrite'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConfigFileInfoOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Write Config Dir File
-      tags:
-      - agents
   /api/v1/agents/{uid}/hooks:
     get:
       description: |-
@@ -2448,40 +2171,8 @@ components:
       - last_fired_at
       title: CofferHookOut
       type: object
-    ConfigFileContentOut:
-      properties:
-        content:
-          title: Content
-          type: string
-        exists:
-          title: Exists
-          type: boolean
-        fingerprint:
-          title: Fingerprint
-          type: string
-        folder_path:
-          title: Folder Path
-          type: string
-        format:
-          $ref: '#/components/schemas/ConfigFileFormat'
-        key:
-          title: Key
-          type: string
-        path:
-          title: Path
-          type: string
-      required:
-      - key
-      - path
-      - folder_path
-      - format
-      - exists
-      - content
-      - fingerprint
-      title: ConfigFileContentOut
-      type: object
     ConfigFileFormat:
-      description: Format of an allowlisted config file — drives save-time validation.
+      description: Format of an allowlisted config file.
       enum:
       - json
       - toml
@@ -2557,20 +2248,6 @@ components:
       required:
       - items
       title: ConfigFileListOut
-      type: object
-    ConfigFileWrite:
-      properties:
-        content:
-          title: Content
-          type: string
-        expected_fingerprint:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Expected Fingerprint
-      required:
-      - content
-      title: ConfigFileWrite
       type: object
     DetectionState:
       enum:
@@ -2653,6 +2330,9 @@ components:
           format: date-time
           title: Modified At
           type: string
+        path:
+          title: Path
+          type: string
         relpath:
           title: Relpath
           type: string
@@ -2661,6 +2341,7 @@ components:
           type: integer
       required:
       - relpath
+      - path
       - size
       - modified_at
       title: DirChildOut
@@ -3999,9 +3680,6 @@ components:
         content:
           title: Content
           type: string
-        fingerprint:
-          title: Fingerprint
-          type: string
         folder_abs_path:
           title: Folder Abs Path
           type: string
@@ -4022,7 +3700,6 @@ components:
       - truncated
       - binary
       - size
-      - fingerprint
       title: SkillFileContentOut
       type: object
     SkillFileNodeOut:

@@ -133,11 +133,7 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
             parseErrors.length > 0 ? (
               <div className="flex flex-col gap-1">
                 {parseErrors.map((pe) => (
-                  <McpParseErrorAlert
-                    key={`${pe.source}:${pe.path}`}
-                    agentType={agent.type}
-                    error={pe}
-                  />
+                  <McpParseErrorAlert key={`${pe.source}:${pe.path}`} error={pe} />
                 ))}
               </div>
             ) : undefined

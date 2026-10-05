@@ -1,26 +1,20 @@
 // frontend/src/components/agents/AgentConfigFilesTab.acceptance.test.tsx
-// Acceptance scenarios for the Config files tab of spec agent-registry: the
-// daemon-backed open / reveal pair beside a selected file.
-import { afterEach, describe, expect, vi, type Mock } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+// Acceptance scenario for the Config files tab of spec agent-registry "Open
+// config files in an external editor or reveal them": the daemon-backed open /
+// reveal pair on a file's row, Reveal alone on a file not created yet, and no
+// content, edit, new-file, delete or copy-path anywhere.
+import { afterEach, describe, expect, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
 
 import { AgentConfigFilesTab } from "./AgentConfigFilesTab";
-import type { AgentOut } from "@/lib/api/agents";
+import { agentsApi, type AgentOut, type ConfigFileInfo } from "@/lib/api/agents";
 import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import "@/i18n";
 
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgentConfigFiles: vi.fn(),
-  useAgentConfigFile: vi.fn(),
-  useAgentConfigChild: vi.fn(),
-}));
+vi.mock("@/lib/api/agents", () => ({ agentsApi: { listConfigFiles: vi.fn() } }));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
-
-const { useAgentConfigFiles, useAgentConfigFile, useAgentConfigChild } =
-  await import("@/lib/hooks/useAgents");
 
 const AGENT = {
   uid: "u-cc",
@@ -30,42 +24,28 @@ const AGENT = {
   config_dir: "/home/u/.claude",
 } as AgentOut;
 
-const INSTRUCTIONS = {
+const INSTRUCTIONS: ConfigFileInfo = {
   key: "instructions",
   display_name: "User instructions (CLAUDE.md)",
   path: "/home/u/.claude/CLAUDE.md",
   folder_path: "/home/u/.claude",
-  kind: "file" as const,
-  format: "markdown" as const,
+  kind: "file",
+  format: "markdown",
   exists: true,
   files: null,
   size: 40,
   modified_at: "2026-06-01T00:00:00Z",
 };
-
-function stub() {
-  vi.mocked(useAgentConfigFiles).mockReturnValue({
-    data: [INSTRUCTIONS],
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof useAgentConfigFiles>);
-  vi.mocked(useAgentConfigFile).mockReturnValue({
-    data: {
-      key: "instructions",
-      format: "markdown",
-      exists: true,
-      content: "# Rules\n",
-      fingerprint: "fp",
-      path: INSTRUCTIONS.path,
-      folder_path: INSTRUCTIONS.folder_path,
-    },
-    isPending: false,
-  } as unknown as ReturnType<typeof useAgentConfigFile>);
-  vi.mocked(useAgentConfigChild).mockReturnValue({
-    data: undefined,
-    isPending: false,
-  } as unknown as ReturnType<typeof useAgentConfigChild>);
-}
+const LOCAL: ConfigFileInfo = {
+  ...INSTRUCTIONS,
+  key: "settings_local",
+  display_name: "Local settings",
+  path: "/home/u/.claude/settings.local.json",
+  format: "json",
+  exists: false,
+  size: null,
+  modified_at: null,
+};
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -74,30 +54,35 @@ afterEach(() => {
 
 describe("Config files tab — acceptance", () => {
   acceptance("agent-registry", "open a config file and reveal it through the daemon", async () => {
-    (fsApi.open as Mock).mockResolvedValue(undefined);
-    (fsApi.reveal as Mock).mockResolvedValue(undefined);
-    stub();
+    vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items: [INSTRUCTIONS, LOCAL] });
+    vi.mocked(fsApi.open).mockResolvedValue(undefined);
+    vi.mocked(fsApi.reveal).mockResolvedValue(undefined);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <AgentConfigFilesTab agent={AGENT} />
-        </MemoryRouter>
+        <AgentConfigFilesTab agent={AGENT} />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByText("CLAUDE.md"));
 
-    fireEvent.click(screen.getByRole("button", { name: /open in editor/i }));
+    const existing = within((await screen.findByText("CLAUDE.md")).closest("li") as HTMLElement);
+    fireEvent.click(existing.getByRole("button", { name: "Open in editor" }));
     await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(INSTRUCTIONS.path, undefined));
-    // Two Reveal icons: the tree header's (the config directory) and the
-    // toolbar's (this file).
-    const reveals = screen.getAllByRole("button", { name: /reveal in finder/i });
-    expect(reveals).toHaveLength(2);
-    fireEvent.click(reveals[1]);
+    fireEvent.click(existing.getByRole("button", { name: "Reveal in Finder" }));
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(INSTRUCTIONS.path));
-    fireEvent.click(reveals[0]);
-    await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(AGENT.config_dir));
 
-    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+    // The file not created yet: Reveal on its folder only, opening creates nothing.
+    const missing = within(screen.getByText("settings.local.json").closest("li") as HTMLElement);
+    expect(missing.getByText("Not created")).toBeInTheDocument();
+    expect(missing.queryByRole("button", { name: "Open in editor" })).toBeNull();
+    fireEvent.click(missing.getByRole("button", { name: "Reveal in Finder" }));
+    await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(LOCAL.folder_path));
+    expect(fsApi.open).toHaveBeenCalledTimes(1);
+
+    // Nothing shows content or offers a change, and there is no copy-path fallback.
+    for (const name of [/^edit$/i, /save/i, /revert/i, /new file/i, /delete/i, /copy/i]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByText("# Rules")).toBeNull();
   });
 });

@@ -127,9 +127,6 @@ class FakeStore:
     def fingerprint(self, text: str | None) -> str:
         return "" if text is None else f"fp:{hash(text)}"
 
-    def resolved_within(self, path: pathlib.Path, root: pathlib.Path) -> bool:
-        return True
-
 
 @dataclass
 class FakeResourceService:

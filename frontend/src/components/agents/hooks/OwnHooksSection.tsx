@@ -21,8 +21,6 @@ import type { NativeHook } from "@/lib/api/agents";
 interface Props {
   hooks: readonly NativeHook[];
   agentType: string;
-  /** The Config files key that holds a file path, when one does. */
-  fileKeyOf: (path: string) => string | null;
 }
 
 /** A plugin's hook reads "<plugin> · hooks.json"; a user file reads as its path. */
@@ -30,7 +28,7 @@ function fileLabel(h: NativeHook): string {
   return h.plugin ? `${h.plugin.split("@")[0]} · ${fileName(h.path)}` : abbreviateHomePath(h.path);
 }
 
-export function OwnHooksSection({ hooks, agentType, fileKeyOf }: Props) {
+export function OwnHooksSection({ hooks, agentType }: Props) {
   const { t } = useTranslation();
   const agent = agentTypeLabel(agentType);
   const [query, setQuery] = useState("");
@@ -161,12 +159,7 @@ export function OwnHooksSection({ hooks, agentType, fileKeyOf }: Props) {
           </div>
         </>
       )}
-      <HookDetailsDialog
-        hook={open}
-        agentType={agentType}
-        fileKey={open ? fileKeyOf(open.path) : null}
-        onClose={() => setOpen(null)}
-      />
+      <HookDetailsDialog hook={open} agentType={agentType} onClose={() => setOpen(null)} />
     </Section>
   );
 }

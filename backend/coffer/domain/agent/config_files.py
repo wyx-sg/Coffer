@@ -1,4 +1,4 @@
-"""Curated config-file allowlist per agent type + format validation.
+"""Curated config-file allowlist per agent type.
 
 Pure domain code. Path construction reads `os.environ['HOME']` (same pattern
 as `types.py`) but performs no other I/O — existence checks, reads, and writes
@@ -12,16 +12,14 @@ any filesystem access.
 
 from __future__ import annotations
 
-import json
 import os
 import pathlib
-import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
 from coffer.domain.agent.types import AgentType
-from coffer.domain.errors import ConfigFileFormatInvalid, ConfigFileNotAllowed
+from coffer.domain.errors import ConfigFileNotAllowed
 
 
 def _home() -> pathlib.Path:
@@ -30,7 +28,7 @@ def _home() -> pathlib.Path:
 
 
 class ConfigFileFormat(StrEnum):
-    """Format of an allowlisted config file — drives save-time validation."""
+    """Format of an allowlisted config file."""
 
     JSON = "json"
     TOML = "toml"
@@ -70,6 +68,7 @@ class DirEntryInfo:
     """One child file of a directory-type config entry."""
 
     relpath: str  # POSIX-style, relative to the directory root
+    path: str  # absolute path, for the open / reveal affordances
     size: int
     modified_at: datetime
 
@@ -103,42 +102,3 @@ def spec_for(
         if spec.key == key:
             return spec
     raise ConfigFileNotAllowed(agent_type.value, key)
-
-
-def validate_child_relpath(root: pathlib.Path, relpath: str) -> pathlib.Path:
-    """Resolve `relpath` under `root` for a directory-type entry.
-
-    Pure path math — no filesystem access (symlink escape is re-checked at
-    I/O time by the store). Rejects traversal, absolute paths, backslashes,
-    hidden segments, and any extension other than lowercase `.md` (exact:
-    `.MD` is rejected so one name can't alias two keys on case-insensitive
-    filesystems). Redundant separators (`a//b.md`) normalise away.
-    """
-    if not root.is_absolute():
-        raise ValueError(f"directory-entry root must be absolute, got {root}")
-    if not relpath or "\\" in relpath:
-        raise ConfigFileNotAllowed("child", relpath or "<empty>")
-    p = pathlib.PurePosixPath(relpath)
-    if p.is_absolute() or ".." in p.parts or any(part.startswith(".") for part in p.parts):
-        raise ConfigFileNotAllowed("child", relpath)
-    if p.suffix != ".md":
-        raise ConfigFileFormatInvalid("markdown", f"only .md files are allowed, got {relpath!r}")
-    return root / pathlib.Path(*p.parts)
-
-
-def validate_content(fmt: ConfigFileFormat, text: str) -> None:
-    """Raise `ConfigFileFormatInvalid` if `text` is malformed for `fmt`.
-
-    `markdown` is always accepted. `json`/`toml` must parse.
-    """
-    if fmt is ConfigFileFormat.JSON:
-        try:
-            json.loads(text)
-        except ValueError as e:
-            raise ConfigFileFormatInvalid("json", str(e)) from e
-    elif fmt is ConfigFileFormat.TOML:
-        try:
-            tomllib.loads(text)
-        except tomllib.TOMLDecodeError as e:
-            raise ConfigFileFormatInvalid("toml", str(e)) from e
-    # markdown: nothing to validate.

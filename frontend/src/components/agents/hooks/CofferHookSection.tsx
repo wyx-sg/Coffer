@@ -20,7 +20,6 @@ import type { CofferHook } from "@/lib/api/agents";
 interface Props {
   hook: CofferHook;
   agentType: string;
-  fileKey: string | null;
   /** Opens the Review changes flow that rewrites the hook; Repair shows only when given. */
   onRepair?: () => void;
   onCheckAgain: () => void;
@@ -36,14 +35,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export function CofferHookSection({
-  hook,
-  agentType,
-  fileKey,
-  onRepair,
-  onCheckAgain,
-  checking,
-}: Props) {
+export function CofferHookSection({ hook, agentType, onRepair, onCheckAgain, checking }: Props) {
   const { t, i18n } = useTranslation();
   const state = cofferHookState(hook);
   const agent = agentTypeLabel(agentType);
@@ -140,7 +132,7 @@ export function CofferHookSection({
           </span>
         </Row>
         <Row label={t("agents.hooks.coffer.file")}>
-          <FileLink agentType={agentType} path={hook.path} fileKey={fileKey} />
+          <FileLink path={hook.path} />
         </Row>
       </dl>
     </Section>

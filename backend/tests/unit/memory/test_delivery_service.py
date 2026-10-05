@@ -110,14 +110,8 @@ class FakeStore:
         self.deletes.append(path)
         return self._files.pop(path, None) is not None
 
-    def remove_tree(self, path: pathlib.Path) -> bool:  # pragma: no cover - unused
-        raise NotImplementedError
-
     def fingerprint(self, text: str | None) -> str:  # pragma: no cover - unused
         return ""
-
-    def resolved_within(self, path: pathlib.Path, root: pathlib.Path) -> bool:
-        return True
 
 
 class FakeAuditRepo:

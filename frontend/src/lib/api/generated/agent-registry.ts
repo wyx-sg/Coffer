@@ -208,43 +208,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agents/{uid}/config-files/{key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Config File */
-        get: operations["read_config_file_api_v1_agents__uid__config_files__key__get"];
-        /** Write Config File */
-        put: operations["write_config_file_api_v1_agents__uid__config_files__key__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/agents/{uid}/config-files/{key}/files/{relpath}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Config Dir File */
-        get: operations["read_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__get"];
-        /** Write Config Dir File */
-        put: operations["write_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__put"];
-        post?: never;
-        /** Delete Config Dir File */
-        delete: operations["delete_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/agents/{uid}/hooks": {
         parameters: {
             query?: never;
@@ -805,25 +768,9 @@ export interface components {
             path: string;
             trust: components["schemas"]["HookTrust"];
         };
-        /** ConfigFileContentOut */
-        ConfigFileContentOut: {
-            /** Content */
-            content: string;
-            /** Exists */
-            exists: boolean;
-            /** Fingerprint */
-            fingerprint: string;
-            /** Folder Path */
-            folder_path: string;
-            format: components["schemas"]["ConfigFileFormat"];
-            /** Key */
-            key: string;
-            /** Path */
-            path: string;
-        };
         /**
          * ConfigFileFormat
-         * @description Format of an allowlisted config file — drives save-time validation.
+         * @description Format of an allowlisted config file.
          * @enum {string}
          */
         ConfigFileFormat: "json" | "toml" | "markdown";
@@ -858,13 +805,6 @@ export interface components {
         ConfigFileListOut: {
             /** Items */
             items: components["schemas"]["ConfigFileInfoOut"][];
-        };
-        /** ConfigFileWrite */
-        ConfigFileWrite: {
-            /** Content */
-            content: string;
-            /** Expected Fingerprint */
-            expected_fingerprint?: string | null;
         };
         /**
          * DetectionState
@@ -912,6 +852,8 @@ export interface components {
              * Format: date-time
              */
             modified_at: string;
+            /** Path */
+            path: string;
             /** Relpath */
             relpath: string;
             /** Size */
@@ -1584,8 +1526,6 @@ export interface components {
             binary: boolean;
             /** Content */
             content: string;
-            /** Fingerprint */
-            fingerprint: string;
             /** Folder Abs Path */
             folder_abs_path: string;
             /** Path */
@@ -2208,233 +2148,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConfigFileListOut"];
                 };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_config_file_api_v1_agents__uid__config_files__key__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                uid: string;
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigFileContentOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    write_config_file_api_v1_agents__uid__config_files__key__put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                uid: string;
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigFileWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigFileInfoOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                uid: string;
-                key: string;
-                relpath: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigFileContentOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    write_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                uid: string;
-                key: string;
-                relpath: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigFileWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigFileInfoOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                uid: string;
-                key: string;
-                relpath: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
