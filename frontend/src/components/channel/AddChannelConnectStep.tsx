@@ -1,6 +1,6 @@
 // frontend/src/components/channel/AddChannelConnectStep.tsx
 // Step 2 of Add channel: name it, choose the agent new conversations start
-// on, and paste the platform's credentials. Validation lands under the field
+// on, and pick or paste the platform's credentials (the one secret field). Validation lands under the field
 // it names (addChannel.ts; the schema's messages are i18n keys); a server
 // failure is toasted by the hook and also stated inline.
 //
@@ -57,7 +57,8 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
   const create = useCreateChannel();
   // Telegram's token is checked as it is pasted (spec channels "Check
   // credentials before they are saved"); SeaTalk's is checked by connecting.
-  const token = secrets.botToken.trim();
+  // A stored token is not re-checked here: it is already in use, or was checked when it was added.
+  const token = secrets.botToken?.kind === "new" ? secrets.botToken.value.trim() : "";
   const tokenCheck = useCredentialCheck(
     platform === "telegram" && token.length >= 10 ? { platform, bot_token: token } : null,
   );
@@ -122,6 +123,7 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
       </div>
       <AddChannelSecretFields
         channelType={platform}
+        channelName={name.trim()}
         draft={secrets}
         errors={fieldErrors}
         onChange={(patch) => setSecrets((s) => ({ ...s, ...patch }))}

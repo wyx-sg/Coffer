@@ -134,7 +134,7 @@ describe("the list", () => {
     fireEvent.click(screen.getByRole("button", { name: /telegram/i }));
     // A card opens Add channel straight at its Connect step.
     expect(await screen.findByRole("heading", { name: "Add a Telegram channel" })).toBeVisible();
-    expect(screen.getByLabelText(/bot token/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /bot token/i })).toBeInTheDocument();
   });
 });
 

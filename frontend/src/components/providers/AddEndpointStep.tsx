@@ -1,17 +1,17 @@
 // src/components/providers/AddEndpointStep.tsx — step 1 of Add: vendor, protocol, name, base URL, key, and Test.
 //
 // A vendor fills the protocol and base URL; Custom asks for the protocol by
-// what can use it. The key is a new value, stored as a new secret when the
-// provider is added — write-only, never shown again. The local path (Ollama /
+// what can use it. The key is the one secret field: a stored secret, or a
+// pasted value stored as a new secret when the provider is added. The local path (Ollama /
 // a runtime on this Mac) has no key: detection finds what answers instead.
 import type { ReactNode } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { Controller, type UseFormReturn } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
+import { SecretField } from "@/components/secret/SecretField";
 import { CUSTOM_PROTOCOLS, PRESETS, type PresetId } from "@/lib/providers/presets";
 import { FieldError } from "./FieldError";
 import { ProtocolCards } from "./ProtocolCards";
@@ -54,6 +54,7 @@ export function AddEndpointStep({
     label: p.id === "custom" ? t("providers.add.custom") : p.label,
   }));
   const protocols = presetId === "custom" ? CUSTOM_PROTOCOLS : [];
+  const vendorLabel = vendors.find((v) => v.value === presetId)?.label ?? "";
   const edited = { onChange: onEdited };
 
   return (
@@ -117,12 +118,25 @@ export function AddEndpointStep({
           <Label htmlFor="pa-secret" required>
             {t("providers.fields.apiKey")}
           </Label>
-          <PasswordInput
-            id="pa-secret"
-            autoComplete="off"
-            className="font-mono text-xs"
-            aria-describedby="pa-secret-error"
-            {...register("secret", edited)}
+          <Controller
+            control={form.control}
+            name="secret"
+            render={({ field }) => (
+              <SecretField
+                id="pa-secret"
+                value={field.value}
+                onChange={(next) => {
+                  field.onChange(next);
+                  onEdited();
+                }}
+                defaultName={t("providers.add.keyName", {
+                  name: watch("name").trim() || vendorLabel,
+                })}
+                aria-label={t("providers.fields.apiKey")}
+                invalid={errors.secret ? true : undefined}
+                help={false}
+              />
+            )}
           />
           <FieldError id="pa-secret-error" message={errors.secret?.message} />
           <p className="text-xs text-text-muted">

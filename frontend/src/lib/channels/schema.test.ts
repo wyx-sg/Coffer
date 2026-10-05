@@ -39,10 +39,18 @@ const AGENT_UID = "u-8f31c0a2";
  */
 const refFor = () => expect.stringMatching(/^secret\/[0-9a-f]{32}$/);
 
+/** A pasted value, as the secret field holds it: written under its minted id, named by `label`. */
+const pasted = (value: string, label = "pasted") => ({
+  kind: "new" as const,
+  name: "0123456789abcdef0123456789abcdef",
+  label,
+  value,
+});
+
 const telegram = {
   channel_type: "telegram" as const,
   name: "tg",
-  bot_token: "123:abc",
+  bot_token: pasted("123:abc", "tg Bot token"),
 };
 
 describe("planChannel", () => {
@@ -58,7 +66,9 @@ describe("planChannel", () => {
     });
     // The write lands where the config points, and the channel's name is not
     // part of the address.
-    expect(plan.secrets).toEqual([{ ref: plan.config.bot_token_ref, value: "123:abc" }]);
+    expect(plan.secrets).toEqual([
+      { ref: plan.config.bot_token_ref, value: "123:abc", label: "tg Bot token" },
+    ]);
     expect(plan.config.bot_token_ref).not.toContain("/tg/");
   });
 
@@ -67,7 +77,7 @@ describe("planChannel", () => {
       channel_type: "seatalk",
       name: "st",
       app_id: "app-1",
-      app_secret: "s1",
+      app_secret: pasted("s1"),
     });
     const plan = planChannel(parsed, HERE, AGENT_UID);
 
@@ -81,7 +91,19 @@ describe("planChannel", () => {
       default_agent: AGENT_UID,
       runs_on: HERE,
     });
-    expect(plan.secrets).toEqual([{ ref: plan.config.app_secret_ref, value: "s1" }]);
+    expect(plan.secrets).toEqual([
+      { ref: plan.config.app_secret_ref, value: "s1", label: "pasted" },
+    ]);
+  });
+
+  test("a stored secret is cited as it is, and nothing is written", () => {
+    const parsed = addChannelFormSchema.parse({
+      ...telegram,
+      bot_token: { kind: "stored", name: "a1".repeat(16) },
+    });
+    const plan = planChannel(parsed, HERE, AGENT_UID);
+    expect(plan.config.bot_token_ref).toBe(`secret/${"a1".repeat(16)}`);
+    expect(plan.secrets).toEqual([]);
   });
 
   test("the binding is whatever machine is passed in, never inferred", () => {
@@ -100,7 +122,7 @@ describe("addChannelFormSchema", () => {
     channel_type: "seatalk" as const,
     name: "st",
     app_id: "app-1",
-    app_secret: "s1",
+    app_secret: pasted("s1"),
   };
 
   test("seatalk accepts app id + app secret alone", () => {
@@ -109,7 +131,8 @@ describe("addChannelFormSchema", () => {
 
   test("seatalk requires both the app id and the app secret", () => {
     for (const field of ["app_id", "app_secret"]) {
-      const parsed = addChannelFormSchema.safeParse({ ...seatalk, [field]: "" });
+      const empty = field === "app_id" ? "" : null;
+      const parsed = addChannelFormSchema.safeParse({ ...seatalk, [field]: empty });
       expect(parsed.success, field).toBe(false);
       expect(parsed.error?.issues.map((i) => i.path.join("."))).toContain(field);
     }

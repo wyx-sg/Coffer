@@ -3682,14 +3682,16 @@
       "name": "名称",
       "namePlaceholder": "例如：团队机器人",
       "botToken": "Bot token",
+      "botTokenName": "{{name}} Bot token",
       "appId": "App ID",
       "appSecret": "App Secret",
+      "appSecretName": "{{name}} App Secret",
       "errors": {
         "name": "请输入名称。",
         "nameTooLong": "最多 80 个字符。",
-        "botToken": "请输入 bot token。",
+        "botToken": "请选择已存的密钥，或粘贴 bot token。",
         "appId": "请输入 App ID。",
-        "appSecret": "请输入 App Secret。",
+        "appSecret": "请选择已存的密钥，或粘贴 App Secret。",
         "agent": "请先添加一个智能体——渠道必须指明它驱动的智能体。"
       },
       "telegramHint": "BotFather 给你的 token。存入 Coffer 密钥库。",
@@ -3702,8 +3704,6 @@
         "body": "请在这里连接之后再设置——后台会检查连接是否已存在。"
       },
       "nameHint": "名称随意；消息渠道靠 ID 区分，之后可以改名。",
-      "botTokenPlaceholder": "粘贴 bot token",
-      "appSecretPlaceholder": "粘贴 App Secret",
       "telegramFound": "找到 @{{handle}}",
       "telegramFoundPlain": "Token 可用",
       "telegramFoundBody": "Token 可用。它将在这台 Mac（{{machine}}）上运行。"
@@ -5905,7 +5905,8 @@
       "vendor": "厂商",
       "vendorHint": "选择厂商会自动填写协议和 Base URL。网关和中转服务请选「自定义」。",
       "custom": "自定义",
-      "keyHint": "作为新密钥保存在这台 Mac 的钥匙串加密存储中。只写不读——不会再显示。",
+      "keyHint": "选择一个已存的密钥，或粘贴新的 Key：添加服务商时会把它存进密钥库。",
+      "keyName": "{{name}} API Key",
       "localUrlPlaceholder": "留空则在默认端口上查找",
       "next": "下一步：模型",
       "back": "上一步",

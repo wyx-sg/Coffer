@@ -3682,14 +3682,16 @@
       "name": "Name",
       "namePlaceholder": "e.g. Team bot",
       "botToken": "Bot token",
+      "botTokenName": "{{name}} bot token",
       "appId": "App ID",
       "appSecret": "App secret",
+      "appSecretName": "{{name}} app secret",
       "errors": {
         "name": "Enter a name.",
         "nameTooLong": "At most 80 characters.",
-        "botToken": "Enter the bot token.",
+        "botToken": "Choose a stored secret or paste the bot token.",
         "appId": "Enter the App ID.",
-        "appSecret": "Enter the App secret.",
+        "appSecret": "Choose a stored secret or paste the App secret.",
         "agent": "Add an agent first — a channel has to name the agent it drives."
       },
       "telegramHint": "The token BotFather gave you. Stored in Coffer's secret store.",
@@ -3702,8 +3704,6 @@
         "body": "Do it after connecting here — the portal checks that a connection exists."
       },
       "nameHint": "Any name; channels are told apart by their ID, so you can rename it later.",
-      "botTokenPlaceholder": "Paste the bot token",
-      "appSecretPlaceholder": "Paste the App secret",
       "telegramFound": "Found @{{handle}}",
       "telegramFoundPlain": "The token works",
       "telegramFoundBody": "The token works. It will run on this Mac ({{machine}})."
@@ -5905,7 +5905,8 @@
       "vendor": "Vendor",
       "vendorHint": "A vendor fills in the protocol and base URL. Custom for gateways and proxies.",
       "custom": "Custom",
-      "keyHint": "Saved as a new secret in this Mac's keychain-encrypted store. Write-only — never shown again.",
+      "keyHint": "Pick a stored secret, or paste a new key: it is saved to Secrets when the provider is added.",
+      "keyName": "{{name}} API key",
       "localUrlPlaceholder": "Leave blank to look on the default ports",
       "next": "Next: Models",
       "back": "Back",
