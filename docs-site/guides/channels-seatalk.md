@@ -37,7 +37,7 @@ Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket del
 1. Download SeaTalk's Python SDK for WebSocket event callbacks from the SeaTalk Open Platform. The package is `seatalk_oapi_sdk`; see SeaTalk's [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) documentation. The download stays with you, because it sits behind the platform's sign-in.
 2. Hand the rest to your agent. Once the channel is registered (step 3), a channel waiting for the SDK reads **SeaTalk's Python SDK isn't installed**, links SeaTalk's download page and offers **Hand off to &lt;Agent&gt;** (its menu copies the prompt; with no Coffer-managed agent available only **Copy prompt** is offered): a prompt that has your agent unpack the archive into Coffer's vendor directory. Press **Retry** once it is in place.
 
-Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start, and keeps retrying while it is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart.
+The SDK is loaded by `coffer-seatalk-bridge`, a separate program that sits beside the daemon and has no access to the master key. The daemon never imports the SDK: that directory is one your agent can write to, and code placed there must not run where the key is readable. The daemon starts the bridge when a SeaTalk channel starts, gives it the app ID and app secret on its standard input, and reads the channel's events back from it. It keeps retrying while the SDK is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart.
 
 To do it by hand instead, unpack the archive so that the package directory sits inside Coffer's vendor directory:
 
@@ -87,7 +87,7 @@ The **SeaTalk connection** badge on the channel's page reports the connection as
 | `connecting` | **Connecting** — Connecting… (**Reconnecting** — Reconnecting… after a failed attempt) | Registering with SeaTalk. |
 | `connected` | **Connected** | Events are flowing. |
 | `kicked` | **Kicked** — Another process took the connection | Another process registered the same app. Coffer waits 60 seconds before trying again rather than fighting for the connection. |
-| `sdk_missing` | **Can't start** — SeaTalk SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
+| `sdk_missing` | **Can't start** — SeaTalk SDK not found | The bridge could not import `seatalk_oapi_sdk`. The error names the directory searched. |
 | `rejected` | **Token rejected** — Connection refused | SeaTalk refused the app at the register handshake: the App ID is wrong, or the App Secret was regenerated on the SeaTalk Open Platform. The banner offers **Replace secret**; `websocket_error` holds SeaTalk's answer verbatim. Coffer keeps retrying, so a secret replaced under the same reference recovers by itself. |
 | `error` | **Network problem** — Can't reach the platform — retrying | The last attempt failed on the way (a DNS failure, a timeout, a dropped socket), not because SeaTalk refused the app; `websocket_error` holds the error verbatim. Coffer retries with a backoff from 1 to 30 seconds, and the banner offers **Reconnect now**, never a new secret. |
 
@@ -181,7 +181,7 @@ On the channel's page choose **Replace secret** (in the **⋯** menu, or under *
 ## Troubleshooting
 
 **The state is `sdk_missing`.**
-Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`), and that `COFFER_SEATALK_SDK_DIR`, if you use it, is set where the daemon starts — not only in your current shell. Replies and notifications still work meanwhile.
+Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`), and that `COFFER_SEATALK_SDK_DIR`, if you use it, is set where the daemon starts — not only in your current shell. The bridge reads it from the daemon's environment. Replies and notifications still work meanwhile.
 
 **The state is `kicked`.**
 Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, change **Runs on** on its **Settings** tab from the machine that currently runs it.

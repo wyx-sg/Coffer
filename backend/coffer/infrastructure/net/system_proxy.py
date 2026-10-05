@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import urllib.request
 from collections.abc import Callable, MutableMapping
 from urllib.parse import urlsplit
 
+from coffer.infrastructure.platform.host import HostOs, host_os
 from coffer.infrastructure.secret.build_identity import keychain_access_group
 
 _logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ _ALWAYS_BYPASS = ("localhost", "127.0.0.1", "::1")
 
 def read_system_proxies() -> dict[str, str]:
     """``{"http": url, "https": url, "no_proxy": "a,b"}`` from macOS; ``{}`` elsewhere."""
-    if sys.platform != "darwin":
+    if host_os() is not HostOs.MACOS:
         return {}
     try:
         found = {

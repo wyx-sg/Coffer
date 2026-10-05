@@ -16,5 +16,12 @@
         "trafficLightPosition": { "x": 20, "y": 17 }
       }
     ]
+  },
+  "bundle": {
+    "macOS": {
+      "files": {
+        "MacOS/coffer-seatalk-bridge": "binaries/coffer-seatalk-bridge"
+      }
+    }
   }
 }

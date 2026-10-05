@@ -301,13 +301,113 @@ def installed_fake_sdk() -> Iterator[FakeSeaTalkSdk]:
             sys.modules[_PACKAGE] = previous
 
 
-def write_fake_sdk_package(directory: Path, *, marker: str = "vendored") -> Path:
-    """Write a minimal importable ``seatalk_oapi_sdk`` package under ``directory``.
+_SCRIPTED_SDK = """
+import json, os, sys, threading
 
-    For the loader's own tests: what matters there is that ``load_sdk`` finds a
-    package by path, not what the package can do.
+print("seatalk_oapi_sdk: a stray print on import")
+__version__ = "0.1.0-scripted"
+MARKER = {marker!r}
+_SCRIPT = {script!r}
+_RECORD = {record!r}
+
+
+class SopConnError(Exception):
+    pass
+
+
+class RegisterError(SopConnError):
+    pass
+
+
+class KickError(SopConnError):
+    pass
+
+
+class Event:
+    def __init__(self, data):
+        self.data = data
+
+
+class Envelope:
+    def __init__(self, message):
+        self.message = message
+
+
+class EventDispatcher:
+    def __init__(self):
+        self.event_handler = self.kick_handler = None
+        self.envelope_handler = print
+        self.invalid_frame_handler = print
+
+    def on_event(self, handler):
+        self.event_handler = handler
+        return self
+
+    def on_kick(self, handler):
+        self.kick_handler = handler
+        return self
+
+    def on_envelope(self, handler):
+        self.envelope_handler = handler
+        return self
+
+    def on_invalid_frame(self, handler):
+        self.invalid_frame_handler = handler
+        return self
+
+
+class Client:
+    def __init__(self, app_id, app_secret, dispatcher=None, **_):
+        self.app_id, self.app_secret = app_id, app_secret
+        self.dispatcher = dispatcher
+        self._closed = threading.Event()
+        if _RECORD:
+            with open(_RECORD, "w") as f:
+                json.dump({{"argv": sys.argv, "env": dict(os.environ), "path": sys.path}}, f)
+
+    def connect(self):
+        if self.app_secret.startswith("bad"):
+            raise RegisterError("register failed: invalid app secret " + self.app_secret)
+
+    def listen(self):
+        print("seatalk_oapi_sdk: a stray print while listening")
+        for data in _SCRIPT.get("events", []):
+            self.dispatcher.event_handler(Event(data))
+        if _SCRIPT.get("invalid_frame"):
+            self.dispatcher.invalid_frame_handler(b"secret body", ValueError("bad frame"))
+        if _SCRIPT.get("kick"):
+            self.dispatcher.kick_handler(Envelope(_SCRIPT["kick"]))
+            raise KickError(_SCRIPT["kick"])
+        self._closed.wait(30)
+
+    def close(self):
+        self._closed.set()
+"""
+
+
+def write_fake_sdk_package(
+    directory: Path,
+    *,
+    marker: str = "vendored",
+    script: dict[str, Any] | None = None,
+    record: Path | None = None,
+) -> Path:
+    """Write an importable, file-based ``seatalk_oapi_sdk`` under ``directory``.
+
+    For the tests that run the real bridge in a subprocess, which cannot be
+    handed an in-memory module. ``script`` says what the connection does:
+    ``events`` (envelopes delivered in order), ``invalid_frame`` (report one bad
+    frame) and ``kick`` (a kick reason, after which ``listen()`` raises
+    ``KickError``); with none of them it holds until closed. An app secret that
+    starts with ``bad`` is refused at the register handshake, with the secret
+    in the error text. ``record`` names a file the client writes its argv,
+    environment and ``sys.path`` to. The package prints to stdout on import and
+    on listen, as a careless SDK might.
     """
     package = directory / _PACKAGE
     package.mkdir(parents=True, exist_ok=True)
-    (package / "__init__.py").write_text(f'__version__ = "0.1.0"\nMARKER = "{marker}"\n')
+    source = _SCRIPTED_SDK.format(
+        marker=marker, script=script or {}, record=str(record) if record else ""
+    )
+    (package / "__init__.py").write_text(source)
     return package

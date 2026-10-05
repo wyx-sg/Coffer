@@ -48,12 +48,15 @@ log = logging.getLogger(__name__)
 
 # The binaries a frozen daemon deploys beside itself. `coffer-daemon` is
 # included so the shim's detect-or-spawn sibling probe resolves after a reboot,
-# and
-# `coffer` so the user has the CLI on PATH once ~/.coffer/bin is added to it.
+# `coffer` so the user has the CLI on PATH once ~/.coffer/bin is added to it,
+# and `coffer-seatalk-bridge` because a daemon started from ~/.coffer/bin finds
+# the SeaTalk bridge beside itself (spec channels/seatalk "Load the websocket
+# client library from an operator-supplied directory").
 DEPLOYED_BINARIES: tuple[str, ...] = (
     "coffer",
     "coffer-daemon",
     "coffer-mcp-shim",
+    "coffer-seatalk-bridge",
 )
 
 #: Version directories kept under ``~/.coffer/bin``: the current one and the

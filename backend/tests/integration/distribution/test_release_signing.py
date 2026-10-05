@@ -213,3 +213,33 @@ def test_the_release_publishes_a_signed_update_manifest(tmp_path: Path) -> None:
     # never committed as a placeholder a build could ship.
     assert updater["pubkey"] == ""
     assert "createUpdaterArtifacts" not in conf["bundle"]
+
+
+def test_the_seatalk_bridge_is_signed_without_the_keychain_group() -> None:
+    """The bridge imports code from a directory any same-user agent can write
+    to, so it is signed with the same Developer ID under the hardened runtime
+    but WITHOUT ``keychain-access-groups`` — never with the rendered file the
+    other binaries get — and the release proves the group is absent on the
+    frozen binary and on the copy inside Coffer.app."""
+    spec = (_REPO / "backend" / "coffer-seatalk-bridge.spec").read_text(encoding="utf-8")
+    assert 'os.environ.get("COFFER_CODESIGN_IDENTITY")' in spec
+    assert 'os.environ.get("COFFER_ENTITLEMENTS_FILE")' not in spec
+    assert '"coffer-seatalk-bridge.entitlements"' in spec
+
+    bridge = _REPO / "desktop" / "entitlements" / "coffer-seatalk-bridge.entitlements"
+    text = bridge.read_text(encoding="utf-8")
+    entitlements = plistlib.loads(text.encode())
+    assert "keychain-access-groups" not in entitlements
+    assert "get-task-allow" not in text.split("-->")[-1]
+    assert "allow-dyld-environment-variables" not in text.split("-->")[-1]
+
+    signing = (_SCRIPTS / "release_signing.sh").read_text(encoding="utf-8")
+    assert "verify-no-keychain) verify_no_keychain" in signing
+    frozen = json.dumps(_step("verify the frozen binaries' signatures"))
+    assert "verify-no-keychain dist/coffer-seatalk-bridge" in frozen
+    in_app = json.dumps(_step("verify the bridge inside the app holds no keychain group"))
+    assert "verify-no-keychain" in in_app
+    assert "Contents/MacOS/coffer-seatalk-bridge" in in_app
+    assert "steps.plan.outputs.codesign" in str(
+        _step("verify the bridge inside the app holds no keychain group").get("if")
+    )

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim) with
-# PyInstaller into dist/. The release workflow packages
+# Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim,
+# coffer-seatalk-bridge) with PyInstaller into dist/. The release workflow packages
 # all of dist/ into coffer-cli-<triple>.tar.gz; the daemon deploys the
 # helper binaries sitting next to it into ~/.coffer/bin/ at startup.
 #
@@ -79,6 +79,11 @@ echo ">>> Building coffer-mcp-shim for $TRIPLE"
 echo ">>> Building coffer (management CLI) for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer.spec )
+# The SeaTalk bridge signs with its own entitlements (no keychain group) and
+# ignores COFFER_ENTITLEMENTS_FILE; see backend/coffer-seatalk-bridge.spec.
+echo ">>> Building coffer-seatalk-bridge for $TRIPLE"
+( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
+    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-seatalk-bridge.spec )
 
 # Pick the right binary extension. Keep this set in sync with the Windows
 # patterns in the triple-detection case statement above.
@@ -89,7 +94,8 @@ fi
 
 chmod +x "$DIST_DIR/coffer${EXT}" \
          "$DIST_DIR/coffer-daemon${EXT}" \
-         "$DIST_DIR/coffer-mcp-shim${EXT}"
+         "$DIST_DIR/coffer-mcp-shim${EXT}" \
+         "$DIST_DIR/coffer-seatalk-bridge${EXT}"
 echo ""
 echo ">>> Built (target triple: $TRIPLE):"
 ls -la "$DIST_DIR"

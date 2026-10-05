@@ -198,7 +198,7 @@ bash scripts/smoke_test_bundle.sh dist
 make desktop
 ```
 
-它会构建 `frontend/dist`，运行 `make bundle-binaries`，把三个二进制以 Rust host triple 为后缀放到 `desktop/binaries/` 下，然后运行 Tauri 2 CLI。未签名的 `.app` 和 `.dmg` 会出现在 `desktop/target/release/bundle/`。在笔记本上大约需要 50 分钟，大部分时间花在 PyInstaller 上。本地构建的应用可以运行；未签名构建的下载副本会被 Gatekeeper 拦下。
+它会构建 `frontend/dist`，运行 `make bundle-binaries`，把四个二进制以 Rust host triple 为后缀放到 `desktop/binaries/` 下，然后运行 Tauri 2 CLI。未签名的 `.app` 和 `.dmg` 会出现在 `desktop/target/release/bundle/`。在笔记本上大约需要 50 分钟，大部分时间花在 PyInstaller 上。本地构建的应用可以运行；未签名构建的下载副本会被 Gatekeeper 拦下。
 
 日常修改 `desktop/src/*.rs` 时，不需要完整构建：
 

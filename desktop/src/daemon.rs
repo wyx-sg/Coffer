@@ -124,6 +124,9 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
         log::warn!("{msg}");
         return Err(msg);
     };
+    // The replacement proves it is Coffer's before its token goes anywhere —
+    // the page, or the post-update handshake that returns this result.
+    crate::daemon_attest::verify_daemon(port, &token)?;
     log::info!("daemon restarted and serving on port {port} (pid {pid})");
     Ok(RestartResult {
         pid,

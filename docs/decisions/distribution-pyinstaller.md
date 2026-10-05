@@ -34,7 +34,7 @@ Three more forces shape the answer:
 
 `backend/coffer-daemon.spec`, `backend/coffer-mcp-shim.spec` and
 `backend/coffer.spec` each freeze one entry point into a single-file binary;
-`scripts/build_binaries.sh` (`make bundle-binaries`) runs all three into `dist/`.
+`scripts/build_binaries.sh` (`make bundle-binaries`) runs all three of those into `dist/`; the SeaTalk bridge is a fourth, shipped beside them.
 The daemon spec carries its Alembic migrations and the built web UI
 (`frontend/dist`, shipped as `webui/`) as data files, and pins the modules
 imported lazily inside functions — `markitdown` and its document parsers,
@@ -107,21 +107,21 @@ because the terminal tier would still need Option A.
 #### Option G — Two tiers built from one freeze: a CLI archive and a desktop `.dmg` (chosen)
 
 Per `v*` tag, `.github/workflows/release.yml` (one leg, `macos-14`,
-`aarch64-apple-darwin`) freezes the three binaries once and wraps them twice:
+`aarch64-apple-darwin`) freezes the four binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, the executable that loads the SeaTalk SDK, signed without the keychain entitlement so third-party code never runs where the master key can be read) once and wraps them twice:
 
-- `coffer-cli-aarch64-apple-darwin.tar.gz` holding `coffer`, `coffer-daemon`
-  and `coffer-mcp-shim` under their plain names, installed by
+- `coffer-cli-aarch64-apple-darwin.tar.gz` holding `coffer`, `coffer-daemon`,
+  `coffer-mcp-shim` and `coffer-seatalk-bridge` under their plain names, installed by
   `curl … install.sh | sh` (served from `docs-site/public/install.sh`) into
   `~/.coffer/bin`, which it adds to `PATH` (overridable with
   `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`);
 - `Coffer-unsigned-aarch64-apple-darwin.dmg`, the Tauri app with the **same
-  three files** copied from `dist/` into `desktop/binaries/` as `externalBin` —
+  four files** copied from `dist/` into `desktop/binaries/` as `externalBin` —
   a copy, not a second PyInstaller run.
 
 One aggregated `SHA256SUMS` covers both (spec daemon "Publish one aggregated
 checksum file"). The `.dmg` needs nothing installed beforehand, and installing
 it installs the CLI too, without the shell doing anything: the first daemon it
-starts deploys all three binaries into `~/.coffer/bin/` (below). Pros: each kind
+starts deploys all four binaries into `~/.coffer/bin/` (below). Pros: each kind
 of user gets the install they expect; the expensive half (freezing) is done once,
 so the second tier costs one Tauri build in CI; the app and the archive cannot
 disagree about the binaries. Cons: a Rust toolchain in the release job, and an
@@ -159,8 +159,8 @@ Pros: the app opens on double-click; the right end state, and the precondition
 of the master key's Keychain access group
 ([The Master Key Lives in the macOS Keychain](master-key-lives-in-the-macos-keychain.md)).
 Cons: requires a paid Apple Developer account. The release job now carries every
-step — PyInstaller signs the three binaries and each library they collect with
-the Developer ID under the hardened runtime and the `keychain-access-groups`
+step — PyInstaller signs the four binaries and each library they collect with
+the Developer ID under the hardened runtime and, on all but the SeaTalk bridge, the `keychain-access-groups`
 entitlement, the access group is stamped into `backend/coffer/infrastructure/secret/build_identity.py` and the shell,
 Tauri signs, notarises and staples the app, and the workflow notarises the CLI
 binaries and notarises and staples the `.dmg` — and each step runs only when its
@@ -177,7 +177,7 @@ under one `SHA256SUMS`.** Rules that follow:
 
 - **The daemon deploys its siblings; nothing else does.** On a frozen start,
   `deploy_frozen_sidecars` (`backend/coffer/application/binary_deploy.py`,
-  called from the daemon's lifespan in `surfaces/http/app.py`) copies the three binaries into
+  called from the daemon's lifespan in `surfaces/http/app.py`) copies the four binaries into
   `~/.coffer/bin/<version>/` with a temp-copy-then-rename and flips the public
   `~/.coffer/bin/<name>` symlinks onto that directory atomically. Staleness is
   byte size plus a version sentinel written after the copy — not mtime, which
@@ -218,7 +218,7 @@ under one `SHA256SUMS`.** Rules that follow:
 - Every dependency upgrade must be proven on a frozen build, not only on the
   source tree; the smoke test and the spec checker are what catch it before a
   user does.
-- A local `make desktop` takes roughly 50 minutes because it freezes all three
+- A local `make desktop` takes roughly 50 minutes because it freezes all four
   binaries first; the release pays the freeze once for both tiers.
 - Until the Developer ID secrets are added (Option K), every install starts with a quarantine
   command, and the desktop tier is where it hurts most.

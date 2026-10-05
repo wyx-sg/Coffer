@@ -69,7 +69,7 @@ need_cmd() {
     fi
 }
 
-# Put the three binaries from $1 into $2 without writing through any existing
+# Put the four binaries from $1 into $2 without writing through any existing
 # file. After the first frozen daemon start, $2/<name> is a symlink into
 # $2/<version>/, and a plain cp would follow it and overwrite the previous
 # version's binary — the one a rollback needs. Copy to a temp sibling instead,
@@ -78,7 +78,7 @@ need_cmd() {
 install_binaries() {
     _src="$1"
     _dest="$2"
-    for bin in coffer coffer-daemon coffer-mcp-shim; do
+    for bin in coffer coffer-daemon coffer-mcp-shim coffer-seatalk-bridge; do
         if [ ! -f "${_src}/${bin}" ]; then
             err "binary '${bin}' not found in archive — the release may be malformed"
         fi
@@ -193,7 +193,7 @@ See https://wyx-sg.github.io/Coffer/start/install for alternatives."
     # --- install -------------------------------------------------------------
     install_binaries "$tmp" "$install_dir"
 
-    say "installed coffer, coffer-daemon, coffer-mcp-shim to ${install_dir}"
+    say "installed coffer, coffer-daemon, coffer-mcp-shim, coffer-seatalk-bridge to ${install_dir}"
 
     # --- requirements: git 2.40+ (a warning, never a failure) ----------------
     check_git

@@ -67,9 +67,9 @@ flowchart LR
 | 桌面壳 | 应用运行期间 | 一个 Tauri 2 应用，把同一份前端构建作为本地资源加载，并通过 IPC 把守护进程的 URL 和令牌交给它。它会检测或拉起守护进程，但守护进程比应用活得久：退出应用不会停止守护进程。见[桌面应用](/zh/guides/desktop-app)。 |
 | 上游 MCP 服务器 | 每个客户端会话 | 网关为每个 `/mcp` 会话拉起的子进程。每个都记录在 `~/.coffer/upstream-pids/` 下，这样崩溃后下一个守护进程可以回收它。 |
 | `codex app-server` | 每个 Codex 对话 | 对话平台一直开着的常驻子进程。它和上游 MCP 服务器走同一条路径拉起和记录。 |
-| SeaTalk websocket | 守护进程内的线程 | 每个 SeaTalk 消息渠道一条出站 websocket 连接。没有任何监听，也不存在第二个进程。 |
+| SeaTalk websocket | 守护进程内读取 `coffer-seatalk-bridge` 子进程的线程 | 每个 SeaTalk 消息渠道一条出站 websocket 连接，由加载 SDK 的桥接进程持有。没有任何监听。 |
 
-消息渠道的入站流量没有单独的进程。Telegram 在守护进程的事件循环里轮询。SeaTalk 的 SDK 是同步的，所以每个 SeaTalk 消息渠道有一个自己的具名线程，持有它的连接，并通过线程安全的回调把每个事件交回事件循环。SDK 不会重连，所以连接器自己监管连接。出错时它按指数退避，从 1 s 到最多 30 s。当同一个应用的另一处注册把它踢下线时，它固定等待 60 s，因为 SeaTalk 每个应用只允许一条活跃连接，和另一方抢只会让连接来回易手。由于这个 socket 是出站的，守护进程的回环监听仍是保险库唯一暴露的 socket。见 [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)。
+Telegram 在守护进程的事件循环里轮询。SeaTalk 的 SDK 是第三方代码，放在智能体可写的目录里，所以它在一个独立的可执行文件 `coffer-seatalk-bridge` 中运行，这个文件没有钥匙串 entitlement，从标准输入接收应用凭据；每个 SeaTalk 消息渠道有一个自己的具名线程，读取桥接进程输出的 JSON 行事件，并通过线程安全的回调把每个事件交回事件循环。SDK 不会重连，所以连接器自己监管连接。出错时它按指数退避，从 1 s 到最多 30 s。当同一个应用的另一处注册把它踢下线时，它固定等待 60 s，因为 SeaTalk 每个应用只允许一条活跃连接，和另一方抢只会让连接来回易手。由于这个 socket 是出站的，守护进程的回环监听仍是保险库唯一暴露的 socket。见 [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)。
 
 ## 两个文件：配置进，运行状态出 {#two-files-configuration-in-runtime-state-out}
 

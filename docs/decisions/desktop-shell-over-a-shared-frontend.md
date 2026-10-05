@@ -231,7 +231,7 @@ bundles the frozen binaries and installs the CLI is decided in
   helpers (close-to-tray, rate limit, port parsing, sync gating, ready budget)
   are unit-tested by `make desktop-test` and linted by `make desktop-lint` in
   `.github/workflows/desktop.yml`. A local `make desktop` runs PyInstaller over
-  three binaries before the Tauri build and takes roughly 50 minutes (the
+  four binaries before the Tauri build and takes roughly 50 minutes (the
   `Makefile` says so when it starts); the release reuses the binaries its CLI leg
   already froze.
 - **Nothing in CI opens the app.** The window's hidden-until-ready behaviour,

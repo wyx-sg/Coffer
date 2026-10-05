@@ -19,7 +19,7 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[4]
 _INSTALL_SH = _REPO / "docs-site" / "public" / "install.sh"
-_BINARIES = ("coffer", "coffer-daemon", "coffer-mcp-shim")
+_BINARIES = ("coffer", "coffer-daemon", "coffer-mcp-shim", "coffer-seatalk-bridge")
 
 
 def _function(script: str, name: str) -> str:

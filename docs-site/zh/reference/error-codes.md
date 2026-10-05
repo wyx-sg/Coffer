@@ -73,7 +73,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，问题会重新摆到你面前（对 `coffer run`，在该密钥上再次点 **允许 `coffer run`…**）。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `APPROVAL_NOT_FOUND` | 404 | 没有这个 id 的审批。 | 在**设置 › 安全**（**审阅**）里列出。 |
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
-| `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
+| `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份、主密钥导入或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
 | `SECRET_NAME_INVALID` | 422 | 新建独立密钥的 ref 不是 `secret/<32 位十六进制>`，或它的标签超过 64 个字符、描述超过 200 个字符。 | 用 `coffer secret set --name "Orders DB"` 创建密钥，让 Coffer 来生成 id；缩短标签或描述。 |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` 指定的独立密钥不在存储中。只有 `secret/<id>` 的值能这样解析；资源的密钥永远不能。 | 用 `coffer secret list` 核对 id，或用 `coffer secret set --name "<名称>"` 创建该密钥。 |
 

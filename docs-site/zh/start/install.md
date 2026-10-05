@@ -44,9 +44,9 @@ login, tell me what to do instead.
 
 | 方式 | 适合 | 你会得到 |
 | --- | --- | --- |
-| [桌面应用](#desktop-app) | 喜欢窗口和菜单栏图标的人 | `Coffer.app`，首次打开后还有同样的三个二进制 |
+| [桌面应用](#desktop-app) | 喜欢窗口和菜单栏图标的人 | `Coffer.app`，首次打开后还有同样的四个二进制 |
 | [一行安装脚本](#one-line-installer) | 在 Mac 上用终端的人 | `~/.coffer/bin` 里的 `coffer`、`coffer-daemon`、`coffer-mcp-shim` |
-| [发布压缩包](#release-archive) | 手动安装，或没有图形界面的机器 | 同样的三个二进制，解压到你选的位置 |
+| [发布压缩包](#release-archive) | 手动安装，或没有图形界面的机器 | 同样的四个二进制，解压到你选的位置 |
 | [从源码](#from-source) | 贡献者、Linux 用户，以及想跟进 `main` 的人 | 一套 Python 安装，`PATH` 上有 `coffer` 和 `coffer-mcp-shim` |
 
 预编译二进制只面向 **Apple 芯片（arm64）的 macOS**。Intel Mac、Linux 和 Windows 没有发布构建，在这些机器上请从源码安装。每种方式都需要 git 2.40 或更高版本，见[系统要求](#requirements)。
@@ -77,7 +77,7 @@ xattr -dr com.apple.quarantine /Applications/Coffer.app
 
 :::
 
-应用内置了和发布压缩包相同的三个二进制。它的守护进程第一次启动时，会把它们复制到 `~/.coffer/bin`。如果还想用 CLI，把这个目录加到你的 `PATH`：
+应用内置了和发布压缩包相同的四个二进制。它的守护进程第一次启动时，会把它们复制到 `~/.coffer/bin`。如果还想用 CLI，把这个目录加到你的 `PATH`：
 
 ```sh
 export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
@@ -108,7 +108,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
-| `COFFER_INSTALL_DIR` | `~/.coffer/bin` | 三个二进制复制到哪里。 |
+| `COFFER_INSTALL_DIR` | `~/.coffer/bin` | 四个二进制复制到哪里。 |
 | `COFFER_VERSION` | 最新发布版本 | 安装指定的标签，比如 `v<version>`。不带开头 `v` 的版本号也可以。 |
 | `COFFER_NO_MODIFY_PATH` | 未设置 | 设为 `1` 则不改动你的 shell 配置文件，脚本会改为打印需要添加的那一行。 |
 
@@ -130,7 +130,7 @@ tar -xzf coffer-cli-aarch64-apple-darwin.tar.gz -C ~/.coffer/bin
 export PATH="$HOME/.coffer/bin:$PATH"          # add to your shell profile
 ```
 
-三个二进制要放在同一个目录里。`coffer` 和 `coffer-mcp-shim` 需要启动守护进程时，会在自己旁边找 `coffer-daemon`。如果你是用浏览器下载的压缩包，用 `xattr -dr com.apple.quarantine ~/.coffer/bin` 清除隔离标记。
+四个二进制要放在同一个目录里。`coffer` 和 `coffer-mcp-shim` 需要启动守护进程时，会在自己旁边找 `coffer-daemon`。如果你是用浏览器下载的压缩包，用 `xattr -dr com.apple.quarantine ~/.coffer/bin` 清除隔离标记。
 
 ## 从源码 {#from-source}
 
@@ -178,7 +178,7 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/content/`、`~/.coffer/derived/` | 媒体文件和聊天工作目录；以及 Coffer 可重建的状态，比如记忆树。 |
 | `~/.coffer/logs/daemon.log` | 守护进程日志，由守护进程、它的子进程和桌面应用共用。 |
 
-发布构建的守护进程会自己管理 `~/.coffer/bin`。每次启动时，它都会检查自己的构建是否已经部署在那里。如果没有，就把三个二进制复制到 `~/.coffer/bin/<version>/`，并以一次原子操作把公开符号链接切换过去。源码安装从不这样做。[文件与目录](/zh/reference/filesystem)参考列出了每一个路径。
+发布构建的守护进程会自己管理 `~/.coffer/bin`。每次启动时，它都会检查自己的构建是否已经部署在那里。如果没有，就把四个二进制复制到 `~/.coffer/bin/<version>/`，并以一次原子操作把公开符号链接切换过去。源码安装从不这样做。[文件与目录](/zh/reference/filesystem)参考列出了每一个路径。
 
 ## 验证安装 {#verify-the-install}
 

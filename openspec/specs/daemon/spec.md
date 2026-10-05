@@ -25,7 +25,7 @@ for all of them. The desktop shell of the desktop-app spec reads `daemon.json` a
 and a change to it is a change to that shell. There is no fleet, no leader election and no
 daemon-to-daemon protocol; the daemon spawns children but does not install runtimes or package
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
-wraps the same three binaries this spec builds.
+wraps the same four binaries this spec builds.
 
 The CLI carries only what needs it (see [resource-framework](../resource-framework/spec.md) "Keep the command line to what needs it"), so most daemon operations are REST and web UI only, and three differences are deliberate. The pre-bind port setting is reachable from the CLI as well as from Settings, because it must work with no daemon
 running. The `/api/v1/fs/*` routes are REST-only because their only caller is a web page that
@@ -655,8 +655,10 @@ are usable with no separate deployment step. See
 
 ### Requirement: Release the macOS arm64 terminal archive
 The release pipeline MUST produce, per `v*` tag, the **terminal-install tier** for **macOS arm64
-only**: a `coffer-cli-<triple>.tar.gz` archive containing exactly three binaries: `coffer` (the
-management CLI), `coffer-daemon` and `coffer-mcp-shim`. The binaries MUST stay co-located inside the archive so the frozen resolution
+only**: a `coffer-cli-<triple>.tar.gz` archive containing exactly four binaries: `coffer` (the
+management CLI), `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` (the executable
+that loads the SeaTalk SDK on the daemon's behalf, see [channels/seatalk](../channels/seatalk/spec.md)
+"Load the websocket client library from an operator-supplied directory"). The binaries MUST stay co-located inside the archive so the frozen resolution
 of "Spawn a detached daemon from any surface that needs one" finds `coffer-daemon` next to
 `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never
 validated end to end. This archive carries the "no system Python required" promise on its own: on a
@@ -759,6 +761,12 @@ sets an idle window, and the login service is installed and removed only through
 - **AND** no database is opened and no audit entry recorded, and no `idle` subcommand exists either.
 
 ### Requirement: Clear inherited agent-home variables at start
+In a signed build the daemon MUST also drop the inherited proxy and certificate settings from its own environment
+at start (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`,
+`CURL_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`, in either case) and use the macOS system proxy and keychain instead, as
+[secret](../secret/spec.md) "Keep the master key behind a storage port chosen by the build" states; the model proxy
+does the same at its own start.
+
 The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type's home variable — from its own environment when it starts, before it spawns anything, and log once which ones it removed. A daemon started from a shell that exports one would otherwise hand it to every agent process it spawns, so an agent registered on the default directory would run against the exported one while Coffer delivers its skills, MCP entry and config into the default. An agent gets the variable only from its own registered config directory ([agent-registry](../agent-registry/spec.md)), set on that agent's process alone.
 
 #### Scenario: a daemon started from a shell exporting an agent home does not pass it on
@@ -771,7 +779,7 @@ The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type
 The daemon MUST supervise the local model proxy as its one sibling process, started from the
 daemon's own binary in proxy mode (`coffer-daemon proxy`): at start it re-attaches to a running
 proxy of the same version found through `~/.coffer/proxy.json` (`port`, `pid`, `started_at`,
-`version` and a control token, mode `0600`), asks a proxy of another version to drain and replaces
+`version` and a control token, mode `0600`) — after checking that it is Coffer's (below) — asks a proxy of another version to drain and replaces
 it once it exits, and spawns one when none is running; it health-checks the proxy on a short period
 and restarts it after a crash. It pushes the proxy what it serves — the agents' token digests and
 each agent's route with the decrypted keys, held only in the proxy's memory — over the proxy's
@@ -779,6 +787,16 @@ authenticated loopback control route after every reconcile pass and whenever a t
 daemon stopping or restarting MUST NOT stop the proxy, so agents' in-flight model streams outlive a
 daemon upgrade. `GET /api/v1/proxy/status` reports whether it runs, its
 port, pid, version, restart count and last error.
+
+`proxy.json` and the loopback port are writable by any process of the same user, and the push
+carries the provider keys, so the daemon MUST know a proxy is its own before it pushes anything.
+It derives an attest key from the master key (context `coffer-proxy-attest-key/v1`) and hands it
+to the proxy it spawns on the child's standard input, never in its arguments or environment. Before
+every `/_coffer/state` push, and before re-attaching to a proxy found through `proxy.json`, it
+challenges `POST /_coffer/attest` with a fresh nonce and accepts only an answer that is the
+HMAC-SHA256 of the nonce and the proxy's own port under that key. A process that fails the
+challenge, or a proxy that holds no key, MUST be sent nothing and is logged as
+`model_proxy.attest_failed`: the daemon does not attach to it, reports the reason as the proxy's last error, and never sends it a key.
 
 #### Scenario: the daemon restarts a crashed proxy
 - **GIVEN** a supervised proxy

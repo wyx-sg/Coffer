@@ -2,10 +2,12 @@
 
 Real threads and a real event loop — the whole point of this module is the
 boundary between them — with the fake ``seatalk_oapi_sdk`` standing in for a
-package that cannot be installed in CI. The fake mirrors the real one's calling
-order (handler inline on the listen thread, ack straight after it returns, kick
-handler then ``KickError`` out of ``listen()``), so these tests pin the behaviour
-that matters in production.
+package that cannot be installed in CI. The bridge's own session code runs on a
+thread (``in_process_bridge``) rather than in a subprocess, its protocol lines
+round-tripped through JSON as they would cross the pipe. The fake mirrors the
+real SDK's calling order (handler inline on the listen thread, ack straight
+after it returns, kick handler then ``KickError`` out of ``listen()``), so these
+tests pin the behaviour that matters in production.
 """
 
 from __future__ import annotations
@@ -14,11 +16,11 @@ import asyncio
 import logging
 import threading
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from coffer.infrastructure.channel.seatalk_sdk import SeaTalkSdkMissingError
 from coffer.infrastructure.channel.seatalk_ws import SeaTalkWebSocketConnector
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 
@@ -33,6 +35,7 @@ from .fake_seatalk_sdk import (
     hold,
     kick,
 )
+from .in_process_bridge import in_process_bridge
 
 
 @pytest.fixture
@@ -65,13 +68,12 @@ def _connector(
         "app-1",
         "app-secret",
         ingest=ingest,
-        loader=lambda: sdk.module,
+        bridge=in_process_bridge(sdk.module),
         # A real ladder would make this suite sleep for a minute; the shape is
         # what is under test, not the wall-clock values.
         backoff_initial=0.01,
         backoff_max=0.04,
         kick_backoff=60.0,
-        join_timeout=2.0,
         **kwargs,
     )
 
@@ -150,8 +152,12 @@ async def test_an_invalid_frame_is_reported_without_its_contents(
             handler = sdk.dispatchers[-1].invalid_frame_handler
             assert handler is not None
             handler(b'{"text": "a private message"}', ValueError("bad json"))
+            await wait_until(
+                lambda: any("invalid_frame" in r.message for r in caplog.records),
+                message="a bad frame was swallowed",
+            )
             records = [r for r in caplog.records if "invalid_frame" in r.message]
-            assert records, "a bad frame was swallowed"
+            assert records[0].__dict__["bytes"] == len(b'{"text": "a private message"}')
             assert "a private message" not in str(records[0].__dict__)
         finally:
             await connector.stop()
@@ -468,15 +474,16 @@ async def test_a_connection_that_closes_straight_away_is_still_an_error(
 )
 async def test_without_the_sdk_the_state_says_what_is_missing() -> None:
     missing = build_fake_sdk()
-
-    def _loader() -> Any:
-        raise SeaTalkSdkMissingError(
-            "SeaTalk's WebSocket SDK (seatalk_oapi_sdk) is not installed; unpack it into "
-            "/tmp/vendor — see https://open.seatalk.io/docs/WebSocket-Event-Callback"
-        )
-
-    connector = _connector(missing, _Recorder())
-    connector._loader = _loader  # type: ignore[assignment]
+    connector = SeaTalkWebSocketConnector(
+        "st",
+        "app-1",
+        "app-secret",
+        ingest=_Recorder(),
+        bridge=in_process_bridge(None),
+        sdk_directory=lambda: Path("/tmp/vendor"),
+        backoff_initial=0.01,
+        backoff_max=0.04,
+    )
     await connector.start()
     try:
         await wait_until(

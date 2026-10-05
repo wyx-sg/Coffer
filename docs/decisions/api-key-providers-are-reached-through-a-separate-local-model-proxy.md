@@ -152,12 +152,24 @@ Mount the proxy routes on the daemon's own server.
 ### Option C — A separate, supervised proxy process from the same binary (chosen)
 
 The proxy is its own small process, started from the daemon's frozen binary in
-a proxy mode (`coffer-daemon proxy`), so there is no fourth binary to build, sign and ship. The daemon
+a proxy mode (`coffer-daemon proxy`), so the proxy needs no binary of its own to build, sign and ship. The daemon
 supervises it — spawns it at start if it is not already running, health-checks
 it, restarts it on a crash — and a daemon restart or upgrade does not stop it:
 the new daemon finds the running proxy through `~/.coffer/proxy.json`
 (`port`, `pid`, `started_at`, `version` and a control token, mode `0600`) and re-attaches.
 A proxy from an older build drains its open streams and is replaced once idle.
+
+**It is attested before it is trusted.** `proxy.json` and the port are writable
+by any process of the same user, and the daemon's push carries the decrypted
+provider keys, so a fake proxy on the port would collect them. The daemon derives
+an attest key from the master key and gives it to the proxy it spawns on the
+child's standard input, never its arguments or environment. Before each state
+push, and before re-attaching to a proxy found through `proxy.json`, it sends
+`POST /_coffer/attest` a fresh nonce and accepts only an HMAC of the nonce and the
+proxy's own port under that key. A failure sends nothing, is logged as
+`model_proxy.attest_failed` and shows as the proxy's last error. A signed build's
+proxy also drops the inherited proxy and certificate variables at start and takes
+them from the operating system.
 
 **Surface.** It binds `127.0.0.1` only, with no option for another interface,
 on a fixed port (`proxy_port` in `daemon-config.json`, 38471 by default), so the value written into the

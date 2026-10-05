@@ -1,6 +1,6 @@
 ---
 title: Security model
-description: Coffer's threat model and the mechanisms behind it — the secret boundary against a prompt-injected agent (plaintext only to a present human in the desktop app, approval before a secret goes somewhere new), what stays exposed, loopback binding and the Host and Origin checks, the per-start API token, the envelope-encrypted secret store and the master key, the SSRF guard, agent identity, channel owner pairing, what reaches logs and audit, and how sync carries secrets.
+description: Coffer's threat model and the mechanisms behind it — the secret boundary against a prompt-injected agent (plaintext only to a present human in the desktop app, approval before a secret goes somewhere new), what stays exposed, sealed boundary state and mutual attestation, loopback binding and the Host and Origin checks, the per-start API token, the envelope-encrypted secret store and the master key, the SSRF guard, agent identity, channel owner pairing, what reaches logs and audit, and how sync carries secrets.
 ---
 
 # Security model
@@ -45,6 +45,11 @@ The presence grant that proves "a person approved this" is signed with a key der
 | An agent asking Coffer for a secret's value — through REST, the CLI, MCP, or a master key export. | No route, command or tool returns a value or the key. Reveals and key backups exist only in the desktop app, behind a presence check. |
 | An agent making Coffer deliver an existing secret to a program or URL of its choosing. | Every destination is checked at the moment of use. A secret goes to a target no person approved only after an approval in the desktop app, signed with a presence grant. |
 | An agent switching the protection off. | It waits for an approval in the desktop app. |
+| An agent editing the boundary's files by hand to approve a destination or switch the protection off. | In a signed build the three state files carry an HMAC seal under a key derived from the master key. A file with a bad or missing seal is read as empty: the protection returns to on and every binding is approved again (see [Sealed state](#sealed-state)). |
+| An agent standing in for the model proxy or the daemon to collect keys, the token or a grant. | The daemon attests the proxy before it pushes any provider key, and the desktop app attests the daemon before it hands over the token or signs a grant. Both answers are HMACs only a holder of the master key can make (see [Who is on the other end](#who-is-on-the-other-end)). |
+| An agent installing a master key of its own so it can forge grants. | Importing a key needs a presence grant over that key's fingerprint, so it happens only through the desktop app's Touch ID. |
+| An agent starting the signed binary with its own `HTTPS_PROXY` or CA bundle to read injected credentials. | A signed build drops the inherited proxy and certificate variables and takes both from macOS. |
+| Code in the SeaTalk SDK directory, which the agent can write to, running where the master key is readable. | The SDK is loaded by a separate executable that carries no keychain entitlement; the daemon never imports it. |
 | A secret pasted into a skill file, `.env` or script that syncs to git, or echoed into a transcript. | Standalone secrets are cited as `coffer://secret/<id>` and resolved by `coffer run` into one child's environment only, with exact values masked in its output, and only for a secret a person granted to local programs. Masking guards against accidents; the grant is what stands between a secret and an agent that runs `coffer run` (see below). |
 | A web page in your browser reaching the daemon — including through DNS rebinding. | Every request whose `Host` is not the daemon's own loopback address and port is refused, and so is every request whose `Origin` is not one of Coffer's own. Every management call must also carry the API token. The browser UI offers no reveal, backup or approval. |
 | A host on the network reaching the daemon. | The daemon binds `127.0.0.1` only. The OS refuses remote connections before they reach Coffer. |
@@ -118,7 +123,7 @@ flowchart LR
 
 ## Plaintext reaches only a present human
 
-Three operations let plaintext out, and all three live only in the desktop app: **revealing or copying a secret**, **writing a master key backup**, and **approving** an [approval](#a-secret-goes-somewhere-new-only-with-your-approval). Each runs the same way:
+Three operations let plaintext out, and all three live only in the desktop app: **revealing or copying a secret**, **writing a master key backup**, and **approving** an [approval](#a-secret-goes-somewhere-new-only-with-your-approval). Installing a master key is gated the same way. Each runs the same way:
 
 1. **A presence check first.** The app runs a LocalAuthentication check — Touch ID, or your login password — with a fresh context for this one operation and **no reuse window**: the next reveal asks again. The prompt macOS shows names the operation and its target ("reveal the secret github/token"), so it is the operating system, not the page, that tells you what you are approving. Cancelling sends nothing.
 2. **A one-time challenge.** The app asks the daemon for a challenge bound to that operation and that target — this ref, this approval, this folder. A challenge expires within two minutes and is consumed by its first use, whether or not it verifies.
@@ -180,6 +185,27 @@ A binding is pinned to more than its target. It is keyed by the secret's ref, th
 Approving a secret for a URL approves that origin, not wherever the server says to go next. `httpx` strips only `Authorization` from a request when a redirect crosses origins; `X-API-Key`, `api-key` and a key in a query would follow, and the OpenAI and Anthropic SDKs build clients that follow redirects by default. So one rule holds on every path that injects a secret: **it does not follow a redirect to another origin.** The clients Coffer builds for the engine, the provider probe, the model proxy, custom-tool requests and channel platforms do not follow redirects at all (the answer is the 3xx, reported as "not followed"; the one exception is a SeaTalk media download, whose short-lived `Authorization` bearer the client already drops on a cross-origin hop); the MCP SDK's HTTP transport follows only within the endpoint's own origin; and the git credential helper behind vault sync answers only for the origin of the remote the call is about, so a remote that redirects to another host is never offered the token. A test makes each path send a canary secret to an origin that redirects to a second one and checks what the second receives, and another scans the code for a client built to follow.
 
 The boundary's state is machine-local: its bindings, pending approvals, switches and the time each ref was first stored here are JSON files under `~/.coffer/local/secret-boundary/`, written atomically, never committed to the vault and never synced. A pending replacement value waits there as ciphertext.
+
+### Sealed state {#sealed-state}
+
+Those files are plain JSON in a directory the agent can write, and an approval is only a line in `bindings.json`. So the three that decide where a secret may go — `bindings.json`, `approvals.json` and `settings.json` — carry a seal: each write adds a `_seal` field holding the HMAC of the document under a key derived from the master key (a different derivation from the grant key's). A file whose seal does not verify, or that has no seal in a signed build, is **read as empty** and logged once as `secret_boundary.state_unsealed`. In practice the protection switch falls back to the build's default (on in a signed build) and every binding must be approved again; an edit by hand therefore costs the agent its own foothold and gains nothing. The next write reseals. A development build adopts an unsealed file left from before sealing, since its master key is readable anyway, but still rejects a wrong seal.
+
+### Who is on the other end {#who-is-on-the-other-end}
+
+`daemon.json` and `proxy.json` are files, and the loopback ports are ports; any process running as you can rewrite the first, bind the second and answer on it. So each side of a hand-over proves it is Coffer's before it receives anything:
+
+- **The daemon attests the model proxy.** The proxy is spawned with an attest key derived from the master key, written to the child's standard input (never its arguments or environment, which other processes can read). Before every state push — which carries the provider keys — and before re-attaching to a proxy found through `proxy.json`, the daemon sends a fresh nonce to `POST /_coffer/attest` and accepts only the HMAC of the nonce and the proxy's own port. A process on the port that cannot answer gets nothing and is logged as `model_proxy.attest_failed`.
+- **The desktop app attests the daemon.** `POST /api/v1/secrets/presence/attest` answers the same kind of HMAC, under a key the app derives for itself from the master key it reads from the Keychain. The app checks it before it hands the token to the page (attach, cold start and restart) and before every presence-gated operation: reveal, approval, key backup, key import. If it fails, the app stops with "This is not Coffer's daemon — nothing was sent".
+
+The port is part of what is signed, so an answer relayed from the real process on another port is worthless.
+
+### Network settings of a signed build {#network-settings}
+
+An HTTP client that honours `HTTPS_PROXY` or `SSL_CERT_FILE` would send injected credentials through whatever proxy and under whatever certificate authority the starting process chose, and an agent chooses the environment of anything it starts. A signed daemon and a signed model proxy therefore drop `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` (in either case) and `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and `NODE_EXTRA_CA_CERTS` at start. The proxy comes from macOS System Settings › Network, which changing needs an administrator's password, and certificates from the macOS keychain. If you rely on a proxy, set it there. Development builds are unchanged. The log line `net.system_proxy` records the proxy's host and port, never credentials.
+
+### The SeaTalk SDK runs outside the daemon
+
+The SeaTalk SDK is operator-supplied code in a directory your agent can write (`~/.coffer/vendor`). Importing it into the daemon would run that code with the daemon's access to the master key. A separate executable, `coffer-seatalk-bridge`, loads it instead: it is signed without the keychain entitlement and shipped unmodified in the app bundle, receives `app_id` and the app secret on standard input, and returns events as JSON lines. The daemon never imports the SDK. The bridge does see that one app secret, so a hostile SDK could misuse the SeaTalk bot; it cannot reach the other secrets or the key.
 
 ## Development builds
 
@@ -243,7 +269,7 @@ Both variables are read when the daemon starts, so restart it after you change t
 
 ### The model proxy listener
 
-The [local model proxy](/architecture/model-proxy) is Coffer's second listener, and it runs its own checks before anything else. They are stricter than the daemon's. A request whose `Host` is not a loopback name on the port it arrived on gets 403, and `COFFER_ALLOWED_HOSTS` does not apply here. **Any** request that carries an `Origin` header gets 403 as well, because no browser page is a client of the proxy. Only then does a model route check the agent's local proxy token. The daemon's control routes are behind a separate control token from `~/.coffer/proxy.json`.
+The [local model proxy](/architecture/model-proxy) is Coffer's second listener, and it runs its own checks before anything else. They are stricter than the daemon's. A request whose `Host` is not a loopback name on the port it arrived on gets 403, and `COFFER_ALLOWED_HOSTS` does not apply here. **Any** request that carries an `Origin` header gets 403 as well, because no browser page is a client of the proxy. Only then does a model route check the agent's local proxy token. The daemon's control routes are behind a separate control token from `~/.coffer/proxy.json`, and the daemon [attests the proxy](#who-is-on-the-other-end) before it pushes any key to it.
 
 ## The API token
 
@@ -382,7 +408,7 @@ An agent that is tricked by a group member can still say something private. An o
 Vault sync pulls and pushes the vault repository with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:
 
 - **Secrets travel only if you opt in** (**Include encrypted secrets**), and then only as Fernet ciphertext, the `secret/<ref>.enc` files. Until then `secret/` is excluded from the repository. What lands in the repository cannot be decrypted on its own, and ciphertext that has been pushed cannot be withdrawn: revoking a secret means rotating it. Machine-local ciphertext in `local/secret/` never travels.
-- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, **Settings › Security › Import a master key** installs it on another, and shows both fingerprints so you can compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
+- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, **Settings › Security › Import a master key** installs it on another — in the desktop app only, behind a presence check that names the key's fingerprint, because a key anyone could install would let them forge every later grant — and shows both fingerprints so you can compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
 - **The push token goes only to the URL it was approved for.** Pointing it at a new remote URL waits for an approval, like any new destination.
 - **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, and the **Machines** tab flags a machine whose key fingerprint differs, rather than failing silently.
 - **The secret boundary stays on the machine.** Its bindings, approvals and switches are in `local/secret-boundary/`, never in the vault, so another machine cannot pre-approve a destination for this one.

@@ -69,9 +69,14 @@ official or third-party integration connects it to any coding agent.
   secret values they cited in the store, because a migration that deletes
   secrets cannot be reversed.
 - **The SDK is an optional runtime dependency the operator provides.**
-  `infrastructure/channel/seatalk_sdk.py` looks in `$COFFER_SEATALK_SDK_DIR`,
-  else `~/.coffer/vendor`, adds that directory to the import path only if it
-  exists, and imports lazily when a connection starts. When the import fails,
+  A separate executable, `coffer-seatalk-bridge`, looks in
+  `$COFFER_SEATALK_SDK_DIR`, else `~/.coffer/vendor`, adds that directory to its
+  own import path only if it exists, and imports lazily when a connection
+  starts; the daemon never imports the SDK, because that directory is writable by
+  the person's agent and code in it must not run in the process that holds the
+  master key. The bridge is signed without the keychain entitlement and shipped
+  beside the daemon; the daemon gives it `app_id` and the app secret on standard
+  input and reads events back as JSON lines. When the import fails,
   the channel's inbound state is `sdk_missing`, naming the directory searched
   and the platform's documentation, and the connector keeps retrying, so
   dropping the SDK in needs no restart. Outbound sends never touch the SDK and

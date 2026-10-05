@@ -17,7 +17,7 @@ Coffer 桌面应用是一个 macOS 应用，它在原生窗口里承载 Coffer �
 - **版本检查。** 如果它连上的是旧版本留下还在运行的守护进程，会发出警告。
 - **同步提醒出现在你看得到的地方。** [保险库同步](/zh/guides/vault-sync)需要你时，菜单栏的计数、Dock 角标和一条通知都会告诉你。
 - **更新。** 它在启动时以及每六小时检查一次是否有更新的签名版本，你在**设置 › 关于**里选**下载并重启**时安装。见[更新](#update)。
-- **在场校验。** 显示或复制密钥、备份主密钥、批准一项批准请求，都会先要求 Touch ID 或你的登录密码。浏览器无法做这种校验，所以浏览器标签页在这些地方显示 **Open in Coffer app**。见[在场校验和批准](#presence-checks-and-approvals)。
+- **在场校验。** 显示或复制密钥、备份主密钥、导入主密钥、批准一项批准请求，都会先要求 Touch ID 或你的登录密码。浏览器无法做这种校验，所以浏览器标签页在这些地方显示 **Open in Coffer app**。见[在场校验和批准](#presence-checks-and-approvals)。
 - **批准提醒。** 有密钥等着被发往新去处时，应用会发一条通知，并打开一个面板让你处理。
 
 其他一切（在编辑器里打开文件、选择文件夹）都和在浏览器里一样，走守护进程的 HTTP 路由。
@@ -42,11 +42,11 @@ Coffer 桌面应用是一个 macOS 应用，它在原生窗口里承载 Coffer �
 
 4. 从应用程序里打开 Coffer。
 
-应用是自包含的：它的包里带着三个 frozen 二进制文件 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim`，不需要事先安装任何东西。
+应用是自包含的：它的包里带着四个 frozen 二进制文件 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge`，不需要事先安装任何东西。
 
 ### 应用也会安装 CLI {#the-app-installs-the-cli-too}
 
-首次启动时，守护进程会把这三个二进制文件复制到 `~/.coffer/bin`。把这个目录加进你的 `PATH`，就能在终端里用 `coffer`，MCP 客户端也能解析到 `coffer-mcp-shim`：
+首次启动时，守护进程会把这四个二进制文件复制到 `~/.coffer/bin`。把这个目录加进你的 `PATH`，就能在终端里用 `coffer`，MCP 客户端也能解析到 `coffer-mcp-shim`：
 
 ```sh
 export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile
@@ -153,7 +153,7 @@ Coffer 在菜单栏里的图标是 Coffer 标志，用菜单栏自己的颜色�
 
 窗口从应用包里加载界面，而不是从守护进程的地址加载。所以守护进程慢或不在时，你看到的是横幅而不是浏览器的连接错误，端口也从不出现在任何地方。
 
-因为这个页面不是守护进程提供的，守护进程没法像对浏览器那样把令牌写进页面。于是应用从 `~/.coffer/daemon.json` 读取端口和令牌，通过进程内 IPC 调用交给页面，作为和浏览器页面收到的相同的两个值。页面先渲染，等值到了再应用。应用自己不存任何密钥：对于需要在场校验的操作，它在签名的那一刻读取主密钥，既不保留主密钥，也不保留任何由它派生的东西。
+因为这个页面不是守护进程提供的，守护进程没法像对浏览器那样把令牌写进页面。于是应用从 `~/.coffer/daemon.json` 读取端口和令牌，通过进程内 IPC 调用交给页面，作为和浏览器页面收到的相同的两个值。页面先渲染，等值到了再应用。在交出令牌之前，以及每次需要在场校验的操作之前，应用还会确认它找到的守护进程确实是 Coffer 的：发一个随机 nonce，校验回答——只有持有主密钥的一方才算得出。校验失败，应用会停下并提示“This is not Coffer's daemon — nothing was sent”，不交出令牌、授权或任何值（见[安全模型](/zh/architecture/security#who-is-on-the-other-end)）。应用自己不存任何密钥：对于需要在场校验的操作，它在签名的那一刻读取主密钥，既不保留主密钥，也不保留任何由它派生的东西。
 
 窗口的内容策略只允许向回环地址（任意端口）和应用自己的 IPC 通道发起网络请求；脚本和样式只来自应用包。
 
@@ -191,7 +191,7 @@ grep coffer.desktop ~/.coffer/logs/daemon.log | tail
 
 ## 从源码构建 {#build-from-source}
 
-`make desktop` 会构建 `Coffer.app` 和 `.dmg`。它需要 Rust 工具链，并先用 PyInstaller 构建三个二进制文件，所以大约要 50 分钟。产物没有签名。见[开发环境搭建](/zh/contributing/development)。
+`make desktop` 会构建 `Coffer.app` 和 `.dmg`。它需要 Rust 工具链，并先用 PyInstaller 构建四个二进制文件，所以大约要 50 分钟。产物没有签名。见[开发环境搭建](/zh/contributing/development)。
 
 ## 相关 {#related}
 

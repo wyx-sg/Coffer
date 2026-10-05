@@ -198,7 +198,7 @@ bash scripts/smoke_test_bundle.sh dist
 make desktop
 ```
 
-This builds `frontend/dist`, runs `make bundle-binaries`, stages the three binaries under `desktop/binaries/` with the Rust host triple as a suffix, and runs the Tauri 2 CLI. The unsigned `.app` and `.dmg` land in `desktop/target/release/bundle/`. Expect it to take around 50 minutes on a laptop, most of it PyInstaller. A locally built app runs. A downloaded copy of an unsigned build is blocked by Gatekeeper.
+This builds `frontend/dist`, runs `make bundle-binaries`, stages the four binaries under `desktop/binaries/` with the Rust host triple as a suffix, and runs the Tauri 2 CLI. The unsigned `.app` and `.dmg` land in `desktop/target/release/bundle/`. Expect it to take around 50 minutes on a laptop, most of it PyInstaller. A locally built app runs. A downloaded copy of an unsigned build is blocked by Gatekeeper.
 
 For day-to-day work on `desktop/src/*.rs`, you do not need a full build:
 

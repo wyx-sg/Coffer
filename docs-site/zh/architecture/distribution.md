@@ -5,7 +5,7 @@ description: Coffer 怎样被构建成冻结二进制，以命令行压缩包和
 
 # 分发与发布 {#distribution-and-releases}
 
-本页讲 Coffer 的 Python 代码怎样到达一台没有 Python 的机器：三个冻结二进制、产出它们的发布流水线、发布怎样签名和公证、桌面应用怎样自我更新、两档下载方式、新构建怎样装在旧构建旁边，以及实验功能怎样在一台机器上逐个开启。它写给构建或发布 Coffer 的贡献者，也写给想知道自己磁盘上到底装了什么的人。
+本页讲 Coffer 的 Python 代码怎样到达一台没有 Python 的机器：四个冻结二进制、产出它们的发布流水线、发布怎样签名和公证、桌面应用怎样自我更新、两档下载方式、新构建怎样装在旧构建旁边，以及实验功能怎样在一台机器上逐个开启。它写给构建或发布 Coffer 的贡献者，也写给想知道自己磁盘上到底装了什么的人。
 
 ## 问题 {#the-problem}
 
@@ -22,7 +22,7 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 | 决策 | 理由 |
 | --- | --- |
 | 用 PyInstaller 把每个入口点冻结成单文件可执行程序 | 在没有 Python 的干净机器上也能运行；同一个构建同时服务命令行使用、MCP 客户端拉起和直接下载。 |
-| 发布三个二进制，始终放在一起 | shim 和命令行把 `coffer-daemon` 当作同目录的兄弟文件来找，所以放在一起本身就是发现机制。 |
+| 发布四个二进制，始终放在一起 | shim 和命令行把 `coffer-daemon` 当作同目录的兄弟文件来找，所以放在一起本身就是发现机制。第四个 `coffer-seatalk-bridge` 在守护进程之外加载 SeaTalk SDK，签名时不带钥匙串 entitlement。 |
 | 两档下载在同一个任务里、用同一批二进制构建 | 桌面应用不可能和它包着的命令行压缩包产生偏移。 |
 | 守护进程把兄弟二进制部署到 `~/.coffer/bin` 下按版本分的目录，再切换符号链接 | 部署从不覆盖可能正在运行的二进制，上一个构建也保留下来供手动回滚。 |
 | 所有人用同一个构建，每个实验功能默认关闭，由人自己开启 | 没有发布分支，也没有第二个构建：维护者测的正是用户在跑的东西。 |
@@ -82,9 +82,9 @@ flowchart TD
 2. 构建前端（`npm run codegen`、`npm run build`）。守护进程的 spec 会把 `frontend/dist` 作为要提供的 Web 界面收进去。
 3. 判断哪些签名步骤可以运行（见[签名、公证与更新](#signing-notarisation-and-updates)）。有 Developer ID 时，把它导入一个临时钥匙串，并打上钥匙串 access group 标记。
 4. 打上构建标记：始终写入提交号，在 tag 上再加 `stable` 标记（见[构建标记](#the-build-stamp)）。
-5. 冻结三个二进制——有 Developer ID 就用它签名——并对 `dist/` 跑冒烟测试。签名的构建随后会校验签名并对二进制做公证。
+5. 冻结四个二进制——有 Developer ID 就用它签名——并对 `dist/` 跑冒烟测试。签名的构建随后会校验签名并对二进制做公证。
 6. 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 打包成 `coffer-cli-<triple>.tar.gz`。
-7. 把同样三个文件以 `<name>-<triple>` 的名字放进桌面 crate，运行 `tauri build`，产出 `.dmg`——签名时是 `Coffer-<triple>.dmg`（随后公证并 staple），否则是 `Coffer-unsigned-<triple>.dmg`——有更新密钥时还会产出签名的更新包和 `latest.json`。
+7. 把同样四个文件以 `<name>-<triple>` 的名字放进桌面 crate，运行 `tauri build`，产出 `.dmg`——签名时是 `Coffer-<triple>.dmg`（随后公证并 staple），否则是 `Coffer-unsigned-<triple>.dmg`——有更新密钥时还会产出签名的更新包和 `latest.json`。
 8. 对每个产物写出 `SHA256SUMS`，然后为这个 tag 创建（或用 `--clobber` 更新）GitHub Release。
 
 只发布 Apple Silicon 上的 macOS 版本。spec 和构建脚本是跨平台的，所以扩大发布矩阵只是改流水线，而不是重新设计。
@@ -93,7 +93,7 @@ flowchart TD
 
 ## 桌面安装包 {#the-desktop-bundle}
 
-桌面应用是一个 Tauri 2 壳，包着守护进程提供的同一套 Web 界面。它的 Tauri 配置打包 `app` 和 `dmg` 两个目标，把构建好的前端作为本地资源加载，并把三个二进制列为外部二进制。Tauri 把每个二进制名字解析为 `<name>-<target-triple>`，放到 `Coffer.app/Contents/MacOS/`，和应用自己的可执行文件放在一起。
+桌面应用是一个 Tauri 2 壳，包着守护进程提供的同一套 Web 界面。它的 Tauri 配置打包 `app` 和 `dmg` 两个目标，把构建好的前端作为本地资源加载，并把四个二进制列为外部二进制。Tauri 把每个二进制名字解析为 `<name>-<target-triple>`，放到 `Coffer.app/Contents/MacOS/`，和应用自己的可执行文件放在一起。
 
 应用启动时按固定顺序寻找守护进程：`~/.coffer/daemon.json` 指向的、已在运行的守护进程（直接附着，从不重新拉起）；应用包里的二进制；`~/.coffer/bin/coffer-daemon`；`PATH` 上的 `coffer-daemon`；都没有就提示你安装命令行。壳自己从不写 `~/.coffer/bin`——那是它启动的守护进程的事（见下一节）。所以装了应用也就装了命令行。
 
@@ -118,7 +118,7 @@ flowchart TD
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-它只接受 `arm64` 上的 macOS，其他平台都指向源码安装。它从最新发布（或 `COFFER_VERSION` 指定的 tag）下载 `coffer-cli-aarch64-apple-darwin.tar.gz` 和 `SHA256SUMS`，校验压缩包的校验和，然后把三个二进制装进 `COFFER_INSTALL_DIR`（默认 `~/.coffer/bin`）：每个先复制到同目录的临时文件，再改名覆盖公开的名字——直接复制会顺着守护进程的符号链接写进上一个版本目录，毁掉回滚所需的构建——并且，除非设置了 `COFFER_NO_MODIFY_PATH=1`，在该目录尚未在 `PATH` 上时，向你的 shell 配置文件（`.zshrc`、`.bash_profile`、fish 的 `config.fish` 或 `.profile`）追加一行 `PATH`。`curl` 下载的二进制从不会被隔离，所以这条路径不需要 `xattr` 步骤。见[安装](/zh/start/install)。
+它只接受 `arm64` 上的 macOS，其他平台都指向源码安装。它从最新发布（或 `COFFER_VERSION` 指定的 tag）下载 `coffer-cli-aarch64-apple-darwin.tar.gz` 和 `SHA256SUMS`，校验压缩包的校验和，然后把四个二进制装进 `COFFER_INSTALL_DIR`（默认 `~/.coffer/bin`）：每个先复制到同目录的临时文件，再改名覆盖公开的名字——直接复制会顺着守护进程的符号链接写进上一个版本目录，毁掉回滚所需的构建——并且，除非设置了 `COFFER_NO_MODIFY_PATH=1`，在该目录尚未在 `PATH` 上时，向你的 shell 配置文件（`.zshrc`、`.bash_profile`、fish 的 `config.fish` 或 `.profile`）追加一行 `PATH`。`curl` 下载的二进制从不会被隔离，所以这条路径不需要 `xattr` 步骤。见[安装](/zh/start/install)。
 
 ### 按版本分的目录与符号链接切换 {#versioned-directories-and-the-symlink-flip}
 
@@ -155,7 +155,7 @@ stateDiagram-v2
 3. **切换。** 以临时名字创建一个相对符号链接，再改名覆盖 `~/.coffer/bin/<name>`。并发的 `exec` 看到的要么是旧二进制，要么是新二进制，永远不会是写了一半的文件。
 4. **退役与清理。** 指向版本目录、但名字已不再由本构建发布的公开符号链接会被移除。最新两个之外的版本目录会被删除，但任何仍有公开符号链接指向的目录除外。
 
-部署是尽力而为的：复制不了的二进制会被记日志并跳过，守护进程照常启动。要手动回滚，把三个符号链接指回上一个版本目录即可。
+部署是尽力而为的：复制不了的二进制会被记日志并跳过，守护进程照常启动。要手动回滚，把符号链接指回上一个版本目录即可。
 
 在运行数据库迁移之前，守护进程还会把 `runs.db`（及其 `-wal`/`-shm` 文件）复制为 `runs.db.pre-<revision>`，保留最近三份。另见[持久化](/zh/architecture/persistence)。
 
@@ -219,7 +219,7 @@ flowchart LR
 
 ### 钥匙串 access group {#the-keychain-access-group}
 
-主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——保留开发用的回退方案：主密钥放在一个 `0600` 文件里，并报告为开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。
+主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——保留开发用的回退方案：主密钥放在一个 `0600` 文件里，并报告为开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。`coffer-seatalk-bridge` 是唯一的例外：它带 hardened runtime 签名但不带这个 entitlement，应用包里原样分发、不重新签名，所以它加载的第三方 SeaTalk SDK 永远读不到主密钥。
 
 ### 桌面应用怎样更新 {#how-the-desktop-app-updates}
 

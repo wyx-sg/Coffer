@@ -183,12 +183,17 @@ jobs:
 
       # PyInstaller signed each binary (and every library it collected) with
       # the Developer ID under the hardened runtime; prove it before shipping.
+      # The SeaTalk bridge runs operator-supplied code, so it must carry the
+      # same signature WITHOUT the keychain access group.
       - name: verify the frozen binaries' signatures
         if: steps.plan.outputs.codesign == 'true'
         shell: bash
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash scripts/release_signing.sh verify dist/coffer dist/coffer-daemon dist/coffer-mcp-shim
+        run: |
+          set -euo pipefail
+          bash scripts/release_signing.sh verify dist/coffer dist/coffer-daemon dist/coffer-mcp-shim
+          bash scripts/release_signing.sh verify-no-keychain dist/coffer-seatalk-bridge
 
       # A bare Mach-O cannot carry a stapled ticket, so the CLI binaries are
       # notarised (Gatekeeper then finds the ticket online) but not stapled.
@@ -202,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/cli-notary"
-          cp dist/coffer dist/coffer-daemon dist/coffer-mcp-shim "$RUNNER_TEMP/cli-notary/"
+          cp dist/coffer dist/coffer-daemon dist/coffer-mcp-shim dist/coffer-seatalk-bridge "$RUNNER_TEMP/cli-notary/"
           ditto -c -k "$RUNNER_TEMP/cli-notary" "$RUNNER_TEMP/coffer-cli.zip"
           bash scripts/release_signing.sh notarize "$RUNNER_TEMP/coffer-cli.zip"
 
@@ -224,6 +229,7 @@ jobs:
             coffer
             coffer-daemon
             coffer-mcp-shim
+            coffer-seatalk-bridge
           )
           for b in "${binaries[@]}"; do
             if [ ! -f "dist/$b" ]; then
@@ -236,9 +242,12 @@ jobs:
           tar -czf "artifacts/$archive" -C dist "${binaries[@]}"
           echo "packaged: artifacts/$archive"
 
-      # The .app bundles the very same three binaries the archive above ships.
-      # Stage them where tauri.conf.json's `externalBin` looks: Tauri resolves
-      # each `binaries/<name>` entry to `binaries/<name>-<target-triple>`.
+      # The .app bundles the very same binaries the archive above ships.
+      # Stage three where tauri.conf.json's `externalBin` looks: Tauri resolves
+      # each `binaries/<name>` entry to `binaries/<name>-<target-triple>`. The
+      # SeaTalk bridge is not an externalBin — Tauri re-signs those with the
+      # app's keychain entitlement — but a bundle.macOS.files entry
+      # (tauri.macos.conf.json), copied unchanged under its plain name.
       # Deliberately a copy of dist/, NOT a second PyInstaller run — freezing
       # these takes the better part of an hour and it is already done.
       - name: stage frozen binaries for the app bundle
@@ -251,6 +260,8 @@ jobs:
             cp "dist/$b" "desktop/binaries/$b-$triple"
             chmod +x "desktop/binaries/$b-$triple"
           done
+          cp dist/coffer-seatalk-bridge desktop/binaries/coffer-seatalk-bridge
+          chmod +x desktop/binaries/coffer-seatalk-bridge
           ls -la desktop/binaries/
 
       # The npm-published CLI, not `cargo install tauri-cli` — the latter
@@ -297,6 +308,19 @@ jobs:
             ${COFFER_PROVISIONING_PROFILE:+--profile "$COFFER_PROVISIONING_PROFILE"}
           npx --yes @tauri-apps/cli@^2 build --target ${{ matrix.triple }} \
             --config "$RUNNER_TEMP/tauri.release.json"
+
+      # The bridge inside the app must still be the one PyInstaller signed:
+      # no keychain access group, whatever Tauri did to the rest of the bundle.
+      - name: verify the bridge inside the app holds no keychain group
+        if: steps.plan.outputs.codesign == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          app="desktop/target/${{ matrix.triple }}/release/bundle/macos/Coffer.app"
+          bash scripts/release_signing.sh verify-no-keychain "$app/Contents/MacOS/coffer-seatalk-bridge"
+          bash scripts/release_signing.sh verify "$app/Contents/MacOS/coffer-daemon"
 
       # NOTE: a missing bundle dir here is signal, not noise — fail rather than
       # publish a release whose .dmg silently went missing.
@@ -445,7 +469,8 @@ jobs:
           ### Command line
 
           Download `coffer-cli-<platform>.tar.gz` and extract it. It contains
-          `coffer` (management CLI), `coffer-daemon` and `coffer-mcp-shim`.
+          `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and
+          `coffer-seatalk-bridge` (runs SeaTalk's SDK outside the daemon).
           Keep the binaries
           co-located: `coffer` finds `coffer-daemon` next to itself, and the
           daemon deploys the helper binaries into `~/.coffer/bin/` on startup.
@@ -458,7 +483,7 @@ jobs:
           `Coffer-<platform>.dmg` (`Coffer-unsigned-<platform>.dmg` when the
           release was built without a Developer ID) is the same web UI in a
           native window, with a Dock icon and a menu bar item, and it starts
-          the daemon for you. It carries the same three binaries and deploys
+          the daemon for you. It carries the same binaries and deploys
           them into `~/.coffer/bin/` on first launch, so installing the app
           installs the CLI too. Once installed, the app checks this page for a
           newer signed release at launch and every six hours, and installs it
