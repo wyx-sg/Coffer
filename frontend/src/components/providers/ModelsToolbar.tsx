@@ -17,8 +17,6 @@ interface Props {
   onType: (t: Modality | "all") => void;
   /** Right-aligned text on the same row (the Add dialog's "7 of 42 selected"). */
   trailing?: ReactNode;
-  /** Right-aligned controls on the same row (Turn all on / off). */
-  actions?: ReactNode;
   /** Width of the search field. */
   searchClass?: string;
 }
@@ -30,7 +28,6 @@ export function ModelsToolbar({
   type,
   onType,
   trailing,
-  actions,
   searchClass = "w-60",
 }: Props) {
   const { t } = useTranslation();
@@ -86,7 +83,6 @@ export function ModelsToolbar({
           </div>
         </PopoverContent>
       </Popover>
-      {actions ? <div className="ml-auto flex items-center gap-1.5">{actions}</div> : null}
       {trailing ? <span className="ml-auto text-xs text-text-muted">{trailing}</span> : null}
     </div>
   );

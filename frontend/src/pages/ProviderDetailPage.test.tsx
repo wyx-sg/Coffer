@@ -15,7 +15,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AgentOut } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 import { ModelProvidersPage } from "./ModelProvidersPage";
 
@@ -133,13 +132,11 @@ function renderPage(path = `/model-providers/${UID}`) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={qc}>
-        <TooltipProvider>
-          <Routes>
-            <Route path="/model-providers" element={<ModelProvidersPage />} />
-            <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
-            <Route path="*" element={null} />
-          </Routes>
-        </TooltipProvider>
+        <Routes>
+          <Route path="/model-providers" element={<ModelProvidersPage />} />
+          <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
+          <Route path="*" element={null} />
+        </Routes>
         <Where />
       </QueryClientProvider>
     </MemoryRouter>,
@@ -315,44 +312,6 @@ describe("ProviderDetailPage", () => {
       });
     },
   );
-
-  acceptance(
-    "provider-switching",
-    "turn the matched models all on or all off in one write",
-    async () => {
-      const embed: ProviderModel = { id: "c-embed", modality: "embedding" };
-      serve(makeProvider({ models: chat("a-chat", "b-chat") }));
-      api.update.mockResolvedValue(makeProvider());
-      serves([...chat("a-chat", "b-chat"), embed]);
-      renderPage();
-      await screen.findByText("c-embed");
-
-      // From a partial selection, all on writes every row in one PATCH.
-      fireEvent.click(screen.getByRole("button", { name: "Turn all on" }));
-      await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
-      expect(api.update).toHaveBeenLastCalledWith(UID, {
-        models: [...chat("a-chat", "b-chat"), embed],
-      });
-      // With a search active, all off acts on the matched rows only.
-      fireEvent.change(screen.getByLabelText("Search models"), {
-        target: { value: "b-" },
-      });
-      fireEvent.click(screen.getByRole("button", { name: "Turn all off" }));
-      await waitFor(() => expect(api.update).toHaveBeenCalledTimes(2));
-      expect(api.update).toHaveBeenLastCalledWith(UID, { models: chat("a-chat") });
-    },
-  );
-
-  test("Turn all off is disabled when it would leave no model on", async () => {
-    serve(makeProvider({ models: chat("a-chat", "b-chat") }));
-    serves(chat("a-chat", "b-chat"));
-    renderPage();
-    await screen.findByText("b-chat");
-    expect(screen.getByRole("button", { name: "Turn all off" })).toBeDisabled();
-    // Everything is on already, so there is nothing to turn on either.
-    expect(screen.getByRole("button", { name: "Turn all on" })).toBeDisabled();
-    expect(api.update).not.toHaveBeenCalled();
-  });
 
   test("the type filter narrows the rows", async () => {
     serve(makeProvider());
