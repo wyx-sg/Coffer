@@ -41,6 +41,10 @@ export type RowValue = { kind: "plain"; value: string } | SecretChoice;
 export interface KeyValueSecretRow {
   key: string;
   value: RowValue;
+  /** HTTP headers only, meaningful on a secret row: the scheme Coffer puts in front of the secret
+   *  when sending. `undefined` = not chosen yet (an `Authorization` row then means Bearer);
+   *  `null` = None, the secret is sent as is. */
+  scheme?: "Bearer" | "Token" | null;
 }
 
 /** The store ref of a standalone secret: `secret/<name>`. */

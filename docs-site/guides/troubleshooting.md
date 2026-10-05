@@ -170,6 +170,12 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Fix.** Open the desktop app and answer the approval it shows (on the **Secrets** page, **Review** opens the approvals dialog). Approve only a target you recognise; refuse the rest there. Rerun the command once you have answered. See [Secrets → Approvals](/guides/secrets#approvals).
 
+### An HTTP server or custom tool answers 401 after you add a key
+
+**Cause.** The header's auth scheme and the stored key disagree. Coffer sends `<scheme> <key>`. If the secret already holds `Bearer …` from an older setup and the row's scheme is also **Bearer**, the server sees `Bearer Bearer …`. If the row's scheme is **None** but the API wants `Authorization: Bearer <key>`, the word `Bearer` is missing. A header like `X-Api-Key` wants **None**.
+
+**Fix.** Open the server's **Edit** dialog (or the custom-tool group's), find the header row and set its scheme to what the API documents. Store only the raw key as the secret: choose **Replace value** and paste the key without `Bearer`. Save, then press **Test**. See [MCP servers → Auth scheme](/guides/mcp-servers#register-an-http-server).
+
 ### There is no way to print a secret from the terminal
 
 **Cause.** By design: no command, route or MCP tool returns a stored value, because an agent can run any command you can. `coffer secret list` only shows which values are stored.

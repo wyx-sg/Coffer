@@ -60,7 +60,7 @@ function FieldHarness({ initial = null }: { initial?: SecretFieldValue }) {
   );
 }
 
-function RowsHarness({ initial }: { initial: KeyValueSecretRow[] }) {
+function RowsHarness({ initial, schemes }: { initial: KeyValueSecretRow[]; schemes?: boolean }) {
   const [rows, setRows] = useState(initial);
   return (
     <>
@@ -70,6 +70,7 @@ function RowsHarness({ initial }: { initial: KeyValueSecretRow[] }) {
         label="Headers"
         keyPlaceholder="Authorization"
         addLabel="Add header"
+        schemes={schemes}
       />
       <output data-testid="rows">{JSON.stringify(rows)}</output>
     </>
@@ -233,6 +234,49 @@ describe("KeyValueSecretRows", () => {
       {
         key: "X-Api-Token",
         value: { kind: "new", name: HEX, label: "X-Api-Token", value: "abc" },
+      },
+    ]);
+  });
+
+  test("an HTTP header's secret row names its auth scheme; Authorization starts as Bearer", async () => {
+    wrap(
+      <RowsHarness
+        schemes
+        initial={[
+          { key: "Authorization", value: { kind: "stored", name: "deploy-token" } },
+          { key: "X-Api-Key", value: { kind: "stored", name: "openai-key" } },
+          plain("X-Team", "core"),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Auth scheme of Authorization" }),
+    ).toHaveTextContent("Bearer");
+    expect(screen.getByRole("combobox", { name: "Auth scheme of X-Api-Key" })).toHaveTextContent(
+      "None",
+    );
+    // A plain row has no scheme.
+    expect(screen.queryByRole("combobox", { name: "Auth scheme of X-Team" })).toBeNull();
+    fireEvent.click(screen.getByRole("combobox", { name: "Auth scheme of Authorization" }));
+    fireEvent.click(await screen.findByRole("option", { name: "None" }));
+    expect(current("rows")[0].scheme).toBeNull();
+  });
+
+  test("env rows show no scheme select", () => {
+    wrap(
+      <RowsHarness initial={[{ key: "Authorization", value: { kind: "stored", name: "a" } }]} />,
+    );
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  test("storing a typed Authorization value splits the scheme off it", () => {
+    wrap(<RowsHarness schemes initial={[plain("Authorization", "Bearer abc")]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Store it in Coffer?" }));
+    expect(current("rows")).toEqual([
+      {
+        key: "Authorization",
+        scheme: "Bearer",
+        value: { kind: "new", name: HEX, label: "Authorization", value: "abc" },
       },
     ]);
   });

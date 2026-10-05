@@ -48,7 +48,7 @@ Most of the time you do not run this by hand. The dialogs that ask for a secret 
 | Where | How the ref is cited |
 | --- | --- |
 | stdio MCP server | An environment variable row set to **Secret** in the **Add server** or **Edit** dialog — becomes an environment variable of the server process |
-| HTTP MCP server | A header row set to **Secret** in the same dialogs — becomes a request header; the secret is the header's whole value |
+| HTTP MCP server | A header row set to **Secret** in the same dialogs — becomes a request header; the secret is the credential only, and the row's auth scheme (Bearer, Token or None) is put in front of it when sent |
 | Adopting an agent's MCP entry | **Import from your agents** in the **Add server** dialog — Coffer stores the entry's current value under a minted `secret/<id>` |
 | Model provider | the **API key** field of **Add provider** |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |

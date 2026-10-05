@@ -1807,12 +1807,20 @@ components:
       type: object
     CustomToolHeaderIn:
       description: |-
-        One group header row: a plain value, or a stored secret that holds the
-        WHOLE value (no ``Bearer`` prefix is put around it). Send one of the two.
+        One group header row: a plain value, or a stored secret holding the
+        credential alone. Send one of the two.
       properties:
         name:
           title: Name
           type: string
+        scheme:
+          anyOf:
+          - enum:
+            - Bearer
+            - Token
+            type: string
+          - type: 'null'
+          title: Scheme
         secret:
           anyOf:
           - type: string
@@ -1832,6 +1840,14 @@ components:
         name:
           title: Name
           type: string
+        scheme:
+          anyOf:
+          - enum:
+            - Bearer
+            - Token
+            type: string
+          - type: 'null'
+          title: Scheme
         secret:
           anyOf:
           - type: string
@@ -1854,6 +1870,7 @@ components:
       - name
       - value
       - secret
+      - scheme
       - secret_state
       title: CustomToolHeaderOut
       type: object
@@ -2869,6 +2886,15 @@ components:
     McpTestHttpIn:
       description: A Streamable HTTP server as the Add form holds it.
       properties:
+        auth_schemes:
+          additionalProperties:
+            enum:
+            - Bearer
+            - Token
+            type: string
+          description: Header → the scheme sent in front of its secret (`Bearer <key>`).
+          title: Auth Schemes
+          type: object
         headers:
           additionalProperties:
             type: string

@@ -301,9 +301,9 @@ def test_a_reimport_preview_shows_the_old_and_new_text_of_a_changed_operation(
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a group's headers are rows whose value is plain or a whole secret"
+    spec="mcp-gateway", scenario="a group's headers are rows whose value is plain or a secret"
 )
-def test_a_groups_headers_are_rows_whose_value_is_plain_or_a_whole_secret(
+def test_a_groups_headers_are_rows_whose_value_is_plain_or_a_secret(
     daemon: BoundaryDaemon, api: FakeHttpApi
 ):
     daemon.store(f"secret/{SECRET_NAME}", SECRET_VALUE)
@@ -314,7 +314,7 @@ def test_a_groups_headers_are_rows_whose_value_is_plain_or_a_whole_secret(
             "base_url": api.base_url,
             "headers": [
                 {"name": "X-Team", "value": "billing"},
-                {"name": "Authorization", "secret": SECRET_NAME},
+                {"name": "Authorization", "secret": SECRET_NAME, "scheme": "Bearer"},
             ],
         },
     )
@@ -322,9 +322,11 @@ def test_a_groups_headers_are_rows_whose_value_is_plain_or_a_whole_secret(
     group = r.json()
     rows = {h["name"]: h for h in group["headers"]}
     assert rows["X-Team"] == {
-        "name": "X-Team", "value": "billing", "secret": None, "secret_state": "none"
+        "name": "X-Team", "value": "billing", "secret": None, "scheme": None,
+        "secret_state": "none",
     }  # fmt: skip
     assert rows["Authorization"]["secret"] == SECRET_NAME
+    assert rows["Authorization"]["scheme"] == "Bearer"
     assert rows["Authorization"]["value"] is None
     assert rows["Authorization"]["secret_state"] == "pending_approval"
     assert group["pending_secrets"] == [SECRET_NAME]

@@ -106,10 +106,20 @@ An HTTP server is a remote MCP endpoint that speaks the streamable HTTP transpor
 ### Worked example: an HTTP server with a bearer token
 
 1. Open **MCP servers**, click **Add server** and paste `https://api.githubcopilot.com/mcp/` into the box.
-2. In the headers, add `Authorization` and paste the whole header value as its value (a stored secret from the field's menu, or a pasted value that is saved as a new secret), including the scheme (`Bearer …`).
+2. In the headers, add `Authorization` and paste only the key the provider gave you as its value (a stored secret from the field's menu, or a pasted value that is saved as a new secret). Leave the row's **auth scheme** on **Bearer**.
 3. Press **Test**, then click **Add server**.
 
-For an HTTP server each header whose value is a secret becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
+For an HTTP server each header whose value is a secret becomes a request header. The secret holds **only the credential**, the raw key the provider hands out; the header row has an **auth scheme** that Coffer puts in front of it when it sends the request. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
+
+**Auth scheme.** A header row that holds a secret has one of three schemes:
+
+| Scheme | Coffer sends | Use it for |
+| --- | --- | --- |
+| **Bearer** | `Authorization: Bearer <key>` | Most APIs. A new `Authorization` row starts here. |
+| **Token** | `Authorization: Token <key>` | APIs that ask for the word `Token`. |
+| **None** | the key as is | Headers such as `X-Api-Key`, where the key is the whole value. |
+
+*Bearer* is the name of the HTTP scheme (RFC 6750), not part of the key, so store the key without it. That way the same secret works wherever the key is used, and it matches what providers show you. A server made before this existed, whose secret already reads `Bearer …`, keeps working: a header with no scheme sends its secret unchanged. To move one over, open its **Edit** dialog, set the `Authorization` row's scheme to **Bearer**, and **Replace** the value with the raw key, all in the same save.
 
 The config Coffer stores:
 
@@ -119,7 +129,8 @@ The config Coffer stores:
     "type": "http",
     "url": "https://api.githubcopilot.com/mcp/",
     "headers": {},
-    "secret_refs": { "Authorization": "github/authorization" }
+    "secret_refs": { "Authorization": "github/authorization" },
+    "auth_schemes": { "Authorization": "Bearer" }
   },
   "spawn_timeout_seconds": 30,
   "request_timeout_seconds": 120
@@ -132,6 +143,8 @@ A static `env` or `headers` value that looks like a secret — starting with `Be
 
 ::: info Pasting an HTTP server with `headers`
 The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is offered for storing in the secret store and cited from `secret_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
+
+A header such as `Authorization: Bearer abc…` is split on the way in: `abc…` is stored as the secret and the row's scheme is set to **Bearer**. The same happens when you import Claude or Cursor JSON, Codex TOML (its `bearer_token_env_var` asks only for the token), adopt an agent's own entry, or move a plaintext key with **Find plaintext keys**.
 :::
 
 ## Server names and descriptions

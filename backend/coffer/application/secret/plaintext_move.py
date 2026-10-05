@@ -27,6 +27,7 @@ import dataclasses
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any, Protocol
 
+from coffer.domain.auth_scheme import split_scheme
 from coffer.domain.secrets import SecretNote, mint_secret_name, secret_ref
 
 
@@ -194,14 +195,26 @@ def _audit(f: Finding, *, name: str | None = None, ref: str | None = None) -> di
     return details
 
 
+def _credential(h: Hit) -> tuple[str | None, str]:
+    """What a hit stores, and the scheme its header keeps: a header's
+    ``Bearer <key>`` stores the key; an environment value is stored as is."""
+    if h.finding.field == "env":
+        return None, h.value
+    return split_scheme(h.value)
+
+
 def _with_refs(config: dict[str, Any], hits: list[Hit], refs: dict[str, str]) -> dict[str, Any]:
-    """``config`` without the plaintext entries, citing ``refs`` under the same keys."""
+    """``config`` without the plaintext entries, citing ``refs`` under the same
+    keys, a header's scheme kept on its slot."""
     new = copy.deepcopy(config)
     transport = new["transport"]
     for h in hits:
         bucket = "env" if h.finding.field == "env" else "headers"
         transport.get(bucket, {}).pop(h.finding.key, None)
         transport.setdefault("secret_refs", {})[h.finding.key] = refs[h.finding.id]
+        scheme, _ = _credential(h)
+        if scheme:
+            transport.setdefault("auth_schemes", {})[h.finding.key] = scheme
     return new
 
 
@@ -224,9 +237,10 @@ async def _move_server(
     try:
         for h in hits:
             ref = refs[h.finding.id]
-            await asyncio.to_thread(store.set, ref, h.value)
+            _, value = _credential(h)
+            await asyncio.to_thread(store.set, ref, value)
             written.append(ref)
-            if await asyncio.to_thread(store.peek, ref) != h.value:
+            if await asyncio.to_thread(store.peek, ref) != value:
                 return skip_all("the store did not read the value back")
             await asyncio.to_thread(set_note, ref, SecretNote(created_for=uid))
         assert hits[0].config is not None

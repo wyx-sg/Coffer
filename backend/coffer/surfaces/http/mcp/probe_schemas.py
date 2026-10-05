@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from coffer.domain.auth_scheme import AuthScheme
 from coffer.domain.mcp.probe import ProbeResult
 from coffer.domain.mcp.server_config import HttpTransport, StdioTransport
 from coffer.surfaces.http.handoff_schemas import HandoffOut
@@ -117,6 +118,10 @@ class McpTestHttpIn(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     secret_refs: dict[str, str] = Field(
         default_factory=dict, description="Header → a stored secret picked for it."
+    )
+    auth_schemes: dict[str, AuthScheme] = Field(
+        default_factory=dict,
+        description="Header → the scheme sent in front of its secret (`Bearer <key>`).",
     )
 
     def to_transport(self) -> HttpTransport:

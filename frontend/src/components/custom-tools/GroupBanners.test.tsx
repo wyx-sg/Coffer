@@ -95,6 +95,7 @@ describe("group banners", () => {
             {
               name: "Authorization",
               value: null,
+              scheme: null,
               secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               secret_state: "missing",
             },
@@ -121,6 +122,7 @@ describe("group banners", () => {
           {
             name: "Authorization",
             value: null,
+            scheme: null,
             secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
             secret_state: "pending_approval",
           },

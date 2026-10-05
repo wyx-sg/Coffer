@@ -122,6 +122,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
               label={t("customTools.fields.headers")}
               keyPlaceholder={t("customTools.editor.headerKey")}
               addLabel={t("customTools.editor.addHeader")}
+              schemes
               secretLabelFor={(key) => `${group.name}-${key}`}
             />
           </FormField>

@@ -6,7 +6,7 @@
 
 import type { ParsedEnvVar, ParsedServer, Unreadable } from "./pasteTypes";
 import { unreadable } from "./pasteTypes";
-import { envVar, mergeByKey } from "./secretDetection";
+import { envVar, mergeByKey, withHeaderSchemes } from "./secretDetection";
 
 export function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -78,7 +78,7 @@ export function parseServerConfig(name: string, cfg: unknown): ParsedServer | Un
     // through the same secret review as env does.
     const headers = parseBlock(name, cfg.headers, "headers");
     if (!Array.isArray(headers)) return headers;
-    const merged = mergeByKey(env, headers);
+    const merged = withHeaderSchemes(mergeByKey(env, headers));
     return { name, transportType: "http", command: "", args: [], url, env: merged };
   }
   return unreadable("errBadServer", { name });

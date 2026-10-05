@@ -411,9 +411,13 @@ describe("AddMcpServerDialog — form", () => {
     expect(transport.secret_refs).toEqual({
       Authorization: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
     });
+    // The secret holds only the key; the scheme travels beside it.
+    expect((transport as unknown as { auth_schemes: unknown }).auth_schemes).toEqual({
+      Authorization: "Bearer",
+    });
     expect(posts("/secrets")[0][1]?.body).toEqual({
       ref: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
-      value: "Bearer abc",
+      value: "abc",
     });
   });
 
@@ -437,7 +441,7 @@ describe("AddMcpServerDialog — form", () => {
     await waitFor(() => expect(posts("/secrets")).toHaveLength(1));
     expect(posts("/secrets")[0][1]?.body).toEqual({
       ref: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
-      value: "Bearer t0k",
+      value: "t0k",
     });
   });
 

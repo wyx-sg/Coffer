@@ -98,8 +98,11 @@ export function ReviewCard({
               label={label}
               keyPlaceholder={http ? "Authorization" : "API_KEY"}
               addLabel={http ? t("mcp.env.addHeader") : t("mcp.env.addVariable")}
+              schemes={http}
             />
-            {server.env.length === 0 ? <p>{t(http ? "mcp.add.noHeaders" : "mcp.add.noEnv")}</p> : null}
+            {server.env.length === 0 ? (
+              <p>{t(http ? "mcp.add.noHeaders" : "mcp.add.noEnv")}</p>
+            ) : null}
             {server.env
               .filter((e) => e.value.kind === "new")
               .map((e) => (

@@ -6,12 +6,13 @@ answers ``tools/list`` from :attr:`HttpApiTransport.tools` and makes each
 tool's HTTP request itself (``infrastructure/mcp/http_api_client.py``).
 
 A group's headers are rows of a name and a value. A value is plain text
-(``headers``) or a stored secret that holds the WHOLE header value, with no
-``Bearer`` or ``Token`` prefix assembled around it (``secret_refs`` maps the
-slot — the header's name — to the ref, the way the other transports cite
-theirs), so every mechanism that walks secret refs (the missing-secret probe,
-the attention source, the secret boundary's destinations) covers a group
-unchanged. A tool has no reach of its own; it follows the group's.
+(``headers``) or a stored secret holding the credential alone (``secret_refs``
+maps the slot — the header's name — to the ref, the way the other transports
+cite theirs), sent behind the row's scheme when it has one (``auth_schemes``:
+``Authorization: Bearer <secret>``; ``coffer.domain.auth_scheme``), so
+every mechanism that walks secret refs (the missing-secret probe, the attention
+source, the secret boundary's destinations) covers a group unchanged. A tool
+has no reach of its own; it follows the group's.
 
 Pure: Pydantic and the standard library only.
 """
@@ -24,6 +25,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
+from coffer.domain.auth_scheme import AuthScheme, check_schemes
 from coffer.domain.mcp.http_api_render import holes_in, template_holes
 
 HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -173,8 +175,10 @@ class HttpApiTransport(BaseModel):
     base_url: HttpUrl
     #: Plain header values.
     headers: dict[str, str] = Field(default_factory=dict)
-    #: ``{header name: ref}`` — headers whose whole value is a stored secret.
+    #: ``{header name: ref}`` — headers whose credential is a stored secret.
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    #: ``{header name: scheme}`` — a secret header sent as ``<scheme> <secret>``.
+    auth_schemes: dict[str, AuthScheme] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     source: OpenApiSource | None = None
     tools: list[HttpApiTool] = Field(default_factory=list)
@@ -210,6 +214,7 @@ class HttpApiTransport(BaseModel):
         seen = [n.lower() for n in (*self.headers, *self.secret_refs)]
         if len(seen) != len(set(seen)):
             raise ValueError("a header may appear once in a group")
+        check_schemes(self.auth_schemes, self.secret_refs)
         return self
 
     def tool(self, name: str) -> HttpApiTool | None:

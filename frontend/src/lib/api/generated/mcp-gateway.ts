@@ -653,12 +653,14 @@ export interface components {
         };
         /**
          * CustomToolHeaderIn
-         * @description One group header row: a plain value, or a stored secret that holds the
-         *     WHOLE value (no ``Bearer`` prefix is put around it). Send one of the two.
+         * @description One group header row: a plain value, or a stored secret holding the
+         *     credential alone. Send one of the two.
          */
         CustomToolHeaderIn: {
             /** Name */
             name: string;
+            /** Scheme */
+            scheme?: ("Bearer" | "Token") | null;
             /** Secret */
             secret?: string | null;
             /** Value */
@@ -668,6 +670,8 @@ export interface components {
         CustomToolHeaderOut: {
             /** Name */
             name: string;
+            /** Scheme */
+            scheme: ("Bearer" | "Token") | null;
             /** Secret */
             secret: string | null;
             /**
@@ -1228,6 +1232,13 @@ export interface components {
          * @description A Streamable HTTP server as the Add form holds it.
          */
         McpTestHttpIn: {
+            /**
+             * Auth Schemes
+             * @description Header → the scheme sent in front of its secret (`Bearer <key>`).
+             */
+            auth_schemes?: {
+                [key: string]: "Bearer" | "Token";
+            };
             /** Headers */
             headers?: {
                 [key: string]: string;

@@ -268,7 +268,7 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 
 密钥只以 **Fernet 密文**存在，每个密钥一个文件，以一个**引用**为键——比如 `github-token` 这样的名字。一个引用的密文是 `~/.coffer/vault/secret/<ref>.enc`：Fernet 令牌加一个换行符，权限 `0600`，位于 `0700` 的目录中。只属于本机的引用，比如模型代理的令牌，存在 `~/.coffer/local/secret/` 中，从不进入保险库。密文放在保险库仓库里是安全的，因为密钥不在那里；`vault/secret/` 列在仓库的 `.git/info/exclude` 中，所以在同步远端开始携带密钥之前，它甚至不会被提交。Coffer 中其余一切都只持有引用：
 
-- MCP 服务器的配置在 `transport.secret_refs` 中把环境变量或请求头映射到引用。它的 schema 会拒绝看起来像密钥的静态 `env` 或请求头值（`Bearer …`、`ghp_…`、`github_pat_…`、`sk-…`、`xox?-…`、JWT 前缀），并提示你把它移进 `secret_refs`。
+- MCP 服务器的配置在 `transport.secret_refs` 中把环境变量或请求头映射到引用。它的 schema 会拒绝看起来像密钥的静态 `env` 或请求头值（`Bearer …`、`ghp_…`、`github_pat_…`、`sk-…`、`xox?-…`、JWT 前缀），并提示你把它移进 `secret_refs`。保存密钥的请求头只存凭据本身，请求头的认证方案（Bearer、Token 或无）在发请求时加上，所以同一个密钥不会绑死在某一个请求头的格式上。
 - 消息渠道的机器人令牌或 app secret、提供商的 API 密钥，以及同步远端的推送密钥，都是引用。
 - **独立密钥**——不属于任何资源的密钥，比如某个技能需要的数据库密码——是 `secret/<id>` 下的引用，id 由 Coffer 生成（随机 UUID 的十六进制），人只给它起名称和写描述，二者可随时修改，保存在保险库的一份笔记文档里。文件中以 `coffer://secret/<id>` 引用它，由 `coffer run` 交给命令（见[密钥](/zh/guides/secrets)）。
 - 当你把智能体切换到某个提供商时，智能体会被指向回环上的[本地模型代理](/zh/architecture/model-proxy)，并用它自己的本地代理令牌认证（`coffer proxy token --agent-uid <uid>`，由 Claude Code 的 `apiKeyHelper` 和 Codex 的提供商 `auth` 命令运行）。提供商的密钥从不写进智能体的文件或环境，也没有任何路由或命令返回它：守护进程解密后交给代理，代理把它注入上游请求，只在内存中持有。

@@ -35,7 +35,13 @@ export function makeGroup(overrides: Partial<CustomToolGroup> = {}): CustomToolG
     enabled: true,
     base_url: `https://${name}.internal.example/v2`,
     headers: [
-      { name: "Authorization", value: null, secret: `${name}-token`, secret_state: "present" },
+      {
+        name: "Authorization",
+        value: null,
+        scheme: null,
+        secret: `${name}-token`,
+        secret_state: "present",
+      },
     ],
     timeout_seconds: 30,
     scope: null,

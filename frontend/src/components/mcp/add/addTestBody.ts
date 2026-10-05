@@ -9,7 +9,7 @@
 // that is added and approved.
 import type { McpConfigTestIn } from "@/lib/api/mcpTestConfig";
 import type { NewServer } from "@/lib/mcp/importMcpServers";
-import { keptRows, plainMapOfRows, secretRefsOfRows } from "@/lib/mcp/serverRows";
+import { authSchemesField, keptRows, plainMapOfRows, secretRefsOfRows } from "@/lib/mcp/serverRows";
 
 export function addTestBodyOf(server: NewServer): McpConfigTestIn {
   const plain = plainMapOfRows(server.env);
@@ -28,7 +28,14 @@ export function addTestBodyOf(server: NewServer): McpConfigTestIn {
           secret_refs: refs,
           ...(server.cwd?.trim() ? { cwd: server.cwd.trim() } : {}),
         }
-      : { type: "http", url: server.url, headers: plain, secret_refs: refs };
+      : {
+          type: "http",
+          url: server.url,
+          headers: plain,
+          secret_refs: refs,
+          // Each typed secret is sent behind its row's scheme for this test.
+          ...authSchemesField(server.env),
+        };
   return {
     name: server.name || null,
     transport,

@@ -170,6 +170,12 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **解决办法。** 打开桌面应用，回应它显示的批准请求（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的在那里拒绝。答复之后重新运行命令。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
+### 添加密钥后，HTTP 服务器或自定义工具返回 401 {#an-http-server-or-custom-tool-answers-401-after-you-add-a-key}
+
+**原因。** 请求头的认证方案和已存的密钥对不上。Coffer 发送的是 `<方案> <密钥>`。如果密钥里因为旧的设置已经写着 `Bearer …`，而这一行的方案也是 **Bearer**，服务器收到的就是 `Bearer Bearer …`。如果这一行的方案是 **None**，而 API 要的是 `Authorization: Bearer <key>`，就少了 `Bearer` 这个词。`X-Api-Key` 这类请求头应选 **None**。
+
+**解决。** 打开服务器的**编辑**对话框（或自定义工具分组的），找到那一行请求头，把方案设为 API 文档写的那种。密钥里只存原始密钥：选**替换值**，粘贴不带 `Bearer` 的密钥。保存后点**测试**。见 [MCP 服务器 → 认证方案](/zh/guides/mcp-servers#register-an-http-server)。
+
 ### 无法在终端里打印密钥 {#there-is-no-way-to-print-a-secret-from-the-terminal}
 
 **原因。** 这是有意设计：没有任何命令、路由或 MCP 工具会返回存储的值，因为你能运行的命令，智能体都能运行。`coffer secret list` 只显示哪些值已被存储。
