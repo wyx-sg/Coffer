@@ -37,12 +37,12 @@ export function SyncSecretPicker({ value, onChange, disabled, autoOpen, describe
     { value: NONE, label: t("sync.remote.secretNone") },
     ...refs.map((r) => ({
       value: r.ref,
-      label: displayName(r),
+      label: displayName(r, t("secrets.unnamed")),
       hint: r.present ? undefined : t("sync.remote.secretMissing"),
     })),
   ];
   if (value && !refs.some((r) => r.ref === value)) {
-    options.push({ value, label: value, hint: t("sync.remote.secretMissing") });
+    options.push({ value, label: t("secrets.unnamed"), hint: t("sync.remote.secretMissing") });
   }
 
   useEffect(() => {

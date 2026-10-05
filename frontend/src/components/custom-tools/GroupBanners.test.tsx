@@ -15,7 +15,20 @@ import { GroupRow } from "./GroupRow";
 import { makeGroup } from "./testFixtures";
 
 vi.mock("@/lib/api/secret", () => ({
-  secretsApi: { list: vi.fn(async () => ({ refs: [] })) },
+  secretsApi: {
+    list: vi.fn(async () => ({
+      refs: [
+        {
+          ref: "secret/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          label: "Grafana token",
+          present: false,
+          cited_by: [],
+          mentioned_by_skills: [],
+          bindings: [],
+        },
+      ],
+    })),
+  },
 }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(async () => undefined), disable: vi.fn() },
@@ -70,7 +83,7 @@ describe("group banners", () => {
     await waitFor(() => expect(resourcesApi.enable).toHaveBeenCalledWith("uid-pagerduty"));
   });
 
-  test("a missing secret has Add secret and Choose another, no hand-off", () => {
+  test("a missing secret has Add secret and Choose another, no hand-off", async () => {
     const onChoose = vi.fn();
     mount(
       <GroupBanners
@@ -82,7 +95,7 @@ describe("group banners", () => {
             {
               name: "Authorization",
               value: null,
-              secret: "grafana-token",
+              secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               secret_state: "missing",
             },
           ],
@@ -90,31 +103,31 @@ describe("group banners", () => {
         onChooseAnother={onChoose}
       />,
     );
-    expect(screen.getByText("Secret grafana-token isn't in Secrets")).toBeInTheDocument();
+    expect(await screen.findByText("Secret Grafana token isn't in Secrets")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add secret" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Choose another" }));
     expect(onChoose).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Hand off to|Copy prompt/ })).toBeNull();
   });
 
-  test("a secret waiting for approval has one button, Open approvals", () => {
+  test("a secret waiting for approval has one button, Open approvals", async () => {
     banners(
       makeGroup({
         name: "grafana",
         health: "attention",
         secret_state: "pending_approval",
-        pending_secrets: ["grafana-token"],
+        pending_secrets: ["a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"],
         headers: [
           {
             name: "Authorization",
             value: null,
-            secret: "grafana-token",
+            secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
             secret_state: "pending_approval",
           },
         ],
       }),
     );
-    expect(screen.getByText("grafana-token waits for approval")).toBeInTheDocument();
+    expect(await screen.findByText("Grafana token waits for approval")).toBeInTheDocument();
     expect(screen.getAllByRole("button")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Open approvals" }));
     expect(openApprovalsSheet).toHaveBeenCalled();

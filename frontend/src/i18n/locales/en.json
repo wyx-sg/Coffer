@@ -4064,7 +4064,6 @@
       "retry": "Retry",
       "openRemote": "Open Remote settings",
       "chooseSecret": "Choose secret",
-      "openSecrets": "Open in Secrets",
       "reveal": "Reveal in Finder",
       "theRemote": "the remote",
       "git_missing": {
@@ -6097,7 +6096,7 @@
     "delete": {
       "title": "Delete {{name}}?",
       "confirm": "Delete {{name}}? This can't be undone.",
-      "confirmWithSecret": "Delete {{name}}? Its secret {{ref}} is deleted from this Mac too. This can't be undone.",
+      "confirmWithSecret": "Delete {{name}}? Its secret {{secret}} is deleted from this Mac too. This can't be undone.",
       "agentTitle": "{{agent}} goes back to its own login",
       "agentBody": "Coffer removes its model and provider lines from {{path}}",
       "agentBodyNoFile": "Coffer clears its connection to this provider",

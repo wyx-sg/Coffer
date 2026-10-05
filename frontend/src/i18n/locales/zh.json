@@ -4064,7 +4064,6 @@
       "retry": "重试",
       "openRemote": "打开远端设置",
       "chooseSecret": "选择密钥",
-      "openSecrets": "在密钥中打开",
       "reveal": "在访达中显示",
       "theRemote": "远端",
       "git_missing": {
@@ -6097,7 +6096,7 @@
     "delete": {
       "title": "删除 {{name}}？",
       "confirm": "删除 {{name}}？此操作无法撤销。",
-      "confirmWithSecret": "删除 {{name}}？它的密钥 {{ref}} 也会从这台 Mac 上删除。此操作无法撤销。",
+      "confirmWithSecret": "删除 {{name}}？它的密钥 {{secret}} 也会从这台 Mac 上删除。此操作无法撤销。",
       "agentTitle": "{{agent}} 回到自己的登录",
       "agentBody": "Coffer 会从 {{path}} 中移除它的模型和提供商配置",
       "agentBodyNoFile": "Coffer 会清除它与这个提供商的连接",
