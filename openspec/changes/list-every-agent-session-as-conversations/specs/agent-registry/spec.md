@@ -56,8 +56,8 @@ place) and **Delete…**, which asks first and says the session is deleted from 
 failure to load the list shows in the list's area with a Retry. The tab shows no session text.
 Beside the search box the tab carries **New conversation**, which opens the dialog of
 [chat](../chat/spec.md) "Start a new conversation in the terminal" with this agent chosen.
-The tab is the Conversations page's list narrowed to this agent: the same rows, actions and
-paging, without the agent column.
+The tab is the Conversations page's list narrowed to this agent: the same header row, rows,
+actions and paging, without the Agent column.
 
 #### Scenario: a session row opens in the terminal
 - **GIVEN** an agent's Sessions tab listing a session `abc-123` in `/work/api`

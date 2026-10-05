@@ -21,6 +21,7 @@
 - [ ] 4.1 `lib/api/agentSessions`: `listAll`; `useAgentSessionsList` infinite query over it; `conversationRow` / `sessionRow` collapse to one mapping with `agentKey`
 - [ ] 4.2 `ConversationsIndex` over the new listing: Source pill (This Mac + channels), Agent pill, search, `?source=local|<uid>`; the unavailable line with Retry; header subtitle reworded
 - [ ] 4.3 Row actions route by row: a row with a session renames / deletes through `/agents/{uid}/sessions/{id}`, a channel row with none through `/chat/conversations/{id}`
+- [ ] 4.3a `SessionList` gains a header row naming its visible columns (Title, Source, Agent, Directory, Last active), above the day groups
 - [ ] 4.4 `AgentSessionsTab` becomes the same list narrowed to its agent (no agent column)
 - [ ] 4.5 Tests with `acceptance("chat", …)`: every MODIFIED scenario of "Show every agent's sessions on the Conversations page", plus "one agent's sessions that cannot be read are named above the list"
 

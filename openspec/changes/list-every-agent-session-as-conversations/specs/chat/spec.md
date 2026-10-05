@@ -17,8 +17,10 @@ every managed agent, wherever it was started — in a terminal, by an IM channel
 Telegram) or by New conversation — read through [agent-registry](../agent-registry/spec.md)
 "List every agent's sessions in one list". It is a list with no conversation view and no reply
 box; its header's one primary action is **New conversation** ("Start a new conversation in the
-terminal"). The list has no header row, is grouped by day (**Today**, **Yesterday**, **Earlier**;
-the group titles carry no counts) and is newest activity first. A row MUST show the title, a
+terminal"). The list has a header row naming its columns — **Title**, **Source**, **Agent**,
+**Directory**, **Last active** — above rows grouped by day (**Today**, **Yesterday**, **Earlier**;
+the group titles carry no counts), newest activity first; a column the list does not show has no
+heading. A row MUST show the title, a
 status word (**Running** with a success-coloured dot while a turn runs; **Needs you** with a
 warning dot while the agent waits for an answer, when the session is a channel conversation's),
 its **source** (for a channel conversation the platform's logo and name with where in the chat it
@@ -63,7 +65,7 @@ suggestions page, which it does not have.
 #### Scenario: rows are grouped by day without counts
 - **GIVEN** sessions last active today, yesterday and weeks ago
 - **WHEN** the Conversations page's list renders
-- **THEN** the list has no header row and shows the groups Today, Yesterday and Earlier, none of them with a count
+- **THEN** a header row names the columns Title, Source, Agent, Directory and Last active, and below it the groups Today, Yesterday and Earlier, none of them with a count
 - **AND** a row from today shows its clock time and an earlier row its date
 
 #### Scenario: the Channel pill filters by several channels

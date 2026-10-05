@@ -16,7 +16,7 @@ agent, wherever it was started, and to start a new one.
   listing by latest activity and pages by one cursor. A row a channel
   conversation points at keeps its channel badge, Running / Needs you and Stop.
   Filters: **Source** (This Mac, or one or more channels), **Agent**, and a
-  search. When one agent cannot be read, the others are still listed and a line
+  search. The list gains a header row naming its columns. When one agent cannot be read, the others are still listed and a line
   above the list names the agent with Retry.
 - **New conversation.** The Conversations page header and an agent's Sessions tab
   carry **New conversation**, a split button that opens a small dialog — agent
