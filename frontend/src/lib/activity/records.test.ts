@@ -38,6 +38,7 @@ function call(overrides: Partial<Invocation> = {}): Invocation {
     resource_uid: "u-gh",
     resource_name: "github",
     capability_type: "tool",
+    environment: null,
     capability_key: "search_code",
     duration_ms: 412,
     status: "ok",

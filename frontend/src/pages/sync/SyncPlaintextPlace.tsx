@@ -44,6 +44,19 @@ function LineText({ line }: { line: Line }) {
   return <>{parts}</>;
 }
 
+function RuleTag({ rule }: { rule: string }) {
+  const { t } = useTranslation();
+  return (
+    <code
+      className="ml-1.5 font-mono text-2xs text-text-subtle"
+      title={t("sync.problem.plaintext_found.foundByRule", { rule })}
+      data-testid="sync-plaintext-rule"
+    >
+      {rule}
+    </code>
+  );
+}
+
 function ShapeText({ value }: { value: Value }) {
   const { t } = useTranslation();
   const s = value.shape;
@@ -54,6 +67,7 @@ function ShapeText({ value }: { value: Value }) {
   return (
     <li>
       <code className="font-mono">{value.key}</code> — {bits.join(" · ")}
+      {value.rule ? <RuleTag rule={value.rule} /> : null}
     </li>
   );
 }
@@ -157,6 +171,7 @@ export function PlaintextPlace({ finding }: { finding: Finding }) {
             ? t("sync.problem.plaintext_found.token")
             : t("sync.problem.plaintext_found.key", { key: finding.key })}
         </span>
+        {finding.rule ? <RuleTag rule={finding.rule} /> : null}
       </button>
       {open ? (
         <div className="pb-1 pl-5">

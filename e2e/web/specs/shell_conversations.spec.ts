@@ -156,11 +156,13 @@ test.describe("Conversations page", () => {
       const before = page.url();
       await rowOf(titleA).click();
       await expect(page).toHaveURL(before);
-      // These rows carry no native session (no turn has run), so Open in terminal
-      // is disabled; the row opens nothing and the page stays a list.
+      // These rows carry no native session (no turn has run), so they show Not
+      // started in place of Open in terminal; the row opens nothing and the page
+      // stays a list.
+      await expect(rowOf(titleA).getByText("Not started")).toBeVisible();
       await expect(
         rowOf(titleA).getByRole("button", { name: /^Open in / }),
-      ).toBeDisabled();
+      ).toHaveCount(0);
 
       // The Source pill narrows the list in the server and the address.
       await page.getByRole("button", { name: /^Source/ }).click();

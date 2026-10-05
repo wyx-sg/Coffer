@@ -1,12 +1,12 @@
 ---
 title: coffer secret
-description: "Manage encrypted secrets."
+description: "Secrets: list, store, delete, reveal in the app, import, approvals."
 pageClass: cli-ref
 ---
 
 # coffer secret
 
-Manage encrypted secrets.
+Secrets: list, store, delete, reveal in the app, import, approvals.
 
 ```sh
 coffer secret [OPTIONS] COMMAND [ARGS]...
@@ -20,6 +20,16 @@ coffer secret [OPTIONS] COMMAND [ARGS]...
 | --- | --- |
 | [`secret set`](#secret-set) | Create a secret with `--name "<label>"`, or replace an existing one by ref. |
 | [`secret list`](#secret-list) | List every stored secret and every ref a resource cites. |
+| [`secret reveal`](#secret-reveal) | Show a secret's value to the person, in the Coffer window, after Touch ID. |
+| [`secret backup-key`](#secret-backup-key) | Open the master key backup in the Coffer app; the person checks presence, types the passphrase and picks the folder there. |
+| [`secret import-key`](#secret-import-key) | Open the master key import in the Coffer app; the person picks the backup file, types its passphrase and checks presence there. |
+| [`secret delete`](#secret-delete) | Delete a secret nothing uses any more. |
+| [`secret describe`](#secret-describe) | Label and describe a secret. |
+| [`secret scan`](#secret-scan) | Find plaintext secrets in skills and MCP servers (values are never shown). |
+| [`secret import`](#secret-import) | Move found plaintext secrets into the store. |
+| [`secret local-access`](#secret-local-access) | Hand a standalone secret to programs `coffer run` starts. |
+| [`secret local-access request`](#secret-local-access-request) | Ask to hand a secret to programs coffer run starts; waits for approval. |
+| [`secret local-access revoke`](#secret-local-access-revoke) | Withdraw the grant. |
 
 ## secret set
 
@@ -60,3 +70,177 @@ coffer secret list [OPTIONS]
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
+
+## secret reveal
+
+Show a secret's value to the person, in the Coffer window, after Touch ID.
+
+The value never reaches this command, its output or any log.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret reveal [OPTIONS] REF
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `REF` <span class="cli-chip">参数</span> | text | 必填 | The secret's ref (coffer secret list) |
+| `--timeout` <span class="cli-chip">选项</span> | float | `120.0` | Seconds to wait for the app and the person |
+| `--no-launch` <span class="cli-chip">选项</span> | 开关 |  | Do not start the desktop app |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret backup-key
+
+Open the master key backup in the Coffer app; the person checks presence, types the passphrase and picks the folder there.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret backup-key [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--timeout` <span class="cli-chip">选项</span> | float | `600.0` | Seconds to wait for the person |
+| `--no-launch` <span class="cli-chip">选项</span> | 开关 |  | Do not start the desktop app |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret import-key
+
+Open the master key import in the Coffer app; the person picks the backup file, types its passphrase and checks presence there.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret import-key [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--timeout` <span class="cli-chip">选项</span> | float | `600.0` | Seconds to wait for the person |
+| `--no-launch` <span class="cli-chip">选项</span> | 开关 |  | Do not start the desktop app |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret delete
+
+Delete a secret nothing uses any more.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret delete [OPTIONS] REF
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `REF` <span class="cli-chip">参数</span> | text | 必填 | ref |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret describe
+
+Label and describe a secret. Body: ref, label, description.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret describe [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret scan
+
+Find plaintext secrets in skills and MCP servers (values are never shown).
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret scan [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret import
+
+Move found plaintext secrets into the store. Body: ids, dry_run.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret import [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret local-access
+
+Hand a standalone secret to programs `coffer run` starts.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret local-access [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`request`, `revoke`。
+
+## secret local-access request
+
+Ask to hand a secret to programs coffer run starts; waits for approval. Body: name.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret local-access request [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret local-access revoke
+
+Withdraw the grant. Body: name.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret local-access revoke [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

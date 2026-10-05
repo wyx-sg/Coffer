@@ -86,6 +86,7 @@ def _masked_value_out(v: MaskedValue) -> MaskedValueOut:
         start=v.start,
         end=v.end,
         key=v.key,
+        rule=v.rule,
         shape=ValueShapeOut(
             length=s.length,
             classes=cast(Any, list(s.classes)),
@@ -101,6 +102,7 @@ def plaintext_context_out(c: PlaintextContext) -> PlaintextContextOut:
         path=c.finding.path,
         line=c.finding.line,
         key=c.finding.key,
+        rule=c.finding.rule,
         change=cast(Any, c.change),
         on_remote=c.on_remote,
         lines=[
@@ -117,7 +119,8 @@ def plaintext_context_out(c: PlaintextContext) -> PlaintextContextOut:
 
 def plaintext_out(found: Sequence[PlaintextFinding]) -> list[PlaintextFindingOut]:
     return [
-        PlaintextFindingOut(path=f.path, line=f.line, key=f.key, current=f.current) for f in found
+        PlaintextFindingOut(path=f.path, line=f.line, key=f.key, rule=f.rule, current=f.current)
+        for f in found
     ]
 
 

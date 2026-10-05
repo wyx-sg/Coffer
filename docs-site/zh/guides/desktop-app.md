@@ -19,6 +19,7 @@ Coffer 桌面应用是一个 macOS 应用，它在原生窗口里承载 Coffer �
 - **更新。** 它在启动时以及每六小时检查一次是否有更新的签名版本，你在**设置 › 关于**里选**下载并重启**时安装。见[更新](#update)。
 - **在场校验。** 显示或复制密钥、备份主密钥、导入主密钥、批准一项批准请求，都会先要求 Touch ID 或你的登录密码。浏览器无法做这种校验，所以浏览器标签页在这些地方显示 **Open in Coffer app**。见[在场校验和批准](#presence-checks-and-approvals)。
 - **批准提醒。** 有密钥等着被发往新去处时，应用会发一条通知，并打开一个面板让你处理。
+- **命令行请求的在场校验。** `coffer approval approve`、`coffer secret reveal`、`coffer secret backup-key` 和 `coffer app update …` 会在守护进程那里留下一个请求；应用大约一秒内取走它，运行和自己按钮一样的流程，所以 Touch ID 提示、显示的值和备份口令都留在应用里。命令发现应用没开时会启动它。见[密钥 → 在命令行上](/zh/guides/secrets#on-the-command-line)。
 
 其他一切（在编辑器里打开文件、选择文件夹）都和在浏览器里一样，走守护进程的 HTTP 路由。
 

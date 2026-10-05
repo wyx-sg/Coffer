@@ -43,13 +43,14 @@ class PulledCommitOut(BaseModel):
 
 
 class PlaintextFindingOut(BaseModel):
-    """Where a round found a plaintext secret: the file, the line and the name
-    the value was assigned to (``token`` for one recognised by its shape).
-    Never the value."""
+    """Where a round found a plaintext secret: the file, the line, the name the
+    value was assigned to (else the rule's id) and the rule. Never the value."""
 
     path: str
     line: int
     key: str
+    #: The bundled rule's id; empty for a round recorded before rules were named.
+    rule: str = ""
     #: Whether the file still holds it; ``False``: only an earlier, unpushed
     #: commit does.
     current: bool

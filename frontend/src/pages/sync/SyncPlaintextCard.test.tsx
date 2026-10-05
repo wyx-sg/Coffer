@@ -40,6 +40,7 @@ const CONTEXT: PlaintextContext = {
   path: "knowledge/team/db.md",
   line: 4,
   key: "DB_PASSWORD",
+  rule: "generic-api-key",
   change: "modified",
   on_remote: false,
   lines: [
@@ -52,6 +53,7 @@ const CONTEXT: PlaintextContext = {
           start: 12,
           end: 28,
           key: "DB_PASSWORD",
+          rule: "generic-api-key",
           shape: {
             length: 16,
             classes: ["lower", "digit"],
@@ -77,9 +79,9 @@ const STATUS = makeStatus({
     since: null,
     handoff: null,
     plaintext: [
-      { path: "knowledge/team/db.md", line: 4, key: "DB_PASSWORD", current: true },
-      { path: "resources/mcp/x.json", line: 7, key: "token", current: true },
-      { path: "knowledge/old.md", line: 2, key: "API_KEY", current: false },
+      { path: "knowledge/team/db.md", line: 4, key: "DB_PASSWORD", current: true, rule: "generic-api-key" },
+      { path: "resources/mcp/x.json", line: 7, key: "token", current: true, rule: "stripe-access-token" },
+      { path: "knowledge/old.md", line: 2, key: "API_KEY", current: false, rule: "generic-api-key" },
     ],
   },
 });
@@ -115,6 +117,7 @@ describe("SyncPlaintextCard", () => {
       expect(places).toHaveTextContent("knowledge/team/db.md, line 4");
       expect(places).toHaveTextContent("the value of DB_PASSWORD");
       expect(places).toHaveTextContent("a value shaped like a token");
+      expect(places).toHaveTextContent("stripe-access-token");
       // A value only in an unpushed commit is folded away by the round, not listed.
       expect(places).not.toHaveTextContent("knowledge/old.md");
       expect(within(card).queryByRole("button", { name: /retry/i })).toBeNull();
@@ -149,6 +152,7 @@ describe("SyncPlaintextCard", () => {
     expect(flagged).toHaveTextContent(`DB_PASSWORD=${MASK}`);
     expect(flagged?.querySelector("mark")).toHaveTextContent(MASK);
     expect(context).toHaveTextContent("16 characters: lowercase, digits");
+    expect(within(context).getByTestId("sync-plaintext-rule")).toHaveTextContent("generic-api-key");
     expect(context).toHaveTextContent("contains “example”, often an example or placeholder");
 
     expect(within(card).queryByTestId("sync-plaintext-diff")).toBeNull();

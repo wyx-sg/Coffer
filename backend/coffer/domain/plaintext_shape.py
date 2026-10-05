@@ -68,12 +68,15 @@ class ValueShape:
 @dataclass(frozen=True)
 class MaskedValue:
     """One masked value on a line: where it is (``[start, end)``, in the masked
-    text, which keeps the line's length), the name it is assigned to, and its
-    shape."""
+    text, which keeps the line's length), the name it is assigned to, the rule
+    that found it, and its shape."""
 
     start: int
     end: int
     key: str
+    #: The bundled rule that found it (spec secret "Detect plaintext secrets
+    #: with the bundled rules").
+    rule: str
     shape: ValueShape
 
 
@@ -132,4 +135,22 @@ def mask(value: str, shape: ValueShape) -> str:
     return value[:keep] + MASK_CHAR * (len(value) - keep)
 
 
-__all__ = ["MASK_CHAR", "MaskedValue", "ValueShape", "is_reference", "mask", "shape_of"]
+def split_rows(text: str) -> list[str]:
+    """The lines of ``text`` as a person reads them: split on ``\\n`` (the
+    detector's line numbers), a trailing ``\\r`` and the empty last line of a
+    final newline dropped."""
+    rows = [row.removesuffix("\r") for row in text.split("\n")]
+    if rows and rows[-1] == "":
+        rows.pop()
+    return rows
+
+
+__all__ = [
+    "MASK_CHAR",
+    "MaskedValue",
+    "ValueShape",
+    "is_reference",
+    "mask",
+    "shape_of",
+    "split_rows",
+]

@@ -5,14 +5,15 @@ Spec mcp-gateway "Serve an HTTP API as a group of custom tools". A group is an
 answers ``tools/list`` from :attr:`HttpApiTransport.tools` and makes each
 tool's HTTP request itself (``infrastructure/mcp/http_api_client.py``).
 
-A group's headers are rows of a name and a value. A value is plain text
-(``headers``) or a stored secret holding the credential alone (``secret_refs``
-maps the slot — the header's name — to the ref, the way the other transports
-cite theirs), sent behind the row's scheme when it has one (``auth_schemes``:
-``Authorization: Bearer <secret>``; ``coffer.domain.auth_scheme``), so
-every mechanism that walks secret refs (the missing-secret probe, the attention
-source, the secret boundary's destinations) covers a group unchanged. A tool
-has no reach of its own; it follows the group's.
+A group keeps one set of tools and one or more environments
+(``http_api_environment``): where the tools are sent, each with its base URL,
+header rows (a plain value, or a stored secret holding the credential alone
+behind an optional scheme), variables, switch and timeout. The group's
+``secret_refs`` is DERIVED from its environments — each environment's slots
+(``<key>:<header>``, the bare header for a lifted group) mapped to their refs
+— so every mechanism that walks secret refs (the missing-secret probe, the
+citation index, the attention sources, delete-time release) covers every
+environment unchanged. A tool has no reach of its own; it follows the group's.
 
 Pure: Pydantic and the standard library only.
 """
@@ -23,45 +24,25 @@ import re
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from coffer.domain.auth_scheme import AuthScheme, check_schemes
-from coffer.domain.mcp.http_api_render import holes_in, template_holes
+from coffer.domain.mcp.http_api_environment import (
+    ENVIRONMENT_ARG,
+    HttpApiEnvironment,
+    env_vars_in,
+    lift_legacy,
+)
+from coffer.domain.mcp.http_api_headers import check_headers
+from coffer.domain.mcp.http_api_render import template_holes
+from coffer.domain.mcp.json_schema_check import InvalidSchema, check_schema
 
 HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
 HTTP_METHODS: tuple[str, ...] = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
 #: A tool's name: what follows ``<group>__`` in the name an agent sees.
 TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
-#: An HTTP header name (RFC 9110 token).
-_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
-
-#: Static values that look like secrets are refused, as on the other transports.
-_SECRET_PATTERNS = (
-    re.compile(r"^Bearer\s+\S"),
-    re.compile(r"^(ghp_|gho_|github_pat_|sk-|xox[abp]-)"),
-    re.compile(r"^eyJ[A-Za-z0-9_-]{20,}"),
-)
-
-
 #: How much of one operation's spec text a tool keeps.
 SOURCE_TEXT_LIMIT = 20_000
-
-
-def _check_headers(values: dict[str, str], *, allow_holes: bool) -> dict[str, str]:
-    for name, value in values.items():
-        if not _HEADER_NAME_RE.match(name):
-            raise ValueError(f"{name!r} is not a valid header name")
-        if "\n" in value or "\r" in value:
-            raise ValueError(f"header {name!r} holds a line break")
-        if not allow_holes and holes_in(value):
-            raise ValueError(f"group header {name!r} may not hold an argument hole")
-        if any(p.search(value) for p in _SECRET_PATTERNS):
-            raise ValueError(
-                f"static value for header {name!r} looks like a secret; bind a stored "
-                "secret to the group's auth header instead"
-            )
-    return values
 
 
 def default_changes_data(method: str) -> bool:
@@ -118,7 +99,7 @@ class HttpApiTool(BaseModel):
     @field_validator("headers")
     @classmethod
     def _headers(cls, v: dict[str, str]) -> dict[str, str]:
-        return _check_headers(v, allow_holes=True)
+        return check_headers(v, allow_holes=True)
 
     @field_validator("input_schema")
     @classmethod
@@ -131,7 +112,16 @@ class HttpApiTool(BaseModel):
         required = v.get("required", [])
         if not isinstance(required, list) or any(r not in props for r in required):
             raise ValueError("every required argument must be declared in properties")
-        return {**v, "type": "object", "properties": props}
+        if ENVIRONMENT_ARG in props:
+            raise ValueError(
+                f"{ENVIRONMENT_ARG!r} is reserved: Coffer adds it to choose the environment"
+            )
+        out = {**v, "type": "object", "properties": props}
+        try:
+            check_schema(out)
+        except InvalidSchema as e:
+            raise ValueError(f"the argument schema is not valid JSON Schema: {e}") from e
+        return out
 
     @model_validator(mode="after")
     def _holes_are_declared(self) -> HttpApiTool:
@@ -152,6 +142,16 @@ class HttpApiTool(BaseModel):
         return self.changes_data
 
     @property
+    def env_vars(self) -> set[str]:
+        """Every ``{env:NAME}`` the tool's request names."""
+        names = env_vars_in(self.path)
+        for value in self.headers.values():
+            names |= env_vars_in(value)
+        if self.body_template:
+            names |= env_vars_in(self.body_template)
+        return names
+
+    @property
     def request_label(self) -> str:
         return f"{self.method} {self.path}"
 
@@ -169,41 +169,22 @@ class OpenApiSource(BaseModel):
 
 
 class HttpApiTransport(BaseModel):
-    """A custom-tool group: one base URL, one auth, many requests."""
+    """A custom-tool group: one set of tools, sent to one of its environments."""
 
     type: Literal["http_api"] = "http_api"
-    base_url: HttpUrl
-    #: Plain header values.
-    headers: dict[str, str] = Field(default_factory=dict)
-    #: ``{header name: ref}`` — headers whose credential is a stored secret.
-    secret_refs: dict[str, str] = Field(default_factory=dict)
-    #: ``{header name: scheme}`` — a secret header sent as ``<scheme> <secret>``.
-    auth_schemes: dict[str, AuthScheme] = Field(default_factory=dict)
+    environments: list[HttpApiEnvironment] = Field(min_length=1)
+    #: The group's timeout; an environment may set its own.
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     source: OpenApiSource | None = None
     tools: list[HttpApiTool] = Field(default_factory=list)
+    #: Derived from the environments on every validation: ``{slot: ref}``.
+    secret_refs: dict[str, str] = Field(default_factory=dict)
 
-    @field_validator("base_url")
+    @model_validator(mode="before")
     @classmethod
-    def _scheme(cls, v: HttpUrl) -> HttpUrl:
-        if v.scheme not in ("http", "https"):
-            raise ValueError("the base URL must be http or https")
-        if v.query or v.fragment:
-            raise ValueError("the base URL may not carry a query or a fragment")
-        return v
-
-    @field_validator("headers")
-    @classmethod
-    def _headers(cls, v: dict[str, str]) -> dict[str, str]:
-        return _check_headers(v, allow_holes=False)
-
-    @field_validator("secret_refs")
-    @classmethod
-    def _secret_header_names(cls, v: dict[str, str]) -> dict[str, str]:
-        for name in v:
-            if not _HEADER_NAME_RE.match(name):
-                raise ValueError(f"{name!r} is not a valid header name")
-        return v
+    def _lift(cls, data: Any) -> Any:
+        """A group stored before environments reads as one ``default``."""
+        return lift_legacy(data) if isinstance(data, dict) else data
 
     @model_validator(mode="after")
     def _consistent(self) -> HttpApiTransport:
@@ -211,25 +192,45 @@ class HttpApiTransport(BaseModel):
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
             raise ValueError("tool names must be unique in a group: " + ", ".join(dupes))
-        seen = [n.lower() for n in (*self.headers, *self.secret_refs)]
-        if len(seen) != len(set(seen)):
-            raise ValueError("a header may appear once in a group")
-        check_schemes(self.auth_schemes, self.secret_refs)
+        env_names = [e.name.lower() for e in self.environments]
+        if len(env_names) != len(set(env_names)):
+            raise ValueError("environment names must be unique in a group")
+        keys = [e.key for e in self.environments]
+        if len(keys) != len(set(keys)):
+            raise ValueError("environment keys must be unique in a group")
+        for tool in self.tools:
+            for env in self.environments:
+                missing = sorted(tool.env_vars - set(env.variables))
+                if env.enabled and missing:
+                    raise ValueError(
+                        f"tool {tool.name!r} uses variable(s) {', '.join(missing)} that "
+                        f"environment {env.name!r} does not define"
+                    )
+        self.secret_refs = {
+            slot: ref for env in self.environments for slot, ref in env.slot_refs().items()
+        }
         return self
 
     def tool(self, name: str) -> HttpApiTool | None:
         return next((t for t in self.tools if t.name == name), None)
 
+    def environment(self, name: str) -> HttpApiEnvironment | None:
+        return next((e for e in self.environments if e.name == name), None)
 
-def http_api_target(transport: HttpApiTransport) -> str:
-    """What receives a group's secret, for the secret boundary: its base URL."""
-    return f"http_api {transport.base_url}"
+    def timeout_for(self, env: HttpApiEnvironment) -> int:
+        return env.timeout_seconds or self.timeout_seconds
+
+
+def http_api_target(env: HttpApiEnvironment) -> str:
+    """What receives an environment's secret, for the secret boundary: its base URL."""
+    return f"http_api {env.base_url}"
 
 
 __all__ = [
     "HTTP_METHODS",
     "SOURCE_TEXT_LIMIT",
     "TOOL_NAME_RE",
+    "HttpApiEnvironment",
     "HttpApiTool",
     "HttpApiTransport",
     "HttpMethod",

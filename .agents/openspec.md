@@ -259,7 +259,7 @@ What follows is the procedure, recovered from that audit.
   subject read both ways.
 - **"It governs how other specs deliver."** The rule belongs in this file. Where
   such a rule needs a test, the assertion may live as a requirement in the one
-  spec whose scope is already cross-kind — the minimal-CLI rule is stated
+  spec whose scope is already cross-kind — the CLI-parity rule is stated
   below and made testable as a requirement of `resource-framework` — but it is stated
   once, in prose here, and tested once, there. Duplicating the prose into the
   spec would make this file advisory.
@@ -282,42 +282,53 @@ What follows is the procedure, recovered from that audit.
 
 ## End-to-End Deliverable Rule
 
-Every feature, on completion, must deliver a usable end-to-end product: backend persistence + the surfaces that expose it (web UI, REST, MCP / `coffer-mcp-shim`, and a CLI command only where the rule below allows one) — all wired so the user can really operate the feature.
+Every feature, on completion, must deliver a usable end-to-end product: backend persistence + the surfaces that expose it (web UI, REST, MCP / `coffer-mcp-shim`, and the `coffer` command for each operation, per the rule below) — all wired so the user can really operate the feature.
 
 A capability is "shipped" only when the end-to-end deliverable works AND every requirement's scenarios have at least one covering test.
 
-**The command line carries only what needs it.** The web UI is where Coffer is
-managed, and its REST routes are that UI's own interface, so a mutation or a
-read of state that is not a file owes no `coffer` command: a web UI operation
-owes no CLI counterpart, and a spec does not ship one for completeness. A
-command exists only for one of four reasons:
+**Every management operation has a command.** Whatever a person can do on a
+web UI page or in the desktop app, an agent can do with a `coffer` command:
+creating, reading, changing and deleting resources, switching them on and off,
+reach, connecting agents, providers, MCP servers, custom tools, channels,
+managed CLIs, skills, knowledge and memory management, secrets and approvals,
+activity, sync and settings. A spec that adds a UI operation ships its command
+in the same change. The command calls the same REST route the page calls, so
+validation, audit and lifecycle are the daemon's whoever acts; it never
+reimplements a route or reaches the vault's internal YAML, `runs.db` or secret
+ciphertext as files. A step that needs a person's presence (approving,
+revealing, writing a key backup) is handed to the desktop app's own presence
+check; no flag skips it, and no sensitive value is printed. See ADR
+[`command-line-parity-with-the-web-ui`](../docs/decisions/command-line-parity-with-the-web-ui.md),
+which replaces the earlier "the command line carries only what needs it" rule.
 
-- **program** — a program Coffer installs or writes runs it (the memory hook
-  entry point, an agent's key helper);
-- **offline** — it must work when the daemon is down or cannot start;
-- **hand-off** — a prompt Coffer gives an agent tells it to run the command,
-  because what it reads or writes is not a file;
-- **no-ui** — the web UI cannot do it.
+Exempt are only plain file contents a spec declares directly readable or
+editable (knowledge documents, memory notes, a skill's files, agents' own
+config and native-memory files), which the agent or person reads and edits with
+their own tools, and acts that are the window itself (a folder picker, opening
+a file in an editor). Registering, binding, reach, delivery and history restore
+stay commands even where what they manage is a file. A command that stands for
+no UI operation still needs a recorded reason: **program** (a program Coffer
+installs runs it), **offline** (it works while the daemon is down), **hand-off**
+(a prompt Coffer gives an agent names it) or **no-ui**.
 
-Plain files are not a reason: where the owning spec declares a file directly
-readable or editable (knowledge documents, memory notes, skill master folders,
-agents' own config and native-memory files), the agent or person reads and
-edits it with their own tools at the path the web UI, the spec or the hand-off
-prompt names. This is policy over every spec rather than a promise of any one
-of them, which is why the rule is stated here: written into a single spec's
-prose it would read as that spec's private promise, and the next spec would
-quietly ship a command for each page.
+Every command shares one contract: `--json`, a body from `--data '<json>'`,
+`@file` or `-`, `--set key=value`, the daemon's error codes unchanged and the
+shared exit codes ([Error codes](../docs-site/reference/error-codes.md#cli-exit-codes)).
+An operation that runs on after its request returns has a status command and a
+way to wait.
 
-Each command is recorded with its reason in one place in the CLI package. The
-**test** for it lives in
-[`resource-framework`](../openspec/specs/resource-framework/spec.md) as "Keep
-the command line to what needs it", with the acceptance scenarios "command line
-covers every visual operation", "every command has a recorded reason", "a
-command missing from the list fails the test", "file-backed reads are answered
-by coffer path" and "a kept command surfaces the daemon's errors": it walks the live
-command tree and asserts it equals the recorded list in both directions, and
-that every group's `--help` renders. That is not a second statement of the rule
-— the assertion runs over the whole command tree across every spec, so it has
-no narrower home, and `resource-framework` is the only spec whose scope is
-already cross-kind. Stated once here, tested once there: change the policy and
-you change this paragraph *and* that requirement, never one of them.
+This is policy over every spec rather than a promise of any one of them, which
+is why it is stated here. Each command is recorded in one registry in the CLI
+package (`coffer.surfaces.cli.registry`) with the UI operation and route(s) it
+stands for, or in `command_reasons.py` with its reason. The **test** lives in
+[`resource-framework`](../openspec/specs/resource-framework/spec.md) as "Offer
+every management operation on the command line": it compares the registry with
+every route the web UI calls and every desktop shell command, runs each
+declared command against a recording transport, walks the live command tree and
+checks every group's `--help`; `scripts/cli_coverage.py --check` (in `make
+lint`) also keeps the generated table at
+[`/reference/cli-coverage`](../docs-site/reference/cli-coverage.md) current.
+That is not a second statement of the rule — the assertion runs over the whole
+command tree across every spec, so it has no narrower home. Stated once here,
+tested once there: change the policy and you change this paragraph *and* that
+requirement, never one of them.

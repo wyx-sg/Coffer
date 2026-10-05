@@ -17,12 +17,10 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
-use crate::daemon_attest;
-use crate::daemon_http::{self, DEFAULT_READ_TIMEOUT};
-use crate::discovery::read_daemon_info;
-use crate::master_key;
+use crate::daemon_client::Daemon;
 use crate::presence::{self, Subject};
-use crate::presence_grant::{self, GrantOp};
+use crate::presence_flows;
+use crate::presence_grant::GrantOp;
 
 /// The folder picker waits on a person choosing a folder in a native dialog.
 const PICK_FOLDER_TIMEOUT: Duration = Duration::from_secs(600);
@@ -45,24 +43,7 @@ pub async fn reveal_secret(app: AppHandle, secret_ref: String) -> Result<String,
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
-        presence::confirm(
-            &app,
-            &Subject::Reveal {
-                secret_ref: &secret_ref,
-            },
-            development,
-        )?;
-        let (nonce, signature) = daemon.grant(GrantOp::Reveal, &secret_ref)?;
-        let answer = daemon.post(
-            "/api/v1/secrets/presence/reveal",
-            &json!({"ref": secret_ref, "nonce": nonce, "signature": signature}),
-            DEFAULT_READ_TIMEOUT,
-        )?;
-        answer
-            .get("value")
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-            .ok_or_else(|| "the daemon's answer carried no value".to_owned())
+        presence_flows::reveal(&app, &daemon, development, &secret_ref)
     })
     .await
 }
@@ -121,29 +102,14 @@ pub async fn export_master_key_backup(
 
 /// Approve a pending request (a secret about to go somewhere new). The prompt
 /// carries the daemon's own description of the request, so the person reads
-/// what is being approved in the operating system's dialog.
+/// what is being approved in the operating system's dialog; the grant is pinned
+/// to the target that description names.
 #[tauri::command]
 pub async fn approve_pending(app: AppHandle, approval_id: String) -> Result<Value, String> {
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
-        let path = format!("/api/v1/secrets/approvals/{}", path_segment(&approval_id)?);
-        let approval = daemon.get(&path)?;
-        let description = approval
-            .get("description")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let subject = Subject::Approve {
-            id: &approval_id,
-            description,
-        };
-        presence::confirm(&app, &subject, development)?;
-        let (nonce, signature) = daemon.grant(GrantOp::Approve, &approval_id)?;
-        daemon.post(
-            &format!("{path}/approve"),
-            &json!({"nonce": nonce, "signature": signature}),
-            DEFAULT_READ_TIMEOUT,
-        )
+        presence_flows::approve_one(&app, &daemon, development, &approval_id, None)
     })
     .await
 }
@@ -165,56 +131,9 @@ pub async fn approve_pending_batch(
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
-        let mut items: Vec<(String, String)> = Vec::new();
-        let mut descriptions: Vec<String> = Vec::new();
-        for id in &approval_ids {
-            let approval =
-                daemon.get(&format!("/api/v1/secrets/approvals/{}", path_segment(id)?))?;
-            if !is_batchable(&approval) {
-                continue;
-            }
-            let text = |name: &str| {
-                approval
-                    .get(name)
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned()
-            };
-            items.push((id.clone(), text("target_fingerprint")));
-            descriptions.push(text("description"));
-        }
-        if items.is_empty() {
-            return Err("nothing in the selection is still waiting for approval".to_owned());
-        }
-        presence::confirm(
-            &app,
-            &Subject::ApproveBatch {
-                descriptions: &descriptions,
-            },
-            development,
-        )?;
-        let target = presence_grant::batch_target(&items);
-        let (nonce, signature) = daemon.grant(GrantOp::ApproveBatch, &target)?;
-        let listed: Vec<Value> = items
-            .iter()
-            .map(|(id, fingerprint)| json!({"id": id, "fingerprint": fingerprint}))
-            .collect();
-        daemon.post(
-            "/api/v1/secrets/approvals/approve",
-            &json!({"items": listed, "nonce": nonce, "signature": signature}),
-            DEFAULT_READ_TIMEOUT,
-        )
+        presence_flows::approve_batch(&app, &daemon, development, &approval_ids, None)
     })
     .await
-}
-
-/// Whether an approval read from the daemon can be one of several: it waits,
-/// it is not the switch that turns the protection off, and it is not a grant to
-/// local programs (which an agent can start, so each takes its own prompt).
-fn is_batchable(approval: &Value) -> bool {
-    approval.get("status").and_then(Value::as_str) == Some("pending")
-        && approval.get("op").and_then(Value::as_str) != Some("disable_protection")
-        && approval.get("destination_kind").and_then(Value::as_str) != Some("local_process")
 }
 
 /// Run blocking work on Tauri's blocking pool.
@@ -226,87 +145,6 @@ where
     tauri::async_runtime::spawn_blocking(work)
         .await
         .map_err(|e| format!("the operation stopped unexpectedly: {e}"))?
-}
-
-/// The running daemon, as `daemon.json` names it.
-pub(crate) struct Daemon {
-    port: u16,
-    token: String,
-}
-
-impl Daemon {
-    pub(crate) fn find() -> Result<Daemon, String> {
-        let (port, token) = read_daemon_info().ok_or("Coffer's daemon is not running")?;
-        // Before anything is sent: `daemon.json` can be written by any process
-        // of this user, so the daemon it names must first prove it holds the key.
-        daemon_attest::verify_daemon(port, &token)?;
-        Ok(Daemon { port, token })
-    }
-
-    fn get(&self, path: &str) -> Result<Value, String> {
-        daemon_http::json_or_error(daemon_http::get(
-            self.port,
-            &self.token,
-            path,
-            DEFAULT_READ_TIMEOUT,
-        )?)
-    }
-
-    pub(crate) fn post(
-        &self,
-        path: &str,
-        body: &Value,
-        timeout: Duration,
-    ) -> Result<Value, String> {
-        daemon_http::json_or_error(daemon_http::post_json(
-            self.port,
-            &self.token,
-            path,
-            body,
-            timeout,
-        )?)
-    }
-
-    /// The daemon's own report of whether its key is in the development file.
-    pub(crate) fn development(&self) -> Result<bool, String> {
-        let status = self.get("/api/v1/secrets/presence/status")?;
-        Ok(status
-            .get("development")
-            .and_then(Value::as_bool)
-            .unwrap_or(true))
-    }
-
-    /// Ask for a nonce and sign `(op, target, nonce)`. The key is read here,
-    /// after the presence check, and dropped before this returns.
-    pub(crate) fn grant(&self, op: GrantOp, target: &str) -> Result<(String, String), String> {
-        let challenge = self.post(
-            "/api/v1/secrets/presence/challenge",
-            &json!({"op": op.as_str(), "target": target}),
-            DEFAULT_READ_TIMEOUT,
-        )?;
-        let nonce = challenge_nonce(&challenge, op, target)?;
-        let key = master_key::read()?;
-        let signature = presence_grant::sign(&key, op, target, &nonce);
-        drop(key);
-        Ok((nonce, signature))
-    }
-}
-
-/// The nonce from a challenge — but only if the daemon echoed back the very
-/// operation and target the person approved. A challenge for anything else is
-/// refused rather than signed.
-fn challenge_nonce(challenge: &Value, op: GrantOp, target: &str) -> Result<String, String> {
-    let echoed_op = challenge.get("op").and_then(Value::as_str);
-    let echoed_target = challenge.get("target").and_then(Value::as_str);
-    if echoed_op != Some(op.as_str()) || echoed_target != Some(target) {
-        return Err("the daemon issued a challenge for a different operation".to_owned());
-    }
-    challenge
-        .get("nonce")
-        .and_then(Value::as_str)
-        .filter(|n| !n.is_empty())
-        .map(str::to_owned)
-        .ok_or_else(|| "the daemon's challenge carried no nonce".to_owned())
 }
 
 /// The folder from a pick-folder answer: `cancelled` when the person closed
@@ -321,37 +159,9 @@ fn picked_folder(answer: &Value) -> Result<String, String> {
     }
 }
 
-/// An approval id as one path segment. Ids are hex from the daemon; anything
-/// that could step outside `/approvals/{id}` is refused rather than escaped.
-fn path_segment(id: &str) -> Result<&str, String> {
-    if !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    {
-        Ok(id)
-    } else {
-        Err(format!("not an approval id: {id:?}"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_challenge_is_signed_only_for_the_operation_the_person_approved() {
-        let good =
-            json!({"nonce": "n1", "op": "reveal", "target": "gh/token", "expires_in_seconds": 120});
-        assert_eq!(
-            challenge_nonce(&good, GrantOp::Reveal, "gh/token").unwrap(),
-            "n1"
-        );
-        assert!(challenge_nonce(&good, GrantOp::Reveal, "gh/other").is_err());
-        assert!(challenge_nonce(&good, GrantOp::Approve, "gh/token").is_err());
-        let no_nonce = json!({"op": "reveal", "target": "gh/token"});
-        assert!(challenge_nonce(&no_nonce, GrantOp::Reveal, "gh/token").is_err());
-    }
 
     #[test]
     fn a_closed_picker_is_cancelled_and_a_missing_one_says_so() {
@@ -361,28 +171,5 @@ mod tests {
         assert_eq!(picked_folder(&closed).unwrap_err(), "cancelled");
         let headless = json!({"available": false, "path": null});
         assert_ne!(picked_folder(&headless).unwrap_err(), "cancelled");
-    }
-
-    #[test]
-    fn only_a_waiting_approval_that_is_not_the_protection_switch_is_batchable() {
-        let a = |status: &str, op: &str| json!({"status": status, "op": op});
-        assert!(is_batchable(&a("pending", "bind")));
-        assert!(is_batchable(&a("pending", "replace_value")));
-        assert!(!is_batchable(&a("pending", "disable_protection")));
-        let local = json!({"status": "pending", "op": "bind", "destination_kind": "local_process"});
-        assert!(!is_batchable(&local));
-        assert!(!is_batchable(&a("superseded", "bind")));
-        assert!(!is_batchable(&json!({})));
-    }
-
-    #[test]
-    fn an_approval_id_cannot_leave_its_path_segment() {
-        assert_eq!(
-            path_segment("0123456789abcdef").unwrap(),
-            "0123456789abcdef"
-        );
-        for bad in ["", "../presence/reveal", "a/b", "a?b", "a b"] {
-            assert!(path_segment(bad).is_err(), "{bad}");
-        }
     }
 }

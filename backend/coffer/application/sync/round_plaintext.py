@@ -3,7 +3,8 @@
 A push publishes more than the files as they are now: it publishes every
 file version in every commit the remote lacks. So the check reads each blob
 reachable from the commit being pushed and not from the remote's head, with
-the detection the Secrets page's scan uses, and skips what is not plaintext:
+the detector the Secrets page's scan uses (spec secret "Detect plaintext secrets
+with the bundled rules"), and skips what is not plaintext:
 an encrypted ``secret/<ref>.enc`` file, a binary file, and a blob the person
 already said to push anyway.
 
@@ -76,8 +77,10 @@ def findings(d: RoundDeps, tip: str | None, final: str) -> tuple[PlaintextFindin
         text = _text(data.get(blob))
         if text is None:
             continue
-        for line, key in d.find_plaintext(text):
-            out.append(PlaintextFinding(path, line, key, blob, current=now.get(path) == blob))
+        for line, key, rule in d.find_plaintext(text, path):
+            out.append(
+                PlaintextFinding(path, line, key, blob, current=now.get(path) == blob, rule=rule)
+            )
     return tuple(sorted(out, key=lambda f: (not f.current, f.path, f.line)))
 
 

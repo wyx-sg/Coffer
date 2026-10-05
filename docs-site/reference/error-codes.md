@@ -76,11 +76,13 @@ give the status each code is actually sent with.
 | `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key, or a `.cfk` backup's fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | A key backup was asked for with a passphrase under eight characters. Nothing was written. | Choose a longer passphrase. |
-| `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it in **Settings › Security** (**Review**). Also returned by `coffer run` for a standalone secret nobody has allowed it to use; see [Secrets → Allow `coffer run` to use it](/guides/secrets#allow-coffer-run-to-use-it). |
+| `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Run `coffer approval approve <id>` and confirm in the Coffer desktop app (or approve it there directly), or reject it with `coffer approval reject <id>` or in **Settings › Security** (**Review**). A custom tool's call answers it in band, naming the approval ids and the same command, for the environment that waits only. Also returned by `coffer run` for a standalone secret nobody has allowed it to use; see [Secrets → Allow `coffer run` to use it](/guides/secrets#allow-coffer-run-to-use-it). |
 | `SECRET_BINDING_REJECTED` | 409 | A person refused this secret for this destination and target, and nothing waits. Nothing was sent. `details.approval_ids` names the refused approvals. | Change the destination to put the question afresh (for `coffer run`, ask again with **Allow `coffer run`…** on the secret). See [Secrets → Approvals](/guides/secrets#approvals). |
-| `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them in **Settings › Security** (**Review**). |
+| `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them with `coffer approval list` or in **Settings › Security** (**Review**). |
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup, key import or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
+| `APPROVAL_TARGET_CHANGED` | 409 | The approval now names another target than the one the person was shown: its destination moved between the presence prompt and the approve request. Nothing was approved; the grant was pinned to the old target. | Review the approval again (`coffer approval show <id>`) and approve it afresh if you recognise the new target. |
+| `DESKTOP_REQUEST_NOT_FOUND` | 404 | No desktop request has that id: a command line request to the desktop app (approve, reveal, key backup, update) that never existed or has expired (requests last two minutes). | Run the command again; keep the desktop app open while it waits. |
 | `SECRET_NAME_INVALID` | 422 | A new standalone secret's ref is not `secret/<32 hex>`, or its label is over 64 characters or its description over 200. | Mint the secret with `coffer secret set --name "Orders DB"` and let Coffer choose the id; shorten the label or description. |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<id>` values can be resolved this way; a resource's secret never can. | Check the id with `coffer secret list`, or mint the secret with `coffer secret set --name "<name>"`. |
 
@@ -104,6 +106,13 @@ give the status each code is actually sent with.
 | `OPENAPI_UNREACHABLE` | 502 | The OpenAPI URL did not answer: its host name does not resolve, the connection was refused, or it timed out. `details.reason` is `dns`, `refused`, `timeout` or `unreachable`, and `details.handoff.prompt` is a prompt for your agent. | Check the URL, your network, VPN or proxy, or import the spec as a file. |
 | `NOT_IMPORTED_FROM_OPENAPI` | 409 | Re-import was asked of a group whose tools were all added by hand. | Nothing to re-import; add tools by hand. |
 | `OPENAPI_FILE_NEEDED` | 422 | The group was imported from a file, and re-import needs that file again. | Re-import from the group's page and give the file. |
+| `CUSTOM_TOOL_ARGUMENTS_INVALID` | 422 | The call's arguments break the tool's JSON Schema. `details.errors` lists every failure as `{path, keyword, message}`. Nothing was sent upstream. On MCP the same list is an in-band tool error. | Fix each argument named; see [Custom tools → Arguments are checked before any request](/guides/custom-tools#arguments-are-checked-before-any-request). |
+| `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | The group has more than one enabled environment and the call named none. `details.environments` lists the enabled ones. Nothing was sent. | Pass `coffer_environment` (on the command line, `--env`). See [Custom tools → Choosing the environment of a call](/guides/custom-tools#choosing-the-environment-of-a-call). |
+| `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | The call named an environment the group does not have. `details.environments` lists the enabled ones. Nothing was sent. | Use one of the names listed, exactly as `coffer custom-tool env list` prints it. |
+| `CUSTOM_TOOL_ENVIRONMENT_DISABLED` | 422 | The call named an environment that is switched off. Nothing was sent. | Switch it on (`coffer custom-tool env enable`, or its switch under **Environments**), or call another. |
+| `CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND` | 404 | A management request named an environment the group does not have. | List them with `coffer custom-tool env list` or on the group's page. |
+| `CUSTOM_TOOL_ENVIRONMENT_EXISTS` | 409 | The group already has an environment of that name. | Pick another name, or change the existing environment. |
+| `CUSTOM_TOOL_LAST_ENVIRONMENT` | 409 | Deleting the environment would leave the group with none. | Add another environment first, or delete the group. |
 
 ## Required CLIs
 
@@ -305,12 +314,16 @@ Calls through `/mcp` answer with JSON-RPC errors, not the envelope above.
 | `-32603` | Any other failure. A Coffer error carries its message; anything else is reported as `internal error: <ExceptionClass>` so no upstream content leaks. |
 
 A built-in tool that fails returns an in-band result with `isError: true` instead; see
-[MCP tools](/reference/mcp-tools#how-built-in-tools-answer).
+[MCP tools](/reference/mcp-tools#how-built-in-tools-answer). So does a custom tool refused before any
+request: its text starts with the code (`CUSTOM_TOOL_ARGUMENTS_INVALID` with one line per field,
+`CUSTOM_TOOL_ENVIRONMENT_*`, `SECRET_MISSING`, or `SECRET_BINDING_PENDING` with the approval ids and
+`next: coffer approval approve <id>`).
 
 ## CLI exit codes
 
 Every `coffer` command exits with one of these codes. HTTP errors from the daemon are
-mapped by status.
+mapped by status, and the daemon's error code passes through unchanged. With `--json`, a failure
+is printed on standard error as `{"error": {"code", "message", "details"}, "exit_code"}`.
 
 | Exit code | Name | When |
 | --- | --- | --- |
@@ -320,11 +333,25 @@ mapped by status.
 | `3` | Daemon unreachable | The daemon could not be started or stopped answering; the CLI suggests checking `~/.coffer/logs/daemon.log`. |
 | `4` | Not found | The daemon answered `404`. |
 | `5` | Conflict | The daemon answered `409`. |
-| `6` | Invalid input | The daemon answered `400` or `422`. |
-| `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server. |
-| `8` | Secret issue | The error code was `SECRET_MISSING` or `SECRET_LOCKED`. |
-| `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, then run the command again. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `6` | Invalid input | The daemon answered `400` or `422`, or the command's own input did not parse (`CLI_INVALID_INPUT`). A custom-tool test whose arguments break the schema exits here, with one error per field. |
+| `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server, or a custom-tool test (`coffer custom-tool tool test`, `test-draft`, `test-unsaved`) reached an API that failed or answered with an error status. |
+| `8` | Secret issue | The error code was `SECRET_MISSING`, `SECRET_LOCKED`, `SECRET_UNREADABLE` or `SECRET_BINDING_REJECTED`. |
+| `9` | Waiting for approval | The change was saved but a secret in it waits for a person's approval (`SECRET_BINDING_PENDING`). The command printed the approval ids and `next: coffer approval approve <id>…` (with `--json`, `{"status": "pending_approval", "approval_ids", "next"}`). Do not retry: run that command, which asks the person in the desktop app, or approve it in the app. See [Secrets → On the command line](/guides/secrets#on-the-command-line). |
 | `10` | Waiting for git | The daemon is running but waits for git: none was found, or it is older than 2.40. The command printed why and a prompt for your agent before sending anything. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
+| `11` | Presence not confirmed | A step handed to the desktop app's presence check (`coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key`) was cancelled, failed or timed out, or the daemon refused the grant (`PRESENCE_GRANT_INVALID`). Every approval stays pending. |
+| `12` | Desktop app unavailable | The step needs the desktop app, which is not running and could not be started here (no app, not a Mac, or `--no-launch`): `CLI_APP_UNAVAILABLE`. Nothing was approved. Open the app and run the command again. |
+| `13` | Wait timed out | An operation started with `--wait` had not finished by `--timeout` (`CLI_WAIT_TIMEOUT`). It may still be running; check its status command. |
+
+### Codes the command line sets
+
+Besides the daemon's codes, which pass through unchanged, a command names these failures it decides itself:
+
+| Code | Exit code | Meaning |
+| --- | --- | --- |
+| `CLI_INVALID_INPUT` | `6` | The command's own input is not valid: `--data` or `--args` is not JSON, `@file` cannot be read, `--set` is not `key=value`, or a flag's value is malformed. Nothing was sent. |
+| `CLI_APP_UNAVAILABLE` | `12` | The desktop app is not running and could not be started. |
+| `CLI_WAIT_TIMEOUT` | `13` | `--wait` ran out before the operation finished. |
+| `CLI_DESKTOP_REQUEST_FAILED` | `1` | The desktop app could not carry out an update request (`coffer app update …`). |
 
 Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.
 

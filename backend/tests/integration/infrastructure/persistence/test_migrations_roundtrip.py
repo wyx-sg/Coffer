@@ -32,7 +32,7 @@ from alembic.script import ScriptDirectory
 BASELINE_REVISION = "0146"
 #: The newest revision in the tree. Equal to the baseline until a revision is
 #: stacked on it; bump it with each new revision.
-HEAD_REVISION = "0150"
+HEAD_REVISION = "0151"
 
 _ALEMBIC_INI = (
     pathlib.Path(__file__).resolve().parents[4]

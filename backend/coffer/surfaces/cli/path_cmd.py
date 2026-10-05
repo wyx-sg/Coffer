@@ -3,7 +3,7 @@
 When the daemon will not start, the log files are what is left to read, so this
 names them without a daemon: the log directory and the ``daemon.log`` in it
 (``COFFER_LOG_DIR`` moves both). It creates and changes nothing (spec
-resource-framework "Keep the command line to what needs it"). ``skill-data`` names
+resource-framework "Offer every management operation on the command line"). ``skill-data`` names
 ``~/.coffer/skill-data``, where a skill's scripts keep their logs, operation
 journals and temp files (one ``<skill-name>/`` folder each; never synced, pruned
 by the ``skill_data`` retention policy), so a script finds it without guessing.

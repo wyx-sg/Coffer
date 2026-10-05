@@ -1,22 +1,25 @@
 """Find plaintext secrets in managed skills and MCP servers, and rewrite a skill file.
 
-Spec secret "Move plaintext secrets in managed resources into the store".
+Spec secret "Move plaintext secrets in managed resources into the store",
+detecting with the bundled rules (spec secret "Detect plaintext secrets with
+the bundled rules").
 
-* A **skill** is read as files: the rules of :func:`plaintext_scan.line_hits`
-  (an assignment whose name says secret, a well-known token shape).
+* A **skill** is read as files: :func:`detector.detect` runs over each whole
+  file, so a value that spans lines (a PEM private key) is one finding on the
+  line it starts on, and :func:`rewrite_file` replaces it whole.
 * An **MCP server** is read as config: a stdio ``env`` value, an HTTP
-  ``headers`` value or an HTTP API ``headers`` value is a finding when its
-  key says secret / key / authorization, or its value is a token shape or a
-  ``Bearer``/``Token`` credential. A reference (``coffer://secret/…``), an
-  interpolation (``$VAR``, ``${VAR}``, ``{{…}}``), a placeholder or a value
-  shorter than eight characters is not.
+  ``headers`` value or an HTTP API ``headers`` value is a finding when
+  :func:`detector.detect_setting` names a rule for it. A reference
+  (``coffer://secret/…``), an interpolation, a placeholder or a short value
+  is not.
 
-A finding names where a value is, **never the value**. Its id is a hash of the
-location, so a dry run and the import after it agree.
+A finding names where a value is and which rule found it, **never the value**.
+Its id is a hash of the location, so a dry run and the import after it agree.
 """
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import pathlib
@@ -27,20 +30,8 @@ from typing import Any
 
 from coffer.application.secret.plaintext_move import Finding, Hit
 from coffer.domain.secrets import is_valid_secret_name, secret_uri
-from coffer.infrastructure.secret.plaintext_scan import (
-    MAX_BYTES,
-    PLACEHOLDER,
-    SKILL_SUFFIXES,
-    TOKEN_SHAPES,
-    line_hits,
-)
-
-_SERVER_KEY = re.compile(
-    r"(?i)(password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key"
-    r"|authorization|auth)"
-)
-_CREDENTIAL = re.compile(r"^(Bearer|Token)\s+\S")
-_MIN_LENGTH = 8
+from coffer.infrastructure.secret.detector import Lines, detect, detect_setting
+from coffer.infrastructure.secret.plaintext_scan import MAX_BYTES, SKILL_SUFFIXES
 
 
 def _name(*parts: str) -> str:
@@ -53,31 +44,42 @@ def _finding_id(*parts: object) -> str:
     return hashlib.sha256("\0".join(str(p) for p in parts).encode()).hexdigest()[:16]
 
 
-def _skill_hits(path: pathlib.Path, skill: str) -> list[Hit]:
+def _read(path: pathlib.Path) -> str | None:
+    """The file's text with its line endings kept, so offsets match the bytes."""
     try:
-        text = path.read_text(encoding="utf-8")
+        with open(path, encoding="utf-8", newline="") as f:
+            return f.read()
     except UnicodeDecodeError:
+        return None
+
+
+def _skill_hits(path: pathlib.Path, skill: str, rel: str) -> list[Hit]:
+    text = _read(path)
+    if text is None:
         return []
+    lines = Lines(text)
     hits: list[Hit] = []
-    for n, raw in enumerate(text.splitlines(), start=1):
-        for key, value, start, end in line_hits(raw):
-            if not key:
-                key = f"token-{n}"
-                name = _name(skill, key)
-            else:
-                name = _name(skill, key.lower())
-            finding = Finding(
-                id=_finding_id("skill", path, n, key),
-                source="skill",
-                resource=skill,
-                resource_uid=None,
-                path=str(path),
-                line=n,
-                field=None,
-                key=key,
-                proposed_name=name,
-            )
-            hits.append(Hit(finding, value, start, end))
+    for d in detect(text, rel):
+        n = lines.number(d.start)
+        if d.key:
+            key = d.key
+            name = _name(skill, key.lower())
+        else:
+            key = f"token-{n}"
+            name = _name(skill, key)
+        finding = Finding(
+            id=_finding_id("skill", path, d.start, d.rule),
+            source="skill",
+            resource=skill,
+            resource_uid=None,
+            path=str(path),
+            line=n,
+            field=None,
+            key=key,
+            proposed_name=name,
+            rule=d.rule,
+        )
+        hits.append(Hit(finding, text[d.start : d.end], d.start, d.end))
     return hits
 
 
@@ -102,18 +104,25 @@ def scan_skills(
             or rel.parts[0] in skip
         ):
             continue
-        hits += _skill_hits(path, rel.parts[0])
+        hits += _skill_hits(path, rel.parts[0], rel.as_posix())
         checked += 1
     return hits, checked
 
 
-def _plaintext_value(key: str, value: str) -> bool:
-    v = value.strip()
-    if len(v) < _MIN_LENGTH or v.startswith(("coffer://secret/", "$", "{{")):
-        return False
-    if PLACEHOLDER.match(v):
-        return False
-    return bool(_SERVER_KEY.search(key) or _CREDENTIAL.match(v) or TOKEN_SHAPES.search(v))
+def _buckets(transport: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
+    """``(field, key prefix, values)`` of every static env and header map — a
+    custom-tool group's per environment, keyed by its slot (``<key>:<header>``,
+    the bare header for an environment lifted from before environments)."""
+    out: list[tuple[str, str, dict[str, Any]]] = []
+    for bucket, field in (("env", "env"), ("headers", "header")):
+        values = transport.get(bucket)
+        if isinstance(values, dict):
+            out.append((field, "", values))
+    for env in transport.get("environments") or []:
+        if isinstance(env, dict) and isinstance(env.get("headers"), dict):
+            key = str(env.get("key") or "")
+            out.append(("header", f"{key}:" if key else "", env["headers"]))
+    return out
 
 
 def scan_server(uid: str, name: str, config: dict[str, Any]) -> list[Hit]:
@@ -122,12 +131,13 @@ def scan_server(uid: str, name: str, config: dict[str, Any]) -> list[Hit]:
     if not isinstance(transport, dict):
         return []
     hits: list[Hit] = []
-    for bucket, field in (("env", "env"), ("headers", "header")):
-        values = transport.get(bucket)
-        if not isinstance(values, dict):
-            continue
-        for key, value in values.items():
-            if not isinstance(value, str) or not _plaintext_value(str(key), value):
+    for field, prefix, values in _buckets(transport):
+        for raw_key, value in values.items():
+            key = f"{prefix}{raw_key}"
+            if not isinstance(value, str):
+                continue
+            rule = detect_setting(str(raw_key), value)
+            if rule is None:
                 continue
             finding = Finding(
                 id=_finding_id("mcp_server", uid, field, key),
@@ -139,6 +149,7 @@ def scan_server(uid: str, name: str, config: dict[str, Any]) -> list[Hit]:
                 field=field,
                 key=str(key),
                 proposed_name=None,
+                rule=rule,
             )
             hits.append(Hit(finding, value, config=config))
     return hits
@@ -157,16 +168,16 @@ def scan_servers(servers: Iterable[tuple[str, str, dict[str, Any]]]) -> tuple[li
 def rewrite_file(path: str, hits: list[Hit], names: dict[str, str]) -> None:
     """Replace each moved value with its reference, atomically, keeping the mode."""
     target = pathlib.Path(path)
-    lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
-    for h in sorted(hits, key=lambda h: (h.finding.line or 0, -h.start)):
-        i = (h.finding.line or 1) - 1
-        line = lines[i]
-        lines[i] = line[: h.start] + secret_uri(names[h.finding.id]) + line[h.end :]
+    text = _read(target)
+    if text is None:
+        raise OSError(errno.EILSEQ, "not valid UTF-8")
+    for h in sorted(hits, key=lambda h: -h.start):
+        text = text[: h.start] + secret_uri(names[h.finding.id]) + text[h.end :]
     mode = target.stat().st_mode & 0o777
     fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write("".join(lines))
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
         os.chmod(tmp, mode)
         os.replace(tmp, target)
     except BaseException:

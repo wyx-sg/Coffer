@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from coffer.domain.auth_scheme import AuthScheme
 from coffer.surfaces.http.handoff_schemas import HandoffOut
@@ -105,6 +105,49 @@ class CustomToolHeaderOut(BaseModel):
     secret_state: SecretStateName
 
 
+class CustomToolEnvironmentIn(BaseModel):
+    """One environment as a request writes it (spec mcp-gateway "Keep a
+    custom-tool group's environments in the group")."""
+
+    name: str
+    description: str = ""
+    enabled: bool = True
+    base_url: str
+    headers: list[CustomToolHeaderIn] = Field(default_factory=list)
+    #: Non-sensitive text a tool's template uses as ``{env:NAME}``.
+    variables: dict[str, str] = Field(default_factory=dict)
+    #: ``null`` uses the group's timeout.
+    timeout_seconds: int | None = Field(default=None, ge=1, le=300)
+
+
+class CustomToolEnvironmentPatch(BaseModel):
+    """A partial change to one environment; ``headers`` and ``variables``
+    replace the whole list, and ``timeout_seconds: null`` uses the group's."""
+
+    name: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
+    base_url: str | None = None
+    headers: list[CustomToolHeaderIn] | None = None
+    variables: dict[str, str] | None = None
+    timeout_seconds: int | None = Field(default=None, ge=1, le=300)
+
+
+class CustomToolEnvironmentOut(BaseModel):
+    name: str
+    description: str
+    enabled: bool
+    base_url: str
+    headers: list[CustomToolHeaderOut]
+    variables: dict[str, str]
+    #: The environment's own timeout; ``null`` when it uses the group's.
+    timeout_seconds: int | None
+    #: The worst state of its secret headers; ``none`` with none.
+    secret_state: SecretStateName
+    pending_approvals: list[str]
+    pending_secrets: list[str]
+
+
 class OpenApiSourceIn(BaseModel):
     kind: Literal["url", "file"]
     location: str
@@ -124,19 +167,31 @@ class OpenApiSourceOut(BaseModel):
 
 
 class CustomToolGroupIn(BaseModel):
+    """A new group: its ``environments``, or — for one environment named
+    ``default`` — a ``base_url`` and ``headers``. Send one of the two."""
+
     name: str
     description: str | None = None
-    base_url: str
+    base_url: str | None = None
     headers: list[CustomToolHeaderIn] = Field(default_factory=list)
+    environments: list[CustomToolEnvironmentIn] | None = None
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     #: The group's reach: agent uids (at least one), or ``null`` for every agent.
     agents: list[str] | None = None
     tools: list[CustomToolIn] = Field(default_factory=list)
     source: OpenApiSourceIn | None = None
 
+    @model_validator(mode="after")
+    def _one_way(self) -> CustomToolGroupIn:
+        if (self.base_url is None) == (self.environments is None):
+            raise ValueError("give the group's environments, or one base_url — not both")
+        return self
+
 
 class CustomToolGroupPatch(BaseModel):
-    """A partial change to a group; ``headers`` replaces the whole list."""
+    """A partial change to a group; ``headers`` replaces the whole list.
+    ``base_url`` and ``headers`` change a group with ONE environment; a group
+    with several changes them per environment."""
 
     description: str | None = None
     base_url: str | None = None
@@ -149,8 +204,11 @@ class CustomToolGroupOut(BaseModel):
     name: str
     description: str | None
     enabled: bool
+    #: The first environment's base URL and headers, for a reader that knows
+    #: one environment only; ``environments`` holds them all.
     base_url: str
     headers: list[CustomToolHeaderOut]
+    environments: list[CustomToolEnvironmentOut]
     timeout_seconds: int
     #: The group's reach as agent uids; ``null`` is every agent.
     scope: list[str] | None
@@ -182,6 +240,15 @@ class CustomToolGroupListOut(BaseModel):
 class CustomToolTestIn(BaseModel):
     tool: CustomToolIn
     arguments: dict[str, Any] = Field(default_factory=dict)
+    #: Which environment to run it in; may be left out when one is switched on.
+    environment: str | None = None
+
+
+class CustomToolSavedTestIn(BaseModel):
+    """A saved tool run once in one environment."""
+
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    environment: str | None = None
 
 
 class CustomToolUnsavedTestIn(BaseModel):
@@ -194,6 +261,8 @@ class CustomToolUnsavedTestIn(BaseModel):
     base_url: str
     headers: list[CustomToolHeaderIn] = Field(default_factory=list)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
+    #: The draft environment's variables, for ``{env:NAME}`` in the tool.
+    variables: dict[str, str] = Field(default_factory=dict)
     tool: CustomToolIn
     arguments: dict[str, Any] = Field(default_factory=dict)
 
@@ -213,6 +282,8 @@ class CustomToolTestOut(BaseModel):
     #: A test that could not connect or timed out: the prompt that hands the
     #: network problem to an agent. ``null`` for anything else.
     handoff: HandoffOut | None = None
+    #: The environment the request was made in (``null`` for an unsaved group).
+    environment: str | None = None
 
 
 class OpenApiReadIn(BaseModel):

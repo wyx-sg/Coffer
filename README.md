@@ -10,13 +10,14 @@
 
 > A local-first vault for your AI coding agents. Set up MCP servers, skills, knowledge, memory and model providers once, and every agent on your machine shares them.
 
-Coffer is one daemon on your machine that your coding agents connect to (today Claude Code and Codex). It keeps what they share in plain files under `~/.coffer` and delivers it into each agent. You manage it from a web UI, a macOS desktop app, or a chat channel on your phone. No account, no cloud backend: the daemon listens on `127.0.0.1` only.
+Coffer is one daemon on your machine that your coding agents connect to (today Claude Code and Codex). It keeps what they share in plain files under `~/.coffer` and delivers it into each agent. You manage it from a web UI, a macOS desktop app, a chat channel on your phone, or the `coffer` command line, where every operation the web UI offers has a command, so your agents can manage it too. No account, no cloud backend: the daemon listens on `127.0.0.1` only.
 
 📖 **Documentation:** <https://wyx-sg.github.io/Coffer/> ([中文](https://wyx-sg.github.io/Coffer/zh/))
 
 ## What it does
 
 - **One MCP endpoint** for every agent, with per-agent reach and a call log.
+- **Custom tools** that turn an HTTP API into MCP tools, one set of tools across test and live environments, with every argument checked before a request goes out.
 - **One skill library**, linked into each agent and kept up to date.
 - **Knowledge and memory** as plain files every agent reads.
 - **Model providers** behind a local proxy that holds the keys and meters usage.

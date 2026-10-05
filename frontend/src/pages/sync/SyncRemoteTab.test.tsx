@@ -6,13 +6,25 @@
 // never a value); "Only when I press Sync now" is how a remote pauses; turning
 // secrets on asks first; Stop syncing runs at once and its toast offers Undo.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import type { SyncRemote, SyncStatus } from "@/lib/api/sync";
 import { SyncRemoteTab } from "./SyncRemoteTab";
 import { idleMutation, makeStatus } from "./syncTestKit";
+import type { FormState } from "./syncRemoteForm";
+
+/** The secret field's dialogs read the query cache. */
+const render = (ui: React.ReactElement) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrap = (node: React.ReactElement) => (
+    <QueryClientProvider client={qc}>{node}</QueryClientProvider>
+  );
+  const out = rtlRender(wrap(ui));
+  return { ...out, rerender: (next: React.ReactElement) => out.rerender(wrap(next)) };
+};
 
 vi.mock("@/lib/hooks/useSync", () => ({
   useSaveSyncRemote: vi.fn(),
@@ -22,7 +34,17 @@ vi.mock("@/lib/hooks/useSync", () => ({
 }));
 const toast = { info: vi.fn(), error: vi.fn(), success: vi.fn() };
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast }) }));
-vi.mock("@/lib/hooks/useSecrets", () => ({ useSecrets: vi.fn() }));
+/** Writing a pasted token to Secrets, as the store would: the form comes back citing it. */
+const storePushToken = vi.fn(async (form: FormState) =>
+  form.secret?.kind === "new"
+    ? { ...form, secret: { kind: "stored" as const, name: form.secret.name } }
+    : form,
+);
+vi.mock("./useStorePushToken", () => ({ useStorePushToken: () => storePushToken }));
+vi.mock("@/lib/hooks/useSecrets", async (original) => ({
+  ...(await original<object>()),
+  useSecrets: vi.fn(),
+}));
 
 const { useSaveSyncRemote, useClearSyncRemote, useRestoreSyncRemote, useMoveVault } =
   await import("@/lib/hooks/useSync");
@@ -129,6 +151,37 @@ describe("SyncRemoteTab", () => {
     fireEvent.click(screen.getByLabelText("Secret"));
     pick(/gitlab-token/);
     expect(sent()).toMatchObject({ secret_ref: GITLAB_TOKEN });
+  });
+
+  acceptance(
+    "web-ui",
+    "a secret field at the window's edge opens its menu inside the window",
+    () => {
+      const { container } = renderTab();
+      fireEvent.click(screen.getByLabelText("Secret"));
+      const menu = screen.getByRole("listbox").closest<HTMLElement>("[role=dialog]")!;
+      // The shared secret menu: portalled out of the row and placed by the popper, which keeps it
+      // inside the window's edges, not hung off the field where the row puts it.
+      expect(container.contains(menu)).toBe(false);
+      expect(menu.closest("[data-radix-popper-content-wrapper]")).not.toBeNull();
+      expect(within(menu).getByRole("button", { name: "New secret…" })).toBeInTheDocument();
+      fireEvent.click(within(menu).getByRole("button", { name: "None" }));
+      expect(sent()).toMatchObject({ secret_ref: null });
+    },
+  );
+
+  acceptance("web-ui", "a pasted push token is stored when the remote saves", async () => {
+    renderTab(status({ secret_ref: null }));
+    fireEvent.paste(screen.getByLabelText("Secret"), {
+      clipboardData: { getData: () => "glpat-token" },
+    });
+    await waitFor(() => expect(sent()?.secret_ref).toMatch(/^secret\/[0-9a-f]{32}$/));
+    expect(storePushToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        secret: expect.objectContaining({ kind: "new", value: "glpat-token" }),
+      }),
+    );
+    expect(screen.queryByText("glpat-token")).not.toBeInTheDocument();
   });
 
   test("?focus=secret opens the secret picker", () => {

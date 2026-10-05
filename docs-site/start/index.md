@@ -50,7 +50,7 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 
 | Surface | What it is for |
 | --- | --- |
-| **CLI** (`coffer …`) | A short command list: start, stop and check the daemon, run a command with secrets in its environment, read Coffer's logs. See the [CLI reference](/reference/cli). |
+| **CLI** (`coffer …`) | A command for every operation on the web pages and in the desktop app, so an agent can manage Coffer too, plus starting and stopping the daemon and running a command with secrets in its environment. See the [CLI reference](/reference/cli) and the [CLI coverage](/reference/cli-coverage) table. |
 | **Web UI** | Browsing and editing everything. The daemon serves it at its own address (`http://127.0.0.1:38470/`), already signed in. See [Web UI](/guides/web-ui). |
 | **Desktop app** | The same UI in a native macOS window, with a Dock icon and a menu-bar icon. It starts the daemon for you. See [Desktop app](/guides/desktop-app). |
 | **MCP endpoint** | Where agents connect, through `coffer-mcp-shim`. Agents see upstream tools plus Coffer's own `coffer__*` tools. See [Connect a client](/guides/connect-a-client). |

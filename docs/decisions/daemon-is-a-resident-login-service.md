@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), spec daemon "Run as a login service", spec daemon "Change residency from the settings page", spec daemon "Stand down only when provably superseded", spec desktop-app "Restart by stopping the running daemon first", PR #412, PR #431
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), spec daemon "Run as a login service", spec daemon "Change residency from the settings page or the command line", spec daemon "Stand down only when provably superseded", spec desktop-app "Restart by stopping the running daemon first", PR #412, PR #431
 
 ## Context
 

@@ -63,6 +63,7 @@ def _finding_fields(h: Hit) -> dict[str, Any]:
         "field": f.field,
         "key": f.key,
         "proposed_name": f.proposed_name,
+        "rule": f.rule,
     }
 
 

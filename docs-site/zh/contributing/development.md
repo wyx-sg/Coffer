@@ -162,6 +162,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make docs-reference` | 重新生成本站的 CLI 参考页面（英文和中文） |
 | `make docs-build` | 按 Pages 工作流的方式构建本站；有失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
 | `make refresh-prices` | 刷新内置的模型价格表（需要联网；不在 `verify` 中） |
+| `make refresh-secret-rules` | 发版前刷新内置的 gitleaks 检测规则（需要联网；不在 `verify` 中） |
 | `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 冻结到 `dist/` |
 | `make desktop` | 构建未签名的 `Coffer.app` 和 `.dmg`（很慢，见下文） |
 | `make desktop-lint` | 对桌面 crate 运行 `cargo check` 和 `cargo clippy -D warnings` |

@@ -115,3 +115,11 @@ def editor_launch_value(*, app_bundle: str | None, command: str | None) -> str |
     if command is not None and shutil.which(command) is not None:
         return command
     return None
+
+
+def launch_app_command(bundle_id: str) -> list[str] | None:
+    """The argv that starts an app by its bundle id in the background, or None
+    where there is no such launcher (only macOS has one)."""
+    if host_os() is not HostOs.MACOS or shutil.which("open") is None:
+        return None
+    return ["open", "-g", "-b", bundle_id]

@@ -181,22 +181,26 @@ class TurnOrchestrator:
         log.debug("Interrupted turn for conversation %s", conversation_id)
         return True
 
-    def cancel_turn(self, conversation_id: str) -> None:
+    def cancel_turn(self, conversation_id: str) -> asyncio.Task[None] | None:
         """Cancel and discard a running turn and drop the pending queue (used when
-        the conversation is deleted).
+        the conversation is deleted). Returns the cancelled turn's task, so a
+        caller that needs the agent process gone (deleting its session) can wait
+        for its teardown; ``None`` when no turn was running.
 
         The whole state is dropped here; the task's ``finally`` release is
         ownership-checked, so a racing start's fresh state is never evicted.
         """
         state = _STATES.pop(conversation_id, None)
         if state is None:
-            return
+            return None
+        state.queue.clear()
         active = state.active
         if active is not None and active.task is not None and not active.task.done():
             active.discarded = True
             active.task.cancel()
             log.debug("Cancelled turn for conversation %s", conversation_id)
-        state.queue.clear()
+            return active.task
+        return None
 
     # ------------------------------------------------------------------
     # Internals

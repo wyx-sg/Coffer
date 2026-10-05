@@ -5,6 +5,9 @@ modified file's masked change — never the value."""
 
 from __future__ import annotations
 
+import random
+import string
+
 import pytest
 
 from coffer.domain.sync.rounds import RoundStatus
@@ -14,9 +17,11 @@ from .harness import Box
 
 DOC = "knowledge/team/db.md"
 #: Built at run time so no secret-shaped literal sits in the source.
-VALUE = "q7rz2" * 3
-OTHER = "k3" * 6
-TOKEN = "ghp_" + "Z9" * 18
+_RNG = random.Random(20261005)
+_LOWER_DIGIT = string.ascii_lowercase + string.digits
+VALUE = "q7" + "".join(_RNG.choices(_LOWER_DIGIT, k=16))
+OTHER = "k3" + "".join(_RNG.choices(_LOWER_DIGIT, k=18))
+TOKEN = "ghp_" + "".join(_RNG.choices(string.ascii_letters + string.digits, k=36))
 
 
 @pytest.mark.acceptance(
@@ -49,6 +54,7 @@ def test_a_new_files_finding_is_shown_masked_with_its_shape(pair: tuple[Box, Box
         assert flagged["text"] == "DB_PASSWORD=" + "•" * len(VALUE)
         (value,) = flagged["values"]
         assert (value["start"], value["end"], value["key"]) == (12, 12 + len(VALUE), "DB_PASSWORD")
+        assert value["rule"] == "coffer-password-assignment"
         assert value["shape"] == {
             "length": len(VALUE),
             "classes": ["lower", "digit"],
@@ -71,29 +77,30 @@ def test_a_new_files_finding_is_shown_masked_with_its_shape(pair: tuple[Box, Box
 )
 def test_a_modified_files_finding_shows_its_masked_change(pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
-    mac.put(DOC, "# Orders database\n\nAPI_KEY=my-example-key-123\n")
+    mac.put(DOC, "# Orders database\n\nDB_PASSWORD=my-demo-pass-2024\n")
     first = mac.round()
     assert first.status is RoundStatus.PLAINTEXT_FOUND
-    # The person checks it is an example, and pushes it anyway.
+    # The person checks it is a demo value, and pushes it anyway.
     assert mac.run(mac.service.push_anyway(actor="user")).status is RoundStatus.PUSHED
     mac.put(
         DOC,
-        f"# Orders database\n\nAPI_KEY=my-example-key-123\ntoken: {TOKEN}\n",
+        f"# Orders database\n\nDB_PASSWORD=my-demo-pass-2024\ntoken: {TOKEN}\n",
     )
     assert mac.round().status is RoundStatus.PLAINTEXT_FOUND
     with client_for(mac) as c:
         old = c.get("/sync/plaintext/context", params={"path": DOC, "line": 3}).json()
         assert old["change"] == "modified" and old["on_remote"] is True
         (example,) = old["lines"][2]["values"]
-        assert (example["shape"]["hint"], example["shape"]["word"]) == ("placeholder", "example")
-        assert "example-key" not in old["lines"][2]["text"]
+        assert (example["shape"]["hint"], example["shape"]["word"]) == ("placeholder", "demo")
+        assert "demo-pass" not in old["lines"][2]["text"]
 
         new = c.get("/sync/plaintext/context", params={"path": DOC, "line": 4})
         assert TOKEN not in new.text
         body = new.json()
         assert body["on_remote"] is False
         (tok,) = body["lines"][3]["values"]
-        assert tok["key"] == "token" and tok["shape"]["prefix"] == "ghp_"
+        assert (tok["key"], tok["rule"]) == ("token", "github-pat")
+        assert tok["shape"]["prefix"] == "ghp_"
         assert body["lines"][3]["text"] == "token: ghp_" + "•" * (len(TOKEN) - 4)
         assert (body["added"], body["removed"]) == (1, 0)
         assert "+token: ghp_" + "•" * (len(TOKEN) - 4) in body["diff"]

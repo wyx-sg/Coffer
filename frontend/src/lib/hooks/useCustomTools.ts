@@ -45,7 +45,7 @@ export function useCustomToolGroup(name: string) {
 /** A write answered with the group: store it, refresh the list, the
  *  resource lists a group also appears in, and the tiering split (a tool added,
  *  removed or switched changes the catalogue every server's split is cut from). */
-function settle(qc: QueryClient, group: CustomToolGroup): void {
+export function settle(qc: QueryClient, group: CustomToolGroup): void {
   qc.setQueryData(customToolGroupKey(group.name), group);
   void qc.invalidateQueries({ queryKey: customToolsKey });
   void qc.invalidateQueries({ queryKey: resourcesKey });
@@ -54,7 +54,7 @@ function settle(qc: QueryClient, group: CustomToolGroup): void {
 
 /** Saved, but the bound secret waits for a person in the Coffer app: say so,
  *  since the dialog that saved it just closes. */
-function useApprovalNotice() {
+export function useApprovalNotice() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -212,11 +212,18 @@ export function useDeleteCustomTool(group: string) {
   });
 }
 
-/** Run a draft once; the drawer renders the result or the failure. */
+/** Run a draft once in one environment; the drawer renders the result or the failure. */
 export function useTestCustomTool(group: string) {
   return useMutation({
-    mutationFn: ({ tool, args }: { tool: CustomToolIn; args: Record<string, unknown> }) =>
-      customToolsApi.test(group, tool, args),
+    mutationFn: ({
+      tool,
+      args,
+      environment,
+    }: {
+      tool: CustomToolIn;
+      args: Record<string, unknown>;
+      environment?: string | null;
+    }) => customToolsApi.test(group, tool, args, environment),
   });
 }
 

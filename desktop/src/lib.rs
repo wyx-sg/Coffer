@@ -27,18 +27,24 @@
 //   * `presence`  — the LocalAuthentication check before every grant
 //   * `secrets`   — the reveal / approve / master-key-backup IPC commands
 //   * `approval_watch` — one notification per approval waiting on a person
+//   * `daemon_client` — the daemon as the secret flows talk to it, and grant signing
+//   * `presence_flows` — reveal / approve flows shared by the page and the CLI
+//   * `desktop_requests` — serve the command line's presence-checked requests
 //   * `traffic_lights` — keeps the macOS lights on the title strip's centre line
 
 mod approval_watch;
 mod coffer_home;
 mod daemon;
 mod daemon_attest;
+mod daemon_client;
 mod daemon_http;
+mod desktop_requests;
 mod discovery;
 mod env_path;
 mod logging;
 mod master_key;
 mod presence;
+mod presence_flows;
 mod presence_grant;
 mod ready;
 mod resolve;
@@ -156,6 +162,10 @@ pub fn run() {
             // (spec desktop-app "Release plaintext and approvals only after a
             // presence check in the shell").
             approval_watch::start(app.handle().clone());
+            // What `coffer approval approve`, `coffer secret reveal` and the
+            // update commands ask of this app (spec desktop-app "Serve the
+            // command line's desktop requests").
+            desktop_requests::start(app.handle().clone());
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
                 traffic_lights::watch(&window);

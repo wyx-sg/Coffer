@@ -1,8 +1,8 @@
 """The shape of a ``coffer config`` key.
 
 A key names its type, its help, the place that stores it, how to read it, how
-to write it and how to return to its default (spec resource-framework "Keep the
-command line to what needs it"). Only keys read before the daemon binds are
+to write it and how to return to its default (spec resource-framework "Offer
+every management operation on the command line"). Only keys read before the daemon binds are
 here, so none of them ever talks to the daemon.
 """
 

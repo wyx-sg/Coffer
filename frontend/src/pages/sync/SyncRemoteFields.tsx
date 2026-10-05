@@ -13,7 +13,8 @@
 // the Remote tab saves on it.
 //
 // There is deliberately no password field: the remote names its secret by
-// reference, so a secret has no reason to exist in this component's tree.
+// reference. A token pasted into the secret field is held as a new secret
+// until the parent saves, which writes it to Secrets first.
 import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
@@ -137,11 +138,10 @@ export function SyncRemoteFields(props: Props) {
         hint={t("sync.setup.secretHint")}
         control={
           <SyncSecretPicker
-            value={form.secretRef}
+            value={form.secret}
             disabled={busy}
             autoOpen={props.focusSecret}
-            describedBy="sync-secret-hint"
-            onChange={(secretRef) => onEdit({ secretRef }, true)}
+            onChange={(secret) => onEdit({ secret }, true)}
           />
         }
       />

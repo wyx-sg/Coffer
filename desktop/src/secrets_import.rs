@@ -5,10 +5,11 @@
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
+use crate::daemon_client::Daemon;
 use crate::daemon_http::DEFAULT_READ_TIMEOUT;
 use crate::presence::{self, Subject};
 use crate::presence_grant::GrantOp;
-use crate::secrets::{blocking, Daemon};
+use crate::secrets::blocking;
 
 /// Writing the key is quick, but it is a disk write behind a request.
 const IMPORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);

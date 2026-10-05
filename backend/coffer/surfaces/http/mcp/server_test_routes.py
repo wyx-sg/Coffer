@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from coffer.application.mcp.custom_tool_secrets import env_secret_resolver
 from coffer.application.mcp.runner_detect import missing_runner_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.http_api import HttpApiTransport
@@ -119,12 +120,14 @@ async def test_mcp_server(
     try:
         if isinstance(config.transport, HttpApiTransport):
             # A custom-tool group: its "connection" is served in-process, so the
-            # test proves the config loads and the secret is released for it.
-            overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.secret_refs, destination
-            )
+            # test proves the config loads and each enabled environment's
+            # secret is released for that environment.
+            resolve = env_secret_resolver(resolver, resource)
+            for env in config.transport.environments:
+                if env.enabled:
+                    await resolve(env)
             conn = HttpApiUpstreamConnection(
-                transport=config.transport, header_overlay=overlay, server_name=resource.name
+                transport=config.transport, header_overlay={}, server_name=resource.name
             )
         else:
             return McpTestResultOut(

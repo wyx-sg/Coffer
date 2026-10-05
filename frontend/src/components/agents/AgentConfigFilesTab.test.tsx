@@ -131,12 +131,7 @@ describe("AgentConfigFilesTab", () => {
     "the agent detail page carries six tabs and a More menu",
     async () => {
       renderTab();
-      for (const n of [
-        "settings\\.json",
-        "CLAUDE\\.md",
-        "settings\\.local\\.json",
-        "\\.claude\\.json",
-      ]) {
+      for (const n of ["settings\\.json", "CLAUDE\\.md", "\\.claude\\.json"]) {
         expect(await treeItem(n)).toBeInTheDocument();
       }
       expect(screen.getByText("Config files · Claude Code")).toBeInTheDocument();
@@ -176,18 +171,21 @@ describe("AgentConfigFilesTab", () => {
     expect(agentsApi.configFileContent).not.toHaveBeenCalledWith("agt_cc", "settings", undefined);
   });
 
-  test("a not-created file is marked and cannot be previewed", async () => {
+  test("a file not created yet is left out of the tree", async () => {
     renderTab();
-    const missing = await treeItem("settings\\.local\\.json");
-    expect(missing).toHaveTextContent("Not created");
     await screen.findByText(/"theme"/);
-    fireEvent.click(missing);
-    expect(missing).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("treeitem", { name: /settings\.local\.json/ })).toBeNull();
     expect(agentsApi.configFileContent).not.toHaveBeenCalledWith(
       "agt_cc",
       "settings_local",
       expect.anything(),
     );
+  });
+
+  test("an agent with no config file on disk says none was found", async () => {
+    renderTab(FILES.map((f) => ({ ...f, exists: false })));
+    expect(await screen.findByText("No config files found.")).toBeInTheDocument();
+    expect(screen.queryByRole("treeitem")).toBeNull();
   });
 
   test("a directory row folds its files", async () => {

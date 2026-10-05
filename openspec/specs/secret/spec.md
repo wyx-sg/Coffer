@@ -22,8 +22,8 @@ a secret goes to a destination it did not go to before only after that human app
 The capability ships no web page of its own and still satisfies the End-to-End Deliverable Rule: it
 delivers a complete route family (`/api/v1/secrets/*` plus `/api/v1/settings/secrets` and
 `/api/v1/settings/secret-boundary`) over its own files under `local/secret-boundary/`, and the
-commands that need a terminal (see [resource-framework](../resource-framework/spec.md), "Keep the
-command line to what needs it"): `coffer secret list` and `coffer secret set`, which a hand-off
+commands that need a terminal (see [resource-framework](../resource-framework/spec.md), "Offer every
+management operation on the command line"): `coffer secret list` and `coffer secret set`, which a hand-off
 prompt tells an agent to run because a person types the value, and `coffer run`, which resolves
 standalone secrets into one child. Approving, revealing and writing a key backup have no command on
 purpose: each needs the desktop app's presence check. Its visual surfaces are the Secrets page,
@@ -168,7 +168,7 @@ Users MUST be able to read and change the key's location from the management API
 (`GET`/`PUT /api/v1/settings/secrets`) and from a Settings card that states the consequence and
 confirms before it writes. `secrets.storage` is not one of the keys read before the daemon binds,
 so `coffer config` does not carry it (see [resource-framework](../resource-framework/spec.md),
-"Keep the command line to what needs it"). `PUT /api/v1/settings/secrets` MUST refuse any value
+"Offer every management operation on the command line"). `PUT /api/v1/settings/secrets` MUST refuse any value
 other than `file` or `keychain` as a validation error, and a change MUST run the verified relocation
 of "Verify the destination before relocating the master key".
 
@@ -527,18 +527,21 @@ The secret boundary MUST be applied when a destination is **registered or change
 - **THEN** the pending approval naming the new command line exists as soon as the save answers, before any spawn or listing
 
 ### Requirement: Report a pending approval on the command line by exiting
-A command whose change leaves a secret waiting for a person MUST say so on standard error and exit
-`9`, which an agent reads as "tell the developer, do not retry": a registration that cites a
-secret from a new destination answers `SECRET_BINDING_PENDING`. Storing a value with `coffer
-secret set` waits for nobody, so it has no `--wait` and never exits `9`. The command line neither
-lists nor answers approvals: they are listed on the Secrets page and `GET /api/v1/secrets/approvals`,
-refused with the Reject button or `POST .../reject`, and approved only in the desktop app, so no
-command approves.
+A command whose change leaves a secret waiting for a person MUST say so on standard error — the
+approval ids and the command that approves them, `coffer approval approve <id>…` — and exit `9`,
+which an agent reads as "the change is saved, ask the person to approve, do not retry": a
+registration that cites a secret from a new destination answers `SECRET_BINDING_PENDING`, and with
+`--json` the same is printed as `{"status": "pending_approval", "approval_ids", "next"}`. Storing a value with `coffer
+secret set` waits for nobody, so it has no `--wait` and never exits `9`. Approvals are listed on the
+Secrets page, by `GET /api/v1/secrets/approvals` and by `coffer approval list`; refused with the
+Reject button, `POST .../reject` or `coffer approval reject`; and approved only after the person's
+presence check in the desktop app, which `coffer approval approve` asks for ("Approve from the
+command line with the person's own presence check").
 
 #### Scenario: a command whose change leaves a binding waiting exits 9
 - **GIVEN** a secret already sent to one MCP server
 - **WHEN** a command registers a second server citing it and the daemon answers `SECRET_BINDING_PENDING`
-- **THEN** the command prints the daemon's message and exits `9`
+- **THEN** the command prints the daemon's message, the approval id and `coffer approval approve <id>`, and exits `9`
 
 #### Scenario: storing a replacement value with the command line waits for nobody
 - **GIVEN** a secret sent to an MCP server, and a provider connection's key stored under a ref
@@ -993,28 +996,29 @@ when its set is empty.
 manages, and MUST NOT return a value:
 
 - **skills** — every text file of a skill in the master store (Coffer's own
-  bundled skills excepted): an assignment whose name says password, secret,
-  token or key, or a well-known token shape;
+  bundled skills excepted), read with the bundled rules (see "Detect plaintext
+  secrets with the bundled rules");
 - **MCP servers** — a registered server's stdio `env` value, HTTP `headers`
-  value, or HTTP API (custom tool) `headers` value whose name says password,
-  secret, token, key or authorization, or whose value is a well-known token
-  shape or a `Bearer`/`Token` credential.
+  value, or HTTP API (custom tool) `headers` value that the bundled rules find
+  when read with its key, or whose name says password, secret, token, key or
+  authorization, or that is a `Bearer`/`Token` credential.
 
 A value that is already a reference (`coffer://secret/…`), an interpolation
 (`$VAR`, `${VAR}`, `{{…}}`), a placeholder (`<…>`, `xxx`, `your-…`,
 `changeme`, `example…`) or code is not a finding. Each finding carries a stable
 id, its source (`skill` or `mcp_server`), the resource's name, where it is
-(a skill's file and line; a server's `env` or `header` and its key), and what
-it would become: the label a skill's secret will get, the server's own
-`secret_refs` slot for a server. The scan also reports how many files and
-servers it read (`files_checked`, `servers_checked`).
+(a skill's file and line; a server's `env` or `header` and its key), the rule
+that found it, and what it would become: the label a skill's secret will get,
+the server's own `secret_refs` slot for a server. The scan also reports how
+many files and servers it read (`files_checked`, `servers_checked`).
 
 `POST /api/v1/secrets/import` (the chosen finding ids, and an optional dry run
 that writes nothing) MUST move each chosen value:
 
 - a skill's value is stored at a minted `secret/<uuid4 hex>` labelled with the
   proposed name and, once the store reads the same value back, replaced in its
-  file by `coffer://secret/<id>`, atomically and keeping the file's mode; a file that cannot be rewritten
+  file by `coffer://secret/<id>`, atomically and keeping the file's mode; a value
+  that spans lines, such as a private key, is replaced whole; a file that cannot be rewritten
   leaves its findings skipped as `stored`, naming the secret, and importing the
   same findings again retries the file;
 - a server's value is stored under a new ref of the server's own
@@ -1030,7 +1034,7 @@ Each value stored MUST be audited as `secret_imported`, naming the secret or
 ref and where it came from, never the value.
 
 The Find plaintext keys dialog lists the findings grouped by source, each by
-resource, place and what it becomes, all ticked; Review changes runs the dry
+resource, place, the rule that found it and what it becomes, all ticked; Review changes runs the dry
 run and lists the secrets it would add and the files and servers it would
 change; Apply moves them and reports what moved and what was skipped and why. A
 scan that finds nothing says how many files and servers it read.
@@ -1038,7 +1042,7 @@ scan that finds nothing says how many files and servers it read.
 #### Scenario: a scan names plaintext secrets in skills and MCP servers without their values
 - **GIVEN** a skill whose script assigns a token, a stdio MCP server whose `env` holds a password, and an HTTP API server whose `Authorization` header holds a bearer token
 - **WHEN** the scan runs
-- **THEN** all three are reported with their resource, place and what each becomes, and the response contains none of the values
+- **THEN** all three are reported with their resource, place, rule and what each becomes, and the response contains none of the values
 
 #### Scenario: references, interpolations and placeholders are not findings
 - **GIVEN** a server whose `env` holds `${API_TOKEN}`, `<your-token>` and a non-secret `LOG_LEVEL=debug`, and a skill citing `coffer://secret/github`
@@ -1067,6 +1071,12 @@ scan that finds nothing says how many files and servers it read.
 - **GIVEN** a skill and a server holding no plaintext secret
 - **WHEN** the scan runs
 - **THEN** it reports no findings, at least one file read and one server read
+
+#### Scenario: a private key in a skill moves into the store whole
+- **GIVEN** a skill file holding a PEM private key over several lines
+- **WHEN** the scan runs and the finding is imported
+- **THEN** the finding names the key's first line and the rule `private-key`
+- **AND** the file cites one `coffer://secret/<id>` where the whole block was, and the store holds the whole block
 
 ### Requirement: Label and describe a secret without changing its reference
 A secret's ref MUST stay its identity for life: no label or description change
@@ -1151,3 +1161,104 @@ rescan the resources or the skill files.
 - **GIVEN** a stored secret
 - **WHEN** an MCP server citing it is registered, then a skill file cites its URI, then the index file is deleted and the daemon restarted
 - **THEN** after each step the list shows that citer, and after the restart it gives the same answer
+
+### Requirement: Detect plaintext secrets with the bundled rules
+Coffer MUST decide what is a plaintext secret with one detector, used by
+**Find plaintext keys** (see "Move plaintext secrets in managed resources into
+the store") and by vault sync's check before a push
+([vault-sync](../vault-sync/spec.md) "Refuse to push a plaintext secret").
+
+The detector MUST run the rules of a pinned gitleaks release, shipped with
+Coffer as a rule file that names its source, release, commit and licence, with
+gitleaks' MIT licence beside it. Each rule is applied as gitleaks applies it:
+its pattern, its secret group, its entropy threshold, its keywords, its path
+condition, and its own and the global allowlists. A gitleaks binary MUST NOT
+be required.
+
+On top of those rules Coffer MUST NOT report a secret reference
+(`coffer://secret/<id>`, or the `secret/<id>` a resource's `secret_refs`
+holds), an interpolation (`$VAR`, `${VAR}`, `{{…}}`), a placeholder (`<…>`,
+`xxx`, `your-…`, `changeme`, `example…`), code that names a value rather than
+holding one, or a line holding `coffer run`; and it MUST also report a value of
+at least eight characters assigned to a password-named key, whatever its
+entropy, and a password inside a URL (`scheme://user:<value>@host`).
+
+Each finding MUST name the rule that found it — the gitleaks rule id
+(`stripe-access-token`, `generic-api-key`) or Coffer's own (`coffer-…`) — and
+where the value is: the line, and its place on that line. A value two rules
+find is one finding. No finding carries the value.
+
+#### Scenario: a vendor token is found and named by its rule
+- **GIVEN** a skill script holding a Stripe secret key and an Anthropic API key, neither assigned to a secret-sounding name
+- **WHEN** the scan runs
+- **THEN** each is a finding naming its file, its line and its rule, `stripe-access-token` and `anthropic-api-key`
+- **AND** the response contains neither value
+
+#### Scenario: a secret reference is not a finding though it looks like a key
+- **GIVEN** a skill whose `.env` holds `API_KEY=coffer://secret/<id>`, and an MCP server whose document cites `secret/<id>` in its `secret_refs`
+- **WHEN** the scan runs, and a sync round reads both files
+- **THEN** neither reports anything
+
+#### Scenario: a weak password and a password in a URL are found
+- **GIVEN** a skill script with `DB_PASSWORD=` followed by a short, low-entropy password, and `DATABASE_URL=` a `postgres://` URL carrying a password
+- **WHEN** the scan runs
+- **THEN** both are findings, named `coffer-password-assignment` and `coffer-url-password`
+
+#### Scenario: the bundled rules say where they came from
+- **GIVEN** the rule file Coffer ships
+- **WHEN** it is read
+- **THEN** it names gitleaks, the release, the commit and the MIT licence, and the licence file is beside it
+- **AND** every rule of that release is either in the file or listed in its header as one that could not be translated
+
+### Requirement: Approve from the command line with the person's own presence check
+`coffer approval list`, `show`, `approve` and `reject` MUST manage approvals from the command line.
+`coffer approval approve <id>…` MUST NOT approve anything itself: it asks the daemon for a desktop
+request naming exactly the approvals given, each still pending and pinned to the target fingerprint
+it names at that moment, and waits; the desktop app's shell runs the operating system's presence
+check (Touch ID or the login password) whose prompt names each action, destination — with the
+custom-tool environment — target and secret, signs a grant over exactly what it showed, and calls
+the approve route ("Release plaintext and approvals only after a presence check in the shell"). A
+single approval's grant MUST be signed over `<id>@<fingerprint>` and the daemon MUST apply it only
+while the approval is still pending for that fingerprint, re-evaluating destinations first; a target
+that moved is refused with `APPROVAL_TARGET_CHANGED` and nothing is applied, and a grant is good for
+one request. The command then reports each approval's state as the daemon holds it — not what the
+shell said — and exits `0` when every one is approved and `11` otherwise. A check the person
+cancels, that fails, that times out, or that cannot run leaves every approval pending and sends no
+request that needs it. When no shell has polled the daemon lately the command MUST start the
+desktop app and wait for it, and where it cannot (no app, not a Mac) exit `12` with nothing
+approved; nothing clicks or scripts the app's window. No flag — `--yes`, `--force` or any other —
+skips the check. Several ids MUST be confirmed together only when each was named, is still pending
+and was shown to the person; one that cannot be one of several (turning the protection off, a grant
+to local programs) gets its own prompt. No agent receives the master key, a grant, a nonce, a
+signature or a secret's value: `coffer secret reveal <ref>` and `coffer secret backup-key` start the
+app's own reveal and backup, whose value is shown, and whose passphrase is typed, in the app.
+
+#### Scenario: a command line approval asks the person and applies after the check
+- **GIVEN** a pending approval and the desktop app running
+- **WHEN** an agent runs `coffer approval approve <id> --json` and the person passes the presence check
+- **THEN** the system prompt names what the approval sends and where, the approval is applied, and the command prints it `approved` and exits 0
+
+#### Scenario: a check that is not confirmed leaves the approval pending
+- **GIVEN** a pending approval and the desktop app running
+- **WHEN** the person cancels the presence check, it fails, or nobody answers before `--timeout`
+- **THEN** the command exits 11 saying it was not confirmed, and the approval is still pending
+
+#### Scenario: a moved target or a replayed grant approves nothing
+- **GIVEN** a pending approval whose destination is changed after the request is made and before the person answers
+- **WHEN** the shell prompts, and a grant pinned to the old fingerprint is sent, and a valid grant is sent twice
+- **THEN** the shell refuses the moved target, the daemon answers `APPROVAL_TARGET_CHANGED` to the stale grant, and the second use of a grant is refused as `PRESENCE_GRANT_INVALID`, with nothing approved but the one valid request
+
+#### Scenario: the desktop app is started, or the command says it is unavailable
+- **GIVEN** a pending approval and no desktop shell polling the daemon
+- **WHEN** `coffer approval approve <id>` runs where the app can be started, and again where it cannot
+- **THEN** the first starts the app and proceeds to its prompt, and the second exits 12 with `CLI_APP_UNAVAILABLE` and the approval pending
+
+#### Scenario: no flag skips the presence check
+- **GIVEN** a pending approval
+- **WHEN** `coffer approval approve <id> --yes` or `--force` is run
+- **THEN** the command refuses the unknown option, exits 2, and no prompt is shown and nothing is approved
+
+#### Scenario: several approvals cover exactly the ones named and still waiting
+- **GIVEN** three pending approvals
+- **WHEN** two of them are approved in one command, and then one already approved is named beside the third
+- **THEN** exactly the two named are approved, and the second command is refused before any prompt because one named approval is no longer waiting, leaving the third pending

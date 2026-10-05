@@ -18,6 +18,7 @@
 // cleared when it closes.
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -43,8 +44,13 @@ import { ImportedKeyResult } from "./ImportedKeyResult";
 
 export function ImportKeyRow() {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const inApp = presenceAvailable();
+  // `?import=1`: the desktop app opened this page for `coffer secret import-key`; the
+  // person still picks the file, types the passphrase and passes the presence check here.
+  const { search } = useLocation();
+  const [open, setOpen] = useState(
+    () => inApp && new URLSearchParams(search).get("import") === "1",
+  );
 
   return (
     <SettingRow

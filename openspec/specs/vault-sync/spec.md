@@ -1526,7 +1526,6 @@ each non-text kind. Pulled commits MUST NOT carry a diff.
 - **WHEN** the file's row is expanded
 - **THEN** its diff rows and its added and removed counts appear
 
-
 ### Requirement: Review a file's change before acting on it
 Every list of files the Sync page asks a person to act on — changes waiting to push, a held round's
 deletions, a stopped round's conflicts, a join's differing files — MUST be read on its own view of one
@@ -1559,6 +1558,7 @@ does not name (`SYNC_ROUND_FILE_NOT_LISTED`, 404) — the held one also when no 
 - **GIVEN** a round held on 25 deleted documents, outgoing on the machine that deleted them and incoming on the other
 - **WHEN** either opens one of them on Review held deletions
 - **THEN** its whole text is shown as removed lines, and a path the hold does not list is refused
+
 ### Requirement: Show a plaintext finding in its file
 The Sync page MUST let a person read each place a `plaintext_found` round
 listed in its file, so they can judge whether it is a secret, without Coffer
@@ -1574,7 +1574,7 @@ Masking MUST replace every character of a value with `•`, keeping the line's
 length, except a well-known token format's public prefix (`ghp_`,
 `github_pat_`, `sk-`, `xoxb-` and its siblings, `AKIA`) or a URL's scheme.
 Each masked value MUST carry its place on the line, the name it is assigned
-to, and its shape: its length, which kinds of character it holds (lower,
+to, the rule that found it, and its shape: its length, which kinds of character it holds (lower,
 upper, digit, symbol), that prefix, and a hint — `reference` for names joined
 by dots, `placeholder` with the placeholder word it holds, `repeated` for one
 or two characters over and over. No other character of a value MAY appear in
@@ -1585,20 +1585,20 @@ When the last round is not `plaintext_found` the request MUST be refused with
 file MUST be refused with `SYNC_PLAINTEXT_NOT_LISTED` (404), so the route never
 reads an arbitrary file. The plaintext card MUST show each place as a row that
 expands to the masked lines — line numbers, the flagged line tinted, each
-masked value highlighted — with whether the file is new or changed, whether the
+masked value highlighted — with the rule that found it, whether the file is new or changed, whether the
 line is already on the remote, the value's shape in words, and for a changed
 file the masked diff behind "Show changes".
 
 #### Scenario: a finding is shown in its file with the value masked
 - **GIVEN** a round stopped as `plaintext_found` on line 4 of a new knowledge document, with another value on line 5
 - **WHEN** the place's context is asked for, before and after the round, and for a line the round did not find
-- **THEN** before the round it is `SYNC_NO_PLAINTEXT_FOUND`, and after it lines 1 to 7 come back with both values masked to `•` of the same length, the file `added`, and line 4's value keyed `DB_PASSWORD` with its length and kinds of character
+- **THEN** before the round it is `SYNC_NO_PLAINTEXT_FOUND`, and after it lines 1 to 7 come back with both values masked to `•` of the same length, the file `added`, and line 4's value keyed `DB_PASSWORD` with its rule, its length and its kinds of character
 - **AND** neither value appears in the response, and a line the round did not find is `SYNC_PLAINTEXT_NOT_LISTED`
 
 #### Scenario: a finding in a file the remote holds shows its masked change
-- **GIVEN** a document the remote already holds with the line `API_KEY=my-example-key-123`, pushed anyway, to which this machine adds a line with a GitHub token
+- **GIVEN** a document the remote already holds with the line `DB_PASSWORD=my-demo-pass-2024`, pushed anyway, to which this machine adds a line with a GitHub token
 - **WHEN** a round stops as `plaintext_found` and each place's context is asked for
-- **THEN** the old line is `modified`, already on the remote, and hinted as a placeholder holding `example`, and the token keeps only `ghp_` visible
+- **THEN** the old line is `modified`, already on the remote, and hinted as a placeholder holding `demo`, and the token keeps only `ghp_` visible and is named `github-pat`
 - **AND** the masked diff adds one line and carries no value
 
 #### Scenario: the Sync page opens each place to its masked lines
@@ -1610,7 +1610,8 @@ file the masked diff behind "Show changes".
 ### Requirement: Refuse to push a plaintext secret
 Before a round pushes — a round that merged, a push with nothing to pull, or a join — it MUST read
 every file version the push would publish: each blob reachable from the commit being pushed and
-not from the remote's head, from every commit in between. It reads them for an assignment whose name says secret and for the well-known token shapes.
+not from the remote's head, from every commit in between. It reads them with the detector the
+Secrets page's scan uses ([secret](../secret/spec.md) "Detect plaintext secrets with the bundled rules").
 An unquoted value that is code names a value rather than holding one, and MUST NOT be reported:
 a value holding call, index or list punctuation (`(`, `)`, `[`, `]`, `,`, `;`), so
 `token = m.group(0)` or `password=password,` is not reported; names joined by `.` or `?.`, each
@@ -1618,15 +1619,16 @@ made of letters and underscores with digits only at its end, such as an environm
 or a member (`process.env.SPACE_TOKEN`, `args.token`, `page.next_page_token`); and a bare name a
 declaration (`const`, `let`, `var`, `final`, `val`, `auto`) or a member assignment (`self.`,
 `this.`, `cls.`) gives. A JSON Web Token (`eyJ…`) and a dotted value whose parts mix digits in are
-values. A quoted value is always a value, and a well-known token shape (`ghp_`, `github_pat_`,
-`sk-`, `xoxb-` and its siblings, `AKIA`) MUST be reported wherever it sits on the line, code around
-it or not.
+values. A value a rule recognises by its format (`ghp_`, `github_pat_`, `sk-`, `xoxb-` and its
+siblings, `AKIA`, and every other vendor format the bundled rules know) MUST be reported wherever it
+sits on the line, code around it or not.
 An encrypted `secret/<ref>.enc` file is ciphertext and MUST NOT be read; a binary file or one over
 1 MB is not read either.
 
 When a file still holds a value at the commit being pushed, the round MUST push nothing and record
-the status `plaintext_found`. The record's `plaintext` names each place: the file, the line, and
-the name the value is assigned to (`token` for a value recognised by its shape alone). Nothing the
+the status `plaintext_found`. The record's `plaintext` names each place: the file, the line, the
+name the value is assigned to (the rule's id for a value with no name before it), and the rule that
+found it. Nothing the
 round records, reports or hands off carries the value. The status's `problem` is
 `plaintext_found`, with the places. A plaintext secret MUST NOT be handed to an agent: neither the
 problem nor the attention list's `sync_plaintext_found` item carries a hand-off prompt, because the
@@ -1652,7 +1654,7 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 - **GIVEN** a joined machine whose knowledge document gains the line `DB_PASSWORD=<a value>`
 - **WHEN** a round runs, and the status and the attention list are read
 - **THEN** the round is `plaintext_found`, the remote's head has not moved and holds no copy of the value, and the other machine never receives the file
-- **AND** each surface names the document, line 4 and `DB_PASSWORD`, none carries the value, and none carries an agent hand-off
+- **AND** each surface names the document, line 4, `DB_PASSWORD` and its rule, none carries the value, and none carries an agent hand-off
 
 #### Scenario: a value removed before the push is not published from the history
 - **GIVEN** a round stopped as `plaintext_found`, after which the person replaces the value with a `coffer://secret/` reference and makes another edit
@@ -1674,7 +1676,7 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 #### Scenario: the Sync page names each place and offers Move into secrets and push anyway
 - **GIVEN** the Sync page with a `plaintext_found` problem in a skill's script and a knowledge document
 - **WHEN** it is shown, and Move into secrets… is chosen
-- **THEN** its card lists each file, line and key a file still holds, with Move into secrets… and Push anyway…, and no agent hand-off and no Retry
+- **THEN** its card lists each file, line, key and rule a file still holds, with Move into secrets… and Push anyway…, and no agent hand-off and no Retry
 - **AND** the move lists only the skill script's finding and moves it through a reviewed dry run, a dialog opened on files it cannot move from says so, and Push anyway runs only after a confirmation that says it is recorded in the audit log
 
 #### Scenario: code that reads a secret from elsewhere is not a plaintext secret
@@ -1682,3 +1684,13 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 - **WHEN** it is read for plaintext secrets
 - **THEN** nothing is reported
 - **AND** a quoted literal, a `.env`-style `API_KEY=` value, a JSON Web Token, and a `ghp_` token beside `process.env.SPACE_TOKEN ||` on the same line still are
+
+#### Scenario: a vendor token in a knowledge note stops the round
+- **GIVEN** a joined machine whose knowledge note gains a Stripe secret key on a line of prose, assigned to no name
+- **WHEN** a round runs
+- **THEN** the round is `plaintext_found`, naming the note, the line and `stripe-access-token`, and nothing is pushed
+
+#### Scenario: a resource document's secret references do not stop a push
+- **GIVEN** a joined machine that registers an MCP server whose document cites two secrets in `secret_refs`
+- **WHEN** a round runs
+- **THEN** it pushes the document

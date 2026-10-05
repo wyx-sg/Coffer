@@ -22,7 +22,8 @@ from coffer.surfaces.http.knowledge import schemas
 
 #: Every route the knowledge kind serves, as (method, path). Deleting a
 #: collection goes through the kind-agnostic Resource route, so it is
-#: deliberately absent (spec knowledge "Manage knowledge in the web UI"). So are
+#: deliberately absent (spec knowledge "Manage knowledge in the web UI and on
+#: the command line"). So are
 #: ``search`` and ``grep``: this surface serves the person and the UI, and
 #: neither retrieves.
 _EXPECTED_ROUTES = {
@@ -104,7 +105,7 @@ def test_the_knowledge_layer_registers_no_builtin_tool() -> None:
 
 def test_no_wire_model_carries_a_retrieval_payload() -> None:
     """A search request, a hit or a grep match here would be a second retrieval
-    surface no one decided to add (see "Manage knowledge in the web UI")."""
+    surface no one decided to add (see "Manage knowledge in the web UI and on the command line")."""
     for gone in ("SearchRequest", "SearchHit", "SearchResultOut", "GrepMatchOut", "GrepOut"):
         assert not hasattr(schemas, gone), gone
 

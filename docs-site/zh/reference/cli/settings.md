@@ -1,0 +1,389 @@
+---
+title: coffer settings
+description: "Settings: approvals, secret storage, features, data, upkeep."
+pageClass: cli-ref
+---
+
+# coffer settings
+
+Settings: approvals, secret storage, features, data, upkeep.
+
+```sh
+coffer settings [OPTIONS] COMMAND [ARGS]...
+```
+
+本页与 `coffer settings --help` 打印的内容一致。在下面任何命令后加 `--help`，即可在终端里查看它的选项。
+
+## 命令 {#commands}
+
+| 命令 | 说明 |
+| --- | --- |
+| [`settings features`](#settings-features) | The experimental features and whether each is on. |
+| [`settings approvals`](#settings-approvals) | Whether a secret going somewhere new waits for approval. |
+| [`settings approvals show`](#settings-approvals-show) | Whether a new secret destination waits for approval. |
+| [`settings approvals set`](#settings-approvals-set) | Switch approvals. |
+| [`settings secrets`](#settings-secrets) | Where the master key is kept. |
+| [`settings secrets show`](#settings-secrets-show) | Where the master key is kept. |
+| [`settings secrets set`](#settings-secrets-set) | Move the master key. |
+| [`settings feature`](#settings-feature) | Switch one experimental feature on this machine. |
+| [`settings feature set`](#settings-feature-set) | Switch a feature. |
+| [`settings feature reset`](#settings-feature-reset) | Forget this machine's choice. |
+| [`settings engine`](#settings-engine) | Coffer's own model: transcription and upkeep passes. |
+| [`settings engine show`](#settings-engine-show) | The engine's transcription model and upkeep passes. |
+| [`settings engine transcribe-model`](#settings-engine-transcribe-model) | Choose the transcription model. |
+| [`settings engine upkeep`](#settings-engine-upkeep) | Switch or schedule an upkeep pass. |
+| [`settings retention`](#settings-retention) | How long each log is kept. |
+| [`settings retention list`](#settings-retention-list) | How long each log is kept. |
+| [`settings retention set`](#settings-retention-set) | Set how long a log is kept. |
+| [`settings retention preview`](#settings-retention-preview) | What a shorter period would delete. |
+| [`settings retention prune`](#settings-retention-prune) | Prune every log to its period now. |
+| [`settings storage`](#settings-storage) | What Coffer stores, and clearing its caches. |
+| [`settings storage show`](#settings-storage-show) | What Coffer stores and how much. |
+| [`settings storage clear-cache`](#settings-storage-clear-cache) | Delete caches Coffer can rebuild. |
+
+## settings features
+
+The experimental features and whether each is on.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings features [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings approvals
+
+Whether a secret going somewhere new waits for approval.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings approvals [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `set`。
+
+## settings approvals show
+
+Whether a new secret destination waits for approval.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings approvals show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings approvals set
+
+Switch approvals. Body: require_approval. Off waits for an approval itself.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings approvals set [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings secrets
+
+Where the master key is kept.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings secrets [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `set`。
+
+## settings secrets show
+
+Where the master key is kept.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings secrets show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings secrets set
+
+Move the master key. Body: master_key_storage.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings secrets set [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings feature
+
+Switch one experimental feature on this machine.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings feature [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`set`, `reset`。
+
+## settings feature set
+
+Switch a feature. Body: enabled.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings feature set [OPTIONS] KEY
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `KEY` <span class="cli-chip">参数</span> | text | 必填 | key |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings feature reset
+
+Forget this machine's choice.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings feature reset [OPTIONS] KEY
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `KEY` <span class="cli-chip">参数</span> | text | 必填 | key |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings engine
+
+Coffer's own model: transcription and upkeep passes.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings engine [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `transcribe-model`, `upkeep`。
+
+## settings engine show
+
+The engine's transcription model and upkeep passes.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings engine show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings engine transcribe-model
+
+Choose the transcription model. Body: model.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings engine transcribe-model [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings engine upkeep
+
+Switch or schedule an upkeep pass. Body: pass, enabled, interval_s, use_default_interval.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings engine upkeep [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings retention
+
+How long each log is kept.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings retention [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`list`, `set`, `preview`, `prune`。
+
+## settings retention list
+
+How long each log is kept.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings retention list [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings retention set
+
+Set how long a log is kept. Body: retention_days.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings retention set [OPTIONS] TABLE_NAME
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `TABLE_NAME` <span class="cli-chip">参数</span> | text | 必填 | table name |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings retention preview
+
+What a shorter period would delete.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings retention preview [OPTIONS] TABLE_NAME
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `TABLE_NAME` <span class="cli-chip">参数</span> | text | 必填 | table name |
+| `--days` <span class="cli-chip">选项</span> | integer |  |  |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings retention prune
+
+Prune every log to its period now.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings retention prune [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings storage
+
+What Coffer stores, and clearing its caches.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings storage [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `clear-cache`。
+
+## settings storage show
+
+What Coffer stores and how much.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings storage show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings storage clear-cache
+
+Delete caches Coffer can rebuild.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings storage clear-cache [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

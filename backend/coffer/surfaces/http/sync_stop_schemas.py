@@ -210,6 +210,7 @@ class MaskedValueOut(BaseModel):
     start: int
     end: int
     key: str
+    rule: str
     shape: ValueShapeOut
 
 
@@ -230,6 +231,8 @@ class PlaintextContextOut(BaseModel):
     path: str
     line: int
     key: str
+    #: The bundled rule that found it.
+    rule: str = ""
     change: Literal["added", "modified"]
     on_remote: bool
     lines: list[MaskedLineOut]

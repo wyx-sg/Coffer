@@ -17,11 +17,13 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
 import { useToast } from "@/components/ui/toast";
+import { translateApiError } from "@/lib/api/errors";
 import type { SyncStatus } from "@/lib/api/sync";
 import { useSaveSyncRemote } from "@/lib/hooks/useSync";
 import { SyncRemoteFields, SyncSecretsSection } from "./SyncRemoteFields";
 import { SyncStopSyncing } from "./SyncStopSyncing";
 import { SyncVaultPath } from "./SyncVaultPath";
+import { useStorePushToken } from "./useStorePushToken";
 import {
   formFromRemote,
   toRemoteInput,
@@ -38,6 +40,7 @@ export function SyncRemoteTab({ status }: { status: SyncStatus }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const save = useSaveSyncRemote();
+  const storePushToken = useStorePushToken();
   const [params] = useSearchParams();
   const stored = status.remote;
 
@@ -58,9 +61,20 @@ export function SyncRemoteTab({ status }: { status: SyncStatus }) {
     const found = validateRemote(next);
     setErrors(found);
     if (found.url || sameInput(next, savedForm)) return;
-    save.mutate(toRemoteInput(next), {
-      onSuccess: () => toast.success(t("common.saved")),
-    });
+    const commitForm = (form: FormState) =>
+      save.mutate(toRemoteInput(form), {
+        onSuccess: () => toast.success(t("common.saved")),
+      });
+    if (next.secret?.kind !== "new") return commitForm(next);
+    // A pasted token is written to Secrets first: the remote cites it, and the daemon resolves
+    // it the moment the remote is saved.
+    storePushToken(next).then(
+      (stored) => {
+        setDraft(stored);
+        commitForm(stored);
+      },
+      (error) => toast.error(translateApiError(t, error)),
+    );
   };
 
   const fields = {

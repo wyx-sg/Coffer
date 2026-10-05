@@ -10,11 +10,15 @@ There is no process and no MCP peer: ``tools/list`` is answered from the
 group's config and ``tools/call`` makes the tool's HTTP request here.
 
 The request is made with no redirect followed (a 3xx is returned as a result,
-so the auth header is never carried somewhere nobody configured), the group's
-timeout, and at most 1 MiB of the response read. The secret arrives in
-``header_overlay`` — materialised by the supervisor through the guarded
-resolver for this group's base URL — and its value is masked out of every
-result before it leaves this module.
+so the auth header is never carried somewhere nobody configured), the chosen
+environment's timeout, and at most 1 MiB of the response read. Each call names
+its environment (spec mcp-gateway "Choose a custom tool's environment on every
+call"); the connection keeps none, so concurrent calls on different
+environments share nothing but the tool definitions. The environment's secrets
+are resolved per call by ``env_secrets`` — the guarded resolver for that
+environment's base URL — so a missing or unapproved secret stops only calls in
+that environment; a value is masked out of every result before it leaves this
+module.
 
 The base URL is an endpoint the user configured as their own, so these calls
 are exempt from the SSRF guard (Principles → Network defaults).
@@ -32,15 +36,30 @@ import mcp.types as mcp_types
 from mcp import MCPError
 
 from coffer.domain.auth_scheme import with_schemes
+from coffer.domain.error_base import CofferError
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
-from coffer.domain.mcp.http_api_render import RenderedRequest, RenderError, render_request
+from coffer.domain.mcp.http_api_environment import (
+    HttpApiEnvironment,
+    advertised_schema,
+    select_environment,
+)
+from coffer.domain.mcp.http_api_render import (
+    ArgumentsInvalid,
+    RenderedRequest,
+    RenderError,
+    render_request,
+)
+from coffer.domain.secret_errors import SecretBindingPending
 
 #: The most of a response body a tool returns (spec: "read at most 1 MiB").
 MAX_RESPONSE_BYTES = 1024 * 1024
 MASK = "***"
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
+#: Resolve one environment's secret headers: ``{header: value}``. Raises
+#: ``SecretMissing`` / ``SecretBindingPending`` for that environment only.
+EnvSecrets = Callable[[HttpApiEnvironment], Awaitable[dict[str, str]]]
 
 
 def tool_annotations(tool: HttpApiTool) -> mcp_types.ToolAnnotations:
@@ -56,7 +75,7 @@ def list_tools_result(transport: HttpApiTransport) -> mcp_types.ListToolsResult:
             mcp_types.Tool(
                 name=t.name,
                 description=t.description or t.request_label,
-                input_schema=t.input_schema,
+                input_schema=advertised_schema(t.input_schema, transport.environments),
                 annotations=tool_annotations(t),
             )
             for t in transport.tools
@@ -124,30 +143,55 @@ def mask_secrets(text: str, secrets: list[str]) -> str:
     return text
 
 
+def overlay_for(env: HttpApiEnvironment, overlay: dict[str, str]) -> dict[str, str]:
+    """``{header: value}`` of ``env`` out of an overlay keyed by slot."""
+    slots = env.slot_refs()
+    return {env.header_of(slot): value for slot, value in overlay.items() if slot in slots}
+
+
 def build_request(
     transport: HttpApiTransport,
+    env: HttpApiEnvironment,
     tool: HttpApiTool,
     arguments: dict[str, Any] | None,
     header_overlay: dict[str, str],
 ) -> RenderedRequest:
-    """The request for ``tool``, the group's secret headers added last (so no
-    tool header can replace them)."""
+    """The request for ``tool`` in ``env``: the arguments validated against the
+    tool's schema, the environment's base URL, headers and variables, and its
+    secret headers (``{header: value}``) added last, so no tool header can
+    replace them. ``arguments`` no longer holds the environment choice."""
     rendered = render_request(
-        base_url=str(transport.base_url),
+        base_url=str(env.base_url),
         method=tool.method,
         path=tool.path,
-        group_headers=transport.headers,
+        group_headers=env.headers,
         tool_headers=tool.headers,
         body_template=tool.body_template,
         input_schema=tool.input_schema,
         arguments=arguments,
+        variables=env.variables,
     )
-    for header, value in with_schemes(header_overlay, transport.auth_schemes).items():
+    for header, value in with_schemes(header_overlay, env.auth_schemes).items():
         # Header names compare case-insensitively: drop any spelling a tool gave.
         for name in [n for n in rendered.headers if n.lower() == header.lower()]:
             del rendered.headers[name]
         rendered.headers[header] = value
     return rendered
+
+
+def refusal_text(error: CofferError | RenderError) -> str:
+    """An in-band tool error naming the code, the reason and what to do next."""
+    if isinstance(error, ArgumentsInvalid):
+        lines = "\n".join(f"- {e.path or '/'} ({e.keyword}): {e.message}" for e in error.errors)
+        return f"{error.code}: the arguments do not match the tool's schema\n{lines}"
+    if isinstance(error, SecretBindingPending):
+        ids = " ".join(error.approval_ids)
+        text = f"{error.code}: {error}"
+        if ids and error.code == "SECRET_BINDING_PENDING":
+            text += f"\napproval ids: {ids}\nnext: coffer approval approve {ids}"
+        return text
+    code = getattr(error, "code", "CUSTOM_TOOL_REQUEST_INVALID")
+    return f"{code}: {error}"
 
 
 async def send_request(
@@ -222,12 +266,20 @@ class HttpApiUpstreamConnection:
         header_overlay: dict[str, str],
         server_name: str,
         client_factory: Callable[[], httpx.AsyncClient] | None = None,
+        env_secrets: EnvSecrets | None = None,
     ) -> None:
         self._transport = transport
+        #: ``{slot: value}``, used only when no ``env_secrets`` is given.
         self._overlay = dict(header_overlay)
         self._server_name = server_name
         self._client_factory = client_factory
+        self._env_secrets = env_secrets
         self._closed = False
+
+    def use_env_secrets(self, env_secrets: EnvSecrets) -> None:
+        """Resolve each call's environment secrets with ``env_secrets`` (the
+        supervisor's guarded resolver), instead of the overlay given up front."""
+        self._env_secrets = env_secrets
 
     def on_notification(self, cb: NotificationCallback) -> None:
         """Nothing to forward: a group's list changes only when its config does,
@@ -253,19 +305,35 @@ class HttpApiUpstreamConnection:
             raise MCPError(mcp_types.METHOD_NOT_FOUND, f"{method} is not offered by a tool group")
         raise UpstreamUnavailable(f"method not supported by gateway: {method!r}")
 
+    async def _secrets(self, env: HttpApiEnvironment) -> dict[str, str]:
+        if self._env_secrets is not None:
+            return await self._env_secrets(env) if env.secret_refs else {}
+        return overlay_for(env, self._overlay)
+
     async def _call(self, name: str, arguments: Any) -> mcp_types.CallToolResult:
         tool = self._transport.tool(name)
         if tool is None:
             return _text_result(f"no tool {name!r} in this group", is_error=True)
-        args = arguments if isinstance(arguments, dict) else {}
-        secrets = list(self._overlay.values())
         try:
-            request = build_request(self._transport, tool, args, self._overlay)
+            env, args = select_environment(
+                self._transport.environments,
+                self._server_name,
+                arguments if isinstance(arguments, dict) else {},
+            )
+            # Validate and render BEFORE any secret is decrypted: a call the
+            # schema refuses never touches the store.
+            build_request(self._transport, env, tool, args, {})
+            overlay = await self._secrets(env)
+        except (CofferError, RenderError) as e:
+            return _text_result(refusal_text(e), is_error=True)
+        secrets = list(overlay.values())
+        try:
+            request = build_request(self._transport, env, tool, args, overlay)
         except RenderError as e:
-            return _text_result(mask_secrets(str(e), secrets), is_error=True)
+            return _text_result(mask_secrets(refusal_text(e), secrets), is_error=True)
         outcome = await send_request(
             request,
-            timeout_seconds=self._transport.timeout_seconds,
+            timeout_seconds=self._transport.timeout_for(env),
             secrets=secrets,
             client_factory=self._client_factory,
         )
@@ -278,11 +346,14 @@ class HttpApiUpstreamConnection:
 
 __all__ = [
     "MAX_RESPONSE_BYTES",
+    "EnvSecrets",
     "HttpApiUpstreamConnection",
     "HttpCallOutcome",
     "build_request",
     "list_tools_result",
     "mask_secrets",
+    "overlay_for",
+    "refusal_text",
     "send_request",
     "tool_annotations",
 ]

@@ -14,6 +14,7 @@ Concrete SQLAlchemy implementation lives in ``infrastructure/chat/persistence.py
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -29,6 +30,10 @@ from coffer.domain.chat.errors import ConversationNotFound, UnknownAgent
 from coffer.domain.pagination import Page
 
 _TITLE_MAX_CHARS = 60
+#: How long a delete waits for the cancelled turn to let go of its session
+#: before asking the agent (the turn's own teardown: interrupt, then the
+#: process's SIGTERM/SIGKILL ladder).
+_TURN_END_WAIT_SECONDS = 15.0
 _PLACEHOLDER_TITLE = "New conversation"
 
 
@@ -167,16 +172,22 @@ class ChatService:
     ) -> None:
         """Delete a conversation through its agent, then its index row.
 
-        The turn in flight is cancelled, the native session is deleted through
-        the agent and the index row goes last. When the agent refuses, its error
-        propagates and the index row stays (the turn was already cancelled). A
-        conversation with no session yet is deleted from the index only.
+        The turn in flight is cancelled and its end awaited, the native session
+        is deleted through the agent and the index row goes last. The wait
+        matters: until the turn's agent process exits it still holds the
+        session, and Codex refuses to delete a thread another process is
+        writing to. ``cancel_turn_fn`` may return the cancelled turn's task to
+        wait on. When the agent refuses, its error propagates and the index row
+        stays (the turn was already cancelled). A conversation with no session
+        yet is deleted from the index only.
         """
         conv = await self.get_conversation(conversation_id)
         session_id = conv.agent_config.session_id
         if session_id and self._sessions is not None:
             if cancel_turn_fn is not None:
-                cancel_turn_fn(conversation_id)
+                ending = cancel_turn_fn(conversation_id)
+                if isinstance(ending, asyncio.Future):
+                    await asyncio.wait({ending}, timeout=_TURN_END_WAIT_SECONDS)
             await self._sessions.delete(conv.agent_key, session_id)
         await self.delete_conversation(conversation_id, cancel_turn_fn=cancel_turn_fn)
 

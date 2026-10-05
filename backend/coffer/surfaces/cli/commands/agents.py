@@ -1,0 +1,298 @@
+"""``coffer agent`` — the Agents page and an agent's tabs, one route each.
+
+Spec agent-registry "Offer every agent operation over REST and on the Agents
+page". An agent is named by its type (``claude-code``,
+``codex``) or its uid. Its config files and native memory are the agent's own
+files and are read with the reader's own tools; the listings are commands.
+"""
+
+from __future__ import annotations
+
+from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
+
+A = {"uid": "agent"}
+_UI = "Agents · "
+
+SPECS = [
+    RouteCommand(
+        "agent list",
+        "GET",
+        "/agents",
+        _UI + "list",
+        "Registered agents.",
+        rows="items",
+        columns=("name", "type", "state", "version", "config_dir"),
+    ),
+    RouteCommand(
+        "agent types",
+        "GET",
+        "/agents/types",
+        _UI + "one row per agent type",
+        "Every supported agent type, found or not, and whether it can be added.",
+    ),
+    RouteCommand(
+        "agent show", "GET", "/agents/{uid}", _UI + "open an agent", "One agent.", names=A
+    ),
+    RouteCommand(
+        "agent add",
+        "POST",
+        "/agents",
+        _UI + "Connect (register)",
+        "Register an agent. Body: type (claude-code | codex), config_dir.",
+        body=True,
+    ),
+    RouteCommand(
+        "agent update",
+        "PATCH",
+        "/agents/{uid}",
+        _UI + "edit the config dir or model",
+        "Change an agent. Body: config_dir, model, tier_models.",
+        names=A,
+        body=True,
+    ),
+    RouteCommand(
+        "agent connect",
+        "POST",
+        "/agents/{uid}/coffer-connection",
+        _UI + "Connect",
+        "Write Coffer's MCP entry, hooks and skills into the agent.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent disconnect",
+        "DELETE",
+        "/agents/{uid}/coffer-connection",
+        _UI + "Disconnect",
+        "Remove what Coffer wrote into the agent.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent connection",
+        "GET",
+        "/agents/{uid}/coffer-connection",
+        _UI + "the Coffer connection's state",
+        "Each part of the connection and its state.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent config-files",
+        "GET",
+        "/agents/{uid}/config-files",
+        _UI + "Config tab",
+        "The agent's config files and their paths (read them with your own tools).",
+        names=A,
+    ),
+    RouteCommand(
+        "agent hooks",
+        "GET",
+        "/agents/{uid}/hooks",
+        _UI + "Hooks tab",
+        "The hooks in the agent's config.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent models",
+        "GET",
+        "/agent-providers/{agent_key}/models",
+        _UI + "model picker",
+        "The models an agent type can be switched to.",
+        query=(Q("source", "Where the list comes from"),),
+        args={"agent_key": "The agent type (claude-code, codex)"},
+    ),
+    RouteCommand(
+        "agent providers",
+        "GET",
+        "/agent-providers",
+        _UI + "model providers per type",
+        "Each agent type's model catalogue source.",
+    ),
+    # MCP entries the agent has of its own.
+    RouteCommand(
+        "agent mcp-entry list",
+        "GET",
+        "/agents/{uid}/mcp-entries",
+        _UI + "MCP tab",
+        "The agent's own MCP entries.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent mcp-entry show",
+        "GET",
+        "/agents/{uid}/mcp-entries/{entry}",
+        _UI + "MCP tab · open an entry",
+        "One entry (secret values never shown).",
+        names=A,
+        query=(Q("source", "The config file the entry is in"),),
+    ),
+    RouteCommand(
+        "agent mcp-entry remove",
+        "DELETE",
+        "/agents/{uid}/mcp-entries/{entry}",
+        _UI + "MCP tab · remove",
+        "Remove an entry from the agent's config.",
+        names=A,
+        query=(Q("source", "The config file the entry is in"),),
+    ),
+    RouteCommand(
+        "agent mcp-entry adopt",
+        "POST",
+        "/agents/{uid}/mcp-entries/{entry}/adopt",
+        _UI + "MCP tab · Move into Coffer",
+        "Register an entry as a Coffer MCP server. Body: new_name, secrets, source.",
+        names=A,
+        body=True,
+        pending=True,
+    ),
+    RouteCommand(
+        "agent mcp-import plan",
+        "POST",
+        "/agents/mcp-import/plan",
+        "MCP servers · Import from agents · review",
+        "What importing these entries would register. Body: entries[{agent_uid, name, "
+        "source, new_name}].",
+        body=True,
+    ),
+    RouteCommand(
+        "agent mcp-import apply",
+        "POST",
+        "/agents/mcp-import/apply",
+        "MCP servers · Import from agents · Import",
+        "Register the entries as Coffer MCP servers. Body as for plan.",
+        body=True,
+        pending=True,
+    ),
+    # Plugins.
+    RouteCommand(
+        "agent plugin list",
+        "GET",
+        "/agents/{uid}/plugins",
+        _UI + "Plugins tab",
+        "The agent's plugins.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent plugin show",
+        "GET",
+        "/agents/{uid}/plugins/{plugin_id}",
+        _UI + "Plugins tab · open",
+        "One plugin and what it brings.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent plugin set",
+        "PATCH",
+        "/agents/{uid}/plugins/{plugin_id}",
+        _UI + "Plugins tab · switch on or off",
+        "Switch a plugin on or off. Body: enabled (--set enabled=false).",
+        names=A,
+        body=True,
+    ),
+    RouteCommand(
+        "agent plugin uninstall",
+        "DELETE",
+        "/agents/{uid}/plugins/{plugin_id}",
+        _UI + "Plugins tab · Uninstall",
+        "Uninstall a plugin with the agent's own CLI.",
+        names=A,
+    ),
+    # Sessions.
+    RouteCommand(
+        "agent session list",
+        "GET",
+        "/agents/{uid}/sessions",
+        _UI + "Sessions tab",
+        "The agent's native sessions, newest first.",
+        names=A,
+        query=(Q("q", "Text to search for"), Q("limit", kind=int), Q("cursor")),
+    ),
+    RouteCommand(
+        "agent session all",
+        "GET",
+        "/agent-sessions",
+        "Conversations · every agent's sessions",
+        "Every agent's sessions in one list.",
+        query=(Q("q"), Q("source"), Q("agent", "An agent uid"), Q("limit", kind=int), Q("cursor")),
+    ),
+    RouteCommand(
+        "agent session rename",
+        "PATCH",
+        "/agents/{uid}/sessions/{session_id}",
+        _UI + "Sessions tab · Rename",
+        "Rename a session. Body: title.",
+        names=A,
+        body=True,
+    ),
+    RouteCommand(
+        "agent session delete",
+        "DELETE",
+        "/agents/{uid}/sessions/{session_id}",
+        _UI + "Sessions tab · Delete",
+        "Delete a session from the agent's store.",
+        names=A,
+    ),
+    # Skills the agent holds that Coffer does not manage.
+    RouteCommand(
+        "agent unmanaged-skill list",
+        "GET",
+        "/agents/{uid}/unmanaged-skills",
+        _UI + "Skills tab · not managed",
+        "Skills in the agent Coffer does not manage.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent unmanaged-skill show",
+        "GET",
+        "/agents/{uid}/unmanaged-skills/{skill}",
+        _UI + "Skills tab · open",
+        "One unmanaged skill.",
+        names=A,
+        query=(Q("location", "Where the skill sits"),),
+    ),
+    RouteCommand(
+        "agent unmanaged-skill files",
+        "GET",
+        "/agents/{uid}/unmanaged-skills/{skill}/files",
+        _UI + "Skills tab · files",
+        "The skill's files (read them with your own tools).",
+        names=A,
+        query=(Q("location"),),
+    ),
+    RouteCommand(
+        "agent unmanaged-skill adopt",
+        "POST",
+        "/agents/{uid}/unmanaged-skills/{skill}/adopt",
+        _UI + "Skills tab · Move into Coffer",
+        "Make Coffer manage the skill. Body: location, name, reach.",
+        names=A,
+        body=True,
+    ),
+    RouteCommand(
+        "agent unmanaged-skill delete",
+        "DELETE",
+        "/agents/{uid}/unmanaged-skills/{skill}",
+        _UI + "Skills tab · Delete",
+        "Delete an unmanaged skill from the agent.",
+        names=A,
+        query=(Q("location"),),
+    ),
+    # Native memory (the files are the agent's own).
+    RouteCommand(
+        "agent native-memory list",
+        "GET",
+        "/agents/{uid}/native-memory",
+        _UI + "Memory tab",
+        "What the agent keeps in its own memory.",
+        names=A,
+    ),
+    RouteCommand(
+        "agent native-memory files",
+        "GET",
+        "/agents/{uid}/native-memory/files",
+        _UI + "Memory tab · files",
+        "The memory files and their paths.",
+        names=A,
+        query=(Q("dir", "A folder under the agent's memory"),),
+    ),
+]
+
+mount(SPECS)

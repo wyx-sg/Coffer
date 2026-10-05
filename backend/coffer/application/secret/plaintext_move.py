@@ -48,13 +48,16 @@ class Finding:
     key: str
     #: A skill's secret's label; its id and a server's ref are minted on import.
     proposed_name: str | None
+    #: The id of the detector rule that found the value.
+    rule: str
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Hit:
     finding: Finding
     value: str = dataclasses.field(repr=False)
-    #: Where the value sits on its line (skills only).
+    #: Where the value sits in its file's text, as offsets (skills only): a
+    #: value that spans lines (a PEM private key) is replaced whole.
     start: int = -1
     end: int = -1
     #: The server's config as it was read (servers only).
@@ -210,12 +213,27 @@ def _with_refs(config: dict[str, Any], hits: list[Hit], refs: dict[str, str]) ->
     transport = new["transport"]
     for h in hits:
         bucket = "env" if h.finding.field == "env" else "headers"
-        transport.get(bucket, {}).pop(h.finding.key, None)
-        transport.setdefault("secret_refs", {})[h.finding.key] = refs[h.finding.id]
+        # A custom-tool group's header lives in one of its environments, its
+        # finding keyed by the environment's slot (``<key>:<header>``).
+        holder, key = _holder(transport, h.finding.key)
+        holder.get(bucket, {}).pop(key, None)
+        holder.setdefault("secret_refs", {})[key] = refs[h.finding.id]
         scheme, _ = _credential(h)
         if scheme:
-            transport.setdefault("auth_schemes", {})[h.finding.key] = scheme
+            holder.setdefault("auth_schemes", {})[key] = scheme
     return new
+
+
+def _holder(transport: dict[str, Any], slot: str) -> tuple[dict[str, Any], str]:
+    """The map that holds ``slot`` — an environment of a custom-tool group, or
+    the transport itself — and the key in it."""
+    for env in transport.get("environments") or []:
+        key = str(env.get("key") or "")
+        if key and slot.startswith(f"{key}:"):
+            return env, slot[len(key) + 1 :]
+        if not key and slot in (env.get("headers") or {}):
+            return env, slot
+    return transport, slot
 
 
 async def _move_server(

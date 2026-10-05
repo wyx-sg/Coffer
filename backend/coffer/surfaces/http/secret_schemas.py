@@ -21,6 +21,11 @@ class PresenceGrantIn(BaseModel):
 
     nonce: str = Field(min_length=8, max_length=128)
     signature: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
+    #: The approval's target fingerprint the person was shown. When sent, the
+    #: grant is signed over ``<id>@<fingerprint>`` and the approval is applied
+    #: only while it is still pending for that very target (design
+    #: align-cli-with-ui-and-add-tool-environments D9).
+    fingerprint: str | None = Field(default=None, max_length=128)
 
 
 class AttestIn(BaseModel):
@@ -205,6 +210,8 @@ class SecretScanFindingOut(BaseModel):
     key: str
     #: The label a skill's secret gets; its id and a server's ref are minted on import.
     proposed_name: str | None = None
+    #: The id of the detector rule that found the value.
+    rule: str
 
 
 class SecretScanOut(BaseModel):

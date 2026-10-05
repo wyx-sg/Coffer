@@ -3,12 +3,14 @@
 // session in the preferred terminal, named on it ("Open in iTerm"); the ▾ menu
 // holds Open in <other terminal> for each other terminal on this machine, then
 // Copy command — the same shape as Hand off to <Agent>. A row with no session
-// yet shows it disabled, with the reason in a tooltip, and no menu.
+// yet has nothing to open: it shows a muted "Not started" in the button's place,
+// with the reason in a tooltip, and no menu.
 import { useTranslation } from "react-i18next";
 import { Copy, SquareTerminal } from "lucide-react";
 
 import type { MenuAction } from "@/components/ui/menu";
 import { SplitButton } from "@/components/ui/split-button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TerminalChoice } from "@/lib/hooks/useTerminals";
 import type { SessionRowData } from "@/lib/sessions/rows";
 
@@ -32,6 +34,23 @@ export function SessionOpenButton({
   onCopyCommand,
 }: Props) {
   const { t } = useTranslation();
+  if (!openable) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              tabIndex={0}
+              className="inline-flex h-control-sm items-center whitespace-nowrap rounded-md px-2.5 text-xs text-text-subtle outline-none focus-visible:ring-[3px] focus-visible:ring-accent-soft"
+            >
+              {t("sessions.row.notStarted")}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{t("sessions.row.noSession")}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
   const actions: MenuAction[] = otherTerminals.map((other) => ({
     key: `terminal:${other.value}`,
     label: t("sessions.row.openIn", { terminal: other.label }),
@@ -56,11 +75,9 @@ export function SessionOpenButton({
           ? t("sessions.row.openIn", { terminal: terminalLabel })
           : t("sessions.row.open")
       }
-      disabled={!openable}
-      tooltip={openable ? undefined : t("sessions.row.noSession")}
       onClick={() => onOpen(row)}
       menuLabel={t("sessions.row.openOptions", { title: row.title })}
-      actions={openable ? actions : []}
+      actions={actions}
     />
   );
 }

@@ -1,12 +1,12 @@
 ---
 title: coffer config
-description: "Read and change Coffer's settings (the keys read before the daemon starts)"
+description: "Daemon settings read before it binds (work while it is down)."
 pageClass: cli-ref
 ---
 
 # coffer config
 
-Read and change Coffer's settings (the keys read before the daemon starts)
+Daemon settings read before it binds (work while it is down).
 
 ```sh
 coffer config [OPTIONS] COMMAND [ARGS]...

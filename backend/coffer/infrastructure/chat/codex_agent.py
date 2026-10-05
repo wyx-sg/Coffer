@@ -61,6 +61,9 @@ _logger = logging.getLogger(__name__)
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.
 _SENTINEL = object()
 
+#: How long a cancelled turn waits for ``turn/interrupt`` before closing anyway.
+_INTERRUPT_TIMEOUT_SECONDS = 5.0
+
 #: JSON-RPC client info Coffer announces in the ``initialize`` handshake.
 _CLIENT_INFO = {"name": "coffer", "title": None, "version": "0"}
 
@@ -348,11 +351,16 @@ class CodexAppServerAdapter:
                 yield item
             await self._persist_session(state)
         except asyncio.CancelledError:
+            # Bounded: an app-server that never answers must not keep the turn
+            # (and the process holding the thread's writer lock) alive forever.
             with contextlib.suppress(Exception):
                 if turn_id and state.session_id:
-                    await rpc.request(
-                        "turn/interrupt",
-                        {"threadId": state.session_id, "turnId": turn_id},
+                    await asyncio.wait_for(
+                        rpc.request(
+                            "turn/interrupt",
+                            {"threadId": state.session_id, "turnId": turn_id},
+                        ),
+                        _INTERRUPT_TIMEOUT_SECONDS,
                     )
             # Persist the thread id even on interruption: it arrives early (the
             # thread/started notification), so an interrupted turn stays resumable.

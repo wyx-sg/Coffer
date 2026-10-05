@@ -81,7 +81,7 @@ The ways a turn can end early are told apart by marks on the in-flight turn, set
 | Cause | How it is signalled | Outcome |
 | --- | --- | --- |
 | Owner interrupt (`POST .../interrupt`, `/stop` in a channel, **Stop** in the list) | The turn is marked interrupted; the queue is paused | `turn_done` with `stop_reason: "interrupted"`; the output so far is delivered to the channel as events. |
-| Conversation deleted | The turn is marked discarded | The turn is cancelled; the bus closes every subscriber. |
+| Conversation deleted | The turn is marked discarded | The turn is cancelled; the bus closes every subscriber. The delete waits for the turn's agent process to exit before asking the agent to delete the session, because Codex refuses to delete a thread a live process still holds. |
 | Daemon shutdown | Neither mark | `turn_error` `daemon_stopped`. |
 
 Stopping every turn is a step of the daemon's teardown and runs before the database closes. It closes the door first (no turn may start afterwards and every queue is paused, so a cancelled turn's end does not start the next one), cancels every running turn, and waits up to five seconds for them. A daemon that dies outright leaves nothing behind to clean up: the next channel message resumes the agent's session.
@@ -170,8 +170,8 @@ When a subscriber attaches, the buffer and snapshot are enqueued synchronously b
 
 Chat has no route that creates a conversation or sends a message: a message enters through a channel, in-process. The sessions of an agent are listed under `GET /api/v1/agents/{uid}/sessions` (see [Native sessions](#native-sessions)), and the Conversations page lists them for all agents at once (see [One list of every agent's sessions](#all-agent-sessions)). There is no route that lists conversations on their own: the channel-only list was removed once the cross-agent listing covered it.
 
-::: info No CLI
-Conversations are driven from channels. The CLI has no chat commands, because it carries only what needs it ([chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)).
+::: info On the command line
+Conversations are driven from channels, so no command starts one or sends a message. What the Conversations page does to a conversation has a command like every other page action: `coffer agent session all` lists every agent's sessions, and `coffer conversation rename`, `interrupt` and `delete` call the same routes as the page ([CLI coverage](/reference/cli-coverage#conversation)).
 :::
 
 ## Agent adapters
@@ -334,7 +334,7 @@ Chat may not import the agent kind, so the chat routes reach rename and delete t
 
 ### One list of every agent's sessions {#all-agent-sessions}
 
-The Conversations page reads `GET /api/v1/agent-sessions`. The daemon asks each managed agent's native-session service for its listing concurrently and merges the results by latest activity, so a session started in a terminal, one a channel opened and one made by New conversation sit in one order. The merged page has one opaque cursor, which records, per agent, where that agent's next unread row sits; the answer has no total, because Codex cannot count without reading everything. An agent whose listing fails is left out and named in the answer, and the page shows a line with Retry above the others' sessions. When `source` names only channels, the listing pages the conversation index instead of asking the agents, so a channel conversation that has not run a turn yet (no native session) is still listed, disabled to open.
+The Conversations page reads `GET /api/v1/agent-sessions`. The daemon asks each managed agent's native-session service for its listing concurrently and merges the results by latest activity, so a session started in a terminal, one a channel opened and one made by New conversation sit in one order. The merged page has one opaque cursor, which records, per agent, where that agent's next unread row sits; the answer has no total, because Codex cannot count without reading everything. An agent whose listing fails is left out and named in the answer, and the page shows a line with Retry above the others' sessions. When `source` names only channels, the listing pages the conversation index instead of asking the agents, so a channel conversation that has not run a turn yet (no native session) is still listed, marked Not started with nothing to open.
 
 Asking an agent is the slow part of this read: Codex answers `thread/list` in about a second whatever the page size. The daemon therefore keeps each agent's last answer for a position and search in memory, never on disk. A read within five seconds of it is answered without asking the agent. A read up to five minutes later is answered at once while one refresh runs in the background, and anything older is asked again before the answer goes out. Reads of the same answer that arrive together share one request. Agents are asked in pages of a fixed size, so the pages after the first reuse what the first read kept. Renaming or deleting a session drops that agent's kept answers. The page refreshes every 30 seconds while it is visible, and pointing at Conversations in the sidebar fetches the first page before the click.
 

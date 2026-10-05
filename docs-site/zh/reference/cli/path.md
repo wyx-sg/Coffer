@@ -1,12 +1,12 @@
 ---
 title: coffer path
-description: "Where Coffer's log files and skill working files live"
+description: "Where Coffer keeps files you read directly."
 pageClass: cli-ref
 ---
 
 # coffer path
 
-Where Coffer's log files and skill working files live
+Where Coffer keeps files you read directly.
 
 ```sh
 coffer path [OPTIONS] COMMAND [ARGS]...

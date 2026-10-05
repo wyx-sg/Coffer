@@ -497,7 +497,7 @@ machine binding and pairing untouched. A secret left blank rotates nothing.
 Registering, editing, enabling, disabling, scoping and deleting a channel are the framework's own
 lifecycle operations (see [resource-framework](../resource-framework/spec.md)), done on the
 Channels page and over `/api/v1/resources`; pairing, binding, restarting and notifying are the
-channel routes under `/api/v1/channels/{uid}`. Coffer has no `channel` command group. The page
+channel routes under `/api/v1/channels/{uid}`; the `coffer channel` commands call the same routes ([resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"). The page
 MUST report the channel's configuration together with its status — adapter run state, paired
 peer, machine binding and the inbound state its type reports — with the group gating and the
 idle period shown as the settings with their defaults filled in, as the daemon reads them. Saving
