@@ -35,7 +35,7 @@ Four rules shape everything below:
 
 1. Create a private, empty repository and a fine-grained personal access token with **Contents: Read and write** on it.
 2. On the **Secrets** page choose **Add secret**, name it (for example `github-sync-token`), paste the token as the value. The value is never shown back and stays out of your shell history.
-3. On the **Sync** page enter the **Repository URL**, choose the token under **Secret**, then press **Check repository**.
+3. On the **Sync** page enter the **Repository URL**, choose the token under **Secret**, then press **Check repository**. You can also skip step 2 and paste the token straight into the empty **Secret** field: Coffer stores it as a new secret when the remote is saved.
 
 ### GitLab
 

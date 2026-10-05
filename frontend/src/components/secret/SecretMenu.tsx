@@ -1,6 +1,6 @@
 // src/components/secret/SecretMenu.tsx — the one secret menu (Foundations 0.2.05):
 // filter · stored secrets by name (with their description and "used by N") · New secret… · Change value… ·
-// (rows only) Type a plain value. Wraps its trigger, and owns the New secret
+// (rows only) Type a plain value · (optional fields) None. Wraps its trigger, and owns the New secret
 // and Replace value dialogs it opens.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +24,8 @@ interface Props {
   defaultNewLabel: string;
   /** Rows only: back to a plain value. Omit in a whole-value secret field. */
   onPlain?: () => void;
+  /** An optional secret field: the item that empties it ("None"). */
+  clear?: { label: string; onClear: () => void };
   /** A pending new secret: its label, editable until the form is saved. */
   pendingLabel?: { value: string; onChange: (label: string) => void };
   disabled?: boolean;
@@ -33,7 +35,8 @@ const ITEM =
   "flex h-[30px] w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none";
 
 export function SecretMenu(props: Props) {
-  const { children, selected, onSelectStored, defaultNewLabel, onPlain, pendingLabel } = props;
+  const { children, selected, onSelectStored, defaultNewLabel, onPlain, pendingLabel, clear } =
+    props;
   const { t } = useTranslation();
   const { options, rowOf, displayOf } = useSecretChoices();
   const [open, setOpen] = useState(false);
@@ -58,6 +61,7 @@ export function SecretMenu(props: Props) {
           {children}
         </PopoverTrigger>
         <PopoverContent
+          collisionPadding={8}
           className="flex max-h-[min(420px,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-[240px] flex-col p-1.5 text-text"
           aria-label={t("secretField.menu")}
         >
@@ -143,6 +147,18 @@ export function SecretMenu(props: Props) {
                 }}
               >
                 {t("secretField.changeValue", { name: displayOf(selected ?? "") })}
+              </button>
+            ) : null}
+            {clear && selected ? (
+              <button
+                type="button"
+                className={ITEM}
+                onClick={() => {
+                  clear.onClear();
+                  close();
+                }}
+              >
+                {clear.label}
               </button>
             ) : null}
             {onPlain ? (

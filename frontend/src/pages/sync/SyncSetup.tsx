@@ -29,6 +29,7 @@ import { SyncEmptyRemote } from "./SyncEmptyRemote";
 import { SyncJoinPreview } from "./SyncJoinPreview";
 import { SyncRemoteCheck } from "./SyncRemoteCheck";
 import { SyncRemoteFields } from "./SyncRemoteFields";
+import { useStorePushToken } from "./useStorePushToken";
 import {
   EMPTY_FORM,
   formFromRemote,
@@ -43,6 +44,7 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
   const { toast } = useToast();
   const check = useCheckRemote();
   const save = useSaveSyncRemote();
+  const storePushToken = useStorePushToken();
   const clear = useClearSyncRemote();
   const join = useJoin();
   const [draft, setDraft] = useState<FormState>(() => formFromRemote(status.remote));
@@ -81,11 +83,8 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
   }
 
   const busy = check.isPending || save.isPending;
-  const runCheck = () => {
-    const found = validateRemote(draft);
-    setErrors(found);
-    if (found.url) return;
-    const body = input();
+  const checkForm = (form: FormState) => {
+    const body = toRemoteInput(form);
     check.mutate(
       { url: body.url, branch: body.branch, secret_ref: body.secret_ref },
       {
@@ -96,6 +95,20 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
           else if (result.result === "vault") save.mutate(body);
         },
       },
+    );
+  };
+  const runCheck = () => {
+    const found = validateRemote(draft);
+    setErrors(found);
+    if (found.url) return;
+    if (draft.secret?.kind !== "new") return checkForm(draft);
+    // A pasted token is written to Secrets first: the check signs in with it.
+    storePushToken(draft).then(
+      (stored) => {
+        setDraft(stored);
+        checkForm(stored);
+      },
+      (error) => toast.error(translateApiError(t, error)),
     );
   };
 

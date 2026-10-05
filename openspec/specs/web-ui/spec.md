@@ -2158,7 +2158,9 @@ and offers no plain-text password input. The menu lists the stored secrets with
 how many things use each and a **New secret…** item, under a search box that
 matches a secret's name or description; however many secrets are stored the menu
 fits the window, the list scrolling between the search box and the menu's items,
-which stay in view. Pasting into the empty field
+which stay in view, and it stays inside the window's edges wherever its field
+sits. A field the form may leave empty (the sync remote's push token) also offers
+**None**, which empties it again. Pasting into the empty field
 makes a new secret named after the thing being configured (with a suffix when the
 name is taken) that is written to Secrets only when the form is saved; a chosen
 name this Mac holds no value for reads **Missing**. Header and environment rows —
@@ -2185,6 +2187,16 @@ row's scheme MUST be stored without it. The form has no Secret | Plain toggle.
 - **GIVEN** more stored secrets than the window has room for
 - **WHEN** the user opens a secret field's menu and types part of a secret's name
 - **THEN** the menu fits the window with the search box and New secret… in view, the list scrolls between them, and it narrows to the secrets that match
+
+#### Scenario: a secret field at the window's edge opens its menu inside the window
+- **GIVEN** the Sync › Remote tab, whose Secret field sits at the right of the window
+- **WHEN** the user opens its menu
+- **THEN** the whole menu is inside the window, and it offers New secret… and None besides the stored secrets
+
+#### Scenario: a pasted push token is stored when the remote saves
+- **GIVEN** the Sync › Remote tab with Secret set to None
+- **WHEN** the user pastes a token into the Secret field
+- **THEN** the token is written to Secrets as a new secret and the remote is saved citing it, the value never shown
 
 #### Scenario: a header row's value is plain until a secret is picked
 - **GIVEN** a header row `Authorization` with an empty value

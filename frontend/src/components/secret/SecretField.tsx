@@ -14,6 +14,7 @@ import { ChevronDown, KeyRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { fieldClass } from "@/components/ui/field-classes";
+import { isMissingHere } from "./secretRows";
 import { useSecretChoices } from "./useSecretChoices";
 import { mintSecretName, type SecretFieldValue } from "./secretValue";
 import { cn } from "@/lib/utils";
@@ -30,13 +31,24 @@ interface Props {
   "aria-label"?: string;
   /** The line under the field; false hides it. Defaults to "Kept in Coffer's Secrets…". */
   help?: string | false;
+  /** An optional field: the menu item that empties it again ("None"). */
+  clearLabel?: string;
 }
 
 const SHELL = "flex h-control-md items-center gap-2 px-2.5 py-0 text-left";
 
-function Picker({ id, value, onChange, defaultName, disabled, invalid, ...aria }: Props) {
+function Picker({
+  id,
+  value,
+  onChange,
+  defaultName,
+  disabled,
+  invalid,
+  clearLabel,
+  ...aria
+}: Props) {
   const { t } = useTranslation();
-  const { names, loaded, displayOf } = useSecretChoices();
+  const { names, loaded, displayOf, rowOf } = useSecretChoices();
   const input = useRef<HTMLInputElement>(null);
   const label = aria["aria-label"] ?? t("secretField.placeholder");
   const paste = (text: string) => {
@@ -90,13 +102,19 @@ function Picker({ id, value, onChange, defaultName, disabled, invalid, ...aria }
   }
 
   const shown = value.kind === "new" ? value.label : displayOf(value.name);
-  const missing = value.kind === "stored" && loaded && !names.has(value.name);
+  const storedRow = value.kind === "stored" ? rowOf(value.name) : undefined;
+  const missing =
+    value.kind === "stored" &&
+    loaded &&
+    !names.has(value.name) &&
+    (storedRow === undefined || isMissingHere(storedRow));
   return (
     <SecretMenu
       selected={value.name}
       disabled={disabled}
       defaultNewLabel={defaultName}
       onSelectStored={(name) => onChange({ kind: "stored", name })}
+      clear={clearLabel ? { label: clearLabel, onClear: () => onChange(null) } : undefined}
       pendingLabel={
         value.kind === "new"
           ? { value: value.label, onChange: (label) => onChange({ ...value, label }) }
