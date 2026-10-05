@@ -207,7 +207,7 @@ and is what a row is read back from, so no column can disagree with it:
 | `push_failed` | pulled and applied, but the remote refused the push |
 | `plaintext_found` | a file the push would publish holds a plaintext secret: nothing pushed |
 | `stopped` | any conflict: nothing checked out, nothing pushed |
-| `held` | the deletion breaker held the round (20% of an area or 20 files, in either direction; resource files counted by uid, so a moved file is not a loss) |
+| `held` | the deletion breaker held the round (20 files, or 5 or more over half of an area, in either direction; `stopped_on` lists the files; resource files counted by uid, so a moved file is not a loss) |
 | `waiting_on_edit` | a person's uncommitted edit is on a path the round would change; it is never overwritten |
 | `join_required` / `joined` | this machine has never converged with the remote / a join finished |
 | `unreachable` / `auth_failed` | the remote could not be reached / sign-in failed (or the token waits for approval) |

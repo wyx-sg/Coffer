@@ -21,6 +21,8 @@ export function makeRound(over: Partial<SyncRound> = {}): SyncRound {
     with_machines: [],
     conflicts: 0,
     held: 0,
+    stopped_on: [],
+    held_direction: null,
     detail: null,
     path: null,
     join: null,

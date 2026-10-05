@@ -43,3 +43,10 @@ export function statusTone(status: string): Tone {
 export function statusLabel(t: TFunction, status: string): string {
   return t(`sync.round.status.${status}`, { defaultValue: status });
 }
+
+/** The statuses a round stops on for a person, before checking anything out. */
+const STOPPED_BEFORE_CHECKOUT = new Set<RoundStatus>(["held", "stopped", "plaintext_found"]);
+
+export function stoppedBeforeCheckout(status: RoundStatus): boolean {
+  return STOPPED_BEFORE_CHECKOUT.has(status);
+}

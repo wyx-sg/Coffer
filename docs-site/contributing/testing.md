@@ -64,7 +64,7 @@ Mock only what is **non-local** (an external HTTP service, an LLM API), **non-de
 
 Some rules must hold for every input, not only for a few chosen ones. For those, the test states the rule and lets [Hypothesis](https://hypothesis.readthedocs.io/) generate the inputs. The sync deletion breaker and a sync round's merge decision are tested this way:
 
-- **The breaker.** Generated areas are checked against the threshold written in whole numbers (twenty files, or more than a fifth of the area). A move is checked never to count as a loss.
+- **The breaker.** Generated areas are checked against the threshold written in whole numbers (twenty files, or five or more that are over half of the area). A move is checked never to count as a loss.
 - **A round.** Generated forks of a vault run through the real round engine over an in-memory git. Any conflict must stop the round, and a merge that loses too much must be held. Neither may check anything out or push. Every other clean merge must be applied and pushed, and the next round must find nothing to do.
 
 These tests live in the unit tier and run in `make verify`. The default profile draws 100 examples per test, the same 100 on every run. It sets no time limit per example and writes no example database into the checkout. After you change the code under test, run `HYPOTHESIS_PROFILE=thorough make verify-unit` for a deeper search: it draws 2,000 random examples per test. When a property fails, Hypothesis shrinks the input to the smallest failing case and prints it. Turn that case into an ordinary example test beside the property.

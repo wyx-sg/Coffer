@@ -129,7 +129,7 @@ Two cases never ask:
 
 ## The deletion breaker
 
-A round is **held** when, in any area and in either direction, its losses reach **20 files** or exceed **20%** of what the area held before. An area is the first path segment, except that `resources/<kind>/` and `state/<area>/` are areas of their own, so a mass deletion of one kind is not diluted by the others. The thresholds are fixed, and nothing skips the breaker.
+A round is **held** when, in any area and in either direction, its losses reach **20 files**, or reach **5 files** that are more than **half** of what the area held before. The share starts at five files so tidying a small area — three of five MCP servers — goes through. An area is the first path segment, except that `resources/<kind>/` and `state/<area>/` are areas of their own, so a mass deletion of one kind is not diluted by the others. The thresholds are fixed, and nothing skips the breaker.
 
 - **Incoming** is what the round would remove from this vault (`L` to `T`).
 - **Outgoing** is what this machine's own commits remove from the shared history. This is what stops a machine that lost its files to a reinstall, a failed restore or a stray `rm -rf` from pushing that loss to every other machine.

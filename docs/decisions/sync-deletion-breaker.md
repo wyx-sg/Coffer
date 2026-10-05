@@ -42,9 +42,13 @@ fired in the field, both times on a migration Coffer shipped, never on a loss.
 `breaker.py` in `domain/sync` trips when, in any one **area**
 (`resources/<kind>`, `state/<name>`, `knowledge`, `skills`,
 `secret`, as `area_of` in `domain/vault/layout.py` names them), the round would
-lose **more than 20%** of the area's files (`SHARE = 0.2`) **or 20 or more** of
-them (`FLOOR = 20`). The share catches a small vault losing most of itself; the
-floor catches a large one losing a lot while staying under the share. The
+lose **20 or more** of the area's files (`FLOOR = 20`), **or 5 or more** that
+are **more than half** of them (`SHARE = 0.5`, `SHARE_MIN = 5`). The share
+catches a small vault losing most of itself; the floor catches a large one
+losing a lot while staying under the share. The share starts counting at five
+files because areas are small — `resources/mcp_server` may hold five files —
+and at one fifth with no minimum, removing three demo servers held the round
+in real use: a person tidying a handful of files is not a mass deletion. The
 registry (`machines/`) and the manifest never count, because they are the
 registry and not vault content.
 
@@ -199,7 +203,7 @@ skip the guard rather than satisfy it (spec vault-sync "Hold a round that would 
 ## Decision
 
 A sync round is held when, in any area and in either direction, its
-**losses** exceed 20% of the area or reach 20 files. A resource file whose uid
+**losses** reach 20 files, or reach 5 files that are more than half of the area. A resource file whose uid
 reappears, a file whose content reappears in the same area, or which git's own
 rename detection pairs with a file in the same area, is a move and does not
 count. The thresholds

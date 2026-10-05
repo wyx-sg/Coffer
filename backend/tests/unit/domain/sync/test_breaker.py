@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.sync.breaker import FLOOR, SHARE, PathDelta, breached, losses, totals
+from coffer.domain.sync.breaker import FLOOR, SHARE, SHARE_MIN, PathDelta, breached, losses, totals
 from coffer.domain.vault.content_ids import EMPTY_BLOB
 
 
@@ -15,15 +15,21 @@ def _gone(paths: list[str]) -> list[PathDelta]:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="the guard trips above a fifth of an area or at twenty documents"
+    spec="vault-sync",
+    scenario="the guard trips at five documents over half an area or at twenty documents",
 )
-def test_the_thresholds_are_a_fifth_of_an_area_or_twenty_files() -> None:
-    assert (SHARE, FLOOR) == (0.2, 20)
+def test_the_thresholds_are_five_over_half_an_area_or_twenty_files() -> None:
+    assert (SHARE, SHARE_MIN, FLOOR) == (0.5, 5, 20)
+    # Tidying a small area goes through: three of five demo servers is 60%.
+    small = [f"resources/mcp_server/demo{i}.json" for i in range(5)]
+    assert breached(losses(_gone(small[:3])), totals(small)) == []
+    (wiped,) = breached(losses(_gone(small)), totals(small))
+    assert (wiped.area, wiped.lost, wiped.total) == ("resources/mcp_server", 5, 5)
     area = [f"knowledge/team/n{i}.md" for i in range(10)]
     before = totals(area)
-    assert breached(losses(_gone(area[:2])), before) == []  # exactly 20%
-    (over,) = breached(losses(_gone(area[:3])), before)
-    assert (over.area, over.lost, over.total) == ("knowledge", 3, 10)
+    assert breached(losses(_gone(area[:5])), before) == []  # exactly half
+    (over,) = breached(losses(_gone(area[:6])), before)
+    assert (over.area, over.lost, over.total) == ("knowledge", 6, 10)
     large = [f"knowledge/big/n{i}.md" for i in range(500)]
     (floor,) = breached(losses(_gone(large[:20])), totals(large))
     assert floor.lost == 20

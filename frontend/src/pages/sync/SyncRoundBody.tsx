@@ -1,6 +1,8 @@
 // frontend/src/pages/sync/SyncRoundBody.tsx — the body of one round in the
 // round drawer (6.4.04, SyncRunDetail): its four steps, in order, and git's
-// words when it could not finish.
+// words when it could not finish. A round that stopped for a person before
+// checking anything out leads with why it stopped and the files it stopped
+// on, and its four empty steps fold into one line.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +11,8 @@ import { useLongList } from "@/components/useLongList";
 import type { SyncChange, SyncRound } from "@/lib/api/sync";
 import { FILE_LIST, FILE_ROW } from "./SyncChangeMark";
 import { RoundFileRow } from "./SyncRoundFileRow";
+import { RoundStop } from "./SyncRoundStop";
+import { stoppedBeforeCheckout } from "./syncRoundStatus";
 import { clock, clockSeconds } from "./syncTime";
 
 /** "1  Safety snapshot": a 13/600 title with its step number in grey. */
@@ -63,8 +67,20 @@ function ChangeBox({
 
 export function RoundBody({ run }: { run: SyncRound }) {
   const { t } = useTranslation();
+  if (stoppedBeforeCheckout(run.status)) {
+    const quiet = !run.snapshot && !run.pulled.length && !run.applied.length && !run.pushed.length;
+    if (quiet) {
+      return (
+        <div className="flex flex-col gap-5">
+          <RoundStop run={run} />
+          <None>{t("sync.drawer.stop.untouched")}</None>
+        </div>
+      );
+    }
+  }
   return (
     <div className="flex flex-col gap-5">
+      {stoppedBeforeCheckout(run.status) ? <RoundStop run={run} /> : null}
       <Step number={1} title={t("sync.drawer.snapshot")} testId="sync-run-snapshot">
         {run.snapshot ? (
           <div className={FILE_LIST}>
@@ -114,7 +130,7 @@ export function RoundBody({ run }: { run: SyncRound }) {
         )}
       </Step>
       {/* The daemon scrubbed any push token out of this before storing it. */}
-      {run.detail ? (
+      {run.detail && run.status !== "plaintext_found" ? (
         <pre
           className="whitespace-pre-wrap break-words rounded-lg bg-surface-sunken px-3 py-2.5 font-mono text-xs text-danger"
           role="alert"
