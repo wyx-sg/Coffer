@@ -3,7 +3,6 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import i18n from "@/i18n";
 import { GeneralSettings } from "./GeneralSettings";
-import { DataTable, type Column } from "@/components/DataTable";
 import { acceptance } from "@/test/acceptance";
 
 // The Speech-to-text section has its own tests (and its own daemon routes);
@@ -65,18 +64,10 @@ const customInput = () =>
   screen.getByRole("textbox", { name: /custom editor command/i }) as HTMLInputElement;
 
 describe("GeneralSettings", () => {
-  test("renders the default page-size control reflecting the stored preference", () => {
-    localStorage.setItem("coffer.pageSize", "50");
-    render(<GeneralSettings />);
-    expect(screen.getAllByText(/rows per page/i)[0]).toBeInTheDocument();
-    // The Select trigger shows the persisted value.
-    expect(screen.getByRole("combobox", { name: /rows per page/i })).toHaveTextContent("50");
-  });
-
   test("pickers are the shared Select and choices are segmented — no native <select>", () => {
     render(<GeneralSettings />);
     expect(document.querySelectorAll("select")).toHaveLength(0);
-    expect(screen.getAllByRole("combobox")).toHaveLength(4);
+    expect(screen.getAllByRole("combobox")).toHaveLength(3);
     expect(screen.getByRole("group", { name: /^language$/i })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: /^theme$/i })).toBeInTheDocument();
   });
@@ -152,29 +143,6 @@ acceptance("web-ui", "general tab persists the preferred editor", () => {
   openEditorPicker();
   pickOption(/system default/i);
   expect(localStorage.getItem("coffer.preferredEditor")).toBeNull();
-});
-
-acceptance("web-ui", "the default page size seeds every list table", () => {
-  type Row = { id: string; name: string };
-  const rows: Row[] = Array.from({ length: 25 }, (_, i) => ({ id: String(i), name: `row-${i}` }));
-  const cols: Column<Row>[] = [{ key: "name", header: "Name", cell: (r) => r.name }];
-  render(
-    <>
-      <GeneralSettings />
-      <DataTable rows={rows} columns={cols} rowKey={(r) => r.id} emptyMessage="none" />
-    </>,
-  );
-  // The default of 20 rows per page: row-19 shows, row-20 is on page 2.
-  expect(screen.getByText("row-19")).toBeInTheDocument();
-  expect(screen.queryByText("row-20")).not.toBeInTheDocument();
-
-  const pageSize = screen.getByRole("combobox", { name: /rows per page/i });
-  fireEvent.keyDown(pageSize, { key: "ArrowDown" });
-  fireEvent.click(screen.getByRole("option", { name: "10" }));
-
-  expect(localStorage.getItem("coffer.pageSize")).toBe("10");
-  expect(screen.getByText("row-9")).toBeInTheDocument();
-  expect(screen.queryByText("row-10")).not.toBeInTheDocument();
 });
 
 acceptance("web-ui", "the General tab offers the theme choice", () => {

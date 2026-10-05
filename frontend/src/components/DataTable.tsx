@@ -1,14 +1,12 @@
 // frontend/src/components/DataTable.tsx
 // The one reusable list table for every resource surface (Agents, MCP servers,
-// Skills, …): search + filters, "Load N more" (Foundations-Tables — never
-// numbered pages), optional row click→detail, and an optional `selection` prop
-// (checkbox column + select-all + bulk bar over the filtered rows — see
-// DataTableSelection.tsx). N is `pageSize`, else the Settings default. Two
-// modes: client (default — caller passes ALL rows; filter and grow in memory)
-// and server (caller passes ONE page + a `serverPagination` descriptor and
-// drives search through `search.value`/`search.onChange`; each page it hands
-// over is kept and shown under the ones before — DataTableLoadMore.tsx); and
-// infinite (cursor-paged: every row passed is shown, see `InfiniteRows`).
+// Skills, …): search + filters, optional row click→detail, and an optional
+// `selection` prop (checkbox column + select-all + bulk bar over the filtered
+// rows — see DataTableSelection.tsx). Never numbered pages (Foundations-Tables).
+// Two modes: client (default — caller passes ALL rows; they filter in memory
+// and render whole, or 100 at a time as the end scrolls into view when there are
+// more than that — `useGrowingList`) and infinite (cursor-paged: every row
+// passed is shown and the next page loads on scroll, see `InfiniteRows`).
 // Row rendering lives in DataTableBody.tsx; sorting (DataTableSort.ts) and its
 // props (DataTable.types.ts) are split out to keep this file within budget.
 import { useMemo, useState } from "react";
@@ -19,9 +17,8 @@ import { DataTableHead } from "@/components/DataTableHead";
 import { DataRows, EmptyRow, SkeletonRows } from "@/components/DataTableBody";
 import { useTableSelection } from "@/components/DataTableSelection";
 import { TableBulkBar, usePageSelectAll } from "@/components/DataTableBulk";
-import { DataTableLoadMore, useLoadMore } from "@/components/DataTableLoadMore";
-import { useDefaultPageSize } from "@/lib/preferences";
-import { LoadMoreFooter } from "@/components/ui/load-more";
+import { useGrowingList } from "@/lib/hooks/useGrowingList";
+import { LoadMoreFooter, LoadMoreSentinel } from "@/components/ui/load-more";
 import { Table, TableBody } from "@/components/ui/table";
 import {
   skeletonCount,
@@ -51,8 +48,6 @@ export function DataTable<T>({
   getRowDetail,
   selection,
   isSelectable,
-  pageSize,
-  serverPagination,
   infinite,
   emptyMessage,
   emptyAction,
@@ -62,8 +57,7 @@ export function DataTable<T>({
   onSortChange,
   isLoading = false,
 }: DataTableProps<T>) {
-  const server = serverPagination;
-  // Search may be controlled (server mode) or internal (client mode).
+  // Search may be controlled by the caller or internal.
   const controlledQuery = search?.value;
   const [internalQuery, setInternalQuery] = useState("");
   const query = controlledQuery ?? internalQuery;
@@ -81,7 +75,6 @@ export function DataTable<T>({
   };
 
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
-  const globalDefault = useDefaultPageSize();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const expandable = Boolean(getRowDetail);
   const colCount = columns.length + (expandable ? 1 : 0) + (selection ? 1 : 0);
@@ -93,8 +86,7 @@ export function DataTable<T>({
       return next;
     });
 
-  // Client-side filter (search + dropdown filters). Unused in server mode, where
-  // the caller has already fetched the matching page.
+  // Client-side filter (search + dropdown filters).
   const clientFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
@@ -108,34 +100,31 @@ export function DataTable<T>({
   }, [rows, query, filterVals, filters, search]);
 
   const filtered = useMemo(
-    () => (server ? rows : sortRows(clientFiltered, columns, sort)),
-    [server, rows, clientFiltered, columns, sort],
+    () => sortRows(clientFiltered, columns, sort),
+    [clientFiltered, columns, sort],
   );
 
-  const size = server ? server.pageSize : (pageSize ?? globalDefault);
-  const resetKey = `${query}␟${JSON.stringify(filterVals)}␟${size}`;
-  const loadMore = useLoadMore({ rows: filtered, rowKey, size, server, resetKey });
-  const pageRows = infinite ? filtered : loadMore.shown;
-  const total = loadMore.total;
+  const resetKey = `${query}␟${JSON.stringify(filterVals)}`;
+  const grow = useGrowingList(filtered, resetKey);
+  const pageRows = infinite ? filtered : grow.shown;
+  const total = filtered.length;
   // Selection derives from the *filtered* set so bulk actions only touch
-  // matching rows (in server mode: the rows loaded so far).
-  const selectable = server ? pageRows : filtered;
-  const sel = useTableSelection(selectable, rowKey);
+  // matching rows.
+  const sel = useTableSelection(filtered, rowKey);
 
   const canSelect = (r: T) => (isSelectable ? isSelectable(r) : true);
   // Header checkbox selects the CURRENT PAGE; TableBulkBar escalates to "all".
   const ps = usePageSelectAll({
     sel,
     pageRows,
-    filtered: selectable,
+    filtered,
     rowKey,
     canSelect,
     total,
-    server: Boolean(server),
     resetKey,
   });
   // The bulk bar takes the filter row's place while rows are ticked.
-  const bulkShown = Boolean(selection) && (sel.selectedRows.length > 0 || ps.allMatching);
+  const bulkShown = Boolean(selection) && sel.selectedRows.length > 0;
   const hasToolbar = (Boolean(search) || filters.length > 0) && !bulkShown;
 
   return (
@@ -145,7 +134,6 @@ export function DataTable<T>({
           query={query}
           onQueryChange={(v) => {
             setQuery(v);
-            if (server) server.onPageChange(1);
           }}
           searchPlaceholder={search?.placeholder}
           filters={filters}
@@ -179,7 +167,7 @@ export function DataTable<T>({
           />
           <TableBody>
             {isLoading && pageRows.length === 0 ? (
-              <SkeletonRows count={skeletonCount(size)} colCount={colCount} />
+              <SkeletonRows count={skeletonCount()} colCount={colCount} />
             ) : pageRows.length === 0 ? (
               <EmptyRow colCount={colCount} message={emptyMessage} action={emptyAction} />
             ) : (
@@ -215,16 +203,9 @@ export function DataTable<T>({
           autoLoad
           countLabel={infinite.countLabel}
         />
-      ) : (
-        <DataTableLoadMore
-          shown={pageRows.length}
-          total={total}
-          size={size}
-          hasMore={loadMore.hasMore}
-          loading={Boolean(server) && isLoading}
-          onMore={loadMore.more}
-        />
-      )}
+      ) : grow.hasMore ? (
+        <LoadMoreSentinel active onVisible={grow.more} version={pageRows.length} />
+      ) : null}
     </div>
   );
 }

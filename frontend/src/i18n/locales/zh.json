@@ -500,8 +500,6 @@
       "noToolsYet": "Coffer 还没有列出它的工具——服务器响应后才会列出。",
       "showAllInTools": "在工具中查看全部 {{count}} 个",
       "allTools": "全部工具",
-      "showingOf": "显示 {{shown}} / {{total}}",
-      "showMore": "再显示 {{count}} 个",
       "filterCaps": "搜索",
       "mostBehindSearchValue": "大多在搜索之后",
       "listedAndBehind": "直接列出 {{listed}} 个 · 通过搜索 {{behind}} 个",
@@ -1082,8 +1080,6 @@
       "features": "功能"
     },
     "general": {
-      "pageSize": "每页行数",
-      "pageSizeHelp": "表格分页前显示的行数。",
       "theme": "主题",
       "themeHelp": "“跟随系统”会跟随 macOS 的外观。",
       "themeSystem": "跟随系统",
@@ -1802,7 +1798,6 @@
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
-    "loadMore": "再加载 {{count}} 条",
     "loadingMore": "正在加载更多…",
     "loaded": "{{count}} 条已加载",
     "loadMoreShort": "加载更多"

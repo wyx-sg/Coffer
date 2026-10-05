@@ -54,7 +54,7 @@ To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port 
 
 ## Choose the port
 
-The daemon listens on **port 38470** by default and never scans for another one. A fixed port keeps a bookmark to the UI working, and it keeps what the browser stores for that origin (the interface language, page size, sidebar state, preferred editor) from resetting when the port moves.
+The daemon listens on **port 38470** by default and never scans for another one. A fixed port keeps a bookmark to the UI working, and it keeps what the browser stores for that origin (the interface language, sidebar state, preferred editor) from resetting when the port moves.
 
 To move it:
 

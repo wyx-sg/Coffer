@@ -135,7 +135,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Fix.** Install or update git. **Copy prompt** on the screen (or the prompt the command printed) hands the chore to your agent, which picks the way that fits your machine. Then press **Check again**: once git is there, Coffer restarts its daemon and opens normally. From a terminal, `coffer daemon restart` does the same.
 
-### The UI lost its language, page size or sidebar state
+### The UI lost its language or sidebar state
 
 **Cause.** The browser keeps those preferences per origin, and the origin includes the port. The daemon is now on a different port than before, so the browser treats it as a different site.
 

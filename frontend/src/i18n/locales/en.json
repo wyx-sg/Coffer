@@ -500,8 +500,6 @@
       "noToolsYet": "Coffer hasn't listed its tools yet — it lists them once the server answers.",
       "showAllInTools": "Show all {{count}} in Tools",
       "allTools": "All tools",
-      "showingOf": "Showing {{shown}} of {{total}}",
-      "showMore": "Show {{count}} more",
       "filterCaps": "Search",
       "mostBehindSearchValue": "Most behind search",
       "listedAndBehind": "{{listed}} listed · {{behind}} by search",
@@ -1082,8 +1080,6 @@
       "features": "Features"
     },
     "general": {
-      "pageSize": "Rows per page",
-      "pageSizeHelp": "How many rows a table shows before paging.",
       "theme": "Theme",
       "themeHelp": "System follows the macOS appearance.",
       "themeSystem": "System",
@@ -1802,7 +1798,6 @@
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
-    "loadMore": "Load {{count}} more",
     "loadingMore": "Loading more…",
     "loaded": "{{count}} loaded",
     "loadMoreShort": "Load more"

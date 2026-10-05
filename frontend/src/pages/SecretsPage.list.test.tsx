@@ -2,7 +2,7 @@
 //
 // Only the network boundary (`secretsApi`) and the desktop shell's seam are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -127,7 +127,10 @@ beforeEach(() => {
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
   api.remove.mockResolvedValue(undefined);
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("SecretsPage list", () => {
   test("a secret is listed by a readable name, never a hex id, and opens on its own page", async () => {
@@ -225,7 +228,18 @@ describe("SecretsPage list", () => {
     expect(names()).toEqual(["groq · key", "jira · JIRA_PERSONAL_TOKEN"]);
   });
 
-  test("a thousand secrets render in batches while search covers all of them", async () => {
+  test("a thousand secrets render 100 at a time as the end scrolls into view, while search covers all of them", async () => {
+    const observed: { callback: IntersectionObserverCallback }[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          observed.push({ callback });
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
     const many = Array.from({ length: 1000 }, (_, i) =>
       ref({
         ref: `secret/key-${String(i).padStart(4, "0")}`,
@@ -237,11 +251,18 @@ describe("SecretsPage list", () => {
     api.list.mockResolvedValue({ refs: many });
     renderPage();
     await screen.findByText("key-0000");
-    expect(names()).toHaveLength(50);
-    expect(screen.getByText("Showing 50 of 1000")).toBeInTheDocument();
-    expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
     expect(names()).toHaveLength(100);
+    expect(screen.queryByRole("button", { name: /load/i })).toBeNull();
+    expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
+    act(() =>
+      observed
+        .at(-1)
+        ?.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        ),
+    );
+    expect(names()).toHaveLength(200);
     fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
       target: { value: "key-0999" },
     });

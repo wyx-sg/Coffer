@@ -176,7 +176,6 @@ COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 
 | 设置 | 默认值 | 作用 | 存储位置 |
 | --- | --- | --- | --- |
-| **每页行数** | `20`（可选 10、20、50、100） | 每个表格的初始每页行数。 | 浏览器 `localStorage`（`coffer.pageSize`） |
 | **打开文件的方式** | 系统默认 | Coffer 打开托管文件时使用的应用或命令。 | 浏览器 `localStorage`（`coffer.preferredEditor`） |
 | **实验功能**（设置 → 功能） | 关 | 见[实验功能](#experimental-features)。 | `daemon-config.json` |
 
