@@ -62,9 +62,10 @@ const PILL_TONE: Record<SyncStateKind, PillTone> = {
   in_sync: "ok",
 };
 
-/** Every file the next round pushes — a commit can carry several. */
+/** Every file the next round pushes, once each — a commit can carry several,
+ *  and several commits can touch one file. */
 export function waitingCount(status: SyncStatus): number {
-  return status.waiting.reduce((n, commit) => n + commit.changes.length, 0);
+  return new Set(status.waiting.flatMap((commit) => commit.changes.map((c) => c.path))).size;
 }
 
 /** Whether this Mac is set up to sync at all: a remote, and joined to it. */

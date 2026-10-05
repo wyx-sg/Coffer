@@ -143,11 +143,6 @@ export function folderLabel(t: TFunction, folder: string): string {
   return rest.length > 0 ? `${name} · ${rest.join("/")}` : name;
 }
 
-/** A folder's share of its files, as a whole percent. */
-export function share(count: number, total: number): number {
-  return total > 0 ? Math.round((count / total) * 100) : 100;
-}
-
 /** A refused answer, in place. A copy that still has conflict markers is
  *  refused with the line it stopped at, which only the daemon's own message
  *  carries — so that one is shown verbatim, every other in the app's words. */

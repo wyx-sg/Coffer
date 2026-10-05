@@ -42,6 +42,8 @@ interface Props {
   children?: ReactNode;
   /** A last grey line under the text (the areas line on the Status boards). */
   footnote?: ReactNode;
+  /** A button at the line's right end (Review changes, for changes to push). */
+  action?: ReactNode;
   testId?: string;
 }
 
@@ -52,6 +54,7 @@ export function SyncBannerLine({
   title,
   children,
   footnote,
+  action,
   testId = "sync-banner",
 }: Props) {
   return (
@@ -62,6 +65,7 @@ export function SyncBannerLine({
         {children ? <div className="text-sm text-text-subtle">{children}</div> : null}
         {footnote}
       </div>
+      {action ? <div className="ml-auto shrink-0">{action}</div> : null}
     </div>
   );
 }

@@ -50,7 +50,7 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Context | **Memory** | `/memory` | What your agents learned, read from their own memory and turned into one note per subject: the partitions, with a search by name and path and **Tidy** on each partition (**Tidy all** for every one). A partition's page has **Memories** and **Delivered** tabs. See [Memory](/guides/memory). |
 | System | **Secrets** | `/secrets` | Every stored secret with what uses it: add, replace, delete, add the values that are missing on this Mac, answer approvals. See [Secrets](/guides/secrets). |
 | System | **Activity** | `/activity` | What changed, what agents called and what the daemon logged: **Everything** merged into one stream, then **Changes**, **Tool calls** and **Daemon log**. See [Activity and audit](/guides/activity). |
-| System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Status**, **Machines** and **Remote** tabs, with **Resolve conflicts** (`/sync/conflicts`) and **Review held deletions** (`/sync/deletions`) views. See [Vault sync](/guides/vault-sync). |
+| System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Status**, **Machines** and **Remote** tabs, with **Review changes to push** (`/sync/pending`), **Resolve conflicts** (`/sync/conflicts`) and **Review held deletions** (`/sync/deletions`) views, each a file list beside the chosen file's diff. See [Vault sync](/guides/vault-sync). |
 
 In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
 

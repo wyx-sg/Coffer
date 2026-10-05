@@ -27,6 +27,7 @@ import { StatusPill } from "@/components/status/StatusPill";
 import { SyncConflictFileList } from "./SyncConflictFileList";
 import { SyncConflictFooter } from "./SyncConflictFooter";
 import { SyncConflictPane } from "./SyncConflictPane";
+import { SyncReviewShell } from "./SyncReviewShell";
 import { clock } from "./syncConflictFormat";
 import { useResolveSource } from "./useResolveSource";
 
@@ -104,24 +105,25 @@ export function SyncResolveConflictsPage() {
   return (
     <div className="space-y-6">
       {header}
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
-        <div className="flex min-h-[420px]">
+      <SyncReviewShell
+        nav={
           <SyncConflictFileList
             files={files}
             selected={file.path}
             editing={editing}
             onSelect={select}
           />
-          <SyncConflictPane
-            key={file.path}
-            file={file}
-            source={source}
-            editing={editing.has(file.path) && file.answer === null && !file.secret}
-            onEditing={(on) => setEditingFor(file.path, on)}
-          />
-        </div>
-        <SyncConflictFooter source={source} onDone={() => navigate("/sync")} />
-      </div>
+        }
+        footer={<SyncConflictFooter source={source} onDone={() => navigate("/sync")} />}
+      >
+        <SyncConflictPane
+          key={file.path}
+          file={file}
+          source={source}
+          editing={editing.has(file.path) && file.answer === null && !file.secret}
+          onEditing={(on) => setEditingFor(file.path, on)}
+        />
+      </SyncReviewShell>
     </div>
   );
 }

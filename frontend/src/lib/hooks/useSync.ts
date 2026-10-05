@@ -213,3 +213,24 @@ export function useRoundFileDiff(
     retry: false,
   });
 }
+
+/** One file waiting to push, from the remote's tip to this Mac's HEAD. */
+export function usePendingFileDiff(path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...syncStatusKey, "pending-diff", path],
+    queryFn: () => syncApi.pendingDiff(path),
+    enabled,
+    retry: false,
+  });
+}
+
+/** One file a held round would delete, its whole text as removed. */
+export function useHeldFileDiff(path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...syncStatusKey, "held-diff", path],
+    queryFn: () => syncApi.heldDiff(path),
+    enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}

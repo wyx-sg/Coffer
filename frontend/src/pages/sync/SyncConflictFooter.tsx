@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/SyncConflictFooter.tsx
 //
-// The foot of Resolve conflicts: how many files have an answer, Leave for
+// The foot of Resolve conflicts (inside `SyncReviewShell`'s footer): how many files have an answer, Leave for
 // later (back to Sync, the round stays stopped and this Mac keeps working),
 // and Continue round — offered once every file has one. Continuing writes the
 // answers into the vault, checks the result out and pushes it. For a first
@@ -26,7 +26,7 @@ export function SyncConflictFooter({
   const resolved = source.chosen;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-t border-border bg-surface-footer px-5 py-3">
+    <>
       <p className="text-xs text-text-muted" data-testid="sync-conflicts-progress">
         {t(join ? "sync.resolve.progressJoin" : "sync.resolve.progress", { resolved, total })}
         {ready ? null : ` · ${t(join ? "sync.resolve.applyHint" : "sync.resolve.continueHint")}`}
@@ -48,6 +48,6 @@ export function SyncConflictFooter({
               : t("sync.resolve.continue")}
         </Button>
       </div>
-    </div>
+    </>
   );
 }

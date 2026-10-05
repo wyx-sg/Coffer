@@ -3933,8 +3933,7 @@
         "coffer": "Coffer",
         "disk": "Edited on disk",
         "agent": "Agent"
-      },
-      "label": "Waiting to push"
+      }
     },
     "conflicts": {
       "title": "Changed on both Macs",
@@ -4049,7 +4048,8 @@
       "empty": {
         "title": "Nothing is held",
         "body": "No round is waiting on deletions right now."
-      }
+      },
+      "deletedOn": "Deleted on {{machine}}"
     },
     "machines": {
       "description": "Macs that sync with this repository. A Mac appears here after its first round.",
@@ -4225,9 +4225,9 @@
     },
     "joinChoices": {
       "title": "Differ from this Mac",
-      "body": "Not pushed or replaced until you choose a version.",
       "choose": "Choose versions",
-      "chooseVersion": "Choose a version"
+      "body_one": "{{count}} file is not pushed or replaced until you choose a version.",
+      "body_other": "{{count}} files are not pushed or replaced until you choose a version."
     },
     "header": {
       "copyUrl": "Copy repository URL",
@@ -4308,7 +4308,8 @@
       "heldOutgoing_one": "This Mac deleted {{count}} file, more than one round may delete",
       "heldOutgoing_other": "This Mac deleted {{count}} files, more than one round may delete",
       "heldBody": "Rounds that delete 20 files or more, or more than 20% of an area, wait for you. Nothing was checked out and nothing was pushed. Review the list, then delete them here too or restore them.",
-      "reviewDeletions": "Review deletions"
+      "reviewDeletions": "Review deletions",
+      "reviewChanges": "Review changes"
     },
     "areas": {
       "documents_one": "{{count}} knowledge document",
@@ -4407,6 +4408,18 @@
       "oldFolder": "The old folder is left empty; delete it yourself.",
       "failed": "Couldn’t move the vault",
       "confirm": "Move vault"
+    },
+    "pending": {
+      "title": "Review changes to push",
+      "subline": "{{files}} on this Mac the remote does not have yet · they go out in the next round.",
+      "sublineAt": "{{files}} on this Mac the remote does not have yet · they go out in the next round at {{time}}.",
+      "hint": "Push now runs the round at once: it pulls first, then pushes these.",
+      "back": "Back to Sync",
+      "pushNow": "Push now",
+      "empty": {
+        "title": "Nothing waits to push",
+        "body": "Every change on this Mac is on the remote."
+      }
     }
   },
   "overview": {

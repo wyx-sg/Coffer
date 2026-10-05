@@ -80,6 +80,52 @@ paths:
       summary: Confirm Hold
       tags:
       - sync
+  /api/v1/sync/hold/diff:
+    get:
+      description: |-
+        One file a held round would delete, its whole text as removed lines.
+        404 ``SYNC_ROUND_FILE_NOT_LISTED`` when no round is held or the hold does
+        not list the path.
+      operationId: get_held_file_diff_api_v1_sync_hold_diff_get
+      parameters:
+      - description: A file the held round would delete; else 404.
+        in: query
+        name: path
+        required: true
+        schema:
+          description: A file the held round would delete; else 404.
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundFileDiffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Held File Diff
+      tags:
+      - sync
   /api/v1/sync/hold/restore:
     post:
       description: Keep the held files, and continue the round (it pushes them back).
@@ -667,6 +713,52 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Restore Machine
+      tags:
+      - sync
+  /api/v1/sync/pending/diff:
+    get:
+      description: |-
+        One file waiting to push, from the remote's tip to this Mac's ``HEAD``
+        (every waiting commit that touched it, as one change). 404
+        ``SYNC_ROUND_FILE_NOT_LISTED`` for a path nothing waiting touches.
+      operationId: get_pending_file_diff_api_v1_sync_pending_diff_get
+      parameters:
+      - description: A file the next push carries; else 404.
+        in: query
+        name: path
+        required: true
+        schema:
+          description: A file the next push carries; else 404.
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundFileDiffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Pending File Diff
       tags:
       - sync
   /api/v1/sync/plaintext/context:
@@ -2561,7 +2653,8 @@ components:
       type: object
     RoundFileDiffOut:
       description: |-
-        One file a round applied or pushed. ``text`` carries the unified
+        One file a round applied or pushed, one waiting to push (``pending``)
+        or one a held round would delete (``held``). ``text`` carries the unified
         ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
         carry no content at all (never ciphertext).
       properties:
@@ -2593,6 +2686,8 @@ components:
           enum:
           - applied
           - pushed
+          - pending
+          - held
           title: Side
           type: string
       required:

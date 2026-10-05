@@ -578,9 +578,10 @@ folder they are. The person answers: **delete** them (the round continues and
 applies or pushes the deletions) or **restore** them (the round continues and
 the files are kept, pushed back if the remote had lost them). Both answers are
 on REST (`POST /api/v1/sync/hold/confirm`, `POST /api/v1/sync/hold/restore`) and the Sync page,
-whose Review held deletions view lists the files by folder and offers the two answers as two buttons —
-**Keep the files** and **Delete N files** — each acting at once: the view itself names what a delete
-removes, so no second dialog repeats it.
+whose Review held deletions view lists every held file, folder by folder, shows the chosen one's text
+as the lines a delete removes (see "Review a file's change before acting on it"), and offers the two
+answers as two buttons — **Keep the files** and **Delete N files** — each acting at once: the view
+itself shows what a delete removes, so no second dialog repeats it.
 
 #### Scenario: an oversized deletion is held for confirmation
 - **GIVEN** a machine that removed 22 documents of one folder, and the machine that receives that deletion
@@ -591,7 +592,7 @@ removes, so no second dialog repeats it.
 #### Scenario: the held deletions view answers with one press
 - **GIVEN** a round held on an outgoing deletion of 22 files in one folder
 - **WHEN** the person opens Review held deletions and presses Delete 22 files
-- **THEN** the view listed the files by folder before the press, no second dialog opened, and the hold was confirmed
+- **THEN** the view listed every file before the press, no second dialog opened, and the hold was confirmed
 - **AND** pressing Keep the files instead restores them at once
 
 ### Requirement: Guard both directions
@@ -834,9 +835,9 @@ No sync route returns the master key.
 
 ### Requirement: Show a conflict as a banner
 A round stopped on conflicts MUST be shown as a card on the Status tab, above the rounds table, not
-as a row. The card lists each conflicting file with its area, when each machine changed it and
-whether it has an answer, and carries **Resolve conflicts** beside a hand-off that gives every
-conflict to an agent at once. That card can be ignored, as the same item on the Overview, and returns
+as a row. The card says how many files conflict and with which machine, and carries **Resolve
+conflicts** beside a hand-off that gives every conflict to an agent at once; the files themselves are
+listed on the Resolve conflicts view, not on the Status tab. That card can be ignored, as the same item on the Overview, and returns
 when the set of conflicts changes. The Resolve conflicts view MUST offer, for each file:
 
 - keep this machine's, and take the other's, each saying what it changes here;
@@ -852,13 +853,13 @@ There is no merge or text editor in the page.
 The view says how many files are answered, lets the person leave the round for later, and offers
 Continue round once every file has an answer. A hold is shown the same way, on its own card, leading
 to the Review held deletions view with its two answers (see "Ask the user to confirm a tripped breaker"). So are a join preview and a join's
-differing files, each on its own card; a join's differing files are listed and opened in the same
-Resolve view as conflicts, titled for the join and ending in **Apply choices**.
+differing files, each on its own card; a join's differing files are counted on the card and listed
+and opened in the same Resolve view as conflicts, titled for the join and ending in **Apply choices**.
 
 #### Scenario: a conflict is shown as a banner above the runs
 - **GIVEN** a vault whose last round stopped on a conflict
 - **WHEN** the Status tab renders
-- **THEN** a card above the rounds table names each conflicting file and leads to its answers
+- **THEN** a card above the rounds table says how many files conflict and leads to the view that answers them
 
 ### Requirement: Fold consecutive quiet rounds into one row
 Consecutive rounds that changed **nothing** — no documents either way, no join,
@@ -1299,8 +1300,7 @@ button, the branch and when rounds run. The title carries the Experimental mark.
 - **Status** is the landing tab. It holds:
   - a banner saying what the status means now, with one grey line under it of what the vault holds
     that syncs: knowledge documents, skills, MCP server and tool definitions, and whether secrets
-    are synced;
-  - what waits to push, five lines then "Show all";
+    are synced; with changes to push it carries **Review changes**;
   - a card for a round stopped on conflicts or held deletions, and for a join's differing files;
   - the problem a failed round met, as a card with its own action and an × that ignores it like
     Ignore on Overview. A card has no Retry; the vault inside a cloud-synced folder is moved with
@@ -1317,8 +1317,10 @@ button, the branch and when rounds run. The title carries the Experimental mark.
   - the vault's folder, with a warning when it sits in a synchronised folder;
   - Stop syncing, which runs at once and offers Undo.
 
-Resolving conflicts and reviewing held deletions each have their own view, `/sync/conflicts` and
-`/sync/deletions`, reached from the Status card and returning to it. Until this machine has joined
+Reviewing changes to push, resolving conflicts and reviewing held deletions each have their own
+view, `/sync/pending`, `/sync/conflicts` and `/sync/deletions`, reached from the Status banner or
+card and returning to it; the Status tab lists no files itself (see "Review a file's change before
+acting on it"). Until this machine has joined
 a remote, the page shows setting one up and joining in place of the tabs. The master key is
 imported and exported in Settings › Security, not on the Sync page.
 
@@ -1501,6 +1503,39 @@ each non-text kind. Pulled commits MUST NOT carry a diff.
 - **WHEN** the file's row is expanded
 - **THEN** its diff rows and its added and removed counts appear
 
+
+### Requirement: Review a file's change before acting on it
+Every list of files the Sync page asks a person to act on — changes waiting to push, a held round's
+deletions, a stopped round's conflicts, a join's differing files — MUST be read on its own view of one
+shape, never listed on the Status tab: the files down the left, each with its mark and one line of
+state; the chosen file on the right with what it changes; the view's actions in a footer under both.
+Which file is open lives in the URL (`?path=`). The person reads any file before pressing an action.
+
+- **Review changes to push** (`/sync/pending`) lists each file the next push carries once, however
+  many waiting commits touched it, with who wrote it last and when. `GET
+  /api/v1/sync/pending/diff?path=<file>` MUST compute the file's change from the remote's tip to this
+  machine's `HEAD` as one diff. Its footer offers **Push now**, which runs a round at once (it still
+  pulls first); without it the changes go out in the next round as before.
+- **Review held deletions** (`/sync/deletions`): `GET /api/v1/sync/hold/diff?path=<file>` MUST show
+  the file's whole text as the lines a delete removes — read from this machine's side for an incoming
+  hold and from the remote's for an outgoing one.
+- **Resolve conflicts** (`/sync/conflicts`, and `?mode=join`) keeps its own right-hand pane: the two
+  choices, the editor, an agent's merge (see "Show a conflict as a banner").
+
+Both diff endpoints answer in the shape of a round's file diff (`side` is `pending` or `held`), carry
+no content for a secret, a binary file or one over the size cap, and MUST refuse a path their list
+does not name (`SYNC_ROUND_FILE_NOT_LISTED`, 404) — the held one also when no round is held.
+
+#### Scenario: a waiting file shows its change since the last push
+- **GIVEN** a joined machine that saved one knowledge document twice since its last push
+- **WHEN** Review changes to push opens that file
+- **THEN** the file is listed once and its diff goes from the remote's text straight to the newest save
+- **AND** a path nothing waiting touches is refused
+
+#### Scenario: a held file shows the text a delete removes
+- **GIVEN** a round held on 25 deleted documents, outgoing on the machine that deleted them and incoming on the other
+- **WHEN** either opens one of them on Review held deletions
+- **THEN** its whole text is shown as removed lines, and a path the hold does not list is refused
 ### Requirement: Show a plaintext finding in its file
 The Sync page MUST let a person read each place a `plaintext_found` round
 listed in its file, so they can judge whether it is a secret, without Coffer

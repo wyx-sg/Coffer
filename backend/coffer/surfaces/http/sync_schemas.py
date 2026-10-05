@@ -86,12 +86,13 @@ class RoundOut(BaseModel):
 
 
 class RoundFileDiffOut(BaseModel):
-    """One file a round applied or pushed. ``text`` carries the unified
+    """One file a round applied or pushed, one waiting to push (``pending``)
+    or one a held round would delete (``held``). ``text`` carries the unified
     ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
     carry no content at all (never ciphertext)."""
 
     path: str
-    side: Literal["applied", "pushed"]
+    side: Literal["applied", "pushed", "pending", "held"]
     kind: Literal["text", "secret", "binary", "too_large"]
     diff: str | None = None
     added: int = 0

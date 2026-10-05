@@ -33,7 +33,7 @@ from coffer.application.sync.views import (
     WaitingCommit,
 )
 from coffer.domain.git_handoff import git_install_handoff
-from coffer.domain.sync.errors import SyncRoundNotFound
+from coffer.domain.sync.errors import SyncRoundFileNotListed, SyncRoundNotFound
 from coffer.domain.sync.handoffs import (
     agent_mergeable,
     is_secret_file,
@@ -254,6 +254,37 @@ class StatusMixin:
         if record is None:
             raise SyncRoundNotFound(round_id)
         return await asyncio.to_thread(round_diff.file_diff, self._engine.d, record, path, side)
+
+    async def pending_file_diff(self, path: str) -> RoundFileDiff:
+        """One file the next push carries, from the remote's tip to ``HEAD``:
+        every waiting commit that touched it, as one change."""
+        remote = await asyncio.to_thread(self._remotes.get)
+        return await asyncio.to_thread(self._pending_file_diff, remote, path)
+
+    def _pending_file_diff(self, remote: SyncRemote | None, path: str) -> RoundFileDiff:
+        d = self._engine.d
+        head = d.git.head()
+        waiting = self._waiting(remote, head) if remote and head else ()
+        if not any(c.path == path for w in waiting for c in w.changes):
+            raise SyncRoundFileNotListed(path, "push")
+        assert remote is not None
+        return round_diff.between(d, path, "pending", d.git.remote_tip(remote.branch), head)
+
+    async def held_file_diff(self, path: str) -> RoundFileDiff:
+        """One file a held round would delete: its whole text, as removed."""
+        return await asyncio.to_thread(self._held_file_diff, path)
+
+    def _held_file_diff(self, path: str) -> RoundFileDiff:
+        d = self._engine.d
+        stop = d.state.stop()
+        hold = stop.hold if stop else None
+        if stop is None or hold is None or path not in hold.paths:
+            raise SyncRoundFileNotListed(path, "delete")
+        # Incoming: the other Mac deletes what this one still has; outgoing:
+        # this Mac deletes what the remote still has.
+        incoming = hold.direction is HoldDirection.INCOMING
+        before, after = (stop.local, stop.remote) if incoming else (stop.remote, stop.local)
+        return round_diff.between(d, path, "held", before, after)
 
     async def join_files(self) -> tuple[StoppedFile, ...]:
         """A join's differing files, in the shape a stopped round's are."""

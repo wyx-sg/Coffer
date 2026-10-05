@@ -6,7 +6,7 @@
 // and one Hand off to Claude Code for every file an agent may merge. Nothing is answered
 // from here.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import type { ConflictFile } from "@/lib/api/sync";
@@ -53,14 +53,13 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SyncJoinChoices", () => {
-  test("each row says when each Mac edited it and that a version is to be chosen", () => {
+  test("says how many files differ, and lists none of them here", () => {
     show();
     expect(screen.getByText("Differ from this Mac")).toBeInTheDocument();
-    const row = screen.getByTestId("join-choice-knowledge/a.md");
-    expect(row).toHaveTextContent(/Knowledge · this Mac .+ · Mac mini /);
-    expect(row).toHaveTextContent("Choose a version");
-    // Each row opens the Resolve page at its file, in join mode.
-    expect(row).toHaveAttribute("href", "/sync/conflicts?mode=join&path=knowledge%2Fa.md");
+    expect(
+      screen.getByText("2 files are not pushed or replaced until you choose a version."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("knowledge/a.md")).not.toBeInTheDocument();
   });
 
   test("Choose versions opens the Resolve page in join mode", () => {
@@ -82,17 +81,6 @@ describe("SyncJoinChoices", () => {
     seed([differing("secret/a.enc", { agent_mergeable: false, secret: true })]);
     show();
     expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
-  });
-
-  test("a long list shows five and a way to the rest", () => {
-    seed(["a", "b", "c", "d", "e", "f"].map((n) => differing(`knowledge/${n}.md`)));
-    show();
-    expect(screen.queryByTestId("join-choice-knowledge/f.md")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 5 of 6")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
-    expect(
-      within(screen.getByTestId("sync-join-choices")).getByTestId("join-choice-knowledge/f.md"),
-    ).toBeInTheDocument();
   });
 
   test("nothing differing renders nothing", () => {

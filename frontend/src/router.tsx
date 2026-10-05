@@ -162,8 +162,16 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "sync",
     element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
   },
-  // Sub-views of a stopped round, without tabs. Resolve conflicts also serves a
-  // first join's differing files (`?mode=join`).
+  // The review pages, without tabs: changes to push, and the sub-views of a
+  // stopped round. Resolve conflicts also serves a first join's differing
+  // files (`?mode=join`).
+  {
+    path: "sync/pending",
+    element: lazyPage(
+      () => import("./pages/sync/SyncPendingReviewPage"),
+      "SyncPendingReviewPage",
+    ),
+  },
   {
     path: "sync/conflicts",
     element: lazyPage(

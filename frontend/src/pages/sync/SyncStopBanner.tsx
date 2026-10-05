@@ -6,7 +6,7 @@
 // Sync now, which is disabled while the round is stopped) or Review deletions,
 // each its own page; for conflicts also Ask an agent, which hands every file
 // an agent may merge over in one prompt. × is Ignore, the same as on Overview.
-// The files themselves are listed below by `SyncStoppedCard`.
+// The files themselves are on those pages, never listed on the Status tab.
 //
 // The stop is read for the name of the Mac on the other side, which is what
 // makes "changed the same lines" a sentence a person can picture.

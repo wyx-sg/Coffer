@@ -3,32 +3,42 @@
 // Review held deletions (`/sync/deletions`, boards 6.4.10 / 6.4.11): the
 // deletion breaker held a round that would delete more than it lets through
 // without a person (spec vault-sync "Hold a round that would lose too much").
-// The page has no back link; the summary rides in the description line. It
-// lists every held file by folder, then offers the two answers as two buttons —
-// Keep the files or Delete N files — each acting at once, because the list
-// above already names what a delete removes. Either continues the round and
-// goes back to Sync.
+// The summary rides in the description line. The shared review shape: every
+// held file down the left, folder by folder; the chosen file on the right,
+// its whole text as the lines a delete removes; the two answers in the foot —
+// Keep the files or Delete N files — each acting at once, because the person
+// has read what a delete removes. Either continues the round and goes back to
+// Sync.
 //
 // The board draws a hold that came in from another Mac; a hold this Mac would
 // push out (`direction: "outgoing"`) reads the same way with its own words.
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/status/StatusPill";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHeldFileDiff } from "@/lib/hooks/useSync";
 import { useSyncStop } from "@/lib/hooks/useSyncStop";
+import { ChangeMark } from "./SyncChangeMark";
 import { SyncDeletionActions } from "./SyncDeletionActions";
-import { SyncDeletionGroups } from "./SyncDeletionGroups";
-import { clock } from "./syncConflictFormat";
+import { SyncReviewDiffPane, SyncReviewNav, SyncReviewShell } from "./SyncReviewShell";
+import { clock, folderLabel } from "./syncConflictFormat";
 
 export function SyncDeletionReviewPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { data, isLoading } = useSyncStop(true);
   const round = data?.stopped && data.round?.kind === "hold" ? data.round : null;
   const hold = round?.hold ?? null;
+  const files = (hold?.groups ?? []).flatMap((g) =>
+    g.paths.map((path) => ({ path, folder: g.folder })),
+  );
+  const wanted = params.get("path");
+  const file = files.find((f) => f.path === wanted) ?? files[0];
+  const diff = useHeldFileDiff(file?.path ?? "", file !== undefined);
 
   const who =
     hold?.direction === "outgoing"
@@ -52,12 +62,12 @@ export function SyncDeletionReviewPage() {
     />
   );
 
-  if (isLoading || !round || !hold) {
+  if (isLoading || !round || !hold || !file) {
     return (
       <div className="space-y-6">
         {header}
         {isLoading ? (
-          <Skeleton className="h-64 w-full max-w-[720px]" />
+          <Skeleton className="h-80 w-full" />
         ) : (
           <EmptyState
             title={t("sync.deletions.empty.title")}
@@ -68,13 +78,37 @@ export function SyncDeletionReviewPage() {
     );
   }
 
+  const select = (path: string) => {
+    const next = new URLSearchParams(params);
+    next.set("path", path);
+    setParams(next, { replace: true });
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {header}
-      <div className="flex max-w-[720px] flex-col gap-5">
-        <SyncDeletionGroups hold={hold} who={who} />
-        <SyncDeletionActions hold={hold} who={who} onDone={() => navigate("/sync")} />
-      </div>
+      <SyncReviewShell
+        nav={
+          <SyncReviewNav
+            selected={file.path}
+            onSelect={select}
+            items={files.map((f) => ({
+              path: f.path,
+              mark: <ChangeMark status="removed" />,
+              note: folderLabel(t, f.folder),
+              testId: `held-file-${f.path}`,
+            }))}
+          />
+        }
+        footer={<SyncDeletionActions hold={hold} who={who} onDone={() => navigate("/sync")} />}
+      >
+        <SyncReviewDiffPane
+          path={file.path}
+          status="removed"
+          note={t("sync.deletions.deletedOn", { machine: who })}
+          query={diff}
+        />
+      </SyncReviewShell>
     </div>
   );
 }

@@ -2,8 +2,9 @@
 //
 // What a person opens Sync to find out, top to bottom: the one state the page
 // is in (a line with the areas line under it, or a card when it asks for
-// something), what waits to push, anything a stopped round or a join is
-// waiting on, and every round this Mac has run.
+// something), what a join is waiting on, and every round this Mac has run.
+// No file is listed here: changes to push, held deletions and conflicts each
+// open their own review page from the banner (SyncReviewShell).
 //
 // The stop and the join are fetched only while the status says there is one
 // to answer; the rounds are read 30, then 50 more as the table is scrolled to
@@ -13,8 +14,6 @@ import { useSyncRuns } from "@/lib/hooks/useSync";
 import { SyncJoinChoices } from "./SyncJoinChoices";
 import { SyncRoundsTable } from "./SyncRoundsTable";
 import { SyncStateBanner } from "./SyncStateBanner";
-import { SyncStoppedCard } from "./SyncStoppedCard";
-import { SyncWaitingList } from "./SyncWaitingList";
 import type { SyncState } from "./syncPageState";
 
 interface Props {
@@ -29,7 +28,6 @@ export function SyncStatusTab({ status, state, startedAt, onRecheck, rechecking 
   // isLoading, not isPending: a disabled query stays "pending" forever.
   const rounds = useSyncRuns(true);
   const runs = rounds.items;
-  const stopped = status.conflicts > 0 || status.held > 0;
 
   return (
     <div className="space-y-5">
@@ -41,8 +39,6 @@ export function SyncStatusTab({ status, state, startedAt, onRecheck, rechecking 
         onRecheck={onRecheck}
         rechecking={rechecking}
       />
-      {state.kind === "to_push" ? <SyncWaitingList waiting={status.waiting} /> : null}
-      {stopped ? <SyncStoppedCard /> : null}
       {status.join_choices > 0 ? <SyncJoinChoices /> : null}
       <SyncRoundsTable
         runs={runs}
