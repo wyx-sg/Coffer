@@ -42,7 +42,10 @@ export function SkillsBulkBar({ skills, total, onDone }: Props) {
         invalidate={[skillsKey]}
         onDone={onDone}
       />
-      <SkillReviewHandoff uids={skills.map((s) => s.uid)} label={t("skills.bulk.review")} />
+      <SkillReviewHandoff
+        uids={skills.map((s) => s.uid)}
+        label={(agent) => t("skills.bulk.review", { agent })}
+      />
       <SkillBulkDelete skills={skills} onDone={onDone} label={t("common.delete")} />
     </ListSelectionBar>
   );

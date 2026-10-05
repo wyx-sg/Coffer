@@ -55,11 +55,25 @@ export function SkillRequiresTab({ skill }: Props) {
   const review = (
     <SkillReviewHandoff
       uids={[skill.uid]}
-      label={t(
-        skill.requires_declared
-          ? "skills.requires.reviewDeclared"
-          : "skills.requires.reviewUndeclared",
-      )}
+      label={(agent) =>
+        t(
+          skill.requires_declared
+            ? "skills.requires.reviewDeclared"
+            : "skills.requires.reviewUndeclared",
+          { agent },
+        )
+      }
+    />
+  );
+
+  // Alone in its row, the button says what it does.
+  const reviewRow = (
+    <SkillReviewHandoff
+      uids={[skill.uid]}
+      label={(agent) => t("skills.requires.reviewDeclared", { agent })}
+      description={(agent) =>
+        agent ? t("skills.requires.reviewNote", { agent }) : t("skills.requires.reviewNoteCopy")
+      }
     />
   );
 
@@ -88,7 +102,7 @@ export function SkillRequiresTab({ skill }: Props) {
   return (
     <div className="flex flex-col">
       {skill.requires_declared ? (
-        <div className="mb-4 flex justify-end">{review}</div>
+        <div className="mb-4">{reviewRow}</div>
       ) : (
         <div
           data-testid="skill-requires-unknown"

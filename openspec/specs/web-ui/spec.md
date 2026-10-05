@@ -2925,7 +2925,7 @@ each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
 "Declare the secrets a skill requires"), **Tools** — the MCP servers and
 custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
 the tools a skill requires"), each with its state and a link to its page — and
-**Skills** it needs. A skill that never declared what it needs (`requires_declared` is `false`; spec skill-manager "Tell a skill that declares nothing from one that has not declared") MUST show an unknown state — "This skill doesn’t declare what it needs, so Coffer doesn’t know" — in place of "Nothing required", carrying the hand-off button **Add requires with an agent**; a declared skill carries **Check with an agent** at the top of the tab and, when it declares nothing, "Nothing required" (spec skill-manager "Hand a skill's review to an agent"). Both are the shared hand-off split button whose prompt is asked of the daemon when a verb is picked. Unknown is shown on this tab only: not in the Skills list, not as an attention item, not on Overview. A row's name is shown in full, never cut short: a group's
+**Skills** it needs. A skill that never declared what it needs (`requires_declared` is `false`; spec skill-manager "Tell a skill that declares nothing from one that has not declared") MUST show an unknown state — "This skill doesn’t declare what it needs, so Coffer doesn’t know" — in place of "Nothing required", carrying the hand-off button **Add requires with <agent>** (the label names the agent the button starts, e.g. Claude Code); a declared skill carries **Check with <agent>** at the top, with a one-line muted note beside it saying what the agent will do of the tab and, when it declares nothing, "Nothing required" (spec skill-manager "Hand a skill's review to an agent"). Both are the shared hand-off split button whose prompt is asked of the daemon when a verb is picked. Unknown is shown on this tab only: not in the Skills list, not as an attention item, not on Overview. A row's name is shown in full, never cut short: a group's
 name column is as wide as its longest name. **Check** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
@@ -3028,11 +3028,11 @@ validates its source inline and MUST carry the Available to reach control.
 #### Scenario: the requires tab offers a check to a skill that declared
 - **GIVEN** a skill declaring `requires: []`
 - **WHEN** the user opens its Requires tab
-- **THEN** it reads "Nothing required" and offers Check with an agent
+- **THEN** it reads "Nothing required" and offers Check with <agent>
 
 #### Scenario: the skills selection bar checks the selected skills with one prompt
 - **GIVEN** two skills ticked in the Skills list
-- **WHEN** the user chooses Check with an agent in the selection bar
+- **WHEN** the user chooses Check with <agent> in the selection bar
 - **THEN** one prompt for both skills is asked of the daemon and handed over
 
 #### Scenario: a skill that needs a secret that is not set says so and links to Secrets
