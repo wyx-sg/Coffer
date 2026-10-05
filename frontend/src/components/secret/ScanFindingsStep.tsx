@@ -11,10 +11,16 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SecretScan, SecretScanFinding } from "@/lib/api/secret";
+import { ScanIgnoredList } from "./ScanIgnoredList";
 import { placeOf, resourceCount } from "./scanPlan";
 
 interface Props {
   scan: SecretScan;
+  /** Findings a person said are not secrets: listed behind "Show ignored (N)", never ticked. */
+  ignored: SecretScanFinding[];
+  busy: boolean;
+  onIgnore: (id: string) => void;
+  onReportAgain: (id: string) => void;
   ticked: ReadonlySet<string>;
   onToggle: (id: string) => void;
   onToggleAll: (all: boolean) => void;
@@ -33,6 +39,10 @@ function becomes(f: SecretScanFinding, t: (key: string) => string): string {
 
 export function ScanFindingsStep({
   scan,
+  ignored,
+  busy,
+  onIgnore,
+  onReportAgain,
   ticked,
   onToggle,
   onToggleAll,
@@ -70,7 +80,10 @@ export function ScanFindingsStep({
               </th>
               <th className="w-[26%] px-2 py-2 font-medium">{t("secrets.scan.resource")}</th>
               <th className="w-[38%] px-2 py-2 font-medium">{t("secrets.scan.foundIn")}</th>
-              <th className="px-3 py-2 font-medium">{t("secrets.scan.becomes")}</th>
+              <th className="px-2 py-2 font-medium">{t("secrets.scan.becomes")}</th>
+              <th className="w-28 px-3 py-2">
+                <span className="sr-only">{t("secrets.scan.notASecret")}</span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
@@ -81,7 +94,7 @@ export function ScanFindingsStep({
                 <Fragment key={source}>
                   <tr className="bg-surface-sunken">
                     <th
-                      colSpan={4}
+                      colSpan={5}
                       scope="colgroup"
                       className="px-3 py-1.5 text-left text-2xs font-medium uppercase tracking-wide text-text-muted"
                     >
@@ -120,10 +133,25 @@ export function ScanFindingsStep({
                           ) : null}
                         </td>
                         <td
-                          className="truncate px-3 py-2 align-top font-mono text-text"
+                          className="truncate px-2 py-2 align-top font-mono text-text"
                           title={becomes(f, t)}
                         >
                           {becomes(f, t)}
+                        </td>
+                        <td className="px-3 py-1 text-right align-top">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            aria-label={t("secrets.scan.notASecretOne", {
+                              resource: f.resource,
+                              place,
+                            })}
+                            onClick={() => onIgnore(f.id)}
+                          >
+                            {t("secrets.scan.notASecret")}
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -134,6 +162,7 @@ export function ScanFindingsStep({
           </tbody>
         </table>
       </div>
+      <ScanIgnoredList ignored={ignored} busy={busy} onReportAgain={onReportAgain} />
       <p className="text-xs text-text-muted">{t("secrets.scan.hint")}</p>
       <DialogFooter className="items-center">
         <span className="mr-auto text-xs text-text-muted">

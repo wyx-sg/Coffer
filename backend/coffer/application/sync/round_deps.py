@@ -8,6 +8,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from coffer.application.secret.plaintext_ignore import PlaintextIgnorePort
 from coffer.application.sync.round_ports import (
     MachinePort,
     RoundStatePort,
@@ -52,11 +53,15 @@ class RoundDeps:
     scratch: ScratchPort | None = None
     validate: Validator | None = None
     cloud_folder: Callable[[], str | None] = lambda: None
-    #: ``(line, key, rule)`` for each plaintext secret in a file's text and
+    #: ``(line, key, rule, fingerprint)`` for each plaintext secret in a file's text and
     #: path — the detector the Secrets page's scan uses (spec secret "Detect
     #: plaintext secrets with the bundled rules"). ``None`` reads nothing
     #: before a push (spec vault-sync "Refuse to push a plaintext secret").
-    find_plaintext: Callable[[str, str], Sequence[tuple[int, str, str]]] | None = None
+    find_plaintext: Callable[[str, str], Sequence[tuple[int, str, str, str | None]]] | None = None
+    #: Values this machine was told are not secrets (spec secret "Remember a
+    #: value a person says is not a secret"); a finding with one of these
+    #: fingerprints does not stop a round. ``None`` remembers nothing.
+    ignores: PlaintextIgnorePort | None = None
     #: A whole file's text with every plaintext value masked: one
     #: ``(masked line, values)`` per line of the text, each value's place, rule
     #: and shape (spec vault-sync "Show a plaintext finding in its file").

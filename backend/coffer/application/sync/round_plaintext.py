@@ -72,14 +72,19 @@ def findings(d: RoundDeps, tip: str | None, final: str) -> tuple[PlaintextFindin
         return ()
     data = d.git.blobs([blob for _, blob in pairs])
     now = d.git.files(final)
+    ignored = d.ignores.fingerprints() if d.ignores is not None else frozenset()
     out: list[PlaintextFinding] = []
     for path, blob in pairs:
         text = _text(data.get(blob))
         if text is None:
             continue
-        for line, key, rule in d.find_plaintext(text, path):
+        for line, key, rule, fp in d.find_plaintext(text, path):
+            if fp is not None and fp in ignored:
+                continue
             out.append(
-                PlaintextFinding(path, line, key, blob, current=now.get(path) == blob, rule=rule)
+                PlaintextFinding(
+                    path, line, key, blob, current=now.get(path) == blob, rule=rule, fingerprint=fp
+                )
             )
     return tuple(sorted(out, key=lambda f: (not f.current, f.path, f.line)))
 

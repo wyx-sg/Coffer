@@ -38,6 +38,10 @@ class PlaintextFinding:
     #: The bundled rule that found it; ``""`` for a round recorded before
     #: rules were named.
     rule: str = ""
+    #: The value's fingerprint (spec secret "Remember a value a person says is
+    #: not a secret"), kept in the round record so "Push anyway" can remember
+    #: the value. Never shown on a surface; ``None`` without a master key.
+    fingerprint: str | None = None
 
 
 @dataclass(frozen=True)

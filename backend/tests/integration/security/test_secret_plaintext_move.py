@@ -263,3 +263,63 @@ def test_a_weak_password_and_a_password_in_a_url_are_found(d: BoundaryDaemon) ->
         "coffer-url-password",
     ]
     assert PASSWORD not in str(body)
+
+
+def _skill_finding(d: BoundaryDaemon) -> dict[str, Any]:
+    found = d.client.post("/api/v1/secrets/scan").json()["findings"]
+    return next(f for f in found if f["source"] == "skill")
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a finding marked not a secret is not reported again"
+)
+def test_a_finding_marked_not_a_secret_is_not_reported_again(d: BoundaryDaemon) -> None:
+    script = _skill(d.home)
+    first = _skill_finding(d)
+    assert first["ignored"] is False
+
+    r = d.client.post("/api/v1/secrets/scan/ignore", json={"ids": [first["id"]]})
+
+    assert r.status_code == 200, r.text
+    assert [f["ignored"] for f in r.json()["findings"]] == [True]
+    entries = d.audit("secret_plaintext_ignored")
+    assert [e["details"] for e in entries] == [
+        {"places": ["skills/deploy/scripts/run.sh:github-pat"]}
+    ]
+    store_file = d.home / ".coffer" / "local" / "secret" / "plaintext-ignored.json"
+    assert TOKEN_VALUE not in store_file.read_text() and TOKEN_VALUE not in str(entries)
+
+    script.write_text("#!/bin/sh\necho hi\n" + script.read_text())
+    assert _skill_finding(d)["ignored"] is True
+
+    script.write_text(f'#!/bin/sh\nexport API_TOKEN="{_fake("gh" + "p_", 9, 36)}"\n')
+    assert _skill_finding(d)["ignored"] is False
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a remembered value can be reported again")
+def test_a_remembered_value_can_be_reported_again(d: BoundaryDaemon) -> None:
+    _skill(d.home)
+    fid = _skill_finding(d)["id"]
+    d.client.post("/api/v1/secrets/scan/ignore", json={"ids": [fid]})
+    assert _skill_finding(d)["ignored"] is True
+
+    r = d.client.post("/api/v1/secrets/scan/unignore", json={"ids": [fid]})
+
+    assert r.status_code == 200, r.text
+    assert [f["ignored"] for f in r.json()["findings"]] == [False]
+    assert len(d.audit("secret_plaintext_unignored")) == 1
+
+
+def test_ignoring_without_the_master_key_is_refused(
+    d: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _skill(d.home)
+    fid = _skill_finding(d)["id"]
+    from coffer.surfaces.http import secret_plaintext_routes as routes
+
+    monkeypatch.setattr(routes, "_fingerprint_of", lambda: lambda _v: None)
+
+    r = d.client.post("/api/v1/secrets/scan/ignore", json={"ids": [fid]})
+
+    assert r.status_code == 503 and r.json()["error"]["code"] == "SECRET_LOCKED", r.text
+    assert d.audit("secret_plaintext_ignored") == []

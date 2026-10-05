@@ -526,6 +526,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/scan/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ignore Plaintext
+         * @description Remember the chosen values as not secrets: scans keep listing them, marked.
+         */
+        post: operations["ignore_plaintext_api_v1_secrets_scan_ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/scan/unignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unignore Plaintext
+         * @description Report the chosen values again.
+         */
+        post: operations["unignore_plaintext_api_v1_secrets_scan_unignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/{ref}": {
         parameters: {
             query?: never;
@@ -1023,6 +1063,11 @@ export interface components {
              */
             present: boolean;
         };
+        /** SecretIgnoreIn */
+        SecretIgnoreIn: {
+            /** Ids */
+            ids: string[];
+        };
         /** SecretImportIn */
         SecretImportIn: {
             /**
@@ -1186,6 +1231,11 @@ export interface components {
             field: ("env" | "header") | null;
             /** Id */
             id: string;
+            /**
+             * Ignored
+             * @default false
+             */
+            ignored: boolean;
             /** Key */
             key: string;
             /** Line */
@@ -2352,6 +2402,96 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScanOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ignore_plaintext_api_v1_secrets_scan_ignore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretIgnoreIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScanOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unignore_plaintext_api_v1_secrets_scan_unignore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretIgnoreIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

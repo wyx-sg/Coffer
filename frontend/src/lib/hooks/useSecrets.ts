@@ -129,6 +129,19 @@ export function useSecretScan(enabled: boolean) {
   });
 }
 
+/** Mark findings as not secrets (or report them again): the answer is the scan, which replaces the one on screen. */
+export function useIgnoreFindings() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: ({ ids, ignore }: { ids: string[]; ignore: boolean }) =>
+      ignore ? secretsApi.ignoreFindings(ids) : secretsApi.unignoreFindings(ids),
+    onSuccess: (scan) => qc.setQueryData(secretScanKey, scan),
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
 /** Move chosen findings into the store; `dryRun` answers what would move and writes nothing. */
 export function useImportSecrets() {
   const qc = useQueryClient();

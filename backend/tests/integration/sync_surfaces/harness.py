@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from coffer.application.secret.plaintext_ignore import fingerprinter
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.service import SyncService
@@ -25,6 +26,7 @@ from coffer.domain.sync.rounds import RoundRecord
 from coffer.domain.vault.findings import Finding, FindingCode
 from coffer.domain.vault.writers import WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import Change, Expect, TreeReader, Verdict
+from coffer.infrastructure.secret.plaintext_ignore_store import JsonPlaintextIgnores
 from coffer.infrastructure.secret.plaintext_mask import find_text, mask_text
 from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
 from coffer.infrastructure.sync.machine_descriptor import HostMachine
@@ -179,7 +181,12 @@ class Box:
             scratch=ConflictScratch(lambda: self.root / "derived" / "sync-conflicts"),
             validate=json_documents if self.validate else None,
             cloud_folder=self.cloud,
-            find_plaintext=find_text,
+            find_plaintext=lambda text, path: find_text(
+                text, path, fingerprinter(lambda: bytes(range(32)))
+            ),
+            ignores=JsonPlaintextIgnores(
+                lambda: self.root / "local" / "sync" / "plaintext-ignored.json"
+            ),
             mask_plaintext=mask_text,
         )
         self.engine = RoundEngine(self.deps)

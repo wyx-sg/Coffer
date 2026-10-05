@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from coffer.application.secret.plaintext_ignore import fingerprinter
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
 from coffer.domain.sync.remote import SyncRemote
@@ -15,6 +16,7 @@ from coffer.domain.sync.rounds import RoundRecord
 from coffer.domain.vault.document import ResourceDocument
 from coffer.domain.vault.writers import WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import Expect, Validator
+from coffer.infrastructure.secret.plaintext_ignore_store import JsonPlaintextIgnores
 from coffer.infrastructure.secret.plaintext_mask import find_text, mask_text
 from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
 from coffer.infrastructure.sync.vault_git import VaultSyncGit
@@ -87,7 +89,10 @@ class Machine:
             machine=FakeMachine(self.label, self.label),
             scratch=ConflictScratch(lambda: self.root / "derived" / "sync-conflicts"),
             validate=self.validate,
-            find_plaintext=find_text,
+            find_plaintext=lambda text, path: find_text(
+                text, path, fingerprinter(lambda: bytes(range(32)))
+            ),
+            ignores=JsonPlaintextIgnores(lambda: self.root / "local" / "plaintext-ignored.json"),
             mask_plaintext=mask_text,
         )
         self.engine = RoundEngine(self.deps)

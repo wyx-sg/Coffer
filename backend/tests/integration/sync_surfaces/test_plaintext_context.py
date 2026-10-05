@@ -88,16 +88,16 @@ def test_a_modified_files_finding_shows_its_masked_change(pair: tuple[Box, Box])
     )
     assert mac.round().status is RoundStatus.PLAINTEXT_FOUND
     with client_for(mac) as c:
-        old = c.get("/sync/plaintext/context", params={"path": DOC, "line": 3}).json()
-        assert old["change"] == "modified" and old["on_remote"] is True
-        (example,) = old["lines"][2]["values"]
-        assert (example["shape"]["hint"], example["shape"]["word"]) == ("placeholder", "demo")
-        assert "demo-pass" not in old["lines"][2]["text"]
+        # Push anyway remembered the demo value, so only the token is listed.
+        old = c.get("/sync/plaintext/context", params={"path": DOC, "line": 3})
+        assert old.json()["error"]["code"] == "SYNC_PLAINTEXT_NOT_LISTED"
 
         new = c.get("/sync/plaintext/context", params={"path": DOC, "line": 4})
-        assert TOKEN not in new.text
+        assert TOKEN not in new.text and "demo-pass" not in new.text
         body = new.json()
-        assert body["on_remote"] is False
+        assert body["change"] == "modified" and body["on_remote"] is False
+        (example,) = body["lines"][2]["values"]
+        assert (example["shape"]["hint"], example["shape"]["word"]) == ("placeholder", "demo")
         (tok,) = body["lines"][3]["values"]
         assert (tok["key"], tok["rule"]) == ("token", "github-pat")
         assert tok["shape"]["prefix"] == "ghp_"

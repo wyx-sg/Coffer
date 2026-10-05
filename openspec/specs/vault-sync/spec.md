@@ -1597,8 +1597,8 @@ file the masked diff behind "Show changes".
 
 #### Scenario: a finding in a file the remote holds shows its masked change
 - **GIVEN** a document the remote already holds with the line `DB_PASSWORD=my-demo-pass-2024`, pushed anyway, to which this machine adds a line with a GitHub token
-- **WHEN** a round stops as `plaintext_found` and each place's context is asked for
-- **THEN** the old line is `modified`, already on the remote, and hinted as a placeholder holding `demo`, and the token keeps only `ghp_` visible and is named `github-pat`
+- **WHEN** a round stops as `plaintext_found` and the token's context is asked for
+- **THEN** only the token's line is listed, the file is `modified` and the token's line is not on the remote, the token keeps only `ghp_` visible and is named `github-pat`, and the old line beside it is still masked, hinted as a placeholder holding `demo`
 - **AND** the masked diff adds one line and carries no value
 
 #### Scenario: the Sync page opens each place to its masked lines
@@ -1644,10 +1644,15 @@ MUST NOT publish that commit. It folds the unpushed commits into one commit on t
 with the same files, checks it out in their place, and pushes that. It records how many commits it
 folded as `folded`. No file on disk changes.
 
+A value this machine was told is not a secret ([secret](../secret/spec.md) "Remember a value a
+person says is not a secret") MUST NOT stop a round, wherever it sits and whatever else in its
+file changed.
+
 "Push anyway" (`POST /api/v1/sync/plaintext/push-anyway`) MUST allow
-exactly the file versions the last round found, record the audit event `sync_plaintext_pushed`
-with the files and lines, and run a round. A file changed since is a new version and is read
-again. When the last round is not `plaintext_found`, it MUST be refused with
+exactly the file versions the last round found, remember each value the last round found as not a
+secret, record the audit event `sync_plaintext_pushed` with the files and lines, and run a round.
+A later edit to the same file is read again, but stops a round only for a value not remembered.
+When the last round is not `plaintext_found`, it MUST be refused with
 `SYNC_NO_PLAINTEXT_FOUND` (409).
 
 #### Scenario: a plaintext secret stops the round before anything is pushed
@@ -1668,6 +1673,12 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 - **THEN** the first is refused with `SYNC_NO_PLAINTEXT_FOUND`, the second pushes the file and records `sync_plaintext_pushed` naming the file and line
 - **AND** a new value written into the same file stops the next round again
 
+#### Scenario: a value pushed anyway does not stop a later edit of its file
+- **GIVEN** a round stopped as `plaintext_found` on a note, and Push anyway
+- **WHEN** the person edits another line of the note, and a round runs
+- **THEN** the round pushes the note
+- **AND** when the value itself is changed, the next round stops as `plaintext_found` again
+
 #### Scenario: an encrypted secret file is not read
 - **GIVEN** a remote that carries secret ciphertext, and a `secret/<ref>.enc` file whose bytes look like a token
 - **WHEN** a round runs
@@ -1677,7 +1688,7 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 - **GIVEN** the Sync page with a `plaintext_found` problem in a skill's script and a knowledge document
 - **WHEN** it is shown, and Move into secrets… is chosen
 - **THEN** its card lists each file, line, key and rule a file still holds, with Move into secrets… and Push anyway…, and no agent hand-off and no Retry
-- **AND** the move lists only the skill script's finding and moves it through a reviewed dry run, a dialog opened on files it cannot move from says so, and Push anyway runs only after a confirmation that says it is recorded in the audit log
+- **AND** the move lists only the skill script's finding and moves it through a reviewed dry run, a dialog opened on files it cannot move from says so, and Push anyway runs only after a confirmation that says it is recorded in the audit log and that this machine will not stop on those values again
 
 #### Scenario: code that reads a secret from elsewhere is not a plaintext secret
 - **GIVEN** a skill script with `const token = process.env.SPACE_TOKEN || require(…)`, `token = args.token or os.environ.get(…)`, `token=page.next_page_token;` and `const token = accessToken`

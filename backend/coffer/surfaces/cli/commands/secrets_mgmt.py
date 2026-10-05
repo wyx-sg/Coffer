@@ -43,6 +43,22 @@ SPECS = [
         body=True,
     ),
     RouteCommand(
+        "secret ignore",
+        "POST",
+        "/secrets/scan/ignore",
+        _UI + "Not a secret",
+        "Remember found values as not secrets, so scans stop reporting them. Body: ids.",
+        body=True,
+    ),
+    RouteCommand(
+        "secret unignore",
+        "POST",
+        "/secrets/scan/unignore",
+        _UI + "Report again",
+        "Forget values remembered as not secrets. Body: ids.",
+        body=True,
+    ),
+    RouteCommand(
         "secret local-access request",
         "POST",
         "/secrets/local-access/request",

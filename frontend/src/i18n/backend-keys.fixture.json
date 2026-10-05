@@ -222,6 +222,8 @@
     "secret_imported",
     "secret_local_access_revoked",
     "secret_notes_updated",
+    "secret_plaintext_ignored",
+    "secret_plaintext_unignored",
     "secret_protection_enabled",
     "secret_resolved",
     "secret_revealed",

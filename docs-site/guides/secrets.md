@@ -56,6 +56,8 @@ Choosing a row opens that secret in the right-hand pane. Its header holds the **
 
 Each move is recorded in [Activity](/guides/activity) as **Imported secrets**, without the value. A scan that finds nothing says how many files and servers it read.
 
+**Not a secret.** When a finding is an example or a test value, choose **Not a secret** on it. Coffer remembers that value on this Mac and stops reporting it — here and in vault sync's check before a push — wherever it sits and however its file is edited; change the value and it is reported again. Coffer keeps only a fingerprint of the value made with your master key, never the value. **Show ignored (N)** lists what you marked, with **Report again** to undo it. Both are recorded in [Activity](/guides/activity), without the value.
+
 **Where the rules come from.** The rules are gitleaks', pinned to one release, bundled in the app and licensed MIT; Coffer adds its own allowlist and its own rules for passwords. They are refreshed by hand with each Coffer release, so a new credential format reaches you with an update, not on its own. Content that is encoded (base64 or hex) is not decoded and scanned.
 
 **Add secret** adds a new standalone secret: a name and a value, which is never shown back. Coffer mints its id, `secret/<id>`, and the dialog then shows `coffer://secret/<id>` with **Copy** — that is what a script or a skill cites. The secret is stored as soon as you add it, with nothing to approve — but `coffer run` cannot use it until you [allow that](#allow-coffer-run-to-use-it). A secret added here, or with `coffer secret set --name`, needs your approval the first time a resource cites it; see [Approvals](#approvals).

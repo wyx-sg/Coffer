@@ -15,14 +15,28 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from coffer.application.secret.plaintext_ignore import Fingerprinter
 from coffer.domain.plaintext_shape import MaskedValue, mask, shape_of, split_rows
 from coffer.infrastructure.secret.detector import Lines, by_line, detect
 
 
-def find_text(text: str, path: str = "") -> list[tuple[int, str, str]]:
-    """``(line, key, rule)`` for each plaintext value in ``text``; the key is
-    the name the value is assigned to, or the rule's id when it has none."""
-    return [(n, d.key or d.rule, d.rule) for n, d in by_line(text, detect(text, path))]
+def find_text(
+    text: str, path: str = "", fingerprint: Fingerprinter | None = None
+) -> list[tuple[int, str, str, str | None]]:
+    """``(line, key, rule, fingerprint)`` for each plaintext value in ``text``;
+    the key is the name the value is assigned to, or the rule's id when it has
+    none. The fingerprint is the value's (spec secret "Remember a value a
+    person says is not a secret"), ``None`` without a ``fingerprint`` function
+    or a master key."""
+    return [
+        (
+            n,
+            d.key or d.rule,
+            d.rule,
+            fingerprint(text[d.start : d.end]) if fingerprint else None,
+        )
+        for n, d in by_line(text, detect(text, path))
+    ]
 
 
 def mask_text(text: str, path: str = "") -> list[tuple[str, tuple[MaskedValue, ...]]]:
