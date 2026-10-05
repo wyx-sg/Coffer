@@ -144,7 +144,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `SKILL_INVALID` | 422 | 该技能文件夹不是有效的技能（例如缺少 `SKILL.md` 或其格式错误）。 | 修好文件夹后重新导入。 |
-| `SKILL_FILE_STALE` | 409 | 你读取之后，某个技能文件在磁盘上被改过。 | 重新加载，再重新做你的修改。 |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | 在智能体自己的技能文件夹中找不到这个名字的技能。 | 刷新智能体的技能列表。 |
 | `UNMANAGED_SKILL_INVALID` | 422 | 智能体自己的某个技能因为文件夹无效而无法纳入托管。 | 修好它的 `SKILL.md`，再纳入托管。 |
 | `SKILL_STAGING_NOT_FOUND` | 404 | 该 id 下没有暂存内容：导入或更新预览已被确认、取消或已过期（暂存只保留一小时，重启后不保留）。 | 重新暂存来源。 |
@@ -153,8 +152,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SKILL_COPY_NOT_DIFFERING` | 409 | 请求比较或处理的智能体副本并不是挡在 Coffer 链接位置上的文件夹。 | 无需比较：该智能体已经是链接，或那里什么都没有。 |
 | `SKILL_NOT_FROM_GIT` | 409 | 该技能不是从 Git 仓库添加的，因此没有可以更新的来源。 | 用 `--force` 从它的仓库重新添加以替换它。 |
 | `SKILL_SOURCE_UNREACHABLE` | 502 | git 无法拉取技能的仓库、解析它的 ref 或找到它的文件夹。消息是 git 自己的，已去掉任何凭据；如果缺少 git，`details.handoff` 是给你的智能体的提示词。 | 检查仓库地址、ref 以及你对它的访问权限。 |
-| `SKILL_UPDATE_CONFLICT` | 409 | 自固定提交以来技能文件夹被编辑过，接受更新会丢弃这些编辑。 | 保留你的编辑，或接受更新并丢弃它们。 |
-| `SKILL_UPDATE_NOT_PENDING` | 409 | “我已合并”给出的提交不是该技能正在等待的更新。 | 重新打开更新，并基于它提供的提交合并。 |
+| `SKILL_UPDATE_NOT_PENDING` | 409 | 该技能没有等待中的更新：“我已合并”指定的提交不是这次更新，或在技能已是最新时请求了更新交接。 | 先检查更新，只交接或记录技能提供的那次更新。 |
 
 ## 知识 {#knowledge}
 
@@ -163,12 +161,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | 调用方看不到这个名字的知识集。 | 在知识页面选一个知识集。 |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | 已存在同名知识集。 | 换一个名字。 |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | 该路径下没有文档。 | 在知识页面浏览该知识集的文件夹。 |
-| `KNOWLEDGE_FILE_CONFLICT` | 409 | 你读取之后，文档在磁盘上被改过，所以你的保存被拒绝，文件保持原样。`details` 带有 `saved: false` 以及文档的当前内容（`current_body`、`current_fingerprint`）。 | 与当前文本对比后，用新的 fingerprint 再次保存。 |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | 路径跳出了知识根目录、指向隐藏条目，或无法指代一篇文档。 | 使用指向知识集内某篇 Markdown 文档的相对路径。 |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | 上传超过了消息中给出的大小上限。 | 拆分文档或上传更小的文件。 |
 | `INGEST_REJECTED` | 400 | 上传的内容无法转换。`details.reason` 为 `unsupported_type`、`scanned_pdf`（没有文本层的 PDF）或 `empty_conversion`；`details.doc_type` 给出类型。 | 转成支持的格式；对扫描的 PDF 做 OCR。 |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | 本机不记录知识历史，通常是因为没装 git。写入仍然可用。 | 安装 git；历史从下一次写入开始记录。 |
-| `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | 知识历史中没有这个 id 的版本，或该文档没有这个版本。 | 在知识页面查看该文档的历史来列出版本。 |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 改为恢复该文档的早期版本。 |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | 放回被删除的文档会覆盖该路径上现在的文件。`details` 给出版本和文档；什么都没写。 | 先移走或重命名该路径上的文件，再恢复。 |
 | `KNOWLEDGE_ERROR` | 400 | 知识层的其他拒绝。 | 阅读 `message`。 |
@@ -179,7 +175,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `MEMORY_NOTE_NOT_FOUND` | 404 | 该分区中没有这个 slug 的笔记。 | 在分区页面上列出笔记。 |
-| `MEMORY_NOTE_CONFLICT` | 409 | 你读取之后，笔记发生了变化（某个维护任务写过它，或在磁盘上被编辑过），所以你的保存被拒绝，笔记保持原样。`details` 带有 `saved: false` 和笔记现在的内容（正文和指纹）。 | 对照当前文本，再用新的指纹重新保存。 |
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已变成笔记并被移除。 |
 | `MEMORY_UNSAFE_PATH` | 400 | 某段路径是隐藏的、全是点，或因其他原因不安全。 | 使用分区内的路径。 |
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
@@ -218,7 +213,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `VAULT_FILE_STALE` | 409 | 你读取之后，文件在磁盘上被改过（你在编辑器中的编辑、另一次保存），所以写入被拒绝，而不是覆盖它。 | 重新加载，然后用新的 fingerprint 再次保存。 |
 | `VAULT_FILE_INVALID` | 422 | 这次写入会让某个保险库文件无法通过校验。什么都没写入。 | 修正消息中指出的问题。 |
 | `VAULT_PATH_INVALID` | 400 | 该路径不是可以读取历史的保险库文件或文件夹，或位于 `secret/` 下。 | 使用相对于保险库的路径，例如 `skills/pdf/`。 |
-| `VAULT_VERSION_NOT_FOUND` | 404 | 该版本不在此文件的历史中。 | 从该文件的**历史**标签页中选一个。 |
 | `VAULT_GIT_FAILED` | 500 | 对保险库仓库的某个 git 操作失败。 | 阅读消息和守护进程日志。 |
 
 ## 保险库同步 {#vault-sync}

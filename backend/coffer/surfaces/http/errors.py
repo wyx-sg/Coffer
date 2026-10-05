@@ -116,7 +116,6 @@ _STATUS: dict[str, int] = {
     "PLUGIN_NOT_FOUND": 404,
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
-    "SKILL_FILE_STALE": 409,
     # The commands skills require (spec skill-manager "Serve required commands on REST
     # and the web").
     "CLI_NOT_KNOWN": 404,
@@ -124,13 +123,12 @@ _STATUS: dict[str, int] = {
     "CLI_TOOL_EXISTS": 409,
     "CLI_TOOL_INVALID": 400,
     # skill sources (spec skill-manager "Add skills from an archive", "Add
-    # skills from a Git repository", "Update a Git-imported skill from its
-    # source"): an expired stage is a missing thing; git failing to fetch is
-    # the upstream refusing us (502, like the vault remote); an update over a
-    # local edit, a merge for no waiting update, a folder-added skill: 409.
+    # skills from a Git repository", "Hand a Git-imported skill's update to an
+    # agent"): an expired stage is a missing thing; git failing to fetch is
+    # the upstream refusing us (502, like the vault remote); a merge for no
+    # waiting update, a folder-added skill: 409.
     "SKILL_STAGING_NOT_FOUND": 404,
     "SKILL_SOURCE_UNREACHABLE": 502,
-    "SKILL_UPDATE_CONFLICT": 409,
     "SKILL_UPDATE_NOT_PENDING": 409,
     "SKILL_NOT_FROM_GIT": 409,
     # A copy Coffer didn't make stops a delete; one not in the way, or no orphan.
@@ -156,9 +154,6 @@ _STATUS: dict[str, int] = {
     "ENGINE_UNAVAILABLE": 503,
     # spec memory
     "MEMORY_NOTE_NOT_FOUND": 404,
-    # A save naming a fingerprint the note no longer has (spec memory "Edit a memory in the
-    # web UI or in an editor"): the note is left as it is.
-    "MEMORY_NOTE_CONFLICT": 409,
     "MEMORY_RAW_ENTRY_NOT_FOUND": 404,
     "MEMORY_UNSAFE_PATH": 400,
     "MEMORY_UNREADABLE": 422,
@@ -196,16 +191,11 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
-    # A save from the web UI naming a fingerprint the file no longer has (spec
-    # knowledge "Save a document edited in the web UI"): the file moved on
-    # disk since the editor read it, and is left as it is.
-    "KNOWLEDGE_FILE_CONFLICT": 409,
-    # History (spec knowledge "Keep every document's history"): no git on this
-    # machine is a state of the machine, an unknown version a missing thing.
+    # The changes feed (spec knowledge "Commit every knowledge write naming its
+    # writer"): no git on this machine is a state of the machine.
     "KNOWLEDGE_HISTORY_UNAVAILABLE": 503,
-    "KNOWLEDGE_VERSION_NOT_FOUND": 404,
-    # Restoring a delete (spec knowledge "Restore a deleted collection or document
-    # from Recent changes"): nothing deleted is a wrong request, a path taken again a conflict.
+    # Undoing a delete (spec knowledge "Undo a knowledge delete from its toast"):
+    # nothing deleted is a wrong request, a path taken again a conflict.
     "KNOWLEDGE_NOT_A_DELETE": 400,
     "KNOWLEDGE_RESTORE_CONFLICT": 409,
     # Also the answer for a path that cannot name a document — the

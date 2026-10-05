@@ -1,7 +1,6 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { UnsavedGuardProvider } from "./components/shell/UnsavedGuard";
 import { SettingsIndexRedirect } from "./components/shell/redirects";
 import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
@@ -144,11 +143,11 @@ const pageRoutes: RouteObject[] = gateRoutes([
   { path: "skills/:name", element: <SkillsPage /> },
   { path: "skills/:name/:tab", element: <SkillsPage /> },
   // Knowledge is ONE page (spec knowledge "Show a collection as one tree of
-  // documents in the web UI"): the collection tree stays on the left whatever the
-  // right pane shows — Recent changes (`/knowledge`), a collection and its open
-  // document (`/knowledge/<uid>?file=`) or the document's History
-  // (`/knowledge/<uid>/history?file=`). Every address reuses the same element, so
-  // moving between them keeps the tree's expanded folders rather than remounting it.
+  // read-only documents in the web UI"): the collection tree stays on the left
+  // whatever the right pane shows — the landing (`/knowledge`) or a collection
+  // and its open document (`/knowledge/<uid>?file=`). Every address reuses the
+  // same element, so moving between them keeps the tree's expanded folders
+  // rather than remounting it.
   { path: "knowledge", element: knowledgePage },
   { path: "knowledge/:uid", element: knowledgePage },
   { path: "knowledge/:uid/:tab", element: knowledgePage },
@@ -204,11 +203,7 @@ export const appRoutes: RouteObject[] = [...pageRoutes, ...settingsRoutes];
 export const routes: RouteObject[] = [
   {
     path: "*",
-    element: (
-      <UnsavedGuardProvider>
-        <Layout pageRoutes={pageRoutes} settingsRoutes={settingsRoutes} />
-      </UnsavedGuardProvider>
-    ),
+    element: <Layout pageRoutes={pageRoutes} settingsRoutes={settingsRoutes} />,
   },
 ];
 

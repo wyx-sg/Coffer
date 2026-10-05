@@ -38,10 +38,6 @@ export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
-export const agentConfigFileKey = (uid: string, key: string) =>
-  ["agents", uid, "config-files", key] as const;
-export const agentConfigChildKey = (uid: string, key: string, relpath: string) =>
-  ["agents", uid, "config-files", key, relpath] as const;
 export const agentConnectionKey = (uid: string) => ["agents", uid, "coffer-connection"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
 /** One entry's detail — under the listing's key, so whatever refreshes the
@@ -89,10 +85,9 @@ export const agentProviderModelsKey = (agentKey: string) =>
 export * from "./queryKeys.capabilities";
 import { customToolsKey, mcpStatusesKey, skillsKey } from "./queryKeys.capabilities";
 
-// vault history: any vault file or folder, e.g. a skill's `skills/<name>/`
-export const vaultKey = ["vault"] as const;
-export const vaultHistoryKey = (path: string) => ["vault", "history", path] as const;
-export const vaultDiffKey = (path: string, v: string) => ["vault", "diff", path, v] as const;
+// vault history hand-off: any vault file or folder, e.g. a skill's `skills/<name>/`
+export const vaultHistoryHandoffKey = (path: string, at: string | null) =>
+  ["vault", "history-handoff", path, at] as const;
 
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 
@@ -168,21 +163,12 @@ export const syncKeyFingerprintKey = ["sync", "key-fingerprint"] as const;
 export const scopeKey = ["scope"] as const;
 export const resourceScopeKey = (uid: string) => ["scope", uid] as const;
 
-// --- knowledge — collections, tree levels, files, changes, document history ---
+// --- knowledge — collections, tree levels, files -----------------------------
 
 export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
-export const knowledgeTreeRootKey = ["knowledge", "tree"] as const;
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
-export const knowledgeChangesRootKey = ["knowledge", "changes"] as const;
-export const knowledgeChangesKey = (collection: string | null) =>
-  ["knowledge", "changes", "list", collection ?? ""] as const;
-export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
-export const knowledgeVersionDiffKey = (path: string, version: string) =>
-  ["knowledge", "history", path, "diff", version] as const;
-export const knowledgeVersionBodyKey = (path: string, version: string) =>
-  ["knowledge", "history", path, "body", version] as const;
 
 // --- memory — partitions, their memories, what is delivered ---------------
 

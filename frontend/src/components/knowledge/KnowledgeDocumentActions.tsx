@@ -7,16 +7,13 @@
 // (spec knowledge "Show a collection as one tree of read-only documents in the
 // web UI").
 //
-// `EditingActions` is the editing bar Memory's note pane still draws.
 import { useTranslation } from "react-i18next";
-import { Check, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
 import { Segmented } from "@/components/ui/segmented";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { useFileActionItems } from "@/lib/fileActionItems";
-import { cn } from "@/lib/utils";
 
 export type DocumentView = "preview" | "source";
 
@@ -71,63 +68,6 @@ export function ReadingActions({
           },
         ]}
       />
-    </>
-  );
-}
-
-interface EditingProps {
-  dirty: boolean;
-  /** The save was refused as stale — the text is not saved and cannot be yet. */
-  notSaved: boolean;
-  saving: boolean;
-  onDiscard: () => void;
-  onSave: () => void;
-  /** Only the state, no buttons — Compare carries its own footer. */
-  statusOnly?: boolean;
-}
-
-export function EditingActions({
-  dirty,
-  notSaved,
-  saving,
-  onDiscard,
-  onSave,
-  statusOnly,
-}: EditingProps) {
-  const { t } = useTranslation();
-  const status = notSaved
-    ? { label: t("knowledge.editor.notSaved"), dot: "bg-danger" }
-    : dirty
-      ? { label: t("knowledge.editor.unsaved"), dot: "bg-warning" }
-      : null;
-  return (
-    <>
-      {status ? (
-        <span className="mr-1 inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
-          <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", status.dot)} />
-          {status.label}
-        </span>
-      ) : null}
-      {statusOnly ? null : (
-        <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" onClick={onDiscard} disabled={saving}>
-                {t("knowledge.editor.discard")}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent shortcut="Esc">{t("knowledge.editor.discard")}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button onClick={onSave} disabled={!dirty || saving || notSaved}>
-                <Check aria-hidden /> {saving ? t("common.saving") : t("common.save")}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent shortcut="⌘S">{t("common.save")}</TooltipContent>
-          </Tooltip>
-        </>
-      )}
     </>
   );
 }

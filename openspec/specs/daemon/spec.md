@@ -545,8 +545,11 @@ primitive (Linux), reveal degrades to opening the containing folder.
 The daemon MUST also expose `GET /api/v1/fs/editors`, which enumerates common GUI editors detected
 as installed on the host (macOS app-bundle names for `open -a`; Linux/Windows commands on `PATH`).
 It returns each editor's display label and the launcher `value` accepted by `/fs/open`'s `with`,
-reads nothing but app presence, and is guarded by the same loopback + token auth. Its two consumers
-are [agent-registry](../agent-registry/spec.md) "Open config files in an external editor or reveal them" and the web-ui spec's preferred-editor setting.
+reads nothing but app presence, and is guarded by the same loopback + token auth. It backs the
+web-ui spec's preferred-editor setting, which every Open in editor uses — an agent's config files
+([agent-registry](../agent-registry/spec.md) "Open config files in an external editor or reveal them"),
+knowledge documents, memories, skill files and a conflicting sync file's copy — because Coffer edits
+none of these files itself.
 
 #### Scenario: a path that is not absolute is refused before anything is launched
 - **GIVEN** a relative path, and an absolute path that does not exist,

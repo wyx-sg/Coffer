@@ -299,6 +299,7 @@ class StatusMixin:
             binary=binary,
         )
 
+
 def _groups(paths: tuple[str, ...], before: dict[str, str]) -> tuple[HoldGroup, ...]:
     """The held paths by folder, with how many files each folder held."""
     held: dict[str, list[str]] = {}

@@ -34,7 +34,7 @@ describe("middlePath", () => {
 
 const ROWS: FileTreeRow[] = [
   { key: "dir", name: "rules", kind: "folder", depth: 0, open: true },
-  { key: "a", name: "style.md", kind: "file", depth: 1, selected: true, dirty: true },
+  { key: "a", name: "style.md", kind: "file", depth: 1, selected: true },
   { key: "b", name: "gone.json", kind: "file", depth: 1, missing: true, note: "not created" },
   {
     key: "c",
@@ -58,7 +58,6 @@ describe("FileTree", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("img", { name: "Unsaved changes" })).toBeInTheDocument();
     expect(screen.getByText("not created")).toBeInTheDocument();
   });
 

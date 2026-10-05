@@ -56,10 +56,12 @@ class AuditEventType(StrEnum):
     SECRET_APPROVAL_REJECTED = "secret_approval_rejected"
     SECRET_PROTECTION_ENABLED = "secret_protection_enabled"
     # spec agent-registry
+    # no longer emitted; kept so recorded events still read
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
     # agent workspace (spec agent-registry, amended)
+    # no longer emitted; kept so recorded events still read
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
     AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
@@ -93,6 +95,7 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
+    # no longer emitted; kept so recorded events still read
     MEMORY_NOTE_EDITED = "memory_note_edited"
     MEMORY_NOTE_DELETED = "memory_note_deleted"
     # spec channels
