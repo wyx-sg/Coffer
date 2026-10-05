@@ -2539,7 +2539,7 @@
     "list": {
       "subtitle": "这台 Mac 上的 Claude Code 和 Codex，以及通过 Coffer 送达各自的内容。",
       "connectBoth": "全部连接",
-      "countsHelp": "数量是通过 Coffer 实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面（MCP 服务器、技能）。",
+      "countsHelp": "数量是通过 Coffer 实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面（<mcp>MCP 服务器</mcp>、<skills>技能</skills>）。",
       "empty": "没有可显示的智能体。",
       "col": {
         "plugins": "插件",
