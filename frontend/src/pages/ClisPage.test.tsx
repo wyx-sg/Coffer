@@ -304,42 +304,54 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("link", { name: /Coffer/ })).toBeNull();
   });
 
-  acceptance(
-    "web-ui",
-    "a CLI added by hand has Edit and Remove, a required one has neither",
-    async () => {
-      api.list.mockResolvedValue(listOf([DEMO_ADDED, UV_READY]));
-      renderPage("/clis/demo");
-      await screen.findByRole("heading", { level: 2, name: "demo" });
-      expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-      expect(screen.getByText(/No skill or MCP server requires it/)).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "More actions for demo" }));
-      // Remove is the only item: no separator above it.
-      expect(screen.getAllByRole("menuitem")).toHaveLength(1);
-      expect(within(screen.getByRole("menu")).queryByRole("separator")).toBeNull();
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
-      expect(await screen.findByText("Remove demo?")).toBeInTheDocument();
-      expect(screen.getByText(/The tool stays installed on this machine/)).toBeInTheDocument();
+  acceptance("web-ui", "every CLI has Edit, only one added by hand has Remove", async () => {
+    api.list.mockResolvedValue(listOf([DEMO_ADDED, UV_READY]));
+    renderPage("/clis/demo");
+    await screen.findByRole("heading", { level: 2, name: "demo" });
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByText(/No skill or MCP server requires it/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for demo" }));
+    // Remove is the only item: no separator above it.
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    expect(within(screen.getByRole("menu")).queryByRole("separator")).toBeNull();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
+    expect(await screen.findByText("Remove demo?")).toBeInTheDocument();
+    expect(screen.getByText(/The tool stays installed on this machine/)).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      fireEvent.click(rowOf("uv"));
-      await screen.findByRole("heading", { level: 2, name: "uv" });
-      expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "More actions for uv" })).toBeNull();
-    },
-  );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(rowOf("uv"));
+    await screen.findByRole("heading", { level: 2, name: "uv" });
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More actions for uv" })).toBeNull();
+  });
 
-  acceptance("web-ui", "a required CLI's description is edited in place", async () => {
+  acceptance("web-ui", "a required CLI's description is edited in a dialog", async () => {
     api.list.mockResolvedValue(listOf([UV_READY]));
     api.edit.mockResolvedValue({ ...UV_READY, description: "Runs Python tools." });
     renderPage("/clis/uv");
+    await screen.findByRole("heading", { level: 2, name: "uv" });
+    // The header has no field to type into: the description is text, edited through Edit.
+    expect(screen.queryByRole("textbox", { name: "Description" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const field = await screen.findByRole("textbox", { name: "Description" });
-    expect(field).toHaveAttribute("placeholder", "What this tool is for");
     fireEvent.change(field, { target: { value: "  Runs Python tools.  " } });
-    fireEvent.blur(field);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(api.edit).toHaveBeenCalledWith("uv", { description: "Runs Python tools." }),
     );
+  });
+
+  test("the description reads as text under the header, and nothing shows without one", async () => {
+    api.list.mockResolvedValue(listOf([DEMO_ADDED, UV_READY]));
+    renderPage("/clis/demo");
+    expect(await screen.findByTestId("cli-description")).toHaveTextContent(
+      "A tool the person added themselves.",
+    );
+    expect(screen.getByText("Demo tool · added by you")).toBeInTheDocument();
+    fireEvent.click(rowOf("uv"));
+    await screen.findByRole("heading", { level: 2, name: "uv" });
+    expect(screen.queryByTestId("cli-description")).toBeNull();
+    expect(screen.queryByText("What this tool is for")).toBeNull();
   });
 
   test("a command nothing knows says so", async () => {

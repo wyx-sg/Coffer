@@ -2227,17 +2227,21 @@ MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
 command to an agent with a prompt") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
 — **Hand off to <Agent>** starts the hand-off agent in the preferred terminal with the prompt sent, and **Copy prompt** copies it;
 with no managed agent available only Copy prompt is offered. **Check**, beside the list pane's filter, probes every command afresh (the header holds Add CLI), and the banner that
-states a problem re-checks that one tool. Under the header's meta line every CLI —
-added by hand or required — carries its description, edited in place (leaving the
-field or Enter saves, an empty field clears it; spec skill-manager "Declare a
-command-line tool without a skill"). A CLI a person added keeps **Edit** and a
-**⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
-installed on this machine); a CLI a skill or MCP server requires has neither, so
-its header's right side is empty. **Add CLI** opens a 480-wide form for a command
-name or path, which says what Coffer found — where, which version, and whether it
-is already added or required — before anything is saved, and keeps a refused
-save in the dialog with Retry (see skill-manager "Declare a command-line tool
-without a skill"). With nothing required and nothing added the page shows one
+states a problem re-checks that one tool. Under the header's meta line a CLI with
+a description shows it as plain text, and one without shows nothing there; the
+header holds no field to type into.
+Every CLI — added by hand or required — has **Edit** on the header's right,
+which opens the Add CLI form with the command locked: for a CLI a person added
+it edits the display name, description, minimum version and login check, and for one only a
+skill or MCP server requires it edits the description alone (spec skill-manager
+"Declare a command-line tool without a skill"). Only a CLI a person added also
+has a **⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
+installed on this machine). **Add CLI** opens a 480-wide form for a command name
+or path, with an optional display name (the request's `title`, shown before the
+meta line's "needed by"), minimum version, description and login check, which says what Coffer found — where, which version, and whether it is
+already added or required — before anything is saved, and keeps a refused save in
+the dialog with Retry (see skill-manager "Declare a command-line tool without a
+skill"). With nothing required and nothing added the page shows one
 empty state with Add CLI and a link to how `requires:` works; `requires:` entries
 Coffer skipped are one muted line under the subtitle with a link to Skills. Coffer
 reads no command's `--help` and shows no tree of subcommands. A skill's detail page MUST link each requirement it declares to
@@ -2267,10 +2271,10 @@ is probed are specified by skill-manager; this page shows what they report.
 - **THEN** the list row reads "Not found · duckdb needs it" with "1 server · 1 skill", the header reads "needed by 1 MCP server and 1 skill", and the banner says duckdb can't start and data-profiling fails at the step that calls uv
 - **AND** Needed by lists `duckdb` (MCP server, "starts with uvx") opening `/mcp-servers/duckdb` and `data-profiling` (Skill) opening its Requires tab
 
-#### Scenario: a CLI added by hand has Edit and Remove, a required one has neither
+#### Scenario: every CLI has Edit, only one added by hand has Remove
 - **GIVEN** `demo` added by hand and `uv` required by a skill
 - **WHEN** the user opens each one's page
-- **THEN** `demo` shows Edit and a ⋯ menu whose Remove asks "Remove demo?" and says the tool stays installed, and `uv` shows neither
+- **THEN** `demo` shows Edit and a ⋯ menu whose Remove asks "Remove demo?" and says the tool stays installed, and `uv` shows Edit and no ⋯ menu
 
 #### Scenario: Add CLI shows what Coffer found before anything is saved
 - **GIVEN** the Add CLI dialog
@@ -2294,10 +2298,10 @@ is probed are specified by skill-manager; this page shows what they report.
 - **THEN** an attention item names the CLI and the problem, and its name and its Check action open the CLI's page
 - **AND** once the daemon's list no longer reports it — every required CLI present, current and logged in — the item is gone
 
-#### Scenario: a required CLI's description is edited in place
+#### Scenario: a required CLI's description is edited in a dialog
 - **GIVEN** `uv`, required by a skill and not added by hand
-- **WHEN** the user opens `/clis/uv`, types a description under the header and leaves the field
-- **THEN** the page saves that description for `uv`, trimmed, with no Edit dialog
+- **WHEN** the user opens `/clis/uv`, chooses Edit, types a description and saves
+- **THEN** the page saves that description alone for `uv`, trimmed, and the dialog offers no minimum version or login check
 
 ### Requirement: Resize every split view by its divider
 Every split view — a list beside its detail, a file tree beside its file, and the sidebar beside the workspace — MUST

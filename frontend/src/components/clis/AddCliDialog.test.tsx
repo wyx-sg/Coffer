@@ -7,7 +7,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
-import { DEMO_ADDED } from "@/test/cliFixtures";
+import { DEMO_ADDED, UV_READY } from "@/test/cliFixtures";
 import { AddCliDialog } from "./AddCliDialog";
 
 vi.mock("@/lib/api/clis", () => ({
@@ -131,7 +131,8 @@ describe("AddCliDialog", () => {
     expect(screen.getByText("Edit demo")).toBeInTheDocument();
     expect(screen.getByLabelText("Login check")).toHaveValue("demo auth");
     expect(api.preview).not.toHaveBeenCalled();
-    type("Title", "");
+    expect(screen.getByLabelText("Display name")).toHaveValue("Demo tool");
+    type("Display name", "");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(api.edit).toHaveBeenCalledWith("demo", {
@@ -140,6 +141,22 @@ describe("AddCliDialog", () => {
         min_version: "2.0",
         login_check: "demo auth",
       }),
+    );
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  test("a tool only a skill requires edits its description alone", async () => {
+    api.edit.mockResolvedValue({ ...UV_READY, description: "Runs Python tools." });
+    const { onOpenChange } = renderDialog({ existing: UV_READY });
+    expect(screen.getByText("Edit uv")).toBeInTheDocument();
+    expect(screen.getByLabelText("Command")).toBeDisabled();
+    expect(screen.queryByLabelText("Display name")).toBeNull();
+    expect(screen.queryByLabelText("Minimum version")).toBeNull();
+    expect(screen.queryByLabelText("Login check")).toBeNull();
+    type("Description", "  Runs Python tools.  ");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(api.edit).toHaveBeenCalledWith("uv", { description: "Runs Python tools." }),
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
