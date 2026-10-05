@@ -62,10 +62,12 @@ export function AgentOwnSkillRows({
           <KindRow
             key={row.key}
             leading={select.leading(row, row.name)}
+            openable
             cells={[
               <KindName key="name">
                 <Link
                   to={unmanagedSkillPath(agentType, item.location, row.name)}
+                  data-row-open
                   className="hover:underline"
                 >
                   {row.name}

@@ -210,7 +210,7 @@ Agents often carry MCP servers configured directly in their own files. The **MCP
 | Claude Code | `mcpServers` in `.claude.json` (the `global` file) and in `settings.json` |
 | Codex | `[mcp_servers.*]` in `config.toml` (the `enabled` flag is shown but never written) |
 
-Click a direct server's name to open its entry in a dialog. It shows, read-only, everything the agent's file holds for that server: the transport, the command and each argument (or the URL), the working directory, the `enabled` flag where the format has one, the names of its environment variables and HTTP headers, any other keys the entry carries, and the config file it lives in. Secret values never leave the daemon: environment and header values are shown only as *set* or *secret · hidden*, and any other key whose name looks secret (the pattern below) shows as *hidden*. Coffer does not start a direct server to show this, so it lists no tools. The dialog's footer carries the two actions of the row around **Close**: **Remove** (or **Remove duplicate**) on the left, **Adopt** on the right.
+Click a direct server's row (or its name) to open its entry in a dialog. It shows, read-only, everything the agent's file holds for that server: the transport, the command and each argument (or the URL), the working directory, the `enabled` flag where the format has one, the names of its environment variables and HTTP headers, any other keys the entry carries, and the config file it lives in. Secret values never leave the daemon: environment and header values are shown only as *set* or *secret · hidden*, and any other key whose name looks secret (the pattern below) shows as *hidden*. Coffer does not start a direct server to show this, so it lists no tools. The dialog's footer carries the two actions of the row around **Close**: **Remove** (or **Remove duplicate**) on the left, **Adopt** on the right.
 
 You can do two things with a direct entry:
 
@@ -223,7 +223,7 @@ When the entry's environment or headers carry a non-empty value under a secret-l
 
 The **Plugins** tab, behind **More** in the tab strip, lists installed plugins — all the agent's own, since Coffer installs none — with a search, their version and marketplace, an enabled switch and a **⋯** menu whose one item is **Uninstall…**. A plugin whose cache directory is gone is marked **Cache missing**, and puts a warning dot on **More**; Coffer does not try to repair it.
 
-Click a plugin's name to open its information dialog. It shows the plugin's `<name>@<marketplace>` id, version, author, description and homepage, the marketplace it came from, and the directory it is installed in, with **Open in editor** and **Reveal** buttons. Below that it lists everything the plugin contributes, read from its package's default locations:
+Click a plugin's row (or its name) to open its information dialog. It shows the plugin's `<name>@<marketplace>` id, version, author, description and homepage, the marketplace it came from, and the directory it is installed in, with **Open in editor** and **Reveal** buttons. Below that it lists everything the plugin contributes, read from its package's default locations:
 
 | Contents | Read from |
 | --- | --- |

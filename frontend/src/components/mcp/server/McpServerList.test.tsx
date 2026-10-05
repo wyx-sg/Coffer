@@ -165,3 +165,16 @@ describe("McpServerList", () => {
     expect(screen.queryByText("github")).toBeNull();
   });
 });
+
+describe("McpServerList row click", () => {
+  test("a click on a row opens the server; its checkbox does not", () => {
+    renderList();
+    const link = screen.getByRole("link", { name: /github/ });
+    const opened = vi.fn((e: Event) => e.preventDefault());
+    link.addEventListener("click", opened);
+    fireEvent.click(link.closest("li")!);
+    expect(opened).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: github/ }));
+    expect(opened).toHaveBeenCalledTimes(1);
+  });
+});

@@ -56,10 +56,12 @@ export function AgentOwnMcpRows({
           <KindRow
             key={row.key}
             leading={select.leading(row, row.name)}
+            openable
             cells={[
               <KindName key="name">
                 <button
                   type="button"
+                  data-row-open
                   onClick={() => onOpenEntry(row)}
                   className="max-w-full truncate text-left hover:underline"
                 >

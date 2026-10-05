@@ -259,3 +259,20 @@ describe("AgentPluginsTab", () => {
     expect(screen.getByLabelText("Search plugins")).toBeInTheDocument();
   });
 });
+
+describe("AgentPluginsTab row click", () => {
+  test("a click on a row opens the plugin's info; its switch, menu and checkbox do not", async () => {
+    api.plugin.mockResolvedValue(undefined as never);
+    renderTab({ items: [SUPERPOWERS] });
+    const row = await rowOf("superpowers");
+    const name = within(row).getByRole("button", { name: "superpowers" });
+    const opened = vi.fn();
+    name.addEventListener("click", opened);
+    fireEvent.click(within(row).getByRole("switch"));
+    fireEvent.click(within(row).getByRole("checkbox"));
+    fireEvent.click(within(row).getByRole("button", { name: "More for superpowers" }));
+    expect(opened).not.toHaveBeenCalled();
+    fireEvent.click(within(row).getByText("5.2.0"));
+    expect(opened).toHaveBeenCalledTimes(1);
+  });
+});
