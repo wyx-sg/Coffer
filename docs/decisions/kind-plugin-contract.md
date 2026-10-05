@@ -69,7 +69,6 @@ reject it:
 | --- | --- | --- |
 | `secret_ref_extractor(config)` | The refs the service probes in the secret store before any write, and cites when deciding whether a delete may release a secret | `mcp_server`, `channel`, `provider` |
 | `audit_redactor(config)` | An audit-safe copy of the config | `mcp_server` |
-| `default_scope(config)` | The scope a new row starts with, consulted once at register | `provider` |
 
 **Pre-write validators** — run before persistence; raising rejects the
 operation with nothing changed:
@@ -181,7 +180,7 @@ new hook must be declared in one of the groups:
   whatever cleanup already ran is not rolled back, which is why refusal
   belongs in `validate_delete`.
 - **Pure config functions** (`secret_ref_extractor`, `audit_redactor`,
-  `default_scope`, `storage_row`, `name_from_config`) take the config alone, so
+  `storage_row`, `name_from_config`) take the config alone, so
   any caller can ask them with what it already holds — including the vault
   store, which files a resource it is creating, and a validator judging a file
   that arrived by a hand edit or a sync merge.

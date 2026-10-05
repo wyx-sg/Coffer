@@ -113,7 +113,6 @@ describe("skillGroup", () => {
     expect(skillGroup(makeSkill(), true)).toBe("attention");
     expect(skillGroup(makeSkill(), false)).toBe("inUse");
     expect(skillGroup(makeSkill({ enabled: false }), false)).toBe("off");
-    expect(skillGroup(makeSkill({ scope: { agents: [] } }), false)).toBe("off");
     expect(skillGroup(BUILTIN_SKILL, true)).toBe("builtin");
   });
 });

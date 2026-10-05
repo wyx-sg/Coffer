@@ -157,11 +157,9 @@ async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
-    """An empty list is dormant; a null list and a null scope both mean every
-    agent. Reach is one record per resource in ``local/reach.json``,
-    whose ``agents: null`` is the one way to say unrestricted, so a null list
-    reads back as no scope at all."""
+async def test_put_empty_scope_is_refused_and_null_clears(tmp_path):
+    """An empty list is refused with 422 SCOPE_INVALID and changes nothing; a
+    null list and a null scope both mean every agent."""
     c, engine, svc = await _client(tmp_path)
     async with c:
         fs = await svc.register(
@@ -170,19 +168,20 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
-        dormant = {"agents": []}
-        r = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": dormant})
+        chosen = {"agents": ["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]}
+        r = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": chosen})
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == dormant
+
+        r_empty = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": {"agents": []}})
+        assert r_empty.status_code == 422, r_empty.text
+        assert "SCOPE_INVALID" in r_empty.text
+        r_get = await c.get(f"/api/v1/resources/{fs.uid}/scope")
+        assert r_get.json()["scope"] == chosen
 
         # A null list is unrestricted: stored as the same record as no scope.
-        unrestricted = {"agents": None}
-        r_u = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": unrestricted})
+        r_u = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": {"agents": None}})
         assert r_u.status_code == 200, r_u.text
         assert r_u.json()["scope"] is None
-
-        r_d = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": dormant})
-        assert r_d.json()["scope"] == dormant
 
         r2 = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": None})
         assert r2.status_code == 200, r2.text

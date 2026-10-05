@@ -47,8 +47,7 @@ agent runs on is **one field of the agent record**, `AgentConfig.connection_uid`
 Which agents a connection may reach is its framework-level `scope`
 ([Per-Agent Resource Scope](per-agent-resource-scope.md)). A credentialed
 connection starts unscoped, reaching every agent; a stored, retired `ollama` connection
-reads as scoped to no agent and never projects (`_provider_default_scope` in
-`application/provider/kind.py`). `application/provider/targets.py` resolves a
+never projects (it has no wire to project onto). `application/provider/targets.py` resolves a
 scope's agent uids to agent types and intersects them with `enabled`. One pure
 function, `connection_for_agent`, answers which connection an agent is on, and
 projection, the proxy's route, the chat model list and the

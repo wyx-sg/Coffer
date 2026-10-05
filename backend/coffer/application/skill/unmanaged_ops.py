@@ -22,8 +22,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import ScopeInvalidError
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
+from coffer.domain.scope import Scope, validate_scope
 from coffer.domain.skill.scan import UnmanagedSkill, classify
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
@@ -181,6 +182,11 @@ async def adopt_unmanaged(
     """
     from coffer.application.skill.lifecycle_ops import register_from_validated
 
+    try:
+        # Refuse before anything is copied, so a bad reach leaves nothing behind.
+        validate_scope(scope, supports_scope=True)
+    except ValueError as e:
+        raise ScopeInvalidError(str(e)) from e
     agent = await service._rs.get(agent_uid)
     # ``skill_name`` here is a DIRECTORY name found on disk, not a resource
     # label: an unmanaged skill has no row, so there is no uid to address it

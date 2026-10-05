@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from coffer.domain.provider.config import (
     Protocol,
     ProviderConfig,
-    starts_dormant,
 )
 from coffer.domain.provider.modality import Modality
 
@@ -87,31 +86,6 @@ def test_cloud_protocol_requires_secret() -> None:
             base_url="x",
             secret_ref=None,
         )
-
-
-def test_only_a_keyless_wire_starts_dormant() -> None:
-    """All the wire still says about scope, and all it CAN say.
-
-    The ``provider`` Kind asks this at registration (ADR per-agent-resource-scope)
-    to decide between a dormant connection and an unscoped one. It cannot ask
-    for a starting agent LIST any more: a scope holds agent uids
-    (ADR identity-is-the-uid-inside-the-file), and this module — a pure
-    function of the config, which is all ``Kind.default_scope`` is handed —
-    knows none. That is what retired the table of ``claude_code`` / ``codex``
-    strings this domain module used to spell out.
-    """
-    # A stored, retired ollama connection has no key, so a scope of "every
-    # agent" would advertise a reach it can never have. It starts scoped to nobody.
-    assert starts_dormant("ollama") is True
-    # Every credentialed wire starts UNSCOPED instead — the widest set, and
-    # unlike the explicit list it replaces it keeps covering an agent the user
-    # registers tomorrow.
-    assert starts_dormant("anthropic") is False
-    assert starts_dormant("openai") is False
-    # unknown starts open too; the user narrows it.
-    assert starts_dormant("unknown") is False
-    # An unrecognised wire is treated like ``unknown`` rather than crashing.
-    assert starts_dormant("martian") is False
 
 
 def test_compatible_agents_is_no_longer_a_config_field() -> None:

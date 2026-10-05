@@ -21,7 +21,7 @@ const SKILLS: SkillOut[] = [
   makeSkill({ uid: "u-bad", name: "delta", master_missing: true }),
   makeSkill({ uid: "u-on", name: "alpha" }),
   makeSkill({ uid: "u-off", name: "beta", enabled: false }),
-  makeSkill({ uid: "u-none", name: "gamma", scope: { agents: [] } }),
+  makeSkill({ uid: "u-none", name: "gamma", enabled: false }),
 ];
 
 function Harness({ skills = SKILLS }: { skills?: SkillOut[] }) {

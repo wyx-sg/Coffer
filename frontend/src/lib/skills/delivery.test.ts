@@ -35,7 +35,7 @@ describe("deliveryRows", () => {
   });
 
   test("without a binding the first reason that applies is given", () => {
-    const off = makeSkill({ enabled: false, scope: { agents: [] } });
+    const off = makeSkill({ enabled: false });
     expect(deliveryRows(off, [CC], null)[0].delivery).toEqual({
       state: "notDelivered",
       reason: "skillOff",

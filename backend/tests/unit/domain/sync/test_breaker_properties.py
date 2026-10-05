@@ -3,7 +3,7 @@ lose too much", "Count losses, not deletions").
 
 The example tests in ``test_breaker.py`` pin the boundaries by hand; these
 check the same rules over generated areas: the threshold against an integer
-oracle (20 files, or more than a fifth of what the area held), areas judged
+oracle (20 files, or 5 files over half of what the area held), areas judged
 independently, a move never counted, and more pairings never adding a loss.
 """
 
@@ -14,6 +14,7 @@ from hypothesis import strategies as st
 
 from coffer.domain.sync.breaker import (
     FLOOR,
+    SHARE_MIN,
     PathDelta,
     breached,
     losses,
@@ -28,8 +29,8 @@ _NOT_COUNTED = ("machines/m.json", "manifest.json", "stray.txt")
 
 
 def _should_breach(lost: int, total: int) -> bool:
-    """The rule in integers: no float can blur the one-fifth boundary."""
-    return lost >= FLOOR or total == 0 or 5 * lost > total
+    """The rule in integers: no float can blur the one-half boundary."""
+    return lost >= FLOOR or (lost >= SHARE_MIN and 2 * lost > total)
 
 
 def _area_files(area: str, n: int) -> list[str]:
@@ -65,7 +66,7 @@ def test_an_area_is_held_exactly_when_the_integer_rule_says_so(
 
 @given(st.integers(100, 600), st.integers(FLOOR - 5, FLOOR + 5))
 def test_a_large_area_is_held_at_the_floor_whatever_its_share(total: int, lost: int) -> None:
-    """Where a fifth of the area is more than twenty files, the floor decides."""
+    """Where half the area is more than twenty files, the floor decides."""
     files = _area_files("knowledge", total)
     got = breached(losses(_gone(files[:lost])), totals(files))
     assert bool(got) is (lost >= FLOOR)
@@ -105,10 +106,14 @@ def test_losing_more_never_releases_a_hold(total: int, lost: int, more: int) -> 
 
 
 @given(st.integers(1, 40))
-def test_a_loss_in_an_area_the_losing_side_never_counted_always_holds(lost: int) -> None:
+def test_an_area_the_losing_side_never_counted_holds_from_the_share_minimum(lost: int) -> None:
     gone = _area_files("secret", lost)
-    (breach,) = breached(losses(_gone(gone)), totals(_area_files("knowledge", 50)))
-    assert (breach.area, breach.lost, breach.total) == ("secret", lost, 0)
+    got = breached(losses(_gone(gone)), totals(_area_files("knowledge", 50)))
+    if lost < SHARE_MIN:
+        assert got == []
+    else:
+        (breach,) = got
+        assert (breach.area, breach.lost, breach.total) == ("secret", lost, 0)
 
 
 @given(st.lists(st.sampled_from(_NOT_COUNTED), min_size=1))

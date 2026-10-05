@@ -307,8 +307,7 @@ unmanaged skill) nests under that tab's path.
 Every list surface of a scoped kind that is a table MUST carry a **reach**
 column — named for what it holds, not for the on/off flag it replaced: one
 button that names the answer it already holds and nothing else — **All agents**,
-**Off**, the badges of the chosen agents alone, or **No agent selected** for a
-scope narrowed to nobody. The button never reads "N of M agents": a count lives
+**Off**, or the badges of the chosen agents alone. The button never reads "N of M agents": a count lives
 only in the panel's footer. A list beside a reading pane shows no reach button in
 its rows: the MCP servers and Skills lists show each row's reach as a mark
 instead — Off, All agents, or the badges of the agents it reaches — and the Model
@@ -321,9 +320,9 @@ column, the button, nor a bulk reach action; see "Offer reach as one choice in a
 panel". No list offers a filter by reach.
 
 #### Scenario: the reach button states the reach it holds
-- **GIVEN** resources that reach every agent, two chosen agents, nobody selected, and one that is off
+- **GIVEN** resources that reach every agent, two chosen agents, and one that is off
 - **WHEN** each one's reach button renders
-- **THEN** they read "All agents", the two agents' badges alone, "No agent selected" and "Off"
+- **THEN** they read "All agents", the two agents' badges alone and "Off"
 - **AND** each is one button rather than a row of segments
 
 #### Scenario: a kind that cannot be disabled shows no status control
@@ -337,8 +336,10 @@ between **Off**, **All agents** (which includes agents added later) and **Chosen
 agents**, the last over the scope's list of agents with a **Filter agents** box
 that narrows it. The list stays visible but dimmed and frozen under Off and All
 agents, with its ticks kept, so switching back restores them. Off is a choice and
-never an inference: choosing Chosen agents with nothing ticked reaches nobody and
-reads "No agent selected", not Off. The footer carries the one summary of the
+never an inference, and it is the only way to reach nobody: the list can never be
+emptied. The last ticked agent MUST NOT be unticked — its box is disabled with a
+hint to turn the resource off instead — and switching to Chosen agents with
+nothing ticked saves nothing until one agent is ticked. The footer carries the one summary of the
 reach — the only place a count appears.
 
 #### Scenario: the reach panel offers the reach states as one choice
@@ -364,10 +365,15 @@ not be delivered to is a failed row with the daemon's reason.
 - **THEN** nothing is written
 
 #### Scenario: each reach change is saved at once
-- **GIVEN** a reach panel open on a resource reaching nobody
-- **WHEN** the user ticks Claude Code, then Codex, then unticks Claude Code
-- **THEN** each tick writes the whole list at that moment, naming the agent just ticked, and the footer says the write is applying and then saved
+- **GIVEN** a reach panel open on a resource that reaches every agent
+- **WHEN** the user chooses Chosen agents, ticks Claude Code, then Codex, then unticks Claude Code
+- **THEN** nothing is written on choosing Chosen agents, each tick writes the whole list at that moment, naming the agent just ticked, and the footer says the write is applying and then saved
 - **AND** there is no Done button
+
+#### Scenario: the last ticked agent cannot be unticked
+- **GIVEN** a reach panel on a resource reaching only Codex
+- **WHEN** the user tries to untick Codex
+- **THEN** its box is disabled and a hint says to turn the resource off instead, and nothing is written
 
 #### Scenario: a failed reach write stays on the agent's row
 - **GIVEN** a reach panel on which the write for Codex fails
@@ -392,7 +398,8 @@ selection bar's **Reach** button. A bulk write is a new intent, so its popover
 (340 wide) opens with no mode picked rather than on any one row's value; it shows
 for each agent how many of the selected items it reaches (a dash where only some
 do) and, once the person changes one, the old → new counts, and nothing is
-written until **Apply**. A row that fails MUST be reported inside the popover —
+written until **Apply**. A row that the change would leave with no agent
+ticked MUST be switched off, and the preview shows it as Off before Apply. A row that fails MUST be reported inside the popover —
 "Applied to 2 of 3", the failing names, a **Retry** that resends only those —
 never as a toast, and the selection is cleared only when every row succeeded.
 Delete stays its own button beside it.
@@ -617,7 +624,7 @@ settings and the agents chosen are kept.
 #### Scenario: an Off server explains itself and offers Turn on
 - **GIVEN** an MCP server that is off
 - **WHEN** its page opens
-- **THEN** a banner says no agent can use it, and Turn on enables it
+- **THEN** a banner says no agent can use it and, when it is unscoped, that turning it on gives it to every agent, and Turn on enables it
 
 #### Scenario: an HTTP server's menu has no Server log
 - **GIVEN** an HTTP server and a stdio server
@@ -3012,6 +3019,7 @@ validates its source inline and MUST carry the Available to reach control.
 - **GIVEN** the Add skill dialog with Available to set to Disabled or to chosen agents
 - **WHEN** the user adds the skill
 - **THEN** each added skill is turned off, or scoped to the chosen agents, and with every agent nothing more is written
+- **AND** with Chosen agents and none ticked the dialog refuses to add, as does every dialog that carries a draft reach (add MCP server, adopt, import, custom-tool group)
 
 #### Scenario: the requires tab lists a skill's secrets and opens Secrets for a missing one
 - **GIVEN** a skill declaring the command `jq` and the secrets `GITHUB_TOKEN`, which is set, and `NPM_TOKEN`, which is not

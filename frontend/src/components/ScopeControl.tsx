@@ -14,7 +14,7 @@
 // fetched and the query stays off; a detail page passes nothing and fetches.
 //
 // The scope value names agents by UID: `null` = every agent, `{agents: [...]}`
-// = only those, `{agents: []}` = dormant. The resource's own `enabled` flag is
+// = only those (never an empty list). The resource's own `enabled` flag is
 // the first mode: Off beats any scope, and turning a resource off leaves the
 // scope untouched, so turning it back on restores the selection.
 //

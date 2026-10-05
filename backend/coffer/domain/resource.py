@@ -316,21 +316,6 @@ class Kind:
     # A pure transform of the config consulted when the audit event is built;
     # it never rejects a write.
     audit_redactor: Callable[[dict[str, Any]], dict[str, Any]] | None = None
-    # Optional kind-supplied starting scope, consulted ONCE by
-    # ``ResourceService.register`` (ADR per-agent-resource-scope). Given the validated config,
-    # returns the scope the new row is created with; ``None`` keeps the
-    # framework default (unscoped — active for every agent).
-    #
-    # It exists for a kind whose "every agent" default would be WRONG rather
-    # than merely wide: `provider` pre-fills the wire's own projection default
-    # (a stored ollama connection projects into no agent at all), so a newly created
-    # connection behaves exactly as it did when that default lived inside its
-    # config. A kind for which "every agent until narrowed" is right — every
-    # other one today — supplies nothing.
-    #
-    # It is deliberately a function of the CONFIG alone, so the kind-agnostic
-    # register path can call it with what it already has.
-    default_scope: Callable[[dict[str, Any]], Scope | None] | None = None
 
     # --- Post-write reactions: run AFTER persistence + audit; not validators ---
 

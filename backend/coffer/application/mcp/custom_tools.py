@@ -29,7 +29,7 @@ from coffer.application.mcp.custom_tool_views import GroupView, GroupViewer
 from coffer.application.mcp.gateway_tool_gate import http_api_transport
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.resolver import SecretResolver
-from coffer.domain.errors import ConfigValidationError
+from coffer.domain.errors import ConfigValidationError, ScopeInvalidError
 from coffer.domain.mcp.custom_tool_errors import (
     CustomToolExists,
     CustomToolNotFound,
@@ -39,7 +39,7 @@ from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
+from coffer.domain.scope import Scope, validate_scope
 from coffer.domain.secrets import is_valid_secret_name, secret_ref, standalone_name
 
 KIND = "mcp_server"
@@ -136,6 +136,12 @@ class CustomToolService:
         source: dict[str, Any] | None,
         actor: str,
     ) -> GroupView:
+        scope = Scope(agents=agents) if agents is not None else None
+        try:
+            # Refuse before registering, so a bad reach leaves no group behind.
+            validate_scope(scope, supports_scope=True)
+        except ValueError as e:
+            raise ScopeInvalidError(str(e)) from e
         plain, refs = split_headers(headers)
         fields: dict[str, Any] = {
             "base_url": base_url,
@@ -148,8 +154,8 @@ class CustomToolService:
         transport = _validated(fields)
         config = MCPServerConfig(transport=transport).model_dump(mode="json")
         created = await self._resources.register(KIND, name, config, actor, description)
-        if agents is not None:
-            await self._resources.update_scope(created.uid, Scope(agents=agents), actor=actor)
+        if scope is not None:
+            await self._resources.update_scope(created.uid, scope, actor=actor)
         return await self.view(name)
 
     async def update_group(

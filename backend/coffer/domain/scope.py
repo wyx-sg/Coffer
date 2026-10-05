@@ -4,7 +4,9 @@ A resource's ``scope`` names the agents it activates for, **by their uid**:
 
 - ``None``                      — active for every agent (the default)
 - ``{"agents": ["<uid>"]}``     — only for that agent
-- ``{"agents": []}``            — dormant (an empty list matches nothing)
+
+An empty list is not a scope: a resource that should reach nobody is switched
+off (``enabled=False``), the one way to say so. ``validate_scope`` refuses it.
 
 Uids rather than names because a scope is a reference to another resource, and
 a name is a label its owner may change (ADR identity-is-the-uid-inside-the-file).
@@ -93,6 +95,8 @@ def validate_scope(scope: object, *, supports_scope: bool) -> None:
         return
     if not supports_scope:
         raise ScopeValidationError("this kind does not support scope")
-    if isinstance(scope, Scope):
-        return
-    Scope.from_json(scope)
+    parsed = scope if isinstance(scope, Scope) else Scope.from_json(scope)
+    if parsed is not None and parsed.agents is not None and not parsed.agents:
+        raise ScopeValidationError(
+            "scope.agents must name at least one agent; switch the resource off to reach nobody"
+        )

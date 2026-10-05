@@ -1329,6 +1329,8 @@ export interface components {
             from_commit: string | null;
             /** Held */
             held: number;
+            /** Held Direction */
+            held_direction: ("incoming" | "outgoing") | null;
             /** Id */
             id: number | null;
             /** Join */
@@ -1353,6 +1355,11 @@ export interface components {
             /** Started At */
             started_at: string;
             status: components["schemas"]["RoundStatus"];
+            /**
+             * Stopped On
+             * @default []
+             */
+            stopped_on: string[];
             /** To Commit */
             to_commit: string | null;
             /** Trigger */

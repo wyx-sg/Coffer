@@ -86,6 +86,46 @@ describe("SyncRunDetail", () => {
     expect(drawer.queryByRole("button", { name: /roll back/i })).toBeNull();
   });
 
+  acceptance("vault-sync", "a stopped round keeps why it stopped", () => {
+    const drawer = open(
+      makeRound({
+        status: "held",
+        held: 3,
+        held_direction: "outgoing",
+        stopped_on: [
+          "resources/mcp_server/demo-empty.json",
+          "resources/mcp_server/demo-httpbin.json",
+          "resources/mcp_server/demo-weather.json",
+        ],
+      }),
+    );
+    const stop = drawer.getByTestId("sync-run-stop");
+    expect(stop).toHaveTextContent("This Mac's changes would delete 3 files from the remote");
+    expect(stop).toHaveTextContent("resources/mcp_server/demo-httpbin.json");
+    // The four empty steps fold into one line.
+    expect(drawer.queryByTestId("sync-run-snapshot")).toBeNull();
+    expect(drawer.getByText(/stopped before checking anything out/)).toBeInTheDocument();
+  });
+
+  test("a held round recorded without its files still says how many", () => {
+    const drawer = open(makeRound({ status: "held", held: 2 }));
+    expect(drawer.getByTestId("sync-run-stop")).toHaveTextContent(
+      "This round would delete 2 files",
+    );
+  });
+
+  test("a plaintext round lists where the secret was, not git's English", () => {
+    const drawer = open(
+      makeRound({
+        status: "plaintext_found",
+        detail: "a plaintext secret in skills/x/run.mjs; nothing was pushed",
+        plaintext: [{ path: "skills/x/run.mjs", line: 12, key: "TOKEN", current: true }],
+      }),
+    );
+    expect(drawer.getByTestId("sync-run-stop")).toHaveTextContent("skills/x/run.mjs:12 · TOKEN");
+    expect(drawer.queryByRole("alert")).toBeNull();
+  });
+
   test("Roll back to before this round hands the round to the dialog", () => {
     const onRollback = vi.fn();
     const run = makeRound({

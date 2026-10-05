@@ -138,7 +138,7 @@ describe("useUpdateResourceScope", () => {
     const { result } = renderHook(() => useUpdateResourceScope("skill", WRITING_UID), { wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ agents: [] });
+      await result.current.mutateAsync({ agents: ["u-agent-1"] });
     });
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
@@ -162,7 +162,7 @@ describe("useUpdateResourceScope", () => {
 
     await act(async () => {
       try {
-        await result.current.mutateAsync({ agents: [] });
+        await result.current.mutateAsync({ agents: ["u-agent-1"] });
       } catch {
         // expected
       }

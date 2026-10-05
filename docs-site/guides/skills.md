@@ -209,7 +209,7 @@ Two settings on the skill decide where it is delivered, and nothing else does:
 | --- | --- |
 | All agents (no scope) | Delivered to every registered agent, including agents you register later. This is the default. |
 | Chosen agents | Delivered only to the agents you pick. |
-| No agent selected (Chosen agents with nothing ticked) | Delivered to nobody. The skill stays in the library, listed and synced. |
+| Off | Delivered to nobody. The skill stays in the library, listed and synced, and keeps the agents you chose. |
 
 A skill is delivered to an agent if and only if the skill is enabled **and** its reach includes that agent. There is no per-agent switch for "this agent gets no skills"; to keep an agent away from a skill, leave it out of that skill's reach.
 
@@ -429,7 +429,7 @@ Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist
 ```
 
 ::: danger The master folder is the only copy
-Removing a skill deletes `~/.coffer/vault/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, disable it or set its reach to no agent instead.
+Removing a skill deletes `~/.coffer/vault/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, turn it off instead.
 :::
 
 If an agent's copy is no longer Coffer's link (it is a regular folder now), Coffer will not remove it. The delete stops with "Nothing was deleted" and names the folder; the dialog then offers **Delete, keep &lt;agent&gt;'s folder**, which deletes the skill and leaves that folder to the agent, or you cancel and review the edit first (see [Resolve a folder in the way](#resolve-a-folder-in-the-way)). Selecting several skills and choosing **Delete…** reports each one: the dialog says "Deleted N of M" and names those it refused, with **Delete N skills, keep their folders** for the rest.

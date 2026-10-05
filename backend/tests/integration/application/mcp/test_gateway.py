@@ -163,11 +163,11 @@ async def _scope(rsvc: ResourceService, name: str, scope: Scope | None) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
+async def test_tools_list_excludes_out_of_scope_server_and_unscoped_is_unaffected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A dormant server (``scope == []`` — active for no agent) vanishes from
-    tools/list while an unscoped server on the same session is unaffected
+    """A server scoped to another agent vanishes from tools/list while an unscoped server on the
+    same session is unaffected
     (ADR per-agent-resource-scope). The row itself stays present and visible in the registry: out
     of scope means not activated, never deleted and never hidden from the
     resource API.
@@ -181,7 +181,7 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
         },
     )
     try:
-        await _scope(rsvc, "gh", Scope(agents=[]))
+        await _scope(rsvc, "gh", Scope(agents=[CODEX_UID]))
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent-uid": CLAUDE_CODE_UID}}
         )
@@ -191,10 +191,10 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
         # Unscoped server is unaffected and still spawns.
         conn = await session._supervisor.get_or_spawn("fs")
         assert conn is not None
-        # The dormant doc is present/visible even though nothing activates it.
+        # The doc is present/visible even though nothing activates it for this agent.
         visible = await rsvc.get_by_name("mcp_server", "gh")
         assert visible is not None
-        assert visible.scope == Scope(agents=[])
+        assert visible.scope == Scope(agents=[CODEX_UID])
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -363,11 +363,11 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
 
 
 @pytest.mark.asyncio
-async def test_tools_call_refused_for_dormant_server(
+async def test_tools_call_refused_for_out_of_scope_server(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A dormant server (``scope == []``) is out of scope for every session,
-    identified or not: tools/call is refused with ToolDisabled and a `denied`
+    """A server scoped to another agent is out of scope for this session:
+    tools/call is refused with ToolDisabled and a `denied`
     invocation row, never spawned."""
     _with_in_memory(monkeypatch)
 
@@ -376,7 +376,7 @@ async def test_tools_call_refused_for_dormant_server(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await _scope(rsvc, "gh", Scope(agents=[]))
+        await _scope(rsvc, "gh", Scope(agents=[CODEX_UID]))
         await session.handle_initialize(
             {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent-uid": CLAUDE_CODE_UID}}
         )

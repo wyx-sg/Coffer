@@ -519,6 +519,7 @@
       "testExit": " · 列出后退出码 {{code}}",
       "testListed": "列出了 {{tools}} 个工具、{{resources}} 个资源、{{prompts}} 个提示词——与智能体现在看到的一致，无需更新。",
       "offBodyAgents": "开启后，它会重新提供给 {{agents}}。",
+      "offBodyEveryone": "开启后，它会提供给所有智能体。",
       "launcherBodyWho": "Coffer 用 {{runner}} 启动 {{name}}，但这台机器上找不到它，所以在此之前 {{who}} 无法调用{{tools}}。把安装交给智能体，装好后再测试一次。",
       "failingBodyWho": "在它恢复响应之前，{{who}} 无法调用{{tools}}。",
       "lastSuccessAt": "上次成功调用于 {{at}}。",
@@ -3776,8 +3777,8 @@
     "bulkPartial": "已应用到 {{total}} 项中的 {{ok}} 项",
     "bulkNone": "没有任何一项被应用",
     "bulkPartialBody": "{{names}} 未能更新：{{reason}}",
-    "noneSelected": "未选中智能体",
-    "dormant": "一个智能体都没选——处于休眠状态。它依然保留，但在至少选中一个智能体之前不会到达任何地方。",
+    "keepOne": "要停用请关闭",
+    "bulkWillOff": "{{count}} 项没有智能体了，将关闭",
     "noAgents": "还没有添加任何智能体。",
     "unknownAgent": "本机未添加",
     "inactiveHereAgent": "在此未生效——它的生效范围没有包含本机添加的任何智能体。",
@@ -4298,7 +4299,7 @@
       "heldIncoming_other": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
       "heldOutgoing_one": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
       "heldOutgoing_other": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
-      "heldBody": "一轮删除 20 个及以上文件、或超过某个区域 20% 的内容时，会等你确认。没有检出任何内容，也没有推送任何内容。查看列表后，可以在这里也删除它们，或把它们恢复。",
+      "heldBody": "一轮删除 20 个及以上文件，或在某个区域删除 5 个以上且超过一半时，会等你确认。没有检出任何内容，也没有推送任何内容。查看列表后，可以在这里也删除它们，或把它们恢复。",
       "reviewDeletions": "查看删除",
       "reviewChanges": "查看改动"
     },
@@ -4388,7 +4389,22 @@
       "diffTooLarge": "改动太大，不逐行显示",
       "diffEmpty": "没有可显示的行改动。",
       "rollBack": "回滚到这一轮之前",
-      "viewActivity": "在活动中查看"
+      "viewActivity": "在活动中查看",
+      "stop": {
+        "title": "为什么停下",
+        "heldOutgoing_one": "这台 Mac 的改动会从远端删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "heldOutgoing_other": "这台 Mac 的改动会从远端删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "heldIncoming_one": "其他机器的改动会在这里删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "heldIncoming_other": "其他机器的改动会在这里删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "held_one": "这一轮会删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "held_other": "这一轮会删除 {{count}} 个文件，超过了不经确认就能删除的量，所以停下等你确认。",
+        "conflicts_one": "{{count}} 个文件两边都改了且无法自动合并，所以停下等你选择。",
+        "conflicts_other": "{{count}} 个文件两边都改了且无法自动合并，所以停下等你选择。",
+        "plaintext_one": "要推送的文件里有明文密钥（{{count}} 处），所以没有推送任何内容。",
+        "plaintext_other": "要推送的文件里有明文密钥（{{count}} 处），所以没有推送任何内容。",
+        "after": "这一轮只是停下等你答复，自己没有做任何改动；你在同步页答复后，由下一轮按你的选择执行。",
+        "untouched": "它在检出前就停下了：没有快照，也没有拉取、应用或推送任何内容。"
+      }
     },
     "moveVault": {
       "title": "把 vault 移出 {{tool}}",

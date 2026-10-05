@@ -53,6 +53,7 @@ from coffer.infrastructure.persistence.migrations_runner import run_migrations
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.vault.home import runs_db_path
+from coffer.infrastructure.vault.reach_store import switch_off_empty_scopes
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
@@ -280,6 +281,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await asyncio.to_thread(deploy_frozen_sidecars)
     # Leftover of the retired transcript summary cache (derived, safe to drop).
     await asyncio.to_thread(remove_transcript_sidecar)
+    # ONE-TIME (require-an-agent-while-on): an empty agent list becomes off.
+    await asyncio.to_thread(switch_off_empty_scopes)
 
     workers = start_background_workers(
         retention_svc=retention_svc,

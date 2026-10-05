@@ -394,7 +394,7 @@ are never quoted. The attention item's reason MUST name no command.
 ### Requirement: Gate server exposure by scope per session
 The system MUST filter `mcp_server` exposure by its framework-level `scope`
 ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)) — one allow-list,
-`agents`, `null` meaning unrestricted — at the gateway's per-session choke point. The value, its validation
+`agents`, `null` meaning unrestricted, otherwise never empty — at the gateway's per-session choke point. The value, its validation
 and the routes that write it are [resource-framework](../resource-framework/spec.md) "Carry a per-agent reach on every resource"; this requirement is the enforcement.
 
 - The session's self-reported agent identity gates `tools/list` / `resources/list` / `prompts/list` and call

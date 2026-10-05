@@ -11,6 +11,9 @@
 // none. Clicking walks the states the selection can actually move to and ends
 // back on the dash (as it was); an agent the user never touched ("orig") keeps
 // whatever each item had.
+//
+// A chosen list is never empty: an enabled item the plan would leave with no
+// agent is planned as Off instead (its scope kept), and the popover says so.
 import type { Scope } from "@/lib/api/scope";
 import { sameScope } from "@/lib/scope";
 import type { ReachMode } from "@/lib/reach/reachState";
@@ -74,7 +77,9 @@ export function planRow(row: BulkRow, plan: BulkPlan, registered: string[]): Rea
   if (now.enabled && now.scope === null && registered.every((uid) => agents.includes(uid))) {
     return null;
   }
-  if (!now.enabled && agents.length === 0) return null;
+  // A row left with nobody is off — a chosen list is never empty — and its
+  // scope stays as it was, so turning it on again restores it.
+  if (agents.length === 0) return now.enabled ? { ...now, enabled: false } : null;
   const next: Scope = { agents };
   return now.enabled && sameScope(now.scope, next) ? null : { enabled: true, scope: next };
 }

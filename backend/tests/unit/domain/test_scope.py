@@ -114,8 +114,14 @@ def test_kind_without_scope_rejects_non_null():
 def test_scope_supporting_kind_accepts_both_shapes():
     validate_scope(None, supports_scope=True)
     validate_scope(Scope(agents=[_A]), supports_scope=True)
-    validate_scope({"agents": []}, supports_scope=True)
     validate_scope({"agents": None}, supports_scope=True)
+
+
+@pytest.mark.acceptance(spec="resource-framework", scenario="an empty agent list is refused")
+@pytest.mark.parametrize("empty", [{"agents": []}, Scope(agents=[])])
+def test_an_empty_agent_list_is_refused(empty):
+    with pytest.raises(ScopeValidationError):
+        validate_scope(empty, supports_scope=True)
 
 
 def test_validate_rejects_malformed():

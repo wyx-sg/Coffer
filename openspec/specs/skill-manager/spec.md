@@ -151,9 +151,9 @@ A skill MUST be delivered to an agent if and only if the skill resource is enabl
 
 - `None` — every registered agent receives the skill (the default for a fresh import).
 - `{"agents": ["<agent uid>"]}` — only those agents receive it. The scope holds agent uids ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)); the web UI lets the user pick agents by name and stores their uids. A uid that matches no agent registered here is legal and simply never matches.
-- `{"agents": []}` — nobody receives it, while the skill stays in the library, synced and visible.
+- An empty list is refused (`SCOPE_INVALID`). A skill that no agent should receive is switched off; it stays in the library, synced and visible, and keeps the agents that were chosen.
 
-Those two together are the skill's REACH, and reach is machine-local: it is set on the machine it applies to, it lives in this machine's reach record, so a sync round neither carries it away nor writes over it (spec vault-sync, "Keep reach machine-local"), and the predicate therefore takes no machine argument and has no machine to take. What travels is the skill — its master folder and its resource file in the vault — unless it is Coffer's own generated one (see "Regenerate Coffer's builtin skill from the build"). A skill can still be delivered here and dormant on another machine — that is two machines each holding their own `enabled` flag and their own scope, not one scope naming machines. The surface that sets reach MUST say that the setting stops at this machine.
+Those two together are the skill's REACH, and reach is machine-local: it is set on the machine it applies to, it lives in this machine's reach record, so a sync round neither carries it away nor writes over it (spec vault-sync, "Keep reach machine-local"), and the predicate therefore takes no machine argument and has no machine to take. What travels is the skill — its master folder and its resource file in the vault — unless it is Coffer's own generated one (see "Regenerate Coffer's builtin skill from the build"). A skill can still be delivered here and switched off on another machine — that is two machines each holding their own `enabled` flag and their own scope, not one scope naming machines. The surface that sets reach MUST say that the setting stops at this machine.
 
 No other flag decides which agents a skill is FOR: neither the delivery bookkeeping of "Track delivered copies as internal bookkeeping" nor any field on the agent resource; the agent resource carries no skill-delivery policy at all. `enabled` is a real switch: disabling a skill reclaims every delivered copy (master untouched) and re-enabling redelivers it to every agent its scope still grants. Scope is a hard grant: narrowing it to exclude an agent reclaims that delivery on the next reconcile even if the copy got there some other way, and widening it delivers; no per-agent state can hold a copy against the scope or keep one away from an agent the scope grants. A reconcile that finds a delivered copy the predicate no longer grants MUST reclaim it (remove the link, clear the delivery record) per "Reclaim a delivered copy without touching master", and MUST deliver a copy the predicate now grants but the agent does not hold. This predicate governs **delivery** — writing a skill into an agent's own filesystem — and is the only path by which a skill reaches an agent (see "Expose no skill tools over MCP").
 
@@ -162,10 +162,10 @@ No other flag decides which agents a skill is FOR: neither the delivery bookkeep
 - **WHEN** the delivery reconcile runs for each agent,
 - **THEN** both agents hold a delivered copy, and registering a third agent delivers the skill there too with no further user action.
 
-#### Scenario: a skill scoped to no agent reaches nobody
+#### Scenario: an empty agent list is refused for a skill
 - **GIVEN** two registered agents each holding a delivered copy of an enabled skill,
-- **WHEN** the user sets the skill's scope to `[]`,
-- **THEN** both delivered copies are reclaimed, the skill remains in the library (still listed, still exported), and no agent receives it until its scope grants one again.
+- **WHEN** the user sets the skill's scope to `{"agents": []}`,
+- **THEN** the write is refused with `422` `SCOPE_INVALID`, both delivered copies stay, and the way to reach nobody is to disable the skill, which reclaims both copies while the skill remains in the library (still listed, still exported).
 
 #### Scenario: disabling a skill reclaims every delivered copy
 - **GIVEN** an enabled skill delivered to two agents,

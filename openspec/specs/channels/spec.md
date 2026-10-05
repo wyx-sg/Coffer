@@ -900,7 +900,9 @@ the one machine that runs it"), for a reason scope cannot satisfy: scope is
 reach, reach is machine-local and never travels, and the machine that runs a
 channel is one answer the machines must share.
 
-- An unrestricted scope MUST mean every registered agent.
+- An unrestricted scope MUST mean every registered agent. A scope is never an
+  empty list: `agents: []` is refused on both write paths with `SCOPE_INVALID`,
+  as on every kind.
 - `agents: [<agent>, …]` MUST narrow `/new <agent>` at every surface that
   names an agent: the list of valid names an unknown one is answered with, and
   the validation of a chosen name. They MUST read one narrowed set — a list that
@@ -919,12 +921,11 @@ channel is one answer the machines must share.
   could express was refused, and the value accepted in its place was one the
   reach picker then had to render as an agent registered nowhere.
 - **The invariant:** a channel's `default_agent` MUST be an agent the channel
-  may drive — registered in this vault, and inside its scope whenever that scope
-  is non-empty. It MUST be enforced on BOTH write paths, so the inconsistent
+  may drive — registered in this vault, and inside its scope. It MUST be enforced on BOTH write paths, so the inconsistent
   state cannot be stored at all: a registration or an edit of the configuration
   is rejected when it names a `default_agent` that is unknown or outside the
   current scope, and an edit to the scope is rejected when the proposed
-  non-empty scope excludes the current `default_agent`. A scope edit MUST NOT be
+  scope excludes the current `default_agent`. A scope edit MUST NOT be
   accepted and then leave the channel unable to run. Each rejection MUST name
   both sides **by label**, not by uid, so the owner sees the two ways forward:
   widen the scope, or change the default agent first.
@@ -936,15 +937,14 @@ channel is one answer the machines must share.
   agent resource and a uid is minted per vault, so nothing a schema could name
   would stand for "the usual agent". Silence with a reason beats a bot that
   answers as an agent nobody chose.
-- `agents: []` (dormant) MUST mean the channel drives nothing, and MUST fail
-  early rather than per-turn: the runtime does not start its adapter, so no
-  message is ever accepted only to be refused. The management surface reports it
-  as not running. Widening the scope is how the owner brings it back.
-- `agents: []` MUST be accepted on both write paths. It is the vault-wide
-  meaning of dormant — this channel is off — and off MUST NOT also mean frozen:
-  a channel the owner deliberately switched off MUST remain editable, so a wrong
-  bot token or app secret can still be corrected without reactivating it
-  first.
+- A channel that should drive nothing is **switched off**, the same switch every
+  toggleable kind has, and there is no second way to say it: a switched-off
+  channel does not start its adapter, so no message is ever accepted only to be
+  refused, and the management surface reports it as not running. Off keeps the
+  scope that was chosen.
+- Off MUST NOT also mean frozen: a channel the owner deliberately switched off
+  MUST remain editable, so a wrong bot token or app secret can still be
+  corrected without reactivating it first.
 - A thread's sticky agent choice MUST be dropped in favour of the channel
   default once the scope no longer admits it, so narrowing a scope takes effect
   on the next conversation rather than waiting on whoever set the preference.
@@ -971,11 +971,13 @@ carry two unrelated answers.
 - **THEN** the edit is accepted, the channel keeps running, and the scope
   reaches `/new <agent>` translated into the agent key that surface speaks.
 
-#### Scenario: a channel scoped to no agent is dormant
-- **GIVEN** an enabled channel whose scope is set to the empty list,
-- **WHEN** the channel runtime reconciles,
-- **THEN** its adapter is never started and the channel reports as not running,
-  so it accepts no turn it would have to refuse.
+#### Scenario: an empty agent list is refused for a channel
+- **GIVEN** a running channel whose scope names one agent,
+- **WHEN** the owner sets its scope to `{"agents": []}`, on the scope route or in
+  a registration,
+- **THEN** the write is refused with `422` `SCOPE_INVALID`, nothing is persisted
+  and the channel keeps running; a channel that should drive nothing is switched
+  off, and then its adapter is not started and it reports as not running.
 
 #### Scenario: reject narrowing a channel's scope past its default agent
 - **GIVEN** a running channel whose `default_agent` is one registered agent,
@@ -1000,11 +1002,11 @@ carry two unrelated answers.
 - **THEN** its adapter is never started, the reason is recorded, and the channel
   reports as not running — it is never started against a substitute agent.
 
-#### Scenario: edit a dormant channel's configuration
-- **GIVEN** a channel the owner switched off by scoping it to no agent,
+#### Scenario: edit a switched-off channel's configuration
+- **GIVEN** a channel the owner switched off,
 - **WHEN** the owner corrects a field of its configuration, such as its bot
   token ref,
-- **THEN** the edit is accepted and the channel stays dormant — off is not
+- **THEN** the edit is accepted and the channel stays off — off is not
   frozen.
 
 ### Requirement: Bind each channel to the one machine that runs it

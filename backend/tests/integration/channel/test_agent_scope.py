@@ -116,17 +116,16 @@ async def test_a_sticky_agent_narrowed_out_falls_back_to_the_channel_default(
     assert conv.agent_key == "builtin"
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a channel scoped to no agent is dormant")
-async def test_a_channel_scoped_to_no_agent_is_never_started(env: ChannelEnv) -> None:
-    """The dormant case fails early rather than per-turn: the reconciler simply
-    does not start the adapter, so the channel accepts nothing to refuse."""
+async def test_a_channel_cannot_be_scoped_to_no_agent(env: ChannelEnv) -> None:
+    """An empty agent list is refused on the write path; a channel that should
+    drive nothing is switched off instead."""
     resource = await env.register_channel("tg")
-    await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
+    with pytest.raises(ScopeInvalidError):
+        await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
 
     await env.runtime.reconcile_once()
-
-    assert env.runtime.is_running(uid_of("tg")) is False
-    assert env.created_adapters == []
+    assert (await env.resources.get(resource.uid)).scope is None
+    assert env.runtime.is_running(uid_of("tg")) is True
 
 
 async def test_narrowing_a_scope_past_the_default_agent_never_reaches_the_runtime(
@@ -151,17 +150,22 @@ async def test_narrowing_a_scope_past_the_default_agent_never_reaches_the_runtim
 
 async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv) -> None:
     """A scope edit must reach `/new <agent>` within a tick, so the binding's snapshot
-    is part of what the reconciler compares. Uses the dormant scope, now the
-    only narrowing that can stop a running channel."""
+    is part of what the reconciler compares."""
+    mine = await env.agent_uid(DEFAULT_AGENT_KEY)
     resource = await env.register_channel("tg")
-    await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
+    await env.resources.update_scope(resource.uid, Scope(agents=[mine]), actor="test")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running(uid_of("tg")) is False
+    binding = env.processor.binding(uid_of("tg"))
+    assert binding is not None
+    assert binding.agent_scope == Scope(agents=[DEFAULT_AGENT_KEY])
 
     await env.resources.update_scope(resource.uid, None, actor="test")
     await env.runtime.reconcile_once()
 
+    binding = env.processor.binding(uid_of("tg"))
     assert env.runtime.is_running(uid_of("tg")) is True
+    assert binding is not None
+    assert binding.agent_scope is None
 
 
 @pytest.mark.acceptance(

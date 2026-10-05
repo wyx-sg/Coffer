@@ -14,7 +14,7 @@
 // `AgentPicker` (components/reach) is the same problem in its multi-select
 // form, under the reach control's "only selected agents". The two are separate
 // components because one is a Radix Select and the other a list of checkboxes
-// with its own dormant/unknown vocabulary — but they agree on the rule, and a
+// with its own unknown-agent vocabulary — but they agree on the rule, and a
 // change to the rule has to land in both.
 //
 // A value no registered agent answers to is KEPT and shown as itself, never

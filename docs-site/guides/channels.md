@@ -154,12 +154,12 @@ Two settings decide which agent answers.
 
 **The default model** is the model that agent runs on in new conversations. Pick it under **Agents** → **Default model** on the **Overview**, from the default agent's own model list; **Provider default** leaves the choice to the agent's provider. It belongs to the default agent only: a chat that switched to another agent with `/new <agent>` does not get it (the default directory still applies), a model chosen in the chat with `/model` wins over it, `/model default` returns to it, and changing the default agent clears it.
 
-**The scope** is the channel's reach — the list of agents it **may drive**. For every other resource kind, scope names the agents a resource is delivered *to*; a channel is used by no agent, so its scope is read the other way round. Set it with **Agents it may drive** on the channel's **Overview**: every agent, only the ones you pick, or none.
+**The scope** is the channel's reach — the list of agents it **may drive**. For every other resource kind, scope names the agents a resource is delivered *to*; a channel is used by no agent, so its scope is read the other way round. Set it with **Agents it may drive** on the channel's **Overview**: every agent, or only the ones you pick (at least one). To have it drive nothing, switch the channel off.
 
 - An unrestricted scope means every registered agent.
 - A restricted scope narrows `/new <agent>` everywhere: the names offered when you type an unknown one, and the check on the name you type.
 - The default agent must always be inside the scope. Coffer refuses a scope that excludes the current default agent, and a default agent outside the current scope, naming both by label, so you either widen the scope or change the default first.
-- An empty scope makes the channel **dormant**: its adapter does not start. A dormant channel can still be edited, for example to fix a wrong token.
+- A scope is never empty. A channel that should drive nothing is switched **off**: its adapter does not start, and it can still be edited, for example to fix a wrong token.
 - Narrowing the scope drops a thread's sticky agent choice that is no longer allowed; the next conversation uses the default agent.
 
 Like every reach setting, scope and the enabled switch are set per machine and are not synced.

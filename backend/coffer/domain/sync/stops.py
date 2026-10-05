@@ -150,6 +150,25 @@ class Stop:
         return dataclasses.replace(self, conflicts=tuple(out))
 
 
+def held_fields(hold: Hold | None) -> dict[str, Any]:
+    """What a held round's record says about its hold."""
+    if hold is None:
+        return {"held": 0}
+    return {
+        "held": len(hold.paths),
+        "stopped_on": hold.paths,
+        "held_direction": hold.direction.value,
+    }
+
+
+def stop_fields(stop: Stop) -> dict[str, Any]:
+    """What a stopped or held round's record says about its stop."""
+    if stop.kind is StopKind.HOLD:
+        return held_fields(stop.hold)
+    unanswered = stop.unanswered
+    return {"conflicts": len(unanswered), "stopped_on": tuple(c.path for c in unanswered)}
+
+
 def with_handoff(
     conflicts: Sequence[ConflictFile],
     paths: Sequence[str],
@@ -255,6 +274,8 @@ __all__ = [
     "Stop",
     "StopKind",
     "conflict_from_json",
+    "held_fields",
+    "stop_fields",
     "stop_from_json",
     "to_json",
     "with_handoff",

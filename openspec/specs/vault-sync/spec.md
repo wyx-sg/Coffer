@@ -386,18 +386,19 @@ by hand.
 
 ### Requirement: Scope names agents only
 `scope` MUST name agents, by uid, and nothing else — `{ agents: [...] }`.
-`null` means every agent, a list restricts to it, `[]` matches nothing and is
-dormant, and an unknown agent uid is legal and simply never matches. There MUST
+`null` means every agent, a non-empty list restricts to it, an empty list is
+refused (a resource reaches nobody only by being off), and an unknown agent uid
+is legal and simply never matches. There MUST
 be no machine axis: reach is machine-local (see "Keep reach machine-local"), so a
 machine already names the resources it activates by *holding* that scope, and
 machine ids inside the scope would record the same fact a second time with two
 ways to disagree.
 
 #### Scenario: a scope names agents and nothing else
-- **GIVEN** scopes of `null`, a list of agent uids, an empty list, and a list naming an agent that does not exist
+- **GIVEN** scopes of `null`, a list of agent uids, and a list naming an agent that does not exist
 - **WHEN** each is matched against the registered agents
-- **THEN** `null` matches every agent, the list matches exactly its agents, the empty list matches none, and the unknown uid matches nothing without being refused
-- **AND** a scope that carries a machine axis is refused
+- **THEN** `null` matches every agent, the list matches exactly its agents, and the unknown uid matches nothing without being refused
+- **AND** a scope that carries a machine axis is refused, and so is an empty list
 
 ### Requirement: Run a round as pull, merge, guard, check out, push
 A round MUST be these steps **in this order**:
@@ -557,17 +558,19 @@ to `secret/**.enc` and to nothing else.
 - **THEN** both machines hold the fresher ciphertext, the round pulls it, and there is nothing to ask
 
 ### Requirement: Hold a round that would lose too much
-A round that would **lose** more than **20%** of the documents in an area, or
-**20 or more** documents in one area, MUST NOT proceed. Both thresholds are
-fixed and MUST NOT be configurable, and nothing — no caller, no migration, no
-relocation of the layout — may skip the guard rather than satisfy it. What
-counts as a loss is "Count losses, not deletions".
+A round that would **lose** **20 or more** documents in one area, or **5 or
+more** documents that are more than **half** of an area, MUST NOT proceed. The
+share only counts from five documents up, so tidying a small area — removing
+three of five demo servers — goes through while wiping most of one does not.
+The thresholds are fixed and MUST NOT be configurable, and nothing — no
+caller, no migration, no relocation of the layout — may skip the guard rather
+than satisfy it. What counts as a loss is "Count losses, not deletions".
 
-#### Scenario: the guard trips above a fifth of an area or at twenty documents
+#### Scenario: the guard trips at five documents over half an area or at twenty documents
 - **GIVEN** the deletion guard at its fixed thresholds
-- **WHEN** it scores a diff losing exactly 20% of an area, one losing more than 20%, and one losing 20 documents from a large area
-- **THEN** the first does not breach and the other two do
-- **AND** the thresholds the guard runs with are the published constants of 20% and 20
+- **WHEN** it scores a diff losing three of an area's five documents, all five, exactly half of a ten-document area, six of those ten, and 20 documents from a large area
+- **THEN** the first and third do not breach and the other three do
+- **AND** the thresholds the guard runs with are the published constants of half, 5 and 20
 
 ### Requirement: Ask the user to confirm a tripped breaker
 A tripped breaker MUST hold the round before anything is checked out or pushed
@@ -992,7 +995,11 @@ continue, an answered hold, a rollback — SHALL be recorded in `runs.db` with i
 status, its trigger, when it started and finished, the commit range it moved the
 vault across, the snapshot it took, the commits it pulled (with the machine that
 wrote each), the files it applied here and pushed, the machines it met and, when
-it stopped or failed, why in words a person can act on. A round that ends in a
+it stopped or failed, why in words a person can act on. A round that stopped for
+a person — held, stopped on conflicts, or refused for a plaintext secret — MUST
+record the files it stopped on, and its drawer MUST lead with why it stopped and
+those files, so the round still explains itself after the stop is answered and
+a later round has done the work. A round that ends in a
 problem — the remote unreachable, sign-in failed, a token waiting for approval —
 MUST be recorded as a round of that status, never raised as an error the caller
 has to catch. The history SHALL be readable newest first, paged, on REST
@@ -1003,6 +1010,12 @@ has to catch. The history SHALL be readable newest first, paged, on REST
 - **WHEN** a round runs
 - **THEN** the history's newest round is `pushed`, names the file it pushed and the commit range it moved across
 - **AND** `GET /api/v1/sync/runs/{id}` returns that round, and an unknown id is `SYNC_ROUND_NOT_FOUND`
+
+#### Scenario: a stopped round keeps why it stopped
+- **GIVEN** a round held because this machine deleted three files
+- **WHEN** its drawer is opened, before or after the hold is answered
+- **THEN** it says this machine's changes would delete 3 files and lists them
+- **AND** the four empty steps fold into one line saying nothing was checked out, pulled or pushed
 
 ### Requirement: Stop the round on any conflict
 A merge that git cannot finish cleanly — both sides changed the same lines, one

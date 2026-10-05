@@ -103,23 +103,19 @@ async def test_unscoped_skill_reaches_every_agent(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="skill-manager", scenario="a skill scoped to no agent reaches nobody")
-async def test_dormant_skill_reaches_nobody(tmp_path):
+@pytest.mark.acceptance(spec="skill-manager", scenario="an empty agent list is refused for a skill")
+async def test_an_empty_agent_list_is_refused_for_a_skill(tmp_path):
     skill_svc, agent_svc, _audit, graph = await _setup(tmp_path)
     a1, dir1 = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "dormant")
-    assert (dir1 / "dormant").is_symlink()
+    await _import_skill(skill_svc, tmp_path, "kept")
+    assert (dir1 / "kept").is_symlink()
 
-    # An empty agents axis is dormant: no agent is in scope.
-    dormant = await _by_name(skill_svc, "dormant")
-    await skill_svc._rs.update_scope(dormant.uid, Scope(agents=[]), actor="cli")
-    assert not (dir1 / "dormant").exists()
-    assert await _delivered_names(skill_svc, a1) == set()
-
-    # And a later agent gets nothing either.
-    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2", agent_type=AgentType.CODEX)
-    assert not (dir2 / "dormant").exists()
-    assert await _delivered_names(skill_svc, a2) == set()
+    skill = await _by_name(skill_svc, "kept")
+    with pytest.raises(ScopeInvalidError):
+        await skill_svc._rs.update_scope(skill.uid, Scope(agents=[]), actor="cli")
+    # Refused: the skill is still delivered.
+    assert (dir1 / "kept").is_symlink()
+    assert await _delivered_names(skill_svc, a1) == {"kept"}
     await graph.dispose()
 
 

@@ -144,7 +144,7 @@ schedule or when the person asks ("Sync now"). A round:
   be withdrawn; revocation is rotation. Before every push the round also reads
   every blob the remote lacks and refuses to publish a plaintext secret.
 - **The deletion breaker** holds a round in both directions, with its
-  thresholds (20% of an area or 20 files): incoming is `L → T`, outgoing is
+  thresholds (20 files, or 5 or more over half of an area): incoming is `L → T`, outgoing is
   what `L` deletes relative to the merge base. For resource files it counts
   lost uids, so a moved or renamed file is a move by construction; for other
   files it keeps content-id and rename pairing

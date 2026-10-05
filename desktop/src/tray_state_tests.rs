@@ -21,7 +21,7 @@ fn a_running_daemon_is_named_with_its_port_and_version() {
         "Daemon running · port 38470 · 1.0.0"
     );
     assert_eq!(icon(&s), Icon::Normal);
-    assert_eq!(title(&s), None);
+    assert_eq!(title(&s), "");
     assert_eq!(attention_label(&s, Lang::En), None);
     assert_eq!(daemon_action(&s, Lang::En), "Restart daemon");
 }
@@ -32,7 +32,7 @@ fn things_that_need_the_user_are_counted_beside_the_icon() {
     let mut s = running();
     s.set_attention(Attention { count: 9 });
     assert_eq!(icon(&s), Icon::Normal);
-    assert_eq!(title(&s).as_deref(), Some("9"));
+    assert_eq!(title(&s), "9");
     assert_eq!(
         attention_label(&s, Lang::En).as_deref(),
         Some("9 things need you")
@@ -42,7 +42,7 @@ fn things_that_need_the_user_are_counted_beside_the_icon() {
         Some("9 件事需要你处理")
     );
     s.attention.count = 1;
-    assert_eq!(title(&s).as_deref(), Some("1"));
+    assert_eq!(title(&s), "1");
     assert_eq!(
         attention_label(&s, Lang::En).as_deref(),
         Some("1 thing needs you")
@@ -54,7 +54,7 @@ fn things_that_need_the_user_are_counted_beside_the_icon() {
 fn a_count_past_nine_reads_nine_plus() {
     let mut s = running();
     s.set_attention(Attention { count: 10 });
-    assert_eq!(title(&s).as_deref(), Some("9+"));
+    assert_eq!(title(&s), "9+");
     // The menu line keeps the real number.
     assert_eq!(
         attention_label(&s, Lang::En).as_deref(),
@@ -66,9 +66,9 @@ fn a_count_past_nine_reads_nine_plus() {
 fn a_raised_sync_alert_counts_before_the_attention_list_catches_up() {
     let mut s = running();
     s.set_sync_alert(true);
-    assert_eq!(title(&s).as_deref(), Some("1"));
+    assert_eq!(title(&s), "1");
     s.set_attention(Attention { count: 3 });
-    assert_eq!(title(&s).as_deref(), Some("3"));
+    assert_eq!(title(&s), "3");
 }
 
 // acceptance(spec = "desktop-app", scenario = "the count drops as soon as what needs the user is resolved")
@@ -77,18 +77,37 @@ fn resolving_everything_clears_the_count_even_with_a_sync_alert_raised() {
     let mut s = running();
     s.set_attention(Attention { count: 2 });
     s.set_sync_alert(true);
-    assert_eq!(title(&s).as_deref(), Some("2"));
+    assert_eq!(title(&s), "2");
     // One item resolved: the count follows the list down.
     s.set_attention(Attention { count: 1 });
-    assert_eq!(title(&s).as_deref(), Some("1"));
+    assert_eq!(title(&s), "1");
     // The list is empty: nothing beside the icon, though the sync watcher has
     // not yet polled its alert clear.
     s.set_attention(Attention { count: 0 });
-    assert_eq!(title(&s), None);
+    assert_eq!(title(&s), "");
     assert_eq!(attention_label(&s, Lang::En), None);
     // A fresh raise counts again until the list is next read.
     s.set_sync_alert(true);
-    assert_eq!(title(&s).as_deref(), Some("1"));
+    assert_eq!(title(&s), "1");
+}
+
+// acceptance(spec = "desktop-app", scenario = "the count drops as soon as what needs the user is resolved")
+#[test]
+fn a_count_that_falls_to_nothing_is_written_as_an_empty_title() {
+    // Regression: the menu bar kept showing "1" after the last item was
+    // resolved. macOS `set_title(None)` leaves the old title drawn, so the
+    // cleared count must be a title to write — the empty one — not "none".
+    let mut s = running();
+    s.set_attention(Attention { count: 1 });
+    let shown: String = title(&s);
+    assert_eq!(shown, "1");
+    s.set_attention(Attention { count: 0 });
+    let cleared: String = title(&s);
+    assert!(cleared.is_empty(), "{cleared:?}");
+    // The same for a daemon that went away with something counted.
+    s.set_attention(Attention { count: 4 });
+    s.daemon = Daemon::Offline;
+    assert!(title(&s).is_empty());
 }
 
 // acceptance(spec = "desktop-app", scenario = "an offline daemon offers to start")
@@ -99,7 +118,7 @@ fn offline_dims_the_icon_drops_the_count_and_offers_start() {
     s.daemon = Daemon::Offline;
     assert_eq!(icon(&s), Icon::Offline);
     assert_eq!(status_line(&s, Lang::En), "Daemon offline");
-    assert_eq!(title(&s), None);
+    assert_eq!(title(&s), "");
     assert_eq!(attention_label(&s, Lang::En), None);
     assert_eq!(daemon_action(&s, Lang::En), "Start daemon");
 }
@@ -109,7 +128,7 @@ fn a_launch_is_connecting_not_offline() {
     let s = TrayState::new();
     assert_eq!(status_line(&s, Lang::En), "Connecting to the daemon…");
     assert_eq!(icon(&s), Icon::Normal);
-    assert_eq!(title(&s), None);
+    assert_eq!(title(&s), "");
 }
 
 // acceptance(spec = "desktop-app", scenario = "the icon tooltip carries the count")

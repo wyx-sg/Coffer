@@ -33,7 +33,6 @@ import { useMcpInvocationSummary, useMcpToolTiering } from "@/lib/hooks/useMcpSe
 import { useTestMcpServer } from "@/lib/hooks/useMcpServerMutations";
 import { useMcpServerStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
-import { useSecrets } from "@/lib/hooks/useSecrets";
 import { rebindMcpSecret } from "@/lib/mcp/rebindMcpSecret";
 import { secretsKey } from "@/lib/api/queryKeys";
 import { McpCapabilityTab } from "./McpCapabilityTab";
@@ -44,8 +43,8 @@ import { McpServerHeader } from "./McpServerHeader";
 import { McpStatusCallout } from "./McpStatusCallout";
 import { McpToolsTab } from "./McpToolsTab";
 import { McpTopTools } from "./McpTopTools";
-import { reachedAgents } from "./reachWords";
-import { serverSecretRows } from "./secretRows";
+import { namesOnTurnOn, reachedAgents } from "./reachWords";
+import { useServerSecretRows } from "./secretRows";
 import { joinNames, serverState, transportOf } from "@/lib/mcp/serverState";
 import { failedTest, type TestResult } from "./testResult";
 
@@ -79,8 +78,6 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const runTest = useTestMcpServer(uid);
   const enable = useEnableResource();
   const disable = useDisableResource();
-  const keyRejected = state.kind === "failing" && detail?.failure_reason === "auth_rejected";
-  const secrets = useSecrets(state.kind === "secretMissing" || keyRejected);
   const [edit, setEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -92,6 +89,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
     reachedAgents(resource, agents).map((a) => a.display_name),
     i18n.language,
   );
+  const turnOnNames = namesOnTurnOn(resource, agents, i18n.language);
   // Only a failed test speaks in the Overview; a pass is a toast.
   const test: TestResult | null =
     (runTest.data as TestResult | undefined) ??
@@ -152,7 +150,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const activityHref = `/activity?tab=mcp&q=${encodeURIComponent(resource.name)}`;
   // "View errors" (a server Coffer does not start has no log): Activity on its failed calls.
   const viewErrors = () => navigate(`${activityHref}&status=failed`);
-  const { missing: missingRow, key: keyRow } = serverSecretRows(secrets.data?.refs, detail);
+  const { missing: missingRow, key: keyRow } = useServerSecretRows(state, detail);
   const capsProps = {
     serverUid: uid,
     capabilities: caps.data,
@@ -195,6 +193,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
                 isHttp={transport.type === "http"}
                 toolCount={toolCount}
                 agentNames={agentNames}
+                turnOnNames={turnOnNames}
                 test={test}
                 onOpenLog={() => setLogOpen(true)}
                 onViewErrors={viewErrors}

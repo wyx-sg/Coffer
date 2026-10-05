@@ -5,8 +5,9 @@
 // with no Done button and nothing deferred to the panel closing.
 //
 // Two rules are load-bearing. OFF IS A CHOICE, never an inference: it has its
-// own endpoint and leaves the scope untouched, so it writes `onDisabled`, and an
-// empty list under Chosen agents is a different state with a different label.
+// own endpoint and leaves the scope untouched, so it writes `onDisabled`, and
+// Chosen agents is never empty (the last tick stays, nothing saves on a switch
+// to it with nothing ticked).
 // And the list is dimmed (ticks kept) under every mode but Chosen agents.
 //
 // A scope stores agent UIDS and a person reads agent NAMES, so the fixtures
@@ -83,13 +84,6 @@ describe("the button says what the reach is", () => {
     expect(trigger().textContent).toBe("");
     expect(trigger()).toHaveAccessibleName("claude, codex");
     expect(trigger().querySelectorAll("[data-agent-mark]")).toHaveLength(2);
-  });
-
-  test("an empty chosen list is NOT Off — it says no agent is selected", () => {
-    seed();
-    mount("restricted", { initialScope: only([]) });
-    expect(trigger()).toHaveTextContent(/no agent selected/i);
-    expect(trigger()).not.toHaveTextContent(/off/i);
   });
 });
 
@@ -207,9 +201,34 @@ describe("every change is written at once", () => {
     expect(h.onRestricted).toHaveBeenCalledWith(only([CODEX]), null);
   });
 
+  test("Chosen agents with nothing ticked writes nothing until the first tick", () => {
+    seed();
+    const h = mount("everywhere");
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    expect(choice(/chosen agents/i)).toBeChecked();
+    expect(h.onRestricted).not.toHaveBeenCalled();
+    expect(h.onEverywhere).not.toHaveBeenCalled();
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE]), CLAUDE);
+  });
+
+  acceptance("web-ui", "the last ticked agent cannot be unticked", () => {
+    seed();
+    const h = mount("restricted", { initialScope: only([CLAUDE]) });
+    openPanel();
+    expect(agentRow("claude").getByRole("checkbox")).toBeDisabled();
+    expect(screen.getByTestId("scope-keep-one")).toHaveTextContent("Turn it off to reach no agent");
+    expect(h.onRestricted).not.toHaveBeenCalled();
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE, CODEX]), CODEX);
+    expect(screen.queryByTestId("scope-keep-one")).toBeNull();
+    expect(agentRow("claude").getByRole("checkbox")).toBeEnabled();
+  });
+
   acceptance("web-ui", "each reach change is saved at once", () => {
     seed();
-    const h = mount("restricted", { initialScope: only([]) });
+    const h = mount("everywhere");
     openPanel();
     fireEvent.click(agentRow("claude").getByRole("checkbox"));
     expect(h.onRestricted).toHaveBeenLastCalledWith(only([CLAUDE]), CLAUDE);
@@ -223,10 +242,10 @@ describe("every change is written at once", () => {
   test("a prop refresh while the panel is open does not undo the ticks", () => {
     seed();
     const h = handlers();
-    const { rerender } = render(<ReachControl mode="restricted" initialScope={only([])} {...h} />);
+    const { rerender } = render(<ReachControl mode="everywhere" {...h} />);
     openPanel();
     fireEvent.click(agentRow("claude").getByRole("checkbox"));
-    rerender(<ReachControl mode="restricted" initialScope={only([])} {...h} />);
+    rerender(<ReachControl mode="everywhere" {...h} />);
     expect(agentRow("claude").getByRole("checkbox")).toBeChecked();
   });
 
@@ -276,7 +295,6 @@ describe("reach conventions (web-ui)", () => {
     seed();
     expect(label("everywhere")).toBe("All agents");
     expect(label("restricted", only([CLAUDE, CODEX]))).toBe("");
-    expect(label("restricted", only([]))).toMatch(/^no agent selected/i);
     expect(label("disabled", only([CLAUDE]))).toBe("Off");
   });
 

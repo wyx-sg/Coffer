@@ -85,7 +85,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 删除断路器（Deletion breaker） {#deletion-breaker}
 
-[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者某个区域超过 20% 的内容，无论方向如何，都会被挂起，直到你在**同步**页面答复：**删除 N 个文件**，或**保留文件**。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
+[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者在某个区域丢失 5 个以上且超过一半，无论方向如何，都会被挂起，直到你在**同步**页面答复：**删除 N 个文件**，或**保留文件**。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
 
 ### 投递（Delivery） {#delivery}
 
