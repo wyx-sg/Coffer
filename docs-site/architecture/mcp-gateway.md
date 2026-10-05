@@ -166,13 +166,13 @@ A fresh vault has no history but also few tools, so it takes the under-budget br
 
 ```text
 coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
-  -> { tools: [{ name, description, inputSchema, score }], total_searched }
+  -> { tools: [{ name, description, inputSchema, score, group_description? }], total_searched }
 ```
 
 It aggregates the visible servers' tools without tiering, removes every `coffer__` tool, and ranks the rest. The ranker is a deterministic BM25-lite:
 
 - **Tokens.** camelCase boundaries are split, the text is lower-cased, and `[a-z0-9]+` runs are kept. The name text is `"<server> <tool>"`. The namespace is split off first so the server token counts once, not twice.
-- **Term frequency.** Each name token adds `3.0`, and each description token adds `1.0`. A document's length is the sum of its weights.
+- **Term frequency.** Each name token adds `3.0`, and each description token adds `1.0`. A document's length is the sum of its weights. A custom-tool group's description is part of the description text of each of its tools, and comes back beside each as `group_description`.
 - **Score.** For each distinct query term `t` present in the tool:
   `idf(t) = ln(1 + (N - df + 0.5) / (df + 0.5))`, and the term adds
   `idf(t) · f · (k1 + 1) / (f + k1 · (1 - b + b · len / avg_len))`, with `k1 = 1.5` and `b = 0.75`.

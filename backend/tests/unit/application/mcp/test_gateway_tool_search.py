@@ -64,6 +64,23 @@ async def test_execute_ranks_by_intent_words():
     assert out["tools"][0]["name"] == "slack__post_message"
 
 
+async def test_a_groups_description_is_scored_and_returned():
+    """A custom-tool group's description joins each of its tools' text, and comes
+    back beside the tool as ``group_description``."""
+    tools = [
+        {"name": "acme__list_items", "description": "List items", "inputSchema": {}},
+        {"name": "slack__post_message", "description": "Post a Slack message"},
+    ]
+    about = {"acme": "Weather forecasts for warehouse sites"}
+
+    out = await execute_tool_search({"query": "weather forecast"}, tools, about=about)
+
+    assert out["tools"][0]["name"] == "acme__list_items"
+    assert out["tools"][0]["group_description"] == about["acme"]
+    plain = await execute_tool_search({"query": "post slack message"}, tools, about=about)
+    assert "group_description" not in plain["tools"][0]
+
+
 def test_corpus_drops_the_duplicated_server_token():
     """`jira__jira_get_issue` tokenizes as jira, jira, get, issue — the server
     name lands twice at the ranker's name weight and crowds out the tokens that

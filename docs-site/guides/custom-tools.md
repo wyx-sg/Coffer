@@ -7,7 +7,9 @@ description: Turn an HTTP API into tools your agents call — import an OpenAPI 
 
 A **custom tool** is one HTTP request that Coffer makes for your agents. There is no MCP server to write or run: you describe the request — method, path, headers, body and arguments — and Coffer's gateway makes it whenever an agent calls the tool, adding your API key on the way out. Agents see custom tools exactly like the tools of any MCP server.
 
-Custom tools live in **groups**. A group is one API: it has a name that agents see as a prefix, one base URL, a list of headers (some of which may hold a stored secret) and a default reach. Each tool in it adds its own path to the base URL.
+Custom tools live in **groups**. A group is one API: it has a name that agents see as a prefix, a description of what the API is for, one base URL, a list of headers (some of which may hold a stored secret) and a default reach. Each tool in it adds its own path to the base URL.
+
+Write the group's description for the agent: what this API is and when to use it. When an agent searches for a tool with `coffer__search_tools`, a group's tools are matched against the group's description as well as their own, and each tool found comes back with the group's description beside it. An agent's tool list keeps each tool's own description.
 
 ```mermaid
 flowchart LR
@@ -23,14 +25,15 @@ flowchart LR
 
 ## Add a group from an OpenAPI spec
 
-On **Custom tools**, choose **Add custom tool**. The group comes first: pick **New group**, then **Import an OpenAPI spec** and **Continue**. (An OpenAPI import always makes a new group; an existing group only takes requests added by hand.)
+On **Custom tools**, choose **Add custom tool**. The group comes first, in a select you can type into to find a group by name; it starts on **New group**. Keep it, pick **Import an OpenAPI spec** and **Continue**. (An OpenAPI import always makes a new group; an existing group only takes requests added by hand.)
 
 1. Name the group — agents see its tools as `<group>__<tool>`, and the name is fixed once the group exists.
 2. Give the spec as a **URL** or a **File** (JSON or YAML, OpenAPI 3.0 or 3.1, up to 5 MB) and press **Load**. Coffer lists every operation it found, grouped by the spec's tags. A spec it cannot read is reported with the line where it breaks; a URL it cannot reach is reported with the host and why (the name did not resolve, the connection was refused, the request timed out), so you can check the URL, your network, VPN or proxy, or switch to **File** and choose a local copy.
-3. Tick the **operations** that become tools. Reads start ticked; operations that change data start unticked. **Reads only** goes back to that choice; the filter narrows a long list.
-4. Check the **Headers** the spec's security scheme fills in (an `Authorization` header for a Bearer scheme): the value is a stored secret that holds the whole header value, or you paste one and Coffer saves it to Secrets with the group. Then set **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
-5. Optionally **Try an operation**: run one ticked operation once against the spec's base URL, before anything exists (see [Test before you save](#test-before-you-save)).
-6. **Review N tools** shows the group as it will be made, the ticked operations as its tools, each with the piece of the spec it comes from, and the rest as **Skipped**. Nothing is saved until **Create group with N tools**.
+3. Check the group's **Description**: it starts as the spec's own description (`info.description`), which you can rewrite for the agent.
+4. Tick the **operations** that become tools. Reads start ticked; operations that change data start unticked. **Reads only** goes back to that choice; the filter narrows a long list.
+5. Check the **Headers** the spec's security scheme fills in (an `Authorization` header for a Bearer scheme): the value is a stored secret that holds the whole header value, or you paste one and Coffer saves it to Secrets with the group. Then set **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
+6. Optionally **Try an operation**: run one ticked operation once against the spec's base URL, before anything exists (see [Test before you save](#test-before-you-save)).
+7. **Review N tools** shows the group as it will be made, the ticked operations as its tools, each with the piece of the spec it comes from, and the rest as **Skipped**. Nothing is saved until **Create group with N tools**.
 
 Each operation becomes a tool named from its `operationId` — `listInvoices` becomes `billing__list_invoices`. Path and query parameters become arguments; a JSON request body becomes one `body` argument.
 
@@ -42,10 +45,10 @@ A group made by an import shows its spec and when it was fetched, with **Re-impo
 
 ## Add a request by hand
 
-Choose **Add custom tool** and pick the group it goes in:
+Choose **Add custom tool** and pick the group it goes in from the select (type to narrow it):
 
 - **An existing group** — **Continue** opens **Add a request**, which uses that group's base URL and secret. A group's own **Add request** button, in the row above its tools table, opens the same form.
-- **New group** — pick **Add one request by hand**, then fill in the group: name, base URL, headers (the auth header is a row whose value is a stored secret), and default reach. **Create group** moves on to its first request; the group is saved together with that request.
+- **New group** — pick **Add one request by hand**, then fill in the group: name, description, base URL, headers (the auth header is a row whose value is a stored secret), and default reach. **Create group** moves on to its first request; the group is saved together with that request.
 
 The request form asks for:
 
@@ -90,7 +93,7 @@ Each tool also has an on/off switch (**All on · All off** switches every tool o
 With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. Under the search box, **Reach** narrows the list to the groups one agent can use (an agent's **Open Custom tools ›** link lands here with that agent chosen). Groups can be ticked: a selection bar replaces the search, reading "N of M selected" with **Reach**, **Delete** and **×** (a select-all row and **Esc** also clear or extend the selection), so reach or deletion applies to every ticked group at once. A group's page has a header and two tabs, each at its own address (`/custom-tools/billing`, `/custom-tools/billing/tools`), laid out like an MCP server's page:
 
 - the **header** carries three fixed buttons, **Reach**, **Edit group** and **⋯** (Delete group), and a one-line summary of the last 24 hours: calls and errors. When the group's calls fail, a banner under it offers **View calls** (the Activity page, searching the group's name) and the daemon's hand-off, **Hand off to &lt;Agent&gt; ▾**;
-- **Overview** — the group's **definition** (what agents see, `billing__<tool>`, the base URL, the auth header with the secret's name, the timeout and the spec it came from, with **Re-import** for an imported group), then the blocks an MCP server's Overview has: **Last 24 hours** (calls and errors, and per calling agent its calls, errors and last call; **View in Activity** opens the Activity page already searching the group's name), **Requires** (each secret the group's headers cite, by the secret's own name — set, missing or waiting for approval — with **View in Secrets**; a group starts no program, so no CLI is listed) and **Most-called tools** (the busiest four, read-only, with **Show all N in Tools**);
+- **Overview** — the group's **definition** (its description, what agents see, `billing__<tool>`, the base URL, the auth header with the secret's name, the timeout and the spec it came from, with **Re-import** for an imported group), then the blocks an MCP server's Overview has: **Last 24 hours** (calls and errors, and per calling agent its calls, errors and last call; **View in Activity** opens the Activity page already searching the group's name), **Requires** (each secret the group's headers cite, by the secret's own name — set, missing or waiting for approval — with **View in Secrets**; a group starts no program, so no CLI is listed) and **Most-called tools** (the busiest four, read-only, with **Show all N in Tools**);
 - **Tools** — the **tools table**, with a search by tool name and **Add request** in one row above it — each tool's switch, method and path, changes-data flag, its **Exposure** and its calls and errors in 24 hours. Choosing a tool opens its editor in a 640-wide drawer, with the test result under the fields.
 
 ### How each tool reaches agents

@@ -1377,6 +1377,8 @@ export interface components {
             auth_header: string | null;
             /** Base Url */
             base_url: string | null;
+            /** Description */
+            description: string | null;
             /** Location */
             location: string;
             /** Operations */

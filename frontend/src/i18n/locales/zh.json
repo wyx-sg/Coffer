@@ -4644,6 +4644,7 @@
       "nameTaken": "已有同名分组。",
       "putItIn": "放入",
       "newGroupSub": "独立的名称、base URL 和密钥",
+      "noGroupMatches": "没有匹配的分组",
       "startNew": "开始新分组",
       "existingNote": "添加到 {{group}} 的请求使用它的 base URL 和密钥。只有新建分组时才能导入 OpenAPI 规范。",
       "change": "更改",
@@ -4895,7 +4896,8 @@
       "timeoutInvalid": "请输入 1 到 300 之间的整数。",
       "name": "名称",
       "nameHelp": "固定不变——智能体以 {{prefix}} 调用它的工具。",
-      "descriptionHelp": "只有你能看到；智能体看不到。"
+      "descriptionHelp": "智能体搜索工具时会读到它，写清这组 API 是做什么的。",
+      "descriptionPlaceholder": "例如：计费系统的发票和付款"
     },
     "reimport": {
       "action": "重新导入",
@@ -5176,7 +5178,7 @@
     },
     "kind": {
       "mcp_server": "MCP 服务器",
-      "custom_tool": "MCP 服务器",
+      "custom_tool": "自定义工具",
       "skill": "Skill",
       "provider": "模型提供商",
       "channel": "渠道",

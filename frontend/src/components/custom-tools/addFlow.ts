@@ -35,6 +35,8 @@ export const EVERY_AGENT: ReachDraft = { mode: "everywhere", scope: null };
  *  until the flow's last button. */
 export interface GroupDraft {
   name: string;
+  /** What the API is for; agents read it when they search for a tool. */
+  description: string;
   baseUrl: string;
   /** Headers every call sends, a secret only from Coffer. */
   headers: KeyValueSecretRow[];
@@ -52,7 +54,7 @@ export interface ImportDraft {
 }
 
 export function newGroupDraft(name = ""): GroupDraft {
-  return { name, baseUrl: "", headers: [], reach: EVERY_AGENT };
+  return { name, description: "", baseUrl: "", headers: [], reach: EVERY_AGENT };
 }
 
 export function newImportDraft(): ImportDraft {

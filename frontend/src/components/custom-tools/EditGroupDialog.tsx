@@ -22,6 +22,7 @@ import { agentPrefix } from "@/lib/customTools/groups";
 import { headerRowsOf, headersIn } from "./headerRows";
 import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { FormField } from "./FormField";
+import { GroupDescriptionField } from "./GroupDescriptionField";
 
 interface Props {
   group: CustomToolGroup;
@@ -97,17 +98,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
           >
             <Input id={`${id}-name`} className="font-mono" value={group.name} disabled readOnly />
           </FormField>
-          <FormField
-            label={t("customTools.editGroup.description")}
-            htmlFor={`${id}-desc`}
-            help={t("customTools.editGroup.descriptionHelp")}
-          >
-            <Input
-              id={`${id}-desc`}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </FormField>
+          <GroupDescriptionField value={description} onChange={setDescription} />
           <FormField
             label={t("customTools.fields.baseUrl")}
             htmlFor={`${id}-base`}

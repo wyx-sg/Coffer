@@ -52,20 +52,41 @@ def tool_search_descriptor() -> dict[str, Any]:
     return {"name": TOOL_SEARCH_NAME, "description": _DESCRIPTION, "inputSchema": _INPUT_SCHEMA}
 
 
-def _search_corpus(tools: list[dict[str, Any]]) -> list[tuple[str, str]]:
+def _search_corpus(
+    tools: list[dict[str, Any]], about: Mapping[str, str] | None = None
+) -> list[tuple[str, str]]:
     """Build the (name_text, description) pairs the rankers score.
 
     The listed name is doubly namespaced — ``jira__jira_get_issue`` tokenizes as
     jira, jira, get, issue — so the server token lands twice at the ranker's
     name weight, inflating the document length and crowding out the tokens that
     actually carry the intent. Splitting the namespace off collapses it to one.
+
+    A custom-tool group's description (``about``, keyed by group name) joins the
+    description text of each of its tools (spec mcp-gateway "Describe a
+    custom-tool group").
     """
     corpus: list[tuple[str, str]] = []
     for tool in tools:
         server, bare = split_prefixed(str(tool.get("name", "")))
         text = f"{server} {bare}" if server else bare
-        corpus.append((text, str(tool.get("description", ""))))
+        description = str(tool.get("description", ""))
+        group = (about or {}).get(server) if server else None
+        corpus.append((text, f"{description}\n{group}" if group else description))
     return corpus
+
+
+def _result_entry(tool: dict[str, Any], score: float, about: Mapping[str, str]) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "name": tool.get("name", ""),
+        "description": tool.get("description", ""),
+        "inputSchema": tool.get("inputSchema", {}),
+        "score": round(score, 4),
+    }
+    server, _ = split_prefixed(str(entry["name"]))
+    if server and server in about:
+        entry["group_description"] = about[server]
+    return entry
 
 
 def _clamp_top_k(raw: Any) -> int:
@@ -80,6 +101,7 @@ async def execute_tool_search(
     args: dict[str, Any],
     aggregated_tools: list[dict[str, Any]],
     exposure: Mapping[str, str] | None = None,
+    about: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Rank ``aggregated_tools`` against ``args['query']``; return the top-k.
 
@@ -92,6 +114,9 @@ async def execute_tool_search(
     ``exposure`` is the person's per-tool override: among equally scored tools,
     one set to ``search`` (reachable only here) goes ahead of one pinned
     ``listed``, which the agent already sees. Every tool stays searchable.
+
+    ``about`` maps a custom-tool group to its description: scored with the
+    group's tools, and returned beside each as ``group_description``.
     """
     query = args.get("query")
     if not isinstance(query, str) or not query.strip():
@@ -101,21 +126,14 @@ async def execute_tool_search(
     candidates = [
         t for t in aggregated_tools if not str(t.get("name", "")).startswith(COFFER_TOOL_PREFIX)
     ]
-    catalogue = _search_corpus(candidates)
+    groups = about or {}
+    catalogue = _search_corpus(candidates, groups)
 
     overrides = exposure or {}
     prefer = [overrides.get(str(t.get("name", ""))) == "search" for t in candidates]
     ranked = rank_tools(query, catalogue, top_k, prefer=prefer)
 
-    tools = [
-        {
-            "name": candidates[s.index].get("name", ""),
-            "description": candidates[s.index].get("description", ""),
-            "inputSchema": candidates[s.index].get("inputSchema", {}),
-            "score": round(s.score, 4),
-        }
-        for s in ranked
-    ]
+    tools = [_result_entry(candidates[s.index], s.score, groups) for s in ranked]
     return {"tools": tools, "total_searched": len(candidates)}
 
 

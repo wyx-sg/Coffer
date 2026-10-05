@@ -3112,6 +3112,11 @@ components:
           - type: string
           - type: 'null'
           title: Base Url
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
         location:
           title: Location
           type: string
@@ -3144,6 +3149,7 @@ components:
       required:
       - title
       - version
+      - description
       - base_url
       - auth_header
       - source_kind

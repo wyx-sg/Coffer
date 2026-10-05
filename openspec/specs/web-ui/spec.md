@@ -1980,7 +1980,8 @@ The page MUST carry:
   and **Not used** headings. The page has no owner line, no
   owner-type filter, no by-owner view and no "Delete unused".
 - **Used by** — for each secret, what cites it, by kind, current name and slot,
-  each opening that thing's page; a secret nothing cites reads Nothing and is
+  each opening that thing's page; a custom-tool group reads as a custom tool
+  and opens its group page, though it is an `mcp_server` underneath; a secret nothing cites reads Nothing and is
   found with the Not used filter.
 - **Add and replace** — store a new secret at once, or replace the value of one
   that exists, at once and without the value ever being shown back (spec
@@ -2065,6 +2066,11 @@ secret capability's, specified with it.
 - **WHEN** its row is chosen
 - **THEN** the list row reads as the server's name and the slot, the address becomes `/secrets/<id>`, and the detail shows the id, the times and the server under Used by, which opens the server's page, with no tabs
 - **AND** a label and description typed in the header show on the row while the id stays the same
+
+#### Scenario: a custom-tool group under Used by reads as a custom tool
+- **GIVEN** a secret cited by the custom-tool group `billing` and by the MCP server `github`
+- **WHEN** its Used by is shown
+- **THEN** `billing` reads as a custom tool and opens `/custom-tools/billing`, while `github` reads as an MCP server and opens its own page
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen
@@ -2680,6 +2686,9 @@ gateway as every other MCP server, and carries:
 - a **name**, fixed once the group exists, which is the prefix every agent sees:
   a tool reaches agents as `<group>__<tool>`, under the same name rules as any
   MCP server ([mcp-gateway](../mcp-gateway/spec.md) "Manage MCP servers as resources");
+- a **description** of what its API is for, which agents read when they search
+  for a tool ([mcp-gateway](../mcp-gateway/spec.md) "Describe a custom-tool group"),
+  shown first in the group's definition;
 - a shared **base URL** its tools' paths are relative to;
 - **header rows** — each a name and a value that is plain text or one stored
   secret holding the WHOLE header value (nothing is put around it, so a bearer
@@ -2701,7 +2710,9 @@ data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
 to it. The page MUST list the groups under Needs attention, Healthy and Off, the failing
 ones first, each showing what is wrong in place of its tools, and an Off group
 leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
-whose flow asks first for the group. An existing group MUST only take a request
+whose flow asks first for the group, in a select you can type into that starts
+on **New group** and lists every existing group with its source, tool count and
+description. An existing group MUST only take a request
 added by hand, which uses that group's base URL and secret; only a **new** group
 offers the two ways in:
 
@@ -2717,9 +2728,10 @@ offers the two ways in:
   operations that change data are listed but not ticked), tools whose request
   the spec changed (each with the operation's old and new text), and tools it
   would remove — before anything changes;
-  applying keeps every unchanged tool's switch as it was.
-- **Add one request by hand** — the new group's name, base URL, header rows and
-  reach, then its first request: method, path, headers, body template
+  applying keeps every unchanged tool's switch as it was. The spec's own
+  description starts the new group's description, which the user can change.
+- **Add one request by hand** — the new group's name, description, base URL,
+  header rows and reach, then its first request: method, path, headers, body template
   and arguments.
 
 Every request form MUST end with a **Test** section, whose Run runs the request as the form
@@ -2777,7 +2789,7 @@ the gateway").
 - **GIVEN** an OpenAPI document with five operations, three that read data and two that change it
 - **WHEN** the user chooses Add custom tool and New group, imports the document as the group `invoices`, unticks one read, ticks one operation that changes data, and reviews
 - **THEN** the reads started ticked and the operations that change data unticked, and the review lists the three ticked as the tools to create and the other two as Skipped
-- **AND** nothing is created until Create group with 3 tools, which creates `invoices` with only those three and opens its page
+- **AND** nothing is created until Create group with 3 tools, which creates `invoices` with only those three and the spec's description, and opens its page
 
 #### Scenario: re-importing a spec previews the operations it adds and removes
 - **GIVEN** the `billing` group imported with three operations, one of them switched off
@@ -2794,8 +2806,8 @@ the gateway").
 
 #### Scenario: a new group made by hand is saved with its first request
 - **GIVEN** no group named `search-api`
-- **WHEN** the user chooses Add custom tool, picks New group and By hand, fills in `search-api` and its base URL, chooses Create group, then fills in the first request and tests it
-- **THEN** nothing is saved until the user chooses Add to search-api, which creates `search-api` with that one tool
+- **WHEN** the user chooses Add custom tool, keeps New group and picks By hand, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first request and tests it
+- **THEN** nothing is saved until the user chooses Add to search-api, which creates `search-api` with its description and that one tool
 - **AND** the test ran without the group's secret
 
 #### Scenario: the custom tools page with no group shows the first-run panel
@@ -2817,7 +2829,7 @@ the gateway").
 #### Scenario: the custom tools page lists groups by health
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
-- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for an existing or new group and offers Import an OpenAPI spec and Add one request by hand, and no Script type
+- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and offers Import an OpenAPI spec and Add one request by hand, and no Script type
 
 #### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours

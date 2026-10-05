@@ -125,6 +125,8 @@ def test_macos_detection_reads_application_bundles(
     monkeypatch.setattr("sys.platform", "darwin")
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / "Applications" / "iTerm.app").mkdir(parents=True)
+    # Only the throwaway home: a Warp.app in this machine's /Applications must not count.
+    monkeypatch.setattr(terminals, "mac_app_dirs", lambda: [tmp_path / "Applications"])
     monkeypatch.setattr(terminals, "_MAC_SYSTEM_APPS", tmp_path / "System")
     (tmp_path / "System" / "Terminal.app").mkdir(parents=True)
     _on_path(monkeypatch, "orca")

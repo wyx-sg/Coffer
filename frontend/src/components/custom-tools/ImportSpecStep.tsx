@@ -1,5 +1,5 @@
 // src/components/custom-tools/ImportSpecStep.tsx — Import step 1 of 2: the new group's name, the spec, the
-// operations to turn into tools, and the auth, secret and reach the spec prefills.
+// operations to turn into tools, and the description, auth, secret and reach the spec prefills.
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Play } from "lucide-react";
@@ -13,6 +13,7 @@ import { isGroupName } from "@/lib/customTools/drafts";
 import { useReadOpenApi } from "@/lib/hooks/useCustomTools";
 import { defaultPicks, headerRowsFromSpec, type GroupDraft, type ImportDraft } from "./addFlow";
 import { FormField } from "./FormField";
+import { GroupDescriptionField } from "./GroupDescriptionField";
 import { GroupHeaderRows } from "./GroupHeaderRows";
 import { GroupReachField } from "./GroupReachField";
 import { OperationPicker } from "./OperationPicker";
@@ -45,6 +46,8 @@ export function ImportSpecStep(props: Props) {
     onGroup({
       ...group,
       baseUrl: reading.base_url ?? group.baseUrl,
+      // The spec's info.description; a description of the person's own stays.
+      description: group.description.trim() ? group.description : (reading.description ?? ""),
       // The spec's security scheme names one header; a row of the person's own stays.
       headers: group.headers.length > 0 ? group.headers : headerRowsFromSpec(reading.auth_header),
     });
@@ -114,6 +117,10 @@ export function ImportSpecStep(props: Props) {
               reading={reading}
               picked={spec.picked}
               onPicked={(picked) => onSpec({ ...spec, picked })}
+            />
+            <GroupDescriptionField
+              value={group.description}
+              onChange={(description) => onGroup({ ...group, description })}
             />
             {reading.base_url ? null : (
               <FormField

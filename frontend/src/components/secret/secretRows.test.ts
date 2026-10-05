@@ -1,6 +1,8 @@
 // src/components/secret/secretRows.test.ts — the Secrets page's row helpers: names, references, citers, groups.
 import { describe, expect, test } from "vitest";
 
+import { acceptance } from "@/test/acceptance";
+
 import type { SecretRef } from "@/lib/api/secret";
 import {
   citersFromRefusal,
@@ -9,6 +11,7 @@ import {
   isMissingHere,
   isValidSecretName,
   referenceOf,
+  shownCiter,
 } from "./secretRows";
 import { shortDate } from "./secretTimes";
 
@@ -113,6 +116,24 @@ describe("secretRows", () => {
       { key: "channel:c1", kind: "channel", uid: "c1", name: "SeaTalk", href: "/channels/c1" },
     ]);
     expect(citersFromRefusal(null)).toEqual([]);
+  });
+
+  acceptance("web-ui", "a custom-tool group under Used by reads as a custom tool", () => {
+    const [group, server] = citersOf(
+      ref({
+        ref: "a",
+        cited_by: [
+          { uid: "g1", kind: "mcp_server", name: "billing", slot: "Authorization" },
+          { uid: "s1", kind: "mcp_server", name: "github", slot: "GITHUB_TOKEN" },
+        ],
+      }),
+    );
+    const groups = new Set(["billing"]);
+    expect(shownCiter(group, groups)).toMatchObject({
+      kind: "custom_tool",
+      href: "/custom-tools/billing",
+    });
+    expect(shownCiter(server, groups)).toEqual(server);
   });
 
   test("a ref is missing on this Mac when it is not stored, or stored under another key", () => {

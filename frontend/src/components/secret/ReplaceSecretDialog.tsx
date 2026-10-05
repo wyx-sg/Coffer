@@ -25,6 +25,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { useSetSecret } from "@/lib/hooks/useSecrets";
 import { citersOf, displayName, isMissingHere } from "./secretRows";
 import { useKindLabel } from "./useKindLabel";
+import { useShownCiter } from "./useShownCiter";
 
 interface Props {
   row: SecretRef | null;
@@ -37,6 +38,7 @@ export function ReplaceSecretDialog({ row, onOpenChange }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const kindLabel = useKindLabel();
+  const shown = useShownCiter();
   const set = useSetSecret();
   const valueId = useId();
   const [value, setValue] = useState("");
@@ -51,7 +53,7 @@ export function ReplaceSecretDialog({ row, onOpenChange }: Props) {
 
   if (!row) return null;
   const name = displayName(row, t("secrets.unnamed"));
-  const citers = citersOf(row);
+  const citers = citersOf(row).map(shown);
   const storing = isMissingHere(row);
 
   const submit = async () => {

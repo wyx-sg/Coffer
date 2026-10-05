@@ -68,7 +68,7 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
     // A first-run card names a way into a new group: open on that way's first step.
     const into = !start?.target || start.target === NEW_GROUP ? start?.way : undefined;
     setStep(start?.step ?? (into ? (into === "import" ? "importSpec" : "newGroup") : "choose"));
-    setTarget(into ? NEW_GROUP : (start?.target ?? ""));
+    setTarget(start?.target ?? NEW_GROUP);
     setSaving(false);
     setSaveError(null);
     setWay(start?.way ?? "import");
@@ -106,6 +106,7 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
   };
   const groupBody = (): CustomToolGroupIn => ({
     name: group.name,
+    description: group.description.trim() || null,
     base_url: group.baseUrl.trim(),
     headers: headersIn(group.headers),
     agents: group.reach.mode === "restricted" ? (group.reach.scope?.agents ?? []) : null,
