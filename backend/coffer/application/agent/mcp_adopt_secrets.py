@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from typing import Protocol
 
 from coffer.domain.agent.mcp_entries import McpEntry
+from coffer.domain.auth_scheme import split_scheme
 from coffer.domain.workspace_errors import AdoptSecretRefExists
 
 
@@ -47,7 +48,9 @@ async def write_new_refs(store: SecretStorePort, refs: Mapping[str, str], entry:
         written: list[str] = []
         try:
             for key, ref in refs.items():
-                value = entry.env[key] if key in entry.env else entry.headers[key]
+                # A header's scheme (`Bearer …`) goes on the slot, not into the
+                # secret: the store keeps the credential alone.
+                value = entry.env[key] if key in entry.env else split_scheme(entry.headers[key])[1]
                 store.set(ref, value)
                 written.append(ref)
         except Exception:

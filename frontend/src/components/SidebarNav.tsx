@@ -2,10 +2,12 @@
 // Layout owns the rail (width, collapse state, brand, search, footer); this
 // file owns what goes in it — the entries of `lib/navigation.ts`, filtered by
 // the experimental switches — and one row's rendering.
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, matchPath } from "react-router-dom";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { prefetchAllAgentSessions } from "@/lib/hooks/useAllAgentSessions";
 import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_GROUPS, type NavEntry } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -18,7 +20,11 @@ interface RowProps {
 
 function NavRow({ entry, collapsed, active }: RowProps) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const label = t(entry.labelKey);
+  // Hover or keyboard focus on Conversations warms its first page, so the page
+  // opens on data already read (the cache keeps it fresh for 30s).
+  const warm = entry.to === "/conversations" ? () => void prefetchAllAgentSessions(qc) : undefined;
   // An experimental feature's entry says so in the rail tooltip (the row
   // itself stays plain; the page's title carries the tag) — spec
   // experimental-features "Mark an experimental feature's sidebar entry".
@@ -26,6 +32,8 @@ function NavRow({ entry, collapsed, active }: RowProps) {
   const link = (
     <Link
       to={entry.to}
+      onPointerEnter={warm}
+      onFocus={warm}
       aria-current={active ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
@@ -100,12 +108,7 @@ export function SidebarNav({ collapsed, pathname }: Props) {
             <div className="nav-group-label">{t(group.labelKey)}</div>
           )}
           {group.entries.map((entry) => (
-            <NavRow
-              key={entry.to}
-              entry={entry}
-              collapsed={collapsed}
-              active={isActive(entry)}
-            />
+            <NavRow key={entry.to} entry={entry} collapsed={collapsed} active={isActive(entry)} />
           ))}
         </div>
       ))}

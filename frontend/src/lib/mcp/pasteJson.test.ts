@@ -106,7 +106,7 @@ describe("parseJsonPaste — shapes", () => {
       }),
     );
     expect(s.env).toEqual([
-      { key: "Authorization", value: "Bearer abc", isSecret: true },
+      { key: "Authorization", value: "abc", isSecret: true, scheme: "Bearer" },
       { key: "X-Region", value: "us-east", isSecret: false },
     ]);
   });

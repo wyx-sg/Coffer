@@ -452,6 +452,7 @@
       "addVariable": "Add variable",
       "addHeader": "Add header",
       "hint": "Secret values stay in Coffer's keychain; the agent's config never holds them.",
+      "hintHeaders": "Secret values stay in Coffer's keychain; the agent's config never holds them. A secret header holds only the key; the auth scheme (Bearer or Token) is added in front of it when Coffer sends the request.",
       "none": "None yet."
     },
     "timeouts": {
@@ -4789,7 +4790,7 @@
       "availableTo": "Available to",
       "availableToHelp": "Every tool in the group is available to these agents.",
       "headers": "Headers",
-      "headersHelp": "Coffer adds these to every call; secret values stay in Coffer's keychain and agents never see them."
+      "headersHelp": "Coffer adds these to every call; secret values stay in Coffer's keychain and agents never see them. A secret header holds only the key; its auth scheme (Bearer or Token) is added in front when Coffer sends the call."
     },
     "import": {
       "title": "Import an OpenAPI spec",
@@ -5240,7 +5241,9 @@
     "addVariable": "Add variable",
     "readsFrom": "reads from",
     "storeHint": "This looks like a secret.",
-    "storeIt": "Store it in Coffer?"
+    "storeIt": "Store it in Coffer?",
+    "schemeOf": "Auth scheme of {{key}}",
+    "schemeNone": "None"
   },
   "secrets": {
     "title": "Secrets",

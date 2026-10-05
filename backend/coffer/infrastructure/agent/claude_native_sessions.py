@@ -2,8 +2,9 @@
 
 ``claude_agent_sdk.list_sessions`` reads each session file's head and tail (no
 parse of the conversation) and returns what a list needs; ``rename_session`` and
-``delete_session`` change the agent's own store. Coffer keeps no copy and no
-cache of any of it.
+``delete_session`` change the agent's own store. This source keeps
+nothing; the application layer's ``SnapshotSessionSource`` holds the last answer
+in memory for a few minutes (never on disk) so a repeated read is not repeated work.
 
 The SDK locates sessions through ``CLAUDE_CONFIG_DIR`` in ``os.environ``. A
 registered agent whose config directory is not ``~/.claude`` therefore gets the

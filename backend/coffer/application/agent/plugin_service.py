@@ -153,6 +153,22 @@ class AgentPluginService:
             contents=contents,
         )
 
+    async def enabled_install_roots(self, uid: str) -> list[tuple[str, str]]:
+        """``(plugin id, package root)`` for every enabled plugin whose package
+        is on disk, in listing order — what ``get_plugin(...).install_path``
+        reports for each, from one listing instead of one listing per plugin."""
+        if self._detail_reader is None:
+            return []
+        out = await self.list_plugins(uid)
+        roots: list[tuple[str, str]] = []
+        for view in out.items:
+            if not view.enabled or not view.cache_present or not view.install_path:
+                continue
+            root = self._detail_reader.resolve_root(view.install_path)
+            if root is not None:
+                roots.append((view.id, root))
+        return roots
+
     async def get_part(self, uid: str, plugin_id: str, kind: str, name: str) -> PluginPart:
         """One skill, command, subagent or MCP server the plugin's package holds
         (``kind`` is ``skills`` / ``commands`` / ``agents`` / ``mcp-servers``),

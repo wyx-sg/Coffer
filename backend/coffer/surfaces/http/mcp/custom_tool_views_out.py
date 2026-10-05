@@ -50,6 +50,7 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
             name=name,
             value=None,
             secret=secret_name_of(ref),
+            scheme=t.auth_schemes.get(name),
             secret_state=view.header_states.get(name, "present"),
         )
         for name, ref in t.secret_refs.items()

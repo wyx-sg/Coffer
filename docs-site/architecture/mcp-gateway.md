@@ -245,7 +245,7 @@ sequenceDiagram
 
 ### Secret materialisation
 
-Server config never holds a secret. A stdio server's `env` and an HTTP server's `headers` reject values that look like tokens (`Bearer …`, `ghp_…`, `sk-…`, JWT prefixes, and similar). Secrets are named in `secret_refs`, a map from an env var or header name to a secret ref.
+Server config never holds a secret. A stdio server's `env` and an HTTP server's `headers` reject values that look like tokens (`Bearer …`, `ghp_…`, `sk-…`, JWT prefixes, and similar). Secrets are named in `secret_refs`, a map from an env var or header name to a secret ref. A secret header holds only the credential; the header's auth scheme (Bearer, Token or none) is stored beside the ref and put in front of the key when the request goes out, and a header with no scheme sends the secret as is.
 
 At spawn time, the secret resolver runs in a worker thread and turns the refs into plaintext from the encrypted store:
 
@@ -327,7 +327,7 @@ An upstream's in-band `isError` result is not an error at this layer. It passes 
 
 ## Custom tools: the HTTP API transport
 
-A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its config holds a base URL, static headers, an auth header and prefix, the one secret ref that header carries, a timeout and a list of tools; each tool is a method, a path template, headers, a body template, a JSON Schema for its arguments, an on/off switch and a changes-data flag. The user-facing side is the [Custom tools guide](/guides/custom-tools).
+A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its config holds a base URL, static headers, an auth header with its auth scheme, the one secret ref that header carries (the credential only, with the scheme added when the request is sent), a timeout and a list of tools; each tool is a method, a path template, headers, a body template, a JSON Schema for its arguments, an on/off switch and a changes-data flag. The user-facing side is the [Custom tools guide](/guides/custom-tools).
 
 ### Principles
 

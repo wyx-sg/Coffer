@@ -31,6 +31,7 @@ import httpx
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.domain.auth_scheme import with_schemes
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.http_api_render import RenderedRequest, RenderError, render_request
@@ -141,7 +142,7 @@ def build_request(
         input_schema=tool.input_schema,
         arguments=arguments,
     )
-    for header, value in header_overlay.items():
+    for header, value in with_schemes(header_overlay, transport.auth_schemes).items():
         # Header names compare case-insensitively: drop any spelling a tool gave.
         for name in [n for n in rendered.headers if n.lower() == header.lower()]:
             del rendered.headers[name]

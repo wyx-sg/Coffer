@@ -16,6 +16,9 @@ export interface ParsedEnvVar {
   value: string;
   /** Heuristic default — the user confirms/flips this in the review step. */
   isSecret: boolean;
+  /** HTTP header, secret row: the auth scheme Coffer puts in front of the secret when sending
+   *  (`Bearer <key>`); null or absent: the secret is sent as is. */
+  scheme?: "Bearer" | "Token" | null;
   /** Secret row: the stored secret it cites instead of a typed value —
    *  `secret/<name>` (Secrets page) or the server's own minted ref. Null or
    *  absent: `value` is stored as a new secret (or, with `storedRef`, written

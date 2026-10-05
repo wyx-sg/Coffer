@@ -5,14 +5,14 @@
 // shell reads that list on its own slow tick; while the window is open the
 // page reads the same query key every page shares, so a resolve or an ignore
 // anywhere — each invalidates it — reaches the tray as soon as the refetch
-// lands. The short interval covers changes no mutation on this page made.
+// lands. The interval covers changes no mutation on this page made.
 import { useEffect } from "react";
 
 import { useAttention } from "@/lib/hooks/useAttention";
 import { inDesktopShell, shellInvoke } from "@/lib/tauri";
 
 /** How often the open window re-reads the list with nothing prompting it. */
-const REFRESH_MS = 10_000;
+const REFRESH_MS = 30_000;
 
 /** Tell the shell the list's length (`tray::set_attention_count`). */
 function reportCount(count: number): Promise<void> {

@@ -31,6 +31,7 @@ severity.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -163,6 +164,15 @@ class AttentionSource(Protocol):
     async def items(self) -> Sequence[AttentionItem]: ...
 
 
+async def _ask(source: AttentionSource) -> Sequence[AttentionItem] | Exception:
+    """One source's items, or the exception it raised — one failing source must
+    not cancel the others."""
+    try:
+        return await source.items()
+    except Exception as exc:
+        return exc
+
+
 class AttentionService:
     def __init__(
         self,
@@ -179,15 +189,21 @@ class AttentionService:
 
     async def report(self) -> AttentionReport:
         """Ask every source that applies now. Writes nothing."""
+        asked = [
+            source
+            for source in self._sources
+            if source.feature is None or self._feature_enabled(source.feature)
+        ]
+        # The sources are independent and mostly wait on I/O, so they are asked
+        # together; their answers are read back in source order.
+        answers = await asyncio.gather(*(_ask(source) for source in asked))
         found: list[AttentionItem] = []
         errors: list[SourceError] = []
-        for source in self._sources:
-            if source.feature is not None and not self._feature_enabled(source.feature):
-                continue
-            try:
-                found.extend(await source.items())
-            except Exception as exc:
-                errors.append(SourceError(source.name, repr(exc)))
+        for source, answer in zip(asked, answers, strict=True):
+            if isinstance(answer, Exception):
+                errors.append(SourceError(source.name, repr(answer)))
+            else:
+                found.extend(answer)
         found = [
             i if i.handoff is not None else replace(i, handoff=fallback_handoff(i)) for i in found
         ]

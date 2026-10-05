@@ -49,6 +49,46 @@ function row(over: Partial<KeyValueSecretRow> = {}): KeyValueSecretRow {
   return { key: "GITHUB_TOKEN", value: { kind: "stored", name: "GITHUB_TOKEN" }, ...over };
 }
 
+describe("configTextFrom auth_schemes", () => {
+  const http = (rows: KeyValueSecretRow[]) =>
+    JSON.parse(
+      configTextFrom(
+        {
+          transport: { type: "http", url: "https://x.example/mcp", auth_schemes: { Old: "Token" } },
+        },
+        { type: "http", url: "https://x.example/mcp", command: "", args: [], cwd: "", rows },
+      ),
+    ).transport;
+
+  test("an HTTP server writes the schemes of its secret rows and drops the old ones", () => {
+    const transport = http([
+      { key: "Authorization", value: { kind: "stored", name: "tok" } },
+      { key: "X-Plain", value: { kind: "plain", value: "1" } },
+    ]);
+    expect(transport.auth_schemes).toEqual({ Authorization: "Bearer" });
+  });
+
+  test("no scheme, no field; a stdio server never gets one", () => {
+    expect(
+      http([{ key: "X", value: { kind: "stored", name: "t" }, scheme: null }]),
+    ).not.toHaveProperty("auth_schemes");
+    const stdio = JSON.parse(
+      configTextFrom(
+        { transport: { type: "stdio", command: "npx", args: [] } },
+        {
+          type: "stdio",
+          url: "",
+          command: "npx",
+          args: [],
+          cwd: "",
+          rows: [{ key: "Authorization", value: { kind: "stored", name: "t" } }],
+        },
+      ),
+    ).transport;
+    expect(stdio).not.toHaveProperty("auth_schemes");
+  });
+});
+
 async function save(rows: KeyValueSecretRow[], res = resource()) {
   return saveMcpServerEdit({
     resource: res,

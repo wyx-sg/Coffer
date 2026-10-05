@@ -205,3 +205,17 @@ def test_read_contents_ignores_malformed_hooks_and_mcp(tmp_path: pathlib.Path) -
     assert c is not None
     assert c.hooks == ()
     assert c.mcp_servers == ()
+
+
+def test_resolve_root_matches_read_contents_root(tmp_path: pathlib.Path) -> None:
+    name_dir = tmp_path / "cache" / "mkt" / "hud"
+    _write(name_dir / "9.0" / ".codex-plugin" / "plugin.json", "{}")
+    _write(name_dir / "26.1" / ".codex-plugin" / "plugin.json", "{}")
+    reader = FsPluginDetailReader()
+
+    contents = reader.read_contents(str(name_dir))
+
+    assert contents is not None
+    assert reader.resolve_root(str(name_dir)) == contents.root == str(name_dir / "26.1")
+    assert reader.resolve_root(str(tmp_path / "missing")) is None
+    assert reader.resolve_root("") is None

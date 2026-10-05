@@ -25,6 +25,7 @@ import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_injection import default_container_key
+from coffer.domain.auth_scheme import split_scheme
 from coffer.domain.errors import ConfigFileFormatInvalid
 from coffer.domain.workspace_errors import AgentConfigParseError, McpEntryNotFound
 
@@ -346,9 +347,16 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
 
     # http transport
     plain_headers = {k: v for k, v in entry.headers.items() if k not in secret_refs}
+    # `Authorization: Bearer <key>` stores the key; the scheme stays on the slot.
+    schemes = {
+        k: scheme
+        for k in secret_refs
+        if k in entry.headers and (scheme := split_scheme(entry.headers[k])[0])
+    }
     return {
         "type": "http",
         "url": entry.url,
         "headers": plain_headers,
         "secret_refs": dict(secret_refs),
+        "auth_schemes": schemes,
     }

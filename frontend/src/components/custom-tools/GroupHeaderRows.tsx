@@ -26,6 +26,7 @@ export function GroupHeaderRows({ rows, onChange, help, group }: Props) {
         label={t("customTools.fields.headers")}
         keyPlaceholder={t("customTools.editor.headerKey")}
         addLabel={t("customTools.editor.addHeader")}
+        schemes
         secretLabelFor={(key) => [group, key].filter(Boolean).join("-")}
       />
       <p className="text-xs text-text-muted">{help}</p>

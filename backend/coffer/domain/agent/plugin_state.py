@@ -28,7 +28,7 @@ from typing import Any
 
 import tomlkit
 
-from coffer.domain.agent.mcp_entries import _parse_json, _parse_toml
+from coffer.domain.agent.mcp_entries import _parse_json, _parse_toml, _parse_toml_readonly
 from coffer.domain.errors import ConfigFileFormatInvalid
 from coffer.domain.workspace_errors import AgentConfigParseError, PluginNotFound
 
@@ -95,7 +95,7 @@ def parse_codex(text: str) -> tuple[list[PluginInfo], list[MarketplaceInfo]]:
     malformed TOML.
     """
     try:
-        doc = _parse_toml(text)
+        doc = _parse_toml_readonly(text)
     except ConfigFileFormatInvalid as e:
         raise AgentConfigParseError("<config>", str(e)) from e
 

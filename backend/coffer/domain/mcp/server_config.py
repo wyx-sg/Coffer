@@ -11,8 +11,9 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
+from coffer.domain.auth_scheme import AuthScheme, check_schemes
 from coffer.domain.mcp.http_api import HttpApiTransport
 
 # Patterns that look like secrets — if a static env/header value matches,
@@ -58,11 +59,19 @@ class HttpTransport(BaseModel):
     url: HttpUrl
     headers: dict[str, str] = Field(default_factory=dict)
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    #: ``{header name: scheme}`` — a secret header sent as ``<scheme> <secret>``
+    #: (``coffer.domain.auth_scheme``); a header not named sends its secret as is.
+    auth_schemes: dict[str, AuthScheme] = Field(default_factory=dict)
 
     @field_validator("headers")
     @classmethod
     def _no_secrets_in_headers(cls, v: dict[str, str]) -> dict[str, str]:
         return _reject_secret_values(v)
+
+    @model_validator(mode="after")
+    def _schemes_on_secret_headers(self) -> HttpTransport:
+        check_schemes(self.auth_schemes, self.secret_refs)
+        return self
 
 
 Transport = Annotated[

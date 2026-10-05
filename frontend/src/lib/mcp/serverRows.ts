@@ -6,6 +6,7 @@
 // stored secret, or a new one written to Secrets when the form is submitted. A
 // config keeps plain values in `transport.env` (stdio) or `transport.headers`
 // (HTTP) and a chosen secret in `transport.secret_refs` as `secret/<name>`.
+import { schemeOfRow, storePlainRow, type AuthScheme } from "@/lib/authScheme";
 import { mintSecretName, secretNameOf, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
 import type { ParsedEnvVar } from "./pasteTypes";
 
@@ -30,13 +31,21 @@ export const askedKeysOf = (env: readonly ParsedEnvVar[]): Set<string> =>
  *  as an empty plain row the person types into (see `promoteAsked`). */
 export function rowsFromParsed(env: ParsedEnvVar[], askAsPlain = false): KeyValueSecretRow[] {
   return env.map((e) => {
+    // A header's scheme is what the paste said; none said = the secret is sent as is. A plain row
+    // that waits for its secret carries the scheme along until it is promoted.
+    const scheme = e.scheme ?? null;
     if (!e.isSecret || (askAsPlain && e.value === "" && !e.ref)) {
-      return { key: e.key, value: { kind: "plain", value: e.value } };
+      return {
+        key: e.key,
+        value: { kind: "plain", value: e.value },
+        ...(e.isSecret ? { scheme } : {}),
+      };
     }
-    if (e.ref) return { key: e.key, value: { kind: "stored", name: refLabel(e.ref) } };
+    if (e.ref) return { key: e.key, value: { kind: "stored", name: refLabel(e.ref) }, scheme };
     return {
       key: e.key,
       value: { kind: "new", name: mintSecretName(), label: e.key, value: e.value },
+      scheme,
     };
   });
 }
@@ -51,10 +60,7 @@ export function promoteAsked(
   return rows.map((r) => {
     const key = r.key.trim();
     if (!asked.has(key) || r.value.kind !== "plain" || r.value.value === "") return r;
-    return {
-      ...r,
-      value: { kind: "new", name: mintSecretName(), label: key, value: r.value.value },
-    };
+    return storePlainRow(r, key);
   });
 }
 
@@ -73,6 +79,36 @@ export const keptRows = (rows: readonly KeyValueSecretRow[]) =>
 export function plainMapOfRows(rows: readonly KeyValueSecretRow[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const r of keptRows(rows)) if (r.value.kind === "plain") out[r.key.trim()] = r.value.value;
+  return out;
+}
+
+/** The schemes of an HTTP server's secret rows as `auth_schemes`: header → scheme. A secret
+ *  without one is left out: it is sent as is. */
+function authSchemesOfRows(rows: readonly KeyValueSecretRow[]): Record<string, AuthScheme> {
+  const out: Record<string, AuthScheme> = {};
+  for (const r of keptRows(rows)) {
+    const scheme = schemeOfRow(r);
+    if (scheme) out[r.key.trim()] = scheme;
+  }
+  return out;
+}
+
+/** `{ auth_schemes }` for an HTTP transport, or nothing when no secret header names a scheme. */
+export function authSchemesField(rows: readonly KeyValueSecretRow[]): {
+  auth_schemes?: Record<string, AuthScheme>;
+} {
+  const schemes = authSchemesOfRows(rows);
+  return Object.keys(schemes).length > 0 ? { auth_schemes: schemes } : {};
+}
+
+/** The schemes a stored config names, by header. */
+function authSchemesOf(config: unknown): Record<string, AuthScheme> {
+  const transport = (config as Record<string, unknown> | null)?.transport;
+  const raw = (transport as Record<string, unknown> | undefined)?.auth_schemes;
+  const out: Record<string, AuthScheme> = {};
+  if (raw && typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) if (v === "Bearer" || v === "Token") out[k] = v;
+  }
   return out;
 }
 
@@ -120,12 +156,14 @@ function refsOf(config: unknown): Record<string, string> {
 /** The refs a stored config cites, by key. */
 export const secretRefsOf = refsOf;
 
-/** The rows a stored config loads as: each cited secret as a stored choice,
- *  then each plain value. */
+/** The rows a stored config loads as: each cited secret as a stored choice
+ *  (with the scheme the config names for it; none = sent as is), then each plain value. */
 export function rowsOf(config: unknown, plain: { key: string; value: string }[]) {
+  const schemes = authSchemesOf(config);
   const secrets: KeyValueSecretRow[] = Object.entries(refsOf(config)).map(([key, ref]) => ({
     key,
     value: { kind: "stored", name: refLabel(ref) },
+    scheme: schemes[key] ?? null,
   }));
   const plains: KeyValueSecretRow[] = plain.map((p) => ({
     key: p.key,

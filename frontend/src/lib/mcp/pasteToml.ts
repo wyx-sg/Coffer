@@ -4,7 +4,7 @@
 // (`~/.codex/config.toml`), one or many, mapped onto the JSON server shape
 // and read by the same `parseServerConfig`.
 
-import type { ParsedServer, PasteResult } from "./pasteTypes";
+import type { ParsedEnvVar, ParsedServer, PasteResult } from "./pasteTypes";
 import { unreadable } from "./pasteTypes";
 import { envVar } from "./secretDetection";
 import { isObject, parseServerConfig } from "./serverConfig";
@@ -20,12 +20,13 @@ export function looksLikeCodexToml(text: string): boolean {
  * Bearer $X` from its own environment. Coffer has no such environment to read,
  * and inventing a `Bearer ${X}` placeholder would register a literal that is
  * never expanded. So the least surprising mapping is an `Authorization`
- * header marked secret with an EMPTY value: the review shows the header the
- * server needs, and the user supplies the token (as `Bearer <token>`) there.
+ * header marked secret with an EMPTY value under the scheme Bearer: the review
+ * shows the header the server needs, and the user supplies the token alone;
+ * Coffer puts `Bearer ` in front of it when sending.
  */
-function bearerHeader(table: TomlTable): { key: string; value: string; isSecret: true } | null {
+function bearerHeader(table: TomlTable): ParsedEnvVar | null {
   return typeof table.bearer_token_env_var === "string"
-    ? { ...envVar("Authorization", ""), isSecret: true }
+    ? { ...envVar("Authorization", ""), isSecret: true, scheme: "Bearer" }
     : null;
 }
 

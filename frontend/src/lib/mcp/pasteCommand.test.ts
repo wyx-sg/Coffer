@@ -46,7 +46,7 @@ describe("parseCommandPaste — claude mcp add", () => {
       args: [],
       url: "https://mcp.sentry.dev/mcp",
       env: [
-        { key: "Authorization", value: "Bearer abc", isSecret: true },
+        { key: "Authorization", value: "abc", isSecret: true, scheme: "Bearer" },
         { key: "X-Org", value: "acme", isSecret: false },
       ],
     });
@@ -103,7 +103,7 @@ describe("parseCommandPaste — codex mcp add", () => {
     expect([s.transportType, s.url, s.env]).toEqual([
       "http",
       "https://mcp.linear.app/mcp",
-      [{ key: "Authorization", value: "", isSecret: true }],
+      [{ key: "Authorization", value: "", isSecret: true, scheme: "Bearer" }],
     ]);
   });
 });

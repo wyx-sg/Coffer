@@ -2167,9 +2167,14 @@ one component of key · value · delete rows: the value is plain text by default
 with a key button at the end of the field that picks a stored secret instead
 (**Type a plain value** goes back), a plain value that looks like a secret offers
 **Store it in Coffer?**, and a row that cites a secret nothing holds shows the
-Missing warning. A secret bound to a header is the whole header value: the form
-has no prefix field and no Secret | Plain toggle, so a bearer token is stored as
-`Bearer <token>`.
+Missing warning. A secret bound to a header holds the credential alone: a header
+row whose value is a secret MUST offer its auth scheme — **Bearer**, **Token** or
+**None** — in front of the secret, **Bearer** by default on a new `Authorization`
+row, so a bearer token is stored as `<token>` and sent as `Bearer <token>`
+([mcp-gateway](../mcp-gateway/spec.md) "Support stdio and HTTP upstreams"). A
+pasted or imported header value `Bearer <token>` MUST become the secret `<token>`
+with the scheme **Bearer**, and a value typed into a secret row that repeats the
+row's scheme MUST be stored without it. The form has no Secret | Plain toggle.
 
 #### Scenario: a pasted value becomes a new secret written when the form is saved
 - **GIVEN** a secret field named for the thing being configured, whose default name is already taken
@@ -2718,8 +2723,8 @@ gateway as every other MCP server, and carries:
   shown first in the group's definition;
 - a shared **base URL** its tools' paths are relative to;
 - **header rows** — each a name and a value that is plain text or one stored
-  secret holding the WHOLE header value (nothing is put around it, so a bearer
-  token is stored as `Bearer <token>`), chosen by its name on the Secrets page
+  secret holding the credential alone, behind the row's auth scheme (a bearer
+  token is stored as `<token>` with the scheme **Bearer**), chosen by its name on the Secrets page
   or pasted to be saved there with the group (see "Choose secrets in one field
   and one set of rows"): Coffer's gateway adds each header when it calls the API,
   once a person has approved a secret for the group's host

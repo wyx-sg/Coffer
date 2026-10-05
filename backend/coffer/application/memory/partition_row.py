@@ -9,6 +9,7 @@ and the reads; ``service`` re-exports the two public types.
 from __future__ import annotations
 
 import pathlib
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -104,25 +105,84 @@ def config_of(placement: Placement) -> dict[str, str]:
     }
 
 
-def summary_of(row: Resource, placement: Placement) -> PartitionSummary:
-    notes = store.list_notes(row.name)
-    waiting = undistilled(row.name, notes, store.read_retired(row.name))
+@dataclass(frozen=True)
+class _Counted:
+    """What a partition's notes, retirements and raw entries add up to — the
+    parts of a summary that cost parsing every file."""
+
+    note_count: int
+    sources: tuple[str, ...]
+    waiting_entries: int
+    waiting_agents: tuple[str, ...]
+    updated_at: str | None
+
+
+_Fingerprint = tuple[
+    str,
+    tuple[tuple[str, int, int], ...],
+    tuple[tuple[str, int, int], ...],
+    tuple[int, int] | None,
+]
+
+#: Partitions whose counted summary is remembered; the oldest goes first.
+_COUNTED_MEMO_MAX = 512
+_counted_memo: dict[str, tuple[_Fingerprint, _Counted]] = {}
+_counted_lock = threading.Lock()
+
+
+def _count(name: str) -> _Counted:
+    notes = store.list_notes(name)
+    waiting = undistilled(name, notes, store.read_retired(name))
     # The agents behind the partition: whoever a memory was learned from, and
     # whoever left an entry no pass has distilled yet.
     agents = {o.agent for note in notes for o in note.origins} | {e.agent for e in waiting}
     newest = max(notes, key=lambda n: n.updated_at, default=None)
+    return _Counted(
+        note_count=len(notes),
+        sources=tuple(sorted(a for a in agents if a)),
+        waiting_entries=len(waiting),
+        waiting_agents=tuple(sorted({e.agent for e in waiting if e.agent})),
+        updated_at=(newest.updated_at or None) if newest is not None else None,
+    )
+
+
+def _counted(name: str) -> _Counted:
+    """:func:`_count`, remembered against the name, mtime and size of every file
+    it reads (``notes/*.md``, ``.raw/*.md``, ``RETIRED.md``) — a stat each, where
+    the count parses each one. Any file added, removed or rewritten changes the
+    fingerprint, so the answer is never older than the files."""
+    fingerprint: _Fingerprint = (
+        str(paths.partition_dir(name)),
+        paths.notes_signature(name),
+        paths.raw_signature(name),
+        paths.retired_signature(name),
+    )
+    with _counted_lock:
+        hit = _counted_memo.get(name)
+    if hit is not None and hit[0] == fingerprint:
+        return hit[1]
+    counted = _count(name)
+    with _counted_lock:
+        if name not in _counted_memo and len(_counted_memo) >= _COUNTED_MEMO_MAX:
+            _counted_memo.pop(next(iter(_counted_memo)))
+        _counted_memo[name] = (fingerprint, counted)
+    return counted
+
+
+def summary_of(row: Resource, placement: Placement) -> PartitionSummary:
+    counted = _counted(row.name)
     return PartitionSummary(
         uid=row.uid,
         name=row.name,
         repository_key=placement.repository_key,
         repository_path=placement.repository_path,
-        note_count=len(notes),
+        note_count=counted.note_count,
         unresolvable=is_unresolvable(placement),
         distilled_at=_distilled_at(row.name),
-        sources=tuple(sorted(a for a in agents if a)),
-        waiting_entries=len(waiting),
-        waiting_agents=tuple(sorted({e.agent for e in waiting if e.agent})),
-        updated_at=(newest.updated_at or None) if newest is not None else None,
+        sources=counted.sources,
+        waiting_entries=counted.waiting_entries,
+        waiting_agents=counted.waiting_agents,
+        updated_at=counted.updated_at,
     )
 
 

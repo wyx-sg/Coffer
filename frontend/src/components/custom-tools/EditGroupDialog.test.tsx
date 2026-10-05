@@ -38,7 +38,15 @@ vi.mock("@/lib/api/secret", () => ({
 
 const update = customToolsApi.update as unknown as ReturnType<typeof vi.fn>;
 const group = makeGroup({
-  headers: [{ name: "Authorization", value: null, secret: TOKEN_ID, secret_state: "present" }],
+  headers: [
+    {
+      name: "Authorization",
+      value: null,
+      scheme: "Bearer",
+      secret: TOKEN_ID,
+      secret_state: "present",
+    },
+  ],
 });
 
 function open(onOpenChange = vi.fn()) {
@@ -88,7 +96,7 @@ describe("EditGroupDialog", () => {
         "billing",
         expect.objectContaining({
           headers: [
-            { name: "Authorization", secret: TOKEN_ID },
+            { name: "Authorization", secret: TOKEN_ID, scheme: "Bearer" },
             { name: "X-Team", value: "core" },
           ],
           timeout_seconds: 30,
@@ -118,6 +126,10 @@ describe("EditGroupDialog", () => {
     expect(value).toBe("k-9f8e7d6c5b4a3210");
     expect(secretsApi.setNotes).toHaveBeenCalledWith(ref, { label: "billing-X-Api-Key" });
     const body = update.mock.calls[0][1] as { headers: unknown[] };
-    expect(body.headers).toContainEqual({ name: "X-Api-Key", secret: ref.slice("secret/".length) });
+    expect(body.headers).toContainEqual({
+      name: "X-Api-Key",
+      secret: ref.slice("secret/".length),
+      scheme: null,
+    });
   });
 });

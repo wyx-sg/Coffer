@@ -26,6 +26,7 @@ from collections.abc import Awaitable
 
 from fastapi import APIRouter, Depends, Request
 
+from coffer.domain.auth_scheme import with_schemes
 from coffer.domain.mcp.probe import secret_looking, secret_values
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.probe import UrlGuard, probe_server
@@ -33,7 +34,12 @@ from coffer.infrastructure.net.ssrf_guard import check_url
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.handoff_views import unsaved_test_prompt
-from coffer.surfaces.http.mcp.probe_schemas import McpConfigTestIn, McpTestResultOut, result_out
+from coffer.surfaces.http.mcp.probe_schemas import (
+    McpConfigTestIn,
+    McpTestHttpIn,
+    McpTestResultOut,
+    result_out,
+)
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -98,6 +104,9 @@ async def test_mcp_server_config(
     # key looks secret (a token pasted into an ordinary row).
     plain = transport.headers if isinstance(transport, HttpTransport) else transport.env
     hidden = secret_values([*typed.values(), *secret_looking(plain)])
+    if isinstance(body.transport, McpTestHttpIn):
+        # A typed header secret is the key alone; its row's scheme goes in front.
+        typed = with_schemes(typed, body.transport.auth_schemes)
     result = await cancel_on_disconnect(
         request,
         probe_server(

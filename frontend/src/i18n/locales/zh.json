@@ -452,6 +452,7 @@
       "addVariable": "添加变量",
       "addHeader": "添加请求头",
       "hint": "密钥值保存在 Coffer 的钥匙串中；智能体的配置里从不保存它们。",
+      "hintHeaders": "密钥值保存在 Coffer 的钥匙串中；智能体的配置里从不保存它们。密钥请求头只保存密钥本身，Coffer 发送请求时会在它前面加上认证方式（Bearer 或 Token）。",
       "none": "暂无。"
     },
     "timeouts": {
@@ -4789,7 +4790,7 @@
       "availableTo": "可用于",
       "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "headers": "请求头",
-      "headersHelp": "Coffer 会把这些加到每次调用中；密钥的值保存在 Coffer 的钥匙串里，智能体永远看不到。"
+      "headersHelp": "Coffer 会把这些加到每次调用中；密钥的值保存在 Coffer 的钥匙串里，智能体永远看不到。密钥请求头只保存密钥本身，Coffer 发送调用时会在它前面加上认证方式（Bearer 或 Token）。"
     },
     "import": {
       "title": "导入 OpenAPI 规范",
@@ -5240,7 +5241,9 @@
     "addVariable": "添加变量",
     "readsFrom": "读取自",
     "storeHint": "这看起来像一个密钥。",
-    "storeIt": "存入 Coffer？"
+    "storeIt": "存入 Coffer？",
+    "schemeOf": "{{key}} 的认证方式",
+    "schemeNone": "无"
   },
   "secrets": {
     "title": "密钥",

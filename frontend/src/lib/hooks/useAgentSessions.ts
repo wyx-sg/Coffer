@@ -13,8 +13,10 @@ import { agentSessionsKey, allAgentSessionsKey } from "@/lib/api/queryKeys";
 import { FIRST_PAGE, MORE_PAGE, useInfiniteList } from "@/lib/hooks/useInfiniteList";
 
 // Sessions are not on the daemon's change feed: the list re-reads itself while
-// the page is visible, so a Running mark keeps up without a reload.
-const REFRESH_MS = 10_000;
+// the page is visible, so a Running mark keeps up without a reload. The daemon
+// serves listings from a short snapshot and a poll may start one background
+// refresh of the agent, so the tick is 30s.
+const REFRESH_MS = 30_000;
 
 export function useAgentSessions(uid: string, q: string) {
   return useInfiniteList<AgentSession>({

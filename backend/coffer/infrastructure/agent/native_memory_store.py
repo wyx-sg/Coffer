@@ -10,7 +10,9 @@ already proved is the agent's — hands back its tree and its files (delegated t
 
 from __future__ import annotations
 
+import os
 import pathlib
+import threading
 
 from coffer.domain.agent.native_memory import (
     MemoryFileContent,
@@ -48,6 +50,17 @@ def _inline_memory_file(memory_dir: pathlib.Path) -> pathlib.Path | None:
     return index if has_content else None
 
 
+def _fact_count(memory_dir: pathlib.Path) -> int:
+    """``*.md`` files other than the index, from a single directory scan."""
+    try:
+        with os.scandir(memory_dir) as it:
+            return sum(
+                1 for e in it if e.name.endswith(".md") and e.name != _INDEX_FILE and e.is_file()
+            )
+    except OSError:
+        return 0
+
+
 def _resolve_project_path(memory_dir: pathlib.Path) -> str | None:
     """Recover the REAL absolute project path that ``memory_dir`` belongs to.
 
@@ -65,9 +78,66 @@ def _resolve_project_path(memory_dir: pathlib.Path) -> str | None:
     return cwd_from_transcripts(memory_dir.parent, encode_slug)
 
 
+#: How many projects' recovered paths one scanner remembers.
+_PATH_MEMO_MAX = 2048
+
+_Signature = int
+
+
+def _transcript_signature(project_dir: pathlib.Path) -> _Signature | None:
+    """The project directory's mtime — it moves whenever a session transcript is
+    created or removed, and costs one stat where listing the transcripts costs a
+    directory scan. ``None`` when it cannot be read (nothing is then remembered)."""
+    try:
+        return project_dir.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _remember[V](memo: dict[pathlib.Path, V], key: pathlib.Path, value: V) -> None:
+    """Insert into a bounded memo, dropping the oldest entry when full."""
+    if key not in memo and len(memo) >= _PATH_MEMO_MAX:
+        memo.pop(next(iter(memo)))
+    memo[key] = value
+
+
 class FileNativeMemoryScanner:
     """Scans an agent's native memory: Claude Code's per-project dirs and Codex's
-    single global task-grouped store."""
+    single global task-grouped store.
+
+    Recovering a project's real path reads its transcripts, so the answer is
+    remembered per project directory (bounded, in memory only). A recovered path
+    is kept as is: the slug encodes the path, so the same directory cannot come
+    to name another one. "No transcript says" is kept only against the project
+    directory's mtime, so a new or removed transcript triggers a fresh read (a
+    transcript that merely grows into a matching ``cwd`` is picked up with the
+    next one; until then the caller's slug-decode guess stands).
+    """
+
+    def __init__(self) -> None:
+        self._found: dict[pathlib.Path, str] = {}
+        self._missing: dict[pathlib.Path, _Signature] = {}
+        # ``scan`` runs on worker threads; two requests may overlap.
+        self._lock = threading.Lock()
+
+    def _project_path(self, memory_dir: pathlib.Path) -> str | None:
+        project_dir = memory_dir.parent
+        with self._lock:
+            known = self._found.get(project_dir)
+        if known is not None:
+            return known
+        sig = _transcript_signature(project_dir)
+        with self._lock:
+            if sig is not None and self._missing.get(project_dir) == sig:
+                return None
+        found = _resolve_project_path(memory_dir)
+        with self._lock:
+            if found is not None:
+                self._missing.pop(project_dir, None)
+                _remember(self._found, project_dir, found)
+            elif sig is not None:
+                _remember(self._missing, project_dir, sig)
+        return found
 
     def scan(self, projects_root: pathlib.Path, memory_subdir: str) -> list[ScannedStore]:
         """Return a :class:`ScannedStore` per project that has a
@@ -93,7 +163,7 @@ class FileNativeMemoryScanner:
             memory_dir = project_dir / memory_subdir
             if not memory_dir.is_dir():
                 continue
-            facts = sum(1 for f in memory_dir.glob("*.md") if f.is_file() and f.name != _INDEX_FILE)
+            facts = _fact_count(memory_dir)
             # No separate fact files but inline content in MEMORY.md still counts
             # as one entry; see `_inline_memory_file`.
             count = facts if facts else (1 if _inline_memory_file(memory_dir) is not None else 0)
@@ -102,7 +172,7 @@ class FileNativeMemoryScanner:
                     slug=project_dir.name,
                     memory_dir=str(memory_dir),
                     item_count=count,
-                    project_path=_resolve_project_path(memory_dir),
+                    project_path=self._project_path(memory_dir),
                 )
             )
         return out

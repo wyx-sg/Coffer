@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import type { NoteSummaryOut, RetiredNoteOut } from "@/lib/api/memoryTypes";
 import { AgentSources } from "./partitionFacts";
+import { useProgressiveRows } from "@/components/ui/useProgressiveRows";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -36,13 +37,17 @@ export function MemoryList({
   sources = [],
 }: Props) {
   const { t } = useTranslation();
+  // The selection is chosen by slug on the page, over the full list; only what
+  // is drawn is sliced, and always far enough to draw the selected memory.
+  const selectedAt = memories.findIndex((m) => m.slug === selected);
+  const progressive = useProgressiveRows(memories, { initial: Math.max(50, selectedAt + 1) });
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ul
         aria-label={t("memory.memories.listLabel")}
         className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
       >
-        {memories.map((m) => {
+        {progressive.visible.map((m) => {
           const active = m.slug === selected;
           return (
             <li key={m.slug}>
@@ -68,13 +73,10 @@ export function MemoryList({
             </li>
           );
         })}
+        {progressive.sentinel ? <li aria-hidden>{progressive.sentinel}</li> : null}
       </ul>
       {retired.length > 0 ? (
-        <RetiredGroup
-          retired={retired}
-          selected={selectedRetired}
-          onSelect={onSelectRetired}
-        />
+        <RetiredGroup retired={retired} selected={selectedRetired} onSelect={onSelectRetired} />
       ) : null}
     </div>
   );
@@ -94,6 +96,7 @@ export function RetiredGroup({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(selected !== null);
+  const progressive = useProgressiveRows(retired, { initial: Math.max(50, (selected ?? -1) + 1) });
   useEffect(() => {
     if (selected !== null) setOpen(true);
   }, [selected]);
@@ -119,7 +122,7 @@ export function RetiredGroup({
           aria-label={t("memory.memories.retiredListLabel")}
           className="mt-1 flex max-h-64 flex-col gap-0.5 overflow-y-auto"
         >
-          {retired.map((r, i) => {
+          {progressive.visible.map((r, i) => {
             const active = i === selected;
             const row = (
               <>
@@ -130,7 +133,10 @@ export function RetiredGroup({
                 </span>
                 {r.reason ? (
                   <span
-                    className={cn("text-xs text-text-subtle", onSelect ? "truncate" : "break-words")}
+                    className={cn(
+                      "text-xs text-text-subtle",
+                      onSelect ? "truncate" : "break-words",
+                    )}
                   >
                     {r.reason}
                   </span>
@@ -157,6 +163,7 @@ export function RetiredGroup({
               </li>
             );
           })}
+          {progressive.sentinel ? <li aria-hidden>{progressive.sentinel}</li> : null}
         </ul>
       ) : null}
     </div>

@@ -52,13 +52,17 @@ def secret_name_of(ref: str) -> str:
     return standalone_name(ref) or ref
 
 
-def split_headers(rows: list[dict[str, Any]]) -> tuple[dict[str, str], dict[str, str]]:
-    """Header rows ``{name, value | secret}`` -> ``(plain headers, secret_refs)``.
+def split_headers(
+    rows: list[dict[str, Any]],
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    """Header rows ``{name, value | secret [, scheme]}`` -> ``(plain headers,
+    secret_refs, auth_schemes)``.
 
-    A secret holds the whole header value, so a row carries a value or a
-    secret, never both."""
+    A row carries a value or a secret, never both. A secret holds the credential
+    alone; the row's scheme, if any, is sent in front of it (``Bearer <key>``)."""
     plain: dict[str, str] = {}
     refs: dict[str, str] = {}
+    schemes: dict[str, str] = {}
     for row in rows:
         name, value, secret = row["name"], row.get("value"), row.get("secret")
         if value is not None and secret is not None:
@@ -67,9 +71,11 @@ def split_headers(rows: list[dict[str, Any]]) -> tuple[dict[str, str], dict[str,
             if not is_valid_secret_name(secret):
                 raise ConfigValidationError(f"{secret!r} is not a secret name")
             refs[name] = secret_ref(secret)
+            if row.get("scheme"):
+                schemes[name] = row["scheme"]
         else:
             plain[name] = value or ""
-    return plain, refs
+    return plain, refs, schemes
 
 
 def _validated(fields: dict[str, Any]) -> HttpApiTransport:
@@ -142,11 +148,12 @@ class CustomToolService:
             validate_scope(scope, supports_scope=True)
         except ValueError as e:
             raise ScopeInvalidError(str(e)) from e
-        plain, refs = split_headers(headers)
+        plain, refs, schemes = split_headers(headers)
         fields: dict[str, Any] = {
             "base_url": base_url,
             "headers": plain,
             "secret_refs": refs,
+            "auth_schemes": schemes,
             "timeout_seconds": timeout_seconds,
             "tools": tools,
             "source": source,
@@ -177,7 +184,9 @@ class CustomToolService:
             if value is not UNSET:
                 fields[key] = value
         if headers is not UNSET:
-            fields["headers"], fields["secret_refs"] = split_headers(headers)
+            fields["headers"], fields["secret_refs"], fields["auth_schemes"] = split_headers(
+                headers
+            )
         await self._write(resource, _validated(fields), actor, description=description)
         return await self.view(name)
 
@@ -253,7 +262,7 @@ class CustomToolService:
         SSRF guard. Nothing is saved or logged.
         """
         # A secret header is left out: an unsaved group has no approved binding.
-        plain, _ = split_headers(headers)
+        plain, _, _ = split_headers(headers)
         transport = _validated(
             {
                 "base_url": base_url,

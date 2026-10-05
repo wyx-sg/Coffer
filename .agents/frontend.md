@@ -318,6 +318,14 @@ return useMutation({
       use exceeds ~200 rows is not bounded: move it to cursor paging. Its list
       endpoint returns summary fields only (detail is read per item), so a
       first page stays small.
+    - **A list fetched whole but potentially long renders progressively.** When the
+      fetch itself is cheap (one in-memory read of a few hundred rows) but
+      drawing them all is not, use `useProgressiveRows`
+      (`components/ui/useProgressiveRows.ts`): the first 50 rows mount and 100
+      more are added when its `sentinel` scrolls into view; pass the search or
+      filter text as `resetKey`. Search, selection and select-all stay on the
+      full array — only the drawn rows are sliced. Server cursor paging stays the
+      rule for a list whose fetch is itself expensive or unbounded.
   - Every button inside a table — row actions and selection-bar actions
     alike — is a `TableActionButton` (`components/table/`): small outline
     button, icon + text label, `destructive` for anything that removes. Row
