@@ -82,7 +82,9 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     ).toBeVisible();
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByLabel("App ID").fill("e2e-app-1");
-    await dialog.getByLabel("App secret").fill("e2e-secret-not-real");
+    await dialog
+      .getByRole("textbox", { name: "App secret" })
+      .fill("e2e-secret-not-real");
     await dialog.getByRole("button", { name: "Connect" }).click();
 
     await expect(
