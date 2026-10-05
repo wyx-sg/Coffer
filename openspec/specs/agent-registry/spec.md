@@ -996,8 +996,8 @@ Conversations page uses ([chat](../chat/spec.md) "Show every agent's sessions on
 channel column unless the session is a channel conversation's: title, working directory and last
 activity, with the channel, the Running / Needs you mark and an inline **Stop** when it is. A search
 box over title and working directory filters the list in the server, and the list pages by
-cursor as it is scrolled. Pressing a row, or the main part of its split button **Open in
-<terminal> ▾**, MUST open the session in the preferred terminal exactly as
+cursor as it is scrolled. The main part of a row's split button **Open in
+<terminal> ▾** MUST open the session in the preferred terminal exactly as
 [chat](../chat/spec.md) "Open a conversation in the terminal" says, asking first when the session is
 busy ("Ask before opening a session that is running"). An always-shown **⋯** menu holds **Rename** (in
 place) and **Delete…**, which asks first and says the session is deleted from the agent and cannot be recovered. A
@@ -1009,8 +1009,8 @@ actions and paging, without the Agent column.
 
 #### Scenario: a session row opens in the terminal
 - **GIVEN** an agent's Sessions tab listing a session `abc-123` in `/work/api`
-- **WHEN** the user presses the row
-- **THEN** the daemon is asked to open the agent's resume command for that session in `/work/api` in the preferred terminal
+- **WHEN** the user presses the row, and then the main part of its split button
+- **THEN** pressing the row asks the daemon for nothing, and the button asks it to open the agent's resume command for that session in `/work/api` in the preferred terminal
 
 #### Scenario: a session that is a channel conversation shows its channel
 - **GIVEN** a listed session that a SeaTalk conversation points at, with a turn running

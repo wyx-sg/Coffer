@@ -548,7 +548,7 @@ status word (**Running** with a success-coloured dot while a turn runs; **Needs 
 warning dot while the agent waits for an answer, when the session is a channel conversation's),
 its **source** (for a channel conversation the platform's logo and name with where in the chat it
 lives — `SeaTalk · DM`, a group by its name when Coffer knows it, a thread or topic rather than the
-chat's main timeline, a parallel thread as `DM · Thread 2`; for any other session nothing), the
+chat's main timeline, a parallel thread as `DM · Thread 2`; for any other session **This Mac**), the
 agent's badge and name, its working directory, and its last activity (the clock time for today and
 yesterday, a date such as `Sep 22` for earlier). A running row carries an inline **Stop**, which
 calls `POST .../interrupt` for that conversation with the semantics of "Pause the pending queue on
@@ -584,6 +584,11 @@ suggestions page, which it does not have.
 - **WHEN** the Conversations page's list renders
 - **THEN** the first row's badge names SeaTalk and the direct chat, the second the group and its thread, and the third its `Thread N` mark
 - **AND** each row shows its agent and working directory, and the third is marked running
+
+#### Scenario: a session no channel started shows This Mac as its source
+- **GIVEN** a session started in a terminal and a conversation a SeaTalk direct chat opened
+- **WHEN** the Conversations page's list renders
+- **THEN** the terminal session's Source reads This Mac and the SeaTalk conversation's reads `SeaTalk · DM`
 
 #### Scenario: rows are grouped by day without counts
 - **GIVEN** sessions last active today, yesterday and weeks ago
@@ -642,8 +647,8 @@ suggestions page, which it does not have.
 
 ### Requirement: Open a conversation in the terminal
 A row of the Conversations page MUST hand its session to the agent's own
-interface: pressing the row, or the main part of its split button **Open in
-<terminal>** (named for the preferred terminal, e.g. **Open in iTerm**), MUST ask the
+interface: the main part of its split button **Open in
+<terminal>** (named for the preferred terminal, e.g. **Open in iTerm**) MUST ask the
 daemon to resume the session in the person's preferred terminal ([web-ui](../web-ui/spec.md)
 "Let the user choose a terminal"; [daemon](../daemon/spec.md) "Open an agent session in a
 terminal") — `claude --resume <session id>` for Claude Code and `codex resume <session id>` for
@@ -655,12 +660,12 @@ the person to run anywhere: the same shape as the hand-off button. A channel con
 that has no native session yet — no turn has run on it — cannot be opened: its split button
 is disabled and says why, and it offers no Copy command. An open the daemon refuses shows its
 reason in a toast beside Copy command as the way out. Agent › Sessions rows use the same row and
-the same behaviour ([agent-registry](../agent-registry/spec.md) "Open an agent's sessions from its Sessions tab").
+the same behaviour. Pressing the row itself MUST NOT open a terminal or do anything else: only the split button opens a session ([agent-registry](../agent-registry/spec.md) "Open an agent's sessions from its Sessions tab").
 
 #### Scenario: a row opens its session in the preferred terminal
 - **GIVEN** a Claude Code session `abc-123` in `/work/api` and a preferred terminal
-- **WHEN** the user presses its row
-- **THEN** the daemon is asked to open `claude --resume abc-123` in `/work/api` in that terminal, for the session's agent
+- **WHEN** the user presses the row, and then the main part of its split button
+- **THEN** pressing the row asks the daemon for nothing, and the button asks it to open `claude --resume abc-123` in `/work/api` in that terminal, for the session's agent
 - **AND** a Codex session is opened as `codex resume <id>` the same way
 
 #### Scenario: the ▾ menu opens the session in another terminal once

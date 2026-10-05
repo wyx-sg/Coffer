@@ -2,8 +2,9 @@
 // tab: the agent's own sessions as the same rows the Conversations page uses,
 // asked of the agent through /agents/{uid}/sessions; the fake daemon answers at
 // the network boundary so the request functions, hooks and cache are real.
-// Pressing a row opens its session in the preferred terminal (asking first while
-// a channel turn is running on it).
+// The row's Open in <terminal> button opens its session in the preferred terminal
+// (asking first while a channel turn is running on it); pressing the row itself
+// opens nothing.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -136,6 +137,8 @@ describe("AgentSessionsTab", () => {
     renderTab();
     await screen.findByText("Alpha rollout");
     fireEvent.click(row("Alpha rollout"));
+    expect(sessionCalls("POST")).toHaveLength(0);
+    fireEvent.click(within(row("Alpha rollout")).getByRole("button", { name: /^Open in / }));
     await waitFor(() => expect(sessionCalls("POST")).toHaveLength(1));
     // The daemon is asked to resume that session in its directory, for this agent.
     expect(sessionCalls("POST")[0]).toMatchObject({
@@ -166,7 +169,7 @@ describe("AgentSessionsTab", () => {
     ];
     renderTab();
     await screen.findByText("From SeaTalk");
-    fireEvent.click(row("From SeaTalk"));
+    fireEvent.click(within(row("From SeaTalk")).getByRole("button", { name: /^Open in / }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("This turn is running in SeaTalk.");
     expect(sessionCalls("POST")).toHaveLength(0);

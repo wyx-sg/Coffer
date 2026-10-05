@@ -5,17 +5,18 @@
 // it came from, the agent (where the list spans agents), the working
 // directory, when it was last active, an inline Stop while a turn runs and a
 // ⋯ menu with Rename and Delete…. Rename edits the title in place — Enter
-// saves, Esc cancels. The row's primary action is `onPrimaryAction` (Open in
-// <terminal>, spec chat "Open a conversation in the terminal"): pressing the
-// row or the main part of its split button runs it in the preferred terminal,
-// named on the button; the ▾ menu holds Open in <other terminal> for each
+// saves, Esc cancels. The row itself is not a click target: the only thing that
+// opens a terminal is the split button, whose main part runs `onPrimaryAction`
+// (Open in <terminal>, spec chat "Open a conversation in the terminal") in the
+// preferred terminal, named on the button; the ▾ menu holds Open in <other terminal> for each
 // other terminal on this machine, then Copy command — the same shape as Hand
 // off to <Agent>. The row's actions always show. A row with no native session
-// yet shows the split button disabled, with the reason in a tooltip. A list
-// that has no primary action leaves the row inert.
+// yet shows the split button disabled, with the reason in a tooltip. The Source
+// column names the channel a conversation came from, and "This Mac" for a
+// session no channel started.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Square, Trash2 } from "lucide-react";
+import { Laptop, Pencil, Square, Trash2 } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
@@ -37,7 +38,7 @@ interface Props {
   /** The agent's display name, from the registry. */
   agentName?: string;
   now: Date;
-  /** What pressing the row does; leave out and the row is inert. Given a
+  /** What the split button's main part does; leave out and the row has no split button. Given a
    *  `terminal`, it is the ▾ pick of another terminal than the preferred one. */
   onPrimaryAction?: (row: SessionRowData, terminal?: string) => void;
   /** The preferred terminal's name, on the main part of the split button. */
@@ -119,13 +120,6 @@ export function SessionRow({
     }
   };
   const openable = onPrimaryAction !== undefined && canOpen(row);
-  const onRowKey = (event: KeyboardEvent<HTMLLIElement>) => {
-    if (event.target !== event.currentTarget || !openable) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onPrimaryAction?.(row);
-    }
-  };
 
   const actions: MenuAction[] = [
     { key: "rename", label: t("sessions.row.rename"), icon: Pencil, onSelect: startRename },
@@ -141,15 +135,11 @@ export function SessionRow({
 
   return (
     <li
-      tabIndex={openable ? 0 : -1}
       data-session={row.id}
-      onClick={openable && !editing ? () => onPrimaryAction?.(row) : undefined}
-      onKeyDown={onRowKey}
       className={cn(
         "group/row grid min-h-14 items-center gap-x-3 border-t border-border-subtle py-2 pl-3.5 pr-2.5 transition-colors duration-fast",
         GRID[columns],
         "hover:bg-surface-hover focus-within:bg-surface-hover",
-        openable && "cursor-pointer",
       )}
     >
       <div className="flex min-w-0 items-center gap-2.5">
@@ -160,7 +150,6 @@ export function SessionRow({
             disabled={saving}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onEditKey}
-            onClick={(e) => e.stopPropagation()}
             aria-label={t("sessions.row.titleAria")}
             className="h-control-sm min-w-0 flex-1 rounded-md border border-accent bg-surface-raised px-2 text-sm font-label text-text outline-none ring-[3px] ring-accent-soft"
           />
@@ -183,7 +172,10 @@ export function SessionRow({
         row.channel ? (
           <SourceBadge channel={row.channel} className="max-w-full" />
         ) : (
-          <span />
+          <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs text-text">
+            <Laptop aria-hidden className="size-3.5 shrink-0 text-text-muted" />
+            {t("conversations.filters.thisMac")}
+          </span>
         )
       ) : null}
       {columns === "agent" || columns === "channel_agent" ? (
@@ -203,7 +195,7 @@ export function SessionRow({
       <time dateTime={row.activityAt ?? undefined} className="text-right text-xs text-text-muted">
         {row.activityAt ? rowTime(row.activityAt, now, i18n.language) : "—"}
       </time>
-      <span className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      <span className="flex items-center justify-end gap-1">
         {row.running && row.conversationId && onStop ? (
           <Button
             variant="outline"
