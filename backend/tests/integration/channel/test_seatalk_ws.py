@@ -598,3 +598,54 @@ async def test_controller_ensure_stopped_on_an_unknown_channel_is_a_no_op(
     controller = _controller(sdk, _Recorder())
     await controller.ensure_stopped("never-started")
     assert controller.active() == set()
+
+
+async def _states_after_failing_attempts(
+    sdk: FakeSeaTalkSdk, failure: BaseException, caplog: pytest.LogCaptureFixture
+) -> tuple[list[str], list[str]]:
+    """Every state the connector reported while each attempt failed with
+    ``failure``, and the error texts beside them."""
+    sdk.connect_errors[:] = [failure] * 50
+    connector = _connector(sdk, _Recorder())
+    with caplog.at_level(logging.INFO, logger="coffer.infrastructure.channel.seatalk_ws"):
+        await connector.start()
+        try:
+            await wait_until(lambda: len(connector.backoffs) >= 2, message="did not retry")
+        finally:
+            await connector.stop()
+    records = [r for r in caplog.records if r.msg == "channel.websocket.state"]
+    return [r.__dict__["state"] for r in records], [r.__dict__["detail"] for r in records]
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a refused app reads as rejected, a network failure does not"
+)
+async def test_a_refused_register_handshake_is_rejected(
+    sdk: FakeSeaTalkSdk, caplog: pytest.LogCaptureFixture
+) -> None:
+    """SeaTalk answering the register frame with a non-OK code is the one
+    failure a new secret fixes, so it is told apart from every other — and it is
+    still retried, so a secret replaced under the same ref recovers by itself."""
+    refusal = sdk.module.RegisterError(1, "invalid app secret")  # type: ignore[attr-defined]
+    states, details = await _states_after_failing_attempts(sdk, refusal, caplog)
+    assert "rejected" in states
+    assert "error" not in states
+    assert any("invalid app secret" in d for d in details)
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a refused app reads as rejected, a network failure does not"
+)
+@pytest.mark.parametrize(
+    "failure",
+    [
+        OSError(8, "nodename nor servname provided, or not known"),
+        TimeoutError("The read operation timed out"),
+    ],
+)
+async def test_a_network_failure_is_an_error_not_a_refusal(
+    sdk: FakeSeaTalkSdk, failure: BaseException, caplog: pytest.LogCaptureFixture
+) -> None:
+    states, _ = await _states_after_failing_attempts(sdk, failure, caplog)
+    assert "error" in states
+    assert "rejected" not in states

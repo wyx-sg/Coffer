@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from coffer.application.attention import AttentionAction, Severity
@@ -74,7 +76,7 @@ async def test_connecting_websocket_is_a_reconnecting_warning() -> None:
     assert item.since is None
 
 
-@pytest.mark.parametrize("state", ["kicked", "error"])
+@pytest.mark.parametrize("state", ["kicked", "rejected", "error"])
 async def test_a_down_websocket_is_an_error_carrying_the_recorded_text(state: str) -> None:
     [item] = await _source(_status("c1", ws=(state, "another   process\nholds it"))).items()
     assert item.reason_code == "channel_disconnected"
@@ -171,3 +173,8 @@ async def test_a_secret_awaiting_approval_is_named_not_a_generic_stop(
     assert item.reason_code == "channel_secret_approval"
     assert phrase in item.reason
     assert "Secrets page" in item.reason
+
+
+async def test_a_channel_still_starting_needs_nobody() -> None:
+    status = replace(_status("t1", running=False, seatalk=False), starting=True)
+    assert await _source(status).items() == []

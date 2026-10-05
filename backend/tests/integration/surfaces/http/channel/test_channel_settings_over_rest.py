@@ -53,6 +53,9 @@ class _Runtime:
     def is_running(self, name: str) -> bool:
         return True
 
+    def start_pending(self, channel_uid: str) -> bool:
+        return False
+
     def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
         return self.websockets.get(channel_uid)
 

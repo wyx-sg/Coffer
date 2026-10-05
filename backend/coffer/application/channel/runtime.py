@@ -120,6 +120,23 @@ class ChannelRuntime:
         reason its adapter is not running, else ``None``."""
         return self._withheld.get(channel_uid)
 
+    def start_pending(self, channel_uid: str) -> bool:
+        """Whether nothing has been decided yet about this channel's start.
+
+        True for a channel that is not running and that no pass has tried to
+        start, found unroutable, or held on its secret: switched on (or bound
+        here) since the last tick, which reaches it within one interval. The
+        caller asks this only of a channel enabled for this machine; a status
+        read in that window is "starting", never "not running" — the latter
+        names a start that was attempted and failed.
+        """
+        return (
+            channel_uid not in self._running
+            and channel_uid not in self._failed_at
+            and channel_uid not in self._withheld
+            and not self._gate.unrouted(channel_uid)
+        )
+
     def adapter(self, channel_uid: str) -> ChannelAdapter | None:
         entry = self._running.get(channel_uid)
         return entry.adapter if entry is not None else None
@@ -209,6 +226,12 @@ class ChannelRuntime:
             desired = await self._enabled_channels()
             for channel_uid in set(self._withheld) - set(desired):
                 del self._withheld[channel_uid]
+            # A failure belongs to the run it ended. A channel switched off (or
+            # bound away) forgets it, so switching it back on starts a new run at
+            # once — not after the old run's retry wait, and not reported as
+            # that run's failure while it starts.
+            for channel_uid in set(self._failed_at) - set(desired):
+                del self._failed_at[channel_uid]
             for channel_uid in list(self._running):
                 # Re-fetch per iteration: evict() can pop entries while a
                 # prior _stop_adapter await is in flight.

@@ -39,6 +39,7 @@ const VARIANT: Partial<Record<ChannelStateKey, Variant>> = {
   kicked: "error",
   sdkMissing: "error",
   connectFailed: "error",
+  unreachable: "warning",
   waitingApproval: "warning",
   approvalRefused: "error",
   stopped: "error",

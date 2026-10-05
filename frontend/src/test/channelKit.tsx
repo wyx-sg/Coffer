@@ -77,6 +77,7 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
     channel_type: seatalk ? "seatalk" : "telegram",
     enabled: channel.enabled,
     running: true,
+    starting: false,
     pending_pairing: false,
     workspace_directory: "/home/me/.coffer/content/workspace",
     commands: [

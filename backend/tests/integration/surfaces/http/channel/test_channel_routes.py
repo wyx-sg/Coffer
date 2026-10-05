@@ -88,6 +88,9 @@ class _StubRuntime:
     def is_running(self, name: str) -> bool:
         return name in self.adapters
 
+    def start_pending(self, channel_uid: str) -> bool:
+        return False
+
     def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
         return self.websockets.get(channel_uid)
 
@@ -263,6 +266,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         # a field that appeared only sometimes would make that a guess.
         "runs_on": None,
         "runs_here": True,  # this runtime has no machine, so nothing is foreign
+        "starting": False,
         "title": None,  # none set, so a surface shows the name
         "handoff": None,  # nothing to hand to an agent
         # Where new conversations start while the channel marks no default.

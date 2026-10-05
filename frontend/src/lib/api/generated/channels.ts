@@ -201,6 +201,11 @@ export interface components {
             secret_approval: components["schemas"]["SecretApprovalOut"] | null;
             /** Settings */
             settings: (components["schemas"]["TelegramChannelConfig"] | components["schemas"]["SeaTalkChannelConfig"]) | null;
+            /**
+             * Starting
+             * @default false
+             */
+            starting: boolean;
             /** Title */
             title: string | null;
             /** Uid */
@@ -268,7 +273,7 @@ export interface components {
             /** Websocket Error */
             websocket_error: string | null;
             /** Websocket State */
-            websocket_state: ("connecting" | "connected" | "kicked" | "sdk_missing" | "error") | null;
+            websocket_state: ("connecting" | "connected" | "kicked" | "sdk_missing" | "rejected" | "error") | null;
         };
         /** NotifyIn */
         NotifyIn: {

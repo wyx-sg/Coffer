@@ -3359,6 +3359,10 @@
         "word": "Connecting",
         "line": "Connecting…"
       },
+      "unreachable": {
+        "word": "Network problem",
+        "line": "Can't reach the platform — retrying"
+      },
       "reconnecting": {
         "word": "Reconnecting",
         "line": "Reconnecting…"
@@ -3423,6 +3427,10 @@
       "unknownMachine": {
         "title": "Set to run on a Mac that isn't in your sync group",
         "body": "No Mac you sync with has taken this channel on, so none starts the bot and it never answers. Run it here, or pick the Mac that should run it in Settings."
+      },
+      "unreachable": {
+        "title": "Can't reach {{platform}} — retrying",
+        "body": "The last attempt failed on the way (the network, DNS or a timeout), not because {{platform}} refused the app. Coffer keeps retrying; nothing needs replacing."
       },
       "reconnecting": {
         "title": "Lost the connection to {{platform}} — reconnecting",

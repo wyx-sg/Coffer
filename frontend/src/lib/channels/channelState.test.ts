@@ -42,7 +42,24 @@ describe("describeChannel", () => {
     ],
     ["kicked", ws("kicked"), "kicked", "attention", "err", "takeBack"],
     ["sdk missing", ws("sdk_missing"), "sdkMissing", "attention", "err", "retryStart"],
-    ["error", ws("error", "bad id"), "connectFailed", "attention", "err", "replaceSecret"],
+    // spec channels/seatalk "Report the websocket connection as the channel's inbound state":
+    // only SeaTalk refusing the app is a rejected secret; a network failure is not.
+    [
+      "rejected",
+      ws("rejected", "RegisterError: code=1"),
+      "connectFailed",
+      "attention",
+      "err",
+      "replaceSecret",
+    ],
+    [
+      "network error",
+      ws("error", "gaierror: nodename nor servname provided"),
+      "unreachable",
+      "attention",
+      "warn",
+      "reconnect",
+    ],
     ["stopped", { running: false, inbound: null }, "stopped", "attention", "err", "replaceSecret"],
     [
       "secret waiting for approval",
@@ -91,6 +108,20 @@ describe("describeChannel", () => {
       "unknownMachine",
     );
     expect(describeChannel(input({ runs_on: null, runs_here: false })).state).toBe("unbound");
+  });
+
+  // spec channels "Report a channel that is starting apart from one that failed to start"
+  test("a channel switched on but not yet started is connecting, never a rejected secret", () => {
+    const view = describeChannel(input({ running: false, starting: true, inbound: null }));
+    expect(view).toMatchObject({ state: "connecting", tone: "warn", primary: null });
+    expect(view.group).not.toBe("attention");
+  });
+
+  test("a status read before the switch is not this run's failure", () => {
+    // The resource already says on; the status cached from while it was off
+    // still says off and not running.
+    const stale = describeChannel(input({ enabled: false, running: false, inbound: null }));
+    expect(stale.state).toBe("connecting");
   });
 
   test("a channel switched off reads Off, in its own group", () => {

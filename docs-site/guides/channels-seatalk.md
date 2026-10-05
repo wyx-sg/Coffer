@@ -88,9 +88,10 @@ The **SeaTalk connection** badge on the channel's page reports the connection as
 | `connected` | **Connected** | Events are flowing. |
 | `kicked` | **Kicked** — Another process took the connection | Another process registered the same app. Coffer waits 60 seconds before trying again rather than fighting for the connection. |
 | `sdk_missing` | **Can't start** — SeaTalk SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
-| `error` | **Can't connect** — Connection refused | The last attempt failed; `websocket_error` holds the error verbatim. Coffer retries with a backoff from 1 to 30 seconds. |
+| `rejected` | **Token rejected** — Connection refused | SeaTalk refused the app at the register handshake: the App ID is wrong, or the App Secret was regenerated on the SeaTalk Open Platform. The banner offers **Replace secret**; `websocket_error` holds SeaTalk's answer verbatim. Coffer keeps retrying, so a secret replaced under the same reference recovers by itself. |
+| `error` | **Network problem** — Can't reach the platform — retrying | The last attempt failed on the way (a DNS failure, a timeout, a dropped socket), not because SeaTalk refused the app; `websocket_error` holds the error verbatim. Coffer retries with a backoff from 1 to 30 seconds, and the banner offers **Reconnect now**, never a new secret. |
 
-No state is shown before the first attempt. Events that SeaTalk sends while the connection is down are not queued anywhere by Coffer.
+Before the first attempt there is no connection state: the daemon starts a channel within about two seconds of it being switched on, and until then `status.starting` is true and the page shows **Connecting**, never a failure. Events that SeaTalk sends while the connection is down are not queued anywhere by Coffer.
 
 ## How replies look
 

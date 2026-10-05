@@ -102,6 +102,8 @@ class ChannelStatus:
     # and the CLI prints the id.
     runs_on: str | None = None
     runs_here: bool = False
+    #: Enabled here and not yet reached by the reconciler (``start_pending``).
+    starting: bool = False
     #: The display title a person chose (spec resource-framework "Carry an optional
     #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
     #: the name in its place.
@@ -321,6 +323,7 @@ class ChannelService:
             # either, so it treats every channel as local — the same reading its
             # gate takes.
             runs_here=runs_here,
+            starting=resource.enabled and runs_here and self._runtime.start_pending(resource.uid),
         )
 
     def _secret_approval(self, resource: Resource) -> SecretApproval | None:
