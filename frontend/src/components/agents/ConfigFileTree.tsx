@@ -3,9 +3,8 @@
 // The tree of the agent's Config files tab: every allowlisted config file in
 // one tree, grouped by the folder it lives in — the config directory as a
 // folder row, a file kept beside it (`~/.claude.json`) at the top level under
-// its own name. A directory entry (`agents`) is a folder of its files. A file
-// the agent has not written yet is italic with "not created" and cannot be
-// opened. Pure presentation over the shared FileTree; the selection is the
+// its own name. A directory entry (`agents`) is a folder of its files. The
+// caller passes only files that exist. Pure presentation over the shared FileTree; the selection is the
 // caller's.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -112,8 +111,6 @@ export function ConfigFileTree({
           depth,
           open,
           leaf: children.length === 0,
-          missing: !f.exists,
-          note: t("agents.config.notCreated"),
           title: describe(f),
         });
         if (open) {
@@ -136,8 +133,6 @@ export function ConfigFileTree({
         kind: "file",
         depth,
         selected: selected?.key === f.key && !selected.child,
-        missing: !f.exists,
-        note: t("agents.config.notCreated"),
         title: describe(f),
       });
     }
@@ -156,9 +151,8 @@ export function ConfigFileTree({
     const kind = row.key.slice(0, sep);
     const rest = row.key.slice(sep + 1);
     if (kind === "folder" || kind === "dir") toggle(row.key);
-    else if (kind === "file") {
-      if (!row.missing) onSelect({ key: rest });
-    } else {
+    else if (kind === "file") onSelect({ key: rest });
+    else {
       const slash = rest.indexOf("/");
       onSelect({ key: rest.slice(0, slash), child: rest.slice(slash + 1) });
     }

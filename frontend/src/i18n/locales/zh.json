@@ -2053,7 +2053,6 @@
     },
     "config": {
       "none": "未找到配置文件。",
-      "notCreated": "未创建",
       "selectFile": "选择一个文件查看。",
       "desc": {
         "settings": "{{agent}} 设置：权限、模型和钩子。",

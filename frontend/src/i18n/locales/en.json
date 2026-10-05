@@ -2053,7 +2053,6 @@
     },
     "config": {
       "none": "No config files found.",
-      "notCreated": "Not created",
       "selectFile": "Select a file to view.",
       "desc": {
         "settings": "{{agent}} settings: permissions, model and hooks.",
