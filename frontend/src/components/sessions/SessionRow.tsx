@@ -1,6 +1,6 @@
 // src/components/sessions/SessionRow.tsx — one row of a session list, shared by
-// the Conversations page and an agent's Sessions tab (spec chat "Show channel
-// conversations on the Conversations page", agent-registry "Open an agent's
+// the Conversations page and an agent's Sessions tab (spec chat "Show every
+// agent's sessions on the Conversations page", agent-registry "Open an agent's
 // sessions from its Sessions tab"): the title with a status word, the channel
 // it came from, the agent (where the list spans agents), the working
 // directory, when it was last active, an inline Stop while a turn runs and a

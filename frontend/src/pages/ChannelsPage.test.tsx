@@ -341,6 +341,16 @@ acceptance(
   },
 );
 
+acceptance("channels", "a channel links to its conversations instead of showing them", async () => {
+  renderChannelsPage(`/channels/${TEAM.uid}`);
+  expect(await screen.findByTestId("channel-conversations-link")).toHaveAttribute(
+    "href",
+    `/conversations?source=${TEAM.uid}`,
+  );
+  expect(screen.getByTestId("channel-state-word")).toBeInTheDocument();
+  expect(screen.queryByRole("table")).toBeNull();
+});
+
 acceptance(
   "channels",
   "a channel's Overview links to its conversations instead of listing them",

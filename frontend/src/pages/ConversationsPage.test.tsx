@@ -294,7 +294,7 @@ describe("Conversations list", () => {
     await waitFor(() => expect(chat.interruptTurn.mock.calls[0][0]).toBe("t"));
   });
 
-  acceptance("chat", "the conversation list pages by cursor", async () => {
+  test("the list pages by cursor", async () => {
     const more = makeSessionRow({
       session_id: "m",
       conversation_id: "m",

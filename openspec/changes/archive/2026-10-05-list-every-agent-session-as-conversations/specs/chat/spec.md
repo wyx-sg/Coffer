@@ -117,11 +117,6 @@ suggestions page, which it does not have.
 - **THEN** the first row reads Running with an inline Stop and the second reads Needs you
 - **AND** both flags come from the daemon's in-memory turn state
 
-#### Scenario: the channel's default directory is edited on the Channels page
-- **GIVEN** a registered channel
-- **WHEN** the owner chooses Set as default on one of its listed directories on the Channels page
-- **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and Unset default — or removing that row — removes it
-
 ### Requirement: Open a conversation in the terminal
 A row of the Conversations page MUST hand its session to the agent's own
 interface: pressing the row, or the main part of its split button **Open in

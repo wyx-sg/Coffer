@@ -98,7 +98,7 @@ Channels included, is owned by no feature and is always there:
   Agents           /agents            — the consumers (Bot icon)
   Model providers  /model-providers   — the endpoints agents' models are served from, and what requests through Coffer cost (tabs Providers | Usage)
  RUN
-  Conversations    /conversations     — the conversations the IM bots started, each opened in the agent's own terminal
+  Conversations    /conversations     — every agent's sessions, wherever they started, each opened in the agent's own terminal
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
@@ -1620,8 +1620,8 @@ groups, under headings in this order:
 - **AGENTS** — set up the agents and the models they run on: Agents, then Model
   providers. Agents come first because they are the subject of the product; a
   provider is the endpoint and key each agent's model is served from.
-- **RUN** — see what the IM bots put agents to work on, and set the bots up: Conversations,
-  then Channels.
+- **RUN** — see and start what agents are working on, and set up the IM bots that put them
+  to work: Conversations, then Channels.
 - **CAPABILITIES** — give agents things they can do: MCP servers, Custom tools,
   Skills, then CLIs.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
@@ -1667,11 +1667,12 @@ word a user navigates by:
   agent in that agent's Change model dialog (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation over REST and in the web UI").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
-  Conversations is where a person finds every conversation a channel started and opens it in the terminal, a
-  channel is an IM bot set up once and revisited rarely, and the conversations a
-  channel carries are listed on the Conversations page with its badge (spec
-  [chat](../chat/spec.md) "Show channel conversations on the Conversations page");
-  the Channels page holds setup, status and settings only.
+  Conversations is where a person finds every session of every agent — a channel's among
+  them — and opens or starts one in the terminal, while a channel is an IM bot set up once
+  and revisited rarely. The conversations a channel carries are listed on the Conversations
+  page with its badge (spec [chat](../chat/spec.md) "Show every agent's sessions on the
+  Conversations page"), reached from the channel's Overview by one link; the Channels page
+  holds setup, status and settings only.
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.
 - **Custom tools** are `mcp_server` resources of the HTTP API transport, one per
