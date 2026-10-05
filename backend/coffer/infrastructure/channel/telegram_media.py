@@ -23,6 +23,7 @@ __all__ = [
     "FetchedMedia",
     "default_media_dir",
     "download_attachments",
+    "download_file",
     "inline_keyboard",
     "media_specs",
     "routing_params",
@@ -233,12 +234,12 @@ async def download_attachments(
             continue  # already noted above; getFile would only fail and note it twice
         # The file endpoint's URL carries the bot token, so this path never logs
         # a traceback: an httpx error's message quotes the request URL, and a
-        # traceback would carry it into the daemon log. ``_download_file``
+        # traceback would carry it into the daemon log. ``download_file``
         # already masks the platform's answer into a ChannelSendFailed whose
         # text names only the method and status; anything else is reported by
         # class alone.
         try:
-            data = await _download_file(client, call, file_base, file_id, name)
+            data = await download_file(client, call, file_base, file_id, name)
         except ChannelSendFailed as e:
             _logger.warning(
                 "telegram.media.download_failed", extra={"channel": name, "detail": str(e)}
@@ -263,7 +264,7 @@ async def download_attachments(
     return FetchedMedia(attachments=tuple(out), notes=tuple(notes))
 
 
-async def _download_file(
+async def download_file(
     client: httpx.AsyncClient,
     call: Callable[..., Awaitable[Any]],
     file_base: str,

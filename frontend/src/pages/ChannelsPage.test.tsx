@@ -47,6 +47,9 @@ vi.mock("@/lib/api/channels", async (orig) => ({
   })),
   cancelPairingCode: vi.fn(async () => undefined),
   removeChannelPerson: vi.fn(async () => undefined),
+  getChannelPersonAvatar: vi.fn(async (_uid: string, senderId: string) =>
+    senderId === "ann" ? "data:image/png;base64,iVBORw0KGgo=" : null,
+  ),
   notifyChannel: vi.fn(async () => ({ sent: true })),
   restartChannel: vi.fn(async () => ({ running: true })),
 }));
@@ -480,6 +483,26 @@ describe("several owners", () => {
     expect(screen.queryByText(/strangers get silence/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("channel-pairing-code")).not.toBeInTheDocument();
   });
+
+  acceptance(
+    "channels",
+    "an owner row shows the person's platform picture or their initials",
+    async () => {
+      two();
+      renderChannelsPage(`/channels/${TEAM.uid}`);
+      const rows = await screen.findAllByTestId("channel-owner");
+      // Ann has a picture on the platform; Alex has none and keeps initials.
+      expect(await within(rows[1]).findByTestId("channel-owner-avatar")).toHaveAttribute(
+        "src",
+        "data:image/png;base64,iVBORw0KGgo=",
+      );
+      expect(within(rows[0]).queryByTestId("channel-owner-avatar")).not.toBeInTheDocument();
+      expect(rows[0]).toHaveTextContent("AC");
+      // The line under the name says who they are and since when, nothing more.
+      expect(rows[0]).toHaveTextContent(/Owner · paired \w+ \d+/);
+      expect(rows[0]).not.toHaveTextContent("direct chat");
+    },
+  );
 
   test("Add owner opens the dialog, and Esc withdraws the code", async () => {
     renderChannelsPage(`/channels/${TEAM.uid}`);

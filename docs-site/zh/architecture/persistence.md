@@ -54,7 +54,7 @@ flowchart LR
 | **local** | `local/` | 本机专属资源（智能体）、生效范围、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
 | **content** | `content/` | 聊天和消息渠道的附件、聊天工作目录。 | 暂不 | 无 | 否：这是你唯一的副本 |
 | **runs** | `runs.db`（以及 `skill-data/`、`config-backups/`） | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次和用量；`skill-data/` 里是 skill 脚本写的日志、操作记录和临时文件；`config-backups/` 里是每次改写前留下的智能体配置文件副本。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
-| **derived** | `derived/` | `derived.db`、记忆树、Coffer 自己的指南技能、同步冲突的编辑器副本。 | 从不 | 无 | 是：会被重建 |
+| **derived** | `derived/` | `derived.db`、记忆树、Coffer 自己的指南技能、同步冲突的编辑器副本、消息渠道主人的头像。 | 从不 | 无 | 是：会被重建 |
 
 一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
 
@@ -156,6 +156,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 
 ```text
 ~/.coffer/derived/
+├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
 ├── derived.db                   MCP server health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)

@@ -423,6 +423,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | `GET /agents/{uid}/config-files/{key}/content` | 普通文件: an agent's config file is its own plain file |
 | `GET /agents/{uid}/native-memory/files/content` | 普通文件: an agent's native memory is its own plain file |
 | `GET /agents/{uid}/unmanaged-skills/{skill}/files/content` | 普通文件: a skill's files are plain files |
+| `GET /channels/{uid}/people/{sender_id}/avatar` | 窗口操作: a paired person's picture in the owner list |
 | `GET /fs/browse` | 窗口操作: the folder picker's own listing |
 | `GET /fs/editors` | 窗口操作: which editors the Open in… menu offers |
 | `POST /fs/open` | 窗口操作: opens a file in the person's editor |

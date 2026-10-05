@@ -124,6 +124,9 @@ export const usageSummaryKey = (p: Record<string, unknown>) => ["usage", "summar
 /** Prefix of every channel status key: a title or rename refreshes them all. */
 const channelsKey = ["channels"] as const;
 export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as const;
+/** A paired person's picture, as a `data:` URL or `null` (show initials). */
+export const channelAvatarKey = (uid: string, senderId: string) =>
+  ["channels", uid, "avatar", senderId] as const;
 
 // --- daemon ----------------------------------------------------------------
 

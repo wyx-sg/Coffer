@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.avatars import PersonAvatars
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.service import ChannelService
@@ -26,6 +27,7 @@ from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.envelopes import SentMessage
 from coffer.domain.channel.errors import ChannelNotRunning
+from coffer.infrastructure.channel.avatar_store import FileAvatarStore
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
     ChannelThreadConversationRepo,
@@ -38,6 +40,7 @@ from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_routes import (
     get_channel_service,
+    set_channel_avatars,
     set_channel_service,
 )
 from coffer.surfaces.http.channel_routes import (
@@ -538,3 +541,41 @@ async def test_restart_route_restarts_the_adapter_and_reports_whether_it_runs(ct
     assert r.json() == {"running": True}
     assert ctx.runtime.restarted == [ctx.tg_uid]
     assert missing.status_code == 404
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a paired person's picture is served from the running adapter"
+)
+async def test_person_avatar_route_serves_the_picture_then_forgets_it_on_removal(
+    ctx: _Ctx, tmp_path
+) -> None:
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
+
+    class _PictureAdapter(_StubAdapter):
+        async def fetch_avatar(self, sender_id: str) -> bytes | None:
+            return png if sender_id == "emp-1" else None
+
+    ctx.runtime.adapters[ctx.tg_uid] = _PictureAdapter()
+    store = FileAvatarStore(tmp_path / "avatars")
+    set_channel_avatars(PersonAvatars(store=store, peers=ctx.peers, adapter_of=ctx.runtime.adapter))
+    try:
+        await _pair(ctx, ctx.tg_uid, chat_id="emp-1")
+        await _pair(ctx, ctx.tg_uid, chat_id="emp-2", display="Bo")
+        async with _client(ctx.app) as c:
+            r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/people/emp-1/avatar")
+            assert r.status_code == 200
+            assert r.headers["content-type"] == "image/png"
+            assert r.content == png
+            # No picture on the platform, or nobody by that id: initials.
+            assert (
+                await c.get(f"/api/v1/channels/{ctx.tg_uid}/people/emp-2/avatar")
+            ).status_code == 204
+            assert (
+                await c.get(f"/api/v1/channels/{ctx.tg_uid}/people/zz/avatar")
+            ).status_code == 204
+            assert (
+                await c.delete(f"/api/v1/channels/{ctx.tg_uid}/people/emp-1")
+            ).status_code == 204
+        assert store.read(ctx.tg_uid, "emp-1") is None
+    finally:
+        set_channel_avatars(None)

@@ -3518,7 +3518,7 @@
         "title": "谁可以使用",
         "addOwner": "添加主人",
         "remove": "移除",
-        "ownerLine": "主人 · 私聊 · 配对于 {{date}}",
+        "ownerLine": "主人 · 配对于 {{date}}",
         "nobody": "还没有人。配对之前，机器人会忽略所有消息。",
         "onlyOwner": "只回应这些人；其他人得不到任何回复。",
         "search": "搜索主人",

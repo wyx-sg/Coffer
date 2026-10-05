@@ -27,7 +27,7 @@ Two consequences follow:
 
 1. On the SeaTalk Open Platform, create an app.
 2. Enable the **Bot** capability and set the bot **Online**.
-3. Request the scopes the bot needs. At minimum you need *Send Message to Bot User*; your organisation's admin may have to approve them.
+3. Request the scopes the bot needs. At minimum you need *Send Message to Bot User*; your organisation's admin may have to approve them. Add *Get Employee Profile* if you want the channel's owner list to show each owner's SeaTalk picture; without it the list shows their initials.
 4. Note the app's **App ID** and **App Secret**.
 
 Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket delivery while Coffer holds the connection.
