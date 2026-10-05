@@ -190,7 +190,7 @@ masking guards against a value leaking into a transcript by accident; it is not
 a wall between you and the value, since you are the command's parent:
 
 ```sh
-coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
+coffer run --secret PGPASSWORD=coffer://secret/orders-db -- psql -h db.internal orders
 coffer run --env-file connection.env -- ./query.sh
 ```
 

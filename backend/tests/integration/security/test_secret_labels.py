@@ -155,18 +155,17 @@ def test_a_server_start_and_a_coffer_run_each_show_as_a_use(d: BoundaryDaemon) -
     )
     assert r.status_code == 200, r.text
 
-    def seen() -> bool:
-        return bool(d.client.get("/api/v1/secrets/uses", params={"ref": server_ref}).json())
-
-    _eventually(seen)
-    use = d.client.get("/api/v1/secrets/uses", params={"ref": server_ref}).json()[0]
+    _eventually(lambda: len(d.audit("secret_resolved")) >= 2)
+    rows = {e["details"]["ref"]: e["details"] for e in d.audit("secret_resolved")}
+    use = rows[server_ref]
     assert (use["destination_kind"], use["destination_name"], use["slot"]) == (
         "mcp_server",
         "svc",
         "SVC_TOKEN",
     )
-    run = d.client.get("/api/v1/secrets/uses", params={"ref": run_ref}).json()[0]
-    assert (run["destination_kind"], run["argv0"], run["cwd"]) == ("run", "psql", "/tmp/work")
+    run = rows[run_ref]
+    assert (run["argv0"], run["cwd"]) == ("psql", "/tmp/work")
+    assert "destination_kind" not in run
     assert VALUE not in str(d.audit("secret_resolved"))
 
 

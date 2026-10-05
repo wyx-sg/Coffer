@@ -2,8 +2,8 @@
 //
 // The header carries the name (the label, edited in place — empty falls back to a readable default)
 // and the description, also in place; the visible actions are Replace value… and Reveal value…, and
-// the ⋯ menu holds Copy reference and Delete…. Two path tabs: Overview (reference, where it lives,
-// who uses it) and Usage (where this Mac handed the value out). The reference never changes, so
+// the ⋯ menu holds Copy reference and Delete…. Under the header, the overview: the reference, where
+// it lives, when it was last used and who uses it. The reference never changes, so
 // editing a note moves nothing that cites it. Its dialogs are the Secrets page's own. No value is
 // shown until Reveal is confirmed (spec web-ui "Manage stored secrets on the Secrets page").
 import { useState } from "react";
@@ -12,34 +12,26 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import type { SecretRef } from "@/lib/api/secret";
-import { useDetailTab } from "@/lib/detailTabs";
 import { presenceAvailable } from "@/lib/tauri";
 import { DeleteSecretDialog } from "./DeleteSecretDialog";
 import { ReplaceSecretDialog } from "./ReplaceSecretDialog";
 import { RevealSecretDialog } from "./RevealSecretDialog";
 import { SecretNoteField } from "./SecretNoteField";
 import { SecretOverview } from "./SecretOverview";
-import { SecretRecentUses } from "./SecretRecentUses";
 import { displayName, isMissingHere, referenceOf } from "./secretRows";
-
-const SECRET_TABS = ["overview", "usage"] as const;
 
 interface Props {
   row: SecretRef;
-  /** The pane's bare address (`/secrets/<ref>`); a tab is a segment under it. */
-  basePath: string;
   onDeleted: () => void;
 }
 
 type Dialog = "replace" | "reveal" | "delete" | null;
 
-export function SecretPane({ row, basePath, onDeleted }: Props) {
+export function SecretPane({ row, onDeleted }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [tab, setTab] = useDetailTab(SECRET_TABS, "overview", basePath);
   const [dialog, setDialog] = useState<Dialog>(null);
   const inApp = presenceAvailable();
   const missing = isMissingHere(row);
@@ -105,18 +97,9 @@ export function SecretPane({ row, basePath, onDeleted }: Props) {
         </span>
       </header>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="overview">{t("secrets.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="usage">{t("secrets.tabs.usage")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="pt-5">
-          <SecretOverview row={row} />
-        </TabsContent>
-        <TabsContent value="usage" className="pt-5">
-          <SecretRecentUses secretRef={row.ref} />
-        </TabsContent>
-      </Tabs>
+      <div className="border-t border-border-subtle pt-5">
+        <SecretOverview row={row} />
+      </div>
 
       <ReplaceSecretDialog row={dialog === "replace" ? row : null} onOpenChange={close} />
       <RevealSecretDialog row={dialog === "reveal" ? row : null} onOpenChange={close} />

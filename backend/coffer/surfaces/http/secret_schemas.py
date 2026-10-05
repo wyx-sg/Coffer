@@ -317,21 +317,6 @@ class SecretCiterOut(BaseModel):
     slot: str | None = None
 
 
-class SecretUseOut(BaseModel):
-    """One time a secret was decrypted for use, and by whom (from the audit log)."""
-
-    at: str
-    actor: str
-    #: The destination's kind (mcp_server, channel, provider, sync_remote, ...) or `run`.
-    destination_kind: str
-    destination_uid: str | None = None
-    destination_name: str
-    slot: str | None = None
-    #: A `coffer run` child's program and working directory.
-    argv0: str | None = None
-    cwd: str | None = None
-
-
 class SecretBindingOut(BaseModel):
     """One destination a secret is sent to (or waits to be sent to)."""
 
