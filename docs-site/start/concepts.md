@@ -108,7 +108,7 @@ Guide: [Skills](/guides/skills).
 
 ## Knowledge collections and tidying
 
-A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and your agents write together. A document's path is its identity. You can edit documents in the web UI or in any editor, and agents read and edit them with their own file tools, finding them through the catalogue in `coffer-guide`. To add knowledge, an agent writes a document straight into the collection; an upload becomes a document as it stands. The `coffer-guide` skill tells the agent where a fact belongs and how to tidy a collection: merge documents on one subject, split a long one, correct a stale statement. Coffer runs no model of its own over your documents. **Tidy** on a collection hands that job to your default agent, in a new conversation.
+A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and your agents write together. A document's path is its identity. The web UI shows documents read-only and opens them in your editor; you edit them there, and agents read and edit them with their own file tools, finding them through the catalogue in `coffer-guide`. To add knowledge, an agent writes a document straight into the collection; an upload becomes a document as it stands. The `coffer-guide` skill tells the agent where a fact belongs and how to tidy a collection: merge documents on one subject, split a long one, correct a stale statement. Coffer runs no model of its own over your documents. **Tidy** on a collection hands that job to your default agent, in a new conversation.
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 

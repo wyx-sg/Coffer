@@ -1,6 +1,6 @@
 ---
 title: Editing the vault by hand
-description: Coffer's configuration and content are plain files in a git repository at ~/.coffer/vault — edit them in any editor, see what Coffer made of the edit, and read, compare and restore any version.
+description: Coffer's configuration and content are plain files in a git repository at ~/.coffer/vault — edit them in any editor, see what Coffer made of the edit, and read any version with git or have your agent bring one back.
 ---
 
 # Editing the vault by hand
@@ -70,15 +70,15 @@ Coffer notices the change, waits until the file has been quiet for a second (so 
 
 Coffer also scans the vault every minute and at startup, so an edit made while the daemon was stopped is picked up when it starts. What decides is the file's content, never its modification time.
 
-While you are editing a file, Coffer does not overwrite it: a save through the web UI to the same file is refused as stale (`VAULT_FILE_STALE`) rather than lost, and a sync round that would change it waits for you.
+While you are editing a file, Coffer does not overwrite it: a write Coffer itself makes to the same file is refused as stale (`VAULT_FILE_STALE`) rather than lost, and a sync round that would change it waits for you.
 
 ## History and restore
 
 Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer or sync) and on which machine. Any file or folder has a history. Secrets have no readable history and cannot be restored.
 
-In the web UI, a skill's **History** tab lists its versions with who wrote each, shows each version's changes file by file, and restores a version after asking. Knowledge documents have the same history on the **Knowledge** page.
+In the web UI, a knowledge document's **⋯** menu and a skill's **⋯** menu (not the built-in skill's) have **History…**. It shows where the file sits in the vault, copies `git -C ~/.coffer/vault log -p -- <path>`, reveals the file, and hands the restore to your agent: **Hand off to &lt;Agent&gt; to restore**, with an optional time. Coffer builds the prompt — the file, the time, that the vault is a git repository whose history is never rewritten, and that the agent writes the earlier content back as one new commit — and shows no version list, diff or Restore button of its own.
 
-For any other file, read the history with git itself and put an old version back by saving its content into the file:
+For any other file, read the history with git itself and put an old version back by saving its content into the file, or ask your agent to:
 
 ```sh
 cd ~/.coffer/vault
@@ -87,7 +87,7 @@ git diff <version> -- resources/mcp_server/jira.json
 git show <version>:resources/mcp_server/jira.json > resources/mcp_server/jira.json
 ```
 
-Coffer validates the saved file and records it as a **new** version, so nothing is rewritten in place and you can restore the restore. Make changes by editing files and let Coffer commit them: its commits carry the trailers that name the writer, and it validates what it commits.
+Coffer validates the saved file and records it as a **new** version, so nothing is rewritten in place and you can restore the restore. Make changes by editing files and let Coffer commit them: its commits carry the trailers that name the writer, and it validates what it commits. An agent that commits a restore itself names `Coffer-Writer: agent`, `Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`, which is what the hand-off's prompt asks for.
 
 ## Related
 

@@ -85,7 +85,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 删除断路器（Deletion breaker） {#deletion-breaker}
 
-[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者某个区域超过 20% 的内容，无论方向如何，都会被挂起，直到你在**同步**页面答复：**删除 n 个文件**，或**恢复 n 个文件**（保留它们）。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
+[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者某个区域超过 20% 的内容，无论方向如何，都会被挂起，直到你在**同步**页面答复：**删除 N 个文件**，或**保留文件**。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
 
 ### 投递（Delivery） {#delivery}
 
@@ -306,4 +306,4 @@ Coffer 按定时器、无需要求就做的机械性工作：记忆的 `aggregat
 
 ### 写入者（Writer） {#writer}
 
-[保险库](#vault)中一次提交的作者，写在它的 `Coffer-Writer` trailer 里：`user`（你，通过 Coffer 的某个界面）、`disk`（在编辑器、shell 或智能体自己的文件工具中编辑的文件）、`agent`、`daemon`、`curation`（只见于较早的历史）或 `sync`。技能的**历史**标签页会显示它。见[手动编辑保险库](/zh/guides/vault-files)。
+[保险库](#vault)中一次提交的作者，写在它的 `Coffer-Writer` trailer 里：`user`（你，通过 Coffer 的某个界面）、`disk`（在编辑器、shell 或智能体自己的文件工具中编辑的文件）、`agent`、`daemon`、`curation`（只见于较早的历史）或 `sync`。保险库里的 `git log` 会显示它。见[手动编辑保险库](/zh/guides/vault-files)。

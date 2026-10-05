@@ -5,6 +5,8 @@
 **Deciders**: Yuxing Wu
 **Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md); research note [agent skills](../research/agent-skills.md)
 
+**Partly superseded** (2026-10-05): Coffer has no in-app skill file editor any more, so the fingerprint-conditional in-app write described under concurrent writers no longer exists; the master folder is edited in the person's own editor or by an agent, see the OpenSpec change `hand-files-to-external-tools`.
+
 ## Context
 
 Coffer keeps one master folder per skill under `~/.coffer/vault/skills/<name>/`
@@ -143,8 +145,7 @@ of the same rule.**
 - **The master has concurrent writers.** The in-app editor's write is
   conditional on a fingerprint of the bytes it read, so a person's concurrent
   edit through their own editor or an agent's link produces a 409 instead of a
-  silent overwrite (spec skill-manager "Save an existing skill file
-  conditionally").
+  silent overwrite (spec skill-manager "Show a skill's master folder read-only").
 - **A copy is not promoted.** Nothing converts a `copy_fallback` binding into a
   link when the filesystem later gains link support.
 - **The Windows paths are tested less than the POSIX ones.** The unit tests in

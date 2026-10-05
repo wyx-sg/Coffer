@@ -180,7 +180,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 
 ## Inside an agent's config directory
 
-Coffer writes into a registered agent's own config directory only for things you asked for: connecting it to Coffer, delivering a skill, switching a model provider, or editing a config file from the agent's page. Every write is atomic, and the previous version of an edited file is first copied to `~/.coffer/config-backups`, never next to the file (see [Config backups](#config-backups)).
+Coffer writes into a registered agent's own config directory only for things you asked for: connecting it to Coffer, delivering a skill, switching a model provider, installing or removing an MCP entry, or switching a plugin. Every write is atomic, refused if the file changed since Coffer read it, and the previous version of the file is first copied to `~/.coffer/config-backups`, never next to the file (see [Config backups](#config-backups)).
 
 The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by default. An agent registered with another directory gets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` set on every process Coffer starts for it.
 

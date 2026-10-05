@@ -189,6 +189,7 @@ The settings for Coffer's own work are one vault document, `state/settings/inter
 | Setting | Default | Effect |
 | --- | --- | --- |
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. |
+| **Check skills for updates** (Settings → General) | every 6 hours | How often this machine checks Git-imported skills for newer commits in the background: every 6 hours, every day, every week or only when you ask. **Machine-local** (kept in `daemon-config.json`), not synced, and takes effect at once; a skill's own **Check for updates** works in every setting. |
 | **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. |
 
 The two memory passes are not in Settings. Each is switched and retimed in the **Automatic** popover on the **Memory** page; the popover's interval list (**Every**) runs from 15 minutes to 1 day, and a shorter interval can be set through the settings API down to a floor of 60 seconds. `coffer daemon status` shows the passes in flight.

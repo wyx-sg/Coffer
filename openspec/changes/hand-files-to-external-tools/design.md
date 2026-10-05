@@ -62,7 +62,7 @@ prompt. The prompt (built in `domain/vault/handoffs.py`, rendered by
   ([ADR](../../../docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md));
 - tell the person what was restored.
 
-It carries no secret and refuses a path under `secret/` (`VAULT_PATH_REFUSED`,
+It carries no secret and refuses a path under `secret/` (`VAULT_PATH_INVALID`,
 as the old restore did). The route sits on the vault router beside
 `/vault/problems`, which stays. `VaultHistoryService`, its port, the version
 and diff models and `VAULT_VERSION_NOT_FOUND` go.

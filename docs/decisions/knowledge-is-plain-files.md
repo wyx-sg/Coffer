@@ -5,6 +5,8 @@
 **Deciders**: Yuxing Wu
 **Related**: spec knowledge; [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
 
+**Partly superseded** (2026-10-05): the web UI no longer edits a document (it shows it read-only and opens it in the person's editor), and has no History tab or Recent changes; a delete keeps its toast Undo, see the OpenSpec change `hand-files-to-external-tools`.
+
 ## Context
 
 A developer who runs more than one coding agent over the same work writes the

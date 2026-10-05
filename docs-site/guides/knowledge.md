@@ -5,7 +5,7 @@ description: Keep what you and your agents know about your working environment a
 
 # Knowledge
 
-Knowledge is a directory of Markdown documents about your working environment — services, repositories, conventions, decisions, pitfalls — that every agent on your machine reads. This page covers creating collections, adding and editing documents, how your agent writes into them and tidies them when you press **Tidy**, how to look back at every change and restore one, and how agents find what is there.
+Knowledge is a directory of Markdown documents about your working environment — services, repositories, conventions, decisions, pitfalls — that every agent on your machine reads. This page covers creating collections, adding and reading documents, how you and your agent change them, how your agent tidies them when you press **Tidy**, how to look back at a document's history and bring a version back, and how agents find what is there.
 
 ## What knowledge is for
 
@@ -13,7 +13,7 @@ Knowledge holds facts about the world you work in: which team owns a service, ho
 
 - **One copy for every agent.** Claude Code and Codex read the same files, so what one agent records in the morning another reads in the afternoon.
 - **Plain files.** Each document is a Markdown file you can open, edit, grep and back up. Coffer keeps no index, no embeddings and no database copy of the content.
-- **Written together.** You edit documents on the Knowledge page or in your own editor. Agents write into the documents with their own file tools, following the rules in the `coffer-guide` skill: a fact goes into the document that already covers its subject. When documents drift into overlap, you press **Tidy** and your agent merges, splits and corrects them. Coffer itself runs no model over your knowledge.
+- **Written together.** You edit documents in your own editor; the Knowledge page shows them read-only and opens them there. Agents write into the documents with their own file tools, following the rules in the `coffer-guide` skill: a fact goes into the document that already covers its subject. When documents drift into overlap, you press **Tidy** and your agent merges, splits and corrects them. Coffer itself runs no model over your knowledge.
 
 Knowledge is not [memory](/guides/memory). Memory is what agents learn while working, read out of their own memory stores. Knowledge is what somebody deliberately wrote down.
 
@@ -143,7 +143,9 @@ If you have a [channel](/guides/channels) paired, there is no knowledge command.
 
 Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next sweep commits it to the history as an edit on disk.
 
-On the Knowledge page, choose a document and use **Edit** to change it in place, or the **⋯** menu's **Open in editor** or **Reveal in Finder** to jump to the file. The editor holds the document's body only: its front matter is shown above it, read-only. The editor is the one place that saves on request: **Discard** drops your changes and **Save** (**⌘S**) keeps them, and leaving with unsaved changes asks whether to leave without saving; the tree marks the open document with a dot meanwhile. A save that finds the file changed on disk since the page loaded it, by your own editor or by an agent, is refused as a conflict and the file is left as it is. The page says the document changed on disk and your text was not saved, and offers **Compare**, **Copy my text** and **Reload** — never a second save over it. **Compare** puts the two versions side by side with their diff: **Keep my edit** or **Take the version on disk**; whichever you leave out stays in the document's History. **Reload** takes what is on disk and asks first, because it drops your text. The saved file counts as an edit, exactly like one made in your own editor.
+On the Knowledge page, choose a document and use **Open in editor**, or the **⋯** menu's **Reveal in Finder**, to jump to the file. The page itself never edits a document: it shows the document read-only, and the next read shows whatever your editor or an agent saved. There is no unsaved state, no stale-save refusal and no leave-without-saving question, because nothing on the page holds your text. Open in editor uses the editor chosen in **Settings › General**.
+
+To add a document, drop a Markdown file into the collection's folder (**Reveal in Finder** on the collection) or use **Upload**.
 
 Agents do the same thing with their own file tools, by the writing rules the `coffer-guide` skill gives them (see [From an agent](#from-an-agent-write-into-the-documents)).
 
@@ -176,7 +178,7 @@ Tidy runs only when you press it or ask your agent. Coffer starts no agent run o
 
 ### If a tidy goes wrong
 
-Every edit the agent makes is a version in the [history](#history-and-restore), written as an edit on disk. Open the document's **History** tab and restore the version you want, or open **Recent changes**, which lists what the agent changed and what it deleted, with **Restore** on each delete.
+Every edit the agent makes is a version in the [history](#history-and-restore), written as an edit on disk. Open the document's **⋯** menu, choose **History…** and hand the restore to your agent, or read the versions with git (see [History and restore](#history-and-restore)).
 
 ::: info What leaves your machine
 Coffer sends nothing about your knowledge to any model. When you press Tidy, the documents the agent reads go to that agent's own provider, as in any conversation with it.
@@ -213,9 +215,9 @@ Write a good `README.md` for each collection: its first paragraph is what a mode
 
 On the Knowledge page, choose the collection in the tree, then a document. The documents are also plain files: the knowledge root is `~/.coffer/vault/knowledge/` and each collection is a folder in it, so you can read and grep them with your own tools. A collection's **⋯** menu has **Copy path**.
 
-The Knowledge page is one tree beside a reading pane, both filling the window under the page header. The title carries the **Experimental** tag; the header's actions are **Tidy all** and **Upload**, the page's one primary button — secondary while you are editing a document. At the top of the tree, **Collections** has a **New collection** button; below it every collection by its folder name, each opening to its documents shown by their file names. **Recent changes** sits above the collections. Choosing a collection shows its folder name, what belongs in it (click it to edit; it saves when you leave the field or press **⌘Enter**, **Esc** cancels, and a toast offers **Undo**) and its properties: **Documents** and **Folder**, with **Tidy** beside them. The collection's **⋯** menu holds **Reveal in Finder**, **Copy path**, **Rename…** and **Delete collection**; a collection with nothing in it yet says so and reminds you that you can upload one or drop Markdown files into its folder. Choosing a document renders it with **Edit** (see [Edit a file yourself](#edit-a-file-yourself)), a **Preview / Source** switch for Markdown and a **⋯** menu — **Open in editor**, **Reveal in Finder**, **Delete document** — on two tabs: **Document** and **History** (see [History and restore](#history-and-restore)). Under the title one line says who wrote it and when it was created.
+The Knowledge page is one tree beside a reading pane, both filling the window under the page header. The title carries the **Experimental** tag; the header's actions are **Tidy all** and **Upload**, the page's one primary button. At the top of the tree, **Collections** has a **New collection** button; below it every collection by its folder name, each opening to its documents shown by their file names. Choosing a collection shows its folder name, what belongs in it (click it to edit; it saves when you leave the field or press **⌘Enter**, **Esc** cancels, and a toast offers **Undo**) and its properties: **Documents** and **Folder**, with **Tidy** beside them. The collection's **⋯** menu holds **Reveal in Finder**, **Copy path**, **Rename…** and **Delete collection**; a collection with nothing in it yet says so and reminds you that you can upload one or drop Markdown files into its folder. Choosing a document shows it read-only, with a **Preview / Source** switch for Markdown, **Open in editor** as a button (see [Edit a file yourself](#edit-a-file-yourself)) and a **⋯** menu — **Reveal in Finder**, **History…** (see [History and restore](#history-and-restore)) and **Delete document**. Under the title one line says who wrote it and when it was created, read from the document's front matter.
 
-The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a document into the page: you write through **Edit**, and agents by writing files.
+The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a document into the page: you write in your own editor, and agents by writing files.
 
 ## Every collection reaches every agent
 
@@ -227,31 +229,31 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 ## History and restore
 
-Every change to a collection is kept as a version: your saves and deletes, an upload or dropped file that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools — which is how a tidy shows up. Each change names its **writer** — `user`, `agent`, `sync` or `disk` (and `curation` on versions an earlier Coffer wrote) — so you can always tell who changed what.
+Every change to a collection is kept as a version: your deletes, an upload or dropped file that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools — which is how a tidy shows up. Each change names its **writer** — `user`, `agent`, `sync` or `disk` (and `curation` on versions an earlier Coffer wrote) — so you can always tell who changed what.
 
-The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the history reads are refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab (*History needs git*) and **Recent changes** (*Recent changes needs git*) show one row with **Check again** and **Hand off to &lt;Agent&gt; ▾** — its menu copies the prompt.
+The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the changes feed a delete's **Undo** reads is refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`.
 
-### Look at a document's history
+### Bring back an earlier version
 
-A document's **History** tab is split in two, like a skill's: its versions on the left, newest first, with their writers and line counts, and the chosen version on the right — the newest when the tab opens. Drag the divider to give either side more room. The right side shows the diff, **Changes in this version** (against the version before) or **Compare with current**, with **Restore this version** on every version but the current one. Long lines wrap rather than being cut off. If the history cannot be read, the tab shows one **Load error** row with **Retry** and **Open Activity**, and the Document tab keeps working.
+Coffer shows no version list, diff or restore button: git and your agent do that better, on the same file. A document's **⋯** menu has **History…**, which opens a dialog with:
 
-A restore is a new version of its own, written by you; the history before it stays. A deleted document is restored the same way, from the version before the delete.
+- the document's path in the vault;
+- an optional date and time to restore to;
+- **Copy git command** — `git -C <vault> log -p -- <path>`, which lists every version of the file with its diff;
+- **Reveal in Finder**;
+- **Hand off to &lt;Agent&gt; to restore**, which starts your agent with a prompt Coffer builds: the file, the time you picked, that the vault is a git repository whose history is never rewritten, and that the agent writes the earlier content back as one new commit naming itself as the writer. Without a time, the agent lists the recent versions and asks which one.
 
-### See recent changes
-
-**Recent changes**, at the top of the tree, is the timeline across every collection for the last seven days, grouped by day, with **Collection** and **Author** filters and **Clear filters** (your choice stays in the page's address).
-
-Each change lists its writer, its time, its collection and every document it added, modified or removed, with line counts. A delete carries **Restore** (see [Delete documents and collections](#delete-documents-and-collections)).
+The restore is a new version of its own; the history before it stays. A deleted document comes back the same way, from the version before the delete.
 
 ## Delete documents and collections
 
 Only a person deletes through Coffer. Coffer gives agents no tool that deletes knowledge, and you can delete any document, whoever wrote it. The change is also an ordinary file delete, so removing a file in your own editor works too and shows up in the history as an edit made on disk.
 
-- **A document:** Knowledge → choose the document → **⋯** → **Delete document**.
-- **A whole collection, and every file in it:** Knowledge → choose the collection → **⋯** → **Delete collection**.
+- **A document:** Knowledge → choose the document → **⋯** → **Delete document**. It happens at once.
+- **A whole collection, and every file in it:** Knowledge → choose the collection → **⋯** → **Delete collection**. Coffer asks first, naming the collection and how many documents it holds.
 
-::: tip A delete can be restored
-In the web UI a delete happens at once: no confirmation, no typed name, and a toast, *Deleted `<name>`*, with **Undo**. A deleted document or collection stays in the [history](#history-and-restore), so **Undo** puts it back even after the toast is gone. **Recent changes** lists the delete with **Restore**, which puts back exactly what it removed — a document into its collection, a collection with its documents and its README — as one new change by you. A restore is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again.
+::: tip A delete can be undone
+A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts back exactly what it removed — a document into its collection, a collection with its documents and its README — as one new change by you. Undo is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again. Once the toast is gone, a document can still be brought back from the vault's history (see [Bring back an earlier version](#bring-back-an-earlier-version)); a deleted collection's files can be, but its registration cannot, which is why **Delete collection** asks first.
 :::
 
 ## What not to put in knowledge
@@ -262,7 +264,7 @@ In the web UI a delete happens at once: no confirmation, no typed name, and a to
 
 ## Troubleshooting
 
-**A tidy rewrote a document badly.** Open the document's **History** tab and restore the version before the agent's edit, or open **Recent changes** and find the agent's changes there.
+**A tidy rewrote a document badly.** Open the document's **⋯** menu, choose **History…**, pick a time before the tidy and hand the restore to your agent.
 
 **Tidy offers only Copy prompt.** No managed agent is available. Add one under **Agents**, or paste the copied prompt into the agent you use; it must have the `coffer-guide` skill.
 

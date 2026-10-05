@@ -148,7 +148,7 @@ backend/coffer/
 │   ├── memory/             # aggregate, mechanical distil, tidy hand-off, delivery, session-start context
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
-│   ├── vault/              # validation rules, history and restore, problems
+│   ├── vault/              # validation rules, problems
 │   └── sync/               # the thin round, answers, join, rollback, worker
 ├── infrastructure/
 │   ├── persistence/        # runs.db (SQLAlchemy, Alembic) and derived.db

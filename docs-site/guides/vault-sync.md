@@ -147,7 +147,7 @@ When a round needs you, **Overview** lists it under **Needs you**, and the deskt
 
 When two machines change the same lines of the same file before either syncs, git cannot merge them. The round stops. Nothing is checked out and nothing is pushed, so the vault on this machine stays as it was.
 
-The **Status** tab lists the files under **Changed on both Macs**, with **Resolve conflicts** and **Hand off to &lt;Agent&gt;** (which hands every file an agent may merge over at once). **Resolve conflicts** opens one page for all files. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**. To merge by hand, **Open in editor** opens a marked-up copy under `~/.coffer/derived/sync-conflicts/`: edit it and remove every conflict marker. A copy that still has a marker is refused, and the message names the line. The vault's own file never receives a marker. One file can also be handed to an agent on its own. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
+The **Status** tab lists the files under **Changed on both Macs**, with **Resolve conflicts** and **Hand off to &lt;Agent&gt;** (which hands every file an agent may merge over at once). **Resolve conflicts** opens one page for all files. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with what the choice changes here (take theirs also shows the diff it makes), and **Open in editor**, then **Mark resolved**. To merge by hand, **Open in editor** opens a marked-up copy under `~/.coffer/derived/sync-conflicts/`: edit it and remove every conflict marker. The page shows none of that copy's text and has no merge editor of its own: the editor is where you read and change it. A copy that still has a marker is refused, and the message names the line. The vault's own file never receives a marker. One file can also be handed to an agent on its own. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
 
 ### Merge with an agent
 
@@ -158,7 +158,7 @@ Merging two edits of one file is a job for your agent. On a stopped round, **Han
 - keep what each side added, and ask you where the two contradict;
 - write only those copies: the vault's own files and its git history are left alone, because Coffer writes the merged file into the vault.
 
-An agent's merge is never an answer by itself. When a copy holds a merge, the file reads **Merged by an agent · check it** and shows the merge's diff from this machine's version, with two choices:
+An agent's merge is never an answer by itself. When a copy holds a merge, the file reads **Merged by an agent · check it**. Coffer shows no diff of the merge: read the copy in your editor (**Open in editor**) before you answer, with two choices:
 
 - **Mark resolved** takes the copy as the file's answer. Coffer refuses while the copy still has a conflict marker, naming the line.
 - **Back to two choices** forgets the copy and the hand-off, and the file is open to **Keep this Mac's** or **Take &lt;machine&gt;'s** again.
@@ -178,7 +178,7 @@ A round that would lose more than **20%** of the files in one area, or **20 or m
 
 A file that reappears at another path in the same round is a move, not a loss, and a resource file counts by its uid, so reorganising or renaming never asks.
 
-Either answer continues the round. On the web the **Status** tab says who deleted how many files, grouped by folder, and **Review deletions** lists them with **Delete n files…** (asks first; a safety snapshot is taken) and **Restore n files**. If this machine was just reinstalled or restored, restore: do not confirm.
+Either answer continues the round. On the web the **Status** tab says who deleted how many files, grouped by folder, and **Review deletions** lists them by folder with two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already names what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete.
 
 ## When a round finds a plaintext secret
 
@@ -223,7 +223,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Press **Move the vault…** on the Status tab: Coffer pauses rounds and agent writes, moves the folder (to `~/.coffer/vault` unless you choose another place outside any synchronised folder), checks the git repository there and resumes. The old folder is left empty; delete it yourself. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |
-| A held round after reinstalling Coffer | The empty vault would push its loss. | **Restore n files** on the **Status** tab. |
+| A held round after reinstalling Coffer | The empty vault would push its loss. | **Keep the files** in **Review deletions** on the **Status** tab. |
 | Secrets cannot be decrypted | This machine lacks the master key they were encrypted with. | **Import a master key** on **Settings › Security**, with the key from a machine that has it. |
 
 A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent (a plaintext secret has none, above). The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message. It never carries or asks for a token. **Retry** stays Coffer's own button.
