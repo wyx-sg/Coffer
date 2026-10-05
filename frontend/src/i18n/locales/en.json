@@ -5175,7 +5175,7 @@
       "body": "Name a command, or the path to an executable.",
       "editTitle": "Edit {{command}}",
       "editBody": "Change what Coffer checks for this tool.",
-      "describeBody": "Say what this tool is for. Its minimum version and login check come from the skills and MCP servers that need it.",
+      "requiredBody": "A skill or MCP server needs this tool. What you change here replaces what they say; clear a field to go back to theirs. The highest minimum version anyone asks for applies.",
       "command": "Command",
       "commandPlaceholder": "jq, or /opt/tools/bin/jq",
       "fixed": "Fixed — Coffer finds the tool by it.",

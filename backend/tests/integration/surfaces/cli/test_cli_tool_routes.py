@@ -127,12 +127,12 @@ def test_a_tool_can_be_edited_and_removed(daemon: CliDaemon, tmp_path: pathlib.P
     assert daemon.client.get("/clis").json()["items"] == []
     assert daemon.client.get("/clis/jq").status_code == 404
     assert not (vault_root(tmp_path) / _STATE).exists()
-    for call in (
-        daemon.client.patch("/clis/jq", json={"title": "x"}),
-        daemon.client.delete("/clis/jq"),
-    ):
-        assert call.status_code == 404
-        assert call.json()["error"]["code"] == "CLI_TOOL_NOT_DECLARED"
+    gone = daemon.client.delete("/clis/jq")
+    assert gone.status_code == 404
+    assert gone.json()["error"]["code"] == "CLI_TOOL_NOT_DECLARED"
+    unknown = daemon.client.patch("/clis/jq", json={"title": "x"})
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["code"] == "CLI_NOT_KNOWN"
 
 
 def test_changes_are_audited(daemon: CliDaemon) -> None:
@@ -191,25 +191,31 @@ def test_a_tool_is_added_edited_and_removed(daemon: CliDaemon) -> None:
     assert again.json()["error"]["code"] == "CLI_TOOL_NOT_DECLARED"
 
 
-@pytest.mark.acceptance(
-    spec="skill-manager", scenario="a required tool takes a description and nothing else"
-)
-def test_a_required_tool_takes_a_description_and_nothing_else(
-    daemon: CliDaemon, tmp_path: pathlib.Path
-) -> None:
-    daemon.add_skill("data", "  - command: jq\n")
+@pytest.mark.acceptance(spec="skill-manager", scenario="a required tool takes the person's edits")
+def test_a_required_tool_takes_the_persons_edits(daemon: CliDaemon, tmp_path: pathlib.Path) -> None:
+    daemon.add_skill("data", '  - command: jq\n    title: From skill\n    min_version: "1.5"\n')
     r = daemon.client.patch("/clis/jq", json={"description": "Slice  JSON."})
     assert r.status_code == 200, r.text
     assert r.json()["description"] == "Slice JSON." and r.json()["added"] is False
-    assert daemon.client.get("/clis/jq").json()["description"] == "Slice JSON."
     stored = _stored(tmp_path)
     assert stored["tools"] == [] and stored["notes"] == {"jq": "Slice JSON."}
-    refused = daemon.client.patch("/clis/jq", json={"title": "x"})
-    assert refused.status_code == 404
-    assert refused.json()["error"]["code"] == "CLI_TOOL_NOT_DECLARED"
+    r = daemon.client.patch(
+        "/clis/jq",
+        json={"title": "JSON", "min_version": "1.7", "login_check": "jq auth status"},
+    )
+    assert r.status_code == 200, r.text
+    jq = r.json()
+    assert jq["title"] == "JSON" and jq["min_version"] == "1.7" and jq["added"] is False
+    assert jq["login"]["check"] == ["jq", "auth", "status"]
+    assert jq["description"] == "Slice JSON." and len(jq["needed_by"]) == 1
+    assert [e["command"] for e in _stored(tmp_path)["edits"]] == ["jq"]
+    # null brings back what the skill says
+    r = daemon.client.patch("/clis/jq", json={"title": None, "min_version": None})
+    assert r.json()["title"] == "From skill" and r.json()["min_version"] == "1.5"
+    bad = daemon.client.patch("/clis/jq", json={"login_check": "other status"})
+    assert bad.status_code == 400
     unknown = daemon.client.patch("/clis/nope", json={"description": "x"})
     assert unknown.status_code == 404
     assert unknown.json()["error"]["code"] == "CLI_NOT_KNOWN"
-    cleared = daemon.client.patch("/clis/jq", json={"description": None})
-    assert cleared.json()["description"] is None
+    daemon.client.patch("/clis/jq", json={"description": None, "login_check": None})
     assert not (vault_root(tmp_path) / _STATE).exists()

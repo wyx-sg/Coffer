@@ -2243,10 +2243,12 @@ states a problem re-checks that one tool. Under the header's meta line a CLI wit
 a description shows it as plain text, and one without shows nothing there; the
 header holds no field to type into.
 Every CLI — added by hand or required — has **Edit** on the header's right,
-which opens the Add CLI form with the command locked: for a CLI a person added
-it edits the display name, description, minimum version and login check, and for one only a
-skill or MCP server requires it edits the description alone (spec skill-manager
-"Declare a command-line tool without a skill"). Only a CLI a person added also
+which opens the Add CLI form with the command locked and every field — display
+name, minimum version, description and login check — filled with what the CLI
+reads now. For a CLI only a skill or MCP server requires, the form says that
+its changes replace what those say and that a cleared field goes back to
+theirs, and it sends only the fields that changed (spec skill-manager "Declare
+a command-line tool without a skill"). Only a CLI a person added also
 has a **⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
 installed on this machine). **Add CLI** opens a 480-wide form for a command name
 or path, with an optional display name (the request's `title`, shown before the
@@ -2310,10 +2312,10 @@ is probed are specified by skill-manager; this page shows what they report.
 - **THEN** an attention item names the CLI and the problem, and its name and its Check action open the CLI's page
 - **AND** once the daemon's list no longer reports it — every required CLI present, current and logged in — the item is gone
 
-#### Scenario: a required CLI's description is edited in a dialog
+#### Scenario: a required CLI is edited in the same dialog
 - **GIVEN** `uv`, required by a skill and not added by hand
-- **WHEN** the user opens `/clis/uv`, chooses Edit, types a description and saves
-- **THEN** the page saves that description alone for `uv`, trimmed, and the dialog offers no minimum version or login check
+- **WHEN** the user opens `/clis/uv`, chooses Edit, changes the display name and saves
+- **THEN** the dialog showed the display name, minimum version, description and login check, and the page saves only the display name for `uv`
 
 ### Requirement: Resize every split view by its divider
 Every split view — a list beside its detail, a file tree beside its file, and the sidebar beside the workspace — MUST

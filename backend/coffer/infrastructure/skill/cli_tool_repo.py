@@ -1,15 +1,18 @@
 """Where the command-line tools a person added by hand are kept.
 
 The declarations are a vault state document, ``state/cli-tools/tools.json`` —
-machine-independent, so they travel with the vault. The same document keeps,
-under ``notes``, the description a person wrote for a tool they did not add (one
-a skill or MCP server requires). Where a tool was found on
+machine-independent, so they travel with the vault. The same document keeps
+what a person changed on a tool they did not add (one a skill or MCP server
+requires): its description under ``notes``, and its display name, minimum
+version and login check under ``edits``, one entry per command shaped like a
+declaration without a description. Where a tool was found on
 this machine (when it was added by an absolute path) is machine-local state
 under ``local/`` and never synced.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -40,34 +43,57 @@ class VaultCliToolRepo:
             return {}
         return {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
 
-    def save(self, tools: list[DeclaredTool], *, summary: str, actor: str | None = None) -> None:
-        self._write(tools, self.notes(), summary=summary, actor=actor)
+    def edits(self) -> dict[str, DeclaredTool]:
+        """The display name, minimum and login check changed on tools nobody
+        added by hand, by command."""
+        raw = (self._doc.get() or {}).get("edits", [])
+        found = (from_document(entry) for entry in raw if isinstance(raw, list))
+        return {t.command: replace(t, description=None) for t in found if t is not None}
 
-    def set_note(
-        self, command: str, text: str | None, *, summary: str, actor: str | None = None
+    def save(self, tools: list[DeclaredTool], *, summary: str, actor: str | None = None) -> None:
+        # A tool now added by hand carries its own fields; its edits go.
+        edits = {k: v for k, v in self.edits().items() if all(t.command != k for t in tools)}
+        self._write(tools, self.notes(), edits, summary=summary, actor=actor)
+
+    def set_edit(
+        self,
+        command: str,
+        edit: DeclaredTool | None,
+        note: str | None,
+        *,
+        summary: str,
+        actor: str | None = None,
     ) -> None:
-        """Keep ``text`` as ``command``'s description; ``None`` drops it."""
-        notes = self.notes()
-        if text is None:
+        """Keep ``note`` as ``command``'s description and ``edit``'s display
+        name, minimum and login check; ``None`` drops either."""
+        notes, edits = self.notes(), self.edits()
+        if note is None:
             notes.pop(command, None)
         else:
-            notes[command] = text
-        self._write(self.all(), notes, summary=summary, actor=actor)
+            notes[command] = note
+        if edit is None:
+            edits.pop(command, None)
+        else:
+            edits[command] = replace(edit, description=None)
+        self._write(self.all(), notes, edits, summary=summary, actor=actor)
 
     def _write(
         self,
         tools: list[DeclaredTool],
         notes: dict[str, str],
+        edits: dict[str, DeclaredTool],
         *,
         summary: str,
         actor: str | None,
     ) -> None:
-        if not tools and not notes:
+        if not tools and not notes and not edits:
             self._doc.remove(summary=summary, actor=actor)
             return
         body: dict[str, Any] = {"tools": [to_document(t) for t in sorted_tools(tools)]}
         if notes:
             body["notes"] = dict(sorted(notes.items()))
+        if edits:
+            body["edits"] = [to_document(t) for t in sorted_tools(list(edits.values()))]
         self._doc.put(body, summary=summary, actor=actor)
 
 

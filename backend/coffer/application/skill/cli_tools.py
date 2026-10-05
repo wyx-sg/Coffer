@@ -1,9 +1,11 @@
 """Add, edit and remove the command-line tools a person declares by hand (spec
 skill-manager "Declare a command-line tool without a skill").
 
-A tool a skill or MCP server requires is not the person's to declare, but its
-description is theirs to write: that is the one field ``edit`` changes on a
-tool nobody added by hand.
+A tool a skill or MCP server requires is not the person's to declare, but
+they may change any of its fields: its description, display name, minimum
+version and login check are kept beside the declarations and take the place
+of what the skills say, as a hand-added declaration's would (the minimum is
+still the highest anyone asks for). Such a tool stays not added by hand.
 
 A tool added here needs no skill and no MCP server: it is one entry in the
 vault's ``cli-tools`` state document, and it is listed, checked and read like
@@ -45,8 +47,16 @@ class DeclaredToolsStore(Protocol):
         self, tools: list[DeclaredTool], *, summary: str, actor: str | None = None
     ) -> None: ...
 
-    def set_note(
-        self, command: str, text: str | None, *, summary: str, actor: str | None = None
+    def edits(self) -> dict[str, DeclaredTool]: ...
+
+    def set_edit(
+        self,
+        command: str,
+        edit: DeclaredTool | None,
+        note: str | None,
+        *,
+        summary: str,
+        actor: str | None = None,
     ) -> None: ...
 
 
@@ -143,25 +153,12 @@ class CliToolService:
 
     async def edit(self, command: str, changes: dict[str, Any], *, actor: str = "api") -> CliView:
         """``changes`` holds only the fields the caller sent; ``None`` clears one.
-        A tool nobody added by hand takes only ``description``."""
+        On a tool nobody added by hand they are kept as the person's edits."""
         tools = self._declared.all()
         current = next((t for t in tools if t.command == command), None)
         if current is None:
-            if set(changes) - {"description"}:
-                raise CliToolNotDeclared(command)
-            return await self._describe(command, changes.get("description"), actor)
-        edited = replace(current)
-        if "title" in changes:
-            edited = replace(edited, title=clean_text(changes["title"], "title"))
-        if "description" in changes:
-            edited = replace(
-                edited,
-                description=clean_text(changes["description"], "description", DESCRIPTION_MAX),
-            )
-        if "min_version" in changes:
-            edited = replace(edited, min_version=clean_min_version(changes["min_version"]))
-        if "login_check" in changes:
-            edited = replace(edited, login_check=clean_login_check(command, changes["login_check"]))
+            return await self._edit_required(command, changes, actor)
+        edited = _apply(current, changes)
         if edited != current:
             rest = [t for t in tools if t.command != command]
             await self._save([*rest, edited], f"Edited the command-line tool {command}", actor)
@@ -172,22 +169,28 @@ class CliToolService:
             )
         return await self._after(command)
 
-    async def _describe(self, command: str, raw: str | None, actor: str) -> CliView:
-        """Keep the description of a tool a skill or MCP server requires."""
+    async def _edit_required(self, command: str, changes: dict[str, Any], actor: str) -> CliView:
+        """Keep the changes made to a tool a skill or MCP server requires."""
         await self._requirements.get(command)  # CliNotKnown for a command nobody lists
-        text = clean_text(raw, "description", DESCRIPTION_MAX)
-        if self._declared.notes().get(command) != text:
+        note = self._declared.notes().get(command)
+        before = self._declared.edits().get(command)
+        current = replace(before or DeclaredTool(command), description=note)
+        edited = _apply(current, changes)
+        if edited != current:
+            rest = replace(edited, description=None)
+            edit = None if rest == DeclaredTool(command) else rest
             await asyncio.to_thread(
-                self._declared.set_note,
+                self._declared.set_edit,
                 command,
-                text,
-                summary=f"Described the command-line tool {command}",
+                edit,
+                edited.description,
+                summary=f"Edited the command-line tool {command}",
                 actor=actor,
             )
             await self._audit.record(
                 AuditEventType.CLI_TOOL_EDITED.value,
                 actor=actor,
-                details={"command": command, "fields": ["description"]},
+                details={"command": command, "fields": sorted(changes)},
             )
         return await self._after(command)
 
@@ -209,6 +212,22 @@ class CliToolService:
     async def _after(self, command: str) -> CliView:
         self._requirements.forget(command)
         return await self._requirements.check(command)
+
+
+def _apply(tool: DeclaredTool, changes: dict[str, Any]) -> DeclaredTool:
+    """``tool`` with the fields ``changes`` carries cleaned and set; ``None`` clears one."""
+    command = tool.command
+    if "title" in changes:
+        tool = replace(tool, title=clean_text(changes["title"], "title"))
+    if "description" in changes:
+        tool = replace(
+            tool, description=clean_text(changes["description"], "description", DESCRIPTION_MAX)
+        )
+    if "min_version" in changes:
+        tool = replace(tool, min_version=clean_min_version(changes["min_version"]))
+    if "login_check" in changes:
+        tool = replace(tool, login_check=clean_login_check(command, changes["login_check"]))
+    return tool
 
 
 __all__ = ["CliPreview", "CliToolService"]

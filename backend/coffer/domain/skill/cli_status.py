@@ -3,7 +3,8 @@
 Rows aggregate every managed skill that declares the command and the tool the
 person added by hand under that name (``DeclaredTool``; no skill needed): the
 minimum is the highest any of them asks for; the title and login check come
-from the hand-added declaration first, then from the first skill (by name) that
+from the hand-added declaration (or, for a tool nobody added, the person's
+edits) first, then from the first skill (by name) that
 declares each, and the login command from the first skill that gives one. The launcher an
 enabled stdio MCP server starts with is required too — by that server, under
 the command that provides it (``uv`` for ``uvx``, see :func:`launcher_cli`),
@@ -148,11 +149,15 @@ def aggregate(
     declared: Iterable[DeclaredTool] = (),
     coffer: Iterable[CofferNeed] = (),
     notes: Mapping[str, str] | None = None,
+    edits: Mapping[str, DeclaredTool] | None = None,
 ) -> list[RequiredCommand]:
     """One :class:`RequiredCommand` per command, sorted by command name.
     ``notes`` are descriptions written for tools nobody added by hand; a
-    hand-added tool's own description wins."""
+    hand-added tool's own description wins. ``edits`` are the display name,
+    minimum and login check changed on such a tool: they take the place of a
+    hand-added declaration's, and list no command on their own."""
     notes = notes or {}
+    edits = edits or {}
     by_declared = {d.command: d for d in declared}
     by_coffer = {c.command: c for c in coffer}
     by_command: dict[str, list[tuple[str, str, CommandRequirement]]] = {}
@@ -172,6 +177,7 @@ def aggregate(
             by_declared.get(command),
             by_coffer.get(command),
             notes.get(command),
+            edits.get(command),
         )
         for command in sorted(
             by_command.keys() | by_server.keys() | by_declared.keys() | by_coffer.keys()
@@ -186,9 +192,10 @@ def _row(
     declared: DeclaredTool | None = None,
     coffer: CofferNeed | None = None,
     note: str | None = None,
+    edit: DeclaredTool | None = None,
 ) -> RequiredCommand:
     reqs = [req for _uid, _name, req in entries]
-    own = declared or DeclaredTool(command)
+    own = declared or edit or DeclaredTool(command)
     return RequiredCommand(
         command=command,
         title=own.title

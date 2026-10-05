@@ -7,7 +7,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
-import { DEMO_ADDED, UV_READY } from "@/test/cliFixtures";
+import { DEMO_ADDED, GH_OUTDATED } from "@/test/cliFixtures";
 import { AddCliDialog } from "./AddCliDialog";
 
 vi.mock("@/lib/api/clis", () => ({
@@ -145,18 +145,23 @@ describe("AddCliDialog", () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
-  test("a tool only a skill requires edits its description alone", async () => {
-    api.edit.mockResolvedValue({ ...UV_READY, description: "Runs Python tools." });
-    const { onOpenChange } = renderDialog({ existing: UV_READY });
-    expect(screen.getByText("Edit uv")).toBeInTheDocument();
+  test("a tool a skill requires edits every field and sends only what changed", async () => {
+    api.edit.mockResolvedValue({ ...GH_OUTDATED, min_version: "2.50" });
+    const { onOpenChange } = renderDialog({ existing: GH_OUTDATED });
+    expect(screen.getByText("Edit gh")).toBeInTheDocument();
     expect(screen.getByLabelText("Command")).toBeDisabled();
-    expect(screen.queryByLabelText("Display name")).toBeNull();
-    expect(screen.queryByLabelText("Minimum version")).toBeNull();
-    expect(screen.queryByLabelText("Login check")).toBeNull();
-    type("Description", "  Runs Python tools.  ");
+    expect(screen.getByText(/What you change here replaces what they say/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Display name")).toHaveValue("GitHub CLI");
+    expect(screen.getByLabelText("Minimum version")).toHaveValue("2.40");
+    expect(screen.getByLabelText("Login check")).toHaveValue("");
+    type("Minimum version", "2.50");
+    type("Description", "  Opens issues.  ");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(api.edit).toHaveBeenCalledWith("uv", { description: "Runs Python tools." }),
+      expect(api.edit).toHaveBeenCalledWith("gh", {
+        description: "Opens issues.",
+        min_version: "2.50",
+      }),
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
