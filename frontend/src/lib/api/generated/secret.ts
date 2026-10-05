@@ -155,7 +155,8 @@ export interface paths {
          *     API"). A replacement is audited as such, never with a value, and whatever
          *     holds the old value, such as the model proxy, picks the new one up.
          *
-         *     Without a `ref`, a `label` names it: the id `secret/<uuid4 hex>` is minted,
+         *     Without a `ref`, a `label` names it (and a `description` says what it is
+         *     for): the id `secret/<uuid4 hex>` is minted,
          *     the label stored as its note, and the answer is 201 with the ref and uri
          *     (spec secret "Mint every secret's id; a person names it").
          */
@@ -323,7 +324,9 @@ export interface paths {
         /**
          * Request Local Access
          * @description Ask for a standalone secret's local-process grant. Only records the
-         *     request: the grant takes a person's approval in the desktop app.
+         *     request: the grant takes a person's approval in the desktop app. Asking
+         *     after a refusal asks again: the refusal is retired and a new request waits
+         *     (only `coffer run` stays refused until then).
          */
         post: operations["request_local_access_api_v1_secrets_local_access_request_post"];
         delete?: never;
@@ -1287,6 +1290,11 @@ export interface components {
              * @description The uid of the resource a new secret is minted for; deleting that resource releases the secret when nothing else cites it.
              */
             created_for?: string | null;
+            /**
+             * Description
+             * @description What the secret is for.
+             */
+            description?: string | null;
             /**
              * Label
              * @description The name the person gives the secret, stored as its label.

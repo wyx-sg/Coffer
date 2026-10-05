@@ -292,6 +292,9 @@ class SecretSetIn(BaseModel):
         max_length=64,
         description="The name the person gives the secret, stored as its label.",
     )
+    description: str | None = Field(
+        default=None, min_length=1, max_length=200, description="What the secret is for."
+    )
     created_for: str | None = Field(
         default=None,
         min_length=1,
@@ -301,11 +304,7 @@ class SecretSetIn(BaseModel):
             "resource releases the secret when nothing else cites it."
         ),
     )
-    value: str = Field(
-        min_length=1,
-        max_length=8192,
-        description="The secret value.",
-    )
+    value: str = Field(min_length=1, max_length=8192, description="The secret value.")
 
 
 class SecretMintedOut(BaseModel):

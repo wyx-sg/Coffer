@@ -1,7 +1,7 @@
 // src/components/secret/SecretListRow.tsx — one secret in the Secrets list pane.
 //
-// The display name (its label, else a readable default — never a hex id) on one line, with no
-// description (that is on its page); on the right, a status word when this Mac has no value or a destination waits for
+// One line, as tall as a single line of text: the display name (its label, else a readable
+// default — never a hex id), with no description (that is on its page); on the right, a status word when this Mac has no value or a destination waits for
 // approval, and how many things use it. The checkbox feeds the selection bar; like the other
 // library lists it shows on hover or focus, and on every row while any is ticked.
 import { Link } from "react-router-dom";
@@ -51,10 +51,10 @@ export function SecretListRow({ item, to, current, selecting, checked, onChecked
       <Link
         to={to}
         aria-current={current ? "page" : undefined}
-        className="flex min-h-[52px] min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
+        className="flex min-h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1.5 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
       >
         <span className="min-w-0 flex-1 truncate text-sm font-label">{item.short}</span>
-        <span className="flex shrink-0 flex-col items-end gap-0.5">
+        <span className="flex shrink-0 items-center gap-2">
           {item.missing ? <StatusWord tone="err">{t("secrets.row.missing")}</StatusWord> : null}
           {item.pending ? <StatusWord tone="warn">{t("secrets.row.pending")}</StatusWord> : null}
           <span className="text-xs text-text-muted">

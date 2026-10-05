@@ -378,12 +378,17 @@ class SecretBoundary:
             ref, LOCAL_PROCESS_KIND, LOCAL_PROCESS_UID, LOCAL_PROCESS_SLOT
         )
         self._supersede_bind(ref, LOCAL_PROCESS_KIND, LOCAL_PROCESS_UID, LOCAL_PROCESS_SLOT)
+        self.retire_local_refusal(ref)
+        return had
+
+    def retire_local_refusal(self, ref: str) -> None:
+        """Forget a refused local-process request for ``ref``, so asking for the
+        grant again puts a new request in front of the person. Grants nothing."""
         for approval in self._store.list_approvals(status="rejected"):
             if approval.ref == ref and approval.destination_kind == LOCAL_PROCESS_KIND:
                 self._store.decide(
                     approval.id, "superseded", by="system", at=self._stamp(), only_from="rejected"
                 )
-        return had
 
     def forget(self, ref: str) -> None:
         """A deleted secret takes its bindings with it; a new value is a new secret."""

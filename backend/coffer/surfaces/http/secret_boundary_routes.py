@@ -266,13 +266,14 @@ async def request_local_access(
     actor: str = Depends(get_actor),
 ) -> LocalAccessOut:
     """Ask for a standalone secret's local-process grant. Only records the
-    request: the grant takes a person's approval in the desktop app."""
+    request: the grant takes a person's approval in the desktop app. Asking
+    after a refusal asks again: the refusal is retired and a new request waits
+    (only `coffer run` stays refused until then)."""
     (name,) = await asyncio.to_thread(_check_names, [body.name], store)
+    await asyncio.to_thread(get_secret_boundary().retire_local_refusal, secret_ref(name))
     waiting = await _ask_local([name], actor, audit)
     if not waiting:
         return LocalAccessOut(local_access="on")
-    if waiting[0].status == "rejected":
-        raise SecretBindingRejected([waiting[0].id], [waiting[0].describe()])
     return LocalAccessOut(local_access="pending", approval_id=waiting[0].id)
 
 

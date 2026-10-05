@@ -38,9 +38,13 @@ export const secretsApi = {
   remove: (ref: string) =>
     unwrapVoid(getApiClient().DELETE("/secrets/{ref}", { params: { path: { ref } } })),
   /** Where this Mac last handed the value out, newest first. */
-  /** Add a standalone secret under a minted id, labelled `label`; answers its ref and URI. */
-  add: (label: string, value: string) =>
-    unwrap(getApiClient().POST("/secrets", { body: { label, value } })) as Promise<AddedSecret>,
+  /** Add a standalone secret under a minted id, labelled `label` (and described); answers its ref and URI. */
+  add: (label: string, value: string, description?: string) =>
+    unwrap(
+      getApiClient().POST("/secrets", {
+        body: description ? { label, description, value } : { label, value },
+      }),
+    ) as Promise<AddedSecret>,
   /** Set a ref's label and description (an empty one removes it); the ref never changes. */
   setNotes: (ref: string, notes: { label?: string; description?: string }) =>
     unwrap(getApiClient().PUT("/secrets/notes", { body: { ref, ...notes } })),

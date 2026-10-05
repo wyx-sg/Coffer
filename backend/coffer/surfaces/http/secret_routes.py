@@ -97,7 +97,8 @@ async def set_secret(
     API"). A replacement is audited as such, never with a value, and whatever
     holds the old value, such as the model proxy, picks the new one up.
 
-    Without a `ref`, a `label` names it: the id `secret/<uuid4 hex>` is minted,
+    Without a `ref`, a `label` names it (and a `description` says what it is
+    for): the id `secret/<uuid4 hex>` is minted,
     the label stored as its note, and the answer is 201 with the ref and uri
     (spec secret "Mint every secret's id; a person names it").
     """
@@ -119,14 +120,14 @@ async def set_secret(
         actor=actor,
         details={"ref": ref, "replaced": replaced},
     )
-    if body.label or body.created_for or minted:
+    if body.label or body.description or body.created_for or minted:
         notes = get_secret_notes()
 
         def merge(before: SecretNote | None) -> SecretNote:
             before = before or SecretNote()
             return SecretNote(
                 label=body.label or before.label,
-                description=before.description,
+                description=body.description or before.description,
                 created_for=body.created_for or before.created_for,
                 # Added on the page (no ref sent): a person made it for itself.
                 origin=ORIGIN_PAGE if minted else before.origin,

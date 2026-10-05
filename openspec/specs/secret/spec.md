@@ -668,7 +668,10 @@ grant MUST read no value, MUST start nothing, and MUST answer
 `SECRET_BINDING_PENDING` with the request waiting in the desktop app
 (`SECRET_BINDING_REJECTED` once a person refused it). `POST
 /api/v1/secrets/local-access/request {name}` MUST record that request without
-granting it, and `POST /api/v1/secrets/local-access/revoke {name}` MUST withdraw
+granting it — after a person refused one, asking this way retires the refusal
+and puts a new request up, while `coffer run` alone stays refused; asked from
+the desktop app, the request is approved on the spot under the presence check,
+as any save there is — and `POST /api/v1/secrets/local-access/revoke {name}` MUST withdraw
 the grant and any request at once, without a presence grant, and record
 `secret_local_access_revoked`. A request MUST keep waiting when approvals are
 brought up to the configuration, since no configuration asks for it. The values MUST be set only in the child's environment; the child's
@@ -695,6 +698,17 @@ only use stays without the grant and reaches its service through Coffer.
 - **WHEN** a resolve names it
 - **THEN** it is refused with `SECRET_BINDING_PENDING`, no value is returned and no `secret_resolved` entry is recorded
 - **AND** a pending approval for the `local_process` destination waits in the desktop app, saying an agent's program could read the value
+
+#### Scenario: asking for the grant again after a refusal puts a new request up
+- **GIVEN** a standalone secret whose local-process request a person refused
+- **WHEN** the grant is asked for again (Allow coffer run… on the Secrets page)
+- **THEN** a new request waits in the desktop app and no refusal is answered
+- **AND** a resolve still gets no value until the person approves it
+
+#### Scenario: allowing coffer run in the desktop app asks for Touch ID at once
+- **GIVEN** a standalone secret without the grant, open on the Secrets page in the desktop app
+- **WHEN** the person presses Allow coffer run…
+- **THEN** the presence prompt opens at once and approves exactly that request, with no approvals sheet to open
 
 #### Scenario: coffer run without a grant starts nothing and prints no value
 - **GIVEN** a standalone secret without the grant, named by `--secret` or by a `coffer://secret/` value in the environment
@@ -1112,11 +1126,12 @@ lowercase hex characters), whoever the secret is for: a standalone secret, an
 MCP server's header, a channel's token, a provider's key. A resource's config
 cites `secret/<hex>` in its secret slot and a file cites
 `coffer://secret/<hex>`; it is the same id. A person gives a secret only a
-label. `POST /api/v1/secrets` MUST accept `{label?, created_for?, value}`
-without a `ref`, mint the id, store the value, keep the label and `created_for`
-(the uid of the resource it is minted for) as the secret's notes, and answer
-`201` with `{ref, uri}`. The Secrets page's Add secret and `coffer secret set
---name <label>` do this and show or print `coffer://secret/<id>`. A secret written under a new `secret/<hex>` ref, without the page, is a dialog's. A request
+label and, optionally, a description. `POST /api/v1/secrets` MUST accept
+`{label?, description?, created_for?, value}` without a `ref`, mint the id,
+store the value, keep the label, the description (up to 200 characters) and
+`created_for` (the uid of the resource it is minted for) as the secret's notes,
+and answer `201` with `{ref, uri}`. The Secrets page's Add secret and `coffer
+secret set --name <label> [--description <text>]` do this and show or print `coffer://secret/<id>`. A secret written under a new `secret/<hex>` ref, without the page, is a dialog's. A request
 that names a `ref` MUST replace the value of a secret that exists, as before,
 and MUST be refused (422) when the ref does not exist and is not itself
 `secret/<32 hex>`; `proxy-token/…` refs are Coffer's own and never go through
@@ -1124,8 +1139,8 @@ this route. `coffer secret set <ref>` replaces an existing secret's value only.
 
 #### Scenario: a secret added on the page gets a minted id and its label
 - **GIVEN** the Secrets page
-- **WHEN** a secret is added with the label "GitHub token" and a value
-- **THEN** it is stored at `secret/<32 hex characters>`, the list shows it as "GitHub token", and the dialog offers `coffer://secret/<that id>` to copy
+- **WHEN** a secret is added with the label "GitHub token", the description "release bot's token" and a value
+- **THEN** it is stored at `secret/<32 hex characters>`, the list shows it as "GitHub token" with that description, and the dialog offers `coffer://secret/<that id>` to copy
 
 #### Scenario: a person cannot choose an id
 - **GIVEN** a running daemon

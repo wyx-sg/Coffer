@@ -18,7 +18,7 @@ coffer secret [OPTIONS] COMMAND [ARGS]...
 
 | 命令 | 说明 |
 | --- | --- |
-| [`secret set`](#secret-set) | Create a secret with `--name "<label>"`, or replace an existing one by ref. |
+| [`secret set`](#secret-set) | Create a secret with `--name "<label>"` (and `--description`), or replace one by ref. |
 | [`secret list`](#secret-list) | List every stored secret and every ref a resource cites. |
 | [`secret reveal`](#secret-reveal) | Show a secret's value to the person, in the Coffer window, after Touch ID. |
 | [`secret backup-key`](#secret-backup-key) | Open the master key backup in the Coffer app; the person checks presence, types the passphrase and picks the folder there. |
@@ -35,7 +35,7 @@ coffer secret [OPTIONS] COMMAND [ARGS]...
 
 ## secret set
 
-Create a secret with `--name "<label>"`, or replace an existing one by ref.
+Create a secret with `--name "<label>"` (and `--description`), or replace one by ref.
 
 A new secret is given a label by you and an id by Coffer: the command prints its ref and `coffer://secret/<id>`, which is how files cite it. `coffer secret set <ref>` only replaces the value of a secret that exists.
 
@@ -53,6 +53,7 @@ coffer secret set [OPTIONS] [REF]
 | --- | --- | --- | --- |
 | `REF` <span class="cli-chip">参数</span> | text |  | An existing secret's reference, to replace its value |
 | `--name` <span class="cli-chip">选项</span> | text |  | Create a new secret with this label; Coffer mints its id |
+| `--description` <span class="cli-chip">选项</span> | text |  | With --name: what the new secret is for |
 | `--value` <span class="cli-chip">选项</span> | text |  | Provide the secret on the command line (UNSAFE — visible in shell history; prefer stdin) |
 
 ## secret list

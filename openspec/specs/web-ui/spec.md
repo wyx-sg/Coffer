@@ -2002,8 +2002,9 @@ The page MUST carry:
   each opening that thing's page; a custom-tool group reads as a custom tool
   and opens its group page, though it is an `mcp_server` underneath; a secret nothing cites reads Nothing and is
   found with the Not used filter.
-- **Add and replace** — store a new secret at once, or replace the value of one
-  that exists, at once and without the value ever being shown back (spec
+- **Add and replace** — store a new secret at once, with a name, an optional
+  description and its value, or replace the value of one that exists, at once
+  and without the value ever being shown back (spec
   [secret](../secret/spec.md) "Store a secret through the API").
 - **Reveal** — show one value behind an explicit, confirmed action, only in the
   desktop app, audited as `secret_revealed` (spec [secret](../secret/spec.md)
@@ -2022,12 +2023,18 @@ The page MUST carry:
   `/secrets/<id>` with the list on the left and the chosen secret on the
   right. A list row shows the secret's label — or, without one, the first
   citer's name and the slot, never a hex id — on one line with no description
-  (that is in the detail's header), its status (missing on this Mac, waiting for approval) and how
+  (that is in the detail's header), the row as tall as that one line, its status (missing on this Mac, waiting for approval) and how
   many things use it; search matches the label, description and id. The
-  detail's header holds the label and description, each edited in place (spec
+  detail's header shows the label and, under it, the description as text
+  (nothing when there is none); the header holds no field to type into. Beside
+  them are **Edit** and Reveal value…, and Copy reference and Delete… are in its
+  ⋯ menu. Edit opens a 480-wide dialog with the name, the description and the
+  value: the name and description are saved as the secret's notes (spec
   [secret](../secret/spec.md) "Label and describe a secret without changing its
-  reference"), with Replace value… and Reveal value… beside them and Copy
-  reference and Delete… in its ⋯ menu. The detail shows the overview directly,
+  reference"), and the value field starts empty, never showing the old value —
+  left empty the value stays, and a new one replaces it at once (for a secret
+  missing on this Mac, stores it). Save is offered once something changed, and
+  only what changed is sent. The detail shows the overview directly,
   with no tabs: the id and `coffer://secret/<id>`, each with Copy, whether this
   Mac holds it and whether local processes can read it, created and last used,
   and everything that uses it — by kind, current name and slot, each opening
@@ -2084,12 +2091,17 @@ secret capability's, specified with it.
 - **GIVEN** the Secrets page listing a secret an MCP server cites under a hex ref, which the server has used
 - **WHEN** its row is chosen
 - **THEN** the list row reads as the server's name and the slot, the address becomes `/secrets/<id>`, and the detail shows the id, the times and the server under Used by, which opens the server's page, with no tabs
-- **AND** a label and description typed in the header show on the row while the id stays the same
+- **AND** a label and description saved through Edit show on the row while the id stays the same
 
 #### Scenario: a custom-tool group under Used by reads as a custom tool
 - **GIVEN** a secret cited by the custom-tool group `billing` and by the MCP server `github`
 - **WHEN** its Used by is shown
 - **THEN** `billing` reads as a custom tool and opens `/custom-tools/billing`, while `github` reads as an MCP server and opens its own page
+
+#### Scenario: Edit changes a secret's name, description and value in one dialog
+- **GIVEN** the Secrets page showing a stored secret a channel cites
+- **WHEN** the user chooses Edit, changes the name and description and saves, then chooses Edit again, types a new value and saves
+- **THEN** the first save stores only the notes and writes no value, the second replaces the value without showing the old one, and the reference stays the same
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen

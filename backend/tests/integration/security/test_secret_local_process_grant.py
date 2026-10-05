@@ -155,6 +155,25 @@ def test_a_refused_grant_stays_refused(d: BoundaryDaemon) -> None:
 
 
 @pytest.mark.acceptance(
+    spec="secret", scenario="asking for the grant again after a refusal puts a new request up"
+)
+def test_asking_again_after_a_refusal_puts_a_new_request_up(d: BoundaryDaemon) -> None:
+    _resolve(d, NAME)
+    [refused] = d.pending()
+    d.client.post(f"/api/v1/secrets/approvals/{refused['id']}/reject")
+
+    asked = d.client.post("/api/v1/secrets/local-access/request", json={"name": NAME})
+
+    assert asked.status_code == 200, asked.text
+    assert asked.json()["local_access"] == "pending"
+    [waiting] = d.pending()
+    assert waiting["id"] != refused["id"] and waiting["destination_kind"] == "local_process"
+    # Asking grants nothing: coffer run still waits for the person.
+    assert _resolve(d, NAME).json()["error"]["code"] == "SECRET_BINDING_PENDING"
+    assert FAKE not in _dumps(d)
+
+
+@pytest.mark.acceptance(
     spec="secret", scenario="a granted secret reaches coffer run until the grant is withdrawn"
 )
 def test_a_grant_lets_the_value_out_and_revoking_withdraws_it(d: BoundaryDaemon) -> None:
