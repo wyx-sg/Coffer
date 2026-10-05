@@ -220,6 +220,6 @@ def test_the_minted_shape_is_a_legal_secret_ref(ref):
     """The API's own pattern for a ref — three slash-separated segments of the
     allowed alphabet. A shape the store would refuse would fail only at the
     moment a user saves a secret."""
-    from coffer.surfaces.http.schemas import SecretSetIn
+    from coffer.surfaces.http.secret_schemas import SecretSetIn
 
     assert SecretSetIn(ref=ref, value="x").ref == ref

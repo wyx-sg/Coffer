@@ -10,12 +10,15 @@ guideline.
 from __future__ import annotations
 
 import asyncio
+import logging
 import pathlib
 from dataclasses import dataclass
 
 from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
+from coffer.domain.secrets import ORIGIN_DIALOG, SecretNote, is_minted_ref
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore, ref_files
 from coffer.infrastructure.secret.master_key import MasterKeyManager
+from coffer.infrastructure.secret.notes_store import VaultSecretNotes
 from coffer.surfaces.http.secret_boundary_wiring import (
     boundary_resolver as boundary_resolver,
 )
@@ -24,7 +27,9 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     make_master_key_manager,
     master_key_path,
 )
+from coffer.surfaces.http.secret_notes_wiring import set_secret_notes
 
+_logger = logging.getLogger(__name__)
 _secret_store: EncryptedSecretStore | None = None
 
 
@@ -107,4 +112,33 @@ async def init_secret_store(*, home: pathlib.Path | None = None) -> SecretWiring
     # The approval gate and the presence grants, before any consumer of a
     # secret is built (every one gets ``boundary_resolver``).
     init_secret_boundary(secret_store, master_key_manager, home=home)
+    # A label and description belong to the ref: whichever path removes it (the
+    # route, a resource's release, a rollback) drops its notes too.
+    notes = VaultSecretNotes(home=home)
+    set_secret_notes(notes)
+
+    def drop_notes(ref: str) -> None:
+        try:
+            notes.put(ref, None, summary=f"drop notes of secret {ref}", actor=None)
+        except Exception:
+            _logger.exception("secret.notes_drop_failed", extra={"ref": ref})
+
+    secret_store.on_removed(drop_notes)
+
+    def mark_dialog(ref: str) -> None:
+        """A value written under a new minted id, other than by the Secrets page
+        (which re-marks it), was written for the resource about to cite it."""
+        if not is_minted_ref(ref):
+            return
+        try:
+            notes.update(
+                ref,
+                lambda note: note if note is not None else SecretNote(origin=ORIGIN_DIALOG),
+                summary=f"secret {ref} written for a resource",
+                actor=None,
+            )
+        except Exception:
+            _logger.exception("secret.notes_mark_failed", extra={"ref": ref})
+
+    secret_store.on_created(mark_dialog)
     return SecretWiring(store=secret_store, master_key=master_key_manager)

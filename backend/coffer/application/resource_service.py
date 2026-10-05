@@ -38,6 +38,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
 from coffer.application.resource_actor import acting_as
 from coffer.application.resource_bindings import BindingSettlerPort, settle_bindings
+from coffer.application.resource_delete_ops import SecretHooks
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
@@ -82,6 +83,8 @@ class ResourceService:
         self._audit = audit
         self._secrets = secrets
         self._bindings = bindings
+        #: Who may release a secret, and what cites each one (composition root).
+        self.secret_hooks = SecretHooks()
 
     def set_binding_settler(self, settler: BindingSettlerPort | None) -> None:
         """Install the post-register seam, once every kind has declared where
@@ -248,6 +251,11 @@ class ResourceService:
 
         return await citations_of(self, secret_ref)
 
+    def secret_slots(self, resource: Resource) -> dict[str, str]:
+        """``{slot key: ref}`` for the secrets ``resource`` cites, by its kind's extractor."""
+        kind_def = self._kinds.get(resource.kind)
+        return {} if kind_def is None else resource_kind_ops.secret_refs(kind_def, resource.config)
+
     async def cited_secret_refs(self) -> dict[str, builtins.list[Resource]]:
         """Every secret ref cited by any resource, mapped to its citers."""
         from coffer.application.resource_delete_ops import all_citations
@@ -369,7 +377,7 @@ class ResourceService:
                 await result
         with acting_as(actor):
             await self._repo.delete(uid)
-        await release_orphaned_secrets(self, kind_def, snapshot.config, actor)
+        await release_orphaned_secrets(self, kind_def, snapshot.config, actor, uid)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
             resource=snapshot,

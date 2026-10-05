@@ -23,6 +23,7 @@ from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.reconcile.hints import HintSink, fan_out
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn_restarting
+from coffer.domain.reconcile import Changed
 from coffer.surfaces.http.event_dependencies import set_event_broker
 
 #: How many recent envelopes a reconnecting client can resume across.
@@ -35,6 +36,8 @@ class EventStream:
     watcher: AttentionWatcher
     #: What ``HintingResourceRepo`` announces every resource write to.
     hint_sink: HintSink
+    #: Listeners added once the services exist (the secret citation index).
+    late_sinks: list[HintSink]
 
 
 def build_event_stream(reconciler: Reconciler) -> EventStream:
@@ -43,8 +46,14 @@ def build_event_stream(reconciler: Reconciler) -> EventStream:
     watcher = AttentionWatcher(broker)
     reconciler.add_pass_listener(watcher.on_pass)
     set_event_broker(broker)
-    sink = fan_out(reconciler.hint, broker.publish_changed, watcher.on_changed)
-    return EventStream(broker=broker, watcher=watcher, hint_sink=sink)
+    late: list[HintSink] = []
+
+    def late_sink(changed: Changed) -> None:
+        for each in list(late):
+            each(changed)
+
+    sink = fan_out(reconciler.hint, broker.publish_changed, watcher.on_changed, late_sink)
+    return EventStream(broker=broker, watcher=watcher, hint_sink=sink, late_sinks=late)
 
 
 async def start_attention_watch(

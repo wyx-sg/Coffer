@@ -17,6 +17,7 @@ import pytest
 
 from coffer.domain.secret_errors import SecretBindingPending
 from coffer.infrastructure.secret import key_backup
+from coffer.surfaces.http.secret_index_wiring import get_citation_index
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
     prepare_home,
@@ -46,6 +47,10 @@ def _two_servers(d: BoundaryDaemon) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 # --- no plaintext out -----------------------------------------------------------
+
+
+LATE = "secret/" + "1" * 32
+NPM = "secret/" + "2" * 32
 
 
 @pytest.mark.acceptance(spec="secret", scenario="no route or command hands out a stored value")
@@ -324,11 +329,11 @@ def test_a_new_standalone_secret_is_stored_at_once_and_may_be_cited(
     daemon: BoundaryDaemon,
 ) -> None:
     d = daemon
-    r = d.client.post("/api/v1/secrets", json={"ref": "secret/late-key", "value": "late-value-123"})
+    r = d.client.post("/api/v1/secrets", json={"ref": LATE, "value": "late-value-123"})
     assert r.status_code == 204, r.text
-    assert d.value("secret/late-key") == "late-value-123"
+    assert d.value(LATE) == "late-value-123"
     assert d.pending() == []
-    d.register_stdio("late", "server", {"TOKEN": "secret/late-key"})
+    d.register_stdio("late", "server", {"TOKEN": LATE})
     # A ref nobody wrote is still refused.
     nobody = d.client.post(
         "/api/v1/resources",
@@ -388,10 +393,10 @@ def test_rejecting_needs_no_presence(daemon: BoundaryDaemon) -> None:
 def test_adding_a_standalone_secret_stores_it_at_once(daemon: BoundaryDaemon) -> None:
     d = daemon
 
-    r = d.client.post("/api/v1/secrets", json={"ref": "secret/npm-publish-token", "value": "npm-v"})
+    r = d.client.post("/api/v1/secrets", json={"ref": NPM, "value": "npm-v"})
 
     assert r.status_code == 204, r.text
-    assert d.value("secret/npm-publish-token") == "npm-v"
+    assert d.value(NPM) == "npm-v"
     assert d.pending() == []
 
 
@@ -443,6 +448,7 @@ def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryD
     skill = d.home / ".coffer" / "vault" / "skills" / "db-tools"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("Run with coffer://secret/used-one set.\n")
+    get_citation_index().skill_files_changed("db-tools")
     d.store("secret/lonely", "lonely-value-1")
     d.store("secret/used-one", "used-value-12")
 

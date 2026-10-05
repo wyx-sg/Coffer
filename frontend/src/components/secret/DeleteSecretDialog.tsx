@@ -32,6 +32,8 @@ import { useKindLabel } from "./useKindLabel";
 interface Props {
   row: SecretRef | null;
   onOpenChange: (open: boolean) => void;
+  /** The secret is gone: the page leaves its detail. */
+  onDeleted?: () => void;
 }
 
 function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onClose: () => void }) {
@@ -41,7 +43,9 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("secrets.blocked.title", { name: displayName(row) })}</DialogTitle>
+        <DialogTitle>
+          {t("secrets.blocked.title", { name: displayName(row, t("secrets.unnamed")) })}
+        </DialogTitle>
         <DialogDescription>
           {t("secrets.blocked.body", { count: citers.length, reference: referenceOf(row) })}
         </DialogDescription>
@@ -70,7 +74,7 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
   );
 }
 
-export function DeleteSecretDialog({ row, onOpenChange }: Props) {
+export function DeleteSecretDialog({ row, onOpenChange, onDeleted }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const remove = useDeleteSecret();
@@ -85,7 +89,7 @@ export function DeleteSecretDialog({ row, onOpenChange }: Props) {
   }, [open, reset]);
 
   if (!row) return null;
-  const name = displayName(row);
+  const name = displayName(row, t("secrets.unnamed"));
   const close = () => onOpenChange(false);
   const known = citersOf(row);
   const blocked = refused ?? (known.length > 0 ? known : null);
@@ -105,6 +109,7 @@ export function DeleteSecretDialog({ row, onOpenChange }: Props) {
       await remove.mutateAsync(row.ref);
       toast.success(t("secrets.delete.deleted", { name }));
       close();
+      onDeleted?.();
     } catch (e) {
       if (e instanceof ApiError && e.code === "SECRET_IN_USE") {
         setRefused(citersFromRefusal(e.details));

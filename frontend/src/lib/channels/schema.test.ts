@@ -30,15 +30,14 @@ const AGENT_UID = "u-8f31c0a2";
  * A secret ref, asserted as a SHAPE and never as a literal.
  *
  * A ref no longer says anything about the channel — it is
- * `channel/<uuid4 hex>/<secret>`, minted fresh — so a test cannot name the
+ * `secret/<uuid4 hex>`, minted fresh — so a test cannot name the
  * value it expects, and should not want to: what the planner owes its caller
  * is that the config and the secret write agree on one opaque address whose
  * readable tail says which secret it holds. The fixture channels are still
  * called `tg` and `st`, and every assertion below goes on to check the name is
  * nowhere in the ref, which is the regression this shape exists to prevent.
  */
-const refFor = (secret: string) =>
-  expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
+const refFor = () => expect.stringMatching(/^secret\/[0-9a-f]{32}$/);
 
 const telegram = {
   channel_type: "telegram" as const,
@@ -53,7 +52,7 @@ describe("planChannel", () => {
 
     expect(plan.config).toEqual({
       channel_type: "telegram",
-      bot_token_ref: refFor("bot-token"),
+      bot_token_ref: refFor(),
       default_agent: AGENT_UID,
       runs_on: HERE,
     });
@@ -78,7 +77,7 @@ describe("planChannel", () => {
     expect(plan.config).toEqual({
       channel_type: "seatalk",
       app_id: "app-1",
-      app_secret_ref: refFor("app-secret"),
+      app_secret_ref: refFor(),
       default_agent: AGENT_UID,
       runs_on: HERE,
     });

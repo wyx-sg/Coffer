@@ -82,7 +82,11 @@ describe("importMcpServers", () => {
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
       servers: [
-        server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] }),
+        server("a", {
+          env: [
+            { key: "TOKEN", value: { kind: "new", name: "token", label: "token", value: "x" } },
+          ],
+        }),
       ],
       created: new Map(),
       t,
@@ -101,7 +105,10 @@ describe("importMcpServers", () => {
       servers: [
         server("a", {
           env: [
-            { key: "TOKEN", value: { kind: "new", name: "a-token", value: "ghp_x" } },
+            {
+              key: "TOKEN",
+              value: { kind: "new", name: "a-token", label: "a-token", value: "ghp_x" },
+            },
             { key: "OTHER", value: { kind: "stored", name: "shared" } },
             { key: "LOG", value: { kind: "plain", value: "debug" } },
           ],
@@ -138,7 +145,11 @@ describe("importMcpServers", () => {
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
       servers: [
-        server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] }),
+        server("a", {
+          env: [
+            { key: "TOKEN", value: { kind: "new", name: "token", label: "token", value: "x" } },
+          ],
+        }),
       ],
       created: new Map(),
       t,
@@ -176,7 +187,11 @@ describe("importMcpServers", () => {
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
       servers: [
-        server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] }),
+        server("a", {
+          env: [
+            { key: "TOKEN", value: { kind: "new", name: "token", label: "token", value: "x" } },
+          ],
+        }),
         server("b"),
       ],
       created: new Map(),
@@ -217,7 +232,10 @@ describe("importMcpServers", () => {
       missingSecretValues(
         server("a", {
           env: [
-            { key: "Authorization", value: { kind: "new", name: "authorization", value: "" } },
+            {
+              key: "Authorization",
+              value: { kind: "new", name: "authorization", label: "authorization", value: "" },
+            },
             { key: "X", value: { kind: "plain", value: "" } },
           ],
         }),

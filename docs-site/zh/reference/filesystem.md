@@ -115,6 +115,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `derived/derived.db` | MCP 服务器健康状态、哪些技能副本投递到了哪些智能体、每项上游能力首次和最近一次被看到的时间。表结构版本不一致时会重建。 | 健康检查、技能投递、网关 |
 | `derived/memory/<partition>/` | `global` 或某个仓库的派生记忆：`MEMORY.md`（索引）、`notes/`、`RETIRED.md`（退役了什么、为什么），以及隐藏的 `.raw/`（聚合读到的原文）。根目录的 `.source_state.json` 记录上一次聚合读了什么。 | 聚合与提炼（`RETIRED.md` 中的退役决定和你对笔记的编辑会丢失） |
 | `derived/resources/` | 派生的资源文件：记忆分区，以及 `skill/coffer-guide.json`。 | 守护进程启动时 |
+| `derived/secret-citations.json` | 每个密钥被谁引用：引用它的资源和技能文件。不会同步。 | 守护进程启动时重建，之后每次资源或技能变化时更新 |
 | `derived/skills/coffer-guide/` | Coffer 自带的指南技能，由当前构建渲染。 | 守护进程启动时 |
 | `derived/sync-conflicts/` | 停下的同步轮次中冲突文件的标注副本，供手工合并。 | 在编辑器里重新打开该文件 |
 

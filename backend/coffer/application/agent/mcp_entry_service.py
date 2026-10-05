@@ -46,6 +46,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileNotAllowed, ResourceAlreadyExists
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import mint_secret_name, secret_ref
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
     AgentConfigParseError,
@@ -310,9 +311,13 @@ class AgentMcpEntryService:
         # entry's env or headers.  A key absent from both would still end up in
         # secret_refs (via to_transport_config) while the stored secret it
         # references was never written — dangling reference.
+        # Coffer mints each secret's id (``secret/<uuid4 hex>``); the caller's
+        # mapping says which keys carry a secret, and a ref it names is not used.
         provided = secrets or {}
         applicable = {
-            k: r for k, r in provided.items() if k in parsed_entry.env or k in parsed_entry.headers
+            k: secret_ref(mint_secret_name())
+            for k in provided
+            if k in parsed_entry.env or k in parsed_entry.headers
         }
 
         # A conflicting name is answered before anything is written, so the

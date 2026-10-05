@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import re
+import uuid
 from collections.abc import Iterable
 from typing import Literal
 
@@ -41,6 +42,68 @@ ApprovalStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 #: What a presence grant may authorise. Each is one operation on one target.
 GRANT_OPS: tuple[str, ...] = ("reveal", "approve", "approve_batch", "export_master_key")
+
+
+#: Longest label and description a person can give a secret.
+LABEL_MAX = 64
+DESCRIPTION_MAX = 200
+
+
+ORIGIN_PAGE = "page"
+ORIGIN_DIALOG = "dialog"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SecretNote:
+    """What a person said about a secret: a name they recognise and what it is
+    for. The ref stays the identity; neither changes anything that cites it."""
+
+    label: str | None = None
+    description: str | None = None
+    #: The uid of the resource this secret was minted for; its deletion may
+    #: release the secret, when nothing else cites it.
+    created_for: str | None = None
+    #: Where it was added: ``page`` (the Secrets page, ``coffer secret set
+    #: --name``: a person made it for itself) or ``dialog`` (written under a
+    #: minted id by a resource dialog, an import or a service, for the resource
+    #: that is about to cite it). Editing the label never changes it.
+    origin: str | None = None
+
+    @property
+    def empty(self) -> bool:
+        return not (self.label or self.description or self.created_for or self.origin)
+
+
+#: A channel's secret fields and the slot name each one fills.
+CHANNEL_SECRET_SLOTS: dict[str, str] = {
+    "bot_token_ref": "bot-token",
+    "app_secret_ref": "app-secret",
+}
+
+
+def slot_of(kind: str, key: str) -> str:
+    """The slot a kind's secret-ref key fills: an MCP server's env var or header
+    name as it is, a channel's field logical name, a provider's ``key``."""
+    if kind == "channel":
+        return CHANNEL_SECRET_SLOTS.get(key) or key.removesuffix("_ref").replace("_", "-")
+    if kind == "provider":
+        return "key"
+    return key
+
+
+_MINTED_RE = re.compile(r"^secret/[0-9a-f]{32}$")
+
+
+def is_minted_ref(ref: str) -> bool:
+    """Whether ``ref`` is a minted id, ``secret/<32 hex>``: every secret's id,
+    whoever it is for. A person never picks one; Coffer mints it (spec secret
+    "Mint every secret's id; a person names it")."""
+    return bool(_MINTED_RE.match(ref))
+
+
+def mint_secret_name() -> str:
+    """A fresh id for a standalone secret added without a name: 32 hex characters."""
+    return uuid.uuid4().hex
 
 
 def is_valid_secret_name(name: str) -> bool:

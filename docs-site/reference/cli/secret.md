@@ -18,26 +18,29 @@ This page matches what `coffer secret --help` prints. Add `--help` to any comman
 
 | Command | What it does |
 | --- | --- |
-| [`secret set`](#secret-set) | Store a secret in the encrypted secret store (via the daemon). |
+| [`secret set`](#secret-set) | Create a secret with `--name "<label>"`, or replace an existing one by ref. |
 | [`secret list`](#secret-list) | List every stored secret and every ref a resource cites. |
 
 ## secret set
 
-Store a secret in the encrypted secret store (via the daemon).
+Create a secret with `--name "<label>"`, or replace an existing one by ref.
+
+A new secret is given a label by you and an id by Coffer: the command prints its ref and `coffer://secret/<id>`, which is how files cite it. `coffer secret set <ref>` only replaces the value of a secret that exists.
 
 Without --value the secret is read from stdin, or prompted for. --value still stores, but warns that the value lands in your shell history; the value itself is never echoed.
 
 <p class="cli-label">Synopsis</p>
 
 ```sh
-coffer secret set [OPTIONS] REF
+coffer secret set [OPTIONS] [REF]
 ```
 
 <p class="cli-label">Arguments and options</p>
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `REF` <span class="cli-chip">argument</span> | text | required | Secret reference key |
+| `REF` <span class="cli-chip">argument</span> | text |  | An existing secret's reference, to replace its value |
+| `--name` <span class="cli-chip">option</span> | text |  | Create a new secret with this label; Coffer mints its id |
 | `--value` <span class="cli-chip">option</span> | text |  | Provide the secret on the command line (UNSAFE — visible in shell history; prefer stdin) |
 
 ## secret list

@@ -30,6 +30,7 @@ vi.mock("@/lib/api/secret", () => ({
       ],
     })),
     set: vi.fn(async () => ({ approval: null })),
+    setNotes: vi.fn(async () => ({})),
   },
 }));
 
@@ -38,7 +39,9 @@ const group = makeGroup();
 
 function open(onOpenChange = vi.fn()) {
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <MemoryRouter>
         <EditGroupDialog group={group} open onOpenChange={onOpenChange} />
       </MemoryRouter>
@@ -60,7 +63,9 @@ describe("EditGroupDialog", () => {
     expect(within(dialog).getByRole("button", { name: "Cancel" }).className).toContain(
       "bg-transparent",
     );
-    expect(within(dialog).getByRole("button", { name: /Choose a secret|billing-token/ })).toBeTruthy();
+    expect(
+      within(dialog).getByRole("button", { name: /Choose a secret|billing-token/ }),
+    ).toBeTruthy();
   });
 
   test("saves secret rows by name and plain rows by value, sending the whole headers list", async () => {
@@ -103,8 +108,12 @@ describe("EditGroupDialog", () => {
     fireEvent.click(await within(dialog).findByRole("button", { name: /Store it in Coffer/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(update).toHaveBeenCalled());
-    expect(secretsApi.set).toHaveBeenCalledWith("secret/billing-x-api-key", "k-9f8e7d6c5b4a3210");
+    // Stored under a minted id, labelled after the group and header; the header cites the id.
+    const [ref, value] = vi.mocked(secretsApi.set).mock.calls[0];
+    expect(ref).toMatch(/^secret\/[0-9a-f]{32}$/);
+    expect(value).toBe("k-9f8e7d6c5b4a3210");
+    expect(secretsApi.setNotes).toHaveBeenCalledWith(ref, { label: "billing-X-Api-Key" });
     const body = update.mock.calls[0][1] as { headers: unknown[] };
-    expect(body.headers).toContainEqual({ name: "X-Api-Key", secret: "billing-x-api-key" });
+    expect(body.headers).toContainEqual({ name: "X-Api-Key", secret: ref.slice("secret/".length) });
   });
 });

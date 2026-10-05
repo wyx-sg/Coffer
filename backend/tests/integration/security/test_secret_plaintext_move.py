@@ -4,6 +4,7 @@ throwaway HOME (spec secret "Move plaintext secrets in managed resources into th
 from __future__ import annotations
 
 import pathlib
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -122,18 +123,21 @@ def test_importing_a_skill_value_leaves_a_reference(d: BoundaryDaemon) -> None:
 
     dry = d.client.post("/api/v1/secrets/import", json={"dry_run": True})
     assert dry.status_code == 200, dry.text
-    assert script.read_text() == before and d.value("secret/deploy.api_token") is None
-    assert dry.json()["moved"][0]["name"] == "deploy.api_token"
+    assert script.read_text() == before and dry.json()["moved"][0]["label"] == "deploy.api_token"
+    assert dry.json()["moved"][0]["ref"] is None
 
     moved = d.client.post("/api/v1/secrets/import", json={})
 
     assert moved.status_code == 200, moved.text
-    assert d.value("secret/deploy.api_token") == TOKEN_VALUE
-    assert 'API_TOKEN="coffer://secret/deploy.api_token"' in script.read_text()
+    row = moved.json()["moved"][0]
+    assert re.fullmatch(r"[0-9a-f]{32}", row["name"]) and row["label"] == "deploy.api_token"
+    assert d.value(row["ref"]) == TOKEN_VALUE
+    assert f'API_TOKEN="coffer://secret/{row["name"]}"' in script.read_text()
     assert (script.stat().st_mode & 0o777) == 0o755
     assert TOKEN_VALUE not in moved.text
+    assert d.client.get("/api/v1/secrets").json()["refs"][0]["label"] == "deploy.api_token"
     entries = d.audit("secret_imported")
-    assert [e["details"]["name"] for e in entries] == ["deploy.api_token"]
+    assert [e["details"]["name"] for e in entries] == [row["name"]]
     assert TOKEN_VALUE not in str(entries)
 
 
@@ -154,7 +158,7 @@ def test_importing_a_server_value_moves_it_into_its_secret_refs(d: BoundaryDaemo
     s = _get(d, stdio["uid"])
     t = s["config"]["transport"]
     assert t["env"] == {} and list(t["secret_refs"]) == ["DB_PASSWORD"]
-    assert t["secret_refs"]["DB_PASSWORD"].startswith("mcp_server/")
+    assert re.fullmatch(r"secret/[0-9a-f]{32}", t["secret_refs"]["DB_PASSWORD"])
     assert d.value(t["secret_refs"]["DB_PASSWORD"]) == PASSWORD
     h = _get(d, api["uid"])["config"]["transport"]
     assert "X-Api-Key" not in h["headers"]
@@ -178,17 +182,18 @@ def test_a_file_that_cannot_be_rewritten_keeps_its_key_and_says_so(d: BoundaryDa
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["moved"] == []
-        assert [(s["name"], s["stored"]) for s in body["skipped"]] == [("deploy.api_token", True)]
+        assert [s["stored"] for s in body["skipped"]] == [True]
+        name = body["skipped"][0]["name"]
         assert script.read_text() == before
-        assert d.value("secret/deploy.api_token") == TOKEN_VALUE
+        assert d.value("secret/" + name) == TOKEN_VALUE
     finally:
         folder.chmod(0o755)
 
     again = d.client.post("/api/v1/secrets/import", json={})
 
     assert again.status_code == 200, again.text
-    assert [m["name"] for m in again.json()["moved"]] == ["deploy.api_token"]
-    assert "coffer://secret/deploy.api_token" in script.read_text()
+    assert [m["label"] for m in again.json()["moved"]] == ["deploy.api_token"]
+    assert "coffer://secret/" + again.json()["moved"][0]["name"] in script.read_text()
 
 
 @pytest.mark.acceptance(spec="secret", scenario="a scan that finds nothing says how much it read")

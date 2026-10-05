@@ -18,6 +18,9 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     readable_by_local_processes: false,
     unreferenced: false,
     uri: null,
+    label: null,
+    description: null,
+    created_for: null,
     ...over,
   };
 }
@@ -30,19 +33,19 @@ const state = (over: Partial<SecretListState> = {}): SecretListState => ({
 
 const JIRA = ref({
   ref: "mcp_server/26dddfa9ff00/JIRA_PERSONAL_TOKEN",
-  cited_by: [{ kind: "mcp_server", name: "jira", uid: "26dd" }],
+  cited_by: [{ kind: "mcp_server", name: "jira", uid: "26dd", slot: null }],
 });
 const SEATALK = ref({
   ref: "channel/4c838e8fa72e/app-secret",
-  cited_by: [{ kind: "channel", name: "seatalk", uid: "4c83" }],
+  cited_by: [{ kind: "channel", name: "seatalk", uid: "4c83", slot: null }],
 });
 const GROQ = ref({
   ref: "provider/b7b7526c/key",
-  cited_by: [{ kind: "provider", name: "groq", uid: "b7b7" }],
+  cited_by: [{ kind: "provider", name: "groq", uid: "b7b7", slot: null }],
 });
 const POSTMAN = ref({
   ref: "postman.AUTHORIZATION",
-  cited_by: [{ kind: "custom_tool", name: "postman", uid: "p1" }],
+  cited_by: [{ kind: "custom_tool", name: "postman", uid: "p1", slot: null }],
 });
 // A destination is waiting for approval to receive it.
 const GROQ_WAITING = ref({
@@ -82,9 +85,24 @@ describe("secret list view", () => {
 
   test("search matches the ref and the short name, not what uses it", () => {
     const names = (s: SecretListState) => filterItems(items, s).map((i) => i.short);
-    expect(names(state({ q: "jira" }))).toEqual(["JIRA_PERSONAL_TOKEN"]);
-    expect(names(state({ q: "APP-SEC" }))).toEqual(["app-secret"]);
-    expect(names(state({ q: "groq" }))).toEqual([]);
+    expect(names(state({ q: "jira" }))).toEqual(["jira · JIRA_PERSONAL_TOKEN"]);
+    expect(names(state({ q: "APP-SEC" }))).toEqual(["seatalk · app-secret"]);
+    expect(names(state({ q: "26dddfa9ff00" }))).toEqual(["jira · JIRA_PERSONAL_TOKEN"]);
+  });
+
+  test("search also matches the label and the description", () => {
+    const noted = decorate([
+      ref({
+        ref: "secret/0123456789abcdef0123456789abcdef",
+        label: "Jira PAT",
+        description: "release bot's token",
+      }),
+      OLD,
+    ]);
+    const names = (q: string) => filterItems(noted, state({ q })).map((i) => i.short);
+    expect(names("jira")).toEqual(["Jira PAT"]);
+    expect(names("RELEASE BOT")).toEqual(["Jira PAT"]);
+    expect(names("0123456789abcdef")).toEqual(["Jira PAT"]);
   });
 
   test("the default order puts no-value and waiting rows first, then names", () => {
@@ -97,12 +115,12 @@ describe("secret list view", () => {
       ref({ ref: "secret/zeta", uri: "coffer://secret/zeta", present: false }),
     ]);
     expect(defaultOrder(withMissing).map((i) => i.short)).toEqual([
-      "key",
+      "groq · key",
       "zeta",
-      "app-secret",
-      "AUTHORIZATION",
-      "JIRA_PERSONAL_TOKEN",
+      "jira · JIRA_PERSONAL_TOKEN",
       "old-key",
+      "postman · AUTHORIZATION",
+      "seatalk · app-secret",
     ]);
   });
 

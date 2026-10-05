@@ -190,6 +190,11 @@ async def resolve_for_run(
         await audit.record(
             AuditEventType.SECRET_RESOLVED.value,
             actor=actor,
-            details={"name": name, "argv0": body.argv0, "cwd": body.cwd},
+            details={
+                "ref": secret_ref(name),
+                "name": name,
+                "argv0": body.argv0,
+                "cwd": body.cwd,
+            },
         )
     return ResolvedSecretsOut(values=values)

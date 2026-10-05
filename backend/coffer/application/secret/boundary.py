@@ -30,6 +30,7 @@ in a worker thread. Async callers use ``asyncio.to_thread``.
 from __future__ import annotations
 
 import builtins
+import dataclasses
 import secrets as _secrets
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
@@ -42,9 +43,12 @@ from coffer.domain.secret_errors import (
     SecretBindingRejected,
 )
 from coffer.domain.secrets import (
+    ORIGIN_DIALOG,
     SecretApproval,
     SecretBinding,
     SecretDestination,
+    SecretNote,
+    is_minted_ref,
     is_standalone_ref,
 )
 
@@ -70,7 +74,10 @@ class SecretBoundary:
         *,
         clock: Callable[[], datetime] = _now,
         default_on: bool = True,
+        note_of: Callable[[str], SecretNote | None] | None = None,
     ) -> None:
+        #: The uid of the resource a minted secret was minted for (its notes).
+        self._note_of = note_of
         self._store = store
         self._values = values
         self._clock = clock
@@ -128,12 +135,23 @@ class SecretBoundary:
 
     # --- the gate -----------------------------------------------------------
 
-    def _supplied(self, ref: str) -> bool:
+    def _supplied(self, ref: str, dest_uid: str = "") -> bool:
         """Whether ``ref`` holds a value this machine was given for whichever
         destination first cites it: never bound, not a standalone secret, and
         written here a moment ago (a ciphertext that arrived from elsewhere was
         supplied to nobody on this machine)."""
-        if is_standalone_ref(ref) or self._store.has_any_binding(ref):
+        if is_minted_ref(ref):
+            # A minted id is every secret's. A value written for a resource (a
+            # dialog's) was given to it; one a person added on the page was not
+            # and needs a person the first time a resource cites it.
+            note = self._note_of(ref) if self._note_of else None
+            if note is None or note.origin != ORIGIN_DIALOG:
+                return False
+            if note.created_for is not None and note.created_for != dest_uid:
+                return False
+        elif is_standalone_ref(ref):
+            return False
+        if self._store.has_any_binding(ref):
             return False
         created = self._values.created_at(ref)
         if created is None:
@@ -199,7 +217,7 @@ class SecretBoundary:
             bound = self._store.get_binding(ref, dest.kind, dest.uid, slot)
             if bound is not None and bound.target_fingerprint == fp:
                 continue
-            if not on or (supplied and bound is None and self._supplied(ref)):
+            if not on or (supplied and bound is None and self._supplied(ref, dest.uid)):
                 self._supersede_bind(ref, dest.kind, dest.uid, slot)
                 self._approve_binding(ref, dest, slot, None)
                 continue
@@ -336,6 +354,13 @@ class SecretBoundary:
 
     def bindings(self, ref: str | None = None) -> builtins.list[SecretBinding]:
         return self._store.bindings(ref)
+
+    def rebind(self, old: str, new: str) -> None:
+        """Carry every binding of ``old`` to ``new``: the same value at a new
+        name stays approved where it was approved (spec secret "Move every
+        secret to a fixed id once")."""
+        for binding in self._store.bindings(old):
+            self._store.put_binding(dataclasses.replace(binding, ref=new))
 
     def forget(self, ref: str) -> None:
         """A deleted secret takes its bindings with it; a new value is a new secret."""

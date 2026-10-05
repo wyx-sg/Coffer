@@ -158,7 +158,7 @@ function renderSeatalk() {
 /**
  * The ref of the n-th `/secrets` write, read back off the mock.
  *
- * A ref is minted opaque — `channel/<uuid4 hex>/<secret>` — so no test can name
+ * A ref is minted opaque — `secret/<uuid4 hex>` — so no test can name
  * the value it expects, and the thing worth asserting was never the value: it
  * is that the secret write and the config that follows it agree on ONE address.
  * Reading it back and reusing it is what makes that agreement the assertion
@@ -176,8 +176,7 @@ const failure = (code: string, message: string) => ({
   response: new Response(null, { status: 422 }),
 });
 
-const refFor = (secret: string) =>
-  expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
+const refFor = () => expect.stringMatching(/^secret\/[0-9a-f]{32}$/);
 
 beforeEach(() => {
   pairing.people = [];
@@ -196,7 +195,7 @@ acceptance("channels", "register a telegram channel", async () => {
   // Secret write first (registration probes the secret ref) …
   expect(api.POST.mock.calls[0]).toEqual([
     "/secrets",
-    { body: { ref: refFor("bot-token"), value: "123:abc" } },
+    { body: { ref: refFor(), value: "123:abc" } },
   ]);
   // … then the resource registration with refs only (never the secret), citing
   // the very address the write above used.
@@ -333,7 +332,7 @@ describe("AddChannelDialog", () => {
       expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets", "/resources"]);
       expect(api.POST.mock.calls[0]).toEqual([
         "/secrets",
-        { body: { ref: refFor("app-secret"), value: "s1" } },
+        { body: { ref: refFor(), value: "s1" } },
       ]);
       expect(api.POST.mock.calls[1][1]).toEqual({
         body: {

@@ -84,6 +84,7 @@ const movedOf = (ids: string[]) =>
       source: f.source,
       resource: f.resource,
       name: f.proposed_name,
+      label: f.proposed_name,
       ref: f.source === "mcp_server" ? `mcp_server:${f.resource}:${f.key}` : null,
       uri: f.proposed_name ? `coffer://secret/${f.proposed_name}` : null,
     }));

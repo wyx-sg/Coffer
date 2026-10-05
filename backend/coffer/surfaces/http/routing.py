@@ -74,6 +74,7 @@ from coffer.surfaces.http.reconcile_routes import router as reconcile_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.secret_boundary_routes import router as secret_boundary_router
+from coffer.surfaces.http.secret_notes_routes import router as secret_notes_router
 from coffer.surfaces.http.secret_routes import router as secret_router
 from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.setup_state import router as setup_router
@@ -110,6 +111,7 @@ def include_all_routers(app: FastAPI) -> None:
         # `/approvals/...` for a DELETE nobody meant.
         secret_boundary_router,
         secret_router,
+        secret_notes_router,
         settings_router,
         sync_router,  # spec vault-sync
         vault_router,  # spec vault-storage

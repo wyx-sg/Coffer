@@ -24,6 +24,9 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     readable_by_local_processes: false,
     unreferenced: false,
     uri: null,
+    label: null,
+    description: null,
+    created_for: null,
     ...over,
   };
 }
@@ -34,8 +37,43 @@ describe("secretRows", () => {
     expect(displayName(row)).toBe("npm-token");
     expect(referenceOf(row)).toBe("coffer://secret/npm-token");
     const own = ref({ ref: "mcp_server/u1/TOKEN" });
-    expect(displayName(own)).toBe("mcp_server/u1/TOKEN");
+    expect(displayName(own)).toBe("TOKEN");
     expect(referenceOf(own)).toBe("mcp_server/u1/TOKEN");
+  });
+
+  const HEX = "0123456789abcdef0123456789abcdef";
+
+  test("the display name is the label, else a readable default, never a hex id", () => {
+    // A label wins.
+    expect(displayName(ref({ ref: `secret/${HEX}`, label: "GitHub token" }))).toBe("GitHub token");
+    // Unlabelled with a hex id: the first citer and the slot it cites it in (read from the binding).
+    const cited = ref({
+      ref: `secret/${HEX}`,
+      cited_by: [{ kind: "mcp_server", name: "server", uid: "u1", slot: null }],
+      bindings: [
+        {
+          approval_id: null,
+          destination_kind: "mcp_server",
+          destination_uid: "u1",
+          slot: "API_KEY",
+          status: "approved",
+        },
+      ],
+    });
+    expect(displayName(cited)).toBe("server · API_KEY");
+    // No slot known: the citer alone; nothing known: the placeholder.
+    expect(displayName({ ...cited, bindings: [] })).toBe("server");
+    expect(displayName(ref({ ref: `secret/${HEX}` }), "Unnamed")).toBe("Unnamed");
+    // A legacy resource ref carries its slot, with an owner prefix dropped.
+    const legacy = ref({
+      ref: `mcp_server/${HEX}/JIRA_TOKEN`,
+      cited_by: [{ kind: "mcp_server", name: "jira", uid: "u2", slot: null }],
+    });
+    expect(displayName(legacy)).toBe("jira · JIRA_TOKEN");
+    // A standalone name that is itself a minted id counts as unnamed.
+    expect(
+      displayName(ref({ ref: `secret/${HEX}`, uri: `coffer://secret/${HEX}` }), "Unnamed"),
+    ).toBe("Unnamed");
   });
 
   test("names follow the spec's one-segment rule", () => {
@@ -49,8 +87,8 @@ describe("secretRows", () => {
     const row = ref({
       ref: "secret/gh",
       cited_by: [
-        { kind: "mcp_server", name: "github", uid: "u1" },
-        { kind: "skill", name: "notes", uid: "s1" },
+        { kind: "mcp_server", name: "github", uid: "u1", slot: null },
+        { kind: "skill", name: "notes", uid: "s1", slot: null },
       ],
       mentioned_by_skills: ["notes", "deploy"],
     });
@@ -63,8 +101,12 @@ describe("secretRows", () => {
 
   test("a refusal's resources become citers; anything malformed is dropped", () => {
     expect(
-      citersFromRefusal({ resources: [{ kind: "channel", name: "SeaTalk", uid: "c1" }, { x: 1 }] }),
-    ).toEqual([{ key: "channel:c1", kind: "channel", name: "SeaTalk", href: "/channels/c1" }]);
+      citersFromRefusal({
+        resources: [{ kind: "channel", name: "SeaTalk", uid: "c1", slot: null }, { x: 1 }],
+      }),
+    ).toEqual([
+      { key: "channel:c1", kind: "channel", uid: "c1", name: "SeaTalk", href: "/channels/c1" },
+    ]);
     expect(citersFromRefusal(null)).toEqual([]);
   });
 

@@ -21,19 +21,31 @@ presence-gated reveal in ``secret_boundary_routes``, for the desktop app.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response, status
+from fastapi.responses import JSONResponse
 
 from coffer.application.audit_service import AuditService
+from coffer.application.resource_delete_ops import SecretHooks
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.model_proxy.state import PROXY_TOKEN_REF_PREFIX
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretInUse
-from coffer.domain.secrets import secret_uri, standalone_name
+from coffer.domain.secrets import (
+    ORIGIN_PAGE,
+    SecretNote,
+    is_minted_ref,
+    mint_secret_name,
+    secret_ref,
+    secret_uri,
+    slot_of,
+    standalone_name,
+)
 from coffer.infrastructure.secret.plaintext_scan import skills_citing_secrets
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
 from coffer.surfaces.http.auth import require_token
@@ -43,16 +55,18 @@ from coffer.surfaces.http.dependencies import (
     get_resource_service,
 )
 from coffer.surfaces.http.errors import error_response
-from coffer.surfaces.http.schemas import (
+from coffer.surfaces.http.secret_boundary_wiring import approval_applied, get_secret_boundary
+from coffer.surfaces.http.secret_composition import get_secret_store
+from coffer.surfaces.http.secret_notes_wiring import get_secret_notes, optional_secret_notes
+from coffer.surfaces.http.secret_schemas import (
     SecretBindingOut,
     SecretCiterOut,
     SecretExistsOut,
     SecretListOut,
+    SecretMintedOut,
     SecretRefOut,
     SecretSetIn,
 )
-from coffer.surfaces.http.secret_boundary_wiring import approval_applied, get_secret_boundary
-from coffer.surfaces.http.secret_composition import get_secret_store
 
 router = APIRouter(
     prefix="/api/v1/secrets",
@@ -61,7 +75,12 @@ router = APIRouter(
 )
 
 
-@router.post("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.post(
+    "",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    responses={201: {"model": SecretMintedOut, "description": "Stored under a minted id."}},
+)
 async def set_secret(
     body: SecretSetIn,
     store: Any = Depends(get_secret_store),  # noqa: B008
@@ -74,18 +93,53 @@ async def set_secret(
     both written without approval (spec secret "Store a secret through the
     API"). A replacement is audited as such, never with a value, and whatever
     holds the old value, such as the model proxy, picks the new one up.
+
+    Without a `ref`, a `label` names it: the id `secret/<uuid4 hex>` is minted,
+    the label stored as its note, and the answer is 201 with the ref and uri
+    (spec secret "Mint every secret's id; a person names it").
     """
+    minted = body.ref is None
+    ref = body.ref if body.ref is not None else secret_ref(mint_secret_name())
     # to_thread: the store write is file IO and, for a vault ref, a git
     # commit under the vault's write lock — nothing for the event loop.
-    replaced = await asyncio.to_thread(store.exists, body.ref)
-    await asyncio.to_thread(store.set, body.ref, body.value)
+    replaced = await asyncio.to_thread(store.exists, ref)
+    if not minted and not replaced and not is_minted_ref(ref):
+        # A person names a secret (a label); Coffer mints every id.
+        raise ConfigValidationError(
+            f"{ref!r} is not a secret that exists, and a new secret's id is minted "
+            "by Coffer: omit the ref (and send a label) to create one"
+        )
+    await asyncio.to_thread(store.set, ref, body.value)
     approval_applied()
     await audit.record(
         AuditEventType.SECRET_SET.value,
         actor=actor,
-        details={"ref": body.ref, "replaced": replaced},
+        details={"ref": ref, "replaced": replaced},
     )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    if body.label or body.created_for or minted:
+        notes = get_secret_notes()
+
+        def merge(before: SecretNote | None) -> SecretNote:
+            before = before or SecretNote()
+            return SecretNote(
+                label=body.label or before.label,
+                description=before.description,
+                created_for=body.created_for or before.created_for,
+                # Added on the page (no ref sent): a person made it for itself.
+                origin=ORIGIN_PAGE if minted else before.origin,
+            )
+
+        await asyncio.to_thread(
+            notes.update, ref, merge, summary=f"describe secret {ref}", actor=actor
+        )
+    if not minted:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    name = standalone_name(ref)
+    assert name is not None
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content=SecretMintedOut(ref=ref, uri=secret_uri(name)).model_dump(),
+    )
 
 
 @router.get("", response_model=SecretListOut)
@@ -107,6 +161,8 @@ async def list_refs(
     value is decrypted, so nothing is audited.
     """
     cited = await resources.cited_secret_refs()
+    notes = optional_secret_notes()
+    noted = await asyncio.to_thread(notes.all) if notes is not None else {}
     rows_stored = [
         row
         for row in await asyncio.to_thread(store.list_refs)
@@ -119,7 +175,7 @@ async def list_refs(
     # is decrypted (spec secret "Show a secret this Mac cannot open as missing
     # on this Mac").
     locked = set(await asyncio.to_thread(store.unreadable_refs))
-    mentions = await asyncio.to_thread(skills_citing_secrets, skills_root())
+    skill_citers = await _skill_citers(resources)
     boundary = get_secret_boundary()
     bindings = await asyncio.to_thread(boundary.bindings)
     pending = await asyncio.to_thread(lambda: boundary.list(status="pending"))
@@ -132,7 +188,7 @@ async def list_refs(
     out: list[SecretRefOut] = []
     for ref in sorted(stored | set(cited)):
         name = standalone_name(ref)
-        skills = sorted(mentions.get(name, set())) if name else []
+        skills = skill_citers(ref) if name else []
         rows = [
             SecretBindingOut(
                 destination_kind=b.destination_kind,
@@ -153,15 +209,22 @@ async def list_refs(
             for a in pending
             if a.op == "bind" and a.ref == ref
         ]
+        note = noted.get(ref)
         out.append(
             SecretRefOut(
                 ref=ref,
+                label=note.label if note else None,
+                description=note.description if note else None,
                 present=ref in stored,
                 locked=ref in locked,
+                created_for=note.created_for if note else None,
                 created_at=created.get(ref),
                 last_used_at=last_used.get(ref),
                 cited_by=[
-                    SecretCiterOut(uid=r.uid, kind=r.kind, name=r.name) for r in cited.get(ref, [])
+                    SecretCiterOut(
+                        uid=r.uid, kind=r.kind, name=r.name, slot=_slot(resources, r, ref)
+                    )
+                    for r in cited.get(ref, [])
                 ],
                 uri=secret_uri(name) if name else None,
                 mentioned_by_skills=skills,
@@ -173,6 +236,23 @@ async def list_refs(
             )
         )
     return SecretListOut(refs=out)
+
+
+async def _skill_citers(resources: ResourceService) -> Callable[[str], list[str]]:
+    """``ref -> skills whose files cite it``, from the citation index (the files
+    are rescanned only where no index is wired, such as a bare test app)."""
+    hooks: SecretHooks | None = getattr(resources, "secret_hooks", None)
+    index = hooks.index if hooks is not None else None
+    if index is not None:
+        await index.settled()
+        return index.skill_citers
+    mentions = await asyncio.to_thread(skills_citing_secrets, skills_root())
+    return lambda ref: sorted(mentions.get(standalone_name(ref) or "", set()))
+
+
+def _slot(resources: ResourceService, resource: Resource, ref: str) -> str | None:
+    keys = [k for k, v in resources.secret_slots(resource).items() if v == ref]
+    return slot_of(resource.kind, keys[0]) if keys else None
 
 
 def _skill_folder(name: str) -> Resource:
@@ -247,8 +327,7 @@ async def delete_secret(
     if name:
         # A standalone secret's citers are mostly files: a skill that still
         # cites its URI would break the next command it runs.
-        mentions = await asyncio.to_thread(skills_citing_secrets, skills_root())
-        for skill in sorted(mentions.get(name, set())):
+        for skill in (await _skill_citers(resources))(ref):
             row = await resources.find_by_name("skill", skill)
             # A master folder with no row yet still cites it; the refusal only
             # needs its kind and name to say what to edit first.

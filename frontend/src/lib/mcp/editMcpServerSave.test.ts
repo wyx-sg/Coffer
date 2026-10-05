@@ -3,7 +3,7 @@
 // The save path's dealings with secrets: a chosen secret is cited as
 // `secret/<name>`, a new one is written to Secrets before the PATCH (and removed
 // again when the PATCH fails), a secret Coffer minted for the server keeps its
-// ref while it is still chosen, and which no-longer-cited refs may be deleted.
+// ref while it is still chosen, and a dropped ref is never deleted from the client.
 // The server is renamed out from under its own minted refs, the state reachable
 // since rename became a field on `PATCH /resources/{uid}` for every kind.
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -20,10 +20,8 @@ vi.mock("@/lib/api/client", async (orig) => ({
 
 const t = ((key: string) => key) as never;
 
-/** A ref as `lib/secretRef.ts` mints one. */
-const MINTED = "mcp_server/0123456789abcdef0123456789abcdef/GITHUB_TOKEN";
-/** One the user typed, or pasted in to share a secret with another server. */
-const HAND_WRITTEN = "shared/github-token";
+/** A ref as `lib/secretRef.ts` mints one: `secret/<uuid4 hex>`. */
+const MINTED = "secret/0123456789abcdef0123456789abcdef";
 
 function resource(overrides: Record<string, unknown> = {}) {
   return {
@@ -75,14 +73,12 @@ describe("which address a secret is cited by", () => {
 
     expect(api.POST).not.toHaveBeenCalled();
     expect(patchedRefs()).toEqual({ GITHUB_TOKEN: "secret/github-pat" });
-    // The server's own minted secret is no longer cited, so it is released.
-    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
-      params: { path: { ref: MINTED } },
-    });
+    // No longer cited, but not deleted from here: the daemon releases it with the server.
+    expect(api.DELETE).not.toHaveBeenCalled();
   });
 
-  test("the secret Coffer minted for the key keeps its ref while it stays chosen", async () => {
-    await save([row()]);
+  test("the secret already cited for the key keeps its ref while it stays chosen", async () => {
+    await save([row({ value: { kind: "stored", name: MINTED.slice("secret/".length) } })]);
 
     expect(api.POST).not.toHaveBeenCalled();
     expect(api.DELETE).not.toHaveBeenCalled();
@@ -90,7 +86,9 @@ describe("which address a secret is cited by", () => {
   });
 
   test("a new secret is written to Secrets before the PATCH and cited by name", async () => {
-    await save([row({ value: { kind: "new", name: "gh-token", value: "ghp_new" } })]);
+    await save([
+      row({ value: { kind: "new", name: "gh-token", label: "gh-token", value: "ghp_new" } }),
+    ]);
 
     expect(api.POST).toHaveBeenCalledWith("/secrets", {
       body: { ref: "secret/gh-token", value: "ghp_new" },
@@ -108,7 +106,9 @@ describe("which address a secret is cited by", () => {
       response: new Response(null, { status: 422 }),
     } as never);
     await expect(
-      save([row({ value: { kind: "new", name: "gh-token", value: "ghp_new" } })]),
+      save([
+        row({ value: { kind: "new", name: "gh-token", label: "gh-token", value: "ghp_new" } }),
+      ]),
     ).rejects.toBeDefined();
 
     expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
@@ -118,7 +118,7 @@ describe("which address a secret is cited by", () => {
 
   test("a new secret with no value is refused before anything is written", async () => {
     await expect(
-      save([{ key: "NEW", value: { kind: "new", name: "new", value: "" } }]),
+      save([{ key: "NEW", value: { kind: "new", name: "new", label: "new", value: "" } }]),
     ).rejects.toThrow("mcp.edit.errSecretNeedsValue");
     expect(api.POST).not.toHaveBeenCalled();
     expect(api.PATCH).not.toHaveBeenCalled();
@@ -128,28 +128,14 @@ describe("which address a secret is cited by", () => {
     await save([row({ value: { kind: "plain", value: "public" } })]);
 
     expect(patchedRefs()).toEqual({});
-    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
-      params: { path: { ref: MINTED } },
-    });
+    expect(api.DELETE).not.toHaveBeenCalled();
   });
 });
 
-describe("which no-longer-cited refs may be deleted", () => {
-  test("a minted ref this server dropped is deleted after a rename", async () => {
-    // With the old `<name>.` prefix test a renamed server owned none of its own
-    // refs and the cleanup silently did nothing.
+describe("a ref the server no longer cites", () => {
+  test("is never deleted from the client, whatever its shape", async () => {
+    // Every secret is `secret/<id>`, so the shape no longer says whom it was minted for.
     await save([]);
-
-    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
-      params: { path: { ref: MINTED } },
-    });
-  });
-
-  test("a hand-written or shared ref is never deleted", async () => {
-    const shared = resource({
-      config: { transport: { type: "stdio", secret_refs: { GITHUB_TOKEN: HAND_WRITTEN } } },
-    });
-    await save([], shared);
 
     expect(api.DELETE).not.toHaveBeenCalled();
   });

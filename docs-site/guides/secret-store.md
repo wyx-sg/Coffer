@@ -5,13 +5,13 @@ description: How Coffer encrypts every secret it holds, how to store, cite, rota
 
 # Secret store
 
-Coffer keeps every secret it needs — an MCP server's token, a provider's API key, a channel bot's token, a sync remote's push token — in one encrypted store, and everything else refers to a secret by name. This page covers storing and citing secrets, rotating and deleting them, where the master key lives, and how to back it up or move it to another machine.
+Coffer keeps every secret it needs — an MCP server's token, a provider's API key, a channel bot's token, a sync remote's push token — in one encrypted store, and everything else refers to a secret by its id. This page covers storing and citing secrets, rotating and deleting them, where the master key lives, and how to back it up or move it to another machine.
 
 No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there. [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to hand a secret to a command you run with `coffer run`.
 
 ## How secrets are stored
 
-- Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in its own file, `~/.coffer/vault/secret/<ref>.enc` (mode `0600`), holding the Fernet token and nothing else. The token carries its own encryption time; when this machine first stored the ref is kept in `~/.coffer/local/secret-boundary/times.json`. The vault's git repository leaves `secret/` out of its commits until a sync remote carries secrets.
+- Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in its own file, `~/.coffer/vault/secret/<ref>.enc` (for example `secret/<id>.enc`) (mode `0600`), holding the Fernet token and nothing else. The token carries its own encryption time; when this machine first stored the ref is kept in `~/.coffer/local/secret-boundary/times.json`. The vault's git repository leaves `secret/` out of its commits until a sync remote carries secrets.
 - One **master key** decrypts them all. It lives in exactly one place. A signed release keeps it in a Keychain item only Coffer's signed binaries can read. A development build — every build from source, and every build until signed releases exist — keeps it in a file (`~/.coffer/master.key`, mode `0600`, the default) or your OS keychain (opt-in). See [Where the master key lives](#where-the-master-key-lives).
 - Resource configuration — MCP servers, providers, channels, the sync remote — holds only **refs**. A ref is resolved to plaintext at the moment of use: when an MCP server is started or an HTTP header is sent, when a provider key is fetched.
 - The daemon is the only process that opens the store. The CLI and web UI write and list secrets through the daemon's `/api/v1/secrets` routes; neither touches the key, and no route hands a value back.
@@ -26,20 +26,22 @@ flowchart LR
 
 ## Store a secret
 
-A ref is a slash-separated name of letters, digits, `.`, `_` and `-` — for example `github/token` or `brave/api-key`. The name carries no meaning to the store; choose one you will recognise in a listing.
+Every secret has one ref shape, `secret/<id>`, where `<id>` is 32 hex characters that Coffer mints. You never choose a ref. You give a secret a **name** (up to 64 characters) and, if you like, a **description** (up to 200), and can change both at any time: they are notes kept in your vault beside the secret, so changing them touches nothing that cites it.
 
 ```sh
 # From stdin, so the value never reaches your shell history
-printf '%s' "$GITHUB_TOKEN" | coffer secret set github/token
-# stored: github/token
+printf '%s' "$GITHUB_TOKEN" | coffer secret set --name "GitHub token"
+# stored: GitHub token
+#   id:  secret/<id>
+#   uri: coffer://secret/<id>
 
 # Or at a hidden prompt
-coffer secret set github/token
+coffer secret set --name "GitHub token"
 ```
 
-An empty value is rejected. `--value <secret>` also works but prints a warning, because the value lands in your shell history.
+An empty value is rejected. `--value <secret>` also works but prints a warning, because the value lands in your shell history. `coffer secret set <existing ref>` only replaces the value of a secret that exists; a ref that does not exist and is not `secret/<id>` is refused.
 
-Most of the time you do not create refs by hand. The dialogs that ask for a secret — **Add server** on the MCP servers page, the MCP server **Edit** dialog's secrets, **Add model provider**, a channel's token field, the sync remote's push secret — write the secret to the store first and save only the generated ref (for example `mcp_server/<uuid>/GITHUB_TOKEN` or `provider/<uuid>/key`). If the registration that follows fails, the just-written secret is deleted again.
+Most of the time you do not run this by hand. The dialogs that ask for a secret — **Add server** on the MCP servers page, the MCP server **Edit** dialog's secrets, **Add model provider**, a channel's token field, the sync remote's push secret — write the pasted value to the store first as a new `secret/<id>` made for that resource, and save only that ref. If the registration that follows fails, the just-written secret is deleted again. Their pickers also list stored secrets by name, so you can cite one you added on the [Secrets page](/guides/secrets#the-secrets-page) instead.
 
 ## Cite a secret
 
@@ -47,11 +49,11 @@ Most of the time you do not create refs by hand. The dialogs that ask for a secr
 | --- | --- |
 | stdio MCP server | An environment variable row set to **Secret** in the **Add server** or **Edit** dialog — becomes an environment variable of the server process |
 | HTTP MCP server | A header row set to **Secret** in the same dialogs — becomes a request header; the secret is the header's whole value |
-| Adopting an agent's MCP entry | **Import from your agents** in the **Add server** dialog — Coffer stores the entry's current value under a generated ref |
+| Adopting an agent's MCP entry | **Import from your agents** in the **Add server** dialog — Coffer stores the entry's current value under a minted `secret/<id>` |
 | Model provider | the **API key** field of **Add provider** |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |
 | Sync remote | the push secret on the **Sync** page |
-| A command you run, a skill, an env file | `coffer://secret/<name>`, for a standalone secret stored as `secret/<name>` — see [Secrets](/guides/secrets) |
+| A command you run, a skill, an env file | `coffer://secret/<id>`, for a standalone secret stored as `secret/<id>` — see [Secrets](/guides/secrets) |
 
 Registering a resource that cites a ref the store does not hold fails, naming the missing secret, and nothing is saved.
 
@@ -66,22 +68,23 @@ coffer secret list
 ```text
                                      Secrets
 ┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Ref                ┃ Present in store ┃ Used by                 ┃ Readable by local processes ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ github/token       │ yes              │ mcp_server github       │ yes                         │
-│ provider/7f3c…/key │ no               │ provider deepseek       │ no                          │
-│ secret/orders-db   │ yes              │ skill coffer-database   │ yes                         │
-│ secret/old-api     │ yes              │ (unreferenced)          │ yes                         │
-└────────────────────┴──────────────────┴─────────────────────────┴─────────────────────────────┘
+┃ Ref          ┃ Name         ┃ Present in store ┃ Used by                 ┃ Readable by local processes ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ secret/<id>  │ GitHub token │ yes              │ mcp_server github       │ yes                         │
+│ secret/<id>  │ DeepSeek key │ no               │ provider deepseek       │ no                          │
+│ secret/<id>  │ Orders DB    │ yes              │ skill coffer-database   │ yes                         │
+│ secret/<id>  │ Old API      │ yes              │ (unreferenced)          │ yes                         │
+└──────────────┴──────────────┴──────────────────┴─────────────────────────┴─────────────────────────────┘
 ```
 
 The list shows every ref the store holds and every ref a registered resource cites:
 
+- **Name** — the secret's name, or empty if it has none.
 - **Present in store** — whether the store holds a value. After restoring a vault without its secrets, the `no` rows are the ones to set again.
-- **Used by** — the resources that cite the ref, the skills whose files cite a standalone secret's `coffer://secret/<name>`, and how many destinations wait for approval. `(unreferenced)` marks a secret nothing uses: a candidate to delete.
+- **Used by** — the resources that cite the ref, the skills whose files cite a standalone secret's `coffer://secret/<id>`, and how many destinations wait for approval. `(unreferenced)` marks a secret nothing uses: a candidate to delete.
 - **Readable by local processes** — whether another program running as you can read the value where Coffer puts it: a stdio MCP server's environment, or a standalone secret handed to a command. See [what stays exposed](/architecture/security#what-stays-exposed).
 
-It decrypts nothing and is not audited. `--json` gives the same data, with the approved and pending destinations of each ref. The [Secrets page](/guides/secrets#the-secrets-page) in the web UI shows the same list.
+It decrypts nothing and is not audited. `--json` gives the same data, with each secret's `label`, `description` and `created_for` (the uid of the resource it was made for), the slot each citer uses (`cited_by`), and the approved and pending destinations of each ref. The [Secrets page](/guides/secrets#the-secrets-page) in the web UI shows the same list.
 
 No command prints a value. A row of the [Secrets page](/guides/secrets#the-secrets-page) says whether a value is stored. To see or copy one, choose **Reveal value…** on the [Secrets page](/guides/secrets#the-secrets-page) in the desktop app, which asks for Touch ID or your login password each time.
 
@@ -90,18 +93,18 @@ No command prints a value. A row of the [Secrets page](/guides/secrets#the-secre
 Store a new value under the same ref:
 
 ```sh
-printf '%s' "$NEW_TOKEN" | coffer secret set github/token
+printf '%s' "$NEW_TOKEN" | coffer secret set secret/<id>
 ```
 
-The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. On the Secrets page, the row's **Replace value…** does it for any ref.
+The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. On the Secrets page, the detail's **Replace value…** does it for any secret.
 
 A replacement is stored at once and needs no approval, like any write: whoever supplies a value already has it. It is audited as a replacement, never with a value.
 
 ## Delete a secret
 
-On the [Secrets page](/guides/secrets#the-secrets-page), choose **Delete…** on the row; it asks first. Deletion is refused while any resource still cites the ref, or while a skill's files cite a standalone secret's `coffer://secret/<name>`: for a ref still in use, the dialog lists what uses it, by kind and current name, each with a link to its page, instead of deleting.
+On the [Secrets page](/guides/secrets#the-secrets-page), choose **Delete…** in the secret's **⋯** menu; it asks first. Deletion is refused while any resource still cites the ref, or while a skill's files cite its `coffer://secret/<id>`: for a ref still in use, the dialog lists what uses it, by kind and current name, each with a link to its page, instead of deleting.
 
-You rarely need to delete by hand: deleting a resource releases the refs nothing else cites (standalone `secret/` names are never released this way). Deleting a ref forgets the destinations it was approved for, so a new value stored under the same ref later is treated as a new secret. Deleting a ref that does not exist succeeds and does nothing.
+You rarely need to delete by hand. A secret you pasted into a resource's own dialog is made for that resource, and deleting the resource deletes it too — but only when nothing else cites it: no other resource, and no skill file holding its `coffer://secret/<id>`. Every other secret the resource cited, such as one you added on the Secrets page, is kept and shows under **Not used**. The secret's name and description are deleted with it. Deleting a ref forgets the destinations it was approved for, so a new value stored under the same ref later is treated as a new secret. Deleting a ref that does not exist succeeds and does nothing.
 
 ## Where the master key lives
 
@@ -167,7 +170,7 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 ## What never gets logged
 
 - Secret values never appear in plaintext in the vault, in `runs.db`, in log files, in the audit log, or in the MCP invocation log.
-- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `master_key_exported`, `secret_resolved` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
+- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`, `secret_migrated`, `master_key_relocated`, `master_key_exported`, `secret_resolved` and the `secret_approval_*` events — carry the ref, the destination or the names of changed fields, never a value or the text of a name or description. `secret_resolved` names who used the secret and the slot, at most once a minute per destination. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".
 - An HTTP upstream's connection errors are reported by exception type only, so a URL or header carrying a secret is not echoed into a message.
@@ -182,7 +185,7 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 | `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
 | `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before | Approve it in the desktop app; the approvals dialog lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `PRESENCE_GRANT_INVALID` | A reveal, key backup or approval was attempted outside the desktop app | Do it in the desktop app. |
-| An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>`. |
+| An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>` to give an existing secret a value, or add the secret on the Secrets page. |
 
 ## Related
 

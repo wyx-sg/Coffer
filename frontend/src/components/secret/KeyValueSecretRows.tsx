@@ -11,7 +11,7 @@ import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSecretChoices } from "./useSecretChoices";
-import { defaultSecretName, looksLikeSecret, type KeyValueSecretRow } from "./secretValue";
+import { looksLikeSecret, mintSecretName, type KeyValueSecretRow } from "./secretValue";
 import { SecretValueButton } from "./SecretValueButton";
 
 interface Props {
@@ -24,8 +24,8 @@ interface Props {
   addLabel?: string;
   /** Read-only form: rows render as `key ← 🔑 name`. */
   readOnly?: boolean;
-  /** Names a New secret from a row's key; defaults to a slug of the key. */
-  secretNameFor?: (key: string) => string;
+  /** Labels a New secret from a row's key; defaults to the key. */
+  secretLabelFor?: (key: string) => string;
   /** Index of a row whose value takes focus when first shown. */
   focusRow?: number;
 }
@@ -35,13 +35,8 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_26px] items-center g
 export function KeyValueSecretRows(props: Props) {
   const { rows, onChange, label, keyPlaceholder, readOnly = false, focusRow } = props;
   const { t } = useTranslation();
-  const { names } = useSecretChoices();
-  // Unique among stored secrets and the new ones already on other rows.
-  const nameFor = (key: string) => {
-    const taken = new Set(names);
-    for (const r of rows) if (r.value.kind === "new") taken.add(r.value.name);
-    return defaultSecretName(props.secretNameFor?.(key) ?? key, taken);
-  };
+  const { displayOf } = useSecretChoices();
+  const labelFor = (key: string) => props.secretLabelFor?.(key) ?? key;
   const update = (i: number, patch: Partial<KeyValueSecretRow>) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
@@ -58,7 +53,9 @@ export function KeyValueSecretRows(props: Props) {
                 <>
                   <span aria-label={t("secretRows.readsFrom")}>←</span>
                   <KeyRound className="size-3.5 shrink-0" aria-hidden />
-                  <span className="truncate text-text">{row.value.name}</span>
+                  <span className="truncate text-text">
+                    {row.value.kind === "new" ? row.value.label : displayOf(row.value.name)}
+                  </span>
                 </>
               )}
             </dd>
@@ -87,7 +84,7 @@ export function KeyValueSecretRows(props: Props) {
               <SecretValueButton
                 rowKey={row.key}
                 value={row.value}
-                defaultName={nameFor(row.key)}
+                defaultLabel={labelFor(row.key)}
                 autoFocus={focusRow === i}
                 onChange={(value) => update(i, { value })}
               />
@@ -113,7 +110,8 @@ export function KeyValueSecretRows(props: Props) {
                     update(i, {
                       value: {
                         kind: "new",
-                        name: nameFor(row.key),
+                        name: mintSecretName(),
+                        label: labelFor(row.key),
                         value: row.value.kind === "plain" ? row.value.value : "",
                       },
                     })

@@ -5,9 +5,12 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Plus } from "lucide-react";
 
-import { NewSecretDialog } from "@/components/secret/NewSecretDialog";
+import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
+import { useSecretChoices } from "@/components/secret/useSecretChoices";
+import { secretRef } from "@/components/secret/secretValue";
 import { Button } from "@/components/ui/button";
 import type { CustomToolGroup } from "@/lib/api/customTools";
+import type { SecretRef } from "@/lib/api/secret";
 import { toolsOn } from "@/lib/customTools/groups";
 import { secretInState } from "./headerRows";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
@@ -22,6 +25,7 @@ interface Props {
 export function GroupSecretAlert({ group, onChooseAnother }: Props) {
   const { t } = useTranslation();
   const refresh = useRefreshCustomTools(group.name);
+  const { rowOf } = useSecretChoices();
   const [adding, setAdding] = useState(false);
   if (group.secret_state === "pending_approval") {
     const secret = secretInState(group, "pending_approval");
@@ -64,12 +68,34 @@ export function GroupSecretAlert({ group, onChooseAnother }: Props) {
       >
         {t("customTools.alert.missingBody", { count: toolsOn(group.tools) })}
       </GroupBanner>
-      <NewSecretDialog
-        open={adding}
-        onOpenChange={setAdding}
-        defaultName={secret}
-        onCreated={refresh}
+      <ReplaceSecretDialog
+        row={adding ? (rowOf(secret) ?? uncitedRow(secret)) : null}
+        onOpenChange={(open) => {
+          setAdding(open);
+          if (!open) refresh();
+        }}
       />
     </>
   );
+}
+
+/** The group cites this secret by name but the list has no row for it yet: a value is stored under
+ *  exactly the name the group cites, never one a person types. */
+function uncitedRow(secret: string): SecretRef {
+  return {
+    ref: secretRef(secret),
+    present: false,
+    locked: false,
+    bindings: [],
+    cited_by: [],
+    mentioned_by_skills: [],
+    created_at: null,
+    last_used_at: null,
+    readable_by_local_processes: false,
+    unreferenced: false,
+    uri: null,
+    label: null,
+    description: null,
+    created_for: null,
+  };
 }

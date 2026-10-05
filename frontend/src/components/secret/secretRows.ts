@@ -1,8 +1,8 @@
 // src/components/secret/secretRows.ts — pure helpers the Secrets page reads its rows through.
 //
 // A row is one ref the store holds or a resource cites. A standalone secret
-// (`secret/<name>`) shows its name and is referred to by its
-// `coffer://secret/<name>`; any other ref is its own name and reference. What
+// (`secret/<name>`) is referred to by its `coffer://secret/<name>`; any other ref is its own
+// reference. What a row is called is `displayName`. What
 // uses a ref is every resource citing it plus every skill whose files cite
 // its URI, each with the page it opens (spec web-ui "Manage stored secrets on
 // the Secrets page").
@@ -11,17 +11,47 @@ import { SECRET_PREFIX, isValidSecretName } from "@/lib/secretValue";
 
 export { SECRET_PREFIX, isValidSecretName };
 
-
 /** The name of a standalone secret, or null for a resource's own ref. */
-function standaloneName(ref: string): string | null {
+export function standaloneName(ref: string): string | null {
   if (!ref.startsWith(SECRET_PREFIX)) return null;
   const name = ref.slice(SECRET_PREFIX.length);
   return isValidSecretName(name) ? name : null;
 }
 
-/** What the Name column shows: a standalone secret's name, else the ref. */
-export function displayName(row: SecretRef): string {
-  return standaloneName(row.ref) ?? row.ref;
+/** The most a label and a description can say (spec secret "Label and describe a secret without
+ *  changing its reference"). */
+export const LABEL_MAX = 64;
+export const DESCRIPTION_MAX = 200;
+
+const HEX_ID = /^[0-9a-f]{32}$/i;
+
+/** A minted id (32 hex characters), which is never a name worth showing. */
+export function isMintedId(segment: string): boolean {
+  return HEX_ID.test(segment);
+}
+
+/** What the list calls a secret: its label; else a standalone secret's name; else the first citer's
+ *  name and the slot it cites it in; else a legacy ref's short name. A minted hex id is never shown —
+ *  `unnamed` stands in when nothing else names it (spec web-ui "Manage stored secrets on the
+ *  Secrets page"). */
+export function displayName(row: SecretRef, unnamed = "Unnamed secret"): string {
+  const label = row.label?.trim();
+  if (label) return label;
+  const standalone = standaloneName(row.ref);
+  if (standalone !== null && !isMintedId(standalone)) return standalone;
+  const first = row.cited_by[0];
+  const citer = first?.name ?? row.mentioned_by_skills[0];
+  // The slot: a resource's own legacy ref ends in it; a `secret/<id>` ref cannot say, so it is read
+  // from the binding where the first citer cites it.
+  const last = row.ref.split("/").pop() ?? row.ref;
+  const fromRef = standalone === null && !isMintedId(last) ? shortName(row) : null;
+  const bound = first
+    ? row.bindings.find((b) => b.destination_kind === first.kind && b.destination_uid === first.uid)
+        ?.slot
+    : undefined;
+  const slot = fromRef ?? bound ?? null;
+  if (citer) return slot ? `${citer} · ${slot}` : citer;
+  return slot ?? unnamed;
 }
 
 /** The last path segment of a ref; `postman.AUTHORIZATION` drops its owner's name prefix. This is
@@ -52,6 +82,8 @@ export function referenceOf(row: SecretRef): string {
 export interface Citer {
   key: string;
   kind: string;
+  /** The citing resource's uid; empty for a skill that only mentions the URI. */
+  uid: string;
   name: string;
   href: string | null;
 }
@@ -59,7 +91,7 @@ export interface Citer {
 const enc = encodeURIComponent;
 
 /** The page a citer opens: kinds keyed by fixed name use it, the rest their uid. */
-function citerHref(kind: string, name: string, uid: string): string | null {
+export function citerHref(kind: string, name: string, uid: string): string | null {
   switch (kind) {
     case "mcp_server":
       return `/mcp-servers/${enc(name)}`;
@@ -87,6 +119,7 @@ export function citersOf(row: SecretRef): Citer[] {
   const out: Citer[] = row.cited_by.map((c) => ({
     key: `${c.kind}:${c.uid}`,
     kind: c.kind,
+    uid: c.uid,
     name: c.name,
     href: citerHref(c.kind, c.name, c.uid),
   }));
@@ -96,6 +129,7 @@ export function citersOf(row: SecretRef): Citer[] {
     out.push({
       key: `skill:${skill}`,
       kind: "skill",
+      uid: "",
       name: skill,
       href: citerHref("skill", skill, ""),
     });
@@ -127,6 +161,6 @@ export function citersFromRefusal(details: unknown): Citer[] {
     const { kind, name, uid } = r as { kind?: unknown; name?: unknown; uid?: unknown };
     if (typeof kind !== "string" || typeof name !== "string") return [];
     const id = typeof uid === "string" ? uid : "";
-    return [{ key: `${kind}:${id || name}`, kind, name, href: citerHref(kind, name, id) }];
+    return [{ key: `${kind}:${id || name}`, kind, uid: id, name, href: citerHref(kind, name, id) }];
   });
 }

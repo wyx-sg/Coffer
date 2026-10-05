@@ -50,7 +50,7 @@ export function ReplaceSecretDialog({ row, onOpenChange }: Props) {
   }, [open, reset]);
 
   if (!row) return null;
-  const name = displayName(row);
+  const name = displayName(row, t("secrets.unnamed"));
   const citers = citersOf(row);
   const storing = isMissingHere(row);
 

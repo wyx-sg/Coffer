@@ -7,20 +7,17 @@
 // never stored, and brand-new refs are rolled back when that PATCH fails so a
 // rejected edit never orphans a secret.
 //
-// The PATCH is addressed to the server's uid, and so are the secret refs:
-// `mcp_server/<uuid4 hex>/<key>`, minted by `@/lib/secretRef`. Nothing here
-// reads the server's NAME: a ref built from the name would make the name a key
-// into the encrypted store, and rename is a field on `PATCH /resources/{uid}`.
+// The PATCH is addressed to the server's uid. A new secret's ref is `secret/<uuid4 hex>`, minted
+// by `@/lib/secretValue`; nothing here reads the server's NAME, which would make it a key into the
+// encrypted store.
 //
 // Which row cites which ref is `serverRows.ts`; this file does the writes in order.
 import type { TFunction } from "i18next";
 
-import { ApiError } from "@/lib/api/errors";
 import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import type { components } from "@/lib/api/types";
 import { persistNewSecrets, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
-import { isMintedSecretRef } from "@/lib/secretRef";
 import { keptRows, plainMapOfRows, secretRefsForSave, secretRefsOf } from "@/lib/mcp/serverRows";
 import { withTimeouts, type Timeouts } from "@/lib/mcp/serverTimeouts";
 
@@ -122,7 +119,7 @@ export async function saveMcpServerEdit({
   timeouts,
   title,
   t,
-}: SaveArgs): Promise<{ orphanWarnings: string[] }> {
+}: SaveArgs): Promise<void> {
   let config: Record<string, unknown>;
   try {
     config = JSON.parse(configText) as Record<string, unknown>;
@@ -174,23 +171,8 @@ export async function saveMcpServerEdit({
     throw e;
   }
 
-  // Clean up secret store entries this server no longer references — but
-  // only ones Coffer minted for it, never a Secrets-page secret or a ref the
-  // user wrote by hand to share one secret between two servers. Ownership is
-  // the ref's SHAPE (a minted ref carries a uuid nothing else produced), not
-  // the server's name. A failed cleanup must not roll back the PATCH above.
-  const newRefs = new Set(Object.values(secretRefs));
-  const orphanWarnings: string[] = [];
-  for (const ref of Object.values(secretRefsOf(resource.config))) {
-    if (!newRefs.has(ref) && isMintedSecretRef("mcp_server", ref)) {
-      try {
-        await secretsApi.remove(ref);
-      } catch (e) {
-        const msg = e instanceof ApiError ? e.message : "secret delete failed";
-        console.warn(`[EditMcpServerDialog] orphan cleanup failed for ${ref}:`, msg);
-        orphanWarnings.push(ref);
-      }
-    }
-  }
-  return { orphanWarnings };
+  // A secret this server no longer cites is not deleted from here: every secret is
+  // `secret/<id>`, so the ref's shape no longer says whom it was minted for. The daemon releases
+  // a ref when the resource that created it goes, and an unused one is deletable from the
+  // Secrets page.
 }

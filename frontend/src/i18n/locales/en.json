@@ -806,6 +806,8 @@
       "secret_approval_approved": "Approved a secret change",
       "secret_approval_rejected": "Rejected a secret change",
       "secret_imported": "Imported secrets",
+      "secret_migrated": "Gave a secret a fixed id",
+      "secret_notes_updated": "Changed a secret's name or description",
       "secret_protection_enabled": "Turned secret approval back on",
       "storage_cache_cleared": "Cleared the rebuildable cache",
       "vault_file_edited": "Edited a vault file on disk",
@@ -1624,6 +1626,14 @@
         "notFoundTitle": "This partition no longer exists",
         "notFoundBody": "No memory partition is registered as <mono>{{id}}</mono>. It was removed.",
         "back": "Back to Memory"
+      },
+      "secrets": {
+        "plural": "secrets",
+        "singular": "secret",
+        "filterHelp": "Filters secret names, descriptions and references.",
+        "notFoundTitle": "This secret no longer exists",
+        "notFoundBody": "No secret is stored as <mono>{{id}}</mono>. It was deleted.",
+        "back": "Back to secrets"
       }
     }
   },
@@ -5138,13 +5148,12 @@
     "newSecret": "New secret…",
     "changeValue": "Change {{name}}’s value…",
     "plain": "Type a plain value",
-    "rename": "Name of the new secret",
     "pick": "Choose a secret for {{label}}",
     "chosen": "{{label}}: secret {{name}}",
     "dialog": {
-      "title": "New secret",
-      "taken": "{{name}} already exists. Pick another name."
-    }
+      "title": "New secret"
+    },
+    "pendingLabel": "Name of the new secret"
   },
   "secretRows": {
     "value": "Value",
@@ -5162,8 +5171,6 @@
     "title": "Secrets",
     "subtitle": "API keys and tokens your MCP servers and providers use, encrypted in the vault on this Mac.",
     "search": "Find a secret",
-    "loadFailed": "Couldn't load secrets",
-    "noMatch": "No secret matches this search.",
     "empty": {
       "title": "No secrets yet",
       "body": "Keep API keys and tokens here instead of in config files. Everything that uses them refers to them by name."
@@ -5194,9 +5201,7 @@
       "skippedWaiting_other": "{{names}} are waiting for approval and will be skipped."
     },
     "cols": {
-      "name": "Name",
       "usedBy": "Used by",
-      "actions": "Actions",
       "lastUsed": "Last used",
       "created": "Created"
     },
@@ -5205,8 +5210,7 @@
       "missing": "No value on this Mac",
       "pending": "Waiting for approval",
       "localReadable": "Readable by local processes",
-      "addValue": "Add value",
-      "addValueFor": "Add a value for {{name}}"
+      "addValue": "Add value"
     },
     "kind": {
       "mcp_server": "MCP server",
@@ -5220,11 +5224,7 @@
     },
     "usedBy": {
       "nothing": "Nothing",
-      "trigger_one": "{{name}} is used by {{count}} thing",
-      "trigger_other": "{{name}} is used by {{count}} things",
-      "title": "Used by",
-      "note": "Each one reads it as {{reference}}. Replacing the value updates all of them.",
-      "find": "Find…"
+      "title": "Used by"
     },
     "menu": {
       "label": "Actions for {{name}}",
@@ -5239,18 +5239,16 @@
     "add": {
       "open": "Add secret",
       "title": "Add secret",
-      "name": "Name",
-      "nameHint": "Letters, digits, dots, underscores and dashes, up to 64. It can't be changed after the secret is added.",
-      "nameInvalid": "Use letters, digits, dots, underscores and dashes only, up to 64 characters.",
-      "nameTaken": "{{name}} already exists —",
-      "replaceInstead": "replace its value instead",
-      "namePlaceholder": "<name>",
       "value": "Value",
       "valueHint": "Pasted values are never shown again unless you reveal them.",
-      "encrypted": "Encrypted with this Mac's master key. Refer to it as {{reference}}.",
       "submit": "Add secret",
       "submitting": "Adding…",
-      "added": "Added {{name}}"
+      "added": "Added {{name}}",
+      "label": "Name",
+      "labelHint": "What you call it. You can change it later; the reference it is cited by stays the same.",
+      "labelPlaceholder": "GitHub token",
+      "addedTitle": "Added {{name}}",
+      "addedHint": "Cite it from a file as:"
     },
     "replace": {
       "title": "Replace the value of {{name}}",
@@ -5409,7 +5407,6 @@
       "rejectN": "Reject {{count}}",
       "rejectAll": "Reject all"
     },
-    "selectAll": "Select all secrets",
     "approvalsOffByBuild": {
       "line": "Approvals are off by default in this build.",
       "help": "An unsigned build cannot protect the master key: any program running as you can read it and forge an approval, so approvals would stop only accidents, not an agent. A signed release keeps them on. You can still turn them on in Settings > Security; turning them off again then needs the Coffer desktop app."
@@ -5450,6 +5447,34 @@
       "save_other": "Save {{count}} values",
       "saved_one": "Saved {{count}} value",
       "saved_other": "Saved {{count}} values"
+    },
+    "detail": {
+      "description": "Description",
+      "descriptionPlaceholder": "What this secret is for",
+      "reference": "Reference",
+      "copyReference": "Copy reference",
+      "value": "Value",
+      "present": "On this Mac",
+      "access": "Access",
+      "approvals": "Approvals",
+      "approved": "Approved",
+      "label": "Name",
+      "labelPlaceholder": "What you call this secret",
+      "uri": "URI",
+      "copyUri": "Copy URI",
+      "recentUses": "Recent uses",
+      "notUsedHere": "Not used on this Mac yet",
+      "runCommand": "coffer run {{command}}",
+      "viewAllActivity": "View all in Activity"
+    },
+    "unnamed": "Unnamed secret",
+    "tabs": {
+      "overview": "Overview",
+      "usage": "Usage"
+    },
+    "list": {
+      "usedBy_one": "used by {{count}}",
+      "usedBy_other": "used by {{count}}"
     }
   },
   "usage": {

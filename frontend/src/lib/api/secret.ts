@@ -19,8 +19,12 @@ export type Approval = Schemas["ApprovalOut"];
 /** What happened to one approval in a batch: approved, rejected, or skipped with why. */
 export type ApprovalBatchResult = Schemas["BatchResultOut"];
 
-/** One stored or cited ref: presence and what uses it, never a value. */
+/** One stored or cited ref: presence, its label and description, and what uses it — never a value. */
 export type SecretRef = Schemas["SecretRefOut"];
+/** One time the value was handed out on this Mac (a `secret_resolved` audit event). */
+export type SecretUse = Schemas["SecretUseOut"];
+/** What adding a standalone secret returns: its minted ref and the URI files cite. */
+export type AddedSecret = Schemas["SecretMintedOut"];
 export type SecretScan = Schemas["SecretScanOut"];
 export type SecretScanFinding = Schemas["SecretScanFindingOut"];
 export type SecretImport = Schemas["SecretImportOut"];
@@ -34,6 +38,15 @@ export const secretsApi = {
   /** Delete a ref; refused with `SECRET_IN_USE` while something cites it. */
   remove: (ref: string) =>
     unwrapVoid(getApiClient().DELETE("/secrets/{ref}", { params: { path: { ref } } })),
+  /** Where this Mac last handed the value out, newest first. */
+  uses: (ref: string, limit = 20) =>
+    unwrap(getApiClient().GET("/secrets/uses", { params: { query: { ref, limit } } })),
+  /** Add a standalone secret under a minted id, labelled `label`; answers its ref and URI. */
+  add: (label: string, value: string) =>
+    unwrap(getApiClient().POST("/secrets", { body: { label, value } })) as Promise<AddedSecret>,
+  /** Set a ref's label and description (an empty one removes it); the ref never changes. */
+  setNotes: (ref: string, notes: { label?: string; description?: string }) =>
+    unwrap(getApiClient().PUT("/secrets/notes", { body: { ref, ...notes } })),
   /** Plaintext secrets in skills and MCP servers — where they are, never what they are. */
   scan: () => unwrap(getApiClient().POST("/secrets/scan")),
   /** Move the chosen findings into the store; `dryRun` writes nothing. */

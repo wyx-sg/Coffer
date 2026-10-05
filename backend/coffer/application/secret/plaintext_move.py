@@ -6,7 +6,8 @@ This module owns the move's *order*, not the detection or the file I/O
 
 * **store first** — a value is written to the store and read back before
   anything that held it is changed, so a failure leaves the original in place;
-* **a skill's value** becomes a standalone ``secret/<name>`` and its file is
+* **a skill's value** becomes a standalone ``secret/<uuid4 hex>`` (Coffer mints
+  the id; the proposed name is its label) and its file is
   rewritten to cite it; a file that cannot be rewritten keeps its values and
   its findings come back skipped as ``stored``;
 * **a server's value** becomes a ref of the server's own and the server's
@@ -23,11 +24,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import dataclasses
-import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any, Protocol
 
-from coffer.domain.secrets import secret_ref
+from coffer.domain.secrets import SecretNote, mint_secret_name, secret_ref
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -45,7 +45,7 @@ class Finding:
     #: A server's ``"env"`` or ``"header"``.
     field: str | None
     key: str
-    #: A skill's standalone secret name; a server's ref is minted on import.
+    #: A skill's secret's label; its id and a server's ref are minted on import.
     proposed_name: str | None
 
 
@@ -74,11 +74,13 @@ class Moved:
     id: str
     source: str
     resource: str
-    #: A skill's standalone secret name.
+    #: A skill's minted standalone name (``None`` in a dry run).
     name: str | None
     #: The ref the value is stored under (``None`` in a server's dry run: it
     #: is minted on import).
     ref: str | None
+    #: The label a skill's secret gets (the name the finding proposed).
+    label: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -115,18 +117,26 @@ RewriteFile = Callable[[str, list[Hit], dict[str, str]], None]
 
 
 def _put_standalone(store: SecretStore, name: str, value: str) -> bool:
-    """Store ``secret/<name>``; true once it reads back as ``value``. A name
-    already holding a different value is refused (false)."""
+    """Store ``secret/<name>``; true once it reads back as ``value``."""
     ref = secret_ref(name)
-    existing = store.peek(ref)
-    if existing is not None:
-        return existing == value
     store.set(ref, value)
-    return store.peek(ref) == value
+    if store.peek(ref) == value:
+        return True
+    store.delete(ref)
+    return False
+
+
+#: ``(ref, note)`` — keep the notes of a minted secret: the label a person will
+#: see, or the resource it was minted for.
+SetNote = Callable[[str, SecretNote], None]
 
 
 def _move_skills(
-    hits: list[Hit], store: SecretStore, rewrite: RewriteFile, dry_run: bool
+    hits: list[Hit],
+    store: SecretStore,
+    rewrite: RewriteFile,
+    dry_run: bool,
+    set_note: SetNote,
 ) -> tuple[list[Moved], list[Skipped], list[dict[str, str]]]:
     moved: list[Moved] = []
     skipped: list[Skipped] = []
@@ -135,17 +145,20 @@ def _move_skills(
     names: dict[str, str] = {}
     for h in hits:
         f = h.finding
-        name = f.proposed_name or "imported"
+        label = f.proposed_name or "imported"
         if dry_run:
-            moved.append(Moved(f.id, f.source, f.resource, name, secret_ref(name)))
+            moved.append(Moved(f.id, f.source, f.resource, None, None, label))
             continue
+        name = mint_secret_name()
         if not _put_standalone(store, name, h.value):
-            why = f"secret {name!r} already holds another value"
-            skipped.append(Skipped(f.id, f.source, f.resource, why))
+            skipped.append(
+                Skipped(f.id, f.source, f.resource, "the store did not read the value back")
+            )
             continue
+        set_note(secret_ref(name), SecretNote(label=label))
         names[f.id] = name
         by_file.setdefault(f.path or "", []).append(h)
-        moved.append(Moved(f.id, f.source, f.resource, name, secret_ref(name)))
+        moved.append(Moved(f.id, f.source, f.resource, name, secret_ref(name), label))
         stored.append(_audit(f, name=name))
     for path, file_hits in by_file.items():
         try:
@@ -197,9 +210,10 @@ async def _move_server(
     hits: list[Hit],
     store: SecretStore,
     update_config: UpdateConfig,
+    set_note: SetNote,
 ) -> tuple[list[Moved], list[Skipped], list[dict[str, str]]]:
     first = hits[0].finding
-    refs = {h.finding.id: f"mcp_server/{uuid.uuid4().hex}/{h.finding.key}" for h in hits}
+    refs = {h.finding.id: secret_ref(mint_secret_name()) for h in hits}
     written: list[str] = []
 
     def skip_all(why: str) -> tuple[list[Moved], list[Skipped], list[dict[str, str]]]:
@@ -214,6 +228,7 @@ async def _move_server(
             written.append(ref)
             if await asyncio.to_thread(store.peek, ref) != h.value:
                 return skip_all("the store did not read the value back")
+            await asyncio.to_thread(set_note, ref, SecretNote(created_for=uid))
         assert hits[0].config is not None
         await update_config(uid, _with_refs(hits[0].config, hits, refs))
     except Exception as e:
@@ -233,6 +248,7 @@ async def move(
     store: SecretStore,
     rewrite: RewriteFile,
     update_config: UpdateConfig,
+    set_note: SetNote,
     dry_run: bool = False,
 ) -> ImportResult:
     """Move the chosen findings (all, when ``ids`` is None) into the store.
@@ -244,7 +260,7 @@ async def move(
     skill_hits = [h for h in chosen if h.finding.source == "skill"]
     server_hits = [h for h in chosen if h.finding.source == "mcp_server"]
     moved, skipped, stored = await asyncio.to_thread(
-        _move_skills, skill_hits, store, rewrite, dry_run
+        _move_skills, skill_hits, store, rewrite, dry_run, set_note
     )
     groups: dict[str, list[Hit]] = {}
     for h in server_hits:
@@ -255,7 +271,7 @@ async def move(
                 Moved(h.finding.id, "mcp_server", h.finding.resource, None, None) for h in group
             ]
             continue
-        m, s, a = await _move_server(uid, group, store, update_config)
+        m, s, a = await _move_server(uid, group, store, update_config, set_note)
         moved += m
         skipped += s
         stored += a

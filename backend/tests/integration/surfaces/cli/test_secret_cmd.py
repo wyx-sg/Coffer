@@ -61,12 +61,18 @@ class _FakeDaemon:
         # computes it from every kind's secret extractor.
         self.cited = cited or {}
         self.master_key_storage = master_key_storage
+        self.labels: dict[str, str] = {}
 
     def post(self, path: str, json: dict | None = None, **_: Any) -> _Resp:
         assert path == "/secrets"
         assert json is not None
-        self.store[json["ref"]] = json["value"]
-        return _Resp(204, None)
+        if "ref" in json:
+            self.store[json["ref"]] = json["value"]
+            return _Resp(204, None)
+        ref = "secret/" + f"{len(self.store):032x}"
+        self.store[ref] = json["value"]
+        self.labels[ref] = json["label"]
+        return _Resp(201, {"ref": ref, "uri": "coffer://" + ref})
 
     def get(self, path: str, **_: Any) -> _Resp:
         if path == "/secrets":
@@ -129,6 +135,7 @@ def daemon(monkeypatch):
     scenario="the command line stores a secret without it reaching shell history",
 )
 def test_set_writes_through_daemon(daemon):
+    daemon.store["my_token"] = "old"
     result = runner.invoke(app, ["secret", "set", "my_token", "--value", "supersecret"])
     assert result.exit_code == 0, result.output
     assert "stored: my_token" in result.stdout
@@ -147,6 +154,7 @@ def test_set_writes_through_daemon(daemon):
     scenario="the command line stores a secret without it reaching shell history",
 )
 def test_set_from_stdin_stores_without_warning(daemon):
+    daemon.store["piped_token"] = "old"
     result = runner.invoke(app, ["secret", "set", "piped_token"], input="pipedsecret\n")
     assert result.exit_code == 0, result.output
     assert daemon.store["piped_token"] == "pipedsecret"
@@ -188,9 +196,9 @@ def test_list_shows_every_cited_ref_with_its_presence(monkeypatch):
 
     result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code == 0, result.output
-    lines = {line.split()[1]: line for line in result.output.splitlines() if "│" in line}
+    lines = {line.split("│")[2].strip(): line for line in result.output.splitlines() if "│" in line}
     assert "yes" in lines["gh_pat"]
-    assert "no" in lines["openai_key"].split("│")[2]
+    assert "no" in lines["openai_key"].split("│")[3]
     assert "provider" in lines["openai_key"]
     assert "ghp_test" not in result.output
 
@@ -256,3 +264,16 @@ def test_secrets_list_5xx_renders_message_exits_nonzero(monkeypatch):
     result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code != 0
     assert "Traceback" not in (result.output or "")
+
+
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="the command line stores a secret without it reaching shell history",
+)
+def test_set_name_mints_the_id_and_prints_its_uri(daemon):
+    result = runner.invoke(app, ["secret", "set", "--name", "Orders DB"], input="pipedsecret\n")
+    assert result.exit_code == 0, result.output
+    (ref,) = daemon.store
+    assert ref.startswith("secret/") and daemon.labels[ref] == "Orders DB"
+    assert f"coffer://{ref}" in result.stdout
+    assert "pipedsecret" not in result.output

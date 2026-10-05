@@ -156,10 +156,10 @@ metadata:
 
 - **技能内不放虚拟环境。** venv 里有解析到文件夹之外的符号链接，而 Coffer 会拒绝导入含有任何此类链接的文件夹。把它放在外面，比如 `~/.cache/coffer-skill-venv`，并在 `SKILL.md` 中写明重建它的那一行命令。
 - **不放测试缓存。** 把 pytest 的 `cache_dir` 指到文件夹之外，并用 `PYTHONDONTWRITEBYTECODE=1` 运行。
-- **不放密钥。** 技能文件夹会通过保险库同步进入 git，所以绝不存放任何值。把密钥作为独立密钥存进 Coffer（`coffer secret set secret/<name>`），并以 `coffer://secret/<name>` 引用它——写在 `connection.md` 里，或作为技能附带的 env 文件中的值。需要它的命令在 `coffer run` 下运行，它只在该命令的环境中设置这个值：
+- **不放密钥。** 技能文件夹会通过保险库同步进入 git，所以绝不存放任何值。把密钥作为独立密钥存进 Coffer（`coffer secret set --name "Orders DB"` 会生成它的 id 并打印 `coffer://secret/<id>` URI），并引用这个 URI——写在 `connection.md` 里，或作为技能附带的 env 文件中的值。需要它的命令在 `coffer run` 下运行，它只在该命令的环境中设置这个值：
 
   ```sh
-  coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
+  coffer run --secret PGPASSWORD=<id> -- psql -h db.internal orders
   coffer run --env-file connection.env -- ./query.sh
   ```
 
