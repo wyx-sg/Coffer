@@ -7,7 +7,7 @@ One item per command that is ``missing``, ``outdated`` or ``logged_out``
 Coffer itself runs (``git``, for the vault's history and sync): the reason
 says what Coffer cannot do without it, and a missing one is an error because
 the vault's history stops. Every other item is a warning. The action is ``check``
-— the CLIs page's own Check again — and the CLIs page's hand-off prompt
+— the CLIs page's own Check — and the CLIs page's hand-off prompt
 (which names the login command for a command that is not logged in, so the
 reason names none). A command only MCP servers need (a stdio launcher no
 skill declares) raises no item here: the server's own ``mcp_missing_launcher``

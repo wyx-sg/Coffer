@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui/toast";
 import { agentSessionsApi, type AgentSession } from "@/lib/api/agentSessions";
 import { translateApiError } from "@/lib/api/errors";
-import { agentSessionsKey, conversationsKey } from "@/lib/api/queryKeys";
+import { agentSessionsKey, allAgentSessionsKey } from "@/lib/api/queryKeys";
 import { FIRST_PAGE, MORE_PAGE, useInfiniteList } from "@/lib/hooks/useInfiniteList";
 
 // Sessions are not on the daemon's change feed: the list re-reads itself while
@@ -40,7 +40,7 @@ function useRefreshLists(uid: string) {
   return () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: agentSessionsKey(uid) }),
-      qc.invalidateQueries({ queryKey: conversationsKey }),
+      qc.invalidateQueries({ queryKey: allAgentSessionsKey }),
     ]);
 }
 

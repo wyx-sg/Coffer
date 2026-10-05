@@ -93,6 +93,23 @@ def test_a_retired_agent_config_key_is_accepted_and_ignored() -> None:
     assert finding.code is FindingCode.CONFIG_INVALID and "'shade'" in finding.message
 
 
+def test_a_portable_home_path_is_judged_as_the_kind_reads_it() -> None:
+    """The store files a path under HOME as ``${HOME}/...``; a schema that
+    wants an absolute path (a channel's directories) judges it expanded."""
+    from coffer.application.channel.kind import make_channel_kind
+
+    rule = resource_rule({"channel": make_channel_kind()}, lambda: {})
+
+    def judge(directory: str):  # type: ignore[no-untyped-def]
+        config = {"channel_type": "telegram", "bot_token_ref": "r", "directories": [directory]}
+        data = _doc(kind="channel", config=config)
+        return rule([Change("resources/channel/w.json", data, None)], _Tree())
+
+    assert judge("${HOME}/WorkEnv/account").findings == []
+    [finding] = judge("WorkEnv/account").findings
+    assert finding.code is FindingCode.CONFIG_INVALID and "absolute" in finding.message
+
+
 def test_an_unknown_kind_is_kept_with_a_warning() -> None:
     data = _doc(kind="newkind")
     verdict = _judge([Change("resources/newkind/w.json", data, None)])

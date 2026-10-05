@@ -16,6 +16,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource
@@ -377,3 +378,37 @@ async def test_deleting_derived_loses_no_resource() -> None:
     engine, _sm = await open_derived_db()
     await engine.dispose()
     assert derived_db_path().exists()
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an absolute path under the home directory passes validation"
+)
+@pytest.mark.parametrize("change", ["add", "remove", "set default"])
+async def test_a_channel_directory_under_home_is_written_and_removed(change: str) -> None:
+    """A channel's working directories (and its default one) under HOME are
+    filed as ``${HOME}/...``; the vault validator judges the config as the kind
+    reads it, so adding, removing or defaulting one is not refused for not
+    being an absolute path (spec channels "Choose the working directory from
+    chat")."""
+    kinds = {"channel": make_channel_kind()}
+    repo = make_resource_repo(kinds)
+    home = os.environ["HOME"]
+    first, second = f"{home}/WorkEnv/account", f"{home}/WorkEnv/account-bff"
+    config: dict[str, object] = {
+        "channel_type": "telegram",
+        "bot_token_ref": "channel/x/bot-token",
+        "directories": [first],
+    }
+    created = await repo.create(_resource("channel", "tg", config))
+    after = {
+        "add": {**config, "directories": [first, second]},
+        "remove": {**config, "directories": []},
+        "set default": {**config, "default_agent_config": {"cwd": first}},
+    }[change]
+
+    updated = await repo.update_config(created.uid, after, None)
+
+    assert updated.config["directories"] == after["directories"]
+    doc = json.loads(_vault_file("resources/channel/tg.json").read_text())
+    assert all(d.startswith("${HOME}/") for d in doc["config"]["directories"])
+    assert "resources/channel/tg.json" in _head_files()

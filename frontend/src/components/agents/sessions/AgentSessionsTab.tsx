@@ -1,7 +1,8 @@
 // src/components/agents/sessions/AgentSessionsTab.tsx — spec agent-registry
 // "Open an agent's sessions from its Sessions tab".
-// The agent detail page's Sessions tab: the agent's own sessions, asked of the
-// agent itself, as the same rows the Conversations page uses — title, working
+// The agent detail page's Sessions tab: the Conversations list narrowed to one
+// agent — read through the agent's own route, so no agent column and no agent
+// heading — as the same rows the Conversations page uses — title, working
 // directory and last activity, plus the channel, Running / Needs you and an
 // inline Stop when the session is a channel conversation's. A search box over
 // title and working directory filters in the server; the list pages by cursor
@@ -12,6 +13,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { NewConversationButton } from "@/components/conversations/NewConversationButton";
 import { DeleteSessionDialog } from "@/components/sessions/DeleteSessionDialog";
 import { SessionList } from "@/components/sessions/SessionList";
 import { useOpenSession } from "@/components/sessions/useOpenSession";
@@ -75,20 +77,28 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
             program: agentProgramName(agent.type),
           })}
         </p>
+        <div className="mt-4 flex justify-center">
+          <NewConversationButton agentKey={agent.type} />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <SearchInput
-        value={search}
-        onChange={setSearch}
-        placeholder={t("agents.sessionsTab.search")}
-        ariaLabel={t("agents.sessionsTab.search")}
-        shortcut="/"
-        className="w-72"
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t("agents.sessionsTab.search")}
+          ariaLabel={t("agents.sessionsTab.search")}
+          shortcut="/"
+          className="w-72"
+        />
+        <div className="ml-auto">
+          <NewConversationButton agentKey={agent.type} />
+        </div>
+      </div>
       {!list.isLoading && drained ? (
         <p className="rounded-xl border border-border px-6 py-8 text-center text-sm text-text-muted">
           {t("agents.sessionsTab.noMatch")}

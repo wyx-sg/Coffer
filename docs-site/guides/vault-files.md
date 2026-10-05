@@ -50,7 +50,7 @@ Some rules to know:
 - **`name` is a label**, but some kinds fix it once agents can see it (an MCP server's name is part of its tool names). Change a name through Coffer when it refuses a rename.
 - **Unknown top-level fields are kept.** A field beside `uid`, `kind`, `name` and `config` that this build does not know is reported as a warning, never dropped, so a field a newer Coffer added survives your edit.
 - **`config` holds only the settings the kind has.** A key the kind does not declare (a typo, or a setting Coffer has retired) is refused: the edit is not committed, the problem names the key, and the last valid version stays in effect. The same goes for a name the kind does not allow (an MCP server's name is at most 24 characters and has no `__`; a skill's name uses lowercase letters, digits and hyphens), and for a `title` on an MCP server, agent, skill, knowledge collection or memory partition, which have none.
-- **`${HOME}`** stands for your home directory, so the same file works on every machine.
+- **`${HOME}`** stands for your home directory, so the same file works on every machine. A setting that must be an absolute path (a channel's working directories) accepts `${HOME}/...`: the check reads it expanded, as Coffer does.
 - **Never edit `secret/`.** The files are ciphertext; use the Secrets page (**Add secret**).
 
 Knowledge documents and skill folders are ordinary files: edit, add, move and delete them as you would any Markdown.
@@ -76,7 +76,9 @@ While you are editing a file, Coffer does not overwrite it: a write Coffer itsel
 
 Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer or sync) and on which machine. Any file or folder has a history. Secrets have no readable history and cannot be restored.
 
-In the web UI, a knowledge document's **⋯** menu and a skill's **⋯** menu (not the built-in skill's) have **History…**. It shows where the file sits in the vault, copies `git -C ~/.coffer/vault log -p -- <path>`, reveals the file, and hands the restore to your agent: **Hand off to &lt;Agent&gt; to restore**, with an optional time. Coffer builds the prompt — the file, the time, that the vault is a git repository whose history is never rewritten, and that the agent writes the earlier content back as one new commit — and shows no version list, diff or Restore button of its own.
+In the web UI, a knowledge document and a skill each have a **History** tab. It lists the versions newest first, each with what it did, who wrote it (**You**, **Edited on disk**, an agent by name, **Coffer** or **Sync**) and when, shows the diff of the chosen one, and offers **Restore this version…**. Coffer asks first, then writes the file (for a skill, every file of the folder) back to that version as a new version by you, and records it in the audit log as `vault_file_restored`. If the file changed since you opened the tab, the restore is refused with `VAULT_FILE_STALE`; reopen the tab and try again. Opening the tab first records any edit you made on disk as its own version. Coffer's built-in skill has the tab but no history, since it is rebuilt at every start. See [Bring back an earlier version](/guides/knowledge#bring-back-an-earlier-version).
+
+You can also read the history with git: `git -C ~/.coffer/vault log -p -- <path>`.
 
 For any other file, read the history with git itself and put an old version back by saving its content into the file, or ask your agent to:
 
@@ -87,7 +89,7 @@ git diff <version> -- resources/mcp_server/jira.json
 git show <version>:resources/mcp_server/jira.json > resources/mcp_server/jira.json
 ```
 
-Coffer validates the saved file and records it as a **new** version, so nothing is rewritten in place and you can restore the restore. Make changes by editing files and let Coffer commit them: its commits carry the trailers that name the writer, and it validates what it commits. An agent that commits a restore itself names `Coffer-Writer: agent`, `Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`, which is what the hand-off's prompt asks for.
+Coffer validates the saved file and records it as a **new** version, so nothing is rewritten in place and you can restore the restore. Make changes by editing files and let Coffer commit them: its commits carry the trailers that name the writer, and it validates what it commits. An agent that commits a restore itself names `Coffer-Writer: agent`, `Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`.
 
 ## Related
 

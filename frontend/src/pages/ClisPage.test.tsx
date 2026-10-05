@@ -1,4 +1,4 @@
-// src/pages/ClisPage.test.tsx — the CLIs page: the grouped list beside one command, the hand-off to an agent, Check again.
+// src/pages/ClisPage.test.tsx — the CLIs page: the grouped list beside one command, the hand-off to an agent, Check.
 //
 // Real QueryClientProvider; only the api modules are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -154,11 +154,11 @@ describe("ClisPage", () => {
     const banner = await screen.findByTestId("cli-problem");
     expect(banner).toHaveTextContent("jq isn’t found on this machine");
     expect(banner).toHaveTextContent(
-      "gh-triage and log-digest fail at the step that calls jq. Hand the install to an agent, then check again.",
+      "gh-triage and log-digest fail at the step that calls jq. Hand the install to an agent, then press Check.",
     );
     expect(screen.getByText("Not on PATH")).toBeInTheDocument();
-    // The fix is in the banner: Check again, then the hand-off; nothing installs.
-    expect(within(banner).getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    // The fix is in the banner: Check, then the hand-off; nothing installs.
+    expect(within(banner).getByRole("button", { name: "Check" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Install|Update/ })).toBeNull();
 
     // Copy prompt lives in the ▾ menu of the split button.
@@ -210,8 +210,8 @@ describe("ClisPage", () => {
       await within(banner).findByRole("button", { name: "Hand off to Claude Code" }),
     ).toBeInTheDocument();
 
-    // The banner's Check again re-checks this one command, not all of them.
-    fireEvent.click(within(banner).getByRole("button", { name: "Check again" }));
+    // The banner's Check re-checks this one command, not all of them.
+    fireEvent.click(within(banner).getByRole("button", { name: "Check" }));
     await waitFor(() => expect(api.check).toHaveBeenCalledWith("gcloud"));
     expect(api.checkAll).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByTestId("cli-problem")).toBeNull());
@@ -221,12 +221,12 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
 
-  test("the header's Check again re-checks every command and is the primary button", async () => {
+  test("the header's Check re-checks every command and is the primary button", async () => {
     api.checkAll.mockResolvedValue(listOf([UV_READY]));
     renderPage("/clis/uv");
     await screen.findByRole("region", { name: "Ready" });
     const header = screen.getAllByRole("banner")[0];
-    fireEvent.click(within(header).getByRole("button", { name: "Check again" }));
+    fireEvent.click(within(header).getByRole("button", { name: "Check" }));
     await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
     expect(within(header).getByRole("button", { name: "Add CLI" })).toBeInTheDocument();
   });
@@ -330,7 +330,7 @@ describe("ClisPage", () => {
     renderPage();
     expect(await screen.findByText("No command-line tools yet")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Add CLI" })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Check again" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Check" })).toBeNull();
     expect(screen.getByRole("link", { name: /How requires: works/ })).toHaveAttribute(
       "href",
       expect.stringContaining("/guides/clis"),

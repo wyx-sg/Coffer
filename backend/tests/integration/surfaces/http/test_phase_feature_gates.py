@@ -78,7 +78,7 @@ def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
         _switch(c, "knowledge", False)
         # Memory and conversations carry on.
         assert c.get("/api/v1/memory/partitions").status_code == 200
-        assert c.get("/api/v1/chat/conversations").status_code == 200
+        assert c.get("/api/v1/agent-sessions").status_code == 200
         tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
         text = kind_gates._instructions(c)
         assert tools == {"coffer__search_tools"}
@@ -109,7 +109,7 @@ def test_memory_off_hides_the_memory_root(home: pathlib.Path) -> None:
         _switch(c, "memory", False)
         # Knowledge and conversations carry on.
         assert c.get("/api/v1/knowledge/collections").status_code == 200
-        assert c.get("/api/v1/chat/conversations").status_code == 200
+        assert c.get("/api/v1/agent-sessions").status_code == 200
         text = kind_gates._instructions(c)
         assert not kind_gates._names_memory(text)
         # Knowledge is its own feature and stays in the handshake.

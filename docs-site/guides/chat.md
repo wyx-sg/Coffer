@@ -1,39 +1,39 @@
 ---
 title: Conversations
-description: List the conversations your IM channels started, resume one in your terminal, and stop or answer one from a channel.
+description: List every agent session wherever it started, resume one in your terminal, start a new one, and stop or answer a channel's from the list.
 ---
 
 # Conversations {#conversations}
 
-The **Conversations** page lists the conversations your [channels](/guides/channels) started with a managed agent, Claude Code or Codex. It is a list, not a chat client: opening a row resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, opening a row, what a running turn or a waiting question means for opening, renaming and deleting, and where the conversation itself is kept.
+The **Conversations** page lists every session of every managed agent, Claude Code or Codex, wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: opening a row resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn or a waiting question means for opening, renaming and deleting, and where the conversation itself is kept.
 
 ## What Conversations is for {#what-conversations-is-for}
 
 Coffer's part is the turn platform that lets an IM channel reach an agent on this machine: you message the bot from your phone, Coffer runs the turn on Claude Code through the Claude Agent SDK or on Codex through `codex app-server`, and the answer comes back to the chat. Coffer does not put a model of its own in between, and it has no chat window of its own. The Claude desktop app, the Codex app and the agents' terminals already are chat clients.
 
-What the page adds is a way back into a conversation your phone started. You see which conversations exist, which one is running, which one waits for you, and you pick one up at your desk.
+What the page adds is one place to find every session, including the ones your phone started. You see which sessions exist, which one is running, which one waits for you, and you pick one up at your desk.
 
 ::: info Web UI and REST
-The list is reachable from the Conversations page and over the REST API under `/api/v1/chat`.
+The list is reachable from the Conversations page and over the REST API at `/api/v1/agent-sessions`.
 :::
 
 ## Prerequisites {#prerequisites}
 
 - A running daemon. Open the UI with the [desktop app](/guides/desktop-app), or in a browser at the daemon's address.
 - At least one managed agent registered on the **Agents** page, with its CLI installed on this machine. See [Agents](/guides/agents).
-- A [channel](/guides/channels) paired to you. A conversation exists because a channel message started one.
+- Optionally, a [channel](/guides/channels) paired to you, for conversations that start from your phone. Sessions you start in a terminal are listed without one.
 - The agent logged in the way you would log in to use it in a terminal. For Claude Code, run `claude` once and complete `/login`.
 
 You do **not** need a [model provider](/guides/providers). A provider is an optional override; without one the agent runs on its own login.
 
 ## Open a conversation in your terminal {#open-in-terminal}
 
-Click a row, or press its split button, which names your preferred terminal (**Open in iTerm**). Its **▾** opens the conversation in another terminal on this Mac just this once, without changing the preference. Coffer opens your preferred terminal in the conversation's directory and runs the agent's own resume command:
+Click a row, or press **Open in *terminal*** on its split button, named after your preferred terminal; the **▾** beside it lists the other terminals and then **Copy command**. Coffer opens the terminal in the session's directory and runs the agent's own resume command:
 
 - Claude Code: `claude --resume <session id>`
 - Codex: `codex resume <session id>`
 
-The button's other half, **Copy command**, puts the same command on your clipboard, to run in a terminal Coffer does not know or on another shell. The command starts with a change into the session's directory.
+**Copy command** puts the same command on your clipboard, to run in a terminal Coffer does not know or on another shell. The command starts with a change into the session's directory.
 
 Pick the terminal under **Settings › General › Preferred terminal**, built like **Preferred editor**:
 
@@ -47,7 +47,7 @@ The daemon builds the command itself from the session id, directory and agent, s
 
 ### One session, one place {#running-or-waiting}
 
-A session should run in one place at a time. When a row's turn is running, or the agent is waiting for your answer, **Open in &lt;terminal&gt;** asks first:
+A session should run in one place at a time. When a row's turn is running, or the agent is waiting for your answer, the open button asks first:
 
 - **Answer in *platform*** (or wait): leave the turn where it is and use the channel.
 - **Stop this turn and continue in the terminal**: stops the turn exactly like **Stop**, tells the agent you stopped it, then opens the terminal.
@@ -94,28 +94,40 @@ The files are pruned after the **Attachments** retention window (30 days after t
 
 ## Manage conversations {#manage-conversations}
 
-`/conversations` lists the conversations your channels started, newest activity first. A conversation moves to the top when a turn starts in it, not only when one ends. The list reads 30 conversations and loads more as you scroll. Each row shows:
+`/conversations` lists every session of every managed agent, wherever it was started: in a terminal, by a channel, or from **New conversation**. Newest activity first; a conversation moves to the top when a turn starts in it, not only when one ends. The list reads 30 sessions and loads more as you scroll, and it shows no total, because Codex cannot count its sessions without reading all of them. Above the rows sits a header naming the columns, **Title**, **Source**, **Agent**, **Directory** and **Last active**, and the rows are grouped under **Today**, **Yesterday** and **Earlier**. Each row shows:
 
-- the title, with a status word — **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer;
-- the **agent**, the working **directory**, the **time of the last activity** (the clock for today and yesterday, a date such as `Sep 22` for earlier) and the **channel**: the platform's logo and the place in its chat, such as `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread` or `Telegram · Group › topic`;
-- an inline **Stop** while a turn runs, the split button (**Open in &lt;terminal&gt; ▾** other terminals · Copy command), and a **⋯** menu — always shown, not only on hover.
+- the title, with a status word on a channel's conversation: **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer;
+- the **source**: for a channel's conversation the platform's logo and the place in its chat, such as `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread` or `Telegram · Group › topic`; a session you started yourself shows nothing here;
+- the **agent**, the working **directory** and the **time of the last activity** (the clock for today and yesterday, a date such as `Sep 22` for earlier);
+- an inline **Stop** while a turn runs, the split button (**Open in *terminal* ▾**), and a **⋯** menu. These are always shown.
 
-Above the list: a search box over titles and directories (press `/` to jump to it), a **Channel** pill and an **Agent** pill, each taking several at once, and **Clear filters** once anything narrows the list. The server applies the filters, so scrolling pages through matches only. They are part of the URL, so a filtered list is a link:
+Above the list: a search box over titles and directories (press `/` to jump to it), a **Source** pill and an **Agent** pill, and **Clear filters** once anything narrows the list. The **Source** pill offers **This Mac** (sessions no channel started) and each channel, and takes several at once. The server applies the filters, so scrolling pages through matches only. They are part of the URL, so a filtered list is a link:
 
-- Search — `?q=sentry`.
-- Channels — `?source=<channel uid>`. A channel's **Conversations from *name*** link on the Channels page opens it with that channel ticked.
-- Agents — `?agent=codex`.
+- Search: `?q=sentry`.
+- Source: `?source=local` for This Mac, `?source=<channel uid>` for a channel, or both joined by commas. A channel's **Conversations from this channel →** link on its Overview page opens the list with that channel ticked.
+- Agents: `?agent=codex`.
 
-The **⋯** menu has two actions, both carried out by the agent itself on its own session:
+If one agent's sessions cannot be read (Codex not answering, say), the others are still listed and one line above the list names the agent, with **Retry**. The page shows an error with **Retry** instead only when no agent could be read.
+
+The split button reads **Open in *terminal***, named after your preferred terminal, and its **▾** lists the other terminals and then **Copy command**. The **⋯** menu has two actions, both carried out by the agent itself on its own session:
 
 | Action | Effect |
 | --- | --- |
-| **Rename** | Renames the session in the agent (Claude Code's `rename_session`, Codex's `thread/name/set`) and then Coffer's row, so the new title shows in the agent's own list too. Coffer will not overwrite a name you set. |
-| **Delete…** | Asks first, then deletes the session in the agent and removes the row. **It is permanent**: the agent's own session file goes with it, and a turn running in the conversation is cancelled. The channel's next message starts a fresh conversation. |
+| **Rename** | Edits the title in place in the row. The agent renames its session (Claude Code's `rename_session`, Codex's `thread/name/set`) and then Coffer's row, so the new title shows in the agent's own list too. Coffer will not overwrite a name you set. |
+| **Delete…** | Asks first, then deletes the session in the agent and removes the row. **It is permanent**: the agent's own session file goes with it, and a turn running in the conversation is cancelled. A channel's next message starts a fresh conversation. |
 
-When there is no conversation yet, the page is its header and one message. When filters match nothing, **No conversations match** offers **Clear filters**; if the list cannot be read it says so, with **Retry**. The list refreshes when the window regains focus and as conversations change.
+When no agent has a session yet, the page is its header and one message. When filters match nothing, **No conversations match** offers **Clear filters**. The list refreshes when the window regains focus and as conversations change.
 
-Conversations are not archived, and there is no Active/Archived switch or bulk bar. Conversations whose channel is gone, or that a web draft once created, no longer appear; the sessions behind them are still in **Agents › *agent* › Sessions**.
+### New conversation {#new-conversation}
+
+**New conversation** in the page header, and the same button on an [agent's Sessions tab](/guides/agents), starts a fresh session in your terminal. It opens a small dialog with two fields:
+
+- **Agent**: Claude Code or Codex. The dialog remembers the one you chose last.
+- **Working directory**: Coffer's workspace, `~/.coffer/content/workspace`, unless you change it; the folder picker chooses another.
+
+The confirm button reads **Open in *terminal*** (your preferred terminal), and its **▾** lists the other terminals. Confirming runs the agent with no arguments in that directory, so the agent's own interface starts a new session. Coffer does not know the new session's id yet, so the row is not added at once: it appears in the list on the next refresh, once the agent has recorded the session, and coming back to the Coffer window triggers one.
+
+Conversations are not archived, and there is no Active/Archived switch or bulk bar. A session of an agent that is no longer managed by Coffer does not appear; a conversation whose channel was deleted still does, as a session of its agent.
 
 ## Where the conversation lives {#chat-and-the-agent-s-own-sessions}
 
@@ -139,7 +151,7 @@ On top of the agent's own system prompt, Coffer appends, in this order:
 2. The [memory](/guides/memory#in-channel-turns) index for the conversation's working directory and `global`, and where the notes are.
 3. The note naming the model Coffer put the agent on.
 
-A session you open from the Conversations page runs in your terminal, outside Coffer, so it gets no memory append; the agent receives memory through Coffer's memory hook in its own settings, when the agent is connected to Coffer.
+A session you open from the Conversations page, or start with **New conversation**, runs in your terminal, outside Coffer, so it gets no memory append; the agent receives memory through Coffer's memory hook in its own settings, when the agent is connected to Coffer.
 
 ::: danger Full permissions
 A channel turn runs Claude Code with `bypassPermissions` and Codex with `approvalPolicy: never` and `sandbox: danger-full-access`. Coffer does not ask you to approve individual tool calls. Pairing a channel to your own account is the gate for turns that come from IM; see [Channels](/guides/channels#security).
@@ -157,7 +169,7 @@ A channel message starts or queues a turn in the daemon. The turn's output is a 
 
 **Nothing streams, and the reply appears all at once.** Claude Code turns need a CLI that supports partial messages. The SDK uses its own bundled CLI; if that is missing and the `claude` on `PATH` is old, the turn fails at connect. Update Claude Code.
 
-**Open in &lt;terminal&gt; does nothing.** Check **Settings › General › Preferred terminal**: a terminal that is not installed, or a custom template with a typo, cannot start. Use **Copy command** and paste it into a terminal.
+**Open in *terminal* does nothing.** Check **Settings › General › Preferred terminal**: a terminal that is not installed, or a custom template with a typo, cannot start. Use **Copy command** and paste it into a terminal.
 
 **The terminal says there is no conversation to resume.** The agent has cleaned the session up (see [above](#chat-and-the-agent-s-own-sessions)). The channel continues as a fresh session on its next message.
 

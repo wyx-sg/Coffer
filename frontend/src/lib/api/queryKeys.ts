@@ -38,6 +38,8 @@ export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
+export const agentConfigFileContentKey = (uid: string, key: string, child: string) =>
+  ["agents", uid, "config-files", key, child] as const;
 export const agentConnectionKey = (uid: string) => ["agents", uid, "coffer-connection"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
 /** One entry's detail — under the listing's key, so whatever refreshes the
@@ -49,9 +51,6 @@ export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as co
 /** One plugin's detail — under the listing's key, so a toggle or uninstall that
  *  invalidates the listing refreshes the detail page too. */
 export const agentPluginKey = (uid: string, id: string) => ["agents", uid, "plugins", id] as const;
-/** The latest conversations one channel started (its Overview). */
-export const channelRecentConversationsKey = (uid: string) =>
-  ["channels", uid, "recent-conversations"] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
 /** One unmanaged folder's preview — nested under the list key, so adopting or
@@ -85,9 +84,12 @@ export const agentProviderModelsKey = (agentKey: string) =>
 export * from "./queryKeys.capabilities";
 import { customToolsKey, mcpStatusesKey, skillsKey } from "./queryKeys.capabilities";
 
-// vault history hand-off: any vault file or folder, e.g. a skill's `skills/<name>/`
-export const vaultHistoryHandoffKey = (path: string, at: string | null) =>
-  ["vault", "history-handoff", path, at] as const;
+// vault history: any vault file or folder, e.g. a skill's `skills/<name>/` or a
+// knowledge document's `knowledge/<collection>/<file>`
+export const vaultKey = ["vault"] as const;
+export const vaultHistoryKey = (path: string) => [...vaultKey, "history", path] as const;
+export const vaultDiffKey = (path: string, version: string, against: string) =>
+  [...vaultKey, "diff", path, version, against] as const;
 
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 
@@ -190,19 +192,16 @@ export const memoryReadingKey = ["memory", "reading"] as const;
  *  pass ending must not drag a kind's whole subtree into the same invalidation. */
 export const upkeepRunsKey = ["upkeep", "runs"] as const;
 
-// --- chat — the channel conversations list ---
+// --- agent sessions — every agent's sessions in one list (the Conversations page) ---
 
-export const conversationsKey = ["conversations"] as const;
-/** The list's channel and agent pills: part of its key, in a stable order. */
-type ListNarrowing = { source?: readonly string[]; agent?: readonly string[] };
-const narrowKey = ({ source = [], agent = [] }: ListNarrowing) => ({
-  source: [...source].sort(),
-  agent: [...agent].sort(),
-});
+export const allAgentSessionsKey = ["agent-sessions"] as const;
 
-/** The pages a conversation list has read so far, for one view (search text, channels, agents). */
-export const conversationPagesKey = (q: string, narrow: ListNarrowing = {}) =>
-  ["conversations", "lists", "pages", { q, ...narrowKey(narrow) }] as const;
+/** The pages the cross-agent list has read so far, for one view (search text, sources, agents). */
+export const allAgentSessionPagesKey = (
+  q: string,
+  { source = [], agent = [] }: { source?: readonly string[]; agent?: readonly string[] } = {},
+) =>
+  ["agent-sessions", "pages", { q, source: [...source].sort(), agent: [...agent].sort() }] as const;
 
 // --- secrets — the secret boundary's approvals -------------------------
 export const secretsKey = ["secrets"] as const;

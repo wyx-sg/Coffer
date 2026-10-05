@@ -66,7 +66,10 @@ def _title(c: TestClient, conv_id: str) -> str:
 
 
 def _ids(c: TestClient) -> list[str]:
-    return [x["id"] for x in c.get("/api/v1/chat/conversations").json()["conversations"]]
+    return [
+        x["conversation_id"]
+        for x in c.get("/api/v1/agent-sessions", params={"source": "chan-1"}).json()["sessions"]
+    ]
 
 
 @pytest.mark.acceptance(spec="chat", scenario="rename a conversation in place")

@@ -7,9 +7,9 @@ Every accepted write to a collection is one commit naming its writer. These
 routes read that feed back — the web UI reads it only to find the delete a
 toast's Undo restores — and put a delete back. A change is named by its
 ``version`` (its commit id). Without git on the machine the feed answers 503
-``KNOWLEDGE_HISTORY_UNAVAILABLE``; writes elsewhere keep working. There is no
-route for a document's versions: its history is git's (spec vault-storage
-"Hand restoring an earlier version of a vault file to an agent").
+``KNOWLEDGE_HISTORY_UNAVAILABLE``; writes elsewhere keep working. A
+document's versions are read and restored through ``/api/v1/vault`` (spec
+vault-storage "Show and restore any version of a vault file or folder").
 
 A collection's description (``PUT /collections/{uid}/description``) is a
 person's recorded write like a restore, so it is served by the same service.

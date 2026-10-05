@@ -129,7 +129,7 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await page.getByRole("tab", { name: "Tools" }).click();
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}/tools$`));
     const tools = page.getByRole("region", { name: "Tools", exact: true });
-    await expect(tools.getByText("1 of 1 on")).toBeVisible();
+    await expect(tools.getByRole("switch", { name: "Turn get_item on or off" })).toBeChecked();
     await expect(tools.getByText("GET /items/{id}")).toBeVisible();
 
     await tools.getByText("get_item", { exact: true }).click();

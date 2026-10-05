@@ -70,9 +70,9 @@ export function KnowledgePage() {
   const collections = useKnowledgeCollections();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
 
-  // A document has no tabs: an address that names one (an old `/<uid>/history`)
-  // is sent to the bare address, which opens the document.
-  useDetailTab(
+  // A document's tab is in the path (`/<uid>/history?file=`); an unknown one is
+  // sent to the bare address, which opens the document.
+  const [tab] = useDetailTab(
     KNOWLEDGE_TABS,
     DEFAULT_KNOWLEDGE_TAB,
     uid ? collectionBasePath(uid) : KNOWLEDGE_ROOT,
@@ -166,6 +166,7 @@ export function KnowledgePage() {
               collection={current}
               collectionsLoading={collections.isPending}
               file={file}
+              tab={tab}
             />
           )
         }

@@ -419,8 +419,9 @@ return useMutation({
   Disconnect, moving a connected agent's config directory, and Change model. The
   preview shows the daemon's own lines; Apply sends the fingerprints the preview
   read and a file edited since is refused (`CONFIG_FILE_STALE`) with Reload
-  preview. Every diff of changed lines (these previews, skill copy and folder
-  reviews, a custom-tool re-import) is drawn by the one `FileDiff` renderer. Deleting a provider something runs on is the same shape.
+  preview. Every diff of changed lines (these previews, a History tab's
+  versions, skill copy and folder reviews, a custom-tool re-import) is drawn by
+  the one `FileDiff` renderer. Deleting a provider something runs on is the same shape.
 - **Detail pages with many tabs: six, then More ⌄.** `components/DetailTabsMore`
   keeps the six most used in the strip and puts the rest in a More menu; while a
   tab inside More is open the trigger wears its name and the underline, and a

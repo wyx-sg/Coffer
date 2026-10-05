@@ -1,7 +1,7 @@
 // src/lib/hooks/useClis.ts — TanStack Query bindings for the command-line tools (/clis): required by skills or MCP servers, or added by hand.
 //
 // Reads: the list (problems first), one tool, and a preview of a typed name for
-// the Add dialog. Writes: Check again (re-probes every tool, or one, and writes
+// the Add dialog. Writes: Check (re-probes every tool, or one, and writes
 // the answer into the cache) and add / edit / remove a tool declared by hand. Coffer never installs a command: fixing one is handed to an
 // agent (`Cli.handoff`). The sidebar's attention signal is derived from the
 // same list query the page reads.
@@ -43,7 +43,7 @@ function useToastError() {
   return (error: unknown) => toast.error(translateApiError(t, error));
 }
 
-/** Check again for every command: the answer replaces the list. */
+/** Check every command: the answer replaces the list. */
 export function useCheckClis() {
   const qc = useQueryClient();
   const onError = useToastError();
@@ -58,7 +58,7 @@ export function useCheckClis() {
   });
 }
 
-/** Check again for one command: the answer replaces its row in the list. */
+/** Check one command: the answer replaces its row in the list. */
 export function useCheckCli(command: string) {
   const qc = useQueryClient();
   const onError = useToastError();

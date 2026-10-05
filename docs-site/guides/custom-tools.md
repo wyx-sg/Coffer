@@ -86,7 +86,7 @@ Every tool carries a **changes data** flag, on by default for every method but G
 
 A group has a reach, like any MCP server: the **Reach** button in its header (**Off**, **All agents** or **Chosen agents**, saved as you change it). A tool has no reach of its own: every tool that is on reaches exactly the agents its group reaches. To keep one tool from some agents — the one dangerous operation among many harmless ones — switch it off, or move it to a group of its own with a narrower reach. **All agents** on a group covers agents you add later, and, like every reach, stays on this machine.
 
-Each tool also has an on/off switch (**All on · All off** switches every tool of the group). A tool that is off, or in a group outside an agent's reach, is not listed to that agent and a call to it is refused.
+Each tool also has an on/off switch. Tick tools (the header box ticks every one the filter shows) and a selection bar offers **Turn on**, **Turn off** and **Exposure** for them. A tool that is off, or in a group outside an agent's reach, is not listed to that agent and a call to it is refused.
 
 ## The Custom tools page
 

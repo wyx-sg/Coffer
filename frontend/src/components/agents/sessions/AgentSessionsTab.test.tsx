@@ -18,6 +18,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { AgentSession } from "@/lib/api/agentSessions";
 import { AgentSessionsTab } from "./AgentSessionsTab";
 
+// New conversation has its own test; here it is only a button.
+vi.mock("@/components/conversations/NewConversationButton", () => ({
+  NewConversationButton: ({ agentKey }: { agentKey?: string }) => (
+    <button type="button" data-agent={agentKey}>
+      New conversation
+    </button>
+  ),
+}));
+
 const call = fakeApi();
 const agent = makeAgent({ uid: "ag-cc" });
 
@@ -85,6 +94,14 @@ describe("AgentSessionsTab", () => {
     expect(row("Alpha rollout")).not.toHaveTextContent("Claude Code");
     expect(sessionCalls("GET")[0].path).toContain("/agents/ag-cc/sessions?limit=30");
     expect(screen.queryByRole("heading")).toBeNull();
+    // The header row names the columns it shows: no Agent, and no Source while no row has one.
+    const header = document.querySelector("li[data-header]") as HTMLElement;
+    expect(header.textContent).toBe("TitleDirectoryLast active");
+    // New conversation sits beside the search, for this agent.
+    expect(screen.getByRole("button", { name: "New conversation" })).toHaveAttribute(
+      "data-agent",
+      "claude_code",
+    );
   });
 
   acceptance(

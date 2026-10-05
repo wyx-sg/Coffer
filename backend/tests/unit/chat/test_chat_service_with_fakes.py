@@ -96,7 +96,6 @@ async def test_the_listing_is_channel_conversations_newest_first() -> None:
     page = await svc.page_conversations()
     assert [c.id for c in page.items] == [c1.id, c2.id]
     assert unowned.id not in {c.id for c in page.items}
-    assert await svc.count_conversations() == 2
 
 
 @pytest.mark.asyncio
@@ -116,7 +115,6 @@ async def test_the_search_matches_the_title_or_the_directory_not_a_message() -> 
     page = await svc.page_conversations(q="deploy")
 
     assert {c.id for c in page.items} == {by_title.id, by_cwd.id}
-    assert await svc.count_conversations(q="  deploy ") == 2
 
 
 @pytest.mark.asyncio

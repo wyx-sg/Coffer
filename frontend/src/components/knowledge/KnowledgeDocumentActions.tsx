@@ -3,7 +3,8 @@
 // The right side of a document's pane bar (boards 5.1.01, 0.6.03): the
 // Preview / Source toggle (Markdown files only), **Open in editor** as a
 // visible button — a document is changed in the person's own editor — and the
-// ⋯ menu: Reveal in Finder · History… · (separator) Delete document in danger
+// ⋯ menu: Reveal in Finder · (separator) Delete document in danger. The
+// document's history is its History tab, beside the crumbs
 // (spec knowledge "Show a collection as one tree of read-only documents in the
 // web UI").
 //
@@ -24,7 +25,6 @@ interface ReadingProps {
   view: DocumentView;
   onView: (view: DocumentView) => void;
   fileActions: ReturnType<typeof useFileActionItems>;
-  onHistory: () => void;
   onDelete: () => void;
 }
 
@@ -34,7 +34,6 @@ export function ReadingActions({
   view,
   onView,
   fileActions: [openItem, revealItem],
-  onHistory,
   onDelete,
 }: ReadingProps) {
   const { t } = useTranslation();
@@ -58,7 +57,6 @@ export function ReadingActions({
         label={t("knowledge.document.more", { path })}
         actions={[
           { key: "reveal", label: revealItem.label, onSelect: revealItem.onClick },
-          { key: "history", label: t("knowledge.document.history"), onSelect: onHistory },
           {
             key: "delete",
             label: t("knowledge.deleteDocument.menu"),

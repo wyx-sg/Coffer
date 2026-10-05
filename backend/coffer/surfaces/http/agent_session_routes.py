@@ -31,6 +31,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, Field
 
+from coffer.application.agent.agent_sessions_listing import AgentSessionsListing, ListedSession
 from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.domain.agent.native_sessions import (
     NativeSession,
@@ -40,12 +41,22 @@ from coffer.domain.agent.native_sessions import (
 from coffer.domain.channel_type import ChannelType
 from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.workspace_dependencies import get_native_session_service
+from coffer.surfaces.http.workspace_dependencies import (
+    get_agent_sessions_listing,
+    get_native_session_service,
+)
 
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
     dependencies=[Depends(require_token), Depends(resolve_agent_path)],
+)
+
+
+all_router = APIRouter(
+    prefix="/api/v1/agent-sessions",
+    tags=["agents"],
+    dependencies=[Depends(require_token)],
 )
 
 
@@ -100,6 +111,32 @@ class AgentSessionListResponse(BaseModel):
     total: int | None
 
 
+class AgentSessionRowOut(AgentSessionOut):
+    """A row of the cross-agent list: the agent's session row plus whose it is."""
+
+    #: The agent's key (its type, e.g. ``claude_code``).
+    agent_key: str
+    #: Null for a channel conversation on which no turn has run yet.
+    session_id: str | None = None  # type: ignore[assignment]
+
+
+class UnavailableAgentOut(BaseModel):
+    """An agent whose sessions could not be read."""
+
+    agent: str
+    reason: str
+
+
+class AllAgentSessionsResponse(BaseModel):
+    """Response for GET /api/v1/agent-sessions (no ``total``: an agent may not count)."""
+
+    sessions: list[AgentSessionRowOut]
+    #: Reads the page after this one; null on the last page.
+    next_cursor: str | None
+    #: Agents left out of this page because their listing failed.
+    unavailable: list[UnavailableAgentOut]
+
+
 class AgentSessionRename(BaseModel):
     """Body of PATCH /api/v1/agents/{uid}/sessions/{session_id}."""
 
@@ -139,6 +176,62 @@ def _row(s: NativeSession, conv: SessionConversation | None) -> AgentSessionOut:
         running=conv.running if conv is not None else False,
         needs_you=conv.needs_you if conv is not None else False,
         channel_binding=_binding(conv.channel) if conv is not None else None,
+    )
+
+
+def _listed_row(row: ListedSession) -> AgentSessionRowOut:
+    conv = row.conversation
+    return AgentSessionRowOut(
+        agent_key=row.agent_key,
+        session_id=row.session_id,
+        title=row.title,
+        cwd=row.cwd,
+        created_at=row.created_at,
+        last_activity_at=row.last_activity_at,
+        conversation_id=conv.conversation_id if conv is not None else None,
+        running=conv.running if conv is not None else False,
+        needs_you=conv.needs_you if conv is not None else False,
+        channel_binding=_binding(conv.channel) if conv is not None else None,
+    )
+
+
+@all_router.get("", response_model=AllAgentSessionsResponse)
+async def list_all_agent_sessions(
+    limit: int = Query(50, ge=1, le=200),
+    cursor: str | None = Query(
+        None,
+        description=(
+            "The previous page's next_cursor. Bound to the filters it was issued "
+            "for; any other value is 400 CURSOR_INVALID."
+        ),
+    ),
+    q: str | None = Query(
+        None,
+        max_length=200,
+        description="Title or working directory contains this text (each agent's own search).",
+    ),
+    source: str | None = Query(
+        None,
+        max_length=2000,
+        description=(
+            "Comma-separated `local` (sessions no channel conversation points at) and "
+            "channel uids. Absent is everything."
+        ),
+    ),
+    agent: str | None = Query(
+        None,
+        max_length=2000,
+        description="Comma-separated agent keys (e.g. `claude_code,codex`). Absent is every agent.",
+    ),
+    svc: AgentSessionsListing = Depends(get_agent_sessions_listing),  # noqa: B008
+) -> AllAgentSessionsResponse:
+    """Every managed agent's sessions, newest activity first (agent key and
+    session id break ties), paged by one opaque cursor."""
+    page = await svc.list(limit=limit, cursor=cursor, q=q, source=source, agent=agent)
+    return AllAgentSessionsResponse(
+        sessions=[_listed_row(r) for r in page.items],
+        next_cursor=page.next_cursor,
+        unavailable=[UnavailableAgentOut(agent=u.agent, reason=u.reason) for u in page.unavailable],
     )
 
 

@@ -61,6 +61,9 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const [draftModel, setDraftModel] = useState(appliedModel);
   const [draftTiers, setDraftTiers] = useState<TierModels>(appliedTiers);
   const [fetched, setFetched] = useState<string[]>([]);
+  // The draft has been reset to the applied state. Until then it holds the
+  // pre-load guess, which would read as a change for one render.
+  const [synced, setSynced] = useState(false);
 
   // The draft starts from what is applied, which is known once providers load.
   const loaded = !providers.isPending;
@@ -69,6 +72,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     setDraftConn(appliedConn);
     setDraftModel(appliedModel);
     setDraftTiers(appliedTiers);
+    setSynced(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the applied state arrives
   }, [loaded]);
 
@@ -163,7 +167,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     tiers,
     draftTiers,
     tiersAreSuggested: tiersKey(draftTiers) === tiersKey(suggestion),
-    loading: providers.isPending,
+    loading: providers.isPending || !synced,
     dirty,
     canReview,
     request,

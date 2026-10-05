@@ -123,7 +123,7 @@ when no skill declares it (no minimum, no login check). On the wire it is
 `CliOut.needed_by_servers` (`CliServerOut`).
 
 `ProbeResult` is the in-memory check result, one per command, kept by
-`CliRequirementService` until **Check again** or a daemon restart (no
+`CliRequirementService` until **Check** or a daemon restart (no
 table):
 
 | Field         | Type                | Notes                                                              |
@@ -377,10 +377,10 @@ Skill **removal** has no dedicated event — deleting a skill goes through
 ```
 
 The master folders are in the vault, so every change to one is a commit and has
-a history (the skill's **History…** dialog hands restoring a version to an agent,
-spec web-ui "Show where a file's history is and hand its restore to an agent"). Coffer
-writes no file inside a master folder on the person's behalf ("Show a skill's
-master folder read-only"); a folder written any way — an import, an update by
+a history (the skill's **History** tab lists its versions and restores one as a
+new commit, spec web-ui "Show a vault file's history on a History tab"). Coffer
+writes no file inside a master folder on the person's behalf beyond that
+restore ("Show a skill's master folder read-only"); a folder written any way — an import, an update by
 the person's agent, an adoption, a person's editor — is committed as found on
 disk (writer `disk`) by the vault's scanner. `MasterStore`
 (`infrastructure/skill/master_store.py`) is the one place that decides whether
@@ -466,7 +466,8 @@ surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 read-only Files tab and surface each node's absolute on-disk path so the UI can offer
 open-in-external-editor / reveal-in-file-manager affordances (spec.md
 `## Purpose`). There is no write helper: nothing in Coffer writes a file inside a
-skill's folder on the person's behalf ("Show a skill's master folder read-only"). Reads audit
+skill's folder on the person's behalf, beyond the History tab's restore, which
+is a vault write ("Show a skill's master folder read-only"). Reads audit
 nothing. Containment is enforced by resolving every candidate path and
 requiring it to stay inside the resolved master folder, reusing the path-escape
 approach from `domain/skill/validator.py`.

@@ -1,6 +1,6 @@
 # The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System
 
-> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The Conversations page is now a list of channel conversations that opens a row in the person's terminal; it has no reply box, no "Coffer" source and no web-reply mirroring. The grouping of the sidebar this ADR decides is unchanged.
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The Conversations page is now a list of every agent's sessions, wherever they were started (change `list-every-agent-session-as-conversations`), that opens a row in the person's terminal; it has no reply box, no "Coffer" source and no web-reply mirroring. The grouping of the sidebar this ADR decides is unchanged.
 
 **Status**: Accepted
 **Date**: 2026-09-29
@@ -22,7 +22,7 @@ spec web-ui "List only shipped surfaces in the sidebar",
 spec web-ui "Call a surface by one name everywhere",
 spec web-ui "Manage stored secrets on the Secrets page",
 spec web-ui "Open Settings as a modal from the sidebar footer",
-spec chat "Show channel conversations on the Conversations page",
+spec chat "Show every agent's sessions on the Conversations page",
 spec provider-switching "Offer every connection operation over REST and in the web UI",
 spec secret "Refuse to delete a secret still in use",
 spec web-ui "Show what needs the user and each area's health on Overview",

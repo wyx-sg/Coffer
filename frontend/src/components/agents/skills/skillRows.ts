@@ -6,6 +6,7 @@
 // state says what can be done with it: adopt it, nothing (invalid SKILL.md, a
 // foreign link), or delete it when Coffer already delivers a skill of the same
 // name (a duplicate). Rows are ordered invalid, foreign, duplicate, unmanaged.
+import type { KindColumn } from "@/components/agents/tabs/AgentKindTab";
 import type { StatusTone } from "@/lib/statusTone";
 import type { UnmanagedSkillOut } from "@/lib/api/agents-workspace";
 import type { SkillOut } from "@/lib/api/skills";
@@ -74,4 +75,15 @@ export function buildOwnSkillRows(
     .map((row, index) => ({ row, index }))
     .sort((a, b) => ORDER[a.row.state] - ORDER[b.row.state] || a.index - b.index)
     .map(({ row }) => row);
+}
+
+/** The table's columns; the row cells follow this order. */
+export function ownSkillColumns(t: (key: string) => string): KindColumn[] {
+  return [
+    { key: "name", header: t("agents.skillsTab.cols.name"), className: "w-[26%]" },
+    { key: "note", header: t("agents.skillsTab.cols.note") },
+    { key: "location", header: t("agents.skillsTab.cols.location"), className: "w-[18%]" },
+    { key: "state", header: t("agents.skillsTab.cols.state"), className: "w-32" },
+    { key: "actions", className: "w-36" },
+  ];
 }

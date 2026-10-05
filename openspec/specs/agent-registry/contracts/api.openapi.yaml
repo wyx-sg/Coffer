@@ -69,6 +69,95 @@ paths:
       summary: List Agent Models
       tags:
       - agent-providers
+  /api/v1/agent-sessions:
+    get:
+      description: |-
+        Every managed agent's sessions, newest activity first (agent key and
+        session id break ties), paged by one opaque cursor.
+      operationId: list_all_agent_sessions_api_v1_agent_sessions_get
+      parameters:
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - description: The previous page's next_cursor. Bound to the filters it was issued for; any other value is 400 CURSOR_INVALID.
+        in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The previous page's next_cursor. Bound to the filters it was issued for; any other value is 400 CURSOR_INVALID.
+          title: Cursor
+      - description: Title or working directory contains this text (each agent's own search).
+        in: query
+        name: q
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 200
+            type: string
+          - type: 'null'
+          description: Title or working directory contains this text (each agent's own search).
+          title: Q
+      - description: Comma-separated `local` (sessions no channel conversation points at) and channel uids. Absent is everything.
+        in: query
+        name: source
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 2000
+            type: string
+          - type: 'null'
+          description: Comma-separated `local` (sessions no channel conversation points at) and channel uids. Absent is everything.
+          title: Source
+      - description: Comma-separated agent keys (e.g. `claude_code,codex`). Absent is every agent.
+        in: query
+        name: agent
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 2000
+            type: string
+          - type: 'null'
+          description: Comma-separated agent keys (e.g. `claude_code,codex`). Absent is every agent.
+          title: Agent
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllAgentSessionsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List All Agent Sessions
+      tags:
+      - agents
   /api/v1/agents:
     get:
       operationId: list_agents_api_v1_agents_get
@@ -631,6 +720,64 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: List Config Files
+      tags:
+      - agents
+  /api/v1/agents/{uid}/config-files/{key}/content:
+    get:
+      description: One allowlisted config file, as written, for a read-only preview.
+      operationId: read_config_file_preview_api_v1_agents__uid__config_files__key__content_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: key
+        required: true
+        schema:
+          title: Key
+          type: string
+      - description: 'Under a directory entry: a file''s relpath as the listing returns it.'
+        in: query
+        name: child
+        required: false
+        schema:
+          anyOf:
+          - minLength: 1
+            type: string
+          - type: 'null'
+          description: 'Under a directory entry: a file''s relpath as the listing returns it.'
+          title: Child
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigFileContentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Config File Preview
       tags:
       - agents
   /api/v1/agents/{uid}/hooks:
@@ -2007,6 +2154,67 @@ components:
       - title
       title: AgentSessionRename
       type: object
+    AgentSessionRowOut:
+      description: 'A row of the cross-agent list: the agent''s session row plus whose it is.'
+      properties:
+        agent_key:
+          title: Agent Key
+          type: string
+        channel_binding:
+          anyOf:
+          - $ref: '#/components/schemas/SessionChannelOut'
+          - type: 'null'
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        created_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Created At
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        last_activity_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Activity At
+        needs_you:
+          default: false
+          title: Needs You
+          type: boolean
+        running:
+          default: false
+          title: Running
+          type: boolean
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        title:
+          title: Title
+          type: string
+      required:
+      - session_id
+      - title
+      - cwd
+      - created_at
+      - last_activity_at
+      - conversation_id
+      - running
+      - needs_you
+      - channel_binding
+      - agent_key
+      title: AgentSessionRowOut
+      type: object
     AgentType:
       description: Supported agent products.
       enum:
@@ -2097,6 +2305,30 @@ components:
       - install_handoff
       title: AgentTypesOut
       type: object
+    AllAgentSessionsResponse:
+      description: 'Response for GET /api/v1/agent-sessions (no ``total``: an agent may not count).'
+      properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+        sessions:
+          items:
+            $ref: '#/components/schemas/AgentSessionRowOut'
+          title: Sessions
+          type: array
+        unavailable:
+          items:
+            $ref: '#/components/schemas/UnavailableAgentOut'
+          title: Unavailable
+          type: array
+      required:
+      - sessions
+      - next_cursor
+      - unavailable
+      title: AllAgentSessionsResponse
+      type: object
     CofferConnectionOut:
       properties:
         parts:
@@ -2170,6 +2402,39 @@ components:
       - expected_command
       - last_fired_at
       title: CofferHookOut
+      type: object
+    ConfigFileContentOut:
+      description: 'One config file''s read-only preview. No fingerprint: there is no write.'
+      properties:
+        abs_path:
+          title: Abs Path
+          type: string
+        binary:
+          title: Binary
+          type: boolean
+        content:
+          title: Content
+          type: string
+        format:
+          $ref: '#/components/schemas/ConfigFileFormat'
+        key:
+          title: Key
+          type: string
+        size:
+          title: Size
+          type: integer
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - key
+      - abs_path
+      - format
+      - content
+      - size
+      - truncated
+      - binary
+      title: ConfigFileContentOut
       type: object
     ConfigFileFormat:
       description: Format of an allowlisted config file.
@@ -3754,4 +4019,18 @@ components:
       required:
       - root
       title: SkillFileTreeOut
+      type: object
+    UnavailableAgentOut:
+      description: An agent whose sessions could not be read.
+      properties:
+        agent:
+          title: Agent
+          type: string
+        reason:
+          title: Reason
+          type: string
+      required:
+      - agent
+      - reason
+      title: UnavailableAgentOut
       type: object

@@ -100,7 +100,7 @@ describe("SkillRequiresTab", () => {
       expect(screen.queryByRole("button", { name: "Copy prompt" })).toBeNull();
       expect(screen.queryByText("gcloud auth login")).toBeNull();
       expect(screen.queryByText(/brew/)).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+      fireEvent.click(screen.getByRole("button", { name: "Check" }));
       await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
     },
   );

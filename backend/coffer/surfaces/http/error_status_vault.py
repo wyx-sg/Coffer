@@ -12,6 +12,7 @@ VAULT_AND_SYNC_STATUS: dict[str, int] = {
     "VAULT_FILE_STALE": 409,
     "VAULT_FILE_INVALID": 422,
     "VAULT_PATH_INVALID": 400,
+    "VAULT_VERSION_NOT_FOUND": 404,
     "VAULT_GIT_FAILED": 500,
     "GIT_MISSING": 500,
     # A daemon waiting in its setup state refuses everything that needs the

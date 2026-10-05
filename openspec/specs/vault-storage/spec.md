@@ -234,25 +234,6 @@ does, once.
 - **WHEN** the commit lands
 - **THEN** one change for that resource reaches the reconciler and the event stream
 
-### Requirement: Hand restoring an earlier version of a vault file to an agent
-The vault's history is git's, read and restored with git or by the person's agent; Coffer SHALL NOT list, diff or restore versions itself. `POST /api/v1/vault/history/handoff` SHALL take a vault-relative `path` — a file, or a folder ending in `/` — and an optional `at` time, and answer the path's absolute location, the vault's absolute path, the command that prints the path's history (`git -C <vault> log -p -- <path>`) and a hand-off prompt built by the daemon from the same module every hand-off uses. The prompt SHALL state the path and, when `at` is given, that it is to be brought back to how it was at that time — otherwise that the agent lists its recent versions and asks the person which one; that the vault is a git repository at the vault's path whose history is never rewritten (no reset, amend, rebase or force push); that the earlier content is written back into the working tree touching only that path — for a folder, removing the files that version did not have — and committed as one new commit whose message carries `Coffer-Writer: agent`, `Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`, the trailers that name a vault commit's writer; and that the agent tells the person what it restored. The prompt SHALL carry no secret, and a path under `secret/` or outside the vault SHALL be refused (`VAULT_PATH_INVALID`). The route writes nothing and records no audit event; the commit the agent makes is validated like any other change to the vault.
-
-#### Scenario: the restore hand-off names the file, the time and the commit rules
-- **GIVEN** a knowledge document in the vault
-- **WHEN** the restore hand-off is asked for with the document's path and a time
-- **THEN** the answer carries the document's absolute path, the vault's path and `git -C <vault> log -p -- <path>`, and the prompt names the path, the time, that history is never rewritten and the three `Coffer-` trailers of the commit to make
-- **AND** asked without a time, the prompt says to list the recent versions and ask which one
-
-#### Scenario: a secret's history is never handed over
-- **GIVEN** a credential file under `secret/`
-- **WHEN** the restore hand-off is asked for with its path, or with a path that leaves the vault
-- **THEN** each is refused `VAULT_PATH_INVALID` and no prompt is built
-
-#### Scenario: a version written back and committed outside Coffer is a new commit
-- **GIVEN** a file with two versions in the vault's history
-- **WHEN** the first version's bytes are written back into the file and committed outside Coffer with the restore trailers
-- **THEN** `HEAD` is a new commit whose writer reads `agent` and that names the commit restored from, and no earlier commit was rewritten
-
 ### Requirement: List the hand edits the vault kept out
 The hand edits the vault refused (see "Keep the last valid version when a hand
 edit is invalid") SHALL be listed with the path, the finding's code, severity
@@ -266,3 +247,33 @@ no page lists the refused edits.
 - **WHEN** `GET /api/v1/vault/problems` is read
 - **THEN** it names the file with the code `invalid_document` and severity `error`
 - **AND** with nothing refused, `coffer vault problems` says there are no problems and `--json` prints an empty list
+
+### Requirement: Show and restore any version of a vault file or folder
+The history of any vault file or folder SHALL be readable newest first, each version with its writer — the `Coffer-Writer` of its commit, `agent:<type>` for an agent — its time, its summary, the version it restored when it is a restore, and the files it touched inside the path with their line counts (`GET /api/v1/vault/history`). A version's diff SHALL be readable file by file, either as what that version changed or as how the path differs now from how that version left it (`GET /api/v1/vault/diff` with `against=previous` or `against=current`). Before either read, an edit found on disk under the path SHALL be committed as a `disk` write, so the newest version is the path as it is. Restoring a version (`POST /api/v1/vault/restore`) SHALL write that content back through the one write path, validated, as one new commit naming the writer and carrying `Coffer-Operation: restore` and `Coffer-Restored-From`, never by rewriting history; restoring a folder SHALL also remove the files that version did not have. The caller SHALL state the newest version it saw (`expected_current`), and a restore after the path changed — a later commit, or an edit on disk — SHALL be refused `409 VAULT_FILE_STALE` with nothing written. Each restore SHALL be audited as `vault_file_restored`. A path under `secret/` or outside the vault SHALL be refused `400 VAULT_PATH_INVALID`, and a version that is not in the path's history `404 VAULT_VERSION_NOT_FOUND`. The command line carries none of it; the web UI reads and restores through these routes.
+
+#### Scenario: a file's history lists its versions with their writers
+- **GIVEN** a document the user wrote, an agent then changed through Coffer, and the person then edited in their own editor
+- **WHEN** its history is read
+- **THEN** three versions are listed newest first, written on disk, by the agent and by the user, each with the file it touched and its line counts
+
+#### Scenario: a version's diff reads against the one before it or the current
+- **GIVEN** a skill folder whose `SKILL.md` was written twice and that later gained a file
+- **WHEN** the second version's diff is read against the one before it, and the first version's against the current
+- **THEN** the first shows `SKILL.md`'s changed line, and the second shows `SKILL.md` modified and the later file added
+- **AND** a version that did not touch the path, or that is not a version at all, is not found
+
+#### Scenario: restore is a new commit through the same checks
+- **GIVEN** a file with two versions
+- **WHEN** a person restores the first, stating the second as the newest version they saw
+- **THEN** the file holds the first version's bytes, `HEAD` is a new commit naming the person and carrying `Coffer-Restored-From`, no earlier commit was rewritten, and the restore is audited
+- **AND** the same restore stating the first as the newest version they saw is refused as stale and changes nothing
+
+#### Scenario: restoring a folder removes files the version did not have
+- **GIVEN** a skill folder that gained a file after a version
+- **WHEN** a person restores the folder to that version
+- **THEN** the folder holds exactly that version's files
+
+#### Scenario: a secret's history is never read or restored
+- **GIVEN** a credential file under `secret/`
+- **WHEN** its history, a diff or a restore is asked for, or the history of a path that leaves the vault
+- **THEN** each is refused `VAULT_PATH_INVALID`

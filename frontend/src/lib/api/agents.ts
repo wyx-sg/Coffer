@@ -41,6 +41,9 @@ export type AgentPatch = Schemas["AgentPatch"];
  *  registering it now would succeed. */
 export type AgentTypeOut = Schemas["AgentTypeOut"];
 
+/** One config file read for its read-only preview, secret values hidden. */
+export type ConfigFileContent = Schemas["ConfigFileContentOut"];
+
 /** Every hook in the agent's native config, plus Coffer's own hook's health. */
 export type AgentHooksOut = Schemas["AgentHooksOut"];
 export type NativeHook = Schemas["NativeHookOut"];
@@ -55,9 +58,16 @@ export const agentsApi = {
   // One row per supported type, registered or not.
   types: () => unwrap(getApiClient().GET("/agents/types")),
 
-  // Config files are listed only: Coffer serves no content and writes none.
+  // Config files are listed and previewed only: Coffer writes none. `child` names
+  // one file under a directory entry, by a relpath the listing returned.
   listConfigFiles: (uid: string) =>
     unwrap(getApiClient().GET("/agents/{uid}/config-files", { params: { path: { uid } } })),
+  configFileContent: (uid: string, key: string, child?: string) =>
+    unwrap(
+      getApiClient().GET("/agents/{uid}/config-files/{key}/content", {
+        params: { path: { uid, key }, query: { child: child || undefined } },
+      }),
+    ),
   // Read-only: every hook the agent's own files and enabled plugins declare.
   hooks: (uid: string) =>
     unwrap(getApiClient().GET("/agents/{uid}/hooks", { params: { path: { uid } } })),

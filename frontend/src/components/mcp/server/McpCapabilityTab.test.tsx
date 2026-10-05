@@ -1,12 +1,19 @@
 // src/components/mcp/server/McpCapabilityTab.test.tsx — the Resources and Prompts tabs list everything the server offers (spec mcp-gateway "Forward tools, resources and prompts").
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 import { McpCapabilityTab } from "./McpCapabilityTab";
+
+const api = vi.hoisted(() => ({ post: vi.fn(async () => undefined) }));
+
+vi.mock("@/lib/hooks/useMcpCapabilityMutations", async (orig) => ({
+  ...(await orig<typeof import("@/lib/hooks/useMcpCapabilityMutations")>()),
+  capabilitiesApi: { setEnabled: api.post },
+}));
 
 function renderTab(kind: "resource" | "prompt", count: number) {
   const caps = {
@@ -74,10 +81,23 @@ describe("McpCapabilityTab", () => {
     expect(screen.queryByRole("button", { name: /more/i })).toBeNull();
   });
 
-  test("the toolbar counts what is on, and Prompts says where they show up", () => {
+  test("Prompts says where they show up", () => {
     renderTab("prompt", 4);
-    expect(screen.getByTestId("mcp-caps-on")).toHaveTextContent(/\d+ of 4 on/);
     expect(screen.getByText(/slash-command menu/)).toBeInTheDocument();
+    expect(screen.queryByTestId("mcp-caps-on")).toBeNull();
+    expect(screen.queryByRole("button", { name: /all on|all off/i })).toBeNull();
+  });
+
+  test("select all ticks every match, the bar replaces the toolbar, Turn off disables them", async () => {
+    renderTab("resource", 3);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(screen.getByRole("region", { name: "Selected resources" })).toHaveTextContent(
+      "3 of 3 selected",
+    );
+    expect(screen.queryByRole("textbox", { name: "Search resources" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(3));
+    expect(await screen.findByRole("textbox", { name: "Search resources" })).toBeInTheDocument();
   });
 
   acceptance("mcp-gateway", "a server's resources and prompts are listed in full", () => {

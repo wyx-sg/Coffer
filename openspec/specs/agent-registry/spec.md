@@ -5,7 +5,7 @@ The agent registry decides which locally-installed AI coding agents Coffer knows
 
 This spec holds what the two types share. Everything that differs by type — where the config directory is, which files are allowlisted, the MCP entry shape, the plugin inventory, the model catalogue's sources, the native-memory layout, the transcript location — lives in a child spec: [`agent-registry/claude-code`](claude-code/spec.md) and [`agent-registry/codex`](codex/spec.md), each the reading of one `AGENT_DESCRIPTORS` record, the single per-type table in the code. Adding a product is one enum value, one descriptor record and one child spec.
 
-Beyond registering agents, the user views and edits each agent's known config files (or opens them in an external editor), installs Coffer's own MCP server into an agent with one click, and sees which models that agent can be put on. The registry also reaches into the agent's real on-disk workspace — the MCP servers configured in its own files, its installed plugins, directory-type config entries, its own native memory and its session transcripts — following **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway; the master skill store of skill-manager) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; the agents' internal state files are read as inputs where needed and never written. Config files are surfaced as raw text with a validate + atomic-write + backup safety net on every save; open-in-external-editor stays alongside as the escape hatch for the long tail, and recurring structured needs graduate into facets.
+Beyond registering agents, the user lists and previews each agent's known config files read-only and opens them in their own editor to change them, installs Coffer's own MCP server into an agent with one click, and sees which models that agent can be put on. The registry also reaches into the agent's real on-disk workspace — the MCP servers configured in its own files, its installed plugins, directory-type config entries, its own native memory and its session transcripts — following **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway; the master skill store of skill-manager) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; the agents' internal state files are read as inputs where needed and never written. Config files are shown as raw text, read-only; a person edits them in their own editor, Coffer's own writes into them keep an atomic write and a backup, and recurring structured needs graduate into facets.
 
 The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement. The registry relies on the Resource framework, audit log and immutable-`uid` identity of resource-framework, and renders inside the web-ui application shell. A `coffer-hook` binary with a session-context rules route and a `disable_native_memory` switch once lived here and was removed because it was never installed; session-start delivery is now memory's own, marker-scoped install, which this registry only supports by supplying the agent record, its config directory, its allowlisted settings file and the atomic-write machinery.
 
@@ -132,7 +132,7 @@ Each supported agent type MUST define a curated allowlist of config files in its
 - **AND** exactly one entry per type is keyed `instructions` and has format `markdown`
 
 ### Requirement: List an agent's config files with their locations
-Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the UI's open-in-external-editor / reveal-in-file-manager affordances (see "Open config files in an external editor or reveal them"). The listing is the only config-file route: Coffer serves no config file's content and writes none on the person's behalf.
+Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the UI's open-in-external-editor / reveal-in-file-manager affordances (see "Open config files in an external editor or reveal them"). Coffer writes none of these files on the person's behalf; one file's content is read only for its preview ("Preview an agent's config file read-only").
 
 #### Scenario: report each config file's path, folder and existence
 - **GIVEN** a registered agent where one allowlisted file exists and another does not
@@ -410,13 +410,19 @@ The system MUST expose a read-only **native-memory store read** that returns one
 - **THEN** Coffer returns the store directory as a tree (directories before files, paths relative to the store) and the file's contents with the absolute path that backs open / reveal, while a directory that is not one of this agent's stores — its sibling project directory included — and a path escaping the store are both rejected as `not_found` (404); read-only, emitting no audit event and writing nothing
 
 ### Requirement: Open config files in an external editor or reveal them
-The agent's **Config files** tab MUST list every allowlisted config file — and, under a directory entry, each of its files — as a read-only row naming the file, its folder, its size and when it changed, with **Open in editor** and **Reveal in Finder** on each, using the `path` and `folder_path` from "List an agent's config files with their locations". A file that does not exist yet reads *Not created* and offers only Reveal in Finder on its folder, because opening creates nothing. Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). The tab shows no file's content and offers no edit, new file or delete: a config file is changed in the person's own editor or by their agent. There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).
+The agent's **Config files** tab MUST list every allowlisted config file — and, under a directory entry, each of its files — as a read-only row naming the file, its folder, its size and when it changed, with **Open in editor** and **Reveal in Finder** on each, using the `path` and `folder_path` from "List an agent's config files with their locations". A file that does not exist yet reads *Not created* and offers only Reveal in Finder on its folder, because opening creates nothing. Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). A row's name opens that file's read-only preview in a dialog ("Preview an agent's config file read-only"); the tab offers no edit, new file or delete: a config file is changed in the person's own editor or by their agent. There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).
 
 #### Scenario: open a config file and reveal it through the daemon
 - **GIVEN** an agent's Config files tab listing an existing config file and one not created yet
 - **WHEN** the user chooses Open in editor and then Reveal in Finder on the existing file's row
 - **THEN** the UI asks the daemon to open that file's absolute path and then to reveal it
-- **AND** the row of the file not created yet offers Reveal in Finder only, no row shows the file's content or offers Edit, New file or Delete, and no copy-path affordance is offered
+- **AND** the row of the file not created yet offers Reveal in Finder only and no preview, no row offers Edit, New file or Delete, and no copy-path affordance is offered
+
+#### Scenario: preview a config file from its row
+- **GIVEN** an agent's Config files tab listing an existing `settings.json`
+- **WHEN** the user chooses the file's name
+- **THEN** a dialog shows the file's content read-only
+- **AND** the dialog offers Open in editor and Reveal in Finder and no Edit or Save
 
 ### Requirement: Audit every agent lifecycle event
 The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, native sessions, the model catalogue, the Coffer connection status — are read-only and emit no audit event. Reading ONE of the listed items — a single store's files — is the same act at a smaller scale and audits nothing either, and renaming or deleting a native session is the agent's own act on its own record ("Rename and delete a native session through the agent") and is not audited here. A connect or disconnect records the events of the parts it installs or removes and none of its own; the memory delivery hook's events are memory's, not this spec's. The `agent_config_file_written` and `agent_config_file_deleted` events are no longer recorded; rows an earlier version recorded keep their wording in Activity.
@@ -870,10 +876,10 @@ path that writes back into it.
 - **THEN** its row carries the `conversation_id`, `running` true, `needs_you` and the channel binding, while a session no conversation points at carries none of them
 
 ### Requirement: Offer every agent operation over REST and on the Agents page
-Every management operation — register/list/view/update/remove, the config-file listing, Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, native session listing, rename and delete, and the model catalogue — MUST be available through (a) the REST API and (b) the Agents page in the web UI. The command line carries none of them: it has no `agent` command group.
+Every management operation — register/list/view/update/remove, the config-file listing and preview, Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, native session listing, rename and delete, and the model catalogue — MUST be available through (a) the REST API and (b) the Agents page in the web UI. The command line carries none of them: it has no `agent` command group.
 
 - the lifecycle of "Manage the agent lifecycle" under `/api/v1/agents`;
-- the config-file listing at `GET /api/v1/agents/{uid}/config-files`;
+- the config-file listing at `GET /api/v1/agents/{uid}/config-files` and one file's preview at `GET /api/v1/agents/{uid}/config-files/{key}/content`;
 - the agent's Coffer connection under `/api/v1/agents/{uid}/coffer-connection` ("Connect an agent to Coffer in one action");
 - direct MCP entries under `/api/v1/agents/{uid}/mcp-entries`;
 - plugins under `/api/v1/agents/{uid}/plugins`, where `DELETE` is the uninstall of "Uninstall a plugin by the type's own strategy";
@@ -881,17 +887,17 @@ Every management operation — register/list/view/update/remove, the config-file
 - native sessions at `GET /api/v1/agents/{uid}/sessions` ("List an agent's native sessions through the agent"), renamed with `PATCH` and deleted with `DELETE` at `/api/v1/agents/{uid}/sessions/{session_id}` ("Rename and delete a native session through the agent");
 - the model catalogue at `GET /api/v1/agent-providers/{agent_key}/models`.
 
-The listing of an agent's config files and the reads of its native memory stores' files are served over REST for the web UI, and the Overview's Details names the config directory for anyone who wants the files themselves. The model catalogue's route takes the agent type it is keyed by (`claude_code`, `codex`), not an agent's name, and an unknown type is its not-found.
+The listing of an agent's config files, one config file's preview and the reads of its native memory stores' files are served over REST for the web UI, and the Overview's Details names the config directory for anyone who wants the files themselves. The model catalogue's route takes the agent type it is keyed by (`claude_code`, `codex`), not an agent's name, and an unknown type is its not-found.
 
 The Agents page in the web UI MUST expose all of these. It renders within the web-ui shell at `/agents` as the first entry of the sidebar's Agents group ([web-ui](../web-ui/spec.md) "Group the sidebar by what the user comes to do"), never among the Capabilities or Context entries, because agents are consumers of vault assets, not assets themselves; agent resources do not appear in the kind-agnostic resources browser.
 
-- A config file is never shown or edited in the page: its row opens it in the person's editor or reveals it ("Open config files in an external editor or reveal them"). Every place the page shows a file the agent holds read-only — a native memory store, an unmanaged skill's folder — uses the same file tree and the same viewer toolbar, so a file reads the same wherever it is opened.
+- A config file is shown read-only and never edited in the page: its name opens its preview in a dialog, and its row opens it in the person's editor or reveals it ("Open config files in an external editor or reveal them"). Every place the page shows a file the agent holds read-only — a native memory store, an unmanaged skill's folder — uses the same file tree and the same viewer toolbar, so a file reads the same wherever it is opened.
 - The agent detail page's **header** carries the agent's mark, its name, one status pill and a **⋯** menu, and nothing under the name: the version and the config directory are on the Overview. The pill reads Connected, Not connected, Needs repair, Hook not approved or Config left behind. The header never turns into a fix button — Connect, Repair and Check again sit on the Overview's Connection section. **Rotate proxy token** is in ⋯ only while the agent routes through Coffer's proxy ([provider-switching](../provider-switching/spec.md) "Authenticate each agent to the proxy with its own local token").
 - The detail page has eight tabs, none carrying a count: six in the strip — **Overview**, **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** — and, behind a **More** menu, **Plugins** and **Memory**, the least used. Each is addressable by its own path (`/agents/<type>` for Overview, then `/agents/<type>/skills`, `/mcp-servers`, `/hooks`, `/config`, `/sessions`, `/plugins` and `/memory`), so a page opened from a tab returns to it. While the open tab is one of the two in More, the More trigger reads that tab's name and carries the underline; a tab in More that needs attention puts a warning dot on More. There is **no Model tab**: an agent's model is a section of the Overview, and `/agents/<type>/model` is not a page.
   - **Overview** stacks, top to bottom, **Connection**, **What this agent can use**, **Model** and **Details**. Connection says what the connection is in one line, lists the `coffer` MCP entry and the memory delivery hook with where each lives and its health, and carries the one fix the state calls for at its title's right — **Connect** or **Repair** as a solid button, **Check again** as an outline one — and none while the agent is healthy. What this agent can use is six tiles, three by two — MCP servers, Skills, Config files, Plugins, Hooks and Memory — each with its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; a tile opens its tab. Model reads **Provider**, **Model** and **Route** (through Coffer's proxy, with **Test**, or direct) and carries **Change…**, which opens the Change model dialog of [provider-switching](../provider-switching/spec.md) "Review a model change before writing it"; opening the page with `?change-model=1` opens that dialog on arrival. With the `models` feature off the section is read-only and shows no Provider row and no Change. Details reads **Version**, **Config directory**, **UID** and **Registered**, with no Title, Name or Type, because an agent's name is fixed to its type.
   - **Skills** and **MCP servers** open with Coffer's part and then the agent's own, per "Show what Coffer manages for an agent in one row". **Plugins** lists the agent's installed plugins — all its own, since Coffer installs none — with a search, an enabled switch and a ⋯ menu whose only item is Uninstall…, and a plugin's name opens an information dialog.
   - **Hooks** opens with **Coffer's memory hook**, then **the agent's own hooks**, per "List every hook in the agent's native config". The tab is read only apart from Repair and Check again on Coffer's hook.
-  - **Config files** lists every allowlisted config file of "Define a curated config-file allowlist per type" as read-only rows — the settings files and the human-authored instructions files (`CLAUDE.md`, `AGENTS.md`) alike, because an instructions file is configuration the person wrote, not something installed — each opened in the editor or revealed ("Open config files in an external editor or reveal them").
+  - **Config files** lists every allowlisted config file of "Define a curated config-file allowlist per type" as read-only rows — the settings files and the human-authored instructions files (`CLAUDE.md`, `AGENTS.md`) alike, because an instructions file is configuration the person wrote, not something installed — each previewed in a dialog, opened in the editor or revealed ("Open config files in an external editor or reveal them").
   - **Memory** leads with **Coffer's memory** — Coffer's memory hook for this agent, when it last fired and what it delivers, with a link to the Memory page and a Repair when the hook is out of date or missing — only while the `memory` feature is on, and then lists **the agent's own memory stores**, read-only ([web-ui](../web-ui/spec.md) "Show memory delivery on the Memory page"). **Sessions** — the agent's own session history, asked of the agent itself — is one list whose rows open in the terminal ("Open an agent's sessions from its Sessions tab").
 - A direct server's name on the MCP servers tab opens that entry's read-only JSON in a dialog ("Show one direct MCP entry's full configuration without its secrets"), whose footer carries the row's two writes — remove it from its file (Remove, or Remove duplicate when Coffer already serves it) and adopt it into Coffer — around Close.
 - The Memory list carries no per-row actions: a row OPENS its subject, and the open / reveal affordances live on the page it opens, beside the thing they act on. A Memory row opens that store's directory as a file tree with a read-only preview, because a store is a directory.
@@ -986,16 +992,20 @@ neither operation is audited here.
 ### Requirement: Open an agent's sessions from its Sessions tab
 The agent detail page's **Sessions** tab MUST list the agent's native sessions
 ("List an agent's native sessions through the agent") as rows of the same kind the
-Conversations page uses ([chat](../chat/spec.md) "Show channel conversations on the Conversations page"), without the
+Conversations page uses ([chat](../chat/spec.md) "Show every agent's sessions on the Conversations page"), without the
 channel column unless the session is a channel conversation's: title, working directory and last
 activity, with the channel, the Running / Needs you mark and an inline **Stop** when it is. A search
 box over title and working directory filters the list in the server, and the list pages by
 cursor as it is scrolled. Pressing a row, or the main part of its split button **Open in
-terminal ▾ Copy command**, MUST open the session in the preferred terminal exactly as
+<terminal> ▾**, MUST open the session in the preferred terminal exactly as
 [chat](../chat/spec.md) "Open a conversation in the terminal" says, asking first when the session is
-busy ("Ask before opening a session that is running"). A hovering **⋯** menu holds **Rename** (in
+busy ("Ask before opening a session that is running"). An always-shown **⋯** menu holds **Rename** (in
 place) and **Delete…**, which asks first and says the session is deleted from the agent and cannot be recovered. A
 failure to load the list shows in the list's area with a Retry. The tab shows no session text.
+Beside the search box the tab carries **New conversation**, which opens the dialog of
+[chat](../chat/spec.md) "Start a new conversation in the terminal" with this agent chosen.
+The tab is the Conversations page's list narrowed to this agent: the same header row, rows,
+actions and paging, without the Agent column.
 
 #### Scenario: a session row opens in the terminal
 - **GIVEN** an agent's Sessions tab listing a session `abc-123` in `/work/api`
@@ -1017,6 +1027,11 @@ failure to load the list shows in the list's area with a Retry. The tab shows no
 - **WHEN** the user chooses Delete… from its ⋯ menu
 - **THEN** a confirmation says it is deleted from the agent and cannot be recovered, and nothing is deleted until the user confirms
 
+#### Scenario: New conversation on the Sessions tab starts this agent
+- **GIVEN** Codex's Sessions tab
+- **WHEN** the user presses New conversation and confirms the dialog without changing it
+- **THEN** the dialog had Codex chosen, and the daemon is asked to start a blank Codex session in the chosen directory
+
 ### Requirement: Back up and compare-and-swap every write Coffer makes to an agent's config
 Every write Coffer makes into an agent's own config files — connecting, repairing or disconnecting it, installing or removing Coffer's MCP entry, removing or adopting a direct MCP entry, toggling or uninstalling a plugin, projecting a provider, and the reconciler's repairs — MUST be atomic (temp file + rename) and MUST first copy the prior content to a timestamped backup under `~/.coffer/config-backups/` (Coffer's own folder: machine-local, outside the vault, and never beside the agent's file). A writer that read the file before deciding what to write MUST pass the fingerprint of what it read, and the write MUST be refused with `conflict` (409, `CONFIG_FILE_STALE`) when the file changed since, leaving it untouched, so the agent's own rewrite between Coffer's read and write is never lost. Backups are named by their UTC time and cleaned by the `config_backups` retention policy ([resource-framework](../resource-framework/spec.md) "Retain config backups on an adjustable policy"), which always keeps the newest backup of each file. Each writer records its own audit event; there is no write of a config file on the person's behalf, which edits the file in their own editor (see "Open config files in an external editor or reveal them").
 
@@ -1030,3 +1045,64 @@ Every write Coffer makes into an agent's own config files — connecting, repair
 - **GIVEN** a config file Coffer read to plan a write, which the agent then rewrites on disk
 - **WHEN** Coffer writes with the fingerprint of what it read
 - **THEN** the write is refused `409 CONFIG_FILE_STALE` and the file holds the agent's content
+
+### Requirement: Preview an agent's config file read-only
+Users MUST be able to read one allowlisted config file of an agent for a read-only preview at `GET /api/v1/agents/{uid}/config-files/{key}/content`, and one file under a directory entry with `?child=<relpath>`, where the relpath MUST be one the listing of "List an agent's config files with their locations" returns for that entry. A key off the allowlist, a directory key without a listed child, and a file key given a child MUST be answered `404` (`CONFIG_FILE_NOT_ALLOWED`) before any read, so the preview can never name a path the listing would not show; a listed file not created yet is `404` (`NOT_FOUND`).
+
+The answer carries the file's absolute path, format, size and its text as written, read up to 1 MiB (`truncated` past it; `binary` with no text for a file that is not UTF-8 or holds a NUL byte). The text is the file's own, values included: the file is the person's, on their own machine, and the loopback daemon shows it to them as their editor would. A preview writes nothing, records no audit event and carries no fingerprint: a config file is edited in the person's own editor.
+
+#### Scenario: preview a config file as written
+- **GIVEN** a registered Claude Code agent whose `settings.json` holds a theme and an `env` map with `ANTHROPIC_AUTH_TOKEN`
+- **WHEN** the user reads the preview of the `settings` key
+- **THEN** the answer carries the file's absolute path, its size and its text exactly as on disk
+- **AND** the file on disk is byte-identical and no audit event is recorded
+
+#### Scenario: preview a file under a directory entry only when the listing names it
+- **GIVEN** a Claude Code agent whose `agents/` directory holds `reviewer.md`
+- **WHEN** the user reads the `subagents` preview with the child `reviewer.md`, then with the child `../settings.json`, then with no child
+- **THEN** the first answers the file's text
+- **AND** the second and third are answered `404` and nothing outside the listed files is read
+
+#### Scenario: answer a config file not created yet as not found
+- **GIVEN** a Claude Code agent with no `CLAUDE.md`
+- **WHEN** the user reads the preview of the `instructions` key
+- **THEN** the answer is `404` and no file is created
+
+### Requirement: List every agent's sessions in one list
+The system MUST expose `GET /api/v1/agent-sessions`, one listing of the native sessions of
+every managed agent, each asked of the agent exactly as "List an agent's native sessions
+through the agent" says and merged newest activity first, with agent key and `session_id`
+as the tie-breaks. Each row carries what that listing's row carries plus the agent's key.
+It MUST page by one opaque cursor over all the agents ([resource-framework](../resource-framework/spec.md)
+"Page growing lists by an opaque cursor") and carry no `total`, because an agent may not
+count its sessions. It MUST narrow, in the server, by `agent` (a comma-separated set of agent
+keys: only those agents are asked), by `source` (a comma-separated set of `local` — a session
+no channel conversation points at — and channel uids — a session that channel's conversation
+points at) and by `q`, passed to each agent's own search; a cursor MUST be bound to the
+filters it was issued for. When `source` names channels only, the rows are those channels'
+conversations from the conversation index, so a conversation on which no turn has run is
+listed, without a session. An agent whose listing fails MUST be left out of the page and
+named under `unavailable` with its reason, while the other agents are listed. The read
+carries no session text and is not audited.
+
+#### Scenario: sessions from two agents are listed in one order
+- **GIVEN** Claude Code with sessions last active at 10:00 and 08:00, and Codex with one last active at 09:00
+- **WHEN** `GET /api/v1/agent-sessions` is read with `limit=2` and then with the answer's `next_cursor`
+- **THEN** the first page holds the 10:00 Claude Code and 09:00 Codex sessions, each with its agent key, and the second the 08:00 one with a `null` `next_cursor`
+- **AND** neither answer carries a `total`
+
+#### Scenario: the listing narrows by source and agent
+- **GIVEN** a Claude Code session started in a terminal and one a SeaTalk conversation points at, and a Codex session
+- **WHEN** the listing is read with `source=local`, then with `source=<SeaTalk uid>`, then with `agent=codex`
+- **THEN** the first lists the terminal session and the Codex one, the second only the SeaTalk one with its channel binding, and the third only Codex's
+- **AND** a cursor issued for one set of filters is `CURSOR_INVALID` for another
+
+#### Scenario: a channel conversation with no session yet is listed under its channel
+- **GIVEN** a SeaTalk conversation on which no turn has run
+- **WHEN** the listing is read with `source=<SeaTalk uid>`
+- **THEN** it is listed with its title and channel binding and a null `session_id`
+
+#### Scenario: one agent failing leaves the others listed
+- **GIVEN** Claude Code with sessions and a Codex whose listing fails
+- **WHEN** the listing is read
+- **THEN** Claude Code's sessions are listed and `unavailable` names Codex with the reason

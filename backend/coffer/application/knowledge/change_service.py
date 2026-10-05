@@ -6,10 +6,10 @@ description in place").
 The history is the vault repository's, under ``knowledge/``
 (``infrastructure.knowledge.history``); this service is what the surfaces ask.
 Every read first commits what changed outside Coffer as ``disk`` writes, so
-what it reports is the tree as it is, not as Coffer last wrote it. The web UI
-lists no versions: a delete's toast finds its change in the feed and restores
-it, and everything older is git's (spec vault-storage "Hand restoring an
-earlier version of a vault file to an agent").
+what it reports is the tree as it is, not as Coffer last wrote it. A delete's
+toast finds its change in the feed and restores it; a document's versions are
+read and restored through the vault's history (spec vault-storage "Show and
+restore any version of a vault file or folder").
 
 Two writes live here, and both are a person's: **restore a delete** puts back
 what a delete removed, and **describe** rewrites a collection's description.

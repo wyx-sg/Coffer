@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgePane.tsx
 //
 // The right side of the Knowledge page: which view the address names
-// (lib/knowledge/routes.ts). An open document, read-only; a collection with no
+// (lib/knowledge/routes.ts). An open document, read-only, or its History; a collection with no
 // document open → its overview; nothing chosen → a line saying to pick one.
 import { Book } from "lucide-react";
 
@@ -11,7 +11,7 @@ import { KnowledgeDocumentPane } from "@/components/knowledge/KnowledgeDocumentP
 import { KnowledgeLandingPanel } from "@/components/knowledge/KnowledgeLandingPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { KNOWLEDGE_ROOT } from "@/lib/knowledge/routes";
+import { KNOWLEDGE_ROOT, type KnowledgeTab } from "@/lib/knowledge/routes";
 
 interface Props {
   uid: string | null;
@@ -19,6 +19,8 @@ interface Props {
   collection: CollectionOut | null;
   collectionsLoading: boolean;
   file: string | null;
+  /** The open document's tab. */
+  tab?: KnowledgeTab;
 }
 
 export function KnowledgePane(props: Props) {
@@ -41,7 +43,13 @@ export function KnowledgePane(props: Props) {
     );
   }
   if (props.file) {
-    return <KnowledgeDocumentPane collection={props.collection} path={props.file} />;
+    return (
+      <KnowledgeDocumentPane
+        collection={props.collection}
+        path={props.file}
+        tab={props.tab ?? "document"}
+      />
+    );
   }
   return <KnowledgeCollectionView collection={props.collection} />;
 }

@@ -98,7 +98,7 @@ Channels included, is owned by no feature and is always there:
   Agents           /agents            — the consumers (Bot icon)
   Model providers  /model-providers   — the endpoints agents' models are served from, and what requests through Coffer cost (tabs Providers | Usage)
  RUN
-  Conversations    /conversations     — the conversations the IM bots started, each opened in the agent's own terminal
+  Conversations    /conversations     — every agent's sessions, wherever they started, each opened in the agent's own terminal
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
@@ -663,7 +663,7 @@ naming the secret. A success is a toast that says what was kept or added.
 - **THEN** the dialog says the secret waits for approval before it closes
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter box, a per-row enable toggle and a per-row checkbox with a select-all box in the header, with each row's use in the last 24 hours; while rows are ticked a selection bar replaces the filter with Turn on, Turn off and (on Tools, while tiering is on) Exposure for the ticked rows — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -1620,8 +1620,8 @@ groups, under headings in this order:
 - **AGENTS** — set up the agents and the models they run on: Agents, then Model
   providers. Agents come first because they are the subject of the product; a
   provider is the endpoint and key each agent's model is served from.
-- **RUN** — see what the IM bots put agents to work on, and set the bots up: Conversations,
-  then Channels.
+- **RUN** — see and start what agents are working on, and set up the IM bots that put them
+  to work: Conversations, then Channels.
 - **CAPABILITIES** — give agents things they can do: MCP servers, Custom tools,
   Skills, then CLIs.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
@@ -1667,11 +1667,12 @@ word a user navigates by:
   agent in that agent's Change model dialog (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation over REST and in the web UI").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
-  Conversations is where a person finds every conversation a channel started and opens it in the terminal, a
-  channel is an IM bot set up once and revisited rarely, and the conversations a
-  channel carries are listed on the Conversations page with its badge (spec
-  [chat](../chat/spec.md) "Show channel conversations on the Conversations page");
-  the Channels page holds setup, status and settings only.
+  Conversations is where a person finds every session of every agent — a channel's among
+  them — and opens or starts one in the terminal, while a channel is an IM bot set up once
+  and revisited rarely. The conversations a channel carries are listed on the Conversations
+  page with its badge (spec [chat](../chat/spec.md) "Show every agent's sessions on the
+  Conversations page"), reached from the channel's Overview by one link; the Channels page
+  holds setup, status and settings only.
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.
 - **Custom tools** are `mcp_server` resources of the HTTP API transport, one per
@@ -2182,7 +2183,7 @@ start and which skills fail — and its detail page and the skill's Requires tab
 MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
 command to an agent with a prompt") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
 — **Hand off to <Agent>** starts the hand-off agent in the preferred terminal with the prompt sent, and **Copy prompt** copies it;
-with no managed agent available only Copy prompt is offered. The page's **Check again** probes every command afresh, and the banner that
+with no managed agent available only Copy prompt is offered. The page's **Check** probes every command afresh, and the banner that
 states a problem re-checks that one tool. Under the header's meta line every CLI —
 added by hand or required — carries its description, edited in place (leaving the
 field or Enter saves, an empty field clears it; spec skill-manager "Declare a
@@ -2214,7 +2215,7 @@ is probed are specified by skill-manager; this page shows what they report.
 
 #### Scenario: check again after logging in
 - **GIVEN** a CLI's detail page showing not logged in, with the hand-off to an agent and no login command shown
-- **WHEN** the user logs in and chooses Check again
+- **WHEN** the user logs in and chooses Check
 - **THEN** the page probes the command afresh and shows it as logged in
 
 #### Scenario: a CLI an MCP server starts with lists that server
@@ -2774,8 +2775,10 @@ tiering is on. The group's calls are read on the Activity page, not on the
 group's page; the failing banner's View calls opens Activity's Tool calls tab
 searching the group's name. Above the table one row
 carries a search, which narrows the rows by tool name, and **Add request**, so
-adding stays in view however many tools the group has; the count of tools that
-are on and **All on** / **All off** keep acting on the whole group. Choosing
+adding stays in view however many tools the group has. Tools are ticked with a
+per-row checkbox (select-all in the header); while any is ticked a selection bar
+replaces that row with **Turn on**, **Turn off** and, while the exposure column
+shows, **Exposure**, acting on the ticked tools. Choosing
 a tool opens its editor in a 640-wide **drawer** below the title bar, where the
 request is edited — the headers the group already adds shown as "from the group",
 no switch, which lives in the table — with **Delete tool** and Cancel
@@ -2875,21 +2878,12 @@ the gateway").
 - **THEN** only `list_invoices` and `void_invoice` are listed, no row carries a reach control, and Add request sits beside the search above the table
 
 ### Requirement: Draw every diff in the web UI with one renderer
-Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
+Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
 
 #### Scenario: a long changed line wraps instead of being cut off
 - **GIVEN** a change preview whose file adds a line longer than the diff is wide
 - **WHEN** the diff renders
 - **THEN** the line shows its old and new line numbers and its sign, and wraps at a word boundary with a ↳ on the continuation row
-
-### Requirement: Show where a file's history is and hand its restore to an agent
-A knowledge document's ⋯ menu and a managed skill's ⋯ menu (not the builtin skill's) MUST offer **History…**, which opens one dialog over the page: the path of the document or the skill's folder in the vault, an optional date and time to restore to, **Copy git command** — the `git -C <vault> log -p -- <path>` the daemon serves — **Reveal in Finder**, and the hand-off split button of "Hand a machine-dependent problem to an agent with one split button", labelled **Hand off to <Agent> to restore**, whose prompt is the one [vault-storage](../vault-storage/spec.md) "Hand restoring an earlier version of a vault file to an agent" builds for that path and time. The dialog MUST NOT list versions, show a diff or restore anything itself, and the page assembles no prompt of its own.
-
-#### Scenario: a document's history dialog copies the git command and hands the restore off
-- **GIVEN** a knowledge document open in its collection
-- **WHEN** the user chooses History… from its ⋯ menu, picks a time and presses the hand-off
-- **THEN** the dialog shows the document's path in the vault, Copy git command copies the served `git log` command, and the hand-off starts the agent with the prompt the daemon built for that path and time
-- **AND** the dialog lists no versions and offers no Restore of its own
 
 ### Requirement: Lay out the Skills page as the canvas draws it
 The Skills page MUST follow canvas 4.3: a compact header (title, help) over the
@@ -2906,9 +2900,9 @@ not — **Check copies of N skills**.
 
 The open skill's header MUST name it with a state pill, its source, its master
 path and when it changed, and carry **Reach** and a **⋯** menu (Open in editor,
-Reveal in Finder, Copy master path, History…, Delete…) whatever the state; each problem is
+Reveal in Finder, Copy master path, Delete…) whatever the state; each problem is
 answered in a banner under the tabs, never in the header. Its tabs — Files,
-Delivery, Requires — carry no counts. The Files tab MUST be one card: the
+Delivery, Requires, History — carry no counts. The Files tab MUST be one card: the
 folder's files with SKILL.md first beside the open file's header bar and body,
 read-only, with Open in editor and Reveal in Finder on the header bar and no Edit. A folder the skills
 store holds that no skill claims, listed under Not in your library, MUST show its
@@ -2921,7 +2915,7 @@ each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
 custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
 the tools a skill requires"), each with its state and a link to its page — and
 **Skills** it needs. A row's name is shown in full, never cut short: a group's
-name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
+name column is as wide as its longest name. **Check** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
 secret that is not set MUST read "secret <name> is not set" and open the Secrets
@@ -3025,3 +3019,17 @@ validates its source inline and MUST carry the Available to reach control.
 - **WHEN** the user opens the Skills page and the skill
 - **THEN** the row reads "Needs github · off" under Needs attention, the header pill reads Tool off, and a banner says github is off so the skill can't call it, with Open github linking to `/mcp-servers/github`
 - **AND** the banner offers no Copy prompt or Ask an agent
+
+### Requirement: Show a vault file's history on a History tab
+A knowledge document and a managed skill MUST each carry a **History** tab (spec knowledge "Show a collection as one tree of read-only documents in the web UI", spec skill-manager "Manage skills on REST and on the Skills page") that reads the history of the document's file or the skill's master folder in the vault ([vault-storage](../vault-storage/spec.md) "Show and restore any version of a vault file or folder"). It MUST be one bordered card split by a divider: on the left the versions, newest first, under a **Versions** header with their count — each row saying what the version did (Created, Edited, Deleted, a file added, removed or changed, N files changed, or which version a restore put back), who wrote it (You, Edited on disk, an agent by its product name, Coffer, Sync) and when, and the lines it moved — the newest marked **Current** and chosen when the tab opens; on the right the chosen version with its short id, writer and time, and every file it changed under its path, operation and line counts, drawn by the one diff renderer ("Draw every diff in the web UI with one renderer"). A version other than the current one MUST offer a switch between **Changes in this version** (against the version before it) and **Compare with current** (from that version to the path as it is now), and **Restore this version…**, which asks first — saying the result is a new version and, for a folder, that files added since are removed — and on confirmation restores it stating the newest version the tab listed, so a path changed since is refused and the refusal stays in the dialog; the restore never rewrites the past. A history that cannot be read MUST say so in one **Load error** row inside the tab with **Retry**, leaving the rest of the page working; a path with no recorded version says that its versions will be listed there. The divider moves both ways — the list narrows to 160 px and widens to leave the diff 320 px — and its position is remembered per kind. The knowledge document's and the skill's ⋯ menus offer no History… item.
+
+#### Scenario: the history tab lists versions with their writers and restores one
+- **GIVEN** a knowledge document the user created, an agent then changed, and the person then edited in their own editor
+- **WHEN** the user opens its History tab, chooses the oldest version, compares it with current and chooses Restore this version… and confirms
+- **THEN** the tab lists the three versions newest first with their writers and the lines each moved, the newest marked Current and offering no restore, and the chosen version shows its own change and then its difference from the current text
+- **AND** the confirmation says the file comes back as a new version, and confirming restores it stating the newest version listed, after which the history is read again
+
+#### Scenario: a history that fails to load says so in its tab
+- **GIVEN** the history read failing
+- **WHEN** the user opens the History tab and chooses Retry once the read works again
+- **THEN** the tab shows one Load error row with Retry, and after Retry it lists the versions

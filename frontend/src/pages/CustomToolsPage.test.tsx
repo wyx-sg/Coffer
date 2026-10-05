@@ -192,7 +192,7 @@ describe("CustomToolsPage", () => {
     expect(within(table).getByText("void_invoice")).toBeInTheDocument();
     expect(within(table).queryByText("refund")).toBeNull();
     // The count still speaks for the whole group.
-    expect(within(tools).getByText("3 of 3 on")).toBeInTheDocument();
+    expect(within(tools).queryByText("3 of 3 on")).not.toBeInTheDocument();
 
     // Add request sits above the table, beside the search, and not below it.
     const add = within(tools).getByRole("button", { name: "Add request" });
@@ -268,7 +268,7 @@ describe("CustomToolsPage", () => {
     await waitFor(() => expect(location()).toBe("/custom-tools/billing/tools"));
     const tools = await screen.findByRole("region", { name: "Tools" });
     expect(within(tools).getByText("GET /invoices/{id}")).toBeInTheDocument();
-    expect(within(tools).getByText("2 of 2 on")).toBeInTheDocument();
+    expect(within(tools).queryByText("2 of 2 on")).not.toBeInTheDocument();
     // A tool has no reach of its own: the group's header carries it.
     expect(within(tools).queryByRole("button", { name: /Available to/ })).toBeNull();
 

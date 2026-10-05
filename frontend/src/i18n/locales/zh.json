@@ -17,6 +17,48 @@
     "openFailed": "无法在编辑器中打开该文件。",
     "revealFailed": "无法显示该文件。"
   },
+  "history": {
+    "listLabel": "版本",
+    "current": "当前",
+    "versionLabel": "所选版本",
+    "failedTitle": "读取历史失败",
+    "emptyTitle": "还没有版本",
+    "empty": "这个文件的每次改动——你的、智能体的、在磁盘上改的——都会作为一个版本列在这里，可以对比和恢复。",
+    "noChanges": "与当前版本没有差别。",
+    "noTextChange": "没有文本改动（二进制文件，或只改了权限）。",
+    "against": {
+      "label": "对比",
+      "previous": "本版本的改动",
+      "current": "与当前版本对比"
+    },
+    "restore": "恢复此版本…",
+    "restoreTitle": "恢复此版本？",
+    "restoreFileBody": "文件会恢复成 {{when}} 的样子，作为一个新版本保存。历史里的内容都不会丢。",
+    "restoreFolderBody": "文件夹里的每个文件都会恢复成 {{when}} 的样子，之后新增的文件会被删除，作为一个新版本保存。历史里的内容都不会丢。",
+    "restoreConfirm": "恢复",
+    "restoring": "正在恢复…",
+    "restoreFailed": "无法恢复此版本",
+    "restored": "已恢复 {{when}} 的版本",
+    "what": {
+      "restored": "恢复了 {{date}} 的版本",
+      "restoredHash": "恢复了版本 {{version}}",
+      "created": "创建",
+      "deleted": "删除",
+      "edited": "编辑",
+      "added": "新增 {{file}}",
+      "removed": "删除 {{file}}",
+      "changed": "改动了 {{file}}",
+      "files_one": "改动了 {{count}} 个文件",
+      "files_other": "改动了 {{count}} 个文件"
+    },
+    "writer": {
+      "user": "你",
+      "disk": "在磁盘上编辑",
+      "agent": "一个智能体",
+      "daemon": "Coffer",
+      "sync": "同步"
+    }
+  },
   "agentBadge": {
     "label": "{{name}}，{{state}}",
     "tooltip": "{{name}} · {{state}}",
@@ -127,7 +169,10 @@
         "allOk": "成功 {{count}} 项",
         "partial": "成功 {{ok}} 项，失败 {{failed}} 项",
         "allFailed": "失败 {{count}} 项"
-      }
+      },
+      "turnOn": "开启",
+      "turnOff": "关闭",
+      "exposure": "暴露方式"
     },
     "emptyValue": "—",
     "copy": "复制",
@@ -460,10 +505,6 @@
         "top_by_use": "因为它是调用最多的工具之一而被直接列出。",
         "low_use": "通过搜索：调用次数少于已直接列出的工具。"
       },
-      "bulk": "批量设置",
-      "bulkAuto": "将 {{count}} 个设为自动",
-      "bulkListed": "将 {{count}} 个设为始终列出",
-      "bulkSearch": "将 {{count}} 个设为仅搜索",
       "bulkDone_one": "已更新 {{count}} 个工具",
       "bulkDone_other": "已更新 {{count}} 个工具"
     },
@@ -527,8 +568,6 @@
         "never": "从未"
       },
       "agents": "智能体",
-      "allOff": "全部关闭",
-      "allOn": "全部开启",
       "behindSearch": "通过搜索",
       "bulkLabel": "已选的 MCP 服务器",
       "calledBy": "调用方",
@@ -668,7 +707,6 @@
       "offNoCalls": "关闭期间没有调用。",
       "mostCalledSub": "智能体在 {{name}} 上调用最多的工具，最常用的在前。",
       "lastCallBy": "上次调用 {{at}}，来自 {{agent}}",
-      "nOfMOn": "{{on}} / {{total}} 已开启",
       "searchResources": "搜索资源",
       "searchPrompts": "搜索提示词",
       "requires": {
@@ -687,7 +725,10 @@
           "waiting_approval": "等待批准"
         }
       },
-      "viewInActivity": "在活动中查看"
+      "viewInActivity": "在活动中查看",
+      "bulkTools": "已选工具",
+      "bulkResources": "已选资源",
+      "bulkPrompts": "已选提示词"
     },
     "builtin": {
       "group": "内置",
@@ -1742,6 +1783,7 @@
     "VAULT_FILE_STALE": "文件在你加载后已被修改。请重新加载后再试。",
     "VAULT_GIT_FAILED": "读写 vault 时 git 出错。",
     "VAULT_PATH_INVALID": "这不是 vault 内的路径。",
+    "VAULT_VERSION_NOT_FOUND": "该文件的这个版本不存在。",
     "SKILL_COPY_NOT_OURS": "这个技能在某个智能体中的副本已经不是 Coffer 的链接，所以 Coffer 不会删除它。请先从主文件夹恢复，或自行删除那个文件夹。",
     "SKILL_COPY_NOT_DIFFERING": "那个智能体的副本现在就是 Coffer 的链接，没有可比较的内容。",
     "SKILL_ORPHAN_NOT_FOUND": "那个文件夹已经不在技能库之外了。",
@@ -1754,7 +1796,7 @@
     "MASTER_KEY_PASSPHRASE_WRONG": "这个口令打不开这个密钥文件。",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "口令至少需要 8 个字符。",
     "KNOWLEDGE_RESTORE_CONFLICT": "没有恢复：这个路径上又有了文档。请先重命名或删除它。",
-    "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以在最近改动中恢复。",
+    "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以撤销。",
     "SYNC_SECRET_NOT_EDITABLE": "加密的 secret 不能手动编辑。请保留本机的版本，或采用另一台的版本。",
     "SYNC_NOTHING_TO_RESTORE": "没有可以恢复的已停止远端。",
     "SYNC_REMOTE_EXISTS": "已经设置了远端，请先停止与它同步。",
@@ -1912,6 +1954,13 @@
         "uninstalled_other": "已卸载 {{count}} 个插件",
         "uninstallPartial": "已卸载 {{ok}} / {{total}}",
         "retry": "重试失败的 {{count}} 个"
+      },
+      "cols": {
+        "name": "名称",
+        "description": "描述",
+        "version": "版本",
+        "marketplace": "市场",
+        "enabled": "启用"
       }
     },
     "pluginDetail": {
@@ -1982,12 +2031,20 @@
         "title": "{{agent}} 自己的记忆",
         "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入。只读：Coffer 只读取，从不写入。",
         "descriptionCodex": "由 {{agent}} 写入。只读：Coffer 只读取，从不写入。"
+      },
+      "cols": {
+        "project": "项目",
+        "folder": "记忆目录",
+        "files": "文件数"
       }
     },
     "config": {
       "none": "未找到配置文件。",
       "notCreated": "未创建",
       "emptyDir": "暂无文件。",
+      "preview": {
+        "description": "此配置文件的只读预览。"
+      },
       "desc": {
         "settings": "{{agent}} 设置：权限、模型和钩子。",
         "settings_local": "叠加在 settings.json 之上的个人覆盖项，不提交到 git。",
@@ -2091,6 +2148,12 @@
         "skipped_one": "已跳过所选的 {{count}} 个技能：只有未托管的文件夹才能纳入托管。",
         "skipped_other": "已跳过所选的 {{count}} 个技能：只有未托管的文件夹才能纳入托管。",
         "reachHint": "决定谁能用到。之后可在「技能」页修改。"
+      },
+      "cols": {
+        "name": "名称",
+        "note": "说明",
+        "location": "位置",
+        "state": "状态"
       }
     },
     "mcpTab": {
@@ -2188,6 +2251,12 @@
         "retry": "重试失败的 {{count}} 个",
         "skipped_one": "已跳过所选的 {{count}} 个条目：只有绕过 Coffer 的条目才能纳入托管。",
         "skipped_other": "已跳过所选的 {{count}} 个条目：只有绕过 Coffer 的条目才能纳入托管。"
+      },
+      "cols": {
+        "name": "名称",
+        "command": "命令",
+        "file": "文件",
+        "state": "状态"
       }
     },
     "memoryStore": {
@@ -2211,7 +2280,8 @@
       "loadFailed": "无法读取此列表",
       "moreFor": "{{name}} 的更多操作",
       "selectRow": "选择 {{name}}",
-      "selectAll": "全选"
+      "selectAll": "全选",
+      "actions": "操作"
     },
     "state": {
       "not_installed": "未安装",
@@ -2578,7 +2648,8 @@
         "overview": "概览",
         "files": "文件",
         "delivery": "投递",
-        "requires": "依赖"
+        "requires": "依赖",
+        "history": "历史"
       },
       "source": {
         "builtin": "由 Coffer 生成"
@@ -2791,7 +2862,6 @@
       "label": "{{name}} 的更多操作",
       "copyPath": "复制主文件夹路径",
       "copyFailed": "无法复制到剪贴板",
-      "history": "历史…",
       "delete": "删除…"
     },
     "banner": {
@@ -2920,17 +2990,11 @@
       "note": "选定之前不会写入任何内容。"
     },
     "checkingCopies": "正在检查…",
-    "checkCopiesHint": "把每个智能体的副本与主文件夹比较"
-  },
-  "vaultHistory": {
-    "title": "历史",
-    "description": "文件的历史由 git 保管。复制命令自己查看，或把还原交给你的智能体。",
-    "path": "保险库中的路径",
-    "at": "还原到此时的样子",
-    "atHint": "可不填。不填时，智能体会列出各个版本并问你选哪一个。",
-    "copyCommand": "复制 git 命令",
-    "copyFailed": "无法复制该命令。",
-    "restoreWith": "交给 {{agent}} 还原"
+    "checkCopiesHint": "把每个智能体的副本与主文件夹比较",
+    "history": {
+      "builtinTitle": "Coffer 自带的技能没有历史",
+      "builtinBody": "它的文件每次启动都按当前版本重建，没有更早的版本可以回退。"
+    }
   },
   "knowledge": {
     "subtitle": "你和智能体共同编写的文档，每个智能体都能读取。",
@@ -3020,7 +3084,11 @@
       "preview": "预览",
       "source": "源码",
       "created": "{{date}}创建",
-      "history": "历史…"
+      "views": "文档视图",
+      "tabs": {
+        "document": "文档",
+        "history": "历史"
+      }
     },
     "deleteDocument": {
       "menu": "删除文档",
@@ -3169,7 +3237,7 @@
     }
   },
   "conversations": {
-    "subtitle": "你的消息渠道发起的对话。",
+    "subtitle": "所有智能体的全部会话，无论从哪里发起。",
     "title": "对话",
     "group": {
       "today": "今天",
@@ -3180,12 +3248,15 @@
       "ariaLabel": "对话",
       "loadFailed": "无法加载对话",
       "emptyTitle": "还没有对话",
-      "emptyBody": "从 SeaTalk 或 Telegram 给你的消息渠道发消息后，对话会出现在这里。",
+      "emptyBody": "智能体有了会话就会出现在这里：在终端里开始的、由消息渠道发起的，或用“新建对话”开始的。",
       "noMatches": "没有匹配的对话",
-      "clearFilters": "清除筛选"
+      "clearFilters": "清除筛选",
+      "unavailable_one": "无法读取 {{agents}} 的会话",
+      "unavailable_other": "无法读取 {{agents}} 的会话"
     },
     "filters": {
-      "channel": "消息渠道",
+      "source": "来源",
+      "thisMac": "本机",
       "agent": "智能体",
       "search": "搜索标题和目录"
     },
@@ -3231,6 +3302,13 @@
       "stop": "停止这一轮并在终端中继续",
       "stopping": "正在停止…",
       "failed": "无法停止这一轮"
+    },
+    "columns": {
+      "title": "标题",
+      "source": "来源",
+      "agent": "智能体",
+      "directory": "目录",
+      "lastActive": "最近活动"
     }
   },
   "channels": {
@@ -3425,9 +3503,7 @@
         "help": "每条消息都会成为「对话」里的一个对话，默认由默认智能体处理，除非 /new 指定了别的。",
         "reachHint": "在聊天里用 /new 指定智能体时，只能从这些里选。"
       },
-      "conversations": "来自 {{name}} 的对话",
-      "allConversations": "打开对话",
-      "noConversations": "还没有对话。"
+      "conversationsLink": "来自此渠道的对话 →"
     },
     "settings": {
       "connection": {
@@ -4792,9 +4868,6 @@
       "fetched": "获取于 {{date}}"
     },
     "tools": {
-      "allOn": "全部开启",
-      "allOff": "全部关闭",
-      "countOn": "{{total}} 个中已开启 {{on}} 个",
       "switch": "开关",
       "switchTool": "开启或关闭 {{name}}",
       "colTool": "工具 · 请求",
@@ -4808,7 +4881,8 @@
       "description": "每个工具就是一个请求；智能体看到的是 {{prefix}}。",
       "filter": "筛选工具",
       "noMatch": "没有工具匹配“{{query}}”",
-      "edit": "编辑 {{name}}"
+      "edit": "编辑 {{name}}",
+      "bulkLabel": "已选工具"
     },
     "editor": {
       "subtitle": "{{group}} 中的工具 · 智能体看到 {{name}}",
@@ -4954,7 +5028,7 @@
     "subtitle": "技能和 MCP 服务器需要的命令行工具。Coffer 负责检查，安装和登录交给智能体。",
     "title": "命令行工具",
     "addTool": "添加命令行工具",
-    "checkAgain": "重新检查",
+    "check": "检查",
     "checking": "正在检查…",
     "status": {
       "missing": "未找到",
@@ -5035,7 +5109,7 @@
       "description": "描述",
       "descriptionPlaceholder": "用一句话说明用途",
       "loginCheck": "登录检查",
-      "loginCheckHint": "已登录时退出码为 0。点「重新检查」时运行。",
+      "loginCheckHint": "已登录时退出码为 0。点「检查」时运行。",
       "submit": "添加",
       "addFailed": "无法添加 {{command}}",
       "editFailed": "无法保存 {{command}}"
@@ -5066,9 +5140,9 @@
       "bothBody_other": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
       "loginFailed": "{{check}} 在 {{time}} 未通过。",
       "hand": {
-        "missing": "把安装交给智能体，然后重新检查。",
-        "outdated": "把更新交给智能体，然后重新检查。",
-        "logged_out": "把登录交给智能体，然后重新检查。"
+        "missing": "把安装交给智能体，然后点「检查」。",
+        "outdated": "把更新交给智能体，然后点「检查」。",
+        "logged_out": "把登录交给智能体，然后点「检查」。"
       },
       "cofferBody": "Coffer 无法{{uses}}。"
     },
@@ -5696,7 +5770,13 @@
       "priceLocal": "本地模型不计费。",
       "listingFailed": "列出失败",
       "lastListed": "上次列出 {{date}}",
-      "showing": "显示 {{shown}} / {{total}}"
+      "showing": "显示 {{shown}} / {{total}}",
+      "bulkLabel": "已选模型",
+      "cols": {
+        "model": "模型",
+        "price": "价格",
+        "type": "类型"
+      }
     },
     "test": {
       "running": "正在测试接入地址…",
@@ -5995,5 +6075,17 @@
     "opened": "已在 {{terminal}} 中打开",
     "copyCommand": "复制命令",
     "commandCopied": "已复制命令"
+  },
+  "newConversation": {
+    "button": "新建对话",
+    "noAgent": "还没有托管的智能体，请先在「智能体」页添加。",
+    "title": "新建对话",
+    "description": "在本机的终端窗口里启动一个空白会话。",
+    "agent": "智能体",
+    "directory": "工作目录",
+    "directoryHint": "默认是 Coffer 的工作区。",
+    "workspacePlaceholder": "~/.coffer/content/workspace",
+    "openIn": "在 {{terminal}} 中打开",
+    "moreTerminals": "在其他终端中打开"
   }
 }

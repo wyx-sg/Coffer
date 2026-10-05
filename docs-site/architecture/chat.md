@@ -17,7 +17,7 @@ There is also a cost constraint. Coffer drives two agents and two IM platforms, 
 
 **One turn platform, channels as its clients.** Conversations, the pending queue, the turn lifecycle and the event stream belong to one platform. Every channel is a client of it. Once a message reaches the orchestrator, nothing downstream knows which channel it came from, and an agent cannot tell a SeaTalk turn from a Telegram turn.
 
-**The agent's own session is the record.** Coffer keeps an index row per conversation (which channel thread, which agent, which directory, which native session id) and nothing that was said. The agent resumes its own session on every turn, so the context lives where the agent keeps it. A person who wants to read or continue a conversation does it in the agent's own interface; Coffer's web UI lists the conversations and opens the row in the terminal.
+**The agent's own session is the record.** Coffer keeps an index row per conversation (which channel thread, which agent, which directory, which native session id) and nothing that was said. The agent resumes its own session on every turn, so the context lives where the agent keeps it. A person who wants to read or continue a conversation does it in the agent's own interface; Coffer's web UI lists them among every agent's sessions and opens the row in the terminal.
 
 **Send freely; queue, never reject.** A message sent while a turn is running joins a per-conversation FIFO pending queue. Each queued message becomes its own turn. Messages are not merged. A channel tells each waiting message its place ("⏳ Queued (n)") and accepts up to ten pending messages per conversation; the eleventh is dropped with the reason (see [the inbound pipeline](#the-inbound-pipeline)).
 
@@ -162,13 +162,13 @@ When a subscriber attaches, the buffer and snapshot are enqueued synchronously b
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/v1/chat/conversations` | List channel conversations by latest activity. `q` searches title and directory; `source` takes channel uids; each row carries `running`, `needs_you`, `cwd` and `has_session`. |
+| `GET /api/v1/agent-sessions` | List every managed agent's sessions by latest activity, merged from each agent's own listing; this is what the Conversations page reads. `q` searches title and directory, `source` takes `local` and channel uids, `agent` narrows the agents asked. A row carries `running`, `needs_you`, `cwd` and the channel when a conversation uses the session. |
 | `GET\|PATCH\|DELETE /api/v1/chat/conversations/{id}` | Read one; rename (the agent renames its session first); delete (the agent deletes its session first). |
 | `POST /api/v1/chat/conversations/{id}/interrupt` | Stop the running turn and pause the queue. `204`. |
 | `GET /api/v1/agent-providers` | Registered agents with display name and availability. |
 | `GET /api/v1/agent-providers/{agent_key}/models` | Models offered for an agent; 404 for an unknown key. |
 
-Chat has no route that creates a conversation or sends a message: a message enters through a channel, in-process. The sessions of an agent are listed under `GET /api/v1/agents/{uid}/sessions` (see [Native sessions](#native-sessions)).
+Chat has no route that creates a conversation or sends a message: a message enters through a channel, in-process. The sessions of an agent are listed under `GET /api/v1/agents/{uid}/sessions` (see [Native sessions](#native-sessions)), and the Conversations page lists them for all agents at once (see [One list of every agent's sessions](#all-agent-sessions)). There is no route that lists conversations on their own: the channel-only list was removed once the cross-agent listing covered it.
 
 ::: info No CLI
 Conversations are driven from channels. The CLI has no chat commands, because it carries only what needs it ([chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)).
@@ -307,7 +307,7 @@ The commands a phone can send are a small, closed vocabulary: `/new [agent]`, `/
 
 ### Where a conversation goes after the chat
 
-A conversation a channel opened is listed on the Conversations page, but the page never sends into the chat: there is no web reply and no mirror port. What the person does there is open the session (see [Opening a session in a terminal](#opening-a-session-in-a-terminal)) or stop, rename or delete it. A rename or delete goes to the agent's own session first and then to the index row; after a delete the channel's next message opens a fresh conversation.
+A conversation a channel opened is listed on the Conversations page among every agent's sessions, but the page never sends into the chat: there is no web reply and no mirror port. What the person does there is open the session (see [Opening a session in a terminal](#opening-a-session-in-a-terminal)) or stop, rename or delete it. A rename or delete goes to the agent's own session first and then to the index row; after a delete the channel's next message opens a fresh conversation.
 
 ### Rendering
 
@@ -332,9 +332,13 @@ A native-session service in the agent kind talks to a small adapter per agent ty
 
 Chat may not import the agent kind, so the chat routes reach rename and delete through a port published at the composition root.
 
+### One list of every agent's sessions {#all-agent-sessions}
+
+The Conversations page reads `GET /api/v1/agent-sessions`. The daemon asks each managed agent's native-session service for its listing concurrently and merges the results by latest activity, so a session started in a terminal, one a channel opened and one made by New conversation sit in one order. The merged page has one opaque cursor, which records, per agent, where that agent's next unread row sits; the answer has no total, because Codex cannot count without reading everything. An agent whose listing fails is left out and named in the answer, and the page shows a line with Retry above the others' sessions. When `source` names only channels, the listing pages the conversation index instead of asking the agents, so a channel conversation that has not run a turn yet (no native session) is still listed, disabled to open.
+
 ### Opening a session in a terminal
 
-`POST /api/v1/fs/terminal` takes the terminal, the agent, the directory and either a session to resume or a prompt for a new session. `GET /api/v1/fs/terminals` lists the terminals found on the machine, reading nothing but presence, like `/fs/editors`. The client never sends a command line: the daemon builds `cd '<cwd>' && claude --resume <id>` or `codex resume <id>` itself, after checking that the session id is made only of letters, digits and hyphens. A prompt travels in a `0600` file under `~/.coffer/tmp/handoff/` that the command reads and removes, so its text never appears on a command line or in shell history. One small adapter per terminal starts it, with an argument vector and no shell in the daemon: Terminal and iTerm through `osascript`, Warp through a launch configuration, Orca through its CLI, the Linux terminals through their commands, and a custom template split into arguments with `{cwd}` and `{command}` substituted.
+`POST /api/v1/fs/terminal` takes the terminal, the agent, the directory and at most one of a session to resume or a prompt for a new session; with neither, it starts a blank session, running the agent with no arguments in the directory (the command behind New conversation). `GET /api/v1/fs/terminals` lists the terminals found on the machine, reading nothing but presence, like `/fs/editors`. The client never sends a command line: the daemon builds `cd '<cwd>' && claude --resume <id>` or `codex resume <id>` itself, after checking that the session id is made only of letters, digits and hyphens. A prompt travels in a `0600` file under `~/.coffer/tmp/handoff/` that the command reads and removes, so its text never appears on a command line or in shell history. One small adapter per terminal starts it, with an argument vector and no shell in the daemon: Terminal and iTerm through `osascript`, Warp through a launch configuration, Orca through its CLI, the Linux terminals through their commands, and a custom template split into arguments with `{cwd}` and `{command}` substituted.
 
 ### One session, one place {#one-session-one-place}
 

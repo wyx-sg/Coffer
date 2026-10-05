@@ -152,7 +152,7 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByRole("heading", { name: "Claude Code’s own memory" })).toBeInTheDocument();
   });
 
-  test("lists the native stores in one bordered list: project, path, file count", () => {
+  test("lists the native stores in one table under Project · Memory folder · Files", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(vi.mocked(nativeHooks.useAgentNativeMemory)).toHaveBeenCalledWith("agt_01cc");
@@ -162,7 +162,12 @@ describe("AgentMemoryTab", () => {
         "One store per project, written by Claude Code. Read-only: Coffer reads them and never writes them.",
       ),
     ).toBeInTheDocument();
-    expect(own.getAllByRole("listitem")).toHaveLength(1);
+    expect(own.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Project",
+      "Memory folder",
+      "Files",
+    ]);
+    expect(own.getAllByRole("row")).toHaveLength(2);
     expect(own.getByText("~/Coffer")).toBeInTheDocument();
     expect(own.getByText("~/.claude/projects/-Users-xing-Coffer/memory")).toBeInTheDocument();
     expect(own.getByText("49 files")).toBeInTheDocument();
@@ -184,11 +189,11 @@ describe("AgentMemoryTab", () => {
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     const own = within(screen.getByTestId("own-memory-section"));
     expect(own.queryByText(/work\/hello/)).not.toBeInTheDocument();
-    expect(own.getAllByRole("listitem")).toHaveLength(9);
+    expect(own.getAllByRole("row")).toHaveLength(10);
     fireEvent.change(own.getByRole("textbox", { name: "Search projects" }), {
       target: { value: "p3" },
     });
-    expect(own.getAllByRole("listitem")).toHaveLength(1);
+    expect(own.getAllByRole("row")).toHaveLength(2);
     expect(own.getByText("~/P3")).toBeInTheDocument();
   });
 

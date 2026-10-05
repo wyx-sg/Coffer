@@ -102,7 +102,7 @@ export function useRemoveSkill() {
 | 来自守护进程的任何东西 | TanStack Query，经由一个 `useX` hook |
 | 临时 UI 状态（展开、折叠、输入草稿） | 组件里的 `useState` |
 | 刷新后仍要保留的偏好 | `localStorage`，读写都用 try/catch 保护，存储被禁用时回退到默认值（页大小和编辑器见 `src/lib/preferences.ts`） |
-| 打开的是哪一项 | 路由参数：`/conversations/:id`、`/agents/:type` |
+| 打开的是哪一项 | 路由参数：`/channels/:uid`、`/agents/:type` |
 | 选中的是哪个详情 tab | 路径的最后一段：`/<kind>/<id>/<tab>`，默认 tab 对应不带该段的路径（`src/lib/detailTabs.ts`） |
 | 选中的是哪个文件 | 通过 `useSearchParams` 读取的查询参数（`?file=`） |
 

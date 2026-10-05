@@ -1,5 +1,5 @@
 """``ChannelPlaces`` — where in its channel each conversation of the
-Conversations list lives (spec chat "Show channel conversations on the Conversations page").
+Conversations list lives (spec chat "Show every agent's sessions on the Conversations page").
 
 Satisfies the chat kind's ``ChannelPlacesPort``. Application layer only: no
 infrastructure import here.

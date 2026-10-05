@@ -115,9 +115,6 @@ async def test_get_missing_conversation_returns_none(tmp_path):  # type: ignore[
         await engine.dispose()
 
 
-@pytest.mark.acceptance(
-    spec="chat", scenario="the conversation list is ordered by activity, not by creation"
-)
 async def test_list_conversations_newest_first(tmp_path):  # type: ignore[no-untyped-def]
     engine, conv_repo = await _setup(tmp_path)
     try:
@@ -137,7 +134,6 @@ async def test_the_listing_holds_channel_conversations_only(tmp_path):  # type: 
         await conv_repo.create(_conv("unowned", channel_uid=None))
 
         assert [c.title for c in await conv_repo.list()] == ["owned"]
-        assert await conv_repo.count() == 1
     finally:
         await engine.dispose()
 
@@ -223,7 +219,6 @@ async def test_rename_missing_conversation_raises_domain_error(tmp_path):  # typ
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="chat", scenario="search matches titles and working directories")
 async def test_the_listing_search_reads_titles_and_directories(tmp_path):  # type: ignore[no-untyped-def]
     engine, conv_repo = await _setup(tmp_path)
     try:
@@ -237,7 +232,6 @@ async def test_the_listing_search_reads_titles_and_directories(tmp_path):  # typ
 
         async def titles(contains: str | None) -> list[str]:
             rows = await conv_repo.list(contains=contains)
-            assert await conv_repo.count(contains=contains) == len(rows)
             return [c.title for c in rows]
 
         assert await titles("DEPLOY") == ["Untitled", "Deploy plan"]  # directory OR title
@@ -245,7 +239,6 @@ async def test_the_listing_search_reads_titles_and_directories(tmp_path):  # typ
         assert await titles("100%_") == ["100%_done"]  # wildcards are text
         assert await titles("%") == ["100%_done"]
         assert await titles("nothing here") == []
-        assert await conv_repo.count() == 4
     finally:
         await engine.dispose()
 
@@ -271,7 +264,5 @@ async def test_the_listing_filters_by_source_and_agent_in_sql(tmp_path):  # type
         assert await titles(agents=["codex", "claude_code"]) == ["a", "b"]
         assert await titles(sources=["ch-b"], agents=["claude_code"]) == ["b"]
         assert await titles() == ["a", "b", "c"]
-        assert await conv_repo.count(narrow=Narrowing.of(sources=["ch-b"])) == 2
-        assert await conv_repo.count(narrow=Narrowing.of(agents=["builtin"])) == 1
     finally:
         await engine.dispose()

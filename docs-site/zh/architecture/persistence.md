@@ -186,7 +186,7 @@ flowchart LR
 
 手工编辑是被发现的，而不是被拦截的。文件事件只是提示（防抖到路径安静一秒为止），每 60 秒一次以及启动时的扫描才是准绳。有效的编辑以 `disk` 写入提交，并以人为操作者审计为 `vault_file_edited`。无效的编辑留在工作区里、不提交，会在待处理列表和 `coffer vault problems` 里被标记出来，同时 `HEAD` 继续生效。生效的状态永远是 `HEAD`：各个存储从一个由 `HEAD` 加载、每次提交后刷新的缓存里读取文档。
 
-保险库里的每个文件和文件夹都有历史，你用 `git log -p` 读，并通过你的智能体找回：知识文档和技能上的**历史…**对话框会显示文件的位置、复制 git 命令，并把恢复连同守护进程构造的提示词交给智能体（`POST /api/v1/vault/history/handoff`）。Coffer 自己不列出、不 diff、也不恢复任何东西。智能体的恢复是一次写明 `Coffer-Writer: agent` 的新提交，和其他提交一样要经过检查。见[手工编辑保险库](/zh/guides/vault-files)。
+保险库里的每个文件和文件夹都有历史，你可以在知识文档或技能的**历史**标签里读，也可以用 `git log -p` 读。这个标签由 `GET /api/v1/vault/history?path=`（一个文件，或以 `/` 结尾的文件夹）、`GET /api/v1/vault/diff?path&version&against=previous|current` 和 `POST /api/v1/vault/restore {path, version, expected_current}` 提供。`secret/` 下和保险库之外的路径会被拒绝，返回 `VAULT_PATH_INVALID`；未知的版本是 `404 VAULT_VERSION_NOT_FOUND`。读取历史时会先把在磁盘上做的编辑提交为它自己的一个版本，所以最新的版本就是文件现在的样子。恢复是 Coffer 自己的写入：一次由用户写入的新提交，带 `Coffer-Operation: restore` 和 `Coffer-Restored-From`，走和其他写入一样的比较后提交，所以读取历史之后又变了的文件会被拒绝，返回 `VAULT_FILE_STALE`。历史从不被改写。见[手工编辑保险库](/zh/guides/vault-files)。
 
 保险库需要 `git` 2.40 或更高版本。没有可用的 git 时，守护进程会启动，但会[等待 git](/zh/architecture/daemon#waiting-for-git)，并在每个界面上说明原因。git 怎么装取决于这台机器，所以 `GIT_MISSING` 错误不点名任何安装程序，而是在 `details.handoff` 里带上交给你的智能体的安装提示词；同步状态也会报告问题 `git_missing`，附带同一段提示词。
 

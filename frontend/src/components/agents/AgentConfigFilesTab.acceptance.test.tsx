@@ -1,8 +1,9 @@
 // frontend/src/components/agents/AgentConfigFilesTab.acceptance.test.tsx
-// Acceptance scenario for the Config files tab of spec agent-registry "Open
+// Acceptance scenarios for the Config files tab of spec agent-registry "Open
 // config files in an external editor or reveal them": the daemon-backed open /
-// reveal pair on a file's row, Reveal alone on a file not created yet, and no
-// content, edit, new-file, delete or copy-path anywhere.
+// reveal pair on a file's row, Reveal alone (and no preview) on a file not
+// created yet, no edit, new-file, delete or copy-path anywhere; and the
+// read-only preview a file's name opens.
 import { afterEach, describe, expect, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -13,7 +14,9 @@ import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import "@/i18n";
 
-vi.mock("@/lib/api/agents", () => ({ agentsApi: { listConfigFiles: vi.fn() } }));
+vi.mock("@/lib/api/agents", () => ({
+  agentsApi: { listConfigFiles: vi.fn(), configFileContent: vi.fn() },
+}));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
 
 const AGENT = {
@@ -35,6 +38,14 @@ const INSTRUCTIONS: ConfigFileInfo = {
   files: null,
   size: 40,
   modified_at: "2026-06-01T00:00:00Z",
+};
+const SETTINGS: ConfigFileInfo = {
+  ...INSTRUCTIONS,
+  key: "settings",
+  display_name: "User settings",
+  path: "/home/u/.claude/settings.json",
+  format: "json",
+  size: 70,
 };
 const LOCAL: ConfigFileInfo = {
   ...INSTRUCTIONS,
@@ -83,6 +94,50 @@ describe("Config files tab — acceptance", () => {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.queryByText("# Rules")).toBeNull();
+    // A file not created yet has no preview; an existing one's name is the way in.
+    expect(
+      within(missing.getByText("settings.local.json").closest("li") as HTMLElement).queryByRole(
+        "button",
+        { name: "settings.local.json" },
+      ),
+    ).toBeNull();
+    expect(existing.getByRole("button", { name: "CLAUDE.md" })).toBeInTheDocument();
+    expect(agentsApi.configFileContent).not.toHaveBeenCalled();
+  });
+
+  acceptance("agent-registry", "preview a config file from its row", async () => {
+    vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items: [SETTINGS] });
+    vi.mocked(agentsApi.configFileContent).mockResolvedValue({
+      key: "settings",
+      abs_path: SETTINGS.path,
+      format: "json",
+      content: '{\n  "theme": "dark",\n  "model": "opus"\n}\n',
+      size: 70,
+      truncated: false,
+      binary: false,
+    });
+    vi.mocked(fsApi.open).mockResolvedValue(undefined);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <AgentConfigFilesTab agent={AGENT} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "settings.json" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await waitFor(() => expect(dialog.getByText(/"model"/)).toBeInTheDocument());
+    expect(agentsApi.configFileContent).toHaveBeenCalledWith("u-cc", "settings", undefined);
+    expect(dialog.getByText(/"theme"/)).toBeInTheDocument();
+
+    // Open in editor (and Reveal) are on the dialog; nothing edits or saves.
+    fireEvent.click(dialog.getByRole("button", { name: "Open in editor" }));
+    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(SETTINGS.path, undefined));
+    expect(dialog.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
+    for (const name of [/^edit$/i, /save/i, /revert/i]) {
+      expect(dialog.queryByRole("button", { name })).toBeNull();
+    }
+    fireEvent.click(dialog.getAllByRole("button", { name: "Close" })[0]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

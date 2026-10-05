@@ -160,7 +160,7 @@ Coffer touches an agent's files through a short list of documented surfaces:
 
 | Surface | Coffer reads | Coffer writes |
 | --- | --- | --- |
-| Allowlisted config files | yes (listed, never their content) | never on your behalf; you edit them in your own editor |
+| Allowlisted config files | yes (listed; a file's content only when you preview it) | never on your behalf; you edit them in your own editor |
 | MCP entries in the agent's config | yes | install/uninstall of `coffer`, remove, adopt |
 | Plugins | inventory and enabled state | the enabled switch; uninstall by the type's own strategy |
 | Model provider keys | yes (checked on every reconcile pass) | when you switch a [provider](/guides/providers), and to bring a projection whose values went stale back in line |
@@ -193,9 +193,9 @@ Each type has a fixed allowlist:
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `hooks` | `<config_dir>/hooks.json` |
 
-**Web UI:** open the agent and choose **Config files**. The tab is a read-only list: each row names the file, its folder, its size and when it changed, with **Open in editor** and **Reveal in Finder**. A directory entry lists each file inside it as its own row. A file that does not exist yet reads **Not created** and offers only **Reveal in Finder**, because opening a file creates nothing. Coffer shows no file's content here and has no editor, **New file** or **Delete**: you change a config file in your own editor (the one chosen in **Settings › General**), or ask the agent to. Coffer's own changes to these files — connecting, repairing, a plugin switch, an MCP entry, a provider switch — go through **Review changes** first.
+**Web UI:** open the agent and choose **Config files**. The tab is a read-only list: each row names the file, its folder, its size and when it changed, with **Open in editor** and **Reveal in Finder**. A directory entry lists each file inside it as its own row. A file that does not exist yet reads **Not created** and offers only **Reveal in Finder**, because opening a file creates nothing. Choose a file's name to preview it read-only in a dialog as it is on disk. To change it, use **Open in editor** there or on the row. Coffer has no editor, **New file** or **Delete**: you change a config file in your own editor (the one chosen in **Settings › General**), or ask the agent to. Coffer's own changes to these files — connecting, repairing, a plugin switch, an MCP entry, a provider switch — go through **Review changes** first.
 
-**API:** `GET /agents/{uid}/config-files` lists the files with their key, path, folder, format, size and modified time. There is no route that reads or writes a file's content.
+**API:** `GET /agents/{uid}/config-files` lists the files with their key, path, folder, format, size and modified time. `GET /agents/{uid}/config-files/{key}/content` reads one file for the preview (for the `subagents` directory, add `?child=<relative path>` from the listing). No route writes a file.
 
 ::: tip Your edits are never overwritten
 Coffer keeps the previous content of every file it writes under `~/.coffer/config-backups`, and refuses to write onto a file that changed after Coffer read it. If you or the agent edit a file while Coffer is about to write it, Coffer's write is refused with `CONFIG_FILE_STALE` and your edit stays.

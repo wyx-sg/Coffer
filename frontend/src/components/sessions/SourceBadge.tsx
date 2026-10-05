@@ -1,6 +1,6 @@
 // src/components/sessions/SourceBadge.tsx — which channel a conversation came
 // from, as the Conversations page and an agent's Sessions tab show it on a row
-// (spec chat "Show channel conversations on the Conversations page"): the
+// (spec chat "Show every agent's sessions on the Conversations page"): the
 // channel's platform logo and the place in its chat — "SeaTalk · DM · Thread 2",
 // "SeaTalk · coffer-dev › thread", "Telegram · Personal". The channel's own
 // name is the badge's text only when the chat and thread are not known. Long
