@@ -285,6 +285,24 @@ def write_cached_machine_id(machine_id: str) -> None:
     _merge(machine_id=machine_id)
 
 
+# --- skill update check -----------------------------------------------------
+#
+# How often the daemon fetches Git-imported skills' repositories in the
+# background (spec skill-manager "Hand a Git-imported skill's update to an
+# agent"). A machine-local choice, so it lives here and not in the vault.
+
+
+def read_skill_update_check() -> str | None:
+    """The stored choice, or ``None`` for the default; validity is the caller's."""
+    payload = _read_raw()
+    value = payload.get("skill_update_check") if payload is not None else None
+    return value if isinstance(value, str) else None
+
+
+def write_skill_update_check(choice: str) -> None:
+    _merge(skill_update_check=choice)
+
+
 # --- experimental features --------------------------------------------------
 #
 # A machine's own choice of which experimental features are on (spec

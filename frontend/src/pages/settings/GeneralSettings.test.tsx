@@ -33,6 +33,11 @@ vi.mock("@/lib/hooks/useTerminals", () => ({
     ],
   }),
 }));
+// The skill-update-check row reads and writes the daemon; stub it like the others.
+vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkillUpdateCheck: () => ({ data: { interval: "6h" } }),
+  useSetSkillUpdateCheck: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 const providers = vi.hoisted(() => ({
   agents: [] as { agent_key: string; display_name: string; available: boolean }[],
 }));
@@ -71,7 +76,7 @@ describe("GeneralSettings", () => {
   test("pickers are the shared Select and choices are segmented — no native <select>", () => {
     render(<GeneralSettings />);
     expect(document.querySelectorAll("select")).toHaveLength(0);
-    expect(screen.getAllByRole("combobox")).toHaveLength(3);
+    expect(screen.getAllByRole("combobox")).toHaveLength(4);
     expect(screen.getByRole("group", { name: /^language$/i })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: /^theme$/i })).toBeInTheDocument();
   });

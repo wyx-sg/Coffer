@@ -188,12 +188,12 @@ test("the commands banner carries one hand-off for every command that needs the 
   ).toBeGreaterThan(0);
 });
 
-test("a Git skill with an update offers Review update… above its tabs", async () => {
+test("a Git skill with an update offers I merged it above its tabs", async () => {
   renderSkillsPage("/skills/terraform-plan");
   const banner = await screen.findByTestId("skill-banner-update");
   expect(banner).toHaveTextContent("An update is available from github.com/acme/agent-skills");
   expect(banner).toHaveTextContent("main moved 3 commits past the pinned a1b2c3d");
-  expect(within(banner).getByRole("button", { name: "Review update…" })).toBeInTheDocument();
+  expect(within(banner).getByRole("button", { name: "I merged it" })).toBeInTheDocument();
   expect(screen.getByText("github.com/acme/agent-skills")).toBeInTheDocument();
 });
 
@@ -243,7 +243,6 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
     truncated: false,
     binary: false,
     size: 12,
-    fingerprint: "fp",
   });
   api.adoptOrphan.mockResolvedValue(makeSkill({ uid: "sk-lr", name: "lint-rules" }));
   renderSkillsPage("/skills");

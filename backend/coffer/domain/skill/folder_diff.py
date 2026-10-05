@@ -1,8 +1,9 @@
 """What changes between two versions of a skill folder.
 
-Used by the update preview (spec skill-manager "Update a Git-imported skill
-from its source"): the pinned commit's folder against the new commit's, and —
-when the person edited the skill — the pinned folder against the master. Each
+Used to name the files a skill's local edits touch since its pinned commit
+(spec skill-manager "Hand a Git-imported skill's update to an agent"), the
+files a change of source would change ("Change a Git-imported skill's
+source"), and a skill copy's differences. Each
 changed file is ``added``, ``removed`` or ``modified``, with a unified diff for
 a text file (capped, so a regenerated data file does not ship megabytes to a
 dialog) and a ``binary`` flag instead for anything that is not UTF-8 text.

@@ -1,6 +1,6 @@
 """/api/v1/skills/stage/* for a folder and an archive (spec skill-manager
 "Import a skill from a local path", "Add skills from an archive", "Cover skill
-management on REST and the web").
+management on REST and on the Skills page").
 
 A stage writes nothing: each test asserts that the master store, the resource
 table and (after confirm or DELETE) the staging area are as they were.

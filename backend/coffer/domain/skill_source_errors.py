@@ -1,6 +1,6 @@
 """Errors of skill sources (spec skill-manager "Add skills from an archive",
-"Add skills from a Git repository", "Update a Git-imported skill from its
-source"). Re-exported from ``coffer.domain.errors``."""
+"Add skills from a Git repository", "Hand a Git-imported skill's update to an
+agent"). Re-exported from ``coffer.domain.errors``."""
 
 from __future__ import annotations
 
@@ -56,19 +56,6 @@ class SkillSourceUnreachable(CofferError):  # noqa: N818
         #: reason and the install hand-off the page offers beside the error.
         if details:
             self.error_details: dict[str, object] = details
-
-
-class SkillUpdateConflict(CofferError):  # noqa: N818
-    """The skill's folder was edited since its pinned commit, so taking the
-    update would discard the edit — only an explicit Take theirs does that."""
-
-    code = "SKILL_UPDATE_CONFLICT"
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"skill {name} was edited since its pinned commit; keep your edits, or take the "
-            "update and discard them"
-        )
 
 
 class SkillUpdateNotPending(CofferError):  # noqa: N818

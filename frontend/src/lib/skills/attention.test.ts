@@ -59,7 +59,8 @@ describe("problems and the count", () => {
     source_status: {
       checked_at: null,
       commits_ahead: 2,
-      dismissed_commit: null,
+      commits: [],
+      compare_url: null,
       error: null,
       files_changed: 1,
       last_success_at: null,
