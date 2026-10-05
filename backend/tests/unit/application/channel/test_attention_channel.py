@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from coffer.application.attention import AttentionAction, Severity
@@ -171,3 +173,8 @@ async def test_a_secret_awaiting_approval_is_named_not_a_generic_stop(
     assert item.reason_code == "channel_secret_approval"
     assert phrase in item.reason
     assert "Secrets page" in item.reason
+
+
+async def test_a_channel_still_starting_needs_nobody() -> None:
+    status = replace(_status("t1", running=False, seatalk=False), starting=True)
+    assert await _source(status).items() == []

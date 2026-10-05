@@ -455,6 +455,10 @@ components:
             - $ref: '#/components/schemas/SeaTalkChannelConfig'
           - type: 'null'
           title: Settings
+        starting:
+          default: false
+          title: Starting
+          type: boolean
         title:
           anyOf:
           - type: string
@@ -480,6 +484,7 @@ components:
       - secret_approval
       - runs_on
       - runs_here
+      - starting
       - title
       - handoff
       - settings

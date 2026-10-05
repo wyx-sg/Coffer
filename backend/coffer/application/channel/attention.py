@@ -12,7 +12,8 @@ machine runs is not this daemon's to report on:
 - ``channel_secret_approval`` — the adapter is not running because its secret
   waits for the owner's approval (or was refused);
 - ``channel_not_running`` — the adapter is not running and no websocket state
-  explains why (a Telegram adapter whose start failed).
+  explains why (a Telegram adapter whose start failed). A channel still
+  starting — switched on, not yet reached by the reconciler — is not one.
 
 Extension point: nothing records a bot token the platform *rejected* today —
 it surfaces only as one of the websocket errors above, or as an adapter that
@@ -101,7 +102,7 @@ class ChannelAttentionSource:
             code, severity = "channel_disconnected", Severity.ERROR
             reason = "Its connection to the platform is down"
             reason += f": {_clip(ws_error)}" if ws_error else "."
-        elif ws_state is None and not status.running:
+        elif ws_state is None and not status.running and not status.starting:
             code, severity = "channel_not_running", Severity.ERROR
             reason = "It is enabled for this machine but is not running."
         else:

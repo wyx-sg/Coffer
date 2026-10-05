@@ -93,6 +93,20 @@ describe("describeChannel", () => {
     expect(describeChannel(input({ runs_on: null, runs_here: false })).state).toBe("unbound");
   });
 
+  // spec channels "Report a channel that is starting apart from one that failed to start"
+  test("a channel switched on but not yet started is connecting, never a rejected secret", () => {
+    const view = describeChannel(input({ running: false, starting: true, inbound: null }));
+    expect(view).toMatchObject({ state: "connecting", tone: "warn", primary: null });
+    expect(view.group).not.toBe("attention");
+  });
+
+  test("a status read before the switch is not this run's failure", () => {
+    // The resource already says on; the status cached from while it was off
+    // still says off and not running.
+    const stale = describeChannel(input({ enabled: false, running: false, inbound: null }));
+    expect(stale.state).toBe("connecting");
+  });
+
   test("a channel switched off reads Off, in its own group", () => {
     expect(describeChannel(input({ running: false }, { enabled: false }))).toMatchObject({
       state: "off",

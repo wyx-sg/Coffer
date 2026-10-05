@@ -90,7 +90,7 @@ The **SeaTalk connection** badge on the channel's page reports the connection as
 | `sdk_missing` | **Can't start** — SeaTalk SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
 | `error` | **Can't connect** — Connection refused | The last attempt failed; `websocket_error` holds the error verbatim. Coffer retries with a backoff from 1 to 30 seconds. |
 
-No state is shown before the first attempt. Events that SeaTalk sends while the connection is down are not queued anywhere by Coffer.
+Before the first attempt there is no connection state: the daemon starts a channel within about two seconds of it being switched on, and until then `status.starting` is true and the page shows **Connecting**, never a failure. Events that SeaTalk sends while the connection is down are not queued anywhere by Coffer.
 
 ## How replies look
 

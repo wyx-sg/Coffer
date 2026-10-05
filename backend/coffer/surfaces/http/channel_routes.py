@@ -158,6 +158,11 @@ class ChannelStatusOut(BaseModel):
     # it comes from `GET /sync/machines`, which is where the registry lives.
     runs_on: str | None = None
     runs_here: bool = False
+    #: Enabled for this machine and not running only because the daemon has not
+    #: reached it yet — it starts within one reconcile tick. ``running: false``
+    #: with this set is "starting", never a failed start (spec channels "Report
+    #: a channel that is starting apart from one that failed to start").
+    starting: bool = False
     #: The display title a person chose (spec resource-framework "Carry an optional
     #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
     #: the name in its place.
@@ -313,6 +318,7 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         ),
         runs_on=status.runs_on,
         runs_here=status.runs_here,
+        starting=status.starting,
         settings=status.settings,
         workspace_directory=str(content_root() / "workspace"),
         commands=[

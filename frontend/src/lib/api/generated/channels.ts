@@ -201,6 +201,11 @@ export interface components {
             secret_approval: components["schemas"]["SecretApprovalOut"] | null;
             /** Settings */
             settings: (components["schemas"]["TelegramChannelConfig"] | components["schemas"]["SeaTalkChannelConfig"]) | null;
+            /**
+             * Starting
+             * @default false
+             */
+            starting: boolean;
             /** Title */
             title: string | null;
             /** Uid */

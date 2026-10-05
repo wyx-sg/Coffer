@@ -123,6 +123,12 @@ function localState(status: ChannelStatus): ChannelStateKey {
   if (!status.running && status.secret_approval) {
     return status.secret_approval.state === "refused" ? "approvalRefused" : "waitingApproval";
   }
+  // Not running is a failed start only once the daemon has tried. Switched on
+  // and not yet reached by its reconciler (`starting`), or a status read before
+  // the switch (it still says off), is a channel on its way up — never a
+  // rejected secret (spec channels "Report a channel that is starting apart
+  // from one that failed to start").
+  if (!status.running && (status.starting || !status.enabled)) return "connecting";
   if (!status.running) return "stopped";
   if (status.inbound && ws !== "connected") {
     // A first connection and a lost one look the same on the wire; the error

@@ -149,6 +149,11 @@ class Gate:
             self._machine_id = await self.machine_id_provider()
         return self._machine_id
 
+    def unrouted(self, channel_uid: str) -> bool:
+        """Whether the last pass found this channel enabled here but routing
+        nowhere — the reason it is not running, decided rather than pending."""
+        return channel_uid in self._unrouted
+
     async def wanted(self, resources: ResourceService) -> Desired:
         """Every channel this machine should be running, right now."""
         local = await self.machine_id()

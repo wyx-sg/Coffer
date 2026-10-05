@@ -90,7 +90,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 | `sdk_missing` | **无法启动** — 未找到 SeaTalk SDK | 无法导入 `seatalk_oapi_sdk`。错误信息会写明搜索过的目录。 |
 | `error` | **无法连接** — 连接被拒绝 | 上一次尝试失败；`websocket_error` 原样保存错误信息。Coffer 以 1 到 30 秒的退避重试。 |
 
-第一次尝试之前不显示任何状态。连接断开期间 SeaTalk 发来的事件，Coffer 不会在任何地方排队保存。
+第一次尝试之前没有连接状态：消息渠道打开后约两秒内守护进程就会启动它，在那之前 `status.starting` 为 true，页面显示**连接中**，不会显示失败。连接断开期间 SeaTalk 发来的事件，Coffer 不会在任何地方排队保存。
 
 ## 回复的样子 {#how-replies-look}
 
