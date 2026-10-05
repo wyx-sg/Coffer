@@ -118,7 +118,7 @@ export function SkillRequiresTab({ skill }: Props) {
               onClick={() => check.mutate()}
             >
               <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
-              {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
+              {check.isPending ? t("clis.checking") : t("clis.check")}
             </Button>
           }
           intro={

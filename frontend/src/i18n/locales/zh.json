@@ -4996,7 +4996,7 @@
     "subtitle": "技能和 MCP 服务器需要的命令行工具。Coffer 负责检查，安装和登录交给智能体。",
     "title": "命令行工具",
     "addTool": "添加命令行工具",
-    "checkAgain": "重新检查",
+    "check": "检查",
     "checking": "正在检查…",
     "status": {
       "missing": "未找到",
@@ -5077,7 +5077,7 @@
       "description": "描述",
       "descriptionPlaceholder": "用一句话说明用途",
       "loginCheck": "登录检查",
-      "loginCheckHint": "已登录时退出码为 0。点「重新检查」时运行。",
+      "loginCheckHint": "已登录时退出码为 0。点「检查」时运行。",
       "submit": "添加",
       "addFailed": "无法添加 {{command}}",
       "editFailed": "无法保存 {{command}}"
@@ -5108,9 +5108,9 @@
       "bothBody_other": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
       "loginFailed": "{{check}} 在 {{time}} 未通过。",
       "hand": {
-        "missing": "把安装交给智能体，然后重新检查。",
-        "outdated": "把更新交给智能体，然后重新检查。",
-        "logged_out": "把登录交给智能体，然后重新检查。"
+        "missing": "把安装交给智能体，然后点「检查」。",
+        "outdated": "把更新交给智能体，然后点「检查」。",
+        "logged_out": "把登录交给智能体，然后点「检查」。"
       },
       "cofferBody": "Coffer 无法{{uses}}。"
     },

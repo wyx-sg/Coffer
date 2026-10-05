@@ -24,7 +24,7 @@ A skill that drives a command-line tool fails at the step that calls it when the
 | Declaration | Parses `requires:` leniently: an entry it cannot use is skipped with a warning and never fails the skill's import. |
 | Versions | Reads a dotted version out of `--version` output and compares two, shared with agent detection. |
 | Status | `missing`, `outdated`, `logged_out` or `ready`, the problems-first order, and which command a stdio launcher is checked as. |
-| Aggregation and cache | One row per command across every managed skill and enabled stdio MCP server: the highest minimum, the first skill's title, login check and login command, every skill that needs it and every server started with it. Results are cached until Check again or the daemon restarts; probes run in worker threads. |
+| Aggregation and cache | One row per command across every managed skill and enabled stdio MCP server: the highest minimum, the first skill's title, login check and login command, every skill that needs it and every server started with it. Results are cached until Check or the daemon restarts; probes run in worker threads. |
 | Probe | Locates the command on the agent's `PATH`, runs `--version` (5 s) and the login check (10 s) with `stdin` closed and output discarded. |
 | Hand-off | The prompt for a missing, outdated or not-logged-in command, carried as `handoff.prompt` on every command the routes return. |
 | Machine | The OS and CPU architecture the prompt names, e.g. `macOS 15.6, arm64`, read once per daemon. |
