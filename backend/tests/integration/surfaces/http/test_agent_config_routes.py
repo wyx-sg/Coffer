@@ -58,6 +58,7 @@ def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> str:
     return r.json()["uid"]
 
 
+@pytest.mark.acceptance(spec="agent-registry/claude-code", scenario="list an agent's config files")
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="report each config file's path, folder and existence"
 )

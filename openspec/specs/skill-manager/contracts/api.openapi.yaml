@@ -1625,66 +1625,6 @@ paths:
       summary: Read Skill File
       tags:
       - skills
-    put:
-      description: |-
-        Overwrite one existing text file in the skill's master folder, as one
-        vault commit naming the writer.
-
-        The write is conditional on ``expected_fingerprint``: ``SkillFileStale``
-        propagates to the shared error handler as 409 ``SKILL_FILE_STALE`` with
-        the file left untouched.
-      operationId: write_skill_file_api_v1_skills__uid__files_content_put
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SkillFileWriteRequest'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillFileContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Write Skill File
-      tags:
-      - skills
   /api/v1/skills/{uid}/source/apply:
     post:
       operationId: apply_update_api_v1_skills__uid__source_apply_post
@@ -2853,9 +2793,6 @@ components:
         content:
           title: Content
           type: string
-        fingerprint:
-          title: Fingerprint
-          type: string
         folder_abs_path:
           title: Folder Abs Path
           type: string
@@ -2876,7 +2813,6 @@ components:
       - truncated
       - binary
       - size
-      - fingerprint
       title: SkillFileContentOut
       type: object
     SkillFileNodeOut:
@@ -2931,24 +2867,6 @@ components:
       required:
       - root
       title: SkillFileTreeOut
-      type: object
-    SkillFileWriteRequest:
-      properties:
-        content:
-          title: Content
-          type: string
-        expected_fingerprint:
-          title: Expected Fingerprint
-          type: string
-        path:
-          minLength: 1
-          title: Path
-          type: string
-      required:
-      - path
-      - content
-      - expected_fingerprint
-      title: SkillFileWriteRequest
       type: object
     SkillImportRequest:
       properties:
