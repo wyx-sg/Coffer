@@ -43,6 +43,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Agent Sessions
+         * @description Every managed agent's sessions, newest activity first (agent key and
+         *     session id break ties), paged by one opaque cursor.
+         */
+        get: operations["list_all_agent_sessions_api_v1_agent_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -709,6 +730,37 @@ export interface components {
             title: string;
         };
         /**
+         * AgentSessionRowOut
+         * @description A row of the cross-agent list: the agent's session row plus whose it is.
+         */
+        AgentSessionRowOut: {
+            /** Agent Key */
+            agent_key: string;
+            channel_binding: components["schemas"]["SessionChannelOut"] | null;
+            /** Conversation Id */
+            conversation_id: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Cwd */
+            cwd: string | null;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /**
+             * Needs You
+             * @default false
+             */
+            needs_you: boolean;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /** Session Id */
+            session_id: string | null;
+            /** Title */
+            title: string;
+        };
+        /**
          * AgentType
          * @description Supported agent products.
          * @enum {string}
@@ -753,6 +805,18 @@ export interface components {
             install_handoff: components["schemas"]["HandoffOut"] | null;
             /** Types */
             types: components["schemas"]["AgentTypeOut"][];
+        };
+        /**
+         * AllAgentSessionsResponse
+         * @description Response for GET /api/v1/agent-sessions (no ``total``: an agent may not count).
+         */
+        AllAgentSessionsResponse: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Sessions */
+            sessions: components["schemas"]["AgentSessionRowOut"][];
+            /** Unavailable */
+            unavailable: components["schemas"]["UnavailableAgentOut"][];
         };
         /** CofferConnectionOut */
         CofferConnectionOut: {
@@ -1603,6 +1667,16 @@ export interface components {
         SkillFileTreeOut: {
             root: components["schemas"]["SkillFileNodeOut"];
         };
+        /**
+         * UnavailableAgentOut
+         * @description An agent whose sessions could not be read.
+         */
+        UnavailableAgentOut: {
+            /** Agent */
+            agent: string;
+            /** Reason */
+            reason: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1632,6 +1706,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentModelsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_all_agent_sessions_api_v1_agent_sessions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description The previous page's next_cursor. Bound to the filters it was issued for; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
+                /** @description Title or working directory contains this text (each agent's own search). */
+                q?: string | null;
+                /** @description Comma-separated `local` (sessions no channel conversation points at) and channel uids. Absent is everything. */
+                source?: string | null;
+                /** @description Comma-separated agent keys (e.g. `claude_code,codex`). Absent is every agent. */
+                agent?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllAgentSessionsResponse"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

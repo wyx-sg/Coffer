@@ -69,6 +69,95 @@ paths:
       summary: List Agent Models
       tags:
       - agent-providers
+  /api/v1/agent-sessions:
+    get:
+      description: |-
+        Every managed agent's sessions, newest activity first (agent key and
+        session id break ties), paged by one opaque cursor.
+      operationId: list_all_agent_sessions_api_v1_agent_sessions_get
+      parameters:
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - description: The previous page's next_cursor. Bound to the filters it was issued for; any other value is 400 CURSOR_INVALID.
+        in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The previous page's next_cursor. Bound to the filters it was issued for; any other value is 400 CURSOR_INVALID.
+          title: Cursor
+      - description: Title or working directory contains this text (each agent's own search).
+        in: query
+        name: q
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 200
+            type: string
+          - type: 'null'
+          description: Title or working directory contains this text (each agent's own search).
+          title: Q
+      - description: Comma-separated `local` (sessions no channel conversation points at) and channel uids. Absent is everything.
+        in: query
+        name: source
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 2000
+            type: string
+          - type: 'null'
+          description: Comma-separated `local` (sessions no channel conversation points at) and channel uids. Absent is everything.
+          title: Source
+      - description: Comma-separated agent keys (e.g. `claude_code,codex`). Absent is every agent.
+        in: query
+        name: agent
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 2000
+            type: string
+          - type: 'null'
+          description: Comma-separated agent keys (e.g. `claude_code,codex`). Absent is every agent.
+          title: Agent
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllAgentSessionsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List All Agent Sessions
+      tags:
+      - agents
   /api/v1/agents:
     get:
       operationId: list_agents_api_v1_agents_get
@@ -2065,6 +2154,67 @@ components:
       - title
       title: AgentSessionRename
       type: object
+    AgentSessionRowOut:
+      description: 'A row of the cross-agent list: the agent''s session row plus whose it is.'
+      properties:
+        agent_key:
+          title: Agent Key
+          type: string
+        channel_binding:
+          anyOf:
+          - $ref: '#/components/schemas/SessionChannelOut'
+          - type: 'null'
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+        created_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Created At
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        last_activity_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Activity At
+        needs_you:
+          default: false
+          title: Needs You
+          type: boolean
+        running:
+          default: false
+          title: Running
+          type: boolean
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        title:
+          title: Title
+          type: string
+      required:
+      - session_id
+      - title
+      - cwd
+      - created_at
+      - last_activity_at
+      - conversation_id
+      - running
+      - needs_you
+      - channel_binding
+      - agent_key
+      title: AgentSessionRowOut
+      type: object
     AgentType:
       description: Supported agent products.
       enum:
@@ -2154,6 +2304,30 @@ components:
       - types
       - install_handoff
       title: AgentTypesOut
+      type: object
+    AllAgentSessionsResponse:
+      description: 'Response for GET /api/v1/agent-sessions (no ``total``: an agent may not count).'
+      properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+        sessions:
+          items:
+            $ref: '#/components/schemas/AgentSessionRowOut'
+          title: Sessions
+          type: array
+        unavailable:
+          items:
+            $ref: '#/components/schemas/UnavailableAgentOut'
+          title: Unavailable
+          type: array
+      required:
+      - sessions
+      - next_cursor
+      - unavailable
+      title: AllAgentSessionsResponse
       type: object
     CofferConnectionOut:
       properties:
@@ -3845,4 +4019,18 @@ components:
       required:
       - root
       title: SkillFileTreeOut
+      type: object
+    UnavailableAgentOut:
+      description: An agent whose sessions could not be read.
+      properties:
+        agent:
+          title: Agent
+          type: string
+        reason:
+          title: Reason
+          type: string
+      required:
+      - agent
+      - reason
+      title: UnavailableAgentOut
       type: object

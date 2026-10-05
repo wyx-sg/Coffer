@@ -48,6 +48,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/agent-providers", "chat"),
     ("/api/v1/agent-providers/{agent_key}/models", "agent-registry"),
+    ("/api/v1/agent-sessions", "agent-registry"),
     ("/api/v1/agents", "agent-registry"),
     ("/api/v1/agents/{uid}/unmanaged-skills", "skill-manager"),
     ("/api/v1/attention", "resource-framework"),
