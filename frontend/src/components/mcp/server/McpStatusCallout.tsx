@@ -6,7 +6,7 @@
 // server's last error, since when, who can't call it and its last successful
 // call, with View log (stdio) or View errors (HTTP: the Activity page on its
 // failed calls) and the diagnosis hand-off; a rejected key, with Replace key (the
-// edit dialog on its secret). A test the user just ran speaks here only when
+// Secrets page's Replace value dialog on the secret it cites). A test the user just ran speaks here only when
 // it failed (a pass is a toast). Nothing for a healthy server.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";

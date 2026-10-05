@@ -26,13 +26,13 @@ import {
   resourcesKey,
 } from "@/lib/api/queryKeys";
 import type { ResourceOut } from "@/lib/api/resources";
+import type { SecretRef } from "@/lib/api/secret";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
 import { useMcpInvocationSummary, useMcpToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { useTestMcpServer } from "@/lib/hooks/useMcpServerMutations";
 import { useMcpServerStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
-import { useSecrets } from "@/lib/hooks/useSecrets";
 import { rebindMcpSecret } from "@/lib/mcp/rebindMcpSecret";
 import { secretsKey } from "@/lib/api/queryKeys";
 import { McpCapabilityTab } from "./McpCapabilityTab";
@@ -44,6 +44,7 @@ import { McpStatusCallout } from "./McpStatusCallout";
 import { McpToolsTab } from "./McpToolsTab";
 import { McpTopTools } from "./McpTopTools";
 import { namesOnTurnOn, reachedAgents } from "./reachWords";
+import { useServerSecretRows } from "./secretRows";
 import { joinNames, serverState, transportOf } from "@/lib/mcp/serverState";
 import { failedTest, type TestResult } from "./testResult";
 
@@ -77,11 +78,11 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const runTest = useTestMcpServer(uid);
   const enable = useEnableResource();
   const disable = useDisableResource();
-  const secrets = useSecrets(state.kind === "secretMissing");
   const [edit, setEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [addingSecret, setAddingSecret] = useState(false);
+  // The secret whose value the Replace value dialog takes: a missing one, or a rejected key.
+  const [secretRow, setSecretRow] = useState<SecretRef | null>(null);
 
   const toolCount = caps.data?.tools?.length || tiering?.tool_count || 0;
   const agentNames = joinNames(
@@ -149,7 +150,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const activityHref = `/activity?tab=mcp&q=${encodeURIComponent(resource.name)}`;
   // "View errors" (a server Coffer does not start has no log): Activity on its failed calls.
   const viewErrors = () => navigate(`${activityHref}&status=failed`);
-  const missingRow = secrets.data?.refs.find((r) => r.ref === detail?.missing_secret_ref) ?? null;
+  const { missing: missingRow, key: keyRow } = useServerSecretRows(state, detail);
   const capsProps = {
     serverUid: uid,
     capabilities: caps.data,
@@ -197,8 +198,8 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
                 onOpenLog={() => setLogOpen(true)}
                 onViewErrors={viewErrors}
                 onTurnOn={turnOn}
-                onAddSecret={() => setAddingSecret(true)}
-                onReplaceKey={() => setEdit(true)}
+                onAddSecret={() => setSecretRow(missingRow)}
+                onReplaceKey={() => (keyRow ? setSecretRow(keyRow) : setEdit(true))}
               />
             }
             tools={
@@ -226,10 +227,10 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         />
       ) : null}
       <ReplaceSecretDialog
-        row={addingSecret ? missingRow : null}
+        row={secretRow}
         onOpenChange={(open) => {
           if (open) return;
-          setAddingSecret(false);
+          setSecretRow(null);
           refresh();
         }}
       />
