@@ -49,6 +49,7 @@ from coffer.domain.model_proxy.state import (
 )
 from coffer.domain.usage.records import Wire
 from coffer.infrastructure.model_proxy import wire as w
+from coffer.infrastructure.model_proxy.attest import ATTEST_PATH, sign
 from coffer.infrastructure.model_proxy.relay import Relay, RelayConfig, RelayRequest
 from coffer.infrastructure.model_proxy.spool import UsageSpool
 from coffer.infrastructure.net.loopback_authority import is_allowed_host
@@ -101,8 +102,14 @@ class ModelProxyApp:
         spool: UsageSpool | None = None,
         relay_config: RelayConfig | None = None,
         on_drained: Callable[[], None] | None = None,
+        attest_key: bytes | None = None,
+        port: int | None = None,
     ) -> None:
         self._control_token = control_token
+        #: In memory only. Without it (or without the port) the proxy refuses to
+        #: attest, so a daemon that wants to push keys will not push to it.
+        self._attest_key = attest_key
+        self._port = port
         self.version = version
         self.started_at = started_at
         self.pid = os.getpid()
@@ -314,6 +321,8 @@ class ModelProxyApp:
                 len(state.routes),
             )
             await _send(send, 200, _JSON, json.dumps({"revision": state.revision}).encode())
+        elif method == "POST" and path == ATTEST_PATH:
+            await self._attest(receive, send)
         elif method == "POST" and path == "/_coffer/drain":
             self.draining = True
             _logger.info("model_proxy.draining inflight=%s", self.inflight)
@@ -321,6 +330,21 @@ class ModelProxyApp:
             self._maybe_drained()
         else:
             await _reply(send, 404, None, f"No such route: {method} {path}", "not_found_error")
+
+    async def _attest(self, receive: Receive, send: Send) -> None:
+        if self._attest_key is None or self._port is None:
+            await _reply(send, 503, None, "This proxy holds no attest key.", "api_error")
+            return
+        body = await _read_body(receive, 1024) or b""
+        try:
+            nonce = json.loads(body).get("nonce")
+        except (ValueError, AttributeError):
+            nonce = None
+        if not isinstance(nonce, str) or not nonce:
+            await _reply(send, 400, None, "A nonce is required.", "invalid_request")
+            return
+        signature = sign(self._attest_key, nonce, self._port)
+        await _send(send, 200, _JSON, json.dumps({"signature": signature}).encode())
 
     def _maybe_drained(self) -> None:
         if self.draining and self.inflight == 0 and self.on_drained is not None:

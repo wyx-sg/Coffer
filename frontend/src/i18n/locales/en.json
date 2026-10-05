@@ -1366,6 +1366,7 @@
         "title": "Import a master key",
         "description": "From another Mac, so this Mac can read the secrets that sync to it. Replacing the key asks you first.",
         "button": "Import…",
+        "openInApp": "Open the Coffer app to import a master key",
         "dialogTitle": "Replace this Mac’s master key?",
         "dialogBody": "The key in the file replaces the one in this Mac’s Keychain. Secrets that were stored with the current key stay readable only if both keys are the same.",
         "keyFile": "Key file",

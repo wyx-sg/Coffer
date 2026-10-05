@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from coffer.application.secret.presence import PresenceGrants, derive_grant_key, sign_grant
 from coffer.domain.sync.remote import SyncRemote
+from coffer.surfaces.http.secret_boundary_wiring import set_secret_boundary
 
 from .conftest import client_for
 from .harness import Box
@@ -145,7 +147,20 @@ def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Pa
             "same": False,
             "protected": False,
         }
-        key = c.post("/sync/key/import", json={"material": "ok-key"}).json()
+        # Installing a key needs the desktop app's grant for that key's fingerprint.
+        gk = derive_grant_key(b"route-test-master-key")
+        grants = PresenceGrants(lambda: gk)
+        set_secret_boundary(None, grants)
+        try:
+            nonce = grants.challenge("import_master_key", "f11e" * 3).nonce
+            grant = {
+                "nonce": nonce,
+                "signature": sign_grant(gk, "import_master_key", "f11e" * 3, nonce),
+            }
+            assert c.post("/sync/key/import", json={"material": "ok-key"}).status_code == 422
+            key = c.post("/sync/key/import", json={"material": "ok-key", **grant}).json()
+        finally:
+            set_secret_boundary(None, None)
         assert key == {
             "fingerprint": "abc123abc123",
             "replaced": False,

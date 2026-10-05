@@ -8,9 +8,10 @@ router.
 
 No route returns the master key: a backup is written only by the desktop
 app's presence-gated export (spec secret "Release plaintext only to a
-present human in the desktop app"). ``/key/import`` takes key material in — a
-caller that supplies a key already has it — and ``/key/import/preview`` says
-whose key a file holds before anything is replaced.
+present human in the desktop app"). ``/key/import`` takes key material in, but
+installing a key is presence-gated too: it needs a grant for the fingerprint
+being installed. ``/key/import/preview`` says whose key a file holds before
+anything is replaced, and changes nothing.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from fastapi import Query
 from coffer.application.sync.views import RoundFileDiff
 from coffer.domain.sync.remote import SyncRemote
 from coffer.surfaces.http import sync_stop_routes as _stop_routes  # noqa: F401  (registers)
+from coffer.surfaces.http.secret_boundary_wiring import get_presence_grants
 from coffer.surfaces.http.sync_dependencies import get_sync_service, router
 from coffer.surfaces.http.sync_projections import machine_out, remote_out, round_out, status_out
 from coffer.surfaces.http.sync_schemas import (
@@ -255,7 +257,13 @@ async def preview_key_import(body: KeyMaterialIn) -> KeyPreviewOut:
 
 @router.post("/key/import", response_model=KeyImportOut)
 async def import_key(body: KeyImportIn) -> KeyImportOut:
-    result = await get_sync_service().import_key(body.material, body.passphrase)
+    """Install a master key — only with a grant the desktop app signed for this
+    exact key, so a process that can reach the API cannot swap the key and then
+    forge grants with it. Redeemed before anything changes."""
+    service = get_sync_service()
+    fingerprint = service.preview_key(body.material).fingerprint
+    get_presence_grants().redeem("import_master_key", fingerprint, body.nonce, body.signature)
+    result = await service.import_key(body.material, body.passphrase, actor="desktop")
     return KeyImportOut(
         fingerprint=result.fingerprint,
         replaced=result.replaced,

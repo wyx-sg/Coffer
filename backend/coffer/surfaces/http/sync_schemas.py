@@ -353,6 +353,10 @@ class KeyImportIn(BaseModel):
     #: Opens a ``.cfk`` backup; not needed for a bare key. Never stored or
     #: recorded.
     passphrase: str | None = None
+    #: The presence grant the desktop app signed for importing this key (spec
+    #: secret "Release plaintext only to a present human in the desktop app").
+    nonce: str = Field(min_length=8, max_length=128)
+    signature: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
 
 
 class KeyImportOut(BaseModel):

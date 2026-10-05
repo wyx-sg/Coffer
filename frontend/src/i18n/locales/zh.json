@@ -1366,6 +1366,7 @@
         "title": "导入主密钥",
         "description": "来自另一台 Mac，让这台 Mac 能读取同步过来的密钥。替换主密钥前会先询问你。",
         "button": "导入…",
+        "openInApp": "在 Coffer 应用中导入主密钥",
         "dialogTitle": "替换这台 Mac 的主密钥？",
         "dialogBody": "文件里的主密钥会替换这台 Mac 钥匙串里的主密钥。用当前主密钥保存的密钥只有在两把主密钥相同时才仍可读取。",
         "keyFile": "密钥文件",

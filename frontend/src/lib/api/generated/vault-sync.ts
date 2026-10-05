@@ -241,7 +241,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import Key */
+        /**
+         * Import Key
+         * @description Install a master key — only with a grant the desktop app signed for this
+         *     exact key, so a process that can reach the API cannot swap the key and then
+         *     forge grants with it. Redeemed before anything changes.
+         */
         post: operations["import_key_api_v1_sync_key_import_post"];
         delete?: never;
         options?: never;
@@ -1044,8 +1049,12 @@ export interface components {
         KeyImportIn: {
             /** Material */
             material: string;
+            /** Nonce */
+            nonce: string;
             /** Passphrase */
             passphrase?: string | null;
+            /** Signature */
+            signature: string;
         };
         /** KeyImportOut */
         KeyImportOut: {

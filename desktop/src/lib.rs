@@ -31,6 +31,7 @@
 mod approval_watch;
 mod coffer_home;
 mod daemon;
+mod daemon_attest;
 mod daemon_http;
 mod discovery;
 mod env_path;
@@ -42,6 +43,7 @@ mod ready;
 mod resolve;
 mod restart;
 mod secrets;
+mod secrets_import;
 mod sidecar;
 mod spawn;
 mod sync_alert;
@@ -114,6 +116,7 @@ pub fn run() {
             secrets::export_master_key_backup,
             secrets::approve_pending,
             secrets::approve_pending_batch,
+            secrets_import::import_master_key,
             updater::update_status,
             updater::check_for_updates,
             updater::install_update,

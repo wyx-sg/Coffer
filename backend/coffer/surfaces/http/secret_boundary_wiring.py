@@ -26,11 +26,16 @@ from collections.abc import Awaitable, Callable, Mapping
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.boundary import SecretBoundary
-from coffer.application.secret.presence import PresenceGrants, derive_grant_key
+from coffer.application.secret.presence import (
+    PresenceGrants,
+    derive_grant_key,
+    derive_purpose_key,
+)
 from coffer.application.secret.resolver import SecretResolver, SecretStorePort
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import (
+    BOUNDARY_STATE_KEY_CONTEXT,
     ORIGIN_DIALOG,
     SecretApproval,
     SecretDestination,
@@ -210,8 +215,12 @@ def init_secret_boundary(
         notes = optional_secret_notes()
         return notes.get(ref) if notes is not None else None
 
+    def seal_key() -> bytes | None:
+        key = manager.current
+        return derive_purpose_key(key, BOUNDARY_STATE_KEY_CONTEXT) if key else None
+
     boundary = SecretBoundary(
-        FileBoundaryStore(home),
+        FileBoundaryStore(home, seal_key=seal_key, development=keychain_access_group() is None),
         store,
         default_on=keychain_access_group() is not None,
         note_of=note_of,

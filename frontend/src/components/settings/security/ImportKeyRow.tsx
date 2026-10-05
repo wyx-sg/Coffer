@@ -1,8 +1,10 @@
 // src/components/settings/security/ImportKeyRow.tsx — "Import a master key" on Settings › Security.
 //
-// Spec vault-sync "Import a master key after showing whose key it is". Any
-// host may import: key material coming in is not gated (a caller that
-// supplies a key already has it). The flow is one dialog:
+// Spec vault-sync "Import a master key after showing whose key it is". The
+// import runs in the desktop app only: installing a key needs a presence check
+// the shell signs (spec secret "Release plaintext only to a present human in
+// the desktop app"), so a browser shows "Open the Coffer app" instead. The flow
+// is one dialog:
 //
 //   1. Choose… — a hidden `<input type="file">`; the page reads the file's
 //      text and asks the daemon whose key it holds (`/sync/key/import/preview`),
@@ -32,6 +34,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { translateApiError } from "@/lib/api/errors";
 import type { KeyImport, KeyPreview } from "@/lib/api/security";
 import { useImportKeyFile, usePreviewKeyImport } from "@/lib/hooks/useSecurity";
+import { presenceAvailable } from "@/lib/tauri";
 
 import { SettingRow } from "@/components/settings/SettingsLayout";
 
@@ -41,17 +44,24 @@ import { ImportedKeyResult } from "./ImportedKeyResult";
 export function ImportKeyRow() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const inApp = presenceAvailable();
 
   return (
     <SettingRow
       label={t("settings.security.import.title")}
       description={t("settings.security.import.description")}
     >
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <Download aria-hidden />
-        {t("settings.security.import.button")}
-      </Button>
-      <ImportDialog open={open} onClose={() => setOpen(false)} />
+      {inApp ? (
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <Download aria-hidden />
+          {t("settings.security.import.button")}
+        </Button>
+      ) : (
+        <Button variant="outline" disabled data-testid="master-key-import-open-in-app">
+          {t("settings.security.import.openInApp")}
+        </Button>
+      )}
+      {inApp ? <ImportDialog open={open} onClose={() => setOpen(false)} /> : null}
     </SettingRow>
   );
 }
@@ -102,7 +112,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
     ? localError
     : preview.error
       ? translateApiError(t, preview.error)
-      : importKey.error
+      : importKey.error && String(importKey.error.message ?? importKey.error) !== "cancelled"
         ? translateApiError(t, importKey.error)
         : null;
 

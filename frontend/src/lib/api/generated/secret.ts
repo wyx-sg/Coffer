@@ -214,6 +214,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/presence/attest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Presence Attest */
+        post: operations["presence_attest_api_v1_secrets_presence_attest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/presence/challenge": {
         parameters: {
             query?: never;
@@ -498,6 +515,19 @@ export interface components {
             target_fingerprint: string | null;
         };
         /**
+         * AttestIn
+         * @description The desktop shell's challenge to a daemon: prove you hold the master key.
+         */
+        AttestIn: {
+            /** Nonce */
+            nonce: string;
+        };
+        /** AttestOut */
+        AttestOut: {
+            /** Signature */
+            signature: string;
+        };
+        /**
          * BatchApproveIn
          * @description Approve every listed approval under one grant over exactly this list.
          */
@@ -590,7 +620,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "approve_batch" | "export_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key";
             /** Target */
             target: string;
         };
@@ -604,7 +634,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "approve_batch" | "export_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key";
             /** Target */
             target: string;
         };
@@ -1409,6 +1439,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretNotesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    presence_attest_api_v1_secrets_presence_attest_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttestOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

@@ -13,6 +13,14 @@ The daemon is the only holder of the master key; the proxy gets the decrypted
 keys it needs in the :class:`ProxyState` pushed over the loopback control
 route — on spawn, on re-attach and on every :meth:`refresh` — and only ever in
 memory. They never travel in argv, the environment or a file.
+
+Before any push (and before re-attaching) the supervisor makes the process on the
+port prove it is the proxy Coffer started: it holds an attest key derived from
+the master key, handed over the spawned child's stdin, and signs a fresh nonce
+plus its own port (:mod:`.attest`). ``proxy.json`` and the port are open to any
+process of this OS user, so without the proof an agent could stand in for the
+proxy and be sent every provider key. A process that fails is never pushed to
+and never commanded with its control token.
 """
 
 from __future__ import annotations
@@ -25,7 +33,6 @@ import subprocess
 import sys
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -33,9 +40,15 @@ import httpx
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.model_proxy.state import CONTROL_TOKEN_HEADER, ProxyState
-from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.model_proxy.attest import challenge, key_to_line
 from coffer.infrastructure.model_proxy.info import EXIT_PORT_IN_USE, ProxyInfo, read_info
+from coffer.infrastructure.model_proxy.supervisor_support import (
+    ProxyStatus,
+    default_proxy_command,
+    pid_alive,
+    source_root,
+)
 from coffer.infrastructure.platform.process import detached_popen_kwargs
 
 _logger = logging.getLogger(__name__)
@@ -59,51 +72,6 @@ FAILING_AFTER = 3
 _IDLE_RECHECK = 60.0
 
 
-@dataclass(frozen=True)
-class ProxyStatus:
-    running: bool
-    pid: int | None
-    port: int
-    version: str | None
-    restarts: int
-    last_error: str | None
-    revision: int | None
-    started_at: str | None
-    #: Consecutive failed attempts to start it; ``0`` while it is up or idle.
-    consecutive_failures: int = 0
-    #: The start has failed ``FAILING_AFTER`` times running; retries slow down.
-    failing: bool = False
-
-
-def default_proxy_command(port: int) -> list[str]:
-    """The frozen ``coffer-daemon proxy`` or, from source, this interpreter."""
-    if getattr(sys, "frozen", False):
-        return [daemon_spawn_command()[0], "proxy", "--port", str(port)]
-    return [sys.executable, "-m", "coffer.infrastructure.model_proxy.entry", "--port", str(port)]
-
-
-def _source_root() -> str:
-    """The directory holding the imported ``coffer`` package — prefixed onto the
-    child's ``PYTHONPATH`` so a worktree's proxy runs that worktree's code."""
-    import coffer
-
-    return str(Path(coffer.__file__).resolve().parent.parent)
-
-
-def _pid_alive(pid: int) -> bool:
-    # A proxy an earlier supervisor in this same process spawned is our child:
-    # once it exits it stays a zombie — and "alive" to kill(0) — until reaped.
-    with contextlib.suppress(ChildProcessError, OSError):
-        os.waitpid(pid, os.WNOHANG)
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 class ProxySupervisor:
     def __init__(
         self,
@@ -118,7 +86,11 @@ class ProxySupervisor:
         spawn_timeout: float = SPAWN_TIMEOUT_SECONDS,
         drain_timeout: float = DRAIN_TIMEOUT_SECONDS,
         clock: Callable[[], float] = time.monotonic,
+        attest_key: Callable[[], bytes | None] = lambda: None,
     ) -> None:
+        #: The key a genuine proxy attests with; ``None`` while the master key is
+        #: not available, in which case nothing is spawned-with or pushed.
+        self._attest_key = attest_key
         self._clock = clock
         self._state_provider = state_provider
         self.port = port
@@ -175,6 +147,9 @@ class ProxySupervisor:
                 if self._idle:
                     self._retry_at = 0.0  # something changed: ask again at the next tick
                 return
+            if not await self._attested(info):
+                self._info = self._health = None  # not ours: re-found only through the checked path
+                return
             state, self._prefetched = self._prefetched or await self._state_provider(), None
             try:
                 r = await self._http.put(
@@ -227,7 +202,17 @@ class ProxySupervisor:
     def _alive(self, pid: int) -> bool:
         if self._proc is not None and self._proc.pid == pid:
             return self._proc.poll() is None  # our own child: reap, don't see a zombie
-        return _pid_alive(pid)
+        return pid_alive(pid)
+
+    async def _attested(self, info: ProxyInfo) -> bool:
+        """Whether the process on ``info.port`` proves it is Coffer's proxy. Logs
+        only the fact and the port, never a value."""
+        key = self._attest_key()
+        if key is not None and await challenge(self._http, key, info.port, info.control_token):
+            return True
+        self._last_error = "the process on the model proxy port did not prove it is Coffer's proxy"
+        _logger.warning("model_proxy.attest_failed port=%s", info.port)
+        return False
 
     async def _probe(self, info: ProxyInfo) -> dict[str, Any] | None:
         if not self._alive(info.pid):
@@ -253,6 +238,11 @@ class ProxySupervisor:
                 and health.get("version") == self.version
                 and info.port == self.port
             ):
+                if not await self._attested(info):
+                    raise RuntimeError(
+                        f"127.0.0.1:{self.port} is held by a process that is not the model "
+                        "proxy this daemon started; no provider key was sent to it"
+                    )
                 self._info, self._health = info, health
                 _logger.info("model_proxy.attached pid=%s port=%s", info.pid, info.port)
                 return True
@@ -287,7 +277,7 @@ class ProxySupervisor:
             env.update(self._env)
         if self._command is None and not getattr(sys, "frozen", False):
             existing = env.get("PYTHONPATH")
-            root = _source_root()
+            root = source_root()
             env["PYTHONPATH"] = root + (os.pathsep + existing if existing else "")
         return env
 
@@ -295,16 +285,22 @@ class ProxySupervisor:
         command = self._command or default_proxy_command(self.port)
         log_path = log_dir() / "proxy.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        key = self._attest_key()
         with open(log_path, "ab") as log:
             proc: subprocess.Popen[bytes] = subprocess.Popen(  # type: ignore[call-overload]
                 command,
-                stdin=subprocess.DEVNULL,
+                # The attest key goes over this pipe, once: never argv or env.
+                stdin=subprocess.PIPE if key is not None else subprocess.DEVNULL,
                 stdout=log,
                 stderr=log,
                 env=self._spawn_env(),
                 **detached_popen_kwargs(),
             )
         self._proc = proc
+        if key is not None and proc.stdin is not None:
+            with contextlib.suppress(OSError):  # a child that already died shows below
+                proc.stdin.write(key_to_line(key))
+                proc.stdin.close()
         deadline = time.monotonic() + self._spawn_timeout
         while time.monotonic() < deadline:
             if proc.poll() is not None:

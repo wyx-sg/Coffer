@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-_GRANT_OPS = Literal["reveal", "approve", "approve_batch", "export_master_key"]
+_GRANT_OPS = Literal["reveal", "approve", "approve_batch", "export_master_key", "import_master_key"]
 
 
 class PresenceGrantIn(BaseModel):
@@ -21,6 +21,17 @@ class PresenceGrantIn(BaseModel):
 
     nonce: str = Field(min_length=8, max_length=128)
     signature: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-fA-F]{64}$")
+
+
+class AttestIn(BaseModel):
+    """The desktop shell's challenge to a daemon: prove you hold the master key."""
+
+    nonce: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class AttestOut(BaseModel):
+    #: ``hex(HMAC-SHA256(attest key, "coffer-attest/v1\n" + nonce + "\n" + port))``.
+    signature: str
 
 
 class PresenceChallengeIn(BaseModel):

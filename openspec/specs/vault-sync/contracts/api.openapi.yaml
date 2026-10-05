@@ -471,6 +471,10 @@ paths:
       - sync
   /api/v1/sync/key/import:
     post:
+      description: |-
+        Install a master key — only with a grant the desktop app signed for this
+        exact key, so a process that can reach the API cannot swap the key and then
+        forge grants with it. Redeemed before anything changes.
       operationId: import_key_api_v1_sync_key_import_post
       parameters:
       - in: header
@@ -2206,13 +2210,26 @@ components:
         material:
           title: Material
           type: string
+        nonce:
+          maxLength: 128
+          minLength: 8
+          title: Nonce
+          type: string
         passphrase:
           anyOf:
           - type: string
           - type: 'null'
           title: Passphrase
+        signature:
+          maxLength: 64
+          minLength: 64
+          pattern: ^[0-9a-fA-F]{64}$
+          title: Signature
+          type: string
       required:
       - material
+      - nonce
+      - signature
       title: KeyImportIn
       type: object
     KeyImportOut:

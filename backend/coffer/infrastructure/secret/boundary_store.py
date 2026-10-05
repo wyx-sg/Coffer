@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from coffer.domain.secrets import SecretApproval, SecretBinding
+from coffer.infrastructure.secret.sealed_json import SealedJsonStore
 from coffer.infrastructure.vault.home import local_root
 from coffer.infrastructure.vault.json_store import JsonStore
 
@@ -60,13 +61,26 @@ class FileBoundaryStore:
     ``HOME``.
     """
 
-    def __init__(self, home: Path | None = None) -> None:
-        def at(name: str) -> Callable[[], Path]:
-            return lambda: local_root(home) / "secret-boundary" / name
+    def __init__(
+        self,
+        home: Path | None = None,
+        *,
+        seal_key: Callable[[], bytes | None] = lambda: None,
+        development: bool = True,
+    ) -> None:
+        """``seal_key`` returns the key that seals the three files (``None``: no
+        key yet, nothing sealed); ``development`` is a build that cannot protect
+        its master key and so accepts an unsealed file from before sealing."""
 
-        self._bindings = JsonStore(at("bindings.json"))
-        self._approvals = JsonStore(at("approvals.json"))
-        self._settings = JsonStore(at("settings.json"))
+        def at(name: str) -> SealedJsonStore:
+            def path() -> Path:
+                return local_root(home) / "secret-boundary" / name
+
+            return SealedJsonStore(JsonStore(path), seal_key, development=development)
+
+        self._bindings = at("bindings.json")
+        self._approvals = at("approvals.json")
+        self._settings = at("settings.json")
 
     def _binding_rows(self) -> list[dict[str, Any]]:
         return list(self._bindings.read().get(_BINDINGS, []))

@@ -139,7 +139,13 @@ async def test_supervisor_spawns_attaches_restarts_and_drains(
 
     port = free_port()
     env = {"HOME": str(home), "COFFER_PROXY_SPOOL_DIR": str(home / "spool")}
-    common = {"port": port, "coffer_dir": home / ".coffer", "env": env, "interval": 0.2}
+    common = {
+        "port": port,
+        "coffer_dir": home / ".coffer",
+        "env": env,
+        "interval": 0.2,
+        "attest_key": lambda: b"k" * 32,
+    }
     first = ProxySupervisor(provider, version=coffer.__version__, **common)
     await first.start()
     status = first.status()

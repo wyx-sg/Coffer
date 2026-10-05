@@ -33,6 +33,7 @@ from coffer.infrastructure.daemon import bootstrap, login_service, self_restart
 from coffer.infrastructure.daemon.phase import set_daemon_phase
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 from coffer.infrastructure.daemon.unpack_keepalive import keep_unpack_dir_alive
+from coffer.infrastructure.net.system_proxy import apply_system_network_settings
 
 _logger = logging.getLogger(__name__)
 
@@ -260,6 +261,9 @@ def main() -> None:
 
         proxy_main(sys.argv[2:])
         return
+    # Before any network client or child process: a signed build takes its proxy
+    # and trust settings from the OS, not from variables an agent could set.
+    apply_system_network_settings(os.environ)
     # First, before anything can spawn an agent process that inherits them.
     scrub_agent_home_env(os.environ)
     _raise_fd_soft_limit()

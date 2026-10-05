@@ -44,6 +44,7 @@ from coffer.infrastructure.secret import key_backup
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.secret_approval_routes import router as approval_router
+from coffer.surfaces.http.secret_attest_routes import router as attest_router
 from coffer.surfaces.http.secret_boundary_wiring import (
     get_presence_grants,
 )
@@ -70,6 +71,7 @@ router = APIRouter(
     dependencies=[Depends(require_token)],
 )
 router.include_router(approval_router)
+router.include_router(attest_router)
 router.include_router(plaintext_router)
 
 

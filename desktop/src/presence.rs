@@ -31,6 +31,10 @@ pub enum Subject<'a> {
         descriptions: &'a [String],
     },
     ExportMasterKey,
+    /// Installing the master key whose fingerprint this is.
+    ImportMasterKey {
+        fingerprint: &'a str,
+    },
 }
 
 /// The prompt's reason. macOS shows it as "Coffer is trying to <reason>", so
@@ -50,6 +54,9 @@ pub fn reason(subject: &Subject<'_>, development: bool) -> String {
         }
         Subject::ApproveBatch { descriptions } => batch_reason(descriptions),
         Subject::ExportMasterKey => "export a backup of Coffer's master key".to_owned(),
+        Subject::ImportMasterKey { fingerprint } => {
+            format!("replace Coffer's master key with the key {fingerprint}")
+        }
     };
     if development {
         format!("Development build — {what}")
@@ -241,6 +248,17 @@ mod tests {
         let export = reason(&Subject::ExportMasterKey, true);
         assert!(export.starts_with("Development build — "), "{export}");
         assert!(export.contains("master key"), "{export}");
+
+        let import = reason(
+            &Subject::ImportMasterKey {
+                fingerprint: "f11ef11ef11e",
+            },
+            false,
+        );
+        assert_eq!(
+            import,
+            "replace Coffer's master key with the key f11ef11ef11e"
+        );
     }
 
     #[test]

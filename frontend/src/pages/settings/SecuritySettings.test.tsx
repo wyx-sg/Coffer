@@ -24,7 +24,10 @@ const exportBackup = vi.fn();
 vi.mock("@/lib/tauri", () => ({
   presenceAvailable: () => inApp,
   exportMasterKeyBackup: (passphrase: string) => exportBackup(passphrase),
+  importMasterKey: (material: string, passphrase: string | null) =>
+    importKeyInShell(material, passphrase),
 }));
+const importKeyInShell = vi.fn();
 
 const OLD = "old-token-value-abcd";
 const NEW = "new-token-value-9f3a";
@@ -76,21 +79,6 @@ async function fakeDaemon(input: RequestInfo | URL, init?: RequestInit): Promise
       current_fingerprint: currentFp,
       same: fp === currentFp,
       protected: body.material === BACKUP,
-    });
-  }
-  if (route === "POST /sync/key/import") {
-    const body = (await req.json()) as { material: string; passphrase: string | null };
-    bodies.push(body);
-    if (body.passphrase !== "correct horse")
-      return json(422, {
-        error: { code: "MASTER_KEY_PASSPHRASE_WRONG", message: "the passphrase does not open" },
-      });
-    currentFp = OTHER_FP;
-    return json(200, {
-      fingerprint: OTHER_FP,
-      replaced: true,
-      readable: 6,
-      locked_refs: ["secret/linear-api-key", "secret/jira-pat-2024"],
     });
   }
   if (route === "POST /daemon/rotate-token") {
@@ -276,10 +264,47 @@ describe("SecuritySettings — master key", () => {
     expect(within(dialog).queryByRole("alert")).toBeNull();
   });
 
+  test("a browser offers no key import, only the way to the app", async () => {
+    renderPage();
+    const button = await screen.findByTestId("master-key-import-open-in-app");
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent("Open the Coffer app to import a master key");
+    expect(screen.queryByRole("button", { name: "Import…" })).toBeNull();
+  });
+
+  test("a cancelled presence check leaves the import dialog open without an error", async () => {
+    inApp = true;
+    importKeyInShell.mockRejectedValue("cancelled");
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Import…" }));
+    const dialog = await screen.findByRole("dialog");
+    const file = Object.assign(new File([BACKUP], "k.cfk"), { text: async () => BACKUP });
+    fireEvent.change(within(dialog).getByLabelText("Key file"), { target: { files: [file] } });
+    await waitFor(() => expect(within(dialog).getByTestId("key-in-file")).toBeInTheDocument());
+    fireEvent.change(within(dialog).getByLabelText("Passphrase"), { target: { value: "pw" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Replace key" }));
+    await waitFor(() => expect(importKeyInShell).toHaveBeenCalledWith(BACKUP, "pw"));
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+  });
+
   acceptance(
     "vault-sync",
     "the security tab replaces a key and names what stays locked",
     async () => {
+      inApp = true;
+      // The shell does the presence check and the daemon call; the page only
+      // hands it the file's text and the passphrase.
+      importKeyInShell.mockImplementation(async (material: string, passphrase: string | null) => {
+        bodies.push({ material, passphrase });
+        if (passphrase !== "correct horse") throw "the passphrase does not open this key file";
+        currentFp = OTHER_FP;
+        return {
+          fingerprint: OTHER_FP,
+          replaced: true,
+          readable: 6,
+          locked_refs: ["secret/linear-api-key", "secret/jira-pat-2024"],
+        };
+      });
       renderPage();
       fireEvent.click(await screen.findByRole("button", { name: "Import…" }));
       const dialog = await screen.findByRole("dialog");
@@ -313,7 +338,7 @@ describe("SecuritySettings — master key", () => {
       });
       fireEvent.click(replace);
       expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-        "That passphrase doesn't open this key file.",
+        "the passphrase does not open this key file",
       );
 
       fireEvent.change(within(dialog).getByLabelText("Passphrase"), {

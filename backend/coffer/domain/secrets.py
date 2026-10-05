@@ -41,7 +41,13 @@ ApprovalOp = Literal["bind", "disable_protection"]
 ApprovalStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 #: What a presence grant may authorise. Each is one operation on one target.
-GRANT_OPS: tuple[str, ...] = ("reveal", "approve", "approve_batch", "export_master_key")
+GRANT_OPS: tuple[str, ...] = (
+    "reveal",
+    "approve",
+    "approve_batch",
+    "export_master_key",
+    "import_master_key",
+)
 
 
 #: Longest label and description a person can give a secret.
@@ -235,6 +241,15 @@ def grant_message(op: str, target: str, nonce: str) -> bytes:
 
 #: The context string the grant key is derived under, from the master key.
 GRANT_KEY_CONTEXT = b"coffer-presence-grant-key/v1"
+#: The other keys derived from the master key, one per purpose, so a key that
+#: proves one thing never proves another. In a signed build only Coffer's own
+#: binaries can read the master key, so only they can hold these.
+#: Seals the secret boundary's machine-local files (bindings, approvals, switch).
+BOUNDARY_STATE_KEY_CONTEXT = b"coffer-boundary-state-key/v1"
+#: The daemon answers the desktop shell's challenge with it: this is Coffer's daemon.
+DAEMON_ATTEST_KEY_CONTEXT = b"coffer-daemon-attest-key/v1"
+#: The model proxy answers the daemon's challenge with it: this is Coffer's proxy.
+PROXY_ATTEST_KEY_CONTEXT = b"coffer-proxy-attest-key/v1"
 
 
 def sync_remote_destination(url: str) -> SecretDestination:
