@@ -3189,6 +3189,7 @@
     },
     "status": {
       "read": "Read {{when}}",
+      "readAuto": "Reads automatically {{cadence}} · {{when}}",
       "failed_one": "{{count}} agent failed",
       "failed_other": "{{count}} agents failed",
       "reading": "Reading agents’ memory…",
@@ -5998,12 +5999,10 @@
       "days_other": "{{count}} days",
       "default": "Default ({{interval}})"
     },
-    "pill": {
-      "label": "Automatic · {{state}}",
-      "hourly": "hourly",
-      "daily": "daily",
-      "every": "every {{interval}}",
-      "off": "off"
+    "cadence": {
+      "hourly": "every hour",
+      "daily": "every day",
+      "every": "every {{interval}}"
     }
   },
   "drawer": {
