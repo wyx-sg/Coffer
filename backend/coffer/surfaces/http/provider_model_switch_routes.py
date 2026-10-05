@@ -39,6 +39,8 @@ def _switch(body: ModelSwitchIn) -> model_switch.ModelSwitch:
         connection_uid=body.connection_uid,
         model=body.model,
         tier_models=body.tier_models,
+        native_model=body.native_model,
+        clear_native_model=body.clear_native_model,
     )
 
 

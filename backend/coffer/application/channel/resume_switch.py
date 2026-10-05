@@ -2,7 +2,7 @@
 channels "Resume an earlier conversation from chat").
 
 The list is the thread's own history (``channel_thread_history``), newest
-first, at most 20: nothing opened on the web or in another chat is offered,
+first, at most 100, a page at a time: nothing opened on the web or in another chat is offered,
 and a tap is checked against the same history before anything is rebound, so
 a forged or stale button can never reach another chat's conversation. A
 conversation deleted since is skipped. `/resume n` and a tap rebind the thread
@@ -29,8 +29,10 @@ __all__ = [
     "current_resume_card",
 ]
 
-#: How many earlier conversations are offered.
-HISTORY_LIMIT = 20
+#: How many earlier conversations are offered, paged four to a card.
+HISTORY_LIMIT = 100
+HEADER = "Send /resume <n> or tap one:"
+HEADER_TEXT = "Send /resume <n> to reopen one:"
 NOTHING_TO_RESUME = "Nothing to resume — this chat has no earlier conversation yet."
 
 
@@ -55,15 +57,14 @@ def _title(conversation: Any) -> str:
     return str(conversation.title or "").strip() or "Untitled"
 
 
-def _listing(
-    ctx: CommandContext, found: list[Any], active: str | None, *, buttons: bool = True
-) -> str:
-    lines = ["Send /resume <n> or tap one:" if buttons else "Send /resume <n> to reopen one:"]
-    for n, conv in enumerate(found, start=1):
-        agent = agent_display(ctx.commands._agents, conv.agent_key)
-        tick = " ✓" if str(conv.id) == active else ""
-        lines.append(f"{n} · {_title(conv)} — {agent} · {age(conv.updated_at)}{tick}")
-    return "\n".join(lines)
+def _line(ctx: CommandContext, n: int, conv: Any, active: str | None) -> str:
+    agent = agent_display(ctx.commands._agents, conv.agent_key)
+    tick = " ✓" if str(conv.id) == active else ""
+    return f"{n} · {_title(conv)} — {agent} · {age(conv.updated_at)}{tick}"
+
+
+def _lines(ctx: CommandContext, found: list[Any], active: str | None) -> list[str]:
+    return [_line(ctx, n, conv, active) for n, conv in enumerate(found, start=1)]
 
 
 async def cmd_resume(ctx: CommandContext, text: str) -> None:
@@ -79,21 +80,21 @@ async def cmd_resume(ctx: CommandContext, text: str) -> None:
             return
         await _rebind(ctx, found[index - 1])
         return
-    listing = _listing(ctx, found, active)
-    text = "Resume a conversation\n" + _listing(ctx, found, active, buttons=False)
-    await ctx.show_or_say(_card(found, active, listing), text)
+    plain = "\n".join(["Resume a conversation", HEADER_TEXT, *_lines(ctx, found, active)])
+    await ctx.show_or_say(_card(ctx, found, active), plain)
 
 
 def _card(
-    found: list[Any], active: str | None, listing: str, page: int | None = None
+    ctx: CommandContext, found: list[Any], active: str | None, page: int | None = None
 ) -> SelectionCard:
-    entries = [(str(conv.id), _title(conv)) for conv in found]
-    return resume_card(header=listing, entries=entries, active=active, page=page)
+    lines = _lines(ctx, found, active)
+    entries = [(str(conv.id), line) for conv, line in zip(found, lines, strict=True)]
+    return resume_card(header=HEADER, entries=entries, active=active, page=page)
 
 
 async def current_resume_card(ctx: CommandContext, *, page: int | None = None) -> SelectionCard:
     found, active = await _entries(ctx)
-    return _card(found, active, _listing(ctx, found, active), page)
+    return _card(ctx, found, active, page)
 
 
 async def apply_resume(ctx: CommandContext, conversation_id: str) -> None:

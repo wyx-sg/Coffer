@@ -100,8 +100,17 @@ async def _open_thread(ctx: CommandContext, title: str) -> str:
     threads = ctx.commands._threads
     ordinal = await threads.next_parallel_ordinal(binding.resource.uid, peer.chat_id)
     mark = parallel_mark(ordinal, title)
+    # Where a direct-chat thread hangs from a message, the owner's own `/thread`
+    # message is the root and the mark answers inside it. A tap on a `/thread`
+    # button has no typed message, and a `/thread` sent inside a thread is
+    # itself a reply (a thread cannot root another): both open a root message.
+    anchor = ""
+    if binding.adapter.capabilities.direct_threads_are_replies and not ctx.thread_id:
+        anchor = ctx.command_message_id
     try:
-        new_thread = await binding.adapter.open_thread(peer.chat_id, mark, THREAD_BODY)
+        new_thread = await binding.adapter.open_thread(
+            peer.chat_id, mark, THREAD_BODY, anchor_message_id=anchor
+        )
     except ParallelThreadUnavailable as e:
         return str(e)
     except Exception:

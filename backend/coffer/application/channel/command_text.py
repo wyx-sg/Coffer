@@ -167,9 +167,11 @@ async def settings_in_effect(
     same = agent == pick("preferred_agent")
     defaults = binding.default_agent_config or {}
     model = pick("preferred_model") if same else None
+    # The channel's default model belongs to its default agent only.
+    channel_model = defaults.get("model") if agent == binding.default_agent else None
     return Settings(
         agent,
-        model or defaults.get("model"),
+        model or channel_model,
         pick("preferred_cwd") or default_cwd(binding),
     )
 

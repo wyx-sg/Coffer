@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coffer.application.provider.projector import Priors
+from coffer.application.provider.projector import NativeModel, Priors
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import ProviderConfig
@@ -85,11 +85,13 @@ async def deproject_connection(
     actor: str,
     connection: Resource | None = None,
     priors: Priors | None = None,
+    native_model: NativeModel | None = None,
 ) -> list[str]:
     """Remove Coffer's projection from every agent of ``agent_type``; return the
-    reverted names. A stale-file refusal is audited, then re-raised."""
+    reverted names. A stale-file refusal is audited, then re-raised.
+    ``native_model`` also sets (or clears) the agent's own ``model`` key."""
     try:
-        return service._projector.deproject_type(agents, agent_type, priors)
+        return service._projector.deproject_type(agents, agent_type, priors, native_model)
     except ConfigFileStale as exc:
         await _record_refusal(
             service, exc, connection=connection, agent_type=agent_type, actor=actor

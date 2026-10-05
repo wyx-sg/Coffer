@@ -1616,13 +1616,20 @@ components:
       description: |-
         What the agent page's Change model dialog asks for.
 
-        ``connection_uid`` ``null`` is the agent's own built-in login: no model
-        or tiers are written, and Coffer removes only the keys it wrote.
+        ``connection_uid`` ``null`` is the agent's own built-in login: no tiers are
+        written, Coffer removes only the keys it wrote, and ``native_model`` sets
+        the agent's own top-level ``model`` (``clear_native_model`` removes it: the
+        built-in default; neither leaves it as it is). Both are refused with a
+        connection, where ``model`` is the binding.
         ``seen`` is sent only to apply: each previewed file's path with the
         fingerprint the preview read, so a file edited since is refused.
       properties:
         agent_type:
           $ref: '#/components/schemas/AgentType'
+        clear_native_model:
+          default: false
+          title: Clear Native Model
+          type: boolean
         connection_uid:
           anyOf:
           - type: string
@@ -1633,6 +1640,11 @@ components:
           - type: string
           - type: 'null'
           title: Model
+        native_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Native Model
         seen:
           anyOf:
           - additionalProperties:

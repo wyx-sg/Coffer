@@ -19,26 +19,27 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol as _Protocol
 
 from coffer.application.provider.cli_path import default_coffer_cli_resolver
+from coffer.application.provider.projection_request import (
+    binding_of,
+    projected_models,
+    projection_request,
+)
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
-from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT, WIRE_PATHS
+from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT
 from coffer.domain.model_proxy.state import proxy_root as proxy_root_at
 from coffer.domain.provider.agent_projection import (
     ProjectionPlan,
     ProviderProjection,
     ProviderProjectionRequest,
 )
-from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
-from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.config import ProviderConfig
-from coffer.domain.provider.modality import Modality
-from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from coffer.domain.resource import Resource
 from coffer.domain.usage.records import Wire
 
@@ -57,6 +58,15 @@ class PlannedFile:
     before: str | None
     after: str | None
     fingerprint: str
+
+
+@dataclass(frozen=True)
+class NativeModel:
+    """A request to set the agent's OWN top-level ``model`` while taking Coffer's
+    projection out: ``name`` is the model, ``None`` removes the key (the agent's
+    built-in default)."""
+
+    name: str | None
 
 
 class ProjectionConfigStore(_Protocol):
@@ -132,17 +142,23 @@ class ProviderProjector:
         return projected
 
     def deproject_type(
-        self, agents: list[Resource], agent_type: AgentType, priors: Priors | None = None
+        self,
+        agents: list[Resource],
+        agent_type: AgentType,
+        priors: Priors | None = None,
+        native_model: NativeModel | None = None,
     ) -> list[str]:
         """Remove Coffer's projection from every enabled agent of ``agent_type``
         so it falls back to its own built-in login; return the reverted names.
-        ``priors`` collects what each file held before, as in :meth:`project_type`."""
+        ``priors`` collects what each file held before, as in :meth:`project_type`.
+        ``native_model`` also sets (or clears) the agent's own ``model`` key, in
+        the same write."""
         facet = self.projection_for(agent_type)
         if facet is None:
             return []
         reverted: list[str] = []
         for agent in self.agents_of_type(agents, agent_type):
-            self._deproject(agent, facet, priors)
+            self._deproject(agent, facet, priors, native_model)
             reverted.append(agent.name)
         return reverted
 
@@ -177,18 +193,41 @@ class ProviderProjector:
         request = self.request_for(connection, cfg, agent)
         return self._planned(spec.path, current, facet.apply(current or "", request, spec.path))
 
-    def plan_deproject(self, agent: Resource) -> list[PlannedFile]:
-        """The files taking Coffer's projection out of ``agent`` would change."""
+    def plan_deproject(
+        self, agent: Resource, native_model: NativeModel | None = None
+    ) -> list[PlannedFile]:
+        """The files taking Coffer's projection out of ``agent`` would change
+        (and, given ``native_model``, setting its own ``model`` key)."""
         agent_cfg = AgentConfig.model_validate(agent.config)
         facet = self.projection_for(agent_cfg.type)
         if facet is None:
             return []
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
-        if not (current or "").strip():
+        plan = self._deprojection(facet, current or "", spec.path, agent_cfg, native_model)
+        if plan is None:
             return []
-        plan = facet.remove(current or "", spec.path, binding_of(agent_cfg))
         return self._planned(spec.path, current, plan)
+
+    @staticmethod
+    def _deprojection(
+        facet: ProviderProjection,
+        text: str,
+        path: pathlib.Path,
+        agent_cfg: AgentConfig,
+        native_model: NativeModel | None,
+    ) -> ProjectionPlan | None:
+        """What leaving the connection (and naming the agent's own model) writes
+        to the main file; ``None`` when there is nothing to do."""
+        if text.strip():
+            plan = facet.remove(text, path, binding_of(agent_cfg))
+        elif native_model is None:
+            return None  # nothing was ever projected
+        else:
+            plan = ProjectionPlan("")
+        if native_model is None:
+            return plan
+        return replace(plan, text=facet.set_native_model(plan.text, native_model.name))
 
     def current_fingerprint(self, path: pathlib.Path) -> str:
         """The fingerprint of what ``path`` holds now."""
@@ -264,15 +303,18 @@ class ProviderProjector:
         )
 
     def _deproject(
-        self, agent: Resource, facet: ProviderProjection, priors: Priors | None = None
+        self,
+        agent: Resource,
+        facet: ProviderProjection,
+        priors: Priors | None = None,
+        native_model: NativeModel | None = None,
     ) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
-        text = current or ""
-        if not text.strip():
-            return {}  # nothing was ever projected
-        plan = facet.remove(text, spec.path, binding_of(agent_cfg))
+        plan = self._deprojection(facet, current or "", spec.path, agent_cfg, native_model)
+        if plan is None:
+            return {}
         return self._perform(spec.path, current, plan, priors)
 
     def _perform(
@@ -325,64 +367,8 @@ class ProviderProjector:
             priors.setdefault(path, current)
 
 
-def binding_of(agent_cfg: AgentConfig) -> ModelBinding:
-    """The agent's model binding, as the projection reads it."""
-    return ModelBinding(
-        model=agent_cfg.model,
-        tier_models=dict(agent_cfg.tier_models or {}),
-    )
-
-
-def projected_models(cfg: ProviderConfig) -> tuple[ProjectedModel, ...]:
-    """The connection's curated TEXT models with what it records about each —
-    a model catalogue is the agent's own picker (spec provider-switching
-    "Offer only text models to chat pickers")."""
-    return tuple(
-        ProjectedModel(
-            id=m.id,
-            context_window=m.context_window,
-        )
-        for m in cfg.models
-        if m.modality is Modality.TEXT
-    )
-
-
-def projection_request(
-    connection: Resource,
-    cfg: ProviderConfig,
-    agent: Resource,
-    agent_cfg: AgentConfig,
-    *,
-    coffer_cli: str,
-    proxy_root: str,
-    wire: Wire,
-) -> ProviderProjectionRequest:
-    """The one construction of a projection request — what the switch writes
-    and what the reconciler compares an agent's file against.
-
-    The agent is pointed at the local model proxy's route for its wire, and
-    authenticates with its own local token: the connection's endpoint and key
-    stay with the proxy (ADR api-key-providers-are-reached-through-a-separate-
-    local-model-proxy), so switching between two connections moves the
-    proxy's route, not the agent's file.
-    """
-    return ProviderProjectionRequest(
-        connection_uid=connection.uid,
-        connection_name=connection.name,
-        agent_uid=agent.uid,
-        base_url=proxy_root.rstrip("/") + WIRE_PATHS[wire],
-        key_helper=proxy_token_helper(agent.uid, coffer_cli=coffer_cli),
-        codex_auth=CodexAuthCommand(coffer_cli, proxy_token_args(agent.uid)),
-        # Model comes solely from the per-agent binding (spec
-        # provider-switching "Take projected model keys from the agent's
-        # binding"); an unbound agent projects no model.
-        binding=binding_of(agent_cfg),
-        models=projected_models(cfg),
-        local=cfg.is_local,
-    )
-
-
 __all__ = [
+    "NativeModel",
     "PlannedFile",
     "Priors",
     "ProjectionConfigStore",

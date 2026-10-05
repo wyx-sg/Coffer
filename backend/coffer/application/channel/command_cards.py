@@ -20,6 +20,7 @@ from coffer.application.channel.selection_cards import (
     paginate,
     tick,
 )
+from coffer.domain.channel.commands import help_text, menu_entries
 from coffer.domain.channel.envelopes import ChoiceButton
 
 #: The ``agent:`` value of the `/new` card's Agent button: show the agent card
@@ -36,21 +37,6 @@ STATUS_ACTIONS: tuple[tuple[str, str], ...] = (
     ("Resume", "resume"),
     ("Dir", "dir"),
 )
-
-#: The five actions a `/help` card offers (spec channels "Offer the commands as
-#: a help card").
-HELP_ACTIONS: tuple[tuple[str, str], ...] = (
-    ("New", "new"),
-    ("Stop", "stop"),
-    ("Model", "model"),
-    ("Status", "status"),
-    ("Resume", "resume"),
-)
-
-
-#: A group's help card: only the two group actions with buttons (spec channels
-#: "Offer the commands as a help card").
-GROUP_HELP_ACTIONS: tuple[tuple[str, str], ...] = (("New", "new"), ("Stop", "stop"))
 
 
 def agent_card(
@@ -100,10 +86,33 @@ def new_card(*, line: str, group: bool = False) -> SelectionCard:
     return SelectionCard(title="", text=f"**🆕 New conversation · {line}**", buttons=buttons)
 
 
-def command_card(
-    *, title: str, text: str, actions: Sequence[tuple[str, str]] = HELP_ACTIONS
-) -> SelectionCard:
-    """A `/status` or `/help` card: ``text`` under ``title`` with its ``cmd:``
+def help_card(*, text: str, group: bool, page: int | None = None) -> SelectionCard:
+    """The `/help` card: ``text`` under a ``cmd:`` button for every command the
+    chat may use, from the roster — all of them in a direct chat, the group
+    commands in a group — paged like any list too long for one card (spec
+    channels "Offer the commands as a help card")."""
+    options = [
+        ChoiceButton(label=entry.name.capitalize(), value=f"cmd:{entry.name}")
+        for entry in menu_entries(group=group)
+    ]
+    return paginate(
+        kind="help",
+        title="Commands",
+        header=text,
+        options=options,
+        current_value=None,
+        current_label="",
+        page=page,
+    )
+
+
+def command_card(*, title: str, text: str, actions: Sequence[tuple[str, str]]) -> SelectionCard:
+    """A `/status` card: ``text`` under ``title`` with its ``cmd:``
     actions — a tap runs exactly the command it names."""
     buttons = [ChoiceButton(label=label, value=f"cmd:{name}") for label, name in actions]
     return SelectionCard(title=title, text=text, buttons=buttons)
+
+
+def current_help_card(*, group: bool, page: int | None = None) -> SelectionCard:
+    """The help card for a chat of this kind, opened on ``page``."""
+    return help_card(text=help_text(group=group), group=group, page=page)

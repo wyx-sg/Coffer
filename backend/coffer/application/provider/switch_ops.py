@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coffer.application.provider.projection_ops import deproject_connection, project_connection
-from coffer.application.provider.projector import Priors
+from coffer.application.provider.projector import NativeModel, Priors
 from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.provider.targets import connection_for_agent, reaches
 from coffer.domain.agent.config import AgentConfig
@@ -120,11 +120,16 @@ async def activate(
 
 
 async def deactivate(
-    service: ProviderService, agent_type: AgentType, *, actor: str
+    service: ProviderService,
+    agent_type: AgentType,
+    *,
+    actor: str,
+    native_model: NativeModel | None = None,
 ) -> DeactivateResult:
     """Put the agent of ``agent_type`` back on its own built-in login: remove
     Coffer's keys from its native config and clear its connection. Idempotent,
-    and only this agent changes."""
+    and only this agent changes. ``native_model`` also sets (or clears) the model
+    the agent's own config names, in the same write."""
     agents = await service._agents.list()
     agent = agent_of_type(agents, agent_type)
     if agent is None:
@@ -137,7 +142,13 @@ async def deactivate(
     priors: Priors = {}
     try:
         deprojected = await deproject_connection(
-            service, agents, agent_type, actor=actor, connection=named, priors=priors
+            service,
+            agents,
+            agent_type,
+            actor=actor,
+            connection=named,
+            priors=priors,
+            native_model=native_model,
         )
         if chosen is not None:
             await service._agents.set_connection(agent.uid, None, actor=actor)

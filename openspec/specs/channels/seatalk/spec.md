@@ -555,19 +555,29 @@ it follows.
 - **WHEN** a forwarded record whose file download is slow arrives, followed by a text message
 - **THEN** the channel receives the forwarded record first and the text second
 
-### Requirement: Open a parallel thread by posting its root message
+### Requirement: Open a parallel thread under the owner's /thread message
 On SeaTalk a thread's id is its root message's id (see "Identify a thread by its
-root message"), so `/thread` MUST open a parallel thread by posting its mark as a
-new direct-chat message. That message's id is the thread's id, and the owner's
-replies under it drive the parallel conversation. A direct-chat reply-in-thread
+root message"), so `/thread` MUST open a parallel thread rooted at the owner's
+own `/thread` message: the bot posts its mark as a reply in the thread of that
+message, and that message's id is the thread's id, so the owner's replies in
+that thread drive the parallel conversation and the answer is already inside the
+thread. When there is no typed message to hang the thread from — the command was
+a tap on a `/thread` button — or the command was itself sent inside a thread
+(a reply cannot root another thread), the bot MUST instead post the mark as a new
+direct-chat message, whose id is the thread's. A direct-chat reply-in-thread
 under any other message is a casual reply and stays in the direct chat's
 conversation ([channels](../spec.md) "Key conversation identity by channel, chat and thread").
 
-#### Scenario: /thread posts the root message the thread hangs from
+#### Scenario: /thread answers inside a thread of the owner's message
 - **GIVEN** a paired SeaTalk direct chat
 - **WHEN** the owner sends `/thread`
-- **THEN** the bot posts a direct-chat message opening with `🧵#1 Task`
-- **AND** a reply under that message is keyed to the new parallel conversation
+- **THEN** the bot replies in the thread rooted at the owner's `/thread` message with a message opening with `🧵#1 Task`
+- **AND** a reply in that thread is keyed to the new parallel conversation
+
+#### Scenario: /thread from a button or inside a thread posts a root message
+- **GIVEN** a paired SeaTalk direct chat
+- **WHEN** the owner taps a `/thread` button, or sends `/thread` inside a thread
+- **THEN** the bot posts the mark as a new direct-chat message, whose id is the thread's
 
 ### Requirement: Mark a main-chat mention as the group's main chat
 A SeaTalk @mention sent in a group's main chat carries no thread id, and the

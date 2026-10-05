@@ -24,6 +24,8 @@ Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -95,6 +97,7 @@ async def list_agent_providers(
 @router.get("/{agent_key}/models", response_model=AgentModelsOut)
 async def list_agent_models(
     agent_key: str,
+    source: Literal["active", "builtin"] = "active",
     registry: AgentProviderRegistry = Depends(get_agent_registry),  # noqa: B008
     catalogue: ModelCatalogPort = Depends(get_model_catalog),  # noqa: B008
 ) -> AgentModelsOut:
@@ -117,10 +120,19 @@ async def list_agent_models(
     catalogue and the web picker merged the endpoint's models into it in the
     browser, so the page and the chat disagreed about one question.
 
+    ``source=builtin`` answers for the agent's own login whatever it runs on now
+    (the Change model dialog, moving an agent back to it): the models its own
+    catalogue lists, or none for a Codex whose projected connection catalogue
+    hides them.
+
     An unregistered ``agent_key`` is a 404.
     """
     _known(registry, agent_key)
-    models = await catalogue.offered(agent_key)
+    models = await (
+        catalogue.builtin_offered(agent_key)
+        if source == "builtin"
+        else catalogue.offered(agent_key)
+    )
     return AgentModelsOut(
         default_model=await catalogue.native_default_model(agent_key),
         models=[

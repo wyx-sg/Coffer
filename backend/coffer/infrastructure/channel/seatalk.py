@@ -273,10 +273,17 @@ class SeaTalkAdapter:
             chat_kind=chat_kind,
         )
 
-    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
-        """A thread's id is its root message's id, so posting the mark as a new DM
-        message opens one (spec channels/seatalk "Open a parallel thread by posting
-        its root message")."""
+    async def open_thread(
+        self, chat_id: str, mark: str, body: str, *, anchor_message_id: str = ""
+    ) -> str:
+        """A thread's id is its root message's id (spec channels/seatalk "Open a
+        parallel thread under the owner's /thread message"). Given the owner's own
+        ``/thread`` message, the mark is posted as a reply in the thread rooted
+        there and that message's id is the thread's; without one the mark is a new
+        DM message, which roots the thread itself."""
+        if anchor_message_id:
+            await self.send_text(chat_id, f"{mark}\n{body}", thread_id=anchor_message_id)
+            return anchor_message_id
         sent = await self.send_text(chat_id, f"{mark}\n{body}")
         if not sent.message_id:
             raise ChannelSendFailed(self._name, "single_chat returned no message_id")

@@ -82,6 +82,11 @@ class AgentDescriptor:
     #: The product's official install page — where the Overview's first-run
     #: card sends a person whose machine does not have the program.
     install_url: str = ""
+    #: Whether a connection's curated model list, once projected, REPLACES the
+    #: list the agent's own login offers (Codex's ``model/list`` reads the
+    #: catalogue pointer Coffer writes into ``config.toml``). Then the built-in
+    #: models cannot be read while such a connection is active.
+    curated_list_replaces_builtin: bool = False
 
     # --- mechanism facets (bound at the composition root; None here) ----------
     #: What Coffer can place into the agent, keyed by asset type x landing.
@@ -143,6 +148,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         home_env_var="CODEX_HOME",
         program="codex",
         install_url="https://developers.openai.com/codex/cli",
+        curated_list_replaces_builtin=True,
         hook_source_keys=("hooks",),
         mcp=McpInjectionSpec(
             config_key="config",

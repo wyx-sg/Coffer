@@ -54,7 +54,10 @@ vi.mock("@/lib/hooks/useMachines", () => ({
   useMachines: () => ({ data: { machines: REGISTRY } }),
   useThisMachineId: () => ({ machineId: HERE, isPending: false }),
 }));
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [AGENT] }) }));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: () => ({ data: [AGENT] }),
+  useAgent: () => ({ data: undefined }),
+}));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),

@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedPrice, Protocol
@@ -341,8 +341,11 @@ class DetectLocalOut(BaseModel):
 class ModelSwitchIn(BaseModel):
     """What the agent page's Change model dialog asks for.
 
-    ``connection_uid`` ``null`` is the agent's own built-in login: no model
-    or tiers are written, and Coffer removes only the keys it wrote.
+    ``connection_uid`` ``null`` is the agent's own built-in login: no tiers are
+    written, Coffer removes only the keys it wrote, and ``native_model`` sets
+    the agent's own top-level ``model`` (``clear_native_model`` removes it: the
+    built-in default; neither leaves it as it is). Both are refused with a
+    connection, where ``model`` is the binding.
     ``seen`` is sent only to apply: each previewed file's path with the
     fingerprint the preview read, so a file edited since is refused."""
 
@@ -350,7 +353,17 @@ class ModelSwitchIn(BaseModel):
     connection_uid: str | None = None
     model: str | None = None
     tier_models: dict[str, str] | None = None
+    native_model: str | None = None
+    clear_native_model: bool = False
     seen: dict[str, str] | None = None
+
+    @model_validator(mode="after")
+    def _native_model_is_builtin_only(self) -> ModelSwitchIn:
+        if self.native_model is not None and self.clear_native_model:
+            raise ValueError("native_model and clear_native_model are exclusive")
+        if self.connection_uid is not None and (self.native_model or self.clear_native_model):
+            raise ValueError("native_model applies to the built-in login only")
+        return self
 
 
 class ModelSwitchLine(BaseModel):

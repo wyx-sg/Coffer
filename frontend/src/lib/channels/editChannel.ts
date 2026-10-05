@@ -73,6 +73,10 @@ export interface ChannelEditValues {
   /** The folder new conversations start in (`default_agent_config.cwd`);
    *  `null` clears it. Undefined leaves the stored value alone. */
   default_directory?: string | null;
+  /** The default agent's model for new conversations (`default_agent_config.model`);
+   *  `null` clears it. Undefined leaves the stored value alone — except that
+   *  changing the default agent drops it, since it named the old agent's model. */
+  default_model?: string | null;
 }
 
 /** The most folders a channel may list (the backend's cap). */
@@ -85,6 +89,15 @@ export function storedDefaultDirectory(config: { default_agent_config?: unknown 
   if (agentConfig === null || typeof agentConfig !== "object") return null;
   const cwd = (agentConfig as Record<string, unknown>).cwd;
   return typeof cwd === "string" && cwd ? cwd : null;
+}
+
+/** The channel's default model — for its default agent only — or `null` when
+ *  none is set (the agent runs its provider's default). */
+export function storedDefaultModel(config: { default_agent_config?: unknown }): string | null {
+  const agentConfig = config.default_agent_config;
+  if (agentConfig === null || typeof agentConfig !== "object") return null;
+  const model = (agentConfig as Record<string, unknown>).model;
+  return typeof model === "string" && model ? model : null;
 }
 
 /** One typed directory, normalised like the backend (trimmed, no trailing
@@ -169,18 +182,34 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   if (values.directories !== undefined && values.directories.join("\n") !== storedDirs.join("\n")) {
     nextConfig.directories = values.directories;
   }
-  // The default directory lives in the default agent config, beside anything
-  // else a CLI user put there.
-  if (
+  // The default directory and default model live in the default agent config,
+  // beside anything else a CLI user put there. The model names a model of the
+  // DEFAULT agent, so it is dropped when that agent changes (unless a new one is
+  // given with the edit).
+  const agentChanged =
+    typeof config.default_agent === "string" && values.default_agent !== config.default_agent;
+  const directoryChanged =
     values.default_directory !== undefined &&
-    values.default_directory !== storedDefaultDirectory(config)
-  ) {
+    values.default_directory !== storedDefaultDirectory(config);
+  const modelChanged =
+    values.default_model !== undefined && values.default_model !== storedDefaultModel(config);
+  const modelDropped =
+    values.default_model === undefined && agentChanged && storedDefaultModel(config) !== null;
+  if (directoryChanged || modelChanged || modelDropped) {
     const agentConfig =
       config.default_agent_config && typeof config.default_agent_config === "object"
         ? { ...(config.default_agent_config as Record<string, unknown>) }
         : {};
-    if (values.default_directory === null) delete agentConfig.cwd;
-    else agentConfig.cwd = values.default_directory;
+    if (directoryChanged) {
+      if (values.default_directory === null) delete agentConfig.cwd;
+      else agentConfig.cwd = values.default_directory;
+    }
+    if (modelChanged) {
+      if (!values.default_model) delete agentConfig.model;
+      else agentConfig.model = values.default_model;
+    } else if (modelDropped) {
+      delete agentConfig.model;
+    }
     nextConfig.default_agent_config = Object.keys(agentConfig).length > 0 ? agentConfig : null;
   }
 

@@ -19,6 +19,8 @@ from coffer.domain.provider.projection import (
     is_managed_api_key_helper,
     remove_anthropic_settings,
     remove_codex_provider,
+    set_anthropic_model,
+    set_codex_model,
 )
 
 #: ``apply_anthropic_settings`` takes no default helper, so tests that do not
@@ -456,3 +458,44 @@ def test_catalog_projection_preserves_comments_and_ordering() -> None:
     # Round-trip leaves the user's file as it was, down to the comment (tomlkit's
     # re-serialisation leaves the blank line the removed table stood on).
     assert reverted.strip() == original.strip()
+
+
+def test_set_codex_model_sets_replaces_and_removes_keeping_the_file() -> None:
+    text = '# my notes\napproval_policy = "never"  # keep\n\n[mcp_servers.x]\ncommand = "x"\n'
+    set_ = set_codex_model(text, "gpt-9")
+    assert set_.splitlines()[0] == "# my notes"
+    assert "# keep" in set_ and "[mcp_servers.x]" in set_
+    assert tomllib.loads(set_)["model"] == "gpt-9"
+    replaced = set_codex_model(set_, "gpt-10")
+    assert tomllib.loads(replaced)["model"] == "gpt-10"
+    assert replaced.count("model =") == 1
+    removed = set_codex_model(replaced, None)
+    assert removed == text
+
+
+def test_set_codex_model_is_the_identity_when_nothing_changes() -> None:
+    text = 'model = "gpt-9"   # mine\napproval_policy = "never"\n'
+    assert set_codex_model(text, "gpt-9") == text
+    assert set_codex_model('approval_policy = "never"\n', None) == 'approval_policy = "never"\n'
+    assert set_codex_model("", None) == ""
+    assert tomllib.loads(set_codex_model("", "gpt-9")) == {"model": "gpt-9"}
+
+
+def test_set_anthropic_model_sets_replaces_and_removes_keeping_other_keys() -> None:
+    text = json.dumps({"theme": "dark", "env": {"FOO": "1"}}, indent=2) + "\n"
+    set_ = set_anthropic_model(text, "opus")
+    assert json.loads(set_) == {"theme": "dark", "env": {"FOO": "1"}, "model": "opus"}
+    replaced = set_anthropic_model(set_, "sonnet")
+    assert json.loads(replaced)["model"] == "sonnet"
+    assert json.loads(set_anthropic_model(replaced, None)) == {
+        "theme": "dark",
+        "env": {"FOO": "1"},
+    }
+
+
+def test_set_anthropic_model_is_the_identity_when_nothing_changes() -> None:
+    text = '{"model":"opus","theme":"dark"}'
+    assert set_anthropic_model(text, "opus") == text
+    assert set_anthropic_model('{"theme":"dark"}', None) == '{"theme":"dark"}'
+    assert set_anthropic_model("", None) == ""
+    assert json.loads(set_anthropic_model("", "opus")) == {"model": "opus"}

@@ -8,10 +8,18 @@ import pytest
 
 from coffer.domain.channel.commands import help_text
 
-from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound
+from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, tap_event
 
 STATUS_IDLE = ["cmd:new", "cmd:model", "cmd:resume", "cmd:dir"]
-HELP = ["cmd:new", "cmd:stop", "cmd:model", "cmd:status", "cmd:resume"]
+HELP_PAGES = [
+    ["cmd:new", "cmd:stop", "cmd:model", "cmd:dir"],
+    ["cmd:status", "cmd:resume", "cmd:thread", "cmd:del"],
+    ["cmd:help"],
+]
+
+
+def _commands(buttons) -> list[str]:  # type: ignore[no-untyped-def]
+    return [b.value for b in buttons if b.value.startswith("cmd:")]
 
 
 async def _card_channel(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
@@ -52,16 +60,36 @@ async def test_status_shows_names_not_ids_with_action_buttons(env: ChannelEnv, t
     assert [b.label for b in buttons] == ["New", "Model", "Resume", "Dir"]
 
 
-@pytest.mark.acceptance(spec="channels", scenario="/help is a card with the five actions")
-async def test_help_is_a_card_with_the_five_actions(env: ChannelEnv) -> None:
-    _resource, adapter = await _card_channel(env)
+@pytest.mark.acceptance(
+    spec="channels", scenario="/help is a card with a button for every command, paged"
+)
+async def test_help_is_a_paged_card_with_a_button_for_every_command(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    adapter = env.bind(
+        resource, FakeChannelAdapter(supports_buttons=True, supports_card_update=True)
+    )
+    await env.pair(resource, "owner")
 
     await env.processor.on_message(inbound("tg", "owner", "/help"))
 
     [(_chat, text, buttons)] = adapter.cards
-    assert text == help_text()
-    assert [b.value for b in buttons] == HELP
-    assert [b.label for b in buttons] == ["New", "Stop", "Model", "Status", "Resume"]
+    assert text.startswith(help_text())
+    assert text.endswith("Page 1/3")
+    assert _commands(buttons) == HELP_PAGES[0]
+    assert [b.label for b in buttons][:4] == ["New", "Stop", "Model", "Dir"]
+
+    # Next rewrites the same card with the following commands.
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:help:1", platform_message_id="card-1")
+    )
+    _c, _m, text, buttons, _t = adapter.card_updates[-1]
+    assert text.endswith("Page 2/3")
+    assert _commands(buttons) == HELP_PAGES[1]
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:help:2", platform_message_id="card-1")
+    )
+    assert _commands(adapter.card_updates[-1][3]) == HELP_PAGES[2]
+    assert len(adapter.cards) == 1, "a page turn must not post a second card"
 
 
 async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> None:
@@ -83,8 +111,8 @@ async def test_the_help_card_follows_pairing(env: ChannelEnv) -> None:
     # The three-line confirmation, then the help card with every command.
     assert adapter.texts()[0].startswith("✅ Paired — you own tg.")
     [(_chat, text, buttons)] = adapter.cards
-    assert text == help_text()
-    assert [b.value for b in buttons] == HELP
+    assert text.startswith(help_text())
+    assert _commands(buttons) == HELP_PAGES[0]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a group's help lists only the group commands")
@@ -103,7 +131,7 @@ async def test_a_groups_help_lists_only_the_group_commands(env: ChannelEnv) -> N
     help_card, new_card = adapter.cards[-2:]
     assert help_card[1] == help_text(group=True)
     assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /del · /help"
-    assert [b.value for b in help_card[2]] == ["cmd:new", "cmd:stop"]
+    assert [b.value for b in help_card[2]] == ["cmd:new", "cmd:stop", "cmd:del", "cmd:help"]
     # The /new card in a group offers Agent alone.
     assert [b.label for b in new_card[2]] == ["Agent"]
     # A direct chat gets all nine.

@@ -269,7 +269,10 @@ class TelegramAdapter:
             ephemeral_feature=self._features.ephemeral_messages,
         )
 
-    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+    async def open_thread(
+        self, chat_id: str, mark: str, body: str, *, anchor_message_id: str = ""
+    ) -> str:
+        del anchor_message_id  # a topic is created, not hung from a message
         return await open_private_topic(self._call, self.send_text, chat_id, mark, body)
 
     async def update_card(

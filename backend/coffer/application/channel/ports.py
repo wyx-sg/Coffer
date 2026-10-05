@@ -214,12 +214,18 @@ class ChannelAdapter(Protocol):
         chat_kind + thread, not the group main chat."""
         ...
 
-    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+    async def open_thread(
+        self, chat_id: str, mark: str, body: str, *, anchor_message_id: str = ""
+    ) -> str:
         """Open a new thread in direct chat ``chat_id`` for a parallel conversation
         and return its thread id (see "Open parallel conversations in a direct
         chat"). ``mark`` (``🧵#N title``) heads the thread — its root message, or
         its topic's name — and ``body`` follows it. How a thread is created is the
-        transport's own fact. Raises ``ParallelThreadUnavailable`` with the
+        transport's own fact. ``anchor_message_id`` is the owner's own ``/thread``
+        message, given only where a direct-chat thread hangs from a message
+        (``capabilities.direct_threads_are_replies``): that transport may root
+        the thread there and answer inside it, and returns that id as the
+        thread's. Others ignore it. Raises ``ParallelThreadUnavailable`` with the
         sentence to answer when this chat cannot have one."""
         ...
 

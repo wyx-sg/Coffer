@@ -161,8 +161,9 @@ class TurnOrchestrator:
     # Turn control
     # ------------------------------------------------------------------
 
-    def interrupt_turn(self, conversation_id: str) -> None:
-        """Stop a running turn (keeping its partial output) and pause the queue.
+    def interrupt_turn(self, conversation_id: str) -> bool:
+        """Stop a running turn (keeping its partial output) and pause the queue;
+        ``True`` when there was one to stop.
 
         A no-op when no turn is in flight. Pausing holds queued messages until the owner
         resumes (any send clears the pause) — spec chat "Pause the
@@ -170,13 +171,15 @@ class TurnOrchestrator:
         """
         state = peek(conversation_id)
         if state is None:
-            return
+            return False
         active = state.active
-        if active is not None and active.task is not None and not active.task.done():
-            active.interrupted = True
-            state.paused = True
-            active.task.cancel()
-            log.debug("Interrupted turn for conversation %s", conversation_id)
+        if active is None or active.task is None or active.task.done():
+            return False
+        active.interrupted = True
+        state.paused = True
+        active.task.cancel()
+        log.debug("Interrupted turn for conversation %s", conversation_id)
+        return True
 
     def cancel_turn(self, conversation_id: str) -> None:
         """Cancel and discard a running turn and drop the pending queue (used when

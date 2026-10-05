@@ -12,14 +12,14 @@ The table lists the nine words. How each reads, where it works and the cards it 
 | Command | What it does |
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
-| `/stop` | Interrupt the running turn and pause the queue. “⏹ Stopping…” is edited into “⏹ Stopped after 12s.” where the platform can edit a message, and followed by a second message where it cannot. A question waiting on you is cancelled and its card reads “⏹ Stopped”. |
+| `/stop` | Interrupt the running turn and pause the queue. The answer names the conversation — “⏹ Stopping “Fix login”…” — and is edited into “⏹ Stopped “Fix login” after 12s · 3 tools.” where the platform can edit a message, or followed by that line where it cannot; messages queued behind the turn are reported as on hold until you send again. With nothing running it answers “Nothing is running.”. A question waiting on you is cancelled and its card reads “⏹ Stopped”. |
 | `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/del` | Owner only. Withdraw the bot's reply: quote one of its messages and send `/del` to withdraw that whole reply, or send it bare to withdraw the bot's most recent reply in this chat or thread. |
-| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons (New and Stop in a group), under the title **Commands**. |
+| `/help` | List the commands, with a button for each, paged (the four group commands in a group), under the title **Commands**. |
 
 In a group only `/new`, `/stop`, `/help` and `/del` work; the other five work only in a direct chat (see [Where each command works](#where-each-command-works)). `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
@@ -95,7 +95,7 @@ Paths must be absolute; a relative one is refused and nothing is saved. Each all
 
 ## Resume an earlier conversation
 
-Every conversation a chat opens is remembered for that chat. `/resume` lists its last 20, newest first, each as “1 · title — Agent · 2h ago”, with numbered buttons, and ticks the one in effect. `/resume 2`, or a tap on the card, makes that conversation the chat's active one again (“↩️ Resumed “title” with Codex.”), so your next message continues it.
+Every conversation a chat opens is remembered for that chat. `/resume` lists up to 100, newest first, four to a page with **← Prev** and **Next →** and the numbering running across pages, each as “1 · title — Agent · 2h ago”, with numbered buttons, and ticks the one in effect. `/resume 2`, or a tap on the card, makes that conversation the chat's active one again (“↩️ Resumed “title” with Codex.”), so your next message continues it.
 
 Only conversations this chat opened are offered — never one from the web page or from another chat — and a conversation deleted since is left out.
 
@@ -107,7 +107,7 @@ In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop 
 
 `/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons in a direct chat and only the **Agent** button in a group. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
 
-On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with **New**, **Stop**, **Model**, **Status** and **Resume** in a direct chat, and with **New** and **Stop** only in a group. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts.
+On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with a button for every command the chat may use — all nine in a direct chat, the four group commands in a group — paged four to a page with **← Prev** and **Next →**. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts.
 
 ## Group defaults on SeaTalk
 

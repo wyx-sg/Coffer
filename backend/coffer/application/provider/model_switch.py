@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from coffer.application.provider import switch_ops
-from coffer.application.provider.projector import PlannedFile
+from coffer.application.provider.projector import NativeModel, PlannedFile
 from coffer.application.provider.switch_ops import activate_checks, agent_of_type
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
@@ -47,6 +47,7 @@ class BindingWriter(Protocol):
         model: str | None = None,
         tier_models: dict[str, str] | None = None,
         clear_tiers: bool = False,
+        clear_model: bool = False,
         actor: str = "api",
     ) -> Resource: ...
 
@@ -54,12 +55,26 @@ class BindingWriter(Protocol):
 @dataclass(frozen=True)
 class ModelSwitch:
     """What the dialog asks for. ``connection_uid`` ``None`` is the agent's own
-    built-in login, which carries no model or tiers."""
+    built-in login, which carries no Coffer binding or tiers: there the model
+    is the agent's own top-level ``model`` key, written with ``native_model``
+    (set it) or ``clear_native_model`` (remove it: the agent's built-in
+    default); neither leaves it as it is."""
 
     agent_type: AgentType
     connection_uid: str | None = None
     model: str | None = None
     tier_models: Mapping[str, str] | None = None
+    native_model: str | None = None
+    clear_native_model: bool = False
+
+    @property
+    def native(self) -> NativeModel | None:
+        """The change to the agent's own ``model`` key, if one is asked for."""
+        if self.connection_uid is not None:
+            return None
+        if self.native_model is not None:
+            return NativeModel(self.native_model)
+        return NativeModel(None) if self.clear_native_model else None
 
 
 @dataclass(frozen=True)
@@ -89,7 +104,7 @@ async def _plan(
     if agent is None:
         raise ResourceNotFound(switch.agent_type.default_name())
     if switch.connection_uid is None:
-        return agent, None, None, service._projector.plan_deproject(agent)
+        return agent, None, None, service._projector.plan_deproject(agent, switch.native)
     resource = await service.get(switch.connection_uid)
     cfg = service._cfg(resource)
     await activate_checks(service, resource, cfg, agent, switch.agent_type)
@@ -125,7 +140,15 @@ async def apply(
             if service._projector.current_fingerprint(pathlib.Path(path)) != was:
                 raise ConfigFileStale(path)
         if resource is None:
-            await switch_ops.deactivate(service, switch.agent_type, actor=actor)
+            await switch_ops.deactivate(
+                service, switch.agent_type, actor=actor, native_model=switch.native
+            )
+            # The binding is a Coffer connection's; the built-in login has none.
+            # Cleared after the file write, whose ``remove`` reads it to know
+            # which model Coffer wrote.
+            await agents.set_model_binding(
+                uid=agent.uid, clear_model=True, clear_tiers=True, actor=actor
+            )
         else:
             await _activate(service, agents, agent, resource, switch, actor=actor)
     return SwitchPreview(

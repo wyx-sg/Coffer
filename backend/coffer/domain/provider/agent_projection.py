@@ -33,6 +33,8 @@ from coffer.domain.provider.projection import (
     codex_model_catalog_path,
     remove_anthropic_settings,
     remove_codex_provider,
+    set_anthropic_model,
+    set_codex_model,
 )
 
 
@@ -114,6 +116,11 @@ class ProviderProjection(_Protocol):
         does not parse; the caller decides what that means."""
         ...
 
+    def set_native_model(self, text: str, model: str | None) -> str:
+        """``text`` with the agent's own top-level ``model`` set, or removed for
+        ``None`` (its built-in default). Touches nothing else."""
+        ...
+
 
 def claude_tiers(req: ProviderProjectionRequest) -> dict[str, str]:
     """The tier pins a projection writes: the binding's own, or — when the
@@ -172,6 +179,9 @@ class ClaudeCodeProviderProjection:
         # Compared as parsed data: the remover re-serialises.
         return bool(json.loads(remove_anthropic_settings(text)) != json.loads(text))
 
+    def set_native_model(self, text: str, model: str | None) -> str:
+        return set_anthropic_model(text, model)
+
 
 @dataclass(frozen=True)
 class CodexProviderProjection:
@@ -213,6 +223,9 @@ class CodexProviderProjection:
         if not text.strip():
             return False
         return bool(tomllib.loads(remove_codex_provider(text)) != tomllib.loads(text))
+
+    def set_native_model(self, text: str, model: str | None) -> str:
+        return set_codex_model(text, model)
 
 
 PROVIDER_PROJECTIONS: tuple[ClaudeCodeProviderProjection | CodexProviderProjection, ...] = (

@@ -60,6 +60,9 @@ from coffer.domain.provider.codex_projection import (
 from coffer.domain.provider.codex_projection import (
     remove_codex_provider as remove_codex_provider,
 )
+from coffer.domain.provider.codex_projection import (
+    set_codex_model as set_codex_model,
+)
 
 #: Keys written into ``env`` besides the tier pins.
 _BASE_URL = "ANTHROPIC_BASE_URL"
@@ -219,6 +222,23 @@ def remove_anthropic_settings(text: str, *, managed_model: str | None = None) ->
     return _dump(data)
 
 
+def set_anthropic_model(text: str, model: str | None) -> str:
+    """``settings.json`` text with the top-level ``model`` set to ``model``, or
+    the key removed for ``None`` — Claude Code's own default on its built-in
+    login. Every other key is kept; text that already says so comes back
+    unchanged, byte for byte."""
+    raw = json.loads(text) if text.strip() else {}
+    if not isinstance(raw, dict):
+        raw = {}
+    if (raw.get("model") == model) if model is not None else ("model" not in raw):
+        return text
+    if model is None:
+        raw.pop("model", None)
+    else:
+        raw["model"] = model
+    return _dump(raw)
+
+
 __all__ = [
     "CODEX_CATALOG_TRUNCATION_LIMIT",
     "CODEX_MODEL_CATALOG_FILENAME",
@@ -233,4 +253,6 @@ __all__ = [
     "model_picker",
     "remove_anthropic_settings",
     "remove_codex_provider",
+    "set_anthropic_model",
+    "set_codex_model",
 ]

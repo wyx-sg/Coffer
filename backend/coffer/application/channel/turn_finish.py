@@ -100,9 +100,18 @@ def failure_line(message: str) -> str:
     return f"⚠️ {reason}. Send it again to retry."
 
 
-def stopped_line(duration: float) -> str:
-    """``⏹ Stopped after 12s.``"""
-    return f"⏹ Stopped after {format_elapsed(duration)}."
+def stopped_line(duration: float, *, title: str = "", tool_count: int = 0, held: int = 0) -> str:
+    """``⏹ Stopped “Fix login” after 12s · 3 tools.`` — what was stopped, that it
+    did stop, and, when messages were queued behind it, that they wait."""
+    what = f" “{title}”" if title else ""
+    line = f"⏹ Stopped{what} after {format_elapsed(duration)}"
+    if tool_count:
+        line += f" · {tool_count} tool" + ("" if tool_count == 1 else "s")
+    line += "."
+    if held:
+        noun = "message is" if held == 1 else "messages are"
+        line += f"\n⏸ {held} queued {noun} on hold — send anything to continue."
+    return line
 
 
 def first_line(body: str) -> str:
@@ -165,11 +174,13 @@ async def _deliver_reply(
     end: TurnEnd,
     send_card: SendCard | None = None,
     stop_noted: bool = False,
+    stop_line: str | None = None,
 ) -> Delivered:
     """Deliver the finished reply and say what it turned out to be.
 
     ``stop_noted``: the "Stopping…" message was already rewritten into the
-    stop result, so the reply does not repeat it.
+    stop result, so the reply does not repeat it. ``stop_line``: that result,
+    naming what was stopped, when a ``/stop`` asked for it.
 
     The @mention is added HERE, to the body, exactly once: whichever of the
     surface or the ordinary send delivers the head carries it, and the overflow
@@ -218,7 +229,7 @@ async def _deliver_reply(
         )
         body = f"{text}\n\n{notice}" if text else notice
     elif end.stop_reason == "interrupted":
-        notice = stopped_line(end.duration)
+        notice = stop_line or stopped_line(end.duration, tool_count=end.tool_count)
         if stop_noted and not text:
             await surface.close("")
             return Delivered()

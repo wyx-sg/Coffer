@@ -20,10 +20,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coffer.application.channel.command_cards import (
-    GROUP_HELP_ACTIONS,
-    HELP_ACTIONS,
     STATUS_ACTIONS,
     command_card,
+    help_card,
 )
 from coffer.application.channel.command_text import settings_line
 from coffer.application.channel.parallel_threads import thread_lines
@@ -36,11 +35,10 @@ __all__ = ["cmd_help", "cmd_status"]
 
 
 async def cmd_help(ctx: CommandContext, _text: str = "") -> None:
-    """The roster as text, with the five actions where the transport has buttons."""
+    """The roster as text, with a button per command where the transport has buttons."""
     group = ctx.chat_kind == "group"
     body = help_text(group=group)
-    actions = GROUP_HELP_ACTIONS if group else HELP_ACTIONS
-    await ctx.answer(command_card(title="Commands", text=body, actions=actions), body)
+    await ctx.answer(help_card(text=body, group=group), body)
 
 
 def _state(running: bool, queued: int) -> str:

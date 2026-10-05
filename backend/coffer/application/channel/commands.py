@@ -182,17 +182,39 @@ class ChannelCommands:
         bound = row.active_conversation_id if row is not None else None
         running = session.running_conversation_id if session is not None else None
         target = running or bound
-        if target is not None:
-            self._turns.interrupt_turn(target)
-        answer = "⏹ Stopping…" if target is not None else "Nothing is running."
-        sent = await send(binding, peer.chat_id, answer, chat_kind=chat_kind, thread_id=thread_id)
-        if (
-            running is not None
-            and sent is not None
-            and sent.message_id
-            and binding.adapter.capabilities.edits_text
-        ):
-            stop_notice.remember(running, StopNotice(peer.chat_id, sent.message_id, chat_kind))
+        # A thread with a conversation bound but no turn in flight has nothing
+        # to stop: "Stopping…" there would never become "Stopped after …".
+        stopped = target is not None and self._turns.interrupt_turn(target)
+        if not stopped or target is None:
+            await send(
+                binding,
+                peer.chat_id,
+                "Nothing is running.",
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+            )
+            return
+        # Say which conversation is stopping; the turn's end says it stopped.
+        title = await self._title(target)
+        held = len(self._turns.pending(target))
+        sent = await send(
+            binding,
+            peer.chat_id,
+            f"⏹ Stopping “{title}”…",
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+        )
+        editable = sent is not None and sent.message_id and binding.adapter.capabilities.edits_text
+        stop_notice.remember(
+            target,
+            StopNotice(
+                peer.chat_id,
+                sent.message_id if editable and sent is not None else "",
+                chat_kind,
+                title=title,
+                held=held,
+            ),
+        )
 
     async def running_titles(self, binding: ChannelBinding, peer: ChannelPeer) -> list[str]:
         """The titles of the conversations running a turn anywhere in this chat."""

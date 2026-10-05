@@ -10,8 +10,10 @@
 // catalogue and is never introspected; an empty set means "no restriction" and
 // the endpoint is introspected. Both are narrowed to modality `text` (spec
 // provider-switching "Offer only text models to chat pickers"), and the staged
-// model is seeded first so it never vanishes from the list. The built-in login writes nothing: no
-// model or tiers, so the dialog shows only the provider.
+// model is seeded first so it never vanishes from the list. The built-in login
+// has no tiers, and its model is the agent's OWN: a draft over the agent's own
+// catalogue (`useBuiltinModels`), "" being its built-in default (the config
+// names none).
 import { useEffect, useMemo, useState } from "react";
 
 import type { AgentOut } from "@/lib/api/agents";
@@ -20,6 +22,7 @@ import { modelIds, WIRE_BY_AGENT } from "@/lib/api/providers";
 import { activeProviderFor } from "@/lib/providers/usedBy";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { useProviders } from "@/lib/hooks/useProviders";
+import { useAgentDefaultModel, useBuiltinModels } from "@/lib/hooks/useAgentModels";
 import {
   BUILTIN,
   isLocal,
@@ -56,20 +59,26 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const appliedModel = active === null ? "" : (agent.model ?? "");
   const appliedTiers: TierModels = hasTiers ? ((agent.tier_models ?? {}) as TierModels) : {};
   const appliedTiersJson = tiersKey(appliedTiers);
+  // On its own login the agent's config names the model; on a connection that
+  // key is the connection's, so moving to the built-in login starts at its default.
+  const nativeApplied = useAgentDefaultModel(active === null ? agent.type : "");
+  const appliedNative = active === null ? (nativeApplied.data ?? "") : "";
 
   const [draftConn, setDraftConn] = useState(appliedConn);
   const [draftModel, setDraftModel] = useState(appliedModel);
   const [draftTiers, setDraftTiers] = useState<TierModels>(appliedTiers);
+  const [draftNative, setDraftNative] = useState(appliedNative);
   const [fetched, setFetched] = useState<string[]>([]);
   // The draft has been reset to the applied state. Until then it holds the
   // pre-load guess, which would read as a change for one render.
   const [synced, setSynced] = useState(false);
 
   // The draft starts from what is applied, which is known once providers load.
-  const loaded = !providers.isPending;
+  const loaded = !providers.isPending && !nativeApplied.isLoading;
   useEffect(() => {
     if (!loaded) return;
     setDraftConn(appliedConn);
+    setDraftNative(appliedNative);
     setDraftModel(appliedModel);
     setDraftTiers(appliedTiers);
     setSynced(true);
@@ -78,6 +87,15 @@ export function useAgentConnectionDraft(agent: AgentOut) {
 
   const draftConnObj = compatible.find((p) => p.uid === draftConn) ?? null;
   const draftIsBuiltin = draftConn === BUILTIN;
+  // The agent's own models, labelled; the config's own id stays selectable
+  // even when the catalogue lacks it.
+  const builtin = useBuiltinModels(agent.type, draftIsBuiltin);
+  const nativeModels = useMemo(() => {
+    const out = (builtin.data?.models ?? []).map((m) => ({ id: m.id, label: m.label || m.id }));
+    for (const id of [draftNative, appliedNative])
+      if (id && !out.some((m) => m.id === id)) out.unshift({ id, label: id });
+    return out;
+  }, [builtin.data, draftNative, appliedNative]);
   const local = isLocal(draftConnObj);
 
   // "Restricted" is asked of the WHOLE curated set; the options are its text
@@ -118,7 +136,10 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const pickConnection = (uid: string) => {
     setDraftConn(uid);
     setFetched([]);
-    if (uid === BUILTIN) return stageModel("", [], false);
+    if (uid === BUILTIN) {
+      setDraftNative(appliedNative);
+      return stageModel("", [], false);
+    }
     const conn = compatible.find((p) => p.uid === uid);
     if (!conn) return;
     const connLocal = isLocal(conn);
@@ -141,6 +162,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
 
   const dirty =
     draftConn !== appliedConn ||
+    (draftIsBuiltin && draftNative !== appliedNative) ||
     draftModel !== appliedModel ||
     (showTiers && tiersKey(draftTiers) !== appliedTiersJson);
   // A model is needed on a provider; Review is for something to change.
@@ -152,6 +174,10 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     connection_uid: draftIsBuiltin ? null : draftConn,
     model: draftIsBuiltin ? null : draftModel,
     tier_models: showTiers ? (draftTiers as Record<string, string>) : null,
+    // The agent's own model on its built-in login: set it, or remove the key.
+    ...(draftIsBuiltin
+      ? { native_model: draftNative || null, clear_native_model: draftNative === "" }
+      : {}),
   };
 
   return {
@@ -161,6 +187,9 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     draftConnObj,
     draftIsBuiltin,
     draftModel,
+    draftNative,
+    nativeModels,
+    pickNative: setDraftNative,
     models,
     local,
     showTiers,

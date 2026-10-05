@@ -45,3 +45,23 @@ def test_a_model_left_in_the_raw_config_blob_is_passed_through_untouched():
     """The blob is provider passthrough; nothing on the channel overrides it."""
     spec = _resolve(default_agent_config={"model": "from-blob"})
     assert spec.agent_config == {"model": "from-blob"}
+
+
+def test_the_channel_default_model_applies_to_the_default_agent():
+    spec = _resolve(default_agent_config={"model": "m1", "cwd": "/w"})
+    assert spec.agent_config == {"model": "m1", "cwd": "/w"}
+
+
+def test_a_sticky_other_agent_does_not_inherit_the_channel_default_model():
+    spec = _resolve(preferred_agent="codex", default_agent_config={"model": "m1", "cwd": "/w"})
+    assert spec.agent_key == "codex"
+    assert spec.agent_config == {"cwd": "/w"}
+
+
+def test_a_sticky_model_beats_the_channel_default_model():
+    spec = _resolve(
+        preferred_agent="builtin",
+        preferred_model="m2",
+        default_agent_config={"model": "m1"},
+    )
+    assert spec.agent_config == {"model": "m2"}

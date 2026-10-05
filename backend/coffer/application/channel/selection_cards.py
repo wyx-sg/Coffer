@@ -66,7 +66,7 @@ PAGE_SIZE = MAX_CARD_BUTTONS - 2
 
 #: The card kinds that can be paged — closed and explicit, so a page value
 #: naming anything else is dropped rather than re-rendered.
-PAGED_KINDS: frozenset[str] = frozenset({"model", "collection", "resume", "dir", "agent"})
+PAGED_KINDS: frozenset[str] = frozenset({"model", "collection", "resume", "dir", "agent", "help"})
 
 
 def callback_fits(value: str) -> bool:
@@ -160,6 +160,7 @@ def paginate(
     current_value: str | None,
     current_label: str,
     page: int | None,
+    lines: Sequence[str] | None = None,
 ) -> SelectionCard:
     """Window ``options`` into one card — the single place the rule lives.
 
@@ -169,9 +170,17 @@ def paginate(
     ``page`` is ``None`` for "open on whichever page holds the current choice";
     an explicit index is clamped into range, so a stale Next from an older,
     longer catalogue cannot land past the end.
+
+    ``lines`` is one body line per option, aligned with ``options``; the card
+    body shows only the lines of the options on the page being shown, so a
+    long numbered list is read a page at a time next to its buttons.
     """
+
+    def body(start: int, stop: int) -> str:
+        return "\n".join([header, *(lines[start:stop] if lines else [])])
+
     if len(options) <= MAX_CARD_BUTTONS:
-        return SelectionCard(title=title, text=header, buttons=options)
+        return SelectionCard(title=title, text=body(0, len(options)), buttons=options)
     pages = (len(options) + PAGE_SIZE - 1) // PAGE_SIZE
     home = _home_page(options, current_value)
     index = (home or 0) if page is None else max(0, min(page, pages - 1))
@@ -184,7 +193,7 @@ def paginate(
         footer += f" · ✓ {current_label} is on page {home + 1}"
     return SelectionCard(
         title=title,
-        text=f"{header}\n{footer}",
+        text=f"{body(index * PAGE_SIZE, index * PAGE_SIZE + PAGE_SIZE)}\n{footer}",
         buttons=window + _navigation(kind, index, pages),
         page=index,
         pages=pages,
@@ -299,16 +308,19 @@ def resume_card(
 ) -> SelectionCard:
     """Pick an earlier conversation of this chat thread to reopen (spec channels
     "Resume an earlier conversation from chat"). ``entries`` is
-    ``(conversation id, title)``, newest first; ``header`` is the listing."""
+    ``(conversation id, listing line)``, newest first; a button is the entry's
+    global number (its position in that list, so ``/resume <n>`` agrees with
+    it on every page) and the page's body shows the lines of its own entries."""
     options = []
-    for n, (conversation_id, _title) in enumerate(entries, start=1):
-        label = str(n)
+    lines = []
+    for n, (conversation_id, line) in enumerate(entries, start=1):
         value = f"resume:{conversation_id}"
         if callback_fits(value):
             selected = conversation_id == active
             options.append(
-                ChoiceButton(label=tick(label, selected), value=value, selected=selected)
+                ChoiceButton(label=tick(str(n), selected), value=value, selected=selected)
             )
+            lines.append(line)
     return paginate(
         kind="resume",
         title="Resume a conversation",
@@ -317,4 +329,5 @@ def resume_card(
         current_value=f"resume:{active}" if active else None,
         current_label="the current one",
         page=page,
+        lines=lines,
     )

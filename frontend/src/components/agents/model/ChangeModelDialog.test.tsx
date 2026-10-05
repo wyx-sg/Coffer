@@ -71,15 +71,23 @@ const PREVIEW = {
 };
 
 let applyError: ApiError | null;
+let nativeModel: string | null;
+let builtinModels: { models: unknown[]; default_model: string | null };
 let testResult: { ok: boolean; message: string };
 
 beforeEach(() => {
   call.mockReset();
   applyError = null;
+  nativeModel = null;
+  builtinModels = { models: [], default_model: null };
   testResult = { ok: true, message: "ok" };
   call.mockImplementation(async (path: string, opts) => {
     if (path === "/providers") return { providers: [PROVIDER] };
-    if (path.startsWith("/agent-providers/")) return { models: [], default_model: null };
+    if (path.startsWith("/agent-providers/")) {
+      return path.endsWith("source=builtin")
+        ? builtinModels
+        : { models: [], default_model: nativeModel };
+    }
     if (path === "/models/test-connection") return testResult;
     if (path === "/providers/model-switch/preview") return PREVIEW;
     if (path === "/providers/model-switch/apply") {
@@ -197,15 +205,91 @@ describe("ChangeModelDialog", () => {
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
   });
 
-  acceptance("provider-switching", "the built-in login asks for a provider only", async () => {
-    renderDialog();
-    const dialog = await screen.findByRole("dialog");
-    const trigger = await within(dialog).findByRole("combobox", { name: /provider/i });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: /built-in login/i }));
-    await waitFor(() => expect(within(dialog).queryByText("Default model")).toBeNull());
-    expect(within(dialog).queryByText("Model per tier")).toBeNull();
-    expect(within(dialog).getByText(/picks its model itself/)).toBeInTheDocument();
+  acceptance(
+    "provider-switching",
+    "the built-in login offers the agent's own models and no tiers",
+    async () => {
+      builtinModels = {
+        models: [
+          { id: "opus", label: "Opus 5", description: "" },
+          { id: "sonnet", label: "Sonnet 5", description: "" },
+        ],
+        default_model: null,
+      };
+      renderDialog();
+      const dialog = await screen.findByRole("dialog");
+      const trigger = await within(dialog).findByRole("combobox", { name: /provider/i });
+      fireEvent.keyDown(trigger, { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name: /built-in login/i }));
+      const model = await within(dialog).findByRole("combobox", { name: "Default model" });
+      expect(model).toHaveTextContent("Built-in default");
+      expect(within(dialog).queryByText("Model per tier")).toBeNull();
+      // The list is the agent's own, asked for as such while a connection is active.
+      expect(
+        call.mock.calls.some(([p]) => p === "/agent-providers/claude_code/models?source=builtin"),
+      ).toBe(true);
+      fireEvent.keyDown(model, { key: "ArrowDown" });
+      expect(await screen.findByRole("option", { name: "Opus 5" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Sonnet 5" })).toBeInTheDocument();
+    },
+  );
+
+  acceptance(
+    "provider-switching",
+    "choosing a model on the built-in login sets the agent's own model",
+    async () => {
+      nativeModel = "sonnet";
+      builtinModels = {
+        models: [
+          { id: "opus", label: "Opus 5", description: "" },
+          { id: "sonnet", label: "Sonnet 5", description: "" },
+        ],
+        default_model: "sonnet",
+      };
+      renderDialog({ ...AGENT, connection_uid: null, model: null, tier_models: null });
+      const model = await screen.findByRole("combobox", { name: "Default model" });
+      // Preselected with what the agent's config names now.
+      await waitFor(() => expect(model).toHaveTextContent("Sonnet 5"));
+      expect(screen.getByRole("button", { name: "Review changes" })).toBeDisabled();
+      fireEvent.keyDown(model, { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name: "Opus 5" }));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Review changes" })).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+      await waitFor(() =>
+        expect(call.mock.calls.some(([p]) => p === "/providers/model-switch/preview")).toBe(true),
+      );
+      const preview = call.mock.calls.find(([p]) => p === "/providers/model-switch/preview");
+      expect((preview?.[1] as { body: unknown }).body).toMatchObject({
+        connection_uid: null,
+        native_model: "opus",
+        clear_native_model: false,
+      });
+    },
+  );
+
+  test("choosing Built-in default on the built-in login clears the agent's own model", async () => {
+    nativeModel = "gpt-9";
+    renderDialog({ ...AGENT, connection_uid: null, model: null, tier_models: null });
+    const model = await screen.findByRole("combobox", { name: "Default model" });
+    // A configured id the catalogue lacks still reads as its id.
+    await waitFor(() => expect(model).toHaveTextContent("gpt-9"));
+    fireEvent.keyDown(model, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Built-in default" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Review changes" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+    await waitFor(() =>
+      expect(call.mock.calls.some(([p]) => p === "/providers/model-switch/preview")).toBe(true),
+    );
+    const preview = call.mock.calls.find(([p]) => p === "/providers/model-switch/preview");
+    expect((preview?.[1] as { body: unknown }).body).toMatchObject({
+      connection_uid: null,
+      native_model: null,
+      clear_native_model: true,
+    });
   });
 
   acceptance(

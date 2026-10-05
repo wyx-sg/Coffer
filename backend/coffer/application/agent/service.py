@@ -324,11 +324,13 @@ class AgentService:
         model: str | None = None,
         tier_models: dict[str, str] | None = None,
         clear_tiers: bool = False,
+        clear_model: bool = False,
         actor: str = "api",
     ) -> Resource:
         """Persist this agent's per-agent model binding (spec agent-registry
         "Carry the model binding on the agent record"). ``None`` fields are left
-        unchanged; ``clear_tiers`` explicitly unbinds. A
+        unchanged; ``clear_tiers`` and ``clear_model`` explicitly unbind (the
+        agent is on its built-in login, which has no binding). A
         ``tier_models`` given replaces the whole mapping — the Model tab sends
         every tier at once, and a partial merge could keep a tier the user
         reset. The new binding reaches the agent's native config through the
@@ -337,13 +339,15 @@ class AgentService:
         existing = await self.get(uid)
         cfg = AgentConfig.model_validate(existing.config)
         overrides: dict[str, object] = {}
-        if model is not None:
+        if clear_model:
+            overrides["model"] = None
+        elif model is not None:
             overrides["model"] = model
         if clear_tiers:
             overrides["tier_models"] = None
         elif tier_models is not None:
             overrides["tier_models"] = tier_models
-        if not overrides:
+        if not overrides or all(getattr(cfg, k) == v for k, v in overrides.items()):
             return existing
         try:
             new_cfg = AgentConfig.model_validate(cfg.model_dump() | overrides)

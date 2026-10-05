@@ -53,6 +53,10 @@ def resolve_conversation_spec(
     else:
         agent_key = default_agent
     config: dict[str, Any] = dict(default_agent_config) if default_agent_config else {}
+    # The channel's default model names a model of the DEFAULT agent; another
+    # agent has no use for it (the directory, by contrast, rides regardless).
+    if agent_key != default_agent:
+        config.pop("model", None)
     # The thread's sticky settings (spec channels "Keep a chat's agent, model and
     # directory across its conversations") override the channel's defaults. A model
     # chosen for one agent means nothing to another, so it rides only while the
