@@ -30,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AgentOption } from "@/components/agent/AgentOption";
+import { agentDisplayName } from "@/lib/agents/display";
 import { useAgents } from "@/lib/hooks/useAgents";
 
 interface Props {
@@ -47,13 +49,17 @@ export function AgentSelect({ id, label, value, onChange, disabled }: Props) {
   const { t } = useTranslation();
   const { data: agents } = useAgents();
 
-  const known = (agents ?? []).map((a) => ({ uid: a.uid, name: a.name }));
+  const known = (agents ?? []).map((a) => ({
+    uid: a.uid,
+    type: a.type ?? "",
+    name: agentDisplayName(a),
+  }));
   // A stored uid this vault has no agent for still gets an option, labelled
   // with the uid itself — there is no name to print, and printing nothing
   // would hide the binding rather than report it.
   const options =
     value !== "" && !known.some((a) => a.uid === value)
-      ? [...known, { uid: value, name: value }]
+      ? [...known, { uid: value, type: "", name: value }]
       : known;
 
   return (
@@ -64,7 +70,7 @@ export function AgentSelect({ id, label, value, onChange, disabled }: Props) {
       <SelectContent>
         {options.map((a) => (
           <SelectItem key={a.uid} value={a.uid}>
-            {a.name}
+            <AgentOption type={a.type} name={a.name} />
           </SelectItem>
         ))}
       </SelectContent>

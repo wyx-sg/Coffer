@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AgentOption } from "@/components/agent/AgentOption";
 import type { AgentFilter } from "@/lib/agents/agentFilter";
 import { useSetAgentFilter } from "@/lib/agents/agentFilter";
-import { agentTypeLabel } from "@/lib/agents/display";
+import { agentDisplayName } from "@/lib/agents/display";
 import { useAgents } from "@/lib/hooks/useAgents";
 
 const ALL = "__all__";
@@ -37,12 +38,14 @@ export function AgentReachFilter({ filter }: { filter: AgentFilter | null }) {
         <SelectItem value={ALL}>{t("reachFilter.all")}</SelectItem>
         {agents.map((a) => (
           <SelectItem key={a.uid} value={a.uid}>
-            {agentTypeLabel(a.type)}
+            <AgentOption type={a.type} name={agentDisplayName(a)} />
           </SelectItem>
         ))}
         {/* An `?agent=` that names no agent still shows, so the list never looks unfiltered. */}
         {filter && !agents.some((a) => a.uid === filter.uid) ? (
-          <SelectItem value={filter.uid}>{filter.label ?? filter.uid}</SelectItem>
+          <SelectItem value={filter.uid}>
+            <AgentOption type="" name={filter.label ?? filter.uid} />
+          </SelectItem>
         ) : null}
       </SelectContent>
     </Select>

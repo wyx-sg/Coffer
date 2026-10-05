@@ -6,6 +6,7 @@
 import type { TFunction } from "i18next";
 import { PencilLine, ScrollText, Server, type LucideIcon } from "lucide-react";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
 import type { StatusTone } from "@/lib/statusTone";
 import { describeActivity, describeDaemonRecord } from "@/lib/activity/activityText";
@@ -139,7 +140,7 @@ export function ByCell({
   if (record.source === "call") {
     const agent = record.call.agent_uid ? agents.get(record.call.agent_uid) : undefined;
     return agent ? (
-      <span className="block truncate text-xs text-text">{agent.name}</span>
+      <AgentBadge type={agent.type} name={agent.name} size="sm" showName tooltip={false} />
     ) : (
       <span className="text-xs text-text-subtle">—</span>
     );

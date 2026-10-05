@@ -1256,7 +1256,9 @@ does not support MUST get a neutral agent glyph on the same tile. Every agent
 sits on the same neutral tile, so colour outside the mark stays reserved for
 state: a healthy agent's badge is plain, and only a problem adds a status mark.
 A badge shown without its name MUST carry the name, and its state when it has
-one, in its accessible label and its tooltip.
+one, in its accessible label and its tooltip. This holds inside selects, filters
+and checklists too: an option or a chosen value names the agent by its mark and
+its display name ("Claude Code"), never by its registry key ("claude-code").
 
 #### Scenario: a supported agent is shown by its official mark
 - **GIVEN** a Claude Code agent and a Codex agent
@@ -1268,6 +1270,11 @@ one, in its accessible label and its tooltip.
 - **GIVEN** an agent type other than Claude Code or Codex
 - **WHEN** it renders as an agent badge
 - **THEN** the badge shows the neutral agent glyph on the neutral tile, labelled with the agent's name
+
+#### Scenario: an agent in a select or filter carries its mark and display name
+- **GIVEN** a select or filter that lists agents, such as a channel's default agent
+- **WHEN** it shows an option or its chosen value
+- **THEN** the agent's official mark sits beside its display name, and the registry key is not shown
 
 ### Requirement: Pair every status colour with its word
 A status MUST never be conveyed by colour alone: the dot MUST always sit beside

@@ -12,6 +12,7 @@
 // to it. Nothing needs React, so nothing here imports it.
 import type { TFunction } from "i18next";
 
+import { agentDisplayName } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import type { Scope } from "@/lib/hooks/useScope";
 
@@ -78,6 +79,8 @@ export function reachLabel(t: TFunction, live: ReachMode | null, scope: Scope | 
 export interface PickableAgent {
   uid: string;
   name: string;
+  /** What a person reads: the display name (`Claude Code`), not the key in `name`. */
+  label: string;
   /** Agent type key; unknown or empty draws the neutral mark. */
   type: string;
   /** False when detection finds no program on this machine — the only state
@@ -90,6 +93,7 @@ export function pickableAgents(agents: readonly AgentOut[] | undefined): Pickabl
   return (agents ?? []).map((a) => ({
     uid: a.uid,
     name: a.name,
+    label: agentDisplayName(a),
     type: a.type ?? "",
     installed: a.state !== "config_only" && a.state !== "missing",
   }));
@@ -99,7 +103,14 @@ export function pickableAgents(agents: readonly AgentOut[] | undefined): Pickabl
  *  vault does not know keeps the neutral mark, as the pick-list keeps its row. */
 export function chosenAgents(scope: Scope | null, registered: PickableAgent[]): PickableAgent[] {
   return (scope?.agents ?? []).map(
-    (uid) => registered.find((a) => a.uid === uid) ?? { uid, name: uid, type: "", installed: true },
+    (uid) =>
+      registered.find((a) => a.uid === uid) ?? {
+        uid,
+        name: uid,
+        label: uid,
+        type: "",
+        installed: true,
+      },
   );
 }
 
