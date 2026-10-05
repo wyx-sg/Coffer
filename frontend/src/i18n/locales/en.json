@@ -716,7 +716,6 @@
         "secret": "Secret",
         "foundVersion": "Found · {{version}}",
         "viewClis": "View in CLIs",
-        "viewSecrets": "View in Secrets",
         "status": {
           "found": "Found",
           "not_found": "Not found",
@@ -6088,5 +6087,17 @@
     "workspacePlaceholder": "~/.coffer/content/workspace",
     "openIn": "Open in {{terminal}}",
     "moreTerminals": "Open in another terminal"
+  },
+  "secretRef": {
+    "replaceOpen": "Replace key…",
+    "source": "Where the key comes from",
+    "newValue": "Enter a new value",
+    "useExisting": "Use another secret",
+    "pickPlaceholder": "Choose a stored secret",
+    "pickEmpty": "No other stored secret.",
+    "existingHint": "Only this one uses the chosen secret; the current secret and its value stay as they are.",
+    "title": "Replace {{field}}",
+    "current": "Current secret",
+    "useSubmit": "Use this secret"
   }
 }

@@ -70,8 +70,10 @@ class ProviderCreate(BaseModel):
 
 
 class ProviderPatch(BaseModel):
-    """Partial update. ``secret_ref`` is immutable (it is the vault address
-    the connection owns); ``protocol`` is not — the probe that guessed the wire
+    """Partial update. The key moves one of two ways, never both at once:
+    ``secret_value`` stores a new value for the secret the connection already
+    cites, ``secret_ref`` (``secret/<id>``) re-points it at ANOTHER stored
+    secret. ``protocol`` is mutable too — the probe that guessed the wire
     can be wrong, so it is corrected in place rather than by re-entering the
     connection, key and all.
 
@@ -91,6 +93,7 @@ class ProviderPatch(BaseModel):
     protocol: Protocol | None = None
     base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
+    secret_ref: str | None = None
     models: list[ProviderModel] | None = None
     description: str | None = None
 

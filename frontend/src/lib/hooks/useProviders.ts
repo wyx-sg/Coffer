@@ -16,6 +16,7 @@ import {
   pendingApprovalsKey,
   providerKey,
   providersKey,
+  secretsListKey,
 } from "@/lib/api/queryKeys";
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
@@ -104,6 +105,20 @@ export function useReplaceProviderKey() {
       providersApi.update(vars.uid, { secret_value: vars.secret }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: providersKey });
+    },
+  });
+}
+
+/** Point a provider at ANOTHER stored secret (its `secret_ref`); neither
+ *  secret's value changes. Failures render inline in the Replace dialog. */
+export function useRebindProviderKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { uid: string; secretRef: string }) =>
+      providersApi.update(vars.uid, { secret_ref: vars.secretRef }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: providersKey });
+      void qc.invalidateQueries({ queryKey: secretsListKey });
     },
   });
 }

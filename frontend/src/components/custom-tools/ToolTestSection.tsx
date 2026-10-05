@@ -10,6 +10,7 @@ import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolHeaderIn, CustomToolIn } from "@/lib/api/customTools";
 import { testArguments, type ArgRow } from "@/lib/customTools/schemaArgs";
 import { useTestCustomTool, useTestUnsavedCustomTool } from "@/lib/hooks/useCustomTools";
+import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import { ToolTestResult } from "./ToolTestResult";
 
 /** Where the request runs: a saved group by name, or an unsaved group's settings. */
@@ -33,6 +34,7 @@ interface Props {
 
 export function ToolTestSection(props: Props) {
   const { target, secret, args, draft, ready } = props;
+  const { displayOf } = useSecretChoices();
   const { t } = useTranslation();
   const saved = useTestCustomTool("group" in target ? target.group : "");
   const unsaved = useTestUnsavedCustomTool();
@@ -57,7 +59,7 @@ export function ToolTestSection(props: Props) {
     "unsaved" in target
       ? t(`customTools.test.noteUnsaved.${props.saveWord}`)
       : secret
-        ? t(`customTools.test.noteSecret.${props.saveWord}`, { secret })
+        ? t(`customTools.test.noteSecret.${props.saveWord}`, { secret: displayOf(secret) })
         : t(`customTools.test.note.${props.saveWord}`);
 
   return (

@@ -124,13 +124,23 @@ without changing the ref. A connection's key is bound to its base URL when the c
 and the new value is stored at once, with no approval
 ([secret](../secret/spec.md) "Store a secret through the API"). The key still reaches a new
 base URL only after that URL is approved.
-`secret_ref` itself is immutable on `PATCH`.
+`PATCH` MAY instead carry `secret_ref` (an existing stored secret, `secret/<id>`), which re-points the
+connection at that other secret and leaves both vault entries as they are; the new ref is held for
+approval like any key a destination has not yet received. `secret_value` and `secret_ref` MUST NOT be
+sent together (`422`), a ref nothing is stored under is refused as a missing secret, and a connection
+that has no key (a local runtime) takes neither.
 
 #### Scenario: rotate a connection's secret without changing its ref
 - **GIVEN** a connection created with an inline secret
 - **WHEN** the user patches it with a new `secret_value`
 - **THEN** its `secret_ref` is unchanged
 - **AND** the vault entry at that ref holds the new secret, which is what the connection's key resolves to
+
+#### Scenario: use another stored secret
+- **GIVEN** a connection with its own key and another stored secret
+- **WHEN** the user patches it with that secret's `secret_ref`
+- **THEN** the connection's `secret_ref` is the other secret's, neither vault entry changes, and the connection's key resolves to the other secret's value
+- **AND** a patch that carries both `secret_value` and `secret_ref` is rejected `422` with nothing changed
 
 ### Requirement: Delete an owned secret with its connection
 On delete, if the connection owns its secret ref (nothing else cites it), the system MUST delete

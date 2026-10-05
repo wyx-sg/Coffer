@@ -37,7 +37,7 @@ export function ToolHeadersField({
       <Label>{t("customTools.editor.headers")}</Label>
       {groupHeaders.map((h) =>
         h.secret ? (
-          <AuthLine key={h.name} header={h.name} secret={h.secret} trailing={fromGroup} />
+          <AuthLine key={h.name} header={h.name} secret={h.secret} trailing={fromGroup} plain />
         ) : (
           <span key={h.name} className="inline-flex items-center gap-2">
             <span className="font-mono text-xs">

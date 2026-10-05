@@ -23,6 +23,7 @@ import {
   mcpStatusKey,
   mcpSummaryKey,
   mcpTieringKey,
+  resourcesKey,
 } from "@/lib/api/queryKeys";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
@@ -32,6 +33,8 @@ import { useTestMcpServer } from "@/lib/hooks/useMcpServerMutations";
 import { useMcpServerStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { useSecrets } from "@/lib/hooks/useSecrets";
+import { rebindMcpSecret } from "@/lib/mcp/rebindMcpSecret";
+import { secretsKey } from "@/lib/api/queryKeys";
 import { McpCapabilityTab } from "./McpCapabilityTab";
 import { McpDeleteDialog } from "./McpDeleteDialog";
 import { McpLogDrawer } from "./McpLogDrawer";
@@ -109,6 +112,13 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       },
       onSettled: refresh,
     });
+  // Replace key… on a Requires row: the same config, that one env var / header citing another secret.
+  const rebindSecret = async (field: string, ref: string) => {
+    await rebindMcpSecret(resource, field, ref);
+    void qc.invalidateQueries({ queryKey: resourcesKey });
+    void qc.invalidateQueries({ queryKey: secretsKey });
+    refresh();
+  };
   const turnOn = () => enable.mutate({ kind: "mcp_server", uid });
   const turnOff = () =>
     disable.mutate(
@@ -172,6 +182,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
             summary={summary.data}
             summaryPending={summary.isPending}
             requires={detail?.requires}
+            onRebindSecret={rebindSecret}
             callout={
               <McpStatusCallout
                 name={resource.name}

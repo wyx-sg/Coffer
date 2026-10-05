@@ -52,6 +52,14 @@ vi.mock("@/lib/api/secret", () => ({
           mentioned_by_skills: [],
           bindings: [],
         },
+        {
+          ref: "secret/c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+          label: "Team key",
+          present: true,
+          cited_by: [],
+          mentioned_by_skills: [],
+          bindings: [],
+        },
       ],
     })),
   },
@@ -512,6 +520,29 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(dialog.getByRole("button", { name: "Replace key" }));
     await waitFor(() => expect(api.update).toHaveBeenCalledWith(UID, { secret_value: "sk-new" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  test("Replace key can use another stored secret instead, without probing it", async () => {
+    serve(makeProvider());
+    api.update.mockResolvedValue(makeProvider());
+    renderPage();
+    await heading();
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace key…" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.click(dialog.getByRole("button", { name: "Use another secret" }));
+    expect(dialog.queryByLabelText("New key")).toBeNull();
+    fireEvent.click(dialog.getByRole("combobox"));
+    expect(screen.queryByRole("option", { name: /Acme key/ })).toBeNull();
+    fireEvent.click(await screen.findByRole("option", { name: /Team key/ }));
+    fireEvent.click(dialog.getByRole("button", { name: "Use this secret" }));
+    await waitFor(() =>
+      expect(api.update).toHaveBeenCalledWith(UID, {
+        secret_ref: "secret/c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      }),
+    );
+    expect(listModels).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 

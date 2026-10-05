@@ -2027,8 +2027,10 @@ components:
       type: object
     ProviderPatch:
       description: |-
-        Partial update. ``secret_ref`` is immutable (it is the vault address
-        the connection owns); ``protocol`` is not — the probe that guessed the wire
+        Partial update. The key moves one of two ways, never both at once:
+        ``secret_value`` stores a new value for the secret the connection already
+        cites, ``secret_ref`` (``secret/<id>``) re-points it at ANOTHER stored
+        secret. ``protocol`` is mutable too — the probe that guessed the wire
         can be wrong, so it is corrected in place rather than by re-entering the
         connection, key and all.
 
@@ -2066,6 +2068,11 @@ components:
           anyOf:
           - $ref: '#/components/schemas/Protocol'
           - type: 'null'
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         secret_value:
           anyOf:
           - maxLength: 8192

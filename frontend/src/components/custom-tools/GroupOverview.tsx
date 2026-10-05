@@ -8,8 +8,10 @@ import type { ToolRow } from "@/components/mcp/server/toolRows";
 import type { AgentOut } from "@/lib/api/agents";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
+import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { GroupDefinition } from "./GroupDefinition";
 import { GroupTopTools } from "./GroupTopTools";
+import { headersWithSecret } from "./headerRows";
 import { groupRequires } from "./overviewRows";
 
 interface Props {
@@ -31,6 +33,12 @@ export function GroupOverview({
   toolsHref,
   onReimport,
 }: Props) {
+  const update = useUpdateCustomToolGroup(group.name);
+  // Replace key… on a header's secret: that header cites another secret, nothing else changes.
+  const rebind = (header: string, ref: string) =>
+    update.mutateAsync({
+      headers: headersWithSecret(group, header, ref.replace(/^secret\//, "")),
+    });
   return (
     <div className="flex flex-col gap-6">
       <GroupDefinition group={group} onReimport={onReimport} />
@@ -43,7 +51,7 @@ export function GroupOverview({
           summaryPending={summaryPending}
           activityHref={`/activity?tab=mcp&q=${encodeURIComponent(group.name)}`}
         />
-        <McpRequires requires={groupRequires(group)} />
+        <McpRequires requires={groupRequires(group)} onRebind={(r, ref) => rebind(r.name, ref)} />
         <GroupTopTools name={group.name} rows={rows} toolsHref={toolsHref} />
       </SectionStack>
     </div>

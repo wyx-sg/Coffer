@@ -14,7 +14,7 @@ import { KeyRound, Lock } from "lucide-react";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
-import { SecretNameLink } from "@/components/secret/SecretNameLink";
+import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import type { Provider } from "@/lib/api/providers";
 import { useProxyAddress } from "@/lib/hooks/useProviderPrices";
@@ -146,18 +146,13 @@ export function ProviderEndpoint({
           }
         >
           {provider.secret_ref ? (
-            <>
-              <SecretNameLink
-                secretRef={provider.secret_ref}
-                className="max-w-[260px] truncate text-sm"
-              />
-              {rejected ? <StatusWord tone="err">{t("providers.key.rejected")}</StatusWord> : null}
-              {rejected ? null : (
-                <Button variant="outline" size="sm" onClick={onReplaceKey}>
-                  <KeyRound aria-hidden /> {t("providers.key.replaceOpen")}
-                </Button>
-              )}
-            </>
+            <SecretRefControl
+              secretRef={provider.secret_ref}
+              onReplace={rejected ? undefined : onReplaceKey}
+              status={
+                rejected ? <StatusWord tone="err">{t("providers.key.rejected")}</StatusWord> : null
+              }
+            />
           ) : (
             <span className="text-sm">{t("providers.key.noneValue")}</span>
           )}

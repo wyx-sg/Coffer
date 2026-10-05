@@ -10,6 +10,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SETTINGS_STACK, SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
+import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
@@ -52,6 +53,7 @@ export function ChannelSettingsTab({
   const setTitle = useSetResourceTitle();
   const config = channel.config;
   const seatalk = config.channel_type === "seatalk";
+  const secretRef = seatalk ? config.app_secret_ref : config.bot_token_ref;
 
   const title = useSettingDraft(
     channel.title ?? "",
@@ -125,11 +127,14 @@ export function ChannelSettingsTab({
         ) : null}
         <SettingRow
           label={seatalk ? t("channels.dialog.appSecret") : t("channels.dialog.botToken")}
-          description={<span className="font-mono">••••••••••••</span>}
         >
-          <Button size="sm" variant="outline" onClick={onReplaceSecret}>
-            {t("channels.settings.secrets.replace")}
-          </Button>
+          {typeof secretRef === "string" && secretRef ? (
+            <SecretRefControl secretRef={secretRef} onReplace={onReplaceSecret} />
+          ) : (
+            <Button size="sm" variant="outline" onClick={onReplaceSecret}>
+              {t("channels.settings.secrets.replace")}
+            </Button>
+          )}
         </SettingRow>
         <SettingRow
           label={

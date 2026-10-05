@@ -423,11 +423,9 @@ describe("McpServerPane", () => {
       expect(screen.getByText("View in CLIs")).toHaveAttribute("href", "/clis/npx");
       expect(screen.getByText("Missing")).toBeInTheDocument();
       // A secret row names the secret, not the header that carries it.
-      expect(screen.getByText("sentry.AUTH_TOKEN")).toHaveAttribute("title", "Authorization");
-      expect(screen.getByText("View in Secrets")).toHaveAttribute(
-        "href",
-        "/secrets?q=sentry.AUTH_TOKEN",
-      );
+      expect(screen.getByText("Authorization")).toBeInTheDocument();
+      expect(screen.queryByText("View in Secrets")).toBeNull();
+      expect(screen.getByRole("button", { name: /replace key/i })).toBeInTheDocument();
       // Busiest first, four shown, read-only (no switches), the rest one link away.
       const tools = await screen.findByRole("table", { name: "Most-called tools" });
       const rows = within(tools).getAllByRole("row");

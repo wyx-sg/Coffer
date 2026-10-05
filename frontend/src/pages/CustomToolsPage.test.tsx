@@ -56,6 +56,7 @@ vi.mock("@/lib/api/secret", () => ({
         },
         {
           ref: "secret/billing-token",
+          label: "Billing token",
           present: true,
           locked: false,
           cited_by: [],
@@ -247,7 +248,10 @@ describe("CustomToolsPage", () => {
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
     // The group's header reads `name ← 🔑 secret` (the secret is the whole value, no prefix).
     expect(within(definition).getByText("Authorization")).toBeInTheDocument();
-    expect(within(definition).getByText("billing-token")).toBeInTheDocument();
+    expect(within(definition).getByRole("link", { name: "Billing token" })).toHaveAttribute(
+      "href",
+      `/secrets/${encodeURIComponent("secret/billing-token")}`,
+    );
     expect(within(definition).getByText("30 s per call")).toBeInTheDocument();
     expect(within(definition).queryByText(/Available to/)).not.toBeInTheDocument();
     expect(within(definition).getByRole("button", { name: "Re-import" })).toBeInTheDocument();
@@ -286,7 +290,7 @@ describe("CustomToolsPage", () => {
       expect.objectContaining({ name: "get_invoice", method: "GET" }),
       { id: "7" },
     );
-    expect(within(drawer).getByText(/Runs once with billing-token/)).toBeInTheDocument();
+    expect(within(drawer).getByText(/Runs once with Billing token/)).toBeInTheDocument();
     expect(location()).toBe("/custom-tools/billing/tools");
     fireEvent.click(within(drawer).getByRole("button", { name: "Cancel" }));
   });
@@ -305,14 +309,16 @@ describe("CustomToolsPage", () => {
         "/activity?tab=mcp&q=billing",
       );
       expect(mcp.summary).toHaveBeenCalledWith("uid-billing");
-      // Requires: the secret its header cites, by the secret's own name, linked to Secrets.
+      // Requires: the header its group sends, then the secret by name (a link to its page)
+      // with Replace key… beside it.
       const requires = screen.getByRole("region", { name: "Requires" });
-      expect(within(requires).getByText("billing-token")).toBeInTheDocument();
+      expect(within(requires).getByText("Authorization")).toBeInTheDocument();
       expect(within(requires).getByText("Set")).toBeInTheDocument();
-      expect(within(requires).getByRole("link", { name: "View in Secrets" })).toHaveAttribute(
+      expect(within(requires).getByRole("link", { name: "Billing token" })).toHaveAttribute(
         "href",
-        "/secrets?q=billing-token",
+        `/secrets/${encodeURIComponent("secret/billing-token")}`,
       );
+      expect(within(requires).getByRole("button", { name: "Replace key…" })).toBeInTheDocument();
       expect(within(requires).queryByText("CLI")).toBeNull();
       // Most-called tools: read-only, busiest first, no switches.
       const top = screen.getByRole("region", { name: "Most-called tools" });

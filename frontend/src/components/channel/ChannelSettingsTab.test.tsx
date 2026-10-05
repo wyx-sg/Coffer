@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { MemoryRouter } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ResourceOut } from "@/lib/api/resources";
 import { acceptance } from "@/test/acceptance";
@@ -20,6 +21,32 @@ import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 import { ChannelSettingsTab } from "./ChannelSettingsTab";
 import { AGENT, HERE, REGISTRY, makeChannel, makeSettings } from "@/test/channelKit";
+
+const SECRETS = {
+  refs: [
+    {
+      ref: "channel/9a/bot-token",
+      label: "Telegram token",
+      present: true,
+      locked: false,
+      cited_by: [],
+      bindings: [],
+      mentioned_by_skills: [],
+    },
+    {
+      ref: "secret/other",
+      label: "Other bot",
+      present: true,
+      locked: false,
+      cited_by: [],
+      bindings: [],
+      mentioned_by_skills: [],
+    },
+  ],
+};
+vi.mock("@/lib/hooks/useSecrets", () => ({
+  useSecrets: () => ({ data: SECRETS }),
+}));
 
 vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
@@ -55,7 +82,9 @@ function wrap(ui: React.ReactNode) {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <TooltipProvider>{ui}</TooltipProvider>
+      <MemoryRouter>
+        <TooltipProvider>{ui}</TooltipProvider>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -105,6 +134,13 @@ describe("message batching", () => {
     // Every ref and platform field goes back as it was.
     expect(config.app_secret_ref).toBe("channel/0f/app-secret");
     expect(config.runs_on).toBe(HERE);
+  });
+
+  test("the secret row shows the secret's name and Replace key", () => {
+    renderSettings(TG);
+    expect(screen.getByRole("link", { name: "Telegram token" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /replace key/i })).toBeVisible();
+    expect(screen.queryByText("••••••••••••")).toBeNull();
   });
 
   test("an out-of-range value shows its error and is not saved", async () => {
@@ -310,4 +346,21 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   // Nothing else is called: no off-and-on, no restart request. The daemon sees
   // the secret change and restarts the adapter on its own.
   expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets"]);
+});
+
+test("picking another stored secret re-points the channel and writes no value", async () => {
+  const api = installApi();
+  wrap(<ChannelReplaceSecretDialog channel={TG} open onOpenChange={() => {}} />);
+
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: /use another secret/i }));
+  fireEvent.click(within(dialog).getByRole("combobox"));
+  fireEvent.click(await screen.findByText("Other bot"));
+  fireEvent.click(within(dialog).getByRole("button", { name: /use this secret/i }));
+
+  await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+  const config = patched(api);
+  expect(config.bot_token_ref).toBe("secret/other");
+  expect(config.default_agent).toBe(AGENT.uid);
+  expect(api.POST).not.toHaveBeenCalled();
 });

@@ -231,6 +231,7 @@ async def update_provider(
         protocol=body.protocol,
         base_url=body.base_url,
         secret_value=body.secret_value,
+        secret_ref=body.secret_ref,
         models=_curated(body.models),
         description=body.description,
         actor=actor,

@@ -26,6 +26,8 @@ interface Props {
   summaryPending: boolean;
   /** What the server requires of this Mac; empty for the built-in one. */
   requires?: McpStatusDetail["requires"];
+  /** Replace key… on a Requires secret row: point that env var / header at another secret. */
+  onRebindSecret?: (field: string, ref: string) => Promise<unknown>;
   /** The state's banner ("why, and what next"). */
   callout?: ReactNode;
   /** The most-called tools; the Tools tab has the rest. */
@@ -44,6 +46,7 @@ export function McpOverviewTab({
   summary,
   summaryPending,
   requires = [],
+  onRebindSecret,
   callout,
   tools,
   builtin = false,
@@ -73,7 +76,10 @@ export function McpOverviewTab({
           note={note}
           builtin={builtin}
         />
-        <McpRequires requires={requires} />
+        <McpRequires
+          requires={requires}
+          onRebind={onRebindSecret ? (r, ref) => onRebindSecret(r.name, ref) : undefined}
+        />
         {tools}
       </SectionStack>
     </div>
