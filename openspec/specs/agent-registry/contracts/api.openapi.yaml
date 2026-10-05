@@ -633,6 +633,64 @@ paths:
       summary: List Config Files
       tags:
       - agents
+  /api/v1/agents/{uid}/config-files/{key}/content:
+    get:
+      description: One allowlisted config file, as written, for a read-only preview.
+      operationId: read_config_file_preview_api_v1_agents__uid__config_files__key__content_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: key
+        required: true
+        schema:
+          title: Key
+          type: string
+      - description: 'Under a directory entry: a file''s relpath as the listing returns it.'
+        in: query
+        name: child
+        required: false
+        schema:
+          anyOf:
+          - minLength: 1
+            type: string
+          - type: 'null'
+          description: 'Under a directory entry: a file''s relpath as the listing returns it.'
+          title: Child
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigFileContentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Config File Preview
+      tags:
+      - agents
   /api/v1/agents/{uid}/hooks:
     get:
       description: |-
@@ -2170,6 +2228,39 @@ components:
       - expected_command
       - last_fired_at
       title: CofferHookOut
+      type: object
+    ConfigFileContentOut:
+      description: 'One config file''s read-only preview. No fingerprint: there is no write.'
+      properties:
+        abs_path:
+          title: Abs Path
+          type: string
+        binary:
+          title: Binary
+          type: boolean
+        content:
+          title: Content
+          type: string
+        format:
+          $ref: '#/components/schemas/ConfigFileFormat'
+        key:
+          title: Key
+          type: string
+        size:
+          title: Size
+          type: integer
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - key
+      - abs_path
+      - format
+      - content
+      - size
+      - truncated
+      - binary
+      title: ConfigFileContentOut
       type: object
     ConfigFileFormat:
       description: Format of an allowlisted config file.

@@ -562,12 +562,12 @@ The `on_delete` hook is bound to a callable supplied by the skill module (spec s
 
 - All HTTP routes bind `127.0.0.1`, share `X-Coffer-Token` auth (per spec mcp-gateway).
 - No new secret-store entries — `agent` config has no secrets. Config-file
-  reads do not parse or extract secrets; each type's credential file is excluded
+  reads do not parse or extract secrets (a preview shows the file as written); each type's credential file is excluded
   from its allowlist (see agent-registry/codex "Never expose Codex's credential file").
-- Config files are editable through Coffer. All writes to an agent's own config
-  files — whichever files the type's child spec allowlists — whether a user
-  save or a Coffer connect/disconnect — are addressable **only** by
-  allowlisted `key`, never by a caller-supplied path, and each is protected by an
-  atomic write and a backup copy in Coffer's folder. User saves additionally validate content
-  against the file's format before touching disk. No path outside the resolved
-  allowlist entries is ever read or written.
+- Config files are read through Coffer, never edited by it on the person's
+  behalf: a preview is addressed **only** by allowlisted `key` (plus, under a
+  directory entry, a child the listing returns), never by a caller-supplied
+  path. Coffer's own writes to an agent's config files — whichever files the
+  type's child spec allowlists — are protected by an atomic write and a backup
+  copy in Coffer's folder. No path outside the resolved allowlist entries is
+  ever read or written.

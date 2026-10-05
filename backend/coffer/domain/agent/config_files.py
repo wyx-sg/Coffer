@@ -73,6 +73,20 @@ class DirEntryInfo:
     modified_at: datetime
 
 
+@dataclass(frozen=True)
+class FileText:
+    """A config file's text as read for a preview: capped, never guessed at.
+
+    ``content`` is empty when ``binary``; ``size`` is the file's true length
+    even when ``truncated``.
+    """
+
+    content: str
+    size: int
+    truncated: bool
+    binary: bool
+
+
 def config_files_for(
     agent_type: AgentType, config_dir: pathlib.Path | None = None
 ) -> tuple[ConfigFileSpec, ...]:

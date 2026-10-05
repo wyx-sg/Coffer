@@ -38,6 +38,8 @@ export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
+export const agentConfigFileContentKey = (uid: string, key: string, child: string) =>
+  ["agents", uid, "config-files", key, child] as const;
 export const agentConnectionKey = (uid: string) => ["agents", uid, "coffer-connection"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
 /** One entry's detail — under the listing's key, so whatever refreshes the

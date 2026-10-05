@@ -1988,6 +1988,9 @@
       "none": "No config files found.",
       "notCreated": "Not created",
       "emptyDir": "No files yet.",
+      "preview": {
+        "description": "Read-only preview of this config file."
+      },
       "desc": {
         "settings": "{{agent}} settings: permissions, model and hooks.",
         "settings_local": "Personal overrides layered on settings.json, kept out of git.",

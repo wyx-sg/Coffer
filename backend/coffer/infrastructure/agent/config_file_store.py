@@ -26,11 +26,15 @@ import shutil
 import tempfile
 from datetime import UTC, datetime
 
-from coffer.domain.agent.config_files import DirEntryInfo, FileStat
+from coffer.domain.agent.config_files import DirEntryInfo, FileStat, FileText
 from coffer.domain.workspace_errors import ConfigFileStale
 from coffer.infrastructure.vault.home import config_backups_dir
 
 _STAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
+#: Cap on a preview read. Claude Code's ``.claude.json`` grows with every project
+#: it has opened and reaches a few hundred kilobytes; past this the preview shows
+#: the start and says so, and the editor has the rest.
+MAX_PREVIEW_BYTES = 1024 * 1024
 #: In every backup's name, so a copy found anywhere says Coffer made it.
 BACKUP_MARK = ".coffer-backup-"
 
@@ -55,6 +59,33 @@ class ConfigFileStore:
             # A directory where a config file is expected is reported as
             # "absent" — same as stat()'s is_file() check — rather than a 500.
             return None
+
+    def read_preview(self, path: pathlib.Path) -> FileText | None:
+        """Read at most :data:`MAX_PREVIEW_BYTES` of ``path`` for a preview.
+
+        ``None`` when no regular file is there. A file with a NUL byte or that
+        is not UTF-8 is ``binary`` with empty content rather than guessed at;
+        a cut that splits a multi-byte character drops the dangling bytes.
+        """
+        if not path.is_file():
+            return None
+        try:
+            size = path.stat().st_size
+            with path.open("rb") as fh:
+                read = fh.read(MAX_PREVIEW_BYTES + 1)
+        except FileNotFoundError:
+            return None
+        truncated = len(read) > MAX_PREVIEW_BYTES
+        chunk = read[:MAX_PREVIEW_BYTES] if truncated else read
+        if b"\x00" in chunk:
+            return FileText(content="", size=size, truncated=truncated, binary=True)
+        try:
+            text = chunk.decode("utf-8")
+        except UnicodeDecodeError:
+            if not truncated:
+                return FileText(content="", size=size, truncated=False, binary=True)
+            text = chunk.decode("utf-8", errors="ignore")
+        return FileText(content=text, size=size, truncated=truncated, binary=False)
 
     def stat(self, path: pathlib.Path) -> FileStat | None:
         try:
