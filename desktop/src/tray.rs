@@ -17,7 +17,7 @@ use tauri::{
 
 use crate::tray_locale::{self, tray_text, Lang};
 use crate::tray_nav::{open_page, show_window};
-use crate::tray_state::{self as view, Icon, TrayState};
+use crate::tray_state::{self as view, Attention, Icon, TrayState};
 
 /// The tray's id.
 pub const TRAY_ID: &str = "coffer-tray";
@@ -145,7 +145,7 @@ pub fn update_state(app: &AppHandle, change: impl FnOnce(&mut TrayState)) {
 
 /// Record whether a sync alert is raised.
 pub fn set_sync_alert(app: &AppHandle, raised: bool) {
-    update_state(app, |s| s.sync_alert = raised);
+    update_state(app, |s| s.set_sync_alert(raised));
 }
 
 /// Write the state onto the menu and the icon, in the current language. Menu
@@ -217,6 +217,15 @@ pub fn set_ui_language(app: AppHandle, language: String) {
         log::info!("tray.language {language}");
         render(&app);
     }
+}
+
+/// The page tells the shell how many items its attention list holds whenever
+/// that list changes, so the count beside the icon drops the moment something
+/// is resolved or ignored instead of at the tray's next own read (spec
+/// desktop-app "Show the daemon and what needs the user in the menu bar").
+#[tauri::command(async)]
+pub fn set_attention_count(app: AppHandle, count: usize) {
+    update_state(&app, |s| s.set_attention(Attention { count }));
 }
 
 /// Return `true` when the close event should actually exit the application.

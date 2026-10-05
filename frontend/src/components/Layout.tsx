@@ -52,6 +52,7 @@ import { SidebarFooter } from "./shell/SidebarFooter";
 import { SidebarSearch } from "./shell/SidebarSearch";
 import { usePaletteRequests } from "./shell/paletteRequest";
 import { useShellShortcuts } from "./shell/useShellShortcuts";
+import { useTrayAttentionCount } from "./shell/useTrayAttentionCount";
 
 const COLLAPSE_KEY = "coffer.nav.collapsed";
 // Tailwind's `md` breakpoint — the width at which the sidebar may expand.
@@ -102,6 +103,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
   const phase = daemon.connection.phase;
   const status = useDaemonStatus();
   const setup = status.data?.status === "setup" ? (status.data.setup ?? null) : null;
+  useTrayAttentionCount();
   // A dimmed page must not take keystrokes either; `inert` is not a React prop yet.
   const pageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

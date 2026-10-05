@@ -3,8 +3,11 @@
 //!
 //! One light loop over loopback. Every tick reads `daemon.json` and the
 //! daemon's own status — the probe `resolve.rs` gates its take-over on — and
-//! lets the sync watcher run its own slow poll on a tick that reached it. The attention list changes on a human timescale, so it is read
-//! every minute, and at once whenever the daemon comes (back) up. A tray
+//! lets the sync watcher run its own slow poll on a tick that reached it. The
+//! attention list is read every 20 seconds, and at once whenever the daemon
+//! comes (back) up; while the window is open the page also reports the list's
+//! length the moment it changes (`tray::set_attention_count`), so resolving
+//! something drops the count at once. A tray
 //! action that changes something (a restart) wakes the loop instead of waiting
 //! out the tick.
 
@@ -25,7 +28,7 @@ use crate::tray_state::{Attention, Daemon};
 /// lag a daemon going down.
 pub const STATUS_TICK: Duration = Duration::from_secs(10);
 /// How often the attention list is re-read.
-const SLOW_TICK: Duration = Duration::from_secs(60);
+const SLOW_TICK: Duration = Duration::from_secs(20);
 /// A short pause before the first tick, so it does not race the launch
 /// handshake's detect-or-spawn.
 const FIRST_TICK_DELAY: Duration = Duration::from_secs(2);
@@ -82,7 +85,7 @@ fn run(app: AppHandle, wake: Receiver<()>) {
                 update_state(&app, |s| {
                     // A read that failed keeps what was last known.
                     if let Some(a) = attention {
-                        s.attention = a;
+                        s.set_attention(a);
                     }
                 });
             }

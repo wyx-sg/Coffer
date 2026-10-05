@@ -35,8 +35,13 @@ pub struct TrayState {
     pub daemon: Daemon,
     pub attention: Attention,
     /// Whether a sync alert is raised (`sync_watch.rs`); it counts as one
-    /// thing until the attention list lists it.
+    /// thing until the attention list has been read after it was raised.
     pub sync_alert: bool,
+    /// Whether the attention list has been read since the sync alert was
+    /// raised. Once it has, the list alone decides the count: an alert the
+    /// user already resolved must not hold the count at one until the sync
+    /// watcher's own slow poll clears it.
+    listed_since_alert: bool,
 }
 
 impl TrayState {
@@ -45,6 +50,22 @@ impl TrayState {
             daemon: Daemon::Connecting,
             attention: Attention::default(),
             sync_alert: false,
+            listed_since_alert: false,
+        }
+    }
+
+    /// Record a fresh read of the attention list.
+    pub fn set_attention(&mut self, attention: Attention) {
+        self.attention = attention;
+        self.listed_since_alert = true;
+    }
+
+    /// Record whether a sync alert is raised. A raise waits for the next
+    /// list read before the list may count it down.
+    pub fn set_sync_alert(&mut self, raised: bool) {
+        self.sync_alert = raised;
+        if raised {
+            self.listed_since_alert = false;
         }
     }
 
@@ -68,14 +89,16 @@ pub fn icon(state: &TrayState) -> Icon {
     }
 }
 
-/// How many things need the user. A raised sync alert counts even before the
-/// attention list has been read, so the count never lags the notification.
+/// How many things need the user: the attention list's length. A raised sync
+/// alert counts as one until the list is next read, so the count never lags
+/// the notification; after that the list alone decides, so resolving the sync
+/// problem clears the count with the next read.
 pub fn needs_you(state: &TrayState) -> usize {
     if !state.online() {
         return 0;
     }
     let listed = state.attention.count;
-    if state.sync_alert && listed == 0 {
+    if state.sync_alert && !state.listed_since_alert && listed == 0 {
         1
     } else {
         listed
