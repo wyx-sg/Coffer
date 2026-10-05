@@ -90,9 +90,9 @@ def _conversation(c: TestClient, session_id: str, *, title: str = "Chat") -> str
 
 
 def _conversation_ids(c: TestClient) -> list[str]:
-    r = c.get("/api/v1/chat/conversations")
+    r = c.get("/api/v1/agent-sessions", params={"source": "chan-1"})
     assert r.status_code == 200, r.text
-    return [x["id"] for x in r.json()["conversations"]]
+    return [x["conversation_id"] for x in r.json()["sessions"]]
 
 
 @pytest.mark.acceptance(

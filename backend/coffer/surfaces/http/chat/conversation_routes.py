@@ -1,17 +1,17 @@
 """/api/v1/chat/conversations — the Conversations page's REST surface.
 
-Coffer lists the conversations its channels run (an index: title, agent,
-channel, directory, native session id); the text of a conversation lives in the
-agent's own session. Domain errors propagate to the app-wide handler in
-``surfaces/http/errors.py``, which renders the standard ``{error, message}``
-envelope.
+Coffer indexes the conversations its channels run (title, agent, channel,
+directory, native session id); they are listed with every agent's sessions
+(``GET /api/v1/agent-sessions``). This surface reads, renames and deletes one
+conversation. The text of a conversation lives in the agent's own session.
+Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``,
+which renders the standard ``{error, message}`` envelope.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
-from coffer.application.chat.conversation_repo import Narrowing
 from coffer.application.chat.ports import ChannelPlacesPort
 from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
@@ -31,7 +31,6 @@ from coffer.surfaces.http.chat.dependencies import (
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.schemas import (
-    ConversationListOut,
     ConversationOut,
     ConversationPatch,
 )
@@ -76,57 +75,6 @@ async def _one_out(
 # ---------------------------------------------------------------------------
 # Conversation routes
 # ---------------------------------------------------------------------------
-
-
-@router.get("/conversations", response_model=ConversationListOut)
-async def list_conversations(
-    limit: int = Query(default=100, ge=1, le=500),
-    cursor: str | None = Query(
-        default=None,
-        description=(
-            "The previous page's next_cursor. Bound to the filters it was issued "
-            "for; any other value is 400 CURSOR_INVALID."
-        ),
-    ),
-    q: str | None = Query(
-        default=None,
-        max_length=200,
-        description=(
-            "Title or working directory contains this text (case-insensitive); "
-            "a cursor is bound to it."
-        ),
-    ),
-    source: str | None = Query(
-        default=None,
-        max_length=2000,
-        description=(
-            "Comma-separated channel uids. Absent or empty is every channel; a "
-            "cursor is bound to it."
-        ),
-    ),
-    agent: str | None = Query(
-        default=None,
-        max_length=2000,
-        description=(
-            "Comma-separated agent keys (e.g. `claude_code,codex`). Absent or empty "
-            "is every agent; a cursor is bound to it."
-        ),
-    ),
-    svc: ChatService = Depends(get_chat_service),  # noqa: B008
-    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
-    places: ChannelPlacesPort | None = Depends(get_channel_places),  # noqa: B008
-) -> ConversationListOut:
-    """Channel conversations, newest activity first (id breaks ties), paged by
-    cursor; ``q`` filters by title or directory, ``source`` and ``agent`` by
-    channel and by which agent it runs (all three also narrow ``total``)."""
-    narrow = Narrowing.parse(source, agent)
-    page = await svc.page_conversations(limit=limit, cursor=cursor, q=q, narrow=narrow)
-    extras = await conversation_extras(page.items, resources, places)
-    return ConversationListOut(
-        conversations=[_conv_out(c, extras) for c in page.items],
-        next_cursor=page.next_cursor,
-        total=await svc.count_conversations(q=q, narrow=narrow),
-    )
 
 
 @router.get("/conversations/{id}", response_model=ConversationOut)

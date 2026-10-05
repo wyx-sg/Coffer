@@ -72,10 +72,6 @@ class ConversationRepo(Protocol):
         its sources and agents."""
         ...
 
-    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
-        """How many conversations ``list`` would return without ``after``/``limit``."""
-        ...
-
     async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:
         """The conversations whose agent session is one of ``session_ids`` (a
         constant number of reads whatever their number)."""

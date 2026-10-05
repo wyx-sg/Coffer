@@ -30,6 +30,7 @@ from coffer.surfaces.http.agent_native_memory_routes import (
 )
 from coffer.surfaces.http.agent_plugin_part_routes import router as agent_plugin_part_router
 from coffer.surfaces.http.agent_routes import router as agent_router
+from coffer.surfaces.http.agent_session_routes import all_router as agent_sessions_all_router
 from coffer.surfaces.http.agent_session_routes import router as agent_session_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
     router as agent_unmanaged_skill_router,
@@ -127,6 +128,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_plugin_part_router,
         agent_native_memory_router,
         agent_session_router,
+        agent_sessions_all_router,  # spec agent-registry: every agent's sessions in one list
         agent_unmanaged_skill_router,
         fs_router,
         fs_terminal_router,

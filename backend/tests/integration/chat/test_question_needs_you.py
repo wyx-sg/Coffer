@@ -100,7 +100,7 @@ async def test_a_waiting_conversation_is_marked_until_it_is_answered() -> None:
     block = await _pending(waiting.id)
 
     async with _client(app) as client:
-        listing = (await client.get(f"{_BASE}/conversations")).json()["conversations"]
+        elsewhere = await client.get(f"{_BASE}/conversations/{other.id}")
         one = await client.get(f"{_BASE}/conversations/{waiting.id}")
         await questions.answer_question(
             waiting.id, block.question_id, [AnswerInput(selected=["Yes"])], via="chan-uid", by="o"
@@ -108,7 +108,6 @@ async def test_a_waiting_conversation_is_marked_until_it_is_answered() -> None:
         await _drain(queue)
         after_one = await client.get(f"{_BASE}/conversations/{waiting.id}")
 
-    flags = {c["id"]: c["needs_you"] for c in listing}
-    assert flags == {waiting.id: True, other.id: False}
+    assert elsewhere.json()["needs_you"] is False
     assert one.json()["needs_you"] is True
     assert after_one.json()["needs_you"] is False

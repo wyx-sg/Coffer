@@ -40,8 +40,8 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | — | **Overview** | `/` | The landing page: what needs you, the health of every area and the last few changes. See [Overview](#overview) below. |
 | Agents | **Agents** | `/agents` | The AI agents installed on this machine that Coffer manages. Each agent's page has **Overview**, **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** tabs, with **Plugins** and **Memory** behind **More**; its model is changed from the Overview. See [Agents](/guides/agents). |
 | Agents | **Model providers** | `/model-providers` | Vendor endpoints and their keys — the models your agents run on — on the **Providers** tab, and what requests through Coffer cost on the **Usage** tab (`?tab=usage`). See [Model providers](/guides/providers) and [Usage](/guides/usage). |
-| Run | **Conversations** | `/conversations` | The conversations your channels started, as a list — title, agent, directory, last activity and channel — with search, filters by channel and agent, and a row that resumes the session in your terminal. See [Conversations](/guides/chat). |
-| Run | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM: setup, connection status and settings; each links to its conversations. See [Channels](/guides/channels). |
+| Run | **Conversations** | `/conversations` | Every agent's sessions, wherever they were started — in a terminal, by a channel or from New conversation — as one list: title, source, agent, directory and last activity, with search, filters by source and agent, and a row that resumes the session in your terminal. See [Conversations](/guides/chat). |
+| Run | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM: setup, connection status and settings; each links to the conversations it started. See [Channels](/guides/channels). |
 | Capabilities | **MCP servers** | `/mcp-servers` | The upstream MCP servers Coffer aggregates behind one endpoint. See [MCP servers](/guides/mcp-servers). |
 | Capabilities | **Custom tools** | `/custom-tools` | HTTP API requests your agents call as tools — see [Custom tools](/guides/custom-tools). |
 | Capabilities | **Skills** | `/skills` | The skill library Coffer delivers to agents. See [Skills](/guides/skills). |
@@ -58,7 +58,7 @@ An entry that belongs to an [experimental feature](/guides/experimental-features
 
 **No badges.** The sidebar carries no counts or dots: everything that needs you is listed under **Needs you** on **Overview**, and the desktop app's menu bar shows the same count.
 
-**The title bar.** In the desktop app, one thin strip in the sidebar's colour runs across the top of the window. It holds the window's traffic lights, the **sidebar toggle** and the **back and forward arrows**, and nothing else — except in an open [conversation](/guides/chat), whose title, source and **⋯** menu sit in it, to the right of the sidebar. In a browser there is no strip: the Coffer mark and the sidebar toggle sit at the top of the sidebar, and the browser's own Back and Forward do the navigating.
+**The title bar.** In the desktop app, one thin strip in the sidebar's colour runs across the top of the window. It holds the window's traffic lights, the **sidebar toggle** and the **back and forward arrows**, and nothing else. In a browser there is no strip: the Coffer mark and the sidebar toggle sit at the top of the sidebar, and the browser's own Back and Forward do the navigating.
 
 **Back and forward.** The arrows (**⌘[** and **⌘]**) move through the pages you have visited in the app and grey out when there is nowhere to go. No page carries its own back button or "back to list" link; the arrows are the only way back, and they also close a detail page you opened from a list.
 
@@ -136,7 +136,7 @@ If the terminal cannot be started, a toast says why. **Copy prompt** and, on a s
 
 ## Resizing split views
 
-Wherever the window is split side by side — the sidebar against the page, and the conversation list against the open conversation — the two halves are divided by a thin line you can drag. The line lights up in the accent colour while you hover over or drag it.
+Wherever the window is split side by side — the sidebar against the page, the Knowledge tree against its reading pane — the two halves are divided by a thin line you can drag. The line lights up in the accent colour while you hover over or drag it.
 
 - **Drag** it to resize. **Double-click** it to go back to the default width.
 - **From the keyboard**, tab to the line and press **←** or **→** to move it in small steps.
@@ -153,7 +153,7 @@ Switch between **English** and **简体中文** in **Settings → General → La
 
 ## Conventions every page shares
 
-**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`), and an agent by its type, since there is one per type (`/agents/claude_code/skills`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/channels/<uid>/<tab>`), so a rename does not break a link. Activity, Sync and Model providers' Usage still carry their tab as `?tab=` (`/activity?tab=mcp` — Everything is the bare `/activity` — `/sync?tab=remote`, `/model-providers?tab=usage`), and Activity and Usage keep their search, range and filters there too, and an open file in a tree is `?file=`. The Conversations list's filters are search parameters (`/conversations?source=coffer,<channel uid>&agent=codex&q=sentry`).
+**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`), and an agent by its type, since there is one per type (`/agents/claude_code/skills`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/channels/<uid>/<tab>`), so a rename does not break a link. Activity, Sync and Model providers' Usage still carry their tab as `?tab=` (`/activity?tab=mcp` — Everything is the bare `/activity` — `/sync?tab=remote`, `/model-providers?tab=usage`), and Activity and Usage keep their search, range and filters there too, and an open file in a tree is `?file=`. The Conversations list's filters are search parameters (`/conversations?source=local|<channel uid>&agent=codex&q=sentry`, where `local` is This Mac).
 
 **Lists look and behave alike.** Every list page uses one table, and clicking a row opens its detail page. Every row action is labelled.
 

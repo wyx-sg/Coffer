@@ -61,9 +61,7 @@ The **Settings** row always opens the General tab and is highlighted only while 
 
 ## The title bar carries the controls that belong to the window
 
-In the desktop app, one 38-pixel strip in the sidebar's colour runs across the whole window, with the traffic lights and its buttons on one centre line. It holds the native traffic lights, the **sidebar toggle** (**⌘\\**) and the **back and forward arrows** (**⌘[** and **⌘]**), and nothing else — with one exception, below. With the sidebar open, the sidebar's edge line runs up through the strip; collapsed, a 56-pixel icon rail sits under it and badges shrink to dots. In full screen the lights are hidden and the controls move to the left edge. A browser draws no strip: the Coffer mark and the toggle sit at the top of the sidebar, and the browser's own arrows navigate.
-
-The exception is an open conversation. A conversation has no page title to put in a header — its title is the thing you rename, its source says where replies go, and its menu holds its commands — so that one row sits in the strip, 32 pixels right of the sidebar's edge, and the messages start right under it. The strip's empty space still drags the window; the row's own elements take the pointer. In a browser the same row is a 44-pixel bar at the top of the content. No other page does this: a page's title stays in the page, so the strip's contract stays "window controls only" everywhere else.
+In the desktop app, one 38-pixel strip in the sidebar's colour runs across the whole window, with the traffic lights and its buttons on one centre line. It holds the native traffic lights, the **sidebar toggle** (**⌘\\**) and the **back and forward arrows** (**⌘[** and **⌘]**), and nothing else. With the sidebar open, the sidebar's edge line runs up through the strip; collapsed, a 56-pixel icon rail sits under it and badges shrink to dots. In full screen the lights are hidden and the controls move to the left edge. A browser draws no strip: the Coffer mark and the toggle sit at the top of the sidebar, and the browser's own arrows navigate.
 
 The arrows walk the app's own history, so no page needs a back button of its own. A per-page "back to the list" link would be a second, competing meaning of "back" — and one that disagrees with the arrows whenever you arrived somewhere else — so pages carry none, and a detail opened from a list returns with the arrows. Page content sits 16 pixels below the strip and 32 pixels in from the sides, the same on every page.
 
@@ -91,7 +89,7 @@ The sidebar says where you can go, never what is wrong. It carries no count badg
 
 ## Split views are resizable, per browser
 
-The sidebar against the page, the conversation list against the open conversation, the Knowledge tree against its reading pane and a memory partition's list against the open memory are split views divided by a hairline you can drag. Every split behaves the same way:
+The sidebar against the page, the Knowledge tree against its reading pane and a memory partition's list against the open memory are split views divided by a hairline you can drag. Every split behaves the same way:
 
 - The divider has a wider invisible grip than the line it draws, and lights up in the accent on hover or drag.
 - Double-clicking restores the default, and the arrow keys move a focused divider in small steps, so resizing does not require a mouse.
@@ -111,7 +109,7 @@ Which identifier fills `<id>` depends on whether the kind can be renamed:
 
 An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>?file=<document>` for a document — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. A list page with no detail to nest under, such as Sync or Activity, carries its tab as `?tab=` instead; the default tab is the bare address.
 
-A list's filters are query parameters too, because a filtered list is something you link to. The Conversations list is the one that needs it most: `/conversations?source=coffer,<channel uid>&agent=codex&q=sentry` narrows it by channel, agent and search text (title and directory), and a channel links to its own conversations as `/conversations?source=<uid>`. The page is only a list: a row opens in the terminal, not at an address of its own.
+A list's filters are query parameters too, because a filtered list is something you link to. The Conversations list is the one that needs it most: `/conversations?source=local|<channel uid>&agent=codex&q=sentry` narrows it by source (`local` is This Mac, the rest are channels), agent and search text (title and directory), and a channel links to its own conversations as `/conversations?source=<uid>`. The page is only a list: a row opens in the terminal, not at an address of its own.
 
 ## Related
 

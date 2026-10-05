@@ -102,7 +102,7 @@ export function useRemoveSkill() {
 | Anything from the daemon | TanStack Query, through a `useX` hook |
 | Ephemeral UI (open, collapsed, draft input) | `useState` in the component |
 | A preference that survives reload | `localStorage`, guarded with try/catch so blocked storage falls back to the default (`src/lib/preferences.ts` for the editor, terminal and hand-off agent) |
-| Which item is open | A route parameter: `/conversations/:id`, `/agents/:type` |
+| Which item is open | A route parameter: `/channels/:uid`, `/agents/:type` |
 | Which detail tab is selected | The last path segment: `/<kind>/<id>/<tab>`, the default tab at the bare path (`src/lib/detailTabs.ts`) |
 | Which file is selected | A search parameter (`?file=`) through `useSearchParams` |
 

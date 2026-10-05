@@ -94,9 +94,6 @@ class FakeConversationRepo:
     def _configs_cwd(self, conversation_id: str) -> str | None:
         return self._agent_configs.get(conversation_id, AgentConfig()).cwd
 
-    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
-        return len(await self.list(contains=contains, narrow=narrow))
-
     async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:
         wanted = set(session_ids)
         return [

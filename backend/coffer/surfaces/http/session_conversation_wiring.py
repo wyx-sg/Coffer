@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
+from coffer.application.agent.agent_sessions_listing import AgentSessionsListing, ListedSession
 from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.application.agent.service import AgentService
+from coffer.application.chat.conversation_repo import Narrowing
 from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -26,9 +28,83 @@ from coffer.domain.agent.native_sessions import (
     SessionPlace,
 )
 from coffer.domain.agent.types import AgentType
+from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
-from coffer.surfaces.http.chat.conversation_views import channel_binding, conversation_extras
+from coffer.domain.pagination import Page
+from coffer.surfaces.http.chat.conversation_views import (
+    Extras,
+    channel_binding,
+    conversation_extras,
+)
 from coffer.surfaces.http.chat.dependencies import get_channel_places
+from coffer.surfaces.http.workspace_dependencies import set_agent_sessions_listing
+
+
+def session_conversation(conv: Conversation, extras: Extras) -> SessionConversation:
+    """The conversation as a session row carries it: state and channel binding."""
+    binding = channel_binding(conv, extras)
+    channel = (
+        SessionChannel(
+            channel_uid=binding.channel_uid,
+            channel=binding.channel,
+            chat_id=binding.chat_id,
+            platform=binding.platform,
+            place=(
+                SessionPlace(
+                    chat_kind=binding.place.chat_kind,
+                    thread=binding.place.thread,
+                    parallel_mark=binding.place.parallel_mark,
+                    chat_name=binding.place.chat_name,
+                )
+                if binding.place is not None
+                else None
+            ),
+        )
+        if binding is not None
+        else None
+    )
+    return SessionConversation(
+        conversation_id=conv.id,
+        running=is_running(conv.id),
+        needs_you=needs_you(conv.id),
+        channel=channel,
+    )
+
+
+class ChatChannelIndex:
+    """``ChannelConversationIndex`` over the chat service: the conversation index
+    paged as list rows (a conversation with no session yet has no session id)."""
+
+    def __init__(self, *, chat: ChatService, resources: ResourceService) -> None:
+        self._chat = chat
+        self._resources = resources
+
+    async def page(
+        self,
+        *,
+        limit: int,
+        cursor: str | None,
+        q: str | None,
+        channels: Sequence[str],
+        agents: Sequence[str],
+    ) -> Page[ListedSession]:
+        page = await self._chat.page_conversations(
+            limit=limit, cursor=cursor, q=q, narrow=Narrowing.of(channels, agents)
+        )
+        extras = await conversation_extras(page.items, self._resources, get_channel_places())
+        items = [
+            ListedSession(
+                agent_key=c.agent_key,
+                session_id=c.agent_config.session_id,
+                title=c.title,
+                cwd=c.agent_config.cwd,
+                created_at=c.created_at,
+                last_activity_at=c.updated_at,
+                conversation=session_conversation(c, extras),
+            )
+            for c in page.items
+        ]
+        return Page(items=items, next_cursor=page.next_cursor)
 
 
 class ChatSessionConversations:
@@ -47,36 +123,10 @@ class ChatSessionConversations:
             return {}
         convs = list(by_session.values())
         extras = await conversation_extras(convs, self._resources, get_channel_places())
-        out: dict[str, SessionConversation] = {}
-        for session_id, conv in by_session.items():
-            binding = channel_binding(conv, extras)
-            channel = (
-                SessionChannel(
-                    channel_uid=binding.channel_uid,
-                    channel=binding.channel,
-                    chat_id=binding.chat_id,
-                    platform=binding.platform,
-                    place=(
-                        SessionPlace(
-                            chat_kind=binding.place.chat_kind,
-                            thread=binding.place.thread,
-                            parallel_mark=binding.place.parallel_mark,
-                            chat_name=binding.place.chat_name,
-                        )
-                        if binding.place is not None
-                        else None
-                    ),
-                )
-                if binding is not None
-                else None
-            )
-            out[session_id] = SessionConversation(
-                conversation_id=conv.id,
-                running=is_running(conv.id),
-                needs_you=needs_you(conv.id),
-                channel=channel,
-            )
-        return out
+        return {
+            session_id: session_conversation(conv, extras)
+            for session_id, conv in by_session.items()
+        }
 
     async def retitle(self, session_id: str, title: str) -> None:
         for conv in (await self._chat.conversations_of_sessions([session_id])).values():
@@ -146,6 +196,17 @@ def wire_session_conversations(
         ChatSessionConversations(chat=chat, orchestrator=orchestrator, resources=resources)
     )
     chat.link_sessions(AgentConversationSessions(agents=agents, sessions=sessions))
+    set_agent_sessions_listing(
+        AgentSessionsListing(
+            agents=agents, sessions=sessions, index=ChatChannelIndex(chat=chat, resources=resources)
+        )
+    )
 
 
-__all__ = ["AgentConversationSessions", "ChatSessionConversations", "wire_session_conversations"]
+__all__ = [
+    "AgentConversationSessions",
+    "ChatChannelIndex",
+    "ChatSessionConversations",
+    "session_conversation",
+    "wire_session_conversations",
+]

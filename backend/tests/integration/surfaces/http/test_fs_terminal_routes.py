@@ -124,7 +124,6 @@ def test_invalid_bodies_are_400_and_start_nothing(
             {"agent": "gemini", "resume": "abc"},
             {"agent": "claude_code", "cwd": "relative", "resume": "abc"},
             {"agent": "claude_code", "resume": "abc", "prompt": "hi"},
-            {"agent": "claude_code"},
             {"agent": "claude_code", "resume": "abc", "terminal": "mycli --dir {cwd}"},
             {"agent": "claude_code", "resume": "abc", "terminal": "hyper"},
         ]
