@@ -167,12 +167,12 @@ The shell MUST install a logger before anything else runs, and MUST write its ow
 - **AND** no second log file exists for the shell.
 
 ### Requirement: Ship the desktop tier as a macOS arm64 dmg
-The release pipeline MUST produce, per `v*` tag, a **macOS arm64** `.dmg` containing the Tauri shell with the three frozen binaries — `coffer`, `coffer-daemon` and `coffer-mcp-shim` — embedded as Tauri `externalBin`, so that installing it requires nothing installed beforehand. macOS x64 (Intel), Linux and Windows are deliberately not built; those legs were never validated end to end. The desktop leg MUST reuse the artifacts the terminal leg already built rather than running PyInstaller a second time; the freezing is the expensive half and it is done once. This `.dmg` is the double-click install and it ships on every tag; the terminal install is the archive tier of [daemon](../daemon/spec.md), and neither tier is a substitute for the other.
+The release pipeline MUST produce, per `v*` tag, a **macOS arm64** `.dmg` containing the Tauri shell with the four frozen binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` — embedded as Tauri `externalBin`, so that installing it requires nothing installed beforehand. macOS x64 (Intel), Linux and Windows are deliberately not built; those legs were never validated end to end. The desktop leg MUST reuse the artifacts the terminal leg already built rather than running PyInstaller a second time; the freezing is the expensive half and it is done once. This `.dmg` is the double-click install and it ships on every tag; the terminal install is the archive tier of [daemon](../daemon/spec.md), and neither tier is a substitute for the other.
 
 #### Scenario: a release tag produces the desktop tier
 - **GIVEN** a release tag matching `v*` is pushed,
 - **WHEN** the release workflow finishes,
-- **THEN** the release contains a macOS arm64 `.dmg` holding the shell with `coffer`, `coffer-daemon` and `coffer-mcp-shim` embedded, and no other binary,
+- **THEN** the release contains a macOS arm64 `.dmg` holding the shell with `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` embedded, and no other binary,
 - **AND** those binaries are the artifacts the terminal tier's build already produced, not a second PyInstaller run,
 - **AND** no other platform is built.
 
@@ -203,7 +203,7 @@ refuses one under eight characters before the presence check, and MUST pass it
 only in the daemon's export request — never into a log, a stored file or the
 signed grant. The shell reads the master key at the moment of signing — from
 the signed release's Keychain access group, or in a development build from the
-key file — and MUST NOT store or cache it or the grant key. In a development
+key file — and MUST NOT store or cache it or the grant key. Before it does either, and before it hands the page the daemon's token (on attach, on a cold start and after a restart), it MUST challenge the daemon it found through `~/.coffer/daemon.json` with `POST /api/v1/secrets/presence/attest` and verify the answer against its own derivation from the master key, bound to the port it dialled ([secret](../secret/spec.md) "Release plaintext only to a present human in the desktop app"); when the answer does not verify it MUST abort with "This is not Coffer's daemon — nothing was sent" and send no token, grant or value. Installing a master key is one more operation behind a presence check, over the fingerprint of the key being imported. In a development
 build without LocalAuthentication the check MUST fall back to a modal
 confirmation in the app window, never to no check. The shell MUST raise one
 native notification per pending approval it has not seen, and tell the page so
@@ -321,7 +321,7 @@ Every update MUST be signed with the project's updater key and verified against 
 - **THEN** the release carries, beside the `.dmg`, the updater archive, its signature and a manifest naming that version, the archive's URL and the signature
 
 ### Requirement: Sign and notarise a release when its credentials are present
-When the repository holds a Developer ID Application certificate and its Team ID, the release workflow MUST sign the three frozen binaries — and every library they unpack — and the app with that Developer ID under the hardened runtime, without `get-task-allow`, with the `keychain-access-groups` entitlement for `<Team ID>.coffer`, and MUST stamp the same group into the daemon's and the shell's build so the master key is kept where only those binaries can read it ([secret](../secret/spec.md) "Keep the master key behind a storage port chosen by the build"). When it also holds an App Store Connect API key it MUST notarise the CLI binaries, the app and the `.dmg`, and staple the app and the `.dmg`. Each of these steps MUST run only when the credentials it needs are present, and a run without them MUST say which are missing and still build and publish the unsigned release, so the pipeline stays green before the owner has an Apple Developer Program membership.
+When the repository holds a Developer ID Application certificate and its Team ID, the release workflow MUST sign the four frozen binaries — and every library they unpack — and the app with that Developer ID under the hardened runtime, without `get-task-allow`, with the `keychain-access-groups` entitlement for `<Team ID>.coffer` on every one of them except `coffer-seatalk-bridge`, which is signed without that entitlement and is shipped in the app bundle's `MacOS` directory without being re-signed (it runs third-party SDK code and must not be able to read the master key), and MUST stamp the same group into the daemon's and the shell's build so the master key is kept where only those binaries can read it ([secret](../secret/spec.md) "Keep the master key behind a storage port chosen by the build"). When it also holds an App Store Connect API key it MUST notarise the CLI binaries, the app and the `.dmg`, and staple the app and the `.dmg`. Each of these steps MUST run only when the credentials it needs are present, and a run without them MUST say which are missing and still build and publish the unsigned release, so the pipeline stays green before the owner has an Apple Developer Program membership.
 
 #### Scenario: a release without signing credentials builds unsigned
 - **GIVEN** a release run with no Developer ID, notary or updater secrets

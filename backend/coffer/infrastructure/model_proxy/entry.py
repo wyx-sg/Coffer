@@ -36,6 +36,7 @@ import uvicorn
 from coffer.infrastructure.daemon.config import effective_proxy_port
 from coffer.infrastructure.daemon.port_alloc import PortInUse, bind_fixed_socket
 from coffer.infrastructure.model_proxy.app import ModelProxyApp, now_iso
+from coffer.infrastructure.model_proxy.attest import read_key_from_stdin
 from coffer.infrastructure.model_proxy.info import (
     EXIT_PORT_IN_USE,
     ProxyInfo,
@@ -43,6 +44,7 @@ from coffer.infrastructure.model_proxy.info import (
     write_info,
 )
 from coffer.infrastructure.model_proxy.spool import UsageSpool
+from coffer.infrastructure.net.system_proxy import apply_system_network_settings
 
 _logger = logging.getLogger(__name__)
 
@@ -105,6 +107,11 @@ def _configure_logging() -> None:
 def main(argv: Sequence[str] | None = None) -> None:
     args = _parse(argv)
     _configure_logging()
+    apply_system_network_settings(os.environ)
+    # The attest key (one hex line on stdin, written by the daemon that spawned
+    # us) is read before anything else and lives only in this variable: argv and
+    # the environment are readable by every process of this user.
+    attest_key = read_key_from_stdin()
     port = args.port if args.port is not None else effective_proxy_port()
     try:
         sock = bind_fixed_socket(port)
@@ -137,6 +144,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         started_at=started_at,
         spool=UsageSpool(),
         on_drained=_drained,
+        attest_key=attest_key,
+        port=port,
     )
     config = uvicorn.Config(
         app,

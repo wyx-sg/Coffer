@@ -394,6 +394,27 @@ the desktop app instead: Settings › Security shows the export as a disabled
 "Open in Coffer app to export" with the reason beside it. How the grant is
 formed is in the change's design.
 
+Installing a master key is a fifth presence-gated operation. `POST /api/v1/sync/key/import`
+MUST redeem a grant for the operation `import_master_key` whose target is the fingerprint of the
+key being imported, before anything changes: a process that can only reach the API could
+otherwise swap the key and then forge grants with the key it chose. The desktop app asks the
+daemon whose key the file holds (`POST /api/v1/sync/key/import/preview`, read-only), shows that
+fingerprint in the operating system's prompt, signs a grant over it and sends the import with
+the grant; a grant for another fingerprint, or none, imports nothing. Settings › Security's
+import goes through the desktop app's Touch ID; in a plain browser it says to open the Coffer
+app and offers no control.
+
+The shell MUST also be sure the daemon is Coffer's before it sends anything. The port and token
+in `~/.coffer/daemon.json` can be rewritten by any process of the same user, so a fake daemon
+could otherwise be handed the token or collect a grant. `POST /api/v1/secrets/presence/attest`
+takes a random `nonce` and answers `HMAC-SHA256(daemon attest key, nonce + "\n" + port)`, the
+attest key being derived from the master key (context `coffer-daemon-attest-key/v1`) and the
+port being the one the daemon serves, so an answer relayed from the real daemon on another port
+is worth nothing. The shell MUST verify the answer with its own derivation before handing the
+token to the page (on attach, on a cold start and after a restart) and before every
+presence-gated operation (reveal, approve, approve several, key backup, key import); on a
+failure it aborts with "This is not Coffer's daemon — nothing was sent" and sends nothing.
+
 #### Scenario: a reveal with a valid grant returns the value once
 - **GIVEN** a stored secret and a challenge issued for revealing exactly that ref
 - **WHEN** the reveal is sent with the challenge signed by the grant key
@@ -748,6 +769,18 @@ arrangement of "Keep the master key in exactly one place", and reports itself
 as development (see "Release plaintext only to a present human in the desktop
 app").
 
+A signed build MUST also take its network settings from the operating system rather than from the
+environment it was started in. Any process of the same user can start a Coffer binary with
+`HTTPS_PROXY` pointing at its own proxy and `SSL_CERT_FILE` trusting its own certificate
+authority, and every HTTP client that honours the environment would then hand it the credentials
+Coffer injects. At start the daemon and the model proxy of a signed build MUST therefore drop
+`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` (in either case) and `SSL_CERT_FILE`,
+`SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and `NODE_EXTRA_CA_CERTS`, take the proxy
+from macOS System Settings › Network (the system configuration, which cannot be changed without
+an administrator's password; loopback is always bypassed) and trust the certificates of the macOS
+keychain through `truststore` when it is available, and log `net.system_proxy` with the proxy's
+host and port and never its credentials. A development build leaves the environment untouched.
+
 #### Scenario: a signed build keeps its key in its access group only
 - **GIVEN** a signed build with an empty secret store
 - **WHEN** the key is resolved
@@ -905,6 +938,18 @@ sync: an approval is a person's answer on this machine, given with a presence gr
 second machine decides for itself which targets receive its values. A ref that arrived from
 another machine by sync therefore has no creation time here, and MUST NOT be counted as a value a
 person here has just supplied (see "Hold a secret for a new destination until a person approves it").
+
+The three files that decide where a secret may go, `bindings.json`, `approvals.json` and
+`settings.json`, MUST be **sealed**: each write adds a `_seal` field, the HMAC-SHA256 of the
+document's canonical JSON without it, under a key derived from the master key (context
+`coffer-boundary-state-key/v1`), so a process that can only edit files cannot approve a binding
+or switch the protection off by hand. A file whose seal does not verify, or, in a signed build,
+carries no seal, MUST be read as empty and logged once as `secret_boundary.state_unsealed`: the
+approval switch falls back to the build's default (on in a signed build) and every binding must
+be approved again. The next write reseals. A development build, whose master key any process
+can read anyway, MUST adopt an unsealed file left by an install from before sealing and seal it
+on the next write, but still rejects a wrong seal. With no master key yet there is nothing to
+protect, so nothing is sealed or checked.
 
 #### Scenario: the boundary's state is machine-local files
 - **GIVEN** an empty home

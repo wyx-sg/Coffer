@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for coffer-seatalk-bridge, and for nothing else.
+
+  The bridge imports SeaTalk's operator-supplied SDK from ~/.coffer/vendor (or
+  $COFFER_SEATALK_SDK_DIR) — a directory any agent running as the same user can
+  write to. So it is the one binary signed WITHOUT keychain-access-groups: code
+  dropped there runs with the app secret of the channel it serves, never with
+  the master key (spec channels/seatalk "Load the websocket client library from
+  an operator-supplied directory"). backend/coffer-seatalk-bridge.spec always
+  signs with this file, never with $COFFER_ENTITLEMENTS_FILE, and Coffer.app
+  carries the bridge through bundle.macOS.files, which Tauri copies without
+  re-signing; scripts/release_signing.sh verify-no-keychain proves both.
+
+  Not a template: there is no Team ID to fill in, because there is no group.
+
+  com.apple.security.cs.disable-library-validation: under the hardened runtime
+  library validation would refuse any native extension the operator's SDK (or
+  a dependency unpacked beside it) brings, since only Coffer's own libraries
+  carry its Developer ID. Running that third-party code is this binary's whole
+  job, and without the keychain group it has nothing beyond the app secret to
+  expose. Still absent: get-task-allow and allow-dyld-environment-variables.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

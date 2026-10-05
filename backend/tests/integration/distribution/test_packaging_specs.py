@@ -119,6 +119,10 @@ def _collect_hidden_string_literals(tree: ast.AST) -> set[str]:
     [
         ("coffer-daemon.spec", "coffer/infrastructure/daemon/entry.py"),
         ("coffer-mcp-shim.spec", "coffer/surfaces/shim/main.py"),
+        (
+            "coffer-seatalk-bridge.spec",
+            "coffer/infrastructure/channel/seatalk_bridge/__main__.py",
+        ),
     ],
 )
 def test_pyinstaller_spec_present_and_valid(spec_name: str, expected_target_module: str) -> None:
@@ -400,6 +404,7 @@ def test_release_workflow_packages_the_cli_archive() -> None:
     for binary in (
         "coffer-daemon",
         "coffer-mcp-shim",
+        "coffer-seatalk-bridge",
     ):
         assert binary in text, f"CLI archive must include {binary}"
 
@@ -407,16 +412,20 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 #: What both tiers carry, and nothing else (spec daemon "Release the macOS
 #: arm64 terminal archive", spec desktop-app "Ship the desktop tier as a macOS
 #: arm64 dmg").
-_SHIPPED_BINARIES = ["coffer", "coffer-daemon", "coffer-mcp-shim"]
+_SHIPPED_BINARIES = ["coffer", "coffer-daemon", "coffer-mcp-shim", "coffer-seatalk-bridge"]
+#: The three the app embeds as ``externalBin`` — which Tauri re-signs with the
+#: app's keychain entitlement. The SeaTalk bridge must never be one of them.
+_EXTERNAL_BINARIES = ["coffer", "coffer-daemon", "coffer-mcp-shim"]
+_BRIDGE = "coffer-seatalk-bridge"
 
 
 @pytest.mark.acceptance(
     spec="daemon",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
-def test_the_cli_archive_holds_exactly_three_binaries() -> None:
-    """The archive's binary list is exactly the three, and the build script
-    freezes exactly the three specs — no fourth helper rides along."""
+def test_the_cli_archive_holds_exactly_the_four_binaries() -> None:
+    """The archive's binary list is exactly the four, and the build script
+    freezes exactly the four specs — no other helper rides along."""
     import yaml
 
     workflow = yaml.safe_load(_release_yml_text())
@@ -433,22 +442,30 @@ def test_the_cli_archive_holds_exactly_three_binaries() -> None:
 
 
 @pytest.mark.acceptance(spec="desktop-app", scenario="a release tag produces the desktop tier")
-def test_the_desktop_tier_embeds_exactly_three_binaries() -> None:
-    """The `.dmg` embeds the same three binaries, and no other one: the
-    shell's ``externalBin`` and the release's staging loop both name exactly
-    those."""
+def test_the_desktop_tier_embeds_the_bridge_outside_external_bin() -> None:
+    """The `.dmg` embeds the same four binaries: three as ``externalBin`` and
+    the SeaTalk bridge through ``bundle.macOS.files``, which Tauri copies
+    without re-signing — so the bridge keeps the signature that has no
+    keychain access group. The release's staging loop names the three, and
+    copies the bridge under its plain name beside them."""
     import json
 
     conf = json.loads((_REPO / "desktop" / "tauri.conf.json").read_text())
-    assert conf["bundle"]["externalBin"] == [f"binaries/{b}" for b in _SHIPPED_BINARIES]
+    assert conf["bundle"]["externalBin"] == [f"binaries/{b}" for b in _EXTERNAL_BINARIES]
+    macos = json.loads((_REPO / "desktop" / "tauri.macos.conf.json").read_text())
+    assert macos["bundle"]["macOS"]["files"] == {f"MacOS/{_BRIDGE}": f"binaries/{_BRIDGE}"}
+    text = _release_yml_text()
     loops = [
         ln.strip()
-        for ln in _release_yml_text().splitlines()
+        for ln in text.splitlines()
         if ln.strip().startswith("for b in ") and "binaries[@]" not in ln
     ]
     assert loops, "release.yml must stage the binaries in a for loop"
     for loop in loops:
-        assert loop == f"for b in {' '.join(_SHIPPED_BINARIES)}; do"
+        assert loop == f"for b in {' '.join(_EXTERNAL_BINARIES)}; do"
+    assert f"cp dist/{_BRIDGE} desktop/binaries/{_BRIDGE}" in text
+    makefile = (_REPO / "Makefile").read_text()
+    assert f'"desktop/binaries/{_BRIDGE}$$EXT"' in makefile
 
 
 @pytest.mark.acceptance(

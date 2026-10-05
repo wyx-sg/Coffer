@@ -170,6 +170,24 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **解决办法。** 打开桌面应用，回应它显示的批准请求（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的在那里拒绝。答复之后重新运行命令。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
+### 应用提示“This is not Coffer's daemon — nothing was sent” {#the-app-says-this-is-not-coffer-s-daemon-—-nothing-was-sent}
+
+**原因。** 桌面应用要求它找到的守护进程证明自己持有主密钥，而回答没有通过校验。通常是过期的 `~/.coffer/daemon.json` 指向了一个不是你的守护进程的进程；偶尔是有东西故意占着这个端口。应用没有发出令牌，也没有发出授权。
+
+**解决。** 退出应用，运行 `coffer daemon restart`（或停掉占着端口的进程），再打开应用。如果在你信任的机器上反复出现，用 `lsof -i :<port>` 查看占着 Coffer 端口的进程。
+
+### 更新之后所有批准都回来了，或某个密钥又要求批准 {#every-approval-came-back-after-an-update-or-a-secret-asks-again}
+
+**原因。** `~/.coffer/local/secret-boundary/` 下的文件是封印过的。被手工编辑过、从另一台 Mac 拷来的文件，或（签名构建里）封印功能出现之前的版本写的文件，校验不过，会被当作空文件读取；守护进程会记一次 `secret_boundary.state_unsealed`。保护回到开启，绑定需要重新批准。
+
+**解决。** 在桌面应用里重新批准即可。丢的只是这些批准。
+
+### 签名的 Coffer 无视我的 `HTTPS_PROXY` 或证书包 {#a-signed-coffer-ignores-my-https-proxy-or-certificate-bundle}
+
+**原因。** 这是有意为之。签名的守护进程和模型代理会丢弃它们继承来的代理和证书变量（`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`、`SSL_CERT_FILE`、`NODE_EXTRA_CA_CERTS` 等），这样别的程序就没法把它们指向自己的代理或证书颁发机构。
+
+**解决。** 在 macOS 系统设置 › 网络里设置代理，并把证书装进 macOS 钥匙串，Coffer 从那里读取两者。开发构建仍然遵循环境变量。
+
 ### 添加密钥后，HTTP 服务器或自定义工具返回 401 {#an-http-server-or-custom-tool-answers-401-after-you-add-a-key}
 
 **原因。** 请求头的认证方案和已存的密钥对不上。Coffer 发送的是 `<方案> <密钥>`。如果密钥里因为旧的设置已经写着 `Bearer …`，而这一行的方案也是 **Bearer**，服务器收到的就是 `Bearer Bearer …`。如果这一行的方案是 **None**，而 API 要的是 `Authorization: Bearer <key>`，就少了 `Bearer` 这个词。`X-Api-Key` 这类请求头应选 **None**。

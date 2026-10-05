@@ -261,8 +261,13 @@ def test_a_binary_missing_from_the_bundle_is_skipped_not_raised(
 # --------------------------------------------------------------------------- #
 
 
-def test_the_build_ships_three_binaries() -> None:
-    assert DEPLOYED_BINARIES == ("coffer", "coffer-daemon", "coffer-mcp-shim")
+def test_the_build_ships_four_binaries() -> None:
+    assert DEPLOYED_BINARIES == (
+        "coffer",
+        "coffer-daemon",
+        "coffer-mcp-shim",
+        "coffer-seatalk-bridge",
+    )
 
 
 @pytest.mark.acceptance(

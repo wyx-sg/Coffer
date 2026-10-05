@@ -124,6 +124,9 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
         log::warn!("{msg}");
         return Err(msg);
     };
+    // The replacement proves it is Coffer's before its token goes anywhere —
+    // the page, or the post-update handshake that returns this result.
+    crate::daemon_attest::verify_daemon(port, &token)?;
     log::info!("daemon restarted and serving on port {port} (pid {pid})");
     Ok(RestartResult {
         pid,
@@ -233,9 +236,14 @@ pub struct DaemonInfo {
 /// main thread that is a frozen window for the whole of it.
 #[tauri::command(async)]
 pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
-    let ready = |port: u16, token: String| DaemonInfo {
-        base_url: base_url_for(port),
-        token,
+    // Whichever way a daemon is adopted — attached to or just started — it
+    // proves it is Coffer's before its token goes to the page.
+    let ready = |port: u16, token: String| -> Result<DaemonInfo, String> {
+        crate::daemon_attest::verify_daemon(port, &token)?;
+        Ok(DaemonInfo {
+            base_url: base_url_for(port),
+            token,
+        })
     };
 
     // Step 1 of the chain short-circuits the whole cold start.
@@ -264,8 +272,9 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
                 }
             }
             log::info!("handshake: attached to the daemon serving on port {port}");
+            let info = ready(port, token);
             reveal_main_window(&app);
-            return Ok(ready(port, token));
+            return info;
         }
         Ok(DaemonSource::Binary { .. }) => {}
         Err(e) => {
@@ -284,7 +293,7 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
     let outcome = match wait_for_daemon_ready(ready_deadline()) {
         Some((port, token)) => {
             log::info!("handshake: spawned daemon is serving on port {port}");
-            Ok(ready(port, token))
+            ready(port, token)
         }
         None => {
             let msg =

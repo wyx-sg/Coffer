@@ -26,6 +26,7 @@ from tests.integration.infrastructure.channel.conftest import (
 
 from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, tap_event, wait_until
 from .fake_seatalk_sdk import build_fake_sdk, deliver, envelope, hold
+from .in_process_bridge import in_process_bridge
 
 _APP_SECRET_REF = "channel/st/app-secret"
 
@@ -224,11 +225,10 @@ async def test_an_event_pushed_down_the_socket_drives_a_turn(env: ChannelEnv) ->
         "app-1",
         "app-secret-value",
         ingest=ingest,
-        loader=lambda: sdk.module,
+        bridge=in_process_bridge(sdk.module),
         backoff_initial=0.01,
         backoff_max=0.04,
         kick_backoff=60.0,
-        join_timeout=2.0,
     )
     await connector.start()
     try:

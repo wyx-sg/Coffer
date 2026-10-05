@@ -30,6 +30,8 @@ pub enum GrantOp {
     /// Several approvals under one grant, signed over [`batch_target`].
     ApproveBatch,
     ExportMasterKey,
+    /// Installing a master key, signed over the fingerprint of the key being installed.
+    ImportMasterKey,
 }
 
 impl GrantOp {
@@ -39,6 +41,7 @@ impl GrantOp {
             GrantOp::Approve => "approve",
             GrantOp::ApproveBatch => "approve_batch",
             GrantOp::ExportMasterKey => "export_master_key",
+            GrantOp::ImportMasterKey => "import_master_key",
         }
     }
 }

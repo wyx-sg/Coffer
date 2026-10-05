@@ -17,6 +17,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
+use crate::daemon_attest;
 use crate::daemon_http::{self, DEFAULT_READ_TIMEOUT};
 use crate::discovery::read_daemon_info;
 use crate::master_key;
@@ -217,7 +218,7 @@ fn is_batchable(approval: &Value) -> bool {
 }
 
 /// Run blocking work on Tauri's blocking pool.
-async fn blocking<T, F>(work: F) -> Result<T, String>
+pub(crate) async fn blocking<T, F>(work: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
     T: Send + 'static,
@@ -228,14 +229,17 @@ where
 }
 
 /// The running daemon, as `daemon.json` names it.
-struct Daemon {
+pub(crate) struct Daemon {
     port: u16,
     token: String,
 }
 
 impl Daemon {
-    fn find() -> Result<Daemon, String> {
+    pub(crate) fn find() -> Result<Daemon, String> {
         let (port, token) = read_daemon_info().ok_or("Coffer's daemon is not running")?;
+        // Before anything is sent: `daemon.json` can be written by any process
+        // of this user, so the daemon it names must first prove it holds the key.
+        daemon_attest::verify_daemon(port, &token)?;
         Ok(Daemon { port, token })
     }
 
@@ -248,7 +252,12 @@ impl Daemon {
         )?)
     }
 
-    fn post(&self, path: &str, body: &Value, timeout: Duration) -> Result<Value, String> {
+    pub(crate) fn post(
+        &self,
+        path: &str,
+        body: &Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         daemon_http::json_or_error(daemon_http::post_json(
             self.port,
             &self.token,
@@ -259,7 +268,7 @@ impl Daemon {
     }
 
     /// The daemon's own report of whether its key is in the development file.
-    fn development(&self) -> Result<bool, String> {
+    pub(crate) fn development(&self) -> Result<bool, String> {
         let status = self.get("/api/v1/secrets/presence/status")?;
         Ok(status
             .get("development")
@@ -269,7 +278,7 @@ impl Daemon {
 
     /// Ask for a nonce and sign `(op, target, nonce)`. The key is read here,
     /// after the presence check, and dropped before this returns.
-    fn grant(&self, op: GrantOp, target: &str) -> Result<(String, String), String> {
+    pub(crate) fn grant(&self, op: GrantOp, target: &str) -> Result<(String, String), String> {
         let challenge = self.post(
             "/api/v1/secrets/presence/challenge",
             &json!({"op": op.as_str(), "target": target}),

@@ -17,7 +17,7 @@ The app shows the same UI as a browser tab at the daemon's address — built fro
 - **A version check.** It warns when it has attached to a daemon left running by an earlier version.
 - **Sync alerts where you look.** When [vault sync](/guides/vault-sync) needs you, the menu bar's count, the Dock badge and a notification say so.
 - **Updates.** It checks for a newer signed release at launch and every six hours, and installs it when you choose **Download and restart** on **Settings › About**. See [Update](#update).
-- **Presence checks.** Revealing or copying a secret, backing up the master key and approving an approval each ask for Touch ID or your login password first. A browser cannot run that check, so a browser tab shows **Open in Coffer app** in their place. See [Presence checks and approvals](#presence-checks-and-approvals).
+- **Presence checks.** Revealing or copying a secret, backing up the master key, importing a master key and approving an approval each ask for Touch ID or your login password first. A browser cannot run that check, so a browser tab shows **Open in Coffer app** in their place. See [Presence checks and approvals](#presence-checks-and-approvals).
 - **Approval alerts.** When a secret waits to be sent somewhere new, the app posts a notification and opens a sheet to answer it.
 
 Everything else — opening files in your editor, choosing folders — goes through the daemon's HTTP routes exactly as it does in a browser.
@@ -42,11 +42,11 @@ The `.dmg` is published with a tagged GitHub release, and none exists yet. Until
 
 4. Open Coffer from Applications.
 
-The app is self-contained: it carries the three frozen binaries `coffer`, `coffer-daemon` and `coffer-mcp-shim` inside its bundle, and needs nothing installed beforehand.
+The app is self-contained: it carries the four frozen binaries `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` inside its bundle, and needs nothing installed beforehand.
 
 ### The app installs the CLI too
 
-On first start, the daemon copies all three binaries into `~/.coffer/bin`. Put that directory on your `PATH` to use `coffer` in a terminal and to let MCP clients resolve `coffer-mcp-shim`:
+On first start, the daemon copies all four binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, which loads the SeaTalk SDK) into `~/.coffer/bin`. Put that directory on your `PATH` to use `coffer` in a terminal and to let MCP clients resolve `coffer-mcp-shim`:
 
 ```sh
 export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile
@@ -153,7 +153,7 @@ If the app attaches to a daemon whose version differs from its own — typically
 
 The window loads the UI from the app bundle, not from the daemon's address. That is why a slow or absent daemon produces a banner instead of a browser connection error, and why the port never appears anywhere.
 
-Because the daemon did not serve that page, it could not write its token into it as it does for a browser. Instead the app reads the port and token from `~/.coffer/daemon.json` and hands them to the page over an in-process IPC call, as the same two values a browser page receives. The page renders first and applies them when they arrive. The app stores no secret of its own: for a presence-gated action it reads the master key at the moment it signs, and keeps neither the key nor anything derived from it.
+Because the daemon did not serve that page, it could not write its token into it as it does for a browser. Instead the app reads the port and token from `~/.coffer/daemon.json` and hands them to the page over an in-process IPC call, as the same two values a browser page receives. The page renders first and applies them when they arrive. Before it hands the page the token, and before every presence-gated action, the app also checks that the daemon it found is Coffer's: it sends a random nonce and verifies the answer, which only a holder of the master key can compute. If the check fails the app stops with "This is not Coffer's daemon — nothing was sent" and sends no token, grant or value (see [Security model](/architecture/security#who-is-on-the-other-end)). The app stores no secret of its own: for a presence-gated action it reads the master key at the moment it signs, and keeps neither the key nor anything derived from it.
 
 The window's content policy allows network requests only to loopback addresses (any port) and to the app's own IPC channel; scripts and styles come only from the bundle.
 
@@ -191,7 +191,7 @@ grep coffer.desktop ~/.coffer/logs/daemon.log | tail
 
 ## Build from source
 
-`make desktop` builds `Coffer.app` and the `.dmg`. It needs a Rust toolchain and runs PyInstaller for the three binaries first, so expect it to take roughly 50 minutes. The result is unsigned. See [Development setup](/contributing/development).
+`make desktop` builds `Coffer.app` and the `.dmg`. It needs a Rust toolchain and runs PyInstaller for the four binaries first, so expect it to take roughly 50 minutes. The result is unsigned. See [Development setup](/contributing/development).
 
 ## Related
 

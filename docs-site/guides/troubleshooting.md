@@ -170,6 +170,24 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Fix.** Open the desktop app and answer the approval it shows (on the **Secrets** page, **Review** opens the approvals dialog). Approve only a target you recognise; refuse the rest there. Rerun the command once you have answered. See [Secrets → Approvals](/guides/secrets#approvals).
 
+### The app says "This is not Coffer's daemon — nothing was sent"
+
+**Cause.** The desktop app asks the daemon it found to prove it holds the master key, and the answer did not verify. Usually a stale `~/.coffer/daemon.json` points at a process that is not your daemon; occasionally something is squatting the port on purpose. The app sent no token and no grant.
+
+**Fix.** Quit the app, run `coffer daemon restart` (or stop what holds the port), and open the app again. If it keeps happening on a machine you trust, check `lsof -i :<port>` for the process on Coffer's port.
+
+### Every approval came back after an update, or a secret asks again
+
+**Cause.** The files under `~/.coffer/local/secret-boundary/` are sealed. A file that was edited by hand, copied from another Mac, or written by a version before sealing (in a signed build) fails the check and is read as empty; the daemon logs `secret_boundary.state_unsealed` once. The protection returns to on and the bindings must be approved again.
+
+**Fix.** Approve them again in the desktop app. Nothing was lost but the approvals.
+
+### A signed Coffer ignores my `HTTPS_PROXY` or certificate bundle
+
+**Cause.** By design. A signed daemon and model proxy drop the proxy and certificate variables they inherit (`HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS` and the like), so another program cannot point them at its own proxy or authority.
+
+**Fix.** Set the proxy in macOS System Settings › Network and install the certificate in the macOS keychain. Coffer reads both from there. Development builds still honour the environment.
+
 ### An HTTP server or custom tool answers 401 after you add a key
 
 **Cause.** The header's auth scheme and the stored key disagree. Coffer sends `<scheme> <key>`. If the secret already holds `Bearer …` from an older setup and the row's scheme is also **Bearer**, the server sees `Bearer Bearer …`. If the row's scheme is **None** but the API wants `Authorization: Bearer <key>`, the word `Bearer` is missing. A header like `X-Api-Key` wants **None**.

@@ -2,33 +2,29 @@
 
 The only way SeaTalk inbound arrives (spec channels/seatalk "Receive every
 event over one outbound websocket connection"): one *connection* per SeaTalk
-channel, held inside this process. It needs no public URL, no signing secret,
-no listener and no tunnel — the register handshake authenticates the socket,
-and events arrive on it as the platform's event envelopes.
+channel. It needs no public URL, no signing secret, no listener and no tunnel —
+the register handshake authenticates the socket, and events arrive on it as the
+platform's event envelopes.
 
-Two things make this unlike a polled transport.
+**The SDK runs in another process.** SeaTalk's SDK is operator-supplied code
+from a directory any same-user agent can write to, and this daemon can read the
+master key, so the SDK never enters it: each connection attempt is one
+``coffer-seatalk-bridge`` process (``seatalk_bridge_process``) that imports the
+SDK, holds the socket and writes protocol lines back (``seatalk_bridge``). The
+bridge acks each event as soon as it has written it out; this side only reads
+lines and schedules ingest, so a slow turn never holds an ack back.
 
-**The SDK is synchronous and thread-based.** ``connect()`` blocks on a register
-handshake; ``listen()`` blocks for the life of the connection. Neither may touch
-the event loop, so every blocking call goes through ``asyncio.to_thread`` and
-``listen()`` runs on a thread we own and join. Inbound events cross back with
-``loop.call_soon_threadsafe``, which schedules the ingest coroutine and returns
-at once, because the SDK's dispatcher calls our handler *inline on the listen
-thread* and acks the event itself the moment the handler returns. So the handler
-never waits for the turn, never acks (the dispatcher already did), and never
-raises — an exception there would lose the ack AND propagate out of ``listen()``,
-dropping the connection over one bad frame.
-
-**The SDK does not reconnect.** Supervision is entirely ours: connect, listen,
-and on any failure back off and try again — exponential from 1s capped at 30s.
-A *kick* is the exception and backs off a flat 60s: SeaTalk allows one live
-connection per app, so a kick means another process (another machine, an older
-daemon) has taken this bot over, and racing it would just trade the connection
-back and forth. Each state change is logged once, never per attempt. The
-supervision loop itself runs under the daemon's task supervisor, which restarts
-it should it ever crash. ``state()`` is what the status surface reads and must
-not flatter: ``connected`` only while the socket is up, and
-``sdk_missing``/``rejected``/``error`` carry the text of what went wrong.
+**Nothing reconnects for us.** Supervision is entirely ours: start a bridge,
+read it until it ends, and on any failure back off and try again — exponential
+from 1s capped at 30s. A *kick* is the exception and backs off a flat 60s:
+SeaTalk allows one live connection per app, so a kick means another process
+(another machine, an older daemon) has taken this bot over, and racing it would
+just trade the connection back and forth. Each state change is logged once,
+never per attempt. The supervision loop itself runs under the daemon's task
+supervisor, which restarts it should it ever crash. ``state()`` is what the
+status surface reads and must not flatter: ``connected`` only while the socket
+is up, and ``sdk_missing``/``rejected``/``error`` carry the text of what went
+wrong.
 """
 
 from __future__ import annotations
@@ -39,13 +35,23 @@ import logging
 import threading
 import time
 from collections.abc import Awaitable, Callable
-from types import ModuleType
+from pathlib import Path
 from typing import Any
 
 from coffer.application.runtime.supervisor import spawn, spawn_restarting
-from coffer.infrastructure.channel.seatalk_sdk import SeaTalkSdkMissingError, load_sdk
+from coffer.infrastructure.channel.seatalk_bridge import protocol as wire
+from coffer.infrastructure.channel.seatalk_bridge.protocol import BridgeConfig
+from coffer.infrastructure.channel.seatalk_bridge_process import (
+    BridgeLauncher,
+    BridgeLink,
+    spawn_bridge,
+)
+from coffer.infrastructure.channel.seatalk_sdk import (
+    SeaTalkSdkMissingError,
+    missing_message,
+    sdk_dir,
+)
 from coffer.infrastructure.channel.seatalk_ws_errors import is_kick, is_refusal
-from coffer.infrastructure.channel.seatalk_ws_thread import listen_on_thread, require
 
 _logger = logging.getLogger(__name__)
 
@@ -54,17 +60,31 @@ _BACKOFF_MAX_SECONDS = 30.0
 # A kick is not a fault to retry quickly — it is another process holding the
 # app's single connection. Back off long enough not to fight it.
 _KICK_BACKOFF_SECONDS = 60.0
-_JOIN_TIMEOUT_SECONDS = 5.0
 # A connection that stayed up this long was healthy: its end is SeaTalk's
 # routine close, not a fault, so the ladder starts again from the bottom. One
 # that dies sooner is flapping and keeps climbing.
 _HEALTHY_AFTER_SECONDS = 30.0
+# What the bridge may report in a ``notice``; anything else is logged generically.
+_NOTICES = frozenset({"event_without_data", "event_bridge_failed"})
 
 # ``(channel_uid, envelope) -> None`` — ChannelService.ingest_event in
 # production, which does the unknown-channel and adapter-down checks and hands
 # the envelope to the adapter's one ingest seam.
 IngestFn = Callable[[str, dict[str, Any]], Awaitable[None]]
-SdkLoader = Callable[[], ModuleType]
+
+
+class BridgeFailureError(Exception):
+    """The bridge reported that the connection ended with an exception."""
+
+    def __init__(self, error_class: str, message: str) -> None:
+        super().__init__(message)
+        self.error_class = error_class
+
+
+def _describe(error: BaseException) -> str:
+    if isinstance(error, BridgeFailureError):
+        return f"{error.error_class}: {error}"
+    return f"{type(error).__name__}: {error}"
 
 
 class SeaTalkWebSocketConnector:
@@ -77,32 +97,32 @@ class SeaTalkWebSocketConnector:
         app_secret: str,
         *,
         ingest: IngestFn,
-        loader: SdkLoader = load_sdk,
+        bridge: BridgeLauncher = spawn_bridge,
+        sdk_directory: Callable[[], Path] = sdk_dir,
         backoff_initial: float = _BACKOFF_INITIAL_SECONDS,
         backoff_max: float = _BACKOFF_MAX_SECONDS,
         kick_backoff: float = _KICK_BACKOFF_SECONDS,
-        join_timeout: float = _JOIN_TIMEOUT_SECONDS,
         healthy_after: float = _HEALTHY_AFTER_SECONDS,
     ) -> None:
         self._name = name
         self._app_id = app_id
         self._app_secret = app_secret
         self._ingest = ingest
-        self._loader = loader
+        self._bridge = bridge
+        self._sdk_directory = sdk_directory
         self._backoff_initial = backoff_initial
         self._backoff_max = backoff_max
         self._kick_backoff = kick_backoff
-        self._join_timeout = join_timeout
         self._healthy_after = healthy_after
         # Monotonic time the current connection registered; None until it does.
         self._connected_since: float | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task[None] | None = None
-        self._thread: threading.Thread | None = None
-        self._client: Any = None
+        self._link: BridgeLink | None = None
         self._stopping = asyncio.Event()
         self._kicked = False
         self._kick_reason = "no reason given"
+        # ``state()`` is read from request handlers; every field it and the
+        # kick bookkeeping touch goes through this lock.
         self._lock = threading.Lock()
         self._state = "connecting"
         self._error: str | None = None
@@ -146,7 +166,6 @@ class SeaTalkWebSocketConnector:
         """Begin supervising. Returns as soon as the loop is scheduled."""
         if self.supervising:
             return
-        self._loop = asyncio.get_running_loop()
         self._stopping.clear()
         self._set_state("connecting", None)
         self._task = spawn_restarting(self._supervise, name=f"seatalk-ws:{self._name}")
@@ -154,36 +173,23 @@ class SeaTalkWebSocketConnector:
     async def stop(self) -> None:
         """Stop supervising and take the connection down.
 
-        Closing the client is what unblocks the listening thread; only then is
-        joining it meaningful. The join is bounded — a thread wedged inside the
-        SDK must not hold up daemon shutdown — and a thread that outlives it is
-        reported rather than ignored.
+        Closing the bridge's stdin is what makes it close the SDK client and
+        exit; the bridge link waits for that (bounded, then terminates it), so
+        no bridge process outlives the channel.
         """
         self._stopping.set()
-        await self._close_client()
+        link = self._link
+        if link is not None:
+            with contextlib.suppress(Exception):
+                await link.close()
         task, self._task = self._task, None
         if task is not None and not task.done():
             task.cancel()
         if task is not None:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
-        thread, self._thread = self._thread, None
-        if thread is not None and thread.is_alive():
-            await asyncio.to_thread(thread.join, self._join_timeout)
-            if thread.is_alive():  # pragma: no cover - wedged SDK only
-                _logger.warning(
-                    "channel.websocket.listen_thread_did_not_stop",
-                    extra={"channel": self._name},
-                )
         for pending in list(self._ingest_tasks):
             pending.cancel()
-
-    async def _close_client(self) -> None:
-        client, self._client = self._client, None
-        if client is None:
-            return
-        with contextlib.suppress(Exception):
-            await asyncio.to_thread(client.close)
 
     # -- supervision -------------------------------------------------------
 
@@ -201,19 +207,20 @@ class SeaTalkWebSocketConnector:
                 # on the ladder so dropping the SDK in needs no daemon restart.
                 self._set_state("sdk_missing", str(e))
             except Exception as e:
-                # A kick arrives BOTH ways: the dispatcher calls ``on_kick`` and
-                # then raises ``KickError`` out of ``listen()``. The backoff
-                # decision belongs here, where the connection has actually ended.
-                kicked = is_kick(e) or self._was_kicked()
+                # A kick arrives BOTH ways: the bridge reports ``kick`` and then
+                # the connection ends with ``KickError``. The backoff decision
+                # belongs here, where the connection has actually ended.
+                error_class = e.error_class if isinstance(e, BridgeFailureError) else None
+                kicked = is_kick(error_class) or self._was_kicked()
                 if kicked:
                     self._set_state("kicked", self._kick_detail(e))
-                elif is_refusal(e):
+                elif is_refusal(error_class):
                     # Still retried on the ladder: a secret replaced under the
                     # same ref, or an app re-enabled on the platform, recovers
                     # with no restart.
-                    self._set_state("rejected", f"{type(e).__name__}: {e}")
+                    self._set_state("rejected", _describe(e))
                 else:
-                    self._set_state("error", f"{type(e).__name__}: {e}")
+                    self._set_state("error", _describe(e))
             if self._stopping.is_set():
                 return
             if self._was_healthy():
@@ -230,34 +237,30 @@ class SeaTalkWebSocketConnector:
                 await asyncio.wait_for(self._stopping.wait(), timeout=wait)
 
     async def _one_connection(self) -> bool:
-        """Hold one connection until it ends. Returns True when it was kicked."""
+        """Run one bridge until its connection ends. Returns True when it was kicked."""
         self._connected_since = None
-        sdk = await asyncio.to_thread(self._loader)
-        dispatcher = require(sdk, "EventDispatcher")()
-        dispatcher.on_event(self._on_event)
-        dispatcher.on_kick(self._on_kick)
-        # The SDK ships both of these defaulted to handlers that ``print()``:
-        # the envelope one dumps every frame's full JSON, message bodies and
-        # all, and the invalid-frame one prints the raw payload. The daemon's
-        # stdout is its log file, so leaving them in place would write every
-        # private message the owner receives into ~/.coffer/logs. Silence the
-        # envelope trace outright and report a bad frame without its contents.
-        dispatcher.on_envelope(None)
-        dispatcher.on_invalid_frame(self._on_invalid_frame)
         self._clear_kick()
-        self._set_state("connecting", None)
-        client = require(sdk, "Client")(self._app_id, self._app_secret, dispatcher=dispatcher)
-        await asyncio.to_thread(client.connect)
-        self._client = client
-        self._connected_since = time.monotonic()
-        self._set_state("connected", None)
-        error = await self._listen(client)
-        self._client = None
-        with contextlib.suppress(Exception):
-            await asyncio.to_thread(client.close)
-        if error is not None:
-            raise error
-        # ``listen()`` returning without an error still means the socket is gone.
+        directory = self._sdk_directory()
+        config = BridgeConfig(self._app_id, self._app_secret, str(directory))
+        link = await self._bridge(config)
+        self._link = link
+        try:
+            ended = await self._pump(link, directory)
+        finally:
+            self._link = None
+            with contextlib.suppress(Exception):
+                await link.close()
+        if ended is None:
+            if self._stopping.is_set():
+                return False
+            raise RuntimeError(
+                f"the SeaTalk bridge exited without reporting why ({link.exit_detail()})"
+            )
+        if ended.get("outcome") == wire.OUTCOME_FAILED:
+            raise BridgeFailureError(
+                str(ended.get("error_class") or "Exception"), str(ended.get("error") or "")
+            )
+        # A connection that ended without an error still means the socket is gone.
         kicked = self._was_kicked()
         if kicked:
             self._set_state("kicked", self._kick_detail(None))
@@ -273,16 +276,53 @@ class SeaTalkWebSocketConnector:
             self._set_state("error", "the SeaTalk connection closed")
         return kicked
 
+    async def _pump(self, link: BridgeLink, directory: Path) -> dict[str, Any] | None:
+        """Act on the bridge's messages; return its ``ended`` line, or None at EOF."""
+        while (message := await link.receive()) is not None:
+            kind = message.get("type")
+            if kind == wire.ENDED:
+                return message
+            if kind == wire.SDK_MISSING:
+                raise SeaTalkSdkMissingError(missing_message(directory))
+            if kind == wire.LOADED:
+                self._set_state("connecting", None)
+            elif kind == wire.CONNECTED:
+                self._connected_since = time.monotonic()
+                self._set_state("connected", None)
+            elif kind == wire.EVENT:
+                data = message.get("data")
+                if isinstance(data, dict):
+                    self._schedule_ingest(data)
+            elif kind == wire.KICK:
+                self._mark_kicked(str(message.get("reason") or "") or "no reason given")
+            elif kind == wire.INVALID_FRAME:
+                # Size and parse error only: the payload may carry message text.
+                _logger.warning(
+                    "channel.websocket.invalid_frame",
+                    extra={
+                        "channel": self._name,
+                        "bytes": message.get("bytes"),
+                        "detail": str(message.get("detail") or ""),
+                    },
+                )
+            elif kind == wire.NOTICE:
+                code = str(message.get("code") or "")
+                event = (
+                    f"channel.websocket.{code}"
+                    if code in _NOTICES
+                    else "channel.websocket.bridge_notice"
+                )
+                _logger.warning(
+                    event, extra={"channel": self._name, "detail": str(message.get("detail") or "")}
+                )
+        return None
+
     def _was_healthy(self) -> bool:
         """Whether the connection that just ended stayed up past the threshold."""
         since = self._connected_since
         return since is not None and time.monotonic() - since >= self._healthy_after
 
     # -- kick bookkeeping ----------------------------------------------------
-    #
-    # ``_on_kick`` runs on the SDK's listen thread; everything else here runs on
-    # the event loop. The two fields cross that boundary, so every read and
-    # write goes through the same lock that already guards ``_state``.
 
     def _mark_kicked(self, reason: str) -> None:
         with self._lock:
@@ -307,63 +347,7 @@ class SeaTalkWebSocketConnector:
             "trade it back and forth"
         )
 
-    async def _listen(self, client: Any) -> BaseException | None:
-        def _started(thread: threading.Thread) -> None:
-            self._thread = thread
-
-        return await listen_on_thread(
-            client, name=self._name, join_timeout=self._join_timeout, started=_started
-        )
-
-    # -- inbound bridge (called on the SDK's thread) ------------------------
-
-    def _on_event(self, event: Any) -> None:
-        """Hand one event's raw dict to the asyncio side and return at once.
-
-        This must not raise, ever. The SDK's dispatcher calls this inline and
-        acks the event only once it returns, so an exception escaping here would
-        both lose the ack (SeaTalk redelivers) and propagate out of ``listen()``,
-        tearing the connection down over one malformed frame. Everything is
-        caught and logged instead.
-        """
-        try:
-            data = getattr(event, "data", None)
-            if not isinstance(data, dict):
-                _logger.warning(
-                    "channel.websocket.event_without_data",
-                    extra={"channel": self._name, "event": type(event).__name__},
-                )
-                return
-            loop = self._loop
-            if loop is None:  # pragma: no cover - start() always sets it
-                return
-            with contextlib.suppress(RuntimeError):  # the loop is gone; so are we
-                loop.call_soon_threadsafe(self._schedule_ingest, dict(data))
-        except Exception:
-            _logger.exception(
-                "channel.websocket.event_bridge_failed", extra={"channel": self._name}
-            )
-
-    def _on_invalid_frame(self, payload: bytes, error: Exception) -> None:
-        """Note a frame the SDK could not parse, without logging its contents.
-
-        The payload is whatever SeaTalk sent and may carry message text, so only
-        its size and the parse error are recorded — enough to tell a protocol
-        change from a one-off, nothing more.
-        """
-        _logger.warning(
-            "channel.websocket.invalid_frame",
-            extra={"channel": self._name, "bytes": len(payload), "detail": str(error)},
-        )
-
-    def _on_kick(self, envelope: Any) -> None:
-        """Record why we were kicked; the dispatcher raises ``KickError`` next.
-
-        Only bookkeeping: the supervision loop owns the state transition and the
-        60s backoff, because that is where the connection has ended.
-        """
-        message = str(getattr(envelope, "message", "") or "")
-        self._mark_kicked(message or "no reason given")
+    # -- ingest --------------------------------------------------------------
 
     def _schedule_ingest(self, envelope: dict[str, Any]) -> None:
         # spec channels/seatalk "Hand a chat's events to the channel in arrival

@@ -5,7 +5,7 @@ description: How Coffer is built into frozen binaries, released as a CLI archive
 
 # Distribution and releases
 
-This page explains how Coffer's Python code reaches a machine with no Python on it: the three frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, and how experimental features are switched on, one machine at a time. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
+This page explains how Coffer's Python code reaches a machine with no Python on it: the four frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, and how experimental features are switched on, one machine at a time. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
 
 ## The problem
 
@@ -22,7 +22,7 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 | Decision | Reason |
 | --- | --- |
 | Freeze each entry point with PyInstaller into a single-file executable | Runs on a clean machine with no Python; one build serves CLI use, MCP-client spawn and direct download. |
-| Ship three binaries, always together | The shim and the CLI find `coffer-daemon` as a sibling, so co-location is the discovery mechanism. |
+| Ship four binaries, always together | The shim and the CLI find `coffer-daemon` as a sibling, so co-location is the discovery mechanism. `coffer-seatalk-bridge` is the fourth: it loads the SeaTalk SDK outside the daemon and is signed without the keychain entitlement. |
 | Two download tiers built in one job from the same binaries | The desktop app cannot drift from the CLI archive it wraps. |
 | The daemon deploys its siblings into versioned directories under `~/.coffer/bin` and flips symlinks | A deploy never overwrites a binary that may be running, and the previous build stays for a manual rollback. |
 | One build for everyone, every experimental feature off until a person switches it on | There is no release branch and no second build: the owner tests exactly what users run. |
@@ -82,9 +82,9 @@ flowchart TD
 2. Build the frontend (`npm run codegen`, `npm run build`). The daemon spec picks up `frontend/dist` as the served web UI.
 3. Decide which signing steps can run (see [Signing, notarisation and updates](#signing-notarisation-and-updates)). When a Developer ID is present, import it into a temporary keychain and stamp the keychain access group.
 4. Stamp the build: the commit always, and the `stable` mark on a tag (see [The build stamp](#the-build-stamp)).
-5. Freeze the three binaries — signed with the Developer ID when there is one — and run the smoke test against `dist/`. A signed build then has its signatures verified and the binaries notarised.
+5. Freeze the four binaries — signed with the Developer ID when there is one — and run the smoke test against `dist/`. A signed build then has its signatures verified and the binaries notarised.
 6. Package `coffer`, `coffer-daemon` and `coffer-mcp-shim` into `coffer-cli-<triple>.tar.gz`.
-7. Stage the same three files in the desktop crate as `<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
+7. Stage the same four files in the desktop crate as `<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
 8. Write `SHA256SUMS` over every artifact, then create (or update, with `--clobber`) the GitHub Release for the tag.
 
 Only macOS on Apple Silicon is published. The specs and build script are cross-platform, so widening the release matrix is a workflow change rather than a redesign.
@@ -93,7 +93,7 @@ Versions are kept in several files that must agree exactly — the Python packag
 
 ## The desktop bundle
 
-The desktop app is a Tauri 2 shell around the same web UI the daemon serves. Its Tauri configuration bundles `app` and `dmg` targets, loads the built frontend as local assets, and lists the three binaries as external binaries. Tauri resolves each binary name to `<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable.
+The desktop app is a Tauri 2 shell around the same web UI the daemon serves. Its Tauri configuration bundles `app` and `dmg` targets, loads the built frontend as local assets, and lists the four binaries as external binaries. Tauri resolves each binary name to `<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable.
 
 When the app starts, it resolves a daemon in a fixed order: an already-running daemon named by `~/.coffer/daemon.json` (attached to, never re-spawned); the binary inside the app bundle; `~/.coffer/bin/coffer-daemon`; `coffer-daemon` on `PATH`; otherwise a message telling you to install the CLI. The shell never writes to `~/.coffer/bin` itself — the daemon it starts does that (next section). Installing the app therefore installs the CLI too.
 
@@ -118,7 +118,7 @@ See [Desktop app](/guides/desktop-app) for using it.
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-It accepts only macOS on `arm64` and points everyone else at a source install. It downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and `SHA256SUMS` from the latest release (or the tag in `COFFER_VERSION`), verifies the archive's checksum, installs the three binaries into `COFFER_INSTALL_DIR` (default `~/.coffer/bin`) by copying each to a temporary sibling and renaming it over the public name — a plain copy would write through the daemon's symlink into the previous version directory and destroy the build a rollback needs — and — unless `COFFER_NO_MODIFY_PATH=1` — appends a `PATH` line to your shell profile (`.zshrc`, `.bash_profile`, fish's `config.fish`, or `.profile`) if the directory is not already on `PATH`. A binary downloaded by `curl` is never quarantined, so this path needs no `xattr` step. See [Install](/start/install).
+It accepts only macOS on `arm64` and points everyone else at a source install. It downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and `SHA256SUMS` from the latest release (or the tag in `COFFER_VERSION`), verifies the archive's checksum, installs the four binaries into `COFFER_INSTALL_DIR` (default `~/.coffer/bin`) by copying each to a temporary sibling and renaming it over the public name — a plain copy would write through the daemon's symlink into the previous version directory and destroy the build a rollback needs — and — unless `COFFER_NO_MODIFY_PATH=1` — appends a `PATH` line to your shell profile (`.zshrc`, `.bash_profile`, fish's `config.fish`, or `.profile`) if the directory is not already on `PATH`. A binary downloaded by `curl` is never quarantined, so this path needs no `xattr` step. See [Install](/start/install).
 
 ### Versioned directories and the symlink flip
 
@@ -155,7 +155,7 @@ For each of `coffer`, `coffer-daemon` and `coffer-mcp-shim`:
 3. **Flip.** A relative symlink is created under a temporary name and renamed over `~/.coffer/bin/<name>`. A concurrent `exec` sees either the old binary or the new one, never a partial file.
 4. **Retire and prune.** A public symlink into a version directory under a name this build no longer ships is removed. Version directories beyond the newest two are deleted, except any directory a public symlink still points into.
 
-Deployment is best-effort: a binary that cannot be copied is logged and skipped, and the daemon starts anyway. To roll back by hand, point the three symlinks at the previous version directory.
+Deployment is best-effort: a binary that cannot be copied is logged and skipped, and the daemon starts anyway. To roll back by hand, point the symlinks at the previous version directory.
 
 Before running database migrations, the daemon also copies `runs.db` (and its `-wal`/`-shm` files) to `runs.db.pre-<revision>`, keeping the three most recent copies. See [Persistence](/architecture/persistence).
 
@@ -219,7 +219,7 @@ Three kinds of credential turn an unsigned release into a signed one, and each i
 
 ### The keychain access group
 
-The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: a stamping step rewrites the access-group constant in the backend's build identity before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and the entitlements template in `desktop/` is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present.
+The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: a stamping step rewrites the access-group constant in the backend's build identity before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and the entitlements template in `desktop/` is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present. `coffer-seatalk-bridge` is the one exception: it is signed with the hardened runtime but without that entitlement, and the app bundle ships it without re-signing, so the third-party SeaTalk SDK it loads can never read the master key.
 
 ### How the desktop app updates
 

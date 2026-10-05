@@ -39,7 +39,18 @@ _MAX_OUTSTANDING = 64
 
 def derive_grant_key(master_key: bytes) -> bytes:
     """The grant-signing key: never the master key itself, never stored."""
-    return hmac.new(master_key.strip(), GRANT_KEY_CONTEXT, hashlib.sha256).digest()
+    return derive_purpose_key(master_key, GRANT_KEY_CONTEXT)
+
+
+def derive_purpose_key(master_key: bytes, context: bytes) -> bytes:
+    """A key for one purpose (``domain.secrets.*_KEY_CONTEXT``), derived from the
+    master key the way the grant key is: never the master key, never stored."""
+    return hmac.new(master_key.strip(), context, hashlib.sha256).digest()
+
+
+def attest(key: bytes, nonce: str) -> str:
+    """The answer to a challenge: ``hex(HMAC-SHA256(key, "coffer-attest/v1\n" + nonce))``."""
+    return hmac.new(key, f"coffer-attest/v1\n{nonce}".encode(), hashlib.sha256).hexdigest()
 
 
 def sign_grant(grant_key: bytes, op: str, target: str, nonce: str) -> str:

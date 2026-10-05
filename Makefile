@@ -75,7 +75,7 @@ help:
 	@echo "  make docs-reference        regenerate the docs site's CLI reference pages (en and zh)"
 	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; part of verify)"
 	@echo "  make refresh-prices        refresh the bundled model price list from pydantic/genai-prices (release time; network)"
-	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
+	@echo "  make bundle-binaries       freeze the four binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
 # The backend installs exactly what backend/uv.lock pins, the way CI and the
@@ -426,12 +426,12 @@ bundle-binaries:
 # refuse a browser-downloaded copy on double-click until a Developer ID
 # exists; a locally-built one runs fine.
 #
-# The .app bundles the three frozen binaries via tauri.conf.json's
-# `externalBin`, which is why this target has to run PyInstaller first. Tauri
+# The .app bundles three frozen binaries via tauri.conf.json's `externalBin`
+# and the SeaTalk bridge via tauri.macos.conf.json's bundle.macOS.files, which is why this target has to run PyInstaller first. Tauri
 # resolves each `binaries/<name>` entry to `binaries/<name>-<target-triple>`,
 # so the freshly-built binaries are staged under that suffixed name.
 desktop:
-	@echo "make desktop: this runs PyInstaller for three binaries before the"
+	@echo "make desktop: this runs PyInstaller for four binaries before the"
 	@echo "  Tauri build — expect roughly 50 minutes on a laptop. The result is"
 	@echo "  UNSIGNED: macOS Gatekeeper will block a downloaded copy of it."
 	@echo ""
@@ -451,10 +451,13 @@ desktop:
 # tauri.conf.json's beforeBuildCommand builds it too; doing it up front
 # fails fast on a broken frontend instead of after the PyInstaller hour.
 	npm run build --prefix $(FRONTEND)
-# (2) Freeze coffer / coffer-daemon / coffer-mcp-shim.
+# (2) Freeze coffer / coffer-daemon / coffer-mcp-shim / coffer-seatalk-bridge.
 	$(MAKE) bundle-binaries
 # (3) Stage them where externalBin expects, under the rustc host triple
-# (the same value Tauri exposes as TAURI_ENV_TARGET_TRIPLE).
+# (the same value Tauri exposes as TAURI_ENV_TARGET_TRIPLE). The SeaTalk
+# bridge is NOT an externalBin — Tauri re-signs those with the app's keychain
+# entitlement — so it is staged under its plain name for
+# tauri.macos.conf.json's bundle.macOS.files, which copies it unchanged.
 	@set -e; \
 	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
 	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
@@ -463,6 +466,8 @@ desktop:
 		cp "dist/$$b$$EXT" "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 		chmod +x "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 	done; \
+	cp "dist/coffer-seatalk-bridge$$EXT" "desktop/binaries/coffer-seatalk-bridge$$EXT"; \
+	chmod +x "desktop/binaries/coffer-seatalk-bridge$$EXT"; \
 	echo "desktop: staged binaries for $$TRIPLE"
 # (4) Build the .app + .dmg.
 	cd desktop && npx --yes @tauri-apps/cli@^2 build
@@ -473,7 +478,7 @@ desktop:
 # externalBin entries to resolve at build time, so a checkout with no frozen
 # binaries staged cannot compile it. Stand in a placeholder for any that is
 # missing: it is gitignored like the real ones, and it announces itself loudly
-# if it ever escapes into a bundle. A real `make desktop` overwrites all three.
+# if it ever escapes into a bundle. A real `make desktop` overwrites all four.
 # Split out of `desktop-test` so the CI desktop job (.github/workflows/
 # desktop.yml) stages the same placeholders before `cargo check`/`clippy`
 # instead of keeping a second copy of this loop.
@@ -494,7 +499,12 @@ desktop-stage-binaries:
 			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \
 			chmod +x "$$f"; \
 		fi; \
-	done
+	done; \
+	f="desktop/binaries/coffer-seatalk-bridge$$EXT"; \
+	if [ ! -e "$$f" ]; then \
+		printf '#!/bin/sh\necho "coffer-seatalk-bridge: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' > "$$f"; \
+		chmod +x "$$f"; \
+	fi
 
 # Compile + lint the crate without bundling anything. This is what CI runs
 # (.github/workflows/desktop.yml): `make desktop` is PyInstaller + Tauri and

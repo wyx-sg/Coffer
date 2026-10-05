@@ -37,6 +37,9 @@ def _attach(d: BoundaryDaemon, proxy: Proxy) -> None:
     """Point the daemon's supervisor at ``proxy``, as a re-attach would."""
     # The facade's refresh is the wiring's own, so it leads to the supervisor.
     wiring = get_proxy_facade().refresh.__self__  # type: ignore[attr-defined]
+    # The test proxy attests like the real one, with a key the daemon also holds.
+    proxy.app._attest_key, proxy.app._port = b"a" * 32, proxy.server.port
+    wiring.supervisor._attest_key = lambda: b"a" * 32
     wiring.supervisor._info = ProxyInfo(
         port=proxy.server.port,
         pid=os.getpid(),

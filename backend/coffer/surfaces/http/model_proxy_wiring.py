@@ -30,11 +30,14 @@ from coffer.application.provider.proxy_tokens import ProxyTokenService
 from coffer.application.provider.service import ProviderService
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn
+from coffer.application.secret.presence import derive_purpose_key
 from coffer.domain.model_proxy.state import ProxyState, proxy_root
+from coffer.domain.secrets import PROXY_ATTEST_KEY_CONTEXT
 from coffer.infrastructure.daemon.config import effective_proxy_port
 from coffer.infrastructure.model_proxy.supervisor import ProxySupervisor
 from coffer.infrastructure.vault.home import coffer_home
 from coffer.surfaces.http.proxy_dependencies import ProxyFacade, set_proxy_facade
+from coffer.surfaces.http.secret_composition import get_master_key_manager
 
 _logger = logging.getLogger(__name__)
 
@@ -110,8 +113,17 @@ def wire_model_proxy(
             return ProxyState()
         return await build_proxy_state(provider_svc, tokens)
 
+    def attest_key() -> bytes | None:
+        # The master key can change (import), so it is read at each use.
+        try:
+            master = get_master_key_manager().current
+        except RuntimeError:
+            return None
+        return derive_purpose_key(master, PROXY_ATTEST_KEY_CONTEXT) if master else None
+
     supervisor = ProxySupervisor(
         state,
+        attest_key=attest_key,
         port=effective_proxy_port(),
         coffer_dir=coffer_dir or coffer_home(),
         version=coffer.__version__,

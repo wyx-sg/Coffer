@@ -10,10 +10,9 @@ Three answers need three reactions, so the connector asks here first:
 * anything else — DNS, a timeout, a dropped socket — is the network, and
   retrying is the whole of the fix; replacing the secret would not help.
 
-Every match is by class name rather than ``isinstance``: the SDK is imported
-dynamically from an operator-supplied directory, so its error classes are not
-importable at module scope here and its internal module layout is not part of
-any contract we can pin.
+Every match is by class name: the SDK runs in ``coffer-seatalk-bridge``, which
+reports the class name of whatever ended the connection, and its internal
+module layout is not part of any contract we can pin anyway.
 """
 
 from __future__ import annotations
@@ -21,11 +20,11 @@ from __future__ import annotations
 _REFUSALS = frozenset({"RegisterError", "MissingCredentialError"})
 
 
-def is_kick(error: BaseException) -> bool:
-    """Whether this exception is the SDK's ``KickError``."""
-    return type(error).__name__ == "KickError"
+def is_kick(error_class: str | None) -> bool:
+    """Whether the SDK's ``KickError`` ended the connection."""
+    return error_class == "KickError"
 
 
-def is_refusal(error: BaseException) -> bool:
+def is_refusal(error_class: str | None) -> bool:
     """Whether SeaTalk refused the app's credentials."""
-    return type(error).__name__ in _REFUSALS
+    return error_class in _REFUSALS

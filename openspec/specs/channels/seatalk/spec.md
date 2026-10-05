@@ -75,13 +75,25 @@ alternative either: none is published. See
 [SeaTalk Inbound Over WebSocket](../../../../docs/decisions/seatalk-websocket-inbound.md).
 
 - Coffer looks for it at runtime in a vendor directory —
-  `$COFFER_SEATALK_SDK_DIR` when set, otherwise `~/.coffer/vendor` — prepended to
-  the import path only when that directory exists, following the same
-  per-subsystem environment override convention the rest of the vault uses. The
-  import is attempted lazily, at the moment a websocket channel starts, never at
-  daemon import time, so an installation without the SDK starts exactly as it
-  does today.
-- When it cannot be imported, the websocket channel's connection MUST NOT come
+  `$COFFER_SEATALK_SDK_DIR` when set, otherwise `~/.coffer/vendor` — following
+  the same per-subsystem environment override convention the rest of the vault
+  uses. The directory is put on the import path of a separate executable,
+  `coffer-seatalk-bridge`, and never of the daemon: code a person drops into a
+  directory their own agent can write to must not run inside the process that
+  holds the master key, so the daemon MUST NOT import the SDK or put the
+  directory on its own import path. The bridge is shipped beside the daemon,
+  signed without the keychain entitlement and not re-signed by the app bundle,
+  so it cannot read the master key. The daemon starts one bridge process per
+  connection attempt (each retry a fresh one), writes the channel's `app_id` and the resolved app secret to
+  its standard input (never its arguments or environment) and reads the
+  channel's events back from its standard output as JSON lines; the bridge
+  appends the directory to its own import path and imports the SDK lazily, so
+  an installation without the SDK starts exactly as it does today. A package
+  that is present but lacks one of its own dependencies reports `error` naming
+  the missing module, not `sdk_missing`. The bridge's entitlements allow
+  loading the operator's unsigned native extensions (library validation off),
+  which is harmless there because it holds no keychain access.
+- When the bridge cannot import it, the websocket channel's connection MUST NOT come
   up and the channel MUST say precisely why: its websocket state is
   `sdk_missing`, with a detail naming the missing library, the directory that
   was searched and the platform documentation for it — a statement of fact, not
@@ -504,10 +516,9 @@ download and the turn itself are the same for every event. The platform permits
 one delivery method per bot, so the bot's event delivery setting on SeaTalk's
 Developer Portal is WebSocket; the portal's Re-verify passes only while the
 connection is live, so the order is to enable the channel in Coffer first and
-verify there second. The kick flag and its reason are written on the SDK's
-listen thread and read by the supervisor on the event loop; the two MUST share
-the connector's state lock, and a kick signalled from any thread is observed by
-the supervisor even when `listen()` then returns without raising.
+verify there second. The bridge reports a kick on its output; the daemon's
+connector records it under its state lock, and the supervisor observes it even
+when the bridge's `listen()` then returns without raising.
 
 #### Scenario: a websocket channel receives an event with no public url
 - **GIVEN** an enabled seatalk channel carrying only its app id and app secret

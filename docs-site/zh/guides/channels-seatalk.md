@@ -37,7 +37,7 @@ Coffer 通过**每个消息渠道一条出站 WebSocket 连接**接收 SeaTalk �
 1. 从 SeaTalk 开放平台下载 SeaTalk 用于 WebSocket 事件回调的 Python SDK。包名是 `seatalk_oapi_sdk`；见 SeaTalk 的 [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) 文档。下载这一步由你来做，因为它在平台的登录之后。
 2. 其余的交给你的智能体。消息渠道登记好之后（第 3 步），等待 SDK 的消息渠道会显示**未安装 SeaTalk 的 Python SDK**，链接到 SeaTalk 的下载页面，并提供**交给 &lt;Agent&gt;**（它的菜单可复制提示词；没有 Coffer 托管的智能体可用时只提供**复制提示词**）：一段让智能体把压缩包解压到 Coffer vendor 目录的提示词。放好之后点**重试**。
 
-Coffer 只在 SeaTalk 消息渠道启动时才导入 SDK，从不在守护进程启动时导入；SDK 缺失时它会一直重试。你可以在登记消息渠道之前或之后添加 SDK；已经在等待的消息渠道不用重启守护进程就能用上它。
+SDK 由 `coffer-seatalk-bridge` 加载，这是放在守护进程旁边的一个独立程序，读不到主密钥。守护进程从不导入 SDK：那个目录是你的智能体可写的，放进去的代码不该在能读到主密钥的地方运行。SeaTalk 消息渠道启动时，守护进程才启动桥接进程，在它的标准输入上交给它应用 ID 和应用密钥，并从它读回渠道的事件。SDK 缺失时它会一直重试。你可以在登记消息渠道之前或之后添加 SDK；已经在等待的消息渠道不用重启守护进程就能用上它。
 
 要手动处理，就解压压缩包，让包目录位于 Coffer 的 vendor 目录下：
 
@@ -87,7 +87,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 | `connecting` | **连接中** — 连接中…（尝试失败后为**重连中** — 重连中…） | 正在向 SeaTalk 注册。 |
 | `connected` | **已连接** | 事件正在流入。 |
 | `kicked` | **被挤下线** — 连接被另一个进程占用 | 另一个进程登记了同一个应用。Coffer 会等 60 秒再试，而不是去抢连接。 |
-| `sdk_missing` | **无法启动** — 未找到 SeaTalk SDK | 无法导入 `seatalk_oapi_sdk`。错误信息会写明搜索过的目录。 |
+| `sdk_missing` | **无法启动** — 未找到 SeaTalk SDK | 桥接进程无法导入 `seatalk_oapi_sdk`。错误信息会写明搜索过的目录。 |
 | `rejected` | **Token 被拒** — 连接被拒绝 | SeaTalk 在注册握手时拒绝了这个应用：App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。横幅提供**更换密钥**；`websocket_error` 原样保存 SeaTalk 的回答。Coffer 会继续重试，所以在同一引用下更换密钥后会自行恢复。 |
 | `error` | **网络问题** — 连不上平台——正在重试 | 上一次尝试在途中失败（DNS 失败、超时、连接断开），不是 SeaTalk 拒绝了这个应用；`websocket_error` 原样保存错误信息。Coffer 以 1 到 30 秒的退避重试，横幅提供**立即重新连接**，不会让你更换密钥。 |
 
@@ -181,7 +181,7 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 ## 故障排查 {#troubleshooting}
 
 **状态是 `sdk_missing`。**
-检查 `~/.coffer/vendor/seatalk_oapi_sdk/`（或 `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`）是否存在；如果你用了 `COFFER_SEATALK_SDK_DIR`，确认它设置在守护进程启动的环境里，而不只是你当前的 shell。在此期间回复和通知仍然可用。
+检查 `~/.coffer/vendor/seatalk_oapi_sdk/`（或 `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`）是否存在；如果你用了 `COFFER_SEATALK_SDK_DIR`，确认它设置在守护进程启动的环境里，而不只是你当前的 shell；桥接进程从守护进程的环境里读取它。在此期间回复和通知仍然可用。
 
 **状态是 `kicked`。**
 另一个进程占用了这个应用的连接。常见原因：同一个应用在第二台机器上也登记成了消息渠道，或者某个测试脚本用了同一个 App ID。停掉另一个；Coffer 大约一分钟内会重连。要在机器之间迁移消息渠道，在当前运行它的机器上，到它的**设置**标签页修改**运行在**。

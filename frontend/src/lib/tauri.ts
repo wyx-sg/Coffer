@@ -5,19 +5,18 @@
 // shell where the daemon is, to spawn one, whether its version pairs with this
 // build, to label the tray in the chosen language, to check for and install an
 // update (`shellUpdates.ts`, through `shellInvoke`) — and for the presence-gated
-// actions (reveal a secret, write a key backup, approve an approval), each
+// actions (reveal a secret, write or install a key backup, approve an approval), each
 // behind a Touch ID / password check in the shell. In a browser those reject
 // and the page offers "Open in Coffer app". Components ask
 // `presenceAvailable()` or `inDesktopShell()`, never `isTauri()` directly.
 //
-// Keep this list short. The shell owns only what a browser cannot do for
-// itself; native file dialogs and "reveal in Finder" deliberately do NOT live
-// here — they go through daemon HTTP routes, which a WebView calls exactly
-// like a tab does. See docs/decisions/desktop-shell-over-a-shared-frontend.md.
+// Keep this list short: native file dialogs and "reveal in Finder" go through
+// daemon HTTP routes, not here (docs/decisions/desktop-shell-over-a-shared-frontend.md).
 
 import { setDaemonConnection } from "./auth";
 import { resetApiClient } from "./api/client";
 import type { components } from "./api/generated/secret";
+import type { components as syncComponents } from "./api/generated/vault-sync";
 
 export function isTauri(): boolean {
   // @ts-expect-error — Tauri injects __TAURI_INTERNALS__ in its WebView
@@ -208,10 +207,7 @@ export function followLanguageInShell(
   i18n.on("languageChanged", tell);
 }
 
-// ---------------------------------------------------------------------------
-// Presence-gated actions (spec desktop-app "Release plaintext and approvals
-// only after a presence check in the shell")
-// ---------------------------------------------------------------------------
+// Presence-gated actions (spec desktop-app "Release plaintext and approvals only after a presence check in the shell")
 
 /** A change waiting for a present human — what `approve_pending` answers. */
 type Approval = components["schemas"]["ApprovalOut"];
@@ -229,7 +225,7 @@ export class PresenceUnavailableError extends Error {
 export function presenceAvailable(): boolean {
   return isTauri();
 }
-/** In the desktop shell? For Settings › Daemon's Restart and About's host line. */
+/** In the desktop shell? */
 export const inDesktopShell = (): boolean => isTauri();
 
 /** Reveal one secret's plaintext after a presence check. Throws outside the shell. */
@@ -238,7 +234,7 @@ export async function revealSecret(secretRef: string): Promise<string> {
   return shellInvoke<string>("reveal_secret", { secretRef });
 }
 
-/** Where the shell wrote a master key backup, and the key it holds. */
+/** Where the shell wrote a key backup, and the key it holds. */
 export interface MasterKeyBackup {
   path: string;
   fingerprint: string;
@@ -250,27 +246,34 @@ export async function exportMasterKeyBackup(passphrase: string): Promise<MasterK
   return shellInvoke<MasterKeyBackup>("export_master_key_backup", { passphrase });
 }
 
+/** What installing a master key answers (the daemon's `KeyImportOut`). */
+export type MasterKeyImport = syncComponents["schemas"]["KeyImportOut"];
+
+/** Install a master key after a presence check naming its fingerprint; the page never holds the grant. */
+export async function importMasterKey(
+  material: string,
+  passphrase: string | null,
+): Promise<MasterKeyImport> {
+  if (!isTauri()) throw new PresenceUnavailableError("import_master_key");
+  return shellInvoke<MasterKeyImport>("import_master_key", { material, passphrase });
+}
+
 /** Approve one pending approval after a presence check. Throws outside the shell. */
 export async function approvePending(approvalId: string): Promise<Approval> {
   if (!isTauri()) throw new PresenceUnavailableError("approve_pending");
   return shellInvoke<Approval>("approve_pending", { approvalId });
 }
 
-/** Approve several approvals under one presence check. Throws outside the shell.
- *  The shell reads each one from the daemon itself and signs over exactly that
- *  list; ids no longer waiting are left out and come back as skipped. */
+/** Approve several under one presence check; the shell signs over exactly the ones still waiting. */
 export async function approvePendingBatch(approvalIds: string[]): Promise<ApprovalBatch> {
   if (!isTauri()) throw new PresenceUnavailableError("approve_pending_batch");
   return shellInvoke<ApprovalBatch>("approve_pending_batch", { approvalIds });
 }
 
-/** The event the shell emits when it sees a pending approval it has not announced. */
+/** Emitted by the shell for a pending approval it has not announced. */
 export const APPROVALS_EVENT = "coffer://approvals";
 
-/**
- * Call `callback` with each payload the shell emits on `event`; a no-op
- * outside the shell. Returns the unsubscribe.
- */
+/** Call `callback` with each payload the shell emits on `event`; returns the unsubscribe. */
 export function onShellEvent<T>(event: string, callback: (payload: T) => void): () => void {
   if (!isTauri()) return () => {};
   let unlisten: (() => void) | null = null;

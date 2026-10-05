@@ -73,7 +73,9 @@ class KeyMixin:
             fingerprint=fingerprint, current=self.key_fingerprint(), protected=protected
         )
 
-    async def import_key(self, material: str, passphrase: str | None = None) -> KeyImport:
+    async def import_key(
+        self, material: str, passphrase: str | None = None, *, actor: str = "user"
+    ) -> KeyImport:
         """Install the key a file holds, and say which secrets it opens here.
 
         A different key already installed is kept beside it (the manager's
@@ -89,7 +91,7 @@ class KeyMixin:
         replaced = previous is not None and previous != fingerprint
         await self._audit.record(
             AuditEventType.MASTER_KEY_IMPORTED.value,
-            actor="user",
+            actor=actor,
             details={"fingerprint": fingerprint, "replaced": previous if replaced else None},
         )
         locked = await asyncio.to_thread(self._secrets.locked_refs)

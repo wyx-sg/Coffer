@@ -2,3 +2,7 @@
 # string was replaced before merge, but the historical commit still trips the
 # generic-api-key rule when the PR range is scanned.
 203e81651edb7fd991789b1fb834991ee049aa6d:backend/tests/unit/infrastructure/credentials/test_encrypted_store.py:generic-api-key:40
+# Fake test value ("bad-secret-…") a fake SeaTalk SDK refuses, in a feature-branch
+# commit of the signed-build gaps PR; replaced with a plain repeated string before
+# merge, but the historical commit still trips generic-api-key in the PR range.
+4b08a8fa5775a0f668648d9d78c14bd91db4ff98:backend/tests/integration/channel/test_seatalk_bridge_process.py:generic-api-key:123

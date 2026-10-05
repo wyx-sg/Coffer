@@ -5,6 +5,12 @@
 **Deciders**: Yuxing Wu
 **Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [principles](../../docs-site/architecture/principles.md) (Secrets; Network defaults), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Return no plaintext on any route, command or tool", spec secret "Release plaintext only to a present human in the desktop app", spec secret "Hold a secret for a new destination until a person approves it", spec secret "Hold plaintext only in memory at the moment of use", spec daemon "Require a token on every management call", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec desktop-app "Reimplement no daemon route in the shell", PR #464
 
+> **Amended 2026-10-05.** Six ways a same-user agent could reach a secret in a
+> signed build despite the grant were closed; the rules below now state them
+> (sealed boundary state, a daemon and a proxy that prove who they are, key
+> import behind presence, network settings from the OS, the SeaTalk SDK in its
+> own executable).
+
 ## Context
 
 Coffer holds the user's secrets and hands them to the things that consume
@@ -334,6 +340,33 @@ Rules a future change must respect:
 - No setting that weakens either rule changes outside the desktop app's signed
   path.
 - Every listener refuses a foreign `Host` and a foreign `Origin`.
+- **The boundary's state is sealed.** The files that decide where a secret may
+  go — bindings, approvals and the protection switch — carry an HMAC under a key
+  derived from the master key. A file whose seal fails, or that has none in a
+  signed build, is read as empty: the switch returns to the build's default (on)
+  and every binding is approved again. Hand-editing `bindings.json` to approve
+  a destination is therefore not an approval. A development build adopts an
+  unsealed file from before sealing, since its master key is readable anyway.
+- **A secret is handed only to a process that proves it is Coffer's.** The
+  daemon challenges the model proxy (an attest key derived from the master key,
+  given to the child on its standard input, an HMAC over a fresh nonce and the
+  proxy's own port) before it pushes provider keys or re-attaches to a proxy found
+  through `proxy.json`; the desktop shell challenges the daemon the same way
+  before it hands the page the token or signs a grant. `daemon.json`,
+  `proxy.json` and the loopback ports are writable by the same user, so a name
+  in a file is not an identity.
+- **Installing a master key is a presence-gated operation**, with a grant over
+  the fingerprint of the key being installed. Otherwise an agent could install a
+  key of its own and forge every later grant.
+- **A signed build's network settings come from the operating system.** The
+  inherited proxy and certificate-authority variables are dropped at start; the
+  proxy comes from macOS System Settings and trust from the system keychain. An
+  agent cannot start the signed binary with its own proxy or CA and read the
+  credentials Coffer injects.
+- **Third-party code never runs in a process that can read the master key.** The
+  SeaTalk SDK is loaded by its own executable, signed without the keychain
+  entitlement, which gets the app credentials on its standard input and returns
+  events as JSON lines; the daemon does not import it.
 - The UI labels every binding a residual risk covers — a stdio server's
   environment, a `coffer run` secret — as readable by local processes, and nothing
   describes Coffer as protecting it.
@@ -362,6 +395,8 @@ Rules a future change must respect:
   signed release ([The Master Key Lives in a Keychain Access Group](master-key-lives-in-the-macos-keychain.md)).
 - The security architecture page's threat table and `SECURITY.md` state the
   residual risks listed in Option A.
+- Not covered: an unsigned build's readable `~/.coffer/master.key` (the
+  development-build limit above); that file is out of scope for these rules.
 - Not built yet: per-agent tokens on the gateway and the REST API (rule 6);
   attribution still uses the self-reported agent name there.
 - Not built yet: any destination beyond MCP servers, channels, the sync push

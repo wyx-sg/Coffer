@@ -164,9 +164,10 @@ daemon as sole keychain owner.
   holding the key encrypted under a key scrypt derives from a passphrase the
   person types, so a stray copy opens nothing on its own, and returns only the
   path and the key's fingerprint. It is audited as `master_key_exported`. Import
-  is Settings › Security's **Import a master key**,
-  open to every surface, since whoever holds the file and its passphrase holds
-  the key; it shows the file's fingerprint beside this machine's before
+  is Settings › Security's **Import a master key**, a desktop-app action behind a
+  presence check that names the key's fingerprint, because a key that any caller
+  could install would let it forge every later grant under a key of its own; a
+  browser says to open the Coffer app. It shows the file's fingerprint beside this machine's before
   replacing anything, and a different key already installed is kept as a second
   Keychain item, never as a file. Losing the Keychain — a reset login keychain,
   a new Mac without migration — loses the secrets unless such a backup or

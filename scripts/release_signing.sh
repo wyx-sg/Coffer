@@ -4,6 +4,7 @@
 #   release_signing.sh import-identity            # → $GITHUB_ENV: APPLE_SIGNING_IDENTITY
 #   release_signing.sh render-entitlements <out>  # template with APPLE_TEAM_ID
 #   release_signing.sh verify <binary>...         # Developer ID, hardened runtime, group
+#   release_signing.sh verify-no-keychain <bin>... # Developer ID, hardened runtime, NO group
 #   release_signing.sh notarize <file>            # notarytool submit --wait
 #   release_signing.sh staple <file>              # stapler staple + validate
 #   release_signing.sh cleanup                    # delete the temporary keychain
@@ -105,6 +106,33 @@ verify() {
 	done
 }
 
+# The SeaTalk bridge runs operator-supplied code, so it must be signed like the
+# others EXCEPT for the keychain group: prove the group is absent, both on the
+# frozen binary and on the copy inside the built Coffer.app (which Tauri must
+# not have re-signed with the app's entitlements).
+verify_no_keychain() {
+	need APPLE_TEAM_ID
+	local bin details entitlements
+	for bin in "$@"; do
+		codesign --verify --strict --verbose=2 "$bin"
+		details="$(codesign -d --verbose=4 "$bin" 2>&1)"
+		grep -q "TeamIdentifier=$APPLE_TEAM_ID" <<<"$details" ||
+			{ echo "release_signing: $bin is not signed by team $APPLE_TEAM_ID" >&2; exit 1; }
+		grep -Eq "flags=.*runtime" <<<"$details" ||
+			{ echo "release_signing: $bin is not signed under the hardened runtime" >&2; exit 1; }
+		entitlements="$(codesign -d --entitlements - --xml "$bin" 2>/dev/null || true)"
+		if grep -q "keychain-access-groups" <<<"$entitlements" || grep -q "$APPLE_TEAM_ID.coffer" <<<"$entitlements"; then
+			echo "release_signing: $bin carries the keychain-access-groups entitlement" >&2
+			exit 1
+		fi
+		if grep -q "get-task-allow" <<<"$entitlements"; then
+			echo "release_signing: $bin carries get-task-allow" >&2
+			exit 1
+		fi
+		echo "release_signing: $bin — Developer ID, hardened runtime, no keychain group"
+	done
+}
+
 api_key_file() {
 	need APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
 	local key="$TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
@@ -154,11 +182,12 @@ case "$cmd" in
 import-identity) import_identity ;;
 render-entitlements) render_entitlements "$@" ;;
 verify) verify "$@" ;;
+verify-no-keychain) verify_no_keychain "$@" ;;
 notarize) notarize "$@" ;;
 staple) staple "$@" ;;
 cleanup) cleanup ;;
 *)
-	echo "usage: release_signing.sh {import-identity|render-entitlements <out>|verify <bin>...|notarize <file>|staple <file>|cleanup}" >&2
+	echo "usage: release_signing.sh {import-identity|render-entitlements <out>|verify <bin>...|verify-no-keychain <bin>...|notarize <file>|staple <file>|cleanup}" >&2
 	exit 2
 	;;
 esac

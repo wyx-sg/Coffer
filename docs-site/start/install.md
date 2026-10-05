@@ -44,9 +44,9 @@ The agent reads this page, chooses the path that fits your machine and checks th
 
 | Path | Best for | Gives you |
 | --- | --- | --- |
-| [Desktop app](#desktop-app) | Anyone who prefers a window and a menu-bar icon | `Coffer.app`, plus the same three binaries once you first open it |
+| [Desktop app](#desktop-app) | Anyone who prefers a window and a menu-bar icon | `Coffer.app`, plus the same four binaries once you first open it |
 | [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim` in `~/.coffer/bin` |
-| [Release archive](#release-archive) | Installing by hand, or on machines with no GUI | The same three binaries, extracted wherever you choose |
+| [Release archive](#release-archive) | Installing by hand, or on machines with no GUI | The same four binaries, extracted wherever you choose |
 | [From source](#from-source) | Contributors, Linux users, and anyone tracking `main` | A Python install with `coffer` and `coffer-mcp-shim` on your `PATH` |
 
 Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source. Every path needs git 2.40 or later; see [Requirements](#requirements).
@@ -77,7 +77,7 @@ Open Coffer. The app finds a running daemon, or starts the one bundled inside it
 
 :::
 
-The app bundles the same three binaries as the release archive. The first time its daemon starts, it copies them into `~/.coffer/bin`. To use the CLI as well, add that directory to your `PATH`:
+The app bundles the same four binaries as the release archive. The first time its daemon starts, it copies them into `~/.coffer/bin`. To use the CLI as well, add that directory to your `PATH`:
 
 ```sh
 export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
@@ -107,7 +107,7 @@ Set these environment variables for the `sh` process:
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `COFFER_INSTALL_DIR` | `~/.coffer/bin` | Where the three binaries are copied. |
+| `COFFER_INSTALL_DIR` | `~/.coffer/bin` | Where the four binaries are copied. |
 | `COFFER_VERSION` | latest release | Install a specific tag, such as `v<version>`. A version without the leading `v` also works. |
 | `COFFER_NO_MODIFY_PATH` | unset | Set to `1` to leave your shell profile alone. The script prints the line to add instead. |
 
@@ -129,7 +129,7 @@ tar -xzf coffer-cli-aarch64-apple-darwin.tar.gz -C ~/.coffer/bin
 export PATH="$HOME/.coffer/bin:$PATH"          # add to your shell profile
 ```
 
-Keep the three binaries together in one directory. `coffer` and `coffer-mcp-shim` look for `coffer-daemon` beside them when they need to start the daemon. If you downloaded the archive in a browser, clear the quarantine flag with `xattr -dr com.apple.quarantine ~/.coffer/bin`.
+Keep the four binaries together in one directory. `coffer` and `coffer-mcp-shim` look for `coffer-daemon` beside them when they need to start the daemon. If you downloaded the archive in a browser, clear the quarantine flag with `xattr -dr com.apple.quarantine ~/.coffer/bin`.
 
 ## From source
 
@@ -177,7 +177,7 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as the memory tree. |
 | `~/.coffer/logs/daemon.log` | The daemon log, shared by the daemon, its child processes and the desktop app. |
 
-A release-built daemon manages `~/.coffer/bin` itself. At every start it checks whether its build is already deployed there. If not, it copies the three binaries into `~/.coffer/bin/<version>/` and switches the public symlinks to them in one atomic step. A source install never does this. The [files and directories](/reference/filesystem) reference lists every path.
+A release-built daemon manages `~/.coffer/bin` itself. At every start it checks whether its build is already deployed there. If not, it copies the four binaries into `~/.coffer/bin/<version>/` and switches the public symlinks to them in one atomic step. A source install never does this. The [files and directories](/reference/filesystem) reference lists every path.
 
 ## Verify the install
 

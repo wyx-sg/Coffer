@@ -962,10 +962,20 @@ never overwritten), how many stored secrets the key decrypts, and the refs it
 still cannot decrypt; it is audited as `master_key_imported` with the
 fingerprints and never the key or the passphrase. The running daemon MUST use
 the imported key from then on, so a secret stored after the import is sealed
-under it. Key material coming in needs no presence check: a caller that
-supplies a key already has it.
+under it. Installing a key MUST need a person present: a process that can reach
+the API must not be able to swap the master key and then forge presence grants
+under the key it chose. `POST /api/v1/sync/key/import` MUST therefore redeem a
+presence grant for the operation `import_master_key` on the fingerprint of the
+key in the request, before anything is replaced; a missing grant, or a grant for
+another fingerprint, MUST be refused with `PRESENCE_GRANT_INVALID` and change
+nothing (see [secret](../secret/spec.md) "Release plaintext only to a present
+human in the desktop app"). The preview needs no grant: it changes nothing and
+returns only fingerprints. The audit event records the actor as the desktop app.
 
-Settings › Security MUST offer the import as one dialog: choose the key file,
+Settings › Security MUST offer the import, in the desktop app only, as one dialog
+whose Replace key runs behind the app's Touch ID prompt naming the key's
+fingerprint; in a browser the row says to open the Coffer app and offers no
+control. The dialog: choose the key file,
 see "Current key" beside "Key in the file" marked same or different, type the
 passphrase when the file needs one, and confirm with Replace key; afterwards it
 says how many secrets are readable now and names those still locked, with a

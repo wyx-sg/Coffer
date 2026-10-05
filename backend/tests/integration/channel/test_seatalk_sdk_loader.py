@@ -1,24 +1,23 @@
-"""The optional-SDK loader: where it looks, and what it says when it finds nothing.
+"""Where the optional SDK is looked for, how the bridge imports it, and what a
+channel says when it is not there.
 
-Real filesystem and a real import, which is what the loader is — there is no
-pure half to unit-test. The SDK itself is never required: one test asserts the
-real package IS importable when the operator happens to have it, and skips
-otherwise; everything else runs against a written-on-the-fly fake.
+Real filesystem and a real import — inside the bridge's own ``import_sdk`` /
+``open_session``, which is the only code allowed to import the SDK. The SDK
+itself is never required: everything runs against a written-on-the-fly fake.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from coffer.infrastructure.channel.seatalk_sdk import (
-    SeaTalkSdkMissingError,
-    load_sdk,
-    sdk_dir,
-)
+from coffer.infrastructure.channel.seatalk_bridge.protocol import BridgeConfig, Emitter
+from coffer.infrastructure.channel.seatalk_bridge.session import import_sdk, open_session
+from coffer.infrastructure.channel.seatalk_sdk import missing_message, sdk_dir
 
 from .fake_seatalk_sdk import write_fake_sdk_package
 
@@ -43,6 +42,10 @@ def _clean_sdk_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
         sys.modules[_PACKAGE] = previous
 
 
+def _emitter(lines: list[dict[str, Any]], secret: str = "s3cret") -> Emitter:
+    return Emitter(lambda line: lines.append(json.loads(line)), secret=secret)
+
+
 def test_sdk_dir_honours_the_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COFFER_SEATALK_SDK_DIR", "~/elsewhere/vendor")
     assert sdk_dir() == Path.home() / "elsewhere/vendor"
@@ -53,30 +56,10 @@ def test_sdk_dir_defaults_to_the_coffer_vendor_dir(monkeypatch: pytest.MonkeyPat
     assert sdk_dir() == Path.home() / ".coffer" / "vendor"
 
 
-def test_loads_the_package_from_the_vendor_dir(tmp_path: Path) -> None:
-    write_fake_sdk_package(tmp_path / "vendor", marker="from-vendor")
-    module = load_sdk()
-    assert module.MARKER == "from-vendor"
-    assert str(tmp_path / "vendor") in sys.path
-
-
-def test_loads_a_package_already_on_the_normal_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An operator who pip-installed it into the venv needs no vendor dir."""
-    from .fake_seatalk_sdk import build_fake_sdk
-
-    handle = build_fake_sdk()
-    monkeypatch.setitem(sys.modules, _PACKAGE, handle.module)
-    assert load_sdk() is handle.module
-    # Nothing was added to sys.path: the vendor dir does not even exist here.
-    assert not (sdk_dir()).exists()
-
-
-def test_missing_sdk_raises_an_actionable_error(tmp_path: Path) -> None:
-    with pytest.raises(SeaTalkSdkMissingError) as excinfo:
-        load_sdk()
-    message = str(excinfo.value)
-    # The three things the owner needs: what is missing, where to put it, and
-    # where to read about it.
+def test_the_missing_message_says_what_where_and_where_to_read(tmp_path: Path) -> None:
+    message = missing_message(tmp_path / "vendor")
+    # The three things the owner needs: what is missing, where it was looked
+    # for, and where to read about it.
     assert _PACKAGE in message
     assert str(tmp_path / "vendor") in message
     assert "https://open.seatalk.io/docs/WebSocket-Event-Callback" in message
@@ -86,22 +69,78 @@ def test_missing_sdk_raises_an_actionable_error(tmp_path: Path) -> None:
     assert "outbound sends are unaffected" in message
 
 
-def test_vendor_dir_is_added_to_sys_path_only_once(tmp_path: Path) -> None:
-    """The reconnect ladder calls this every few seconds; a path that grew per
-    attempt would be a slow leak."""
+def test_the_bridge_imports_the_package_from_the_vendor_dir(tmp_path: Path) -> None:
+    write_fake_sdk_package(tmp_path / "vendor", marker="from-vendor")
+    module = import_sdk(str(tmp_path / "vendor"))
+    assert module.MARKER == "from-vendor"
+
+
+def test_the_vendor_dir_is_appended_so_it_cannot_shadow_anything(tmp_path: Path) -> None:
+    """A file dropped into the vendor directory named like a stdlib or bundled
+    module must lose to the real one, so the directory goes LAST."""
     write_fake_sdk_package(tmp_path / "vendor")
-    load_sdk()
+    import_sdk(str(tmp_path / "vendor"))
+    assert sys.path[-1] == str(tmp_path / "vendor")
+
+
+def test_the_vendor_dir_is_added_only_once(tmp_path: Path) -> None:
+    write_fake_sdk_package(tmp_path / "vendor")
+    import_sdk(str(tmp_path / "vendor"))
     sys.modules.pop(_PACKAGE, None)
-    load_sdk()
+    import_sdk(str(tmp_path / "vendor"))
     assert sys.path.count(str(tmp_path / "vendor")) == 1
 
 
-def test_absent_vendor_dir_is_not_added_to_sys_path(tmp_path: Path) -> None:
-    with pytest.raises(SeaTalkSdkMissingError):
-        load_sdk()
+def test_an_absent_vendor_dir_is_not_added_to_sys_path(tmp_path: Path) -> None:
+    with pytest.raises(ModuleNotFoundError):
+        import_sdk(str(tmp_path / "vendor"))
     assert str(tmp_path / "vendor") not in sys.path
 
 
-def test_a_second_call_returns_the_already_imported_module(tmp_path: Path) -> None:
+def test_a_missing_package_is_reported_as_sdk_missing(tmp_path: Path) -> None:
+    lines: list[dict[str, Any]] = []
+    config = BridgeConfig("app-1", "s3cret", str(tmp_path / "vendor"))
+    session = open_session(lambda: import_sdk(config.sdk_dir), config, _emitter(lines))
+    assert session is None
+    assert lines == [
+        {
+            "type": "sdk_missing",
+            "dir": str(tmp_path / "vendor"),
+            "detail": f"ModuleNotFoundError: No module named '{_PACKAGE}'",
+        }
+    ]
+
+
+def test_a_package_missing_its_own_dependency_is_a_failure_not_sdk_missing(
+    tmp_path: Path,
+) -> None:
+    """The SDK is there but cannot import what IT needs: saying "not installed"
+    would send the owner to re-download something they already have."""
+    package = tmp_path / "vendor" / _PACKAGE
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("import a_dependency_nobody_has\n")
+    lines: list[dict[str, Any]] = []
+    config = BridgeConfig("app-1", "s3cret", str(tmp_path / "vendor"))
+    assert open_session(lambda: import_sdk(config.sdk_dir), config, _emitter(lines)) is None
+    assert lines[0]["type"] == "ended"
+    assert lines[0]["outcome"] == "failed"
+    assert lines[0]["error_class"] == "ModuleNotFoundError"
+    assert "a_dependency_nobody_has" in lines[0]["error"]
+
+
+def test_a_loaded_package_is_announced_with_its_version(tmp_path: Path) -> None:
     write_fake_sdk_package(tmp_path / "vendor")
-    assert load_sdk() is load_sdk()
+    lines: list[dict[str, Any]] = []
+    config = BridgeConfig("app-1", "s3cret", str(tmp_path / "vendor"))
+    assert open_session(lambda: import_sdk(config.sdk_dir), config, _emitter(lines)) is not None
+    assert lines == [{"type": "loaded", "version": "0.1.0-scripted"}]
+
+
+def test_the_emitter_scrubs_the_secret_from_every_string() -> None:
+    lines: list[dict[str, Any]] = []
+    _emitter(lines).emit("ended", outcome="failed", error_class="X", error="bad key s3cret here")
+    assert lines[0]["error"] == "bad key [redacted] here"
+
+
+def test_the_config_never_shows_its_secret() -> None:
+    assert "s3cret" not in repr(BridgeConfig("app-1", "s3cret", "/v"))

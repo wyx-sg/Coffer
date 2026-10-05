@@ -251,7 +251,7 @@ Both transports answer yes to live text by different means. Telegram edits one m
 ### Transports
 
 - **Telegram** long-polls the Bot API directly over HTTP, with no bot SDK. The update offset is committed only after a dispatch attempt, so a crash re-delivers an update rather than losing it, and a dispatch that raises still advances past a poison update.
-- **SeaTalk** receives over one outbound websocket connection per channel, held on a thread inside the daemon. The operator supplies the websocket SDK. It is synchronous, so its listen loop runs on a thread Coffer owns, and events are handed back to the daemon's event loop thread-safely. Coffer supervises reconnection itself: exponential backoff from 1 s capped at 30 s, and a flat 60 s after being kicked by another connection for the same app. Nothing is exposed to the network. Outbound calls use plain HTTPS.
+- **SeaTalk** receives over one outbound websocket connection per channel, held by a separate `coffer-seatalk-bridge` process that loads the operator-supplied websocket SDK, so third-party code never runs inside the daemon. The daemon gives the bridge the app credentials on standard input and reads events back as JSON lines on a thread Coffer owns, handing them back to the daemon's event loop thread-safely. Coffer supervises reconnection itself: exponential backoff from 1 s capped at 30 s, and a flat 60 s after being kicked by another connection for the same app. Nothing is exposed to the network. Outbound calls use plain HTTPS.
 
 Both transports drop redelivered events with a bounded in-memory set of recently seen ids (2048 entries).
 
