@@ -5,6 +5,7 @@
 // Coffer, or duplicates a registered server (`matches_resource`), or sits in a
 // file that failed to parse and is then read-only. The `coffer` entry of the
 // agent's config is the gateway itself, so it is never a row.
+import type { KindColumn } from "@/components/agents/tabs/AgentKindTab";
 import { reachesAgent } from "@/lib/agents/counts";
 import { isCustomToolGroup } from "@/lib/customTools/groups";
 import type { McpEntryOut } from "@/lib/api/agents-workspace";
@@ -76,4 +77,15 @@ export function cofferToolGroupNames(
   servers: readonly McpServerLike[],
 ): string[] {
   return reachingNames(agentUid, servers.filter(isCustomToolGroup));
+}
+
+/** The table's columns; the row cells follow this order. */
+export function ownMcpColumns(t: (key: string) => string): KindColumn[] {
+  return [
+    { key: "name", header: t("agents.mcpTab.cols.name"), className: "w-[20%]" },
+    { key: "command", header: t("agents.mcpTab.cols.command") },
+    { key: "file", header: t("agents.mcpTab.cols.file"), className: "w-[20%]" },
+    { key: "state", header: t("agents.mcpTab.cols.state"), className: "w-28" },
+    { key: "actions", className: "w-40" },
+  ];
 }

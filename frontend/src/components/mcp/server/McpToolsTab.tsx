@@ -1,14 +1,19 @@
-// src/components/mcp/server/McpToolsTab.tsx — the open server's Tools tab: Search tools, N of M on, All on · All off, the table (design 4.1.10).
+// src/components/mcp/server/McpToolsTab.tsx — the open server's Tools tab: Search tools, the table (design 4.1.10).
 //
 // Every tool in the server's own order, with its switch,
 // rendered whole (100 at a time as the end scrolls into view, past 100) while the
-// search runs over all of them. The toolbar's menu sets the exposure of the filtered tools. A list rebuilt
-// from the saved switches (the server could not be reached) says so: the
-// switches still apply when it answers.
+// search runs over all of them. Ticking rows (or the header box, which ticks
+// every tool the search matches) swaps the toolbar for the selection bar: Turn
+// on, Turn off and, while tiering is on, an Exposure menu, all acting on the
+// ticked tools only. A list rebuilt from the saved switches (the server could
+// not be reached) says so: the switches still apply when it answers.
 import { useState } from "react";
-import { ActionMenu, type MenuAction } from "@/components/ui/menu";
+import { ListSelectionBar } from "@/components/ListSelectionBar";
+import { useTableSelection } from "@/components/DataTableSelection";
+import { BulkOnOffActions } from "@/components/BulkOnOffActions";
 import { useTranslation } from "react-i18next";
 
+import { BulkExposureMenu } from "./BulkExposureMenu";
 import { CapabilityToolbar } from "./CapabilityToolbar";
 import { LoadMoreSentinel } from "@/components/ui/load-more";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,7 +29,9 @@ import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPag
 import { McpToolTable } from "./McpToolTable";
 import { NoTools } from "./McpTopTools";
 import type { ServerState } from "@/lib/mcp/serverState";
-import { cacheNote, countsUsage, toolRows } from "./toolRows";
+import { cacheNote, countsUsage, toolRows, type ToolRow } from "./toolRows";
+
+const rowKey = (row: ToolRow) => row.key;
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
@@ -56,53 +63,60 @@ export function McpToolsTab({
   });
   const tools = capabilities?.tools ?? [];
   const rows = toolRows(tools, summary, tiering, countsUsage(state));
-  const on = rows.filter((r) => r.enabled).length;
   const q = query.trim().toLowerCase();
   const matching = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
   const fromCache = capabilities?.from_cache ?? false;
   const page = useGrowingList(matching, q);
   const exposure = useSetToolExposure();
-  const exposureActions: MenuAction[] = (
-    [
-      ["auto", "bulkAuto"],
-      ["listed", "bulkListed"],
-      ["search", "bulkSearch"],
-    ] as const
-  ).map(([mode, key]: readonly [ToolExposureMode, string]) => ({
-    key: mode,
-    label: t(`mcp.exposure.${key}`, { count: matching.length }),
-    disabled: exposure.isPending || matching.length === 0,
-    onSelect: () => exposure.mutate({ serverUid, tools: matching.map((r) => r.key), mode }),
-  }));
+  const selection = useTableSelection(matching, rowKey);
+  const selected = selection.selectedRows;
+  const exposable = selected.filter((r) => r.enabled).map((r) => r.key);
+  const exposeSelected = (mode: ToolExposureMode) =>
+    exposure.mutate({ serverUid, tools: exposable, mode }, { onSuccess: selection.clear });
 
-  const setAll = (op: "enable" | "disable") =>
-    void bulk.run(
-      tools.filter((tool) => tool.enabled !== (op === "enable")),
-      (tool) =>
+  const setSelected = async (op: "enable" | "disable") => {
+    await bulk.run(
+      selected.filter((r) => r.enabled !== (op === "enable")),
+      (r) =>
         capabilitiesApi.setEnabled(op, {
           serverUid,
           capabilityType: "tool",
-          capabilityKey: tool.original_name,
+          capabilityKey: r.key,
         }),
     );
+    selection.clear();
+  };
 
   return (
     <div className="flex flex-col gap-3">
-      <CapabilityToolbar
-        placeholder={t("mcp.page.searchTools")}
-        query={query}
-        onQueryChange={setQuery}
-        on={on}
-        total={rows.length}
-        busy={bulk.isPending}
-        onAllOn={() => setAll("enable")}
-        onAllOff={() => setAll("disable")}
-        extra={
-          tiering?.enabled ? (
-            <ActionMenu label={t("mcp.exposure.bulk")} actions={exposureActions} />
-          ) : null
-        }
-      />
+      {selected.length > 0 ? (
+        <ListSelectionBar
+          label={t("mcp.page.bulkTools")}
+          count={selected.length}
+          total={matching.length}
+          onClear={selection.clear}
+        >
+          <BulkOnOffActions
+            busy={bulk.isPending}
+            offCount={selected.filter((r) => !r.enabled).length}
+            onCount={selected.filter((r) => r.enabled).length}
+            onTurnOn={() => void setSelected("enable")}
+            onTurnOff={() => void setSelected("disable")}
+          />
+          {tiering?.enabled ? (
+            <BulkExposureMenu
+              disabled={exposure.isPending || exposable.length === 0}
+              onPick={exposeSelected}
+            />
+          ) : null}
+        </ListSelectionBar>
+      ) : (
+        <CapabilityToolbar
+          placeholder={t("mcp.page.searchTools")}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      )}
       {pending ? (
         <Skeleton className="h-40 w-full" />
       ) : rows.length === 0 ? (
@@ -121,6 +135,13 @@ export function McpToolsTab({
               showListing={rows.some((r) => r.exposure !== null || r.listing !== null)}
               fromCache={fromCache}
               label={t("mcp.server.tabs.tools")}
+              selection={{
+                keys: selection.keys,
+                toggle: selection.toggle,
+                allKeys: matching.map(rowKey),
+                setMany: selection.setMany,
+                count: selected.length,
+              }}
             />
           )}
           <LoadMoreSentinel

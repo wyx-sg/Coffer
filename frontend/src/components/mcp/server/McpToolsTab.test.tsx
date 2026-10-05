@@ -156,13 +156,22 @@ describe("McpToolsTab", () => {
     );
   });
 
-  test("the toolbar menu sets the filtered tools in one call", async () => {
+  test("select all ticks every match; Exposure in the bar sets the selected tools in one call", async () => {
     renderTab();
     fireEvent.change(screen.getByRole("textbox", { name: "Search tools" }), {
       target: { value: "tool_1" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Set exposure" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Set 10 to Search only" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(screen.getByRole("region", { name: "Selected tools" })).toHaveTextContent(
+      "10 of 10 selected",
+    );
+    expect(screen.queryByRole("button", { name: /all on|all off/i })).toBeNull();
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Selected tools" })).getByRole("button", {
+        name: "Exposure",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Search only" }));
     await waitFor(() => expect(api.setToolExposure).toHaveBeenCalledTimes(1));
     const [uid, tools, mode] = api.setToolExposure.mock.calls[0] as unknown as [
       string,
@@ -175,9 +184,19 @@ describe("McpToolsTab", () => {
     expect(tools[0]).toBe("tool_10");
   });
 
+  test("a row's box selects without opening the row", () => {
+    renderTab();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select tool_03" }));
+    expect(screen.getByRole("region", { name: "Selected tools" })).toHaveTextContent(
+      "1 of 78 selected",
+    );
+    expect(screen.queryByTestId("mcp-tool-detail")).toBeNull();
+  });
+
   test("with tiering off there is no exposure to set", () => {
     renderTab(tiering({ enabled: false }));
     expect(screen.queryByRole("combobox", { name: /Exposure of/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Set exposure" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select tool_00" }));
+    expect(screen.queryByRole("button", { name: "Exposure" })).toBeNull();
   });
 });

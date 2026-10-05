@@ -1,7 +1,8 @@
-// src/components/providers/ProviderModelRow.tsx — one model in the Models section: switch, id (never wrapped), what uses it, its price, its type.
+// src/components/providers/ProviderModelRow.tsx — one model in the Models section, a table row: select box, switch, id (never wrapped) with what uses it, its price, its type.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import type { Modality } from "@/lib/api/providers";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,8 @@ interface Props {
   /** The model's price and where it came from (ModelPriceCell). */
   price?: ReactNode;
   disabled: boolean;
+  selected: boolean;
+  onSelect: () => void;
   onToggle: () => void;
   onModality: (m: Modality) => void;
 }
@@ -27,41 +30,53 @@ export function ProviderModelRow({
   tags,
   price,
   disabled,
+  selected,
+  onSelect,
   onToggle,
   onModality,
 }: Props) {
   const { t } = useTranslation();
   return (
-    <div
-      data-testid="model-row"
-      className="grid min-h-row grid-cols-[auto_minmax(0,1fr)_auto_120px] items-center gap-3 px-3.5 py-2"
-    >
-      <Switch
-        checked={on}
-        onCheckedChange={onToggle}
-        disabled={disabled}
-        aria-label={t("providers.models.offered", { id })}
-      />
-      <span className="flex min-w-0 items-center gap-2">
-        <span
-          className={cn(
-            "shrink-0 whitespace-nowrap font-mono text-xs",
-            on ? "text-text" : "text-text-subtle",
-          )}
-        >
-          {id}
-        </span>
-        {tags.map((tag) => (
+    <tr data-testid="model-row" className="border-b border-border-subtle last:border-b-0">
+      <td className="py-2 pl-4 pr-1 align-middle">
+        <Checkbox
+          checked={selected}
+          onChange={onSelect}
+          aria-label={t("agents.kindTab.selectRow", { name: id })}
+        />
+      </td>
+      <td className="px-2 py-2 align-middle">
+        <Switch
+          checked={on}
+          onCheckedChange={onToggle}
+          disabled={disabled}
+          aria-label={t("providers.models.offered", { id })}
+        />
+      </td>
+      <td className="min-w-0 px-2 py-2 align-middle">
+        <span className="flex min-w-0 items-center gap-2">
           <span
-            key={tag}
-            className="block h-[18px] min-w-0 truncate whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs leading-[18px] font-label text-text-muted"
+            className={cn(
+              "shrink-0 whitespace-nowrap font-mono text-xs",
+              on ? "text-text" : "text-text-subtle",
+            )}
           >
-            {tag}
+            {id}
           </span>
-        ))}
-      </span>
-      <span className="justify-self-end">{price}</span>
-      <ModalitySelect value={modality} onChange={onModality} disabled={disabled} label={id} />
-    </div>
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="block h-[18px] min-w-0 truncate whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs leading-[18px] font-label text-text-muted"
+            >
+              {tag}
+            </span>
+          ))}
+        </span>
+      </td>
+      <td className="px-2 py-2 align-middle">{price}</td>
+      <td className="py-2 pl-2 pr-4 align-middle">
+        <ModalitySelect value={modality} onChange={onModality} disabled={disabled} label={id} />
+      </td>
+    </tr>
   );
 }

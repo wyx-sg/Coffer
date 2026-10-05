@@ -304,6 +304,42 @@ describe("ProviderDetailPage", () => {
     expect(api.update).toHaveBeenCalledWith(UID, { models: chat("gpt-5-codex") });
   });
 
+  test("the models table names its columns and selects every matching row", async () => {
+    serve(makeProvider({ models: [] }));
+    serves(chat("gpt-5", "gpt-5-codex", "o3"));
+    renderPage();
+    await screen.findByText("gpt-5-codex");
+
+    const table = screen.getByRole("table");
+    for (const name of ["Model", "Price", "Type"]) {
+      expect(within(table).getByRole("columnheader", { name })).toBeInTheDocument();
+    }
+    fireEvent.change(screen.getByRole("textbox", { name: /search/i }), {
+      target: { value: "gpt" },
+    });
+    fireEvent.click(within(table).getByRole("checkbox", { name: "Select all" }));
+    const bar = screen.getByRole("region", { name: "Selected models" });
+    expect(bar).toHaveTextContent("2 of 2 selected");
+  });
+
+  test("bulk Turn off saves once with the selected models removed", async () => {
+    serve(makeProvider({ models: [] }));
+    api.update.mockResolvedValue(makeProvider());
+    serves(chat("gpt-5", "gpt-5-codex", "o3"));
+    renderPage();
+    await screen.findByText("gpt-5-codex");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select gpt-5" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select o3" }));
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Selected models" })).getByRole("button", {
+        name: "Turn off",
+      }),
+    );
+    await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
+    expect(api.update).toHaveBeenCalledWith(UID, { models: chat("gpt-5-codex") });
+  });
+
   acceptance(
     "provider-switching",
     "curate an embedding model alongside chat models on one connection",

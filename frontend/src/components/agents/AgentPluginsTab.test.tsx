@@ -112,7 +112,7 @@ function renderTab(
   return render(<AgentPluginsTab agent={{ ...agent(type), ...over }} />, { wrapper: Wrapper });
 }
 
-const rowOf = async (text: string) => (await screen.findByText(text)).closest("li") as HTMLElement;
+const rowOf = async (text: string) => (await screen.findByText(text)).closest("tr") as HTMLElement;
 
 afterEach(() => vi.clearAllMocks());
 

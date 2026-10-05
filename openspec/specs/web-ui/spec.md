@@ -663,7 +663,7 @@ naming the secret. A success is a toast that says what was kept or added.
 - **THEN** the dialog says the secret waits for approval before it closes
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter box, a per-row enable toggle and a per-row checkbox with a select-all box in the header, with each row's use in the last 24 hours; while rows are ticked a selection bar replaces the filter with Turn on, Turn off and (on Tools, while tiering is on) Exposure for the ticked rows — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -2762,8 +2762,10 @@ tiering is on. The group's calls are read on the Activity page, not on the
 group's page; the failing banner's View calls opens Activity's Tool calls tab
 searching the group's name. Above the table one row
 carries a search, which narrows the rows by tool name, and **Add request**, so
-adding stays in view however many tools the group has; the count of tools that
-are on and **All on** / **All off** keep acting on the whole group. Choosing
+adding stays in view however many tools the group has. Tools are ticked with a
+per-row checkbox (select-all in the header); while any is ticked a selection bar
+replaces that row with **Turn on**, **Turn off** and, while the exposure column
+shows, **Exposure**, acting on the ticked tools. Choosing
 a tool opens its editor in a 640-wide **drawer** below the title bar, where the
 request is edited — the headers the group already adds shown as "from the group",
 no switch, which lives in the table — with **Delete tool** and Cancel

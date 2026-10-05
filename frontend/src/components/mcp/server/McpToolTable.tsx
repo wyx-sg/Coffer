@@ -1,7 +1,7 @@
 // src/components/mcp/server/McpToolTable.tsx — the Tools tab's table (design 4.1.10).
 //
-// Header Tool · Exposure (?) · Calls 24 h · Errors; each row its switch,
-// name and one-line description, its exposure control (Auto · Listed, Always
+// Header [select all] · (switch) · Tool · Exposure (?) · Calls 24 h · Errors;
+// each row its select box, switch, name and one-line description, its exposure control (Auto · Listed, Always
 // listed, Search only), its calls and errors. A row opens to its full description, its input
 // parameters, the name agents see, and its last call.
 import { useState } from "react";
@@ -16,6 +16,7 @@ import { ToggleSwitch } from "../CapabilityRowCells";
 import { CLIENT_NAME_LIMIT } from "../capabilityRows";
 import { McpToolDetail } from "./McpToolDetail";
 import { McpToolExposure } from "./McpToolExposure";
+import { RowSelectBox, SelectAllBox, type CapabilitySelection } from "./CapabilityToolbar";
 import type { ToolRow } from "./toolRows";
 
 interface Props {
@@ -26,6 +27,7 @@ interface Props {
   /** The list was rebuilt from saved switches: no descriptions or parameters. */
   fromCache: boolean;
   label: string;
+  selection: CapabilitySelection;
 }
 
 const COLS = "w-44";
@@ -36,7 +38,7 @@ function Count({ value, danger }: { value: number | null; danger?: boolean }) {
   return <span className={cn(danger && value > 0 ? "text-danger" : "text-text")}>{value}</span>;
 }
 
-export function McpToolTable({ serverUid, rows, showListing, fromCache, label }: Props) {
+export function McpToolTable({ serverUid, rows, showListing, fromCache, label, selection }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState<string | null>(null);
 
@@ -46,6 +48,9 @@ export function McpToolTable({ serverUid, rows, showListing, fromCache, label }:
         role="row"
         className="flex items-center gap-3 border-b border-border-subtle py-1.5 text-2xs font-semibold text-text-muted"
       >
+        <span role="columnheader" className="flex w-5 justify-center pl-2">
+          <SelectAllBox selection={selection} />
+        </span>
         <span className="w-9" aria-hidden />
         <span role="columnheader" className="min-w-0 flex-1">
           {t("mcp.page.colTool")}
@@ -82,6 +87,9 @@ export function McpToolTable({ serverUid, rows, showListing, fromCache, label }:
                 }
               }}
             >
+              <span className="flex w-5 justify-center pl-2" role="cell">
+                <RowSelectBox selection={selection} rowKey={row.key} name={row.key} />
+              </span>
               <span className="flex w-9 justify-center" role="cell">
                 <ToggleSwitch serverUid={serverUid} kind="tool" row={row} />
               </span>

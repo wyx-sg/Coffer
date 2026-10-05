@@ -180,7 +180,7 @@ export function useToggleCustomTool(group: string) {
   });
 }
 
-/** All on / All off: switch every tool not already in that state. */
+/** Switch the given tools on or off, one after another. */
 export function useSetAllCustomTools(group: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();

@@ -25,6 +25,7 @@ import {
   cofferMcpNames,
   cofferToolGroupNames,
   type OwnMcpRow,
+  ownMcpColumns,
 } from "@/components/agents/mcp/mcpRows";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { FromCofferRow } from "@/components/agents/tabs/FromCofferRow";
@@ -115,6 +116,7 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
           rows={rows}
           searchPlaceholder={t("agents.mcpTab.search")}
           searchText={(row) => row.name}
+          columns={ownMcpColumns(t)}
           isLoading={entries.isPending}
           error={entries.error}
           onRetry={() => void entries.refetch()}

@@ -18,6 +18,7 @@ import { DeleteOwnSkillDialog } from "@/components/agents/skills/DeleteOwnSkillD
 import {
   buildOwnSkillRows,
   cofferSkillNames,
+  ownSkillColumns,
   type OwnSkillRow,
 } from "@/components/agents/skills/skillRows";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
@@ -76,6 +77,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
           rows={rows}
           searchPlaceholder={t("agents.skillsTab.search")}
           searchText={(row) => row.name}
+          columns={ownSkillColumns(t)}
           isLoading={unmanaged.isPending}
           error={unmanaged.error}
           onRetry={() => void unmanaged.refetch()}

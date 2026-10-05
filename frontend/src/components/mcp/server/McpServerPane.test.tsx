@@ -494,11 +494,12 @@ describe("McpServerPane", () => {
     expect(detail).not.toHaveTextContent("calls ·");
   });
 
-  test("All off turns every tool that is on off, one call each", async () => {
+  test("selecting all tools and choosing Turn off turns every tool that is on off, one call each", async () => {
     api.post.mockResolvedValue({ data: undefined, error: undefined, response: { status: 204 } });
     renderPane(SENTRY, "/mcp-servers/sentry/tools");
     await screen.findByRole("table", { name: "Tools" });
-    fireEvent.click(screen.getByRole("button", { name: /all off/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(4));
     expect(api.post.mock.calls[0][0]).toBe(
       "/resources/mcp_server/{uid}/capabilities/{capability_type}/disable",

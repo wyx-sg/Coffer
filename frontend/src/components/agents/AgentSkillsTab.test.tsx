@@ -156,7 +156,7 @@ function renderTab() {
   );
 }
 
-const row = (name: string) => screen.getByRole("link", { name }).closest("li") as HTMLElement;
+const row = (name: string) => screen.getByRole("link", { name }).closest("tr") as HTMLElement;
 
 afterEach(() => vi.clearAllMocks());
 
@@ -173,7 +173,8 @@ describe("AgentSkillsTab", () => {
       expect(screen.queryByRole("link", { name: "coffer-guide" })).not.toBeInTheDocument();
       expect(screen.getByRole("link", { name: "release-notes" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "migrate-old" })).toBeInTheDocument();
-      expect(screen.getAllByRole("listitem")).toHaveLength(2);
+      // The header row, then one row per own skill.
+      expect(screen.getAllByRole("row")).toHaveLength(3);
     },
   );
 
