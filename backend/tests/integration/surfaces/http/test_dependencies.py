@@ -79,6 +79,7 @@ _PROVIDERS: list[_Provider] = [
         "_agent_plugin_service",
         "_agent_native_memory_service",
         "_native_session_service",
+        "_agent_sessions_listing",
         "_agent_hooks_service",
     ),
     # skill kind
