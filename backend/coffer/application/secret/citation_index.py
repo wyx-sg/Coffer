@@ -19,6 +19,7 @@ import logging
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.reconcile import Changed
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SECRET_NAMESPACE, slot_of
@@ -133,7 +134,7 @@ class CitationIndex:
             loop.call_soon_threadsafe(self._schedule, changed)
 
     def _schedule(self, changed: Changed) -> None:
-        task = asyncio.get_running_loop().create_task(self._refresh(changed))
+        task = spawn(self._refresh(changed), name="secret-citations-refresh")
         self._pending.add(task)
         task.add_done_callback(self._pending.discard)
 
@@ -146,7 +147,7 @@ class CitationIndex:
             loop.call_soon_threadsafe(self._schedule_skill, name)
 
     def _schedule_skill(self, name: str) -> None:
-        task = asyncio.get_running_loop().create_task(self._refresh_skill(name))
+        task = spawn(self._refresh_skill(name), name="secret-citations-skill")
         self._pending.add(task)
         task.add_done_callback(self._pending.discard)
 

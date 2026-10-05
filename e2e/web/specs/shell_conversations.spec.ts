@@ -58,15 +58,16 @@ async function api(
 }
 
 async function createElsewhereChannel(name: string): Promise<string> {
-  const ref = `channel/${name}/app-secret`;
+  // Coffer mints the secret's id; the channel cites the ref it answers.
   const secret = await api("POST", "/secrets", {
-    ref,
+    label: name,
     value: "e2e-not-a-secret",
   });
   if (!secret.ok)
     throw new Error(
       `secret write failed: ${secret.status} ${await secret.text()}`,
     );
+  const ref = ((await secret.json()) as { ref: string }).ref;
   const res = await api("POST", "/resources", {
     kind: "channel",
     name,
