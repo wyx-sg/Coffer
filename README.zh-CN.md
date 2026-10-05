@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://wyx-sg.github.io/Coffer/zh/"><img alt="文档" src="https://img.shields.io/badge/docs-coffer-4353D8"></a>
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <img alt="平台：macOS" src="https://img.shields.io/badge/platform-macOS-555">
 </p>
 
@@ -47,4 +47,4 @@ a login, tell me what to do instead.
 
 ## 许可证
 
-[MIT](./LICENSE)
+Copyright © 2026 Asen。Coffer 以 [GNU Affero 通用公共许可证 v3.0 或更高版本](./LICENSE)发布：你可以使用、修改和再分发它；基于它分发或通过网络提供的作品，必须以同一许可证发布并公开源码。

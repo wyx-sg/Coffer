@@ -54,7 +54,7 @@ describe("AboutPage", () => {
     } as unknown as ReturnType<typeof getApiClient>);
     render(<AboutPage />, { wrapper: wrap });
 
-    expect(screen.getByText("MIT")).toBeInTheDocument();
+    expect(screen.getByText("AGPL-3.0")).toBeInTheDocument();
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 

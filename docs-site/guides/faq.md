@@ -38,7 +38,7 @@ Everything else is deterministic and local. `coffer__search_tools` ranks tools b
 
 ## What does it cost?
 
-Coffer is free and open source under the MIT license. The only costs are the ones you already have: the model providers your agents (and speech to text, if you set it up) call, and any hosting for a sync remote you choose.
+Coffer is free and open source under the GNU AGPL v3.0 (or later). The only costs are the ones you already have: the model providers your agents (and speech to text, if you set it up) call, and any hosting for a sync remote you choose.
 
 ## How is this different from listing MCP servers in each agent's config?
 

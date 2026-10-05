@@ -90,7 +90,7 @@ export function AboutPage() {
             <span className="font-mono text-xs">{build}</span>
           </SettingRow>
           <SettingRow label={t("settings.about.fields.license")}>
-            <span className="text-sm">MIT</span>
+            <span className="text-sm">AGPL-3.0</span>
           </SettingRow>
           <SettingRow label={t("settings.about.fields.documentation")}>
             <a

@@ -11,7 +11,7 @@ Operating manual for AI agents (Claude Code, Codex, future ones) entering Coffer
 | **Languages**       | Python 3.12+ (backend); TypeScript / React (frontend).                                             |
 | **Source of truth** | `docs-site/architecture/principles.md` (principles); `openspec/specs/` (product contracts).        |
 | **Default branch**  | `main`.                                                                                            |
-| **License**         | MIT.                                                                                               |
+| **License**         | AGPL-3.0-or-later.                                                                                 |
 
 ## 2. Files to Read at Session Start
 

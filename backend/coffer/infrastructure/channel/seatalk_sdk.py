@@ -2,7 +2,7 @@
 
 ``seatalk-oapi-sdk-py`` is the only client for SeaTalk's WebSocket Event
 Callback. It is distributed from an internal Shopee portal, is absent from
-public PyPI, and carries no public licence — so Coffer, which is MIT and
+public PyPI, and carries no public licence — so Coffer, which is AGPL-3.0 and
 OSS-bound, can neither vendor it into this repository nor declare it as a
 dependency. Reimplementing it is not an option either: the frame protocol
 behind the register handshake is unpublished.

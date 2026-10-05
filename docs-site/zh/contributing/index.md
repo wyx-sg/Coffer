@@ -17,7 +17,7 @@ description: Coffer 是怎么开发的，一个改动从 issue 到合并 pull re
 
 ## 项目如何运作 {#how-the-project-runs}
 
-Coffer 是一个单人维护、采用 MIT 许可证的项目，在 [github.com/wyx-sg/Coffer](https://github.com/wyx-sg/Coffer) 公开开发。几乎每一次贡献都受下面五条规则约束。
+Coffer 是一个单人维护、采用 AGPL-3.0 许可证的项目，在 [github.com/wyx-sg/Coffer](https://github.com/wyx-sg/Coffer) 公开开发。几乎每一次贡献都受下面五条规则约束。
 
 ### 规格就是契约 {#specs-are-the-contract}
 
@@ -140,7 +140,7 @@ README 遵循同样的规则：`README.md` 和 `README.zh-CN.md` 在开头互相
 
 ## 许可证与行为准则 {#licence-and-conduct}
 
-Coffer 以 [MIT 许可证](https://github.com/wyx-sg/Coffer/blob/main/LICENSE)发布。参与贡献即表示你同意你的贡献也以该许可证授权。
+Coffer 以 [GNU Affero 通用公共许可证 v3.0 或更高版本](https://github.com/wyx-sg/Coffer/blob/main/LICENSE)发布。参与贡献即表示你同意你的贡献也以该许可证授权。
 
 仓库没有单独的行为准则文档。讨论请保持技术性和礼貌，在 issue 和评审中以善意揣度他人。
 

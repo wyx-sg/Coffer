@@ -65,7 +65,7 @@ No wire type is hand-written on either side. The Pydantic models are the only ha
 
 ### III. Open-Source-Readiness from Day One
 
-License (MIT), governance, contribution flow, and Conventional Commits are present in the repository from v0.0.1, not retrofitted later. A change that would shorten this list — adding a closed-source dependency without an exception, omitting attribution for AI-authored content — violates this principle and requires an amendment with an explicit migration plan.
+License (AGPL-3.0-or-later), governance, contribution flow, and Conventional Commits are present in the repository from v0.0.1, not retrofitted later. A change that would shorten this list — adding a closed-source dependency without an exception, omitting attribution for AI-authored content — violates this principle and requires an amendment with an explicit migration plan.
 
 This prevents the hidden cost of "we'll open-source it later" — retrofitting licenses, attribution, and governance onto a codebase after the fact is expensive and error-prone.
 

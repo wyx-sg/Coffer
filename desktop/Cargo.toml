@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Coffer desktop shell"
 authors = ["Coffer contributors"]
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 
 [lib]
 # `staticlib` for iOS, `cdylib` for Android, `rlib` for desktop binaries.

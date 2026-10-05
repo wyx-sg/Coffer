@@ -7,7 +7,7 @@ name = "coffer"
 version = "0.2.0"
 description = "Local-first AI agent vault — backend"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Coffer contributors" }]
 dependencies = [
     # 0.137.x regressed APIRouter inclusion (app.include_router adds only the

@@ -17,7 +17,7 @@ This section is for anyone who wants to change Coffer: fix a bug, add a feature,
 
 ## How the project runs
 
-Coffer is a single-maintainer, MIT-licensed project developed in the open at [github.com/wyx-sg/Coffer](https://github.com/wyx-sg/Coffer). Five rules shape almost every contribution.
+Coffer is a single-maintainer, AGPL-3.0-licensed project developed in the open at [github.com/wyx-sg/Coffer](https://github.com/wyx-sg/Coffer). Five rules shape almost every contribution.
 
 ### Specs are the contract
 
@@ -140,7 +140,7 @@ The repository receives Dependabot security updates only, with no routine versio
 
 ## Licence and conduct
 
-Coffer is released under the [MIT License](https://github.com/wyx-sg/Coffer/blob/main/LICENSE). By contributing, you agree that your contributions are licensed under it too.
+Coffer is released under the [GNU Affero General Public License v3.0 or later](https://github.com/wyx-sg/Coffer/blob/main/LICENSE). By contributing, you agree that your contributions are licensed under it too.
 
 The repository has no separate code of conduct document. Keep discussion technical and courteous, and assume good faith in issues and reviews.
 

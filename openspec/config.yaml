@@ -6,7 +6,7 @@ context: |
   Coffer is a local-first AI agent vault: a developer's skills, knowledge,
   MCP servers, secrets and agent configuration live on their own machines,
   and coding agents (Claude Code, Codex) read and contribute through one local
-  daemon. Single user, one vault across the user's machines, MIT-licensed.
+  daemon. Single user, one vault across the user's machines, AGPL-3.0-or-later.
 
   Stack: Python 3.12+ backend (FastAPI, SQLAlchemy + Alembic on SQLite, Typer
   CLI, an MCP shim); TypeScript + React + Vite web UI; a Rust/Tauri desktop
