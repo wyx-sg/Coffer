@@ -28,7 +28,7 @@ from hypothesis import strategies as st
 
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
-from coffer.domain.sync.breaker import FLOOR
+from coffer.domain.sync.breaker import FLOOR, SHARE_MIN
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
 from coffer.domain.sync.stops import HoldDirection, StopKind
@@ -113,7 +113,7 @@ def _lost_too_much(before: Files, after: Files) -> list[str] | None:
     gone = sorted(p for p in before if p not in after)
     held = Counter(area_of(p) for p in before)
     for area, lost in Counter(area_of(p) for p in gone).items():
-        if lost >= FLOOR or 5 * lost > held[area]:
+        if lost >= FLOOR or (lost >= SHARE_MIN and 2 * lost > held[area]):
             return gone
     return None
 

@@ -171,7 +171,7 @@ A resource with the same name but a different uid on each side (two machines cre
 
 ## When a round is held for deletions
 
-A round that would lose more than **20%** of the files in one area, or **20 or more** files in one area, stops before touching anything. The thresholds are fixed. The breaker runs in both directions:
+A round that would lose **20 or more** files in one area, or **5 or more** that are over **half** of one area, stops before touching anything. Removing a few files from a small area — three of five MCP servers — goes through. The thresholds are fixed. The breaker runs in both directions:
 
 - **incoming**: the remote would delete a large part of this vault;
 - **outgoing**: this machine would push the deletion of a large part of the remote, which is what a reinstall, a failed restore or a stray `rm -rf` looks like from inside.
@@ -190,6 +190,8 @@ To decide whether a place is a real secret, open it on the Sync page. It shows t
 
 - **Move it into secrets.** **Move into secrets…** opens the Secrets page's [Find plaintext keys](./secrets.md) right on the Sync page, listing only what it finds in the flagged files: review the dry run, then apply, and each value moves into the encrypted store with a `coffer://secret/<id>` reference in its place. It moves values out of skill files; a flagged file that is not one (a knowledge document, say) you edit yourself so it refers to a secret by name, and when none of the flagged files is a skill's, the dialog says so. A secret is never handed to an agent here: a prompt would send the agent to the file that holds it. Then press **Sync now**. The old value is still in the unpushed commits, so the round folds them into one commit that holds the files as they are now, and pushes that. The files on disk do not change; the separate history entries of those unpushed edits become one.
 - **Push anyway.** If a place is an example or a test value and not a real secret, **Push anyway…** asks first, records who pushed which files in the audit log, and pushes exactly the versions it showed you. A file changed after that is read again.
+
+A round that stopped for you keeps why. Click it on the **Status** tab and its drawer leads with what stopped it — the deletions held, the conflicting files, or where the plaintext secret was — and lists those files, even after you have answered and a later round did the work.
 
 ## Roll back a round
 

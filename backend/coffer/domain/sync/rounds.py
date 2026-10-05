@@ -107,6 +107,12 @@ class RoundRecord:
     with_machines: tuple[str, ...] = ()
     conflicts: int = 0
     held: int = 0
+    #: For a round that stopped for a person: the files it stopped on (the
+    #: unanswered conflicts, or what a hold would delete), so the round still
+    #: says why once the stop is answered.
+    stopped_on: tuple[str, ...] = ()
+    #: For a held round: ``incoming`` or ``outgoing``.
+    held_direction: str | None = None
     #: For a failure: git's redacted message, and the path a waiting round names.
     detail: str | None = None
     path: str | None = None
@@ -158,6 +164,8 @@ class RoundRecord:
             with_machines=tuple(raw.get("with_machines") or ()),
             conflicts=int(raw.get("conflicts") or 0),
             held=int(raw.get("held") or 0),
+            stopped_on=tuple(raw.get("stopped_on") or ()),
+            held_direction=raw.get("held_direction"),
             detail=raw.get("detail"),
             path=raw.get("path"),
             join=raw.get("join"),

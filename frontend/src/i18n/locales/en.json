@@ -4296,7 +4296,7 @@
       "heldIncoming_other": "{{peer}} deleted {{count}} files, more than one round may delete",
       "heldOutgoing_one": "This Mac deleted {{count}} file, more than one round may delete",
       "heldOutgoing_other": "This Mac deleted {{count}} files, more than one round may delete",
-      "heldBody": "Rounds that delete 20 files or more, or more than 20% of an area, wait for you. Nothing was checked out and nothing was pushed. Review the list, then delete them here too or restore them.",
+      "heldBody": "Rounds that delete 20 files or more, or 5 or more that are over half of an area, wait for you. Nothing was checked out and nothing was pushed. Review the list, then delete them here too or restore them.",
       "reviewDeletions": "Review deletions",
       "reviewChanges": "Review changes"
     },
@@ -4386,7 +4386,22 @@
       "diffTooLarge": "Too large to show line by line",
       "diffEmpty": "No line changes to show.",
       "rollBack": "Roll back to before this round",
-      "viewActivity": "View in Activity"
+      "viewActivity": "View in Activity",
+      "stop": {
+        "title": "Why this round stopped",
+        "heldOutgoing_one": "This Mac's changes would delete {{count}} file from the remote — more than a round deletes without asking, so it waited for you.",
+        "heldOutgoing_other": "This Mac's changes would delete {{count}} files from the remote — more than a round deletes without asking, so it waited for you.",
+        "heldIncoming_one": "Another machine's changes would delete {{count}} file here — more than a round deletes without asking, so it waited for you.",
+        "heldIncoming_other": "Another machine's changes would delete {{count}} files here — more than a round deletes without asking, so it waited for you.",
+        "held_one": "This round would delete {{count}} file — more than a round deletes without asking, so it waited for you.",
+        "held_other": "This round would delete {{count}} files — more than a round deletes without asking, so it waited for you.",
+        "conflicts_one": "{{count}} file changed on both sides and could not be merged, so it waited for you to choose.",
+        "conflicts_other": "{{count}} files changed on both sides and could not be merged, so it waited for you to choose.",
+        "plaintext_one": "A file it was about to push holds a plaintext secret ({{count}} place), so nothing was pushed.",
+        "plaintext_other": "Files it was about to push hold plaintext secrets ({{count}} places), so nothing was pushed.",
+        "after": "This round only stopped to wait for your answer and changed nothing itself; the round after your answer on the Sync page carries it out.",
+        "untouched": "It stopped before checking anything out: no snapshot, nothing pulled, applied or pushed."
+      }
     },
     "moveVault": {
       "title": "Move the vault out of {{tool}}",

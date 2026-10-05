@@ -68,6 +68,8 @@ def round_out(r: RoundRecord) -> RoundOut:
         with_machines=list(r.with_machines),
         conflicts=r.conflicts,
         held=r.held,
+        stopped_on=list(r.stopped_on),
+        held_direction=r.held_direction,  # type: ignore[arg-type]
         detail=r.detail,
         path=r.path,
         join=r.join,

@@ -73,6 +73,11 @@ class RoundOut(BaseModel):
     with_machines: list[str]
     conflicts: int
     held: int
+    #: For a round that stopped for a person: the files it stopped on (the
+    #: unanswered conflicts, or what a hold would delete); empty otherwise.
+    stopped_on: list[str] = []
+    #: For a held round: ``incoming`` or ``outgoing``.
+    held_direction: Literal["incoming", "outgoing"] | None = None
     detail: str | None
     path: str | None
     join: str | None

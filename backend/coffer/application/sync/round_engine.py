@@ -35,7 +35,14 @@ from coffer.application.sync.round_trees import (
 )
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import PROBLEM_STATUS, RoundRecord, RoundStatus
-from coffer.domain.sync.stops import ConflictFile, HoldDirection, Stop, StopKind
+from coffer.domain.sync.stops import (
+    ConflictFile,
+    HoldDirection,
+    Stop,
+    StopKind,
+    held_fields,
+    stop_fields,
+)
 from coffer.domain.vault.errors import VaultFileStale
 from coffer.domain.vault.remote_errors import RemoteFailed
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_DAEMON, CommitMeta
@@ -94,13 +101,7 @@ class RoundEngine:
         if stop is not None:
             if stop.local == local and stop.remote == tip:
                 status = RoundStatus.HELD if stop.kind is StopKind.HOLD else RoundStatus.STOPPED
-                return rec(
-                    status,
-                    conflicts=len(stop.unanswered),
-                    held=len(stop.hold.paths) if stop.hold else 0,
-                    from_commit=local,
-                    to_commit=tip,
-                )
+                return rec(status, **stop_fields(stop), from_commit=local, to_commit=tip)
             d.state.set_stop(None)  # a side moved since the question: ask it again
         if tip is None:
             if not d.state.joined():
@@ -191,7 +192,12 @@ class RoundEngine:
             )
         )
         return rec(
-            RoundStatus.STOPPED, conflicts=len(dated), from_commit=local, to_commit=tip, join=join
+            RoundStatus.STOPPED,
+            conflicts=len(dated),
+            stopped_on=tuple(c.path for c in dated),
+            from_commit=local,
+            to_commit=tip,
+            join=join,
         )
 
     def _dated(
@@ -232,7 +238,7 @@ class RoundEngine:
                 Stop(StopKind.HOLD, local, tip, base, d.now(), hold=hold, tree=tree, join=join)
             )
             return rec(
-                RoundStatus.HELD, held=len(hold.paths), from_commit=local, to_commit=tip, join=join
+                RoundStatus.HELD, **held_fields(hold), from_commit=local, to_commit=tip, join=join
             )
         pulled, machines = d.pulled(local, tip)
         fast_forward = tree == d.git.tree_of(tip) and d.git.is_ancestor(local, tip)
@@ -323,7 +329,7 @@ class RoundEngine:
                         tree=d.git.tree_of(local),
                     )
                 )
-                return rec(RoundStatus.HELD, held=len(hold.paths), from_commit=local, to_commit=tip)
+                return rec(RoundStatus.HELD, **held_fields(hold), from_commit=local, to_commit=tip)
         final = self._publish_descriptor(local)
         checked = round_plaintext.check(d, tip, final)
         if checked.findings or checked.moved:

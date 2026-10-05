@@ -15,7 +15,7 @@ from coffer.application.sync.round_guard import invalid_files
 from coffer.application.sync.round_trees import identity_conflicts, overrides_for
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
-from coffer.domain.sync.stops import HoldDirection, Stop, StopKind
+from coffer.domain.sync.stops import HoldDirection, Stop, StopKind, held_fields, stop_fields
 from coffer.domain.vault.remote_errors import RemoteFailed
 
 
@@ -43,7 +43,7 @@ def resume(
         if stop.unanswered:
             return rec(
                 RoundStatus.STOPPED,
-                conflicts=len(stop.unanswered),
+                **stop_fields(stop),
                 from_commit=stop.local,
                 to_commit=stop.remote,
             )
@@ -68,7 +68,7 @@ def _resume_hold(
 ) -> RoundRecord:
     d = engine.d
     if d.state.confirmed() != (stop.local, stop.remote):
-        return rec(RoundStatus.HELD, held=len(stop.hold.paths) if stop.hold else 0)
+        return rec(RoundStatus.HELD, **held_fields(stop.hold))
     d.state.set_stop(None)
     if (
         stop.hold is not None

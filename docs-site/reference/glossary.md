@@ -131,7 +131,7 @@ name and the experimental-feature switches. See [Files and directories](/referen
 ### Deletion breaker
 
 The [vault sync](#vault-sync) safeguard that holds a [sync round](#sync-round) that would
-lose 20 or more files, or more than 20% of an area, in either direction, until you answer
+lose 20 or more files, or 5 or more that are over half of an area, in either direction, until you answer
 it on the **Sync** page: **Delete N files** or **Keep the files**. Moves and renames are not losses. See
 [Vault sync](/architecture/vault-sync#the-deletion-breaker).
 

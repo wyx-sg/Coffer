@@ -2,8 +2,10 @@
 identity-is-the-uid-inside-the-file).
 
 A round is **held** when, in any area and in either direction, its *losses*
-exceed 20% of what the area held before or reach 20 files. It counts losses,
-not deletions:
+reach 20 files, or reach 5 files that are more than half of what the area held
+before. The share only counts from 5 files up, so tidying a small area — two
+of three demo servers, a stale skill — goes through, while wiping most of one
+is still asked about. It counts losses, not deletions:
 
 - a **resource file** is lost only when its **uid** is gone from the other
   side — a path that disappears while its uid reappears under another name is
@@ -25,8 +27,10 @@ from dataclasses import dataclass
 from coffer.domain.vault.content_ids import EMPTY_BLOB
 from coffer.domain.vault.layout import RESOURCES, area_of
 
-SHARE = 0.2
+SHARE = 0.5
 FLOOR = 20
+#: The fewest losses the share is judged on.
+SHARE_MIN = 5
 _NOT_COUNTED = frozenset({"machines", "manifest", "other"})
 
 
@@ -97,16 +101,17 @@ def breached(
     *,
     share: float = SHARE,
     floor: int = FLOOR,
+    share_min: int = SHARE_MIN,
 ) -> list[Breach]:
-    """Areas whose losses exceed the share or reach the floor. An area the
-    losing side did not know about counts as empty: any loss there breaches."""
+    """Areas whose losses reach the floor, or reach ``share_min`` and exceed
+    the share. An area the losing side did not know about counts as empty."""
     counted = Counter(area_of(p) for p in lost)
     out: list[Breach] = []
     for area, count in sorted(counted.items()):
         total = before_totals.get(area, 0)
-        if count >= floor or total == 0 or count / total > share:
+        if count >= floor or (count >= share_min and count > share * total):
             out.append(Breach(area, count, total))
     return out
 
 
-__all__ = ["FLOOR", "SHARE", "Breach", "PathDelta", "breached", "losses", "totals"]
+__all__ = ["FLOOR", "SHARE", "SHARE_MIN", "Breach", "PathDelta", "breached", "losses", "totals"]
