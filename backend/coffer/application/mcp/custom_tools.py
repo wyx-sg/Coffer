@@ -15,6 +15,7 @@ read model in ``custom_tool_views``.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -25,6 +26,7 @@ from coffer.application.mcp.custom_tool_ports import (
     CustomToolRunnerPort,
     ToolTestOutcome,
 )
+from coffer.application.mcp.custom_tool_secrets import env_secret_resolver
 from coffer.application.mcp.custom_tool_views import GroupView, GroupViewer
 from coffer.application.mcp.gateway_tool_gate import http_api_transport
 from coffer.application.resource_service import ResourceService
@@ -36,7 +38,13 @@ from coffer.domain.mcp.custom_tool_errors import (
     NotACustomToolGroup,
 )
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
-from coffer.domain.mcp.secret_target import mcp_destination
+from coffer.domain.mcp.http_api_environment import (
+    ENVIRONMENT_ARG,
+    LIFTED_ENVIRONMENT,
+    select_environment,
+)
+from coffer.domain.mcp.http_api_render import ArgumentsInvalid
+from coffer.domain.mcp.json_schema import validate
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope, validate_scope
@@ -76,6 +84,14 @@ def split_headers(
         else:
             plain[name] = value or ""
     return plain, refs, schemes
+
+
+def environment_fields(raw: dict[str, Any]) -> dict[str, Any]:
+    """An environment as a request writes it (header ROWS) -> its stored fields."""
+    plain, refs, schemes = split_headers(list(raw.get("headers") or []))
+    out = {k: v for k, v in raw.items() if k != "headers"}
+    out.update(headers=plain, secret_refs=refs, auth_schemes=schemes)
+    return out
 
 
 def _validated(fields: dict[str, Any]) -> HttpApiTransport:
@@ -134,26 +150,22 @@ class CustomToolService:
         *,
         name: str,
         description: str | None,
-        base_url: str,
-        headers: list[dict[str, Any]],
+        environments: list[dict[str, Any]],
         timeout_seconds: int,
         agents: list[str] | None,
         tools: list[dict[str, Any]],
         source: dict[str, Any] | None,
         actor: str,
     ) -> GroupView:
+        """Create a group. ``environments`` are request-shaped (header rows)."""
         scope = Scope(agents=agents) if agents is not None else None
         try:
             # Refuse before registering, so a bad reach leaves no group behind.
             validate_scope(scope, supports_scope=True)
         except ValueError as e:
             raise ScopeInvalidError(str(e)) from e
-        plain, refs, schemes = split_headers(headers)
         fields: dict[str, Any] = {
-            "base_url": base_url,
-            "headers": plain,
-            "secret_refs": refs,
-            "auth_schemes": schemes,
+            "environments": [environment_fields(e) for e in environments],
             "timeout_seconds": timeout_seconds,
             "tools": tools,
             "source": source,
@@ -175,18 +187,23 @@ class CustomToolService:
         headers: Any = UNSET,
         timeout_seconds: Any = UNSET,
     ) -> GroupView:
+        """Change a group. ``base_url`` and ``headers`` change its environment
+        when it has exactly one; with several, they are changed per environment."""
         resource, transport = await self.group(name)
         fields = transport.model_dump(mode="json")
-        for key, value in (
-            ("base_url", base_url),
-            ("timeout_seconds", timeout_seconds),
-        ):
-            if value is not UNSET:
-                fields[key] = value
-        if headers is not UNSET:
-            fields["headers"], fields["secret_refs"], fields["auth_schemes"] = split_headers(
-                headers
-            )
+        if timeout_seconds is not UNSET:
+            fields["timeout_seconds"] = timeout_seconds
+        if base_url is not UNSET or headers is not UNSET:
+            if len(transport.environments) != 1:
+                raise ConfigValidationError(
+                    "this group has several environments; change base_url and headers "
+                    "on one environment instead"
+                )
+            env = fields["environments"][0]
+            if base_url is not UNSET:
+                env["base_url"] = base_url
+            if headers is not UNSET:
+                env["headers"], env["secret_refs"], env["auth_schemes"] = split_headers(headers)
         await self._write(resource, _validated(fields), actor, description=description)
         return await self.view(name)
 
@@ -229,21 +246,54 @@ class CustomToolService:
         return await self.view(name)
 
     async def test_tool(
-        self, name: str, raw_tool: dict[str, Any], arguments: dict[str, Any]
+        self,
+        name: str,
+        raw_tool: dict[str, Any],
+        arguments: dict[str, Any],
+        environment: str | None = None,
     ) -> ToolTestOutcome:
-        """Run a draft tool once against the group's base URL and secret.
+        """Run a draft tool once in one of the group's environments.
 
         Nothing is saved and nothing enters the invocation log (spec
         mcp-gateway "Manage custom tools through REST and the Custom tools page"); the
         secret goes through the same boundary as a call does.
         """
         resource, transport = await self.group(name)
-        tool = validated_tool(raw_tool)
-        config = MCPServerConfig(transport=transport)
-        overlay = await self._resolver().materialize_async(
-            dict(transport.secret_refs), mcp_destination(resource.uid, resource.name, config)
+        return await self._run(
+            resource, transport, validated_tool(raw_tool), arguments, environment
         )
-        return await self._runner.run(transport, tool, arguments, overlay)
+
+    async def test_saved(
+        self, name: str, tool_name: str, arguments: dict[str, Any], environment: str | None
+    ) -> ToolTestOutcome:
+        """Run a saved tool once in one of the group's environments."""
+        resource, transport = await self.group(name)
+        tool = transport.tool(tool_name)
+        if tool is None:
+            raise CustomToolNotFound(name, tool_name)
+        return await self._run(resource, transport, tool, arguments, environment)
+
+    async def _run(
+        self,
+        resource: Resource,
+        transport: HttpApiTransport,
+        tool: HttpApiTool,
+        arguments: dict[str, Any],
+        environment: str | None,
+    ) -> ToolTestOutcome:
+        """The checks a call makes, in its order, then one request: the
+        environment, the arguments against the schema, then the environment's
+        secrets — each refused before anything is sent."""
+        chosen = dict(arguments)
+        if environment is not None:
+            chosen[ENVIRONMENT_ARG] = environment
+        env, args = select_environment(transport.environments, resource.name, chosen)
+        errors = validate(tool.input_schema, args)
+        if errors:
+            raise ArgumentsInvalid(errors)
+        overlay = await env_secret_resolver(self._resolver(), resource)(env)
+        outcome = await self._runner.run(transport, env, tool, args, overlay)
+        return replace(outcome, environment=env.name)
 
     async def test_unsaved(
         self,
@@ -253,6 +303,7 @@ class CustomToolService:
         timeout_seconds: int,
         raw_tool: dict[str, Any],
         arguments: dict[str, Any],
+        variables: dict[str, str] | None = None,
     ) -> ToolTestOutcome:
         """Run a request of a group that is not saved yet (spec mcp-gateway
         "Test a custom tool request before its group is saved").
@@ -263,16 +314,21 @@ class CustomToolService:
         """
         # A secret header is left out: an unsaved group has no approved binding.
         plain, _, _ = split_headers(headers)
+        tool = validated_tool(raw_tool)
+        env = {
+            "name": LIFTED_ENVIRONMENT,
+            "base_url": base_url,
+            "headers": plain,
+            "variables": variables or {},
+        }
         transport = _validated(
-            {
-                "base_url": base_url,
-                "headers": plain,
-                "timeout_seconds": timeout_seconds,
-                "tools": [],
-                "secret_refs": {},
-            }
+            {"environments": [env], "timeout_seconds": timeout_seconds, "tools": [tool]}
         )
-        return await self._runner.run_unsaved(transport, validated_tool(raw_tool), arguments)
+        args = {k: v for k, v in arguments.items() if k != ENVIRONMENT_ARG}
+        errors = validate(tool.input_schema, args)
+        if errors:
+            raise ArgumentsInvalid(errors)
+        return await self._runner.run_unsaved(transport, transport.environments[0], tool, args)
 
     # --- the one write path ----------------------------------------------------
 
@@ -300,8 +356,19 @@ class CustomToolService:
         """For ``custom_tool_import``: the same write path."""
         return await self._write(resource, transport, actor)
 
+    def validated(self, fields: dict[str, Any]) -> HttpApiTransport:
+        """For ``custom_tool_environments``: a group's fields, validated."""
+        return _validated(fields)
+
     def now(self) -> datetime:
         return self._clock()
 
 
-__all__ = ["UNSET", "CustomToolService", "secret_name_of", "split_headers", "validated_tool"]
+__all__ = [
+    "UNSET",
+    "CustomToolService",
+    "environment_fields",
+    "secret_name_of",
+    "split_headers",
+    "validated_tool",
+]

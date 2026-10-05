@@ -289,6 +289,7 @@ describe("CustomToolsPage", () => {
       "billing",
       expect.objectContaining({ name: "get_invoice", method: "GET" }),
       { id: "7" },
+      "default",
     );
     expect(within(drawer).getByText(/Runs once with Billing token/)).toBeInTheDocument();
     expect(location()).toBe("/custom-tools/billing/tools");

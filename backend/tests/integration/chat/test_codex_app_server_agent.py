@@ -27,6 +27,7 @@ from coffer.domain.chat.events import (
     TurnError,
     TurnStarted,
 )
+from coffer.infrastructure.chat import codex_agent
 from coffer.infrastructure.chat.codex_agent import CodexAppServerAdapter
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 
@@ -693,6 +694,48 @@ async def test_cancel_interrupts_and_closes_and_persists_thread():
     # turn/interrupt was sent on cancel.
     methods = [m for m, _ in server.requests]
     assert "turn/interrupt" in methods
+
+
+class _DeafToInterrupt(FakeCodexAppServer):
+    """A peer that never answers ``turn/interrupt``."""
+
+    async def _handle_client_request(
+        self, method: str, req_id: int, params: dict[str, Any]
+    ) -> None:
+        if method == "turn/interrupt":
+            self.requests.append((method, params))
+            return
+        await super()._handle_client_request(method, req_id, params)
+
+
+@pytest.mark.asyncio
+async def test_cancel_closes_even_when_the_interrupt_is_never_answered(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # The process holds the thread's writer lock until it is closed; an
+    # unanswered interrupt must not keep it (and the turn) alive forever.
+    monkeypatch.setattr(codex_agent, "_INTERRUPT_TIMEOUT_SECONDS", 0.1)
+    server = _DeafToInterrupt(
+        frames=[_Frame("thread/start", "thread/started", {"thread": {"id": "thread-1"}})]
+    )
+    factory = _Factory(server)
+    adapter = _adapter(factory)
+
+    stream = await adapter.run_turn(_user_turn("go"))
+
+    async def consume() -> None:
+        async for _ in stream:
+            pass
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0.1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5.0)
+
+    assert factory.session is not None
+    assert factory.session.closed is True
+    assert "turn/interrupt" in [m for m, _ in server.requests]
 
 
 @pytest.mark.asyncio

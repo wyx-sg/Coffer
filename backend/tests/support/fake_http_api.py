@@ -92,10 +92,15 @@ def _handler(api: FakeHttpApi) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
+class _Server(ThreadingHTTPServer):
+    # The default backlog of 5 drops connections when a test fires dozens at once.
+    request_queue_size = 128
+
+
 @contextmanager
 def fake_http_api() -> Iterator[FakeHttpApi]:
     api = FakeHttpApi()
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _handler(api))
+    server = _Server(("127.0.0.1", 0), _handler(api))
     api.port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

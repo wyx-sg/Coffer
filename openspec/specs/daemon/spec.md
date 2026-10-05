@@ -27,7 +27,7 @@ daemon-to-daemon protocol; the daemon spawns children but does not install runti
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
 wraps the same four binaries this spec builds.
 
-The CLI carries only what needs it (see [resource-framework](../resource-framework/spec.md) "Keep the command line to what needs it"), so most daemon operations are REST and web UI only, and three differences are deliberate. The pre-bind port setting is reachable from the CLI as well as from Settings, because it must work with no daemon
+The CLI carries only what needs it (see [resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"), so most daemon operations are REST and web UI only, and three differences are deliberate. The pre-bind port setting is reachable from the CLI as well as from Settings, because it must work with no daemon
 running. The `/api/v1/fs/*` routes are REST-only because their only caller is a web page that
 cannot reach the OS by itself, while a terminal user already has `cd`, `$EDITOR` and their
 platform's own open command. `POST /daemon/shutdown` has no dedicated CLI verb because
@@ -346,7 +346,7 @@ installed: deployed binaries live under a per-version directory whose older entr
 versioned path stops working two upgrades later, and a supervisor that cannot execute its program
 fails silently — which is the one way autostart could stop without anyone finding out. It MUST
 write to the daemon log (see "Write one bounded daemon log in one format") rather than a file of
-its own. Installing and removing it MUST be done from Settings → Daemon (see "Change residency from the settings page"), and MUST
+its own. Installing and removing it MUST be done from Settings → Daemon (see "Change residency from the settings page or the command line"), and MUST
 be reversible without trace: removing it MUST NOT stop a daemon that is already running, and MUST
 unload it from launchd — at once when no process runs under it, otherwise as that daemon exits, so a
 crash after the user switched the service off is never restarted. See
@@ -394,8 +394,8 @@ daemon MUST NOT serve the framework's interactive API pages (`/docs`, `/redoc`) 
 - **THEN** the schema is refused with `401` until the active token is sent, and then answers with the management routes,
 - **AND** nothing answers at `/openapi.json`, `/docs` or `/redoc`.
 
-### Requirement: Rotate the token over REST
-Rotation MUST be reachable through `POST /api/v1/daemon/rotate-token`, and no command rotates the token. It MUST mint a fresh token, rewrite `daemon.json` atomically at mode
+### Requirement: Rotate the token over REST and on the command line
+Rotation MUST be reachable through `POST /api/v1/daemon/rotate-token`, which `coffer daemon rotate-token` calls. It MUST mint a fresh token, rewrite `daemon.json` atomically at mode
 `0600` — never leaving the file at wider permissions for any window — publish the new value to the
 in-process check so the accepted token and the token "Hand the browser its token in the served
 page" injects cannot drift apart, and record a `token_rotated` audit entry. That audit obligation
@@ -728,38 +728,6 @@ whichever tier it came from.
 - **WHEN** the migrations run at startup,
 - **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
-### Requirement: Change residency from the settings page
-The one residency setting — whether the login service is installed (see "Run as a login service")
-— MUST be readable and settable over REST, from Settings → Daemon. The daemon never stands down on
-its own: once started it serves until it is stopped, or until another daemon supersedes it (see
-"Stand down only when provably superseded"), so there is no idle window to configure.
-
-`GET /api/v1/daemon/residency` MUST report whether a login service is supported on this host and
-whether it is installed. `PUT` on the same route MUST install or remove it, and the change MUST take
-effect at once, because the system's service manager is a different process. On a host with no
-login service, a request to install one MUST leave it off and say so rather than fail. The response
-MUST report what is true after the change, and the change MUST be audited as
-`daemon_residency_updated` with that same value.
-
-This setting has a REST surface where the port deliberately does not: a port is changed when the
-daemon cannot start, so a route the daemon would have to serve is useless exactly then, while
-residency is a settings question asked of a daemon that is working, so it has no command.
-
-There MUST be no command line for it: no `daemon` subcommand installs or removes the login service or
-sets an idle window, and the login service is installed and removed only through the route above.
-
-#### Scenario: the settings page changes residency in one request
-- **GIVEN** a running daemon on a host that supports a login service, with nothing configured,
-- **WHEN** a client reads `GET /api/v1/daemon/residency` and then sends `PUT /api/v1/daemon/residency` with `login_service_installed: true`,
-- **THEN** the read reports a supported login service that is not installed, and the login service is installed at once,
-- **AND** the response and a `daemon_residency_updated` audit entry both report `login_service_installed: true`, and neither carries an idle window.
-
-#### Scenario: residency has no command
-- **GIVEN** no daemon running, on a host that supports a login service,
-- **WHEN** the user runs `coffer daemon` with a `service` subcommand, install or status,
-- **THEN** each exits non-zero as an unknown command and the login service is neither installed nor removed,
-- **AND** no database is opened and no audit entry recorded, and no `idle` subcommand exists either.
-
 ### Requirement: Clear inherited agent-home variables at start
 In a signed build the daemon MUST also drop the inherited proxy and certificate settings from its own environment
 at start (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`,
@@ -885,7 +853,7 @@ connection — MUST come from
 daemon's state without a token and without a route of its own, and so the footer, the Daemon tab,
 `coffer daemon status` and the desktop shell's version check all read one answer. The one daemon
 setting those surfaces also show, whether it starts at login, comes from
-`GET /api/v1/daemon/residency` (see "Change residency from the settings page"). Showing the state MUST NOT move starting the daemon onto the user: every surface that needs
+`GET /api/v1/daemon/residency` (see "Change residency from the settings page or the command line"). Showing the state MUST NOT move starting the daemon onto the user: every surface that needs
 a daemon and finds none still starts one itself (see "Spawn a detached daemon from any surface that
 needs one").
 
@@ -1168,3 +1136,33 @@ auth. It is the terminal counterpart of `GET /api/v1/fs/editors`
 - **WHEN** `GET /api/v1/fs/terminals` is called with a valid token
 - **THEN** it lists those two with their labels and the launcher values `POST /api/v1/fs/terminal` accepts, and nothing is started
 - **AND** the same call with no token is rejected
+
+### Requirement: Change residency from the settings page or the command line
+The one residency setting — whether the login service is installed (see "Run as a login service")
+— MUST be readable and settable over REST, from Settings → Daemon and with `coffer daemon residency show` / `set`. The daemon never stands down on
+its own: once started it serves until it is stopped, or until another daemon supersedes it (see
+"Stand down only when provably superseded"), so there is no idle window to configure.
+
+`GET /api/v1/daemon/residency` MUST report whether a login service is supported on this host and
+whether it is installed. `PUT` on the same route MUST install or remove it, and the change MUST take
+effect at once, because the system's service manager is a different process. On a host with no
+login service, a request to install one MUST leave it off and say so rather than fail. The response
+MUST report what is true after the change, and the change MUST be audited as
+`daemon_residency_updated` with that same value.
+
+The port is changed with `coffer config set daemon.port` because a port is changed when the daemon
+cannot start; residency is a settings question asked of a daemon that is working, so its commands
+call the route above, and no command installs or removes the login service any other way or sets an
+idle window.
+
+#### Scenario: the settings page changes residency in one request
+- **GIVEN** a running daemon on a host that supports a login service, with nothing configured,
+- **WHEN** a client reads `GET /api/v1/daemon/residency` and then sends `PUT /api/v1/daemon/residency` with `login_service_installed: true`,
+- **THEN** the read reports a supported login service that is not installed, and the login service is installed at once,
+- **AND** the response and a `daemon_residency_updated` audit entry both report `login_service_installed: true`, and neither carries an idle window.
+
+#### Scenario: residency is set in Settings or on the command line
+- **GIVEN** a host that supports a login service
+- **WHEN** the command tree is listed, and the user runs `coffer daemon service install` and `coffer daemon idle`
+- **THEN** residency is `coffer daemon residency show` and `set`, which call the route above
+- **AND** the old `service` and `idle` subcommands exit non-zero as unknown commands, writing nothing

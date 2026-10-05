@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fail when a doc, spec, shipped skill, web UI, desktop shell or e2e spec quotes a removed command.
 
-The OpenSpec change trim-the-cli-to-what-needs-it cut the `coffer` command line
-to what the web UI cannot do (its design.md §1 lists what stays), with no
-compatibility aliases; each removed spelling is listed below with where the
-operation lives now. Anything that still quotes an old spelling tells
+Commands the command line has dropped over time (OpenSpec changes
+trim-the-cli-to-what-needs-it and align-cli-with-ui-and-add-tool-environments)
+are listed below with where the operation lives now, with no compatibility
+aliases. Anything that still quotes an old spelling tells
 a reader or an agent to run a command that no longer exists, and the failure
 only shows when someone follows it. The readers that matter are the docs site,
 the repository's own guides (README in both languages, AGENTS, CONTRIBUTING,
@@ -74,98 +74,52 @@ _SKIP_FILES = {"package-lock.json"}
 #: it matches with any run of whitespace between the words and must not be
 #: followed by a word character or a dash.
 #:
-#: The command line keeps only what needs it (OpenSpec change
-#: trim-the-cli-to-what-needs-it, design §1): `memory hook`, `proxy token`,
-#: `daemon start|stop|restart|status`, `path logs`, `config
-#: list|get|set|unset`, `run`, `secret list|set`, `cli list`, `log audit|mcp|daemon`, `mcp
-#: test` and `vault problems`. Everything else is removed, with no aliases;
-#: each spelling names the web UI page that does the job now.
-_AGENTS = "the Agents page"
-_CHANNELS = "the Channels page"
-_SKILLS = "the Skills page"
-_KNOWLEDGE = "edit the files in the knowledge folder directly (or the Knowledge page)"
-_MEMORY = "read the memory notes as files (or the Memory page)"
-_MCP = "the MCP servers page"
-_MODELS = "the Models page"
-_SYNC = "the Sync page"
-_SECRETS = "the Secrets page"
-_SETTINGS = "Settings"
+#: The OpenSpec change trim-the-cli-to-what-needs-it cut the command line to
+#: what the web UI could not do; align-cli-with-ui-and-add-tool-environments
+#: then gave every web UI and desktop operation a command again (spec
+#: resource-framework "Offer every management operation on the command line"),
+#: so most of those spellings are live once more. What is left here is only
+#: what is still gone, each with the command or the file that does the job now.
+_MEMORY = "read and edit the memory notes as files"
 REMOVED: tuple[tuple[str, str], ...] = (
-    # Whole groups.
-    ("coffer agent", _AGENTS),
-    ("coffer channel", _CHANNELS),
-    ("coffer skill", _SKILLS),
-    ("coffer knowledge", _KNOWLEDGE),
-    ("coffer provider", _MODELS),
-    ("coffer tool", "the Custom tools page"),
-    ("coffer cli show", "coffer cli list --json (or the CLIs page)"),
-    ("coffer cli check", "Check again on the CLIs page"),
-    ("coffer cli install", "the hand-off prompt on the CLIs page"),
-    ("coffer usage", "the Usage tab"),
-    ("coffer sync", _SYNC),
+    ("coffer tool", "coffer custom-tool"),
+    ("coffer cli install", "the hand-off prompt on the CLIs page (coffer cli add registers one)"),
     (
         "coffer drift",
-        "nothing: the reconciler repairs drift; what needs a person is on the attention list",
+        "nothing: the reconciler repairs drift; what needs a person is coffer attention list",
     ),
-    ("coffer attention", "the attention list on the Overview page"),
     ("coffer migrate", "nothing: a fresh install starts at the current layout"),
     ("coffer open", "open the Coffer app"),
-    (
-        "coffer scan",
-        "the Agents page (detected agents) and the Skills / MCP servers pages (unmanaged items)",
-    ),
-    ("coffer adopt", "the Skills / MCP servers pages"),
-    ("coffer discard", "the Skills / MCP servers pages"),
-    # Subcommands of groups that keep a few.
-    ("coffer memory list", _MEMORY),
-    ("coffer memory show", _MEMORY),
+    ("coffer scan", "coffer agent list (detected agents) and coffer skill / mcp unmanaged items"),
+    ("coffer adopt", "the adopt command of the Skills or MCP servers group"),
+    ("coffer discard", "the discard command of the Skills or MCP servers group"),
     ("coffer memory edit", _MEMORY),
-    ("coffer memory rm", _MEMORY),
-    ("coffer memory sync", "Update memory on the Memory page"),
-    ("coffer memory delivered", "the Memory page"),
-    ("coffer memory context", "the Memory page"),
-    ("coffer memory delivery", "the Agents page (Connect)"),
-    ("coffer memory distil", "Update memory on the Memory page"),
-    ("coffer memory partitions", _MEMORY),
-    ("coffer memory notes", _MEMORY),
-    ("coffer proxy rotate", "the Agents page"),
-    ("coffer proxy status", _MODELS),
-    ("coffer daemon service", f"{_SETTINGS} > General (start at login)"),
-    ("coffer daemon rotate-token", f"{_SETTINGS}"),
-    ("coffer log prune", f"{_SETTINGS} (log retention)"),
-    ("coffer mcp add", _MCP),
-    ("coffer mcp edit", _MCP),
-    ("coffer mcp rm", _MCP),
-    ("coffer mcp list", _MCP),
-    ("coffer mcp show", _MCP),
-    ("coffer mcp enable", _MCP),
-    ("coffer mcp disable", _MCP),
-    ("coffer mcp scope", _MCP),
-    ("coffer mcp handoff", _MCP),
-    ("coffer mcp cap", _MCP),
-    ("coffer secret get", _SECRETS),
-    ("coffer secret rm", _SECRETS),
-    ("coffer secret approvals", "approve in the Coffer app"),
-    ("coffer secret reject", "reject in the Coffer app"),
-    ("coffer secret scan", _SECRETS),
-    ("coffer secret import", _SECRETS),
-    ("coffer vault history", "the file history in the web UI"),
-    ("coffer vault diff", "the file history in the web UI"),
-    ("coffer vault show", "the file history in the web UI"),
-    ("coffer vault restore", "the file history in the web UI"),
+    ("coffer memory rm", "coffer memory delete"),
+    ("coffer memory context", "coffer memory reading"),
+    ("coffer memory delivery", "coffer agent connect"),
+    ("coffer memory distil", "coffer memory sync"),
+    ("coffer daemon service", "coffer daemon residency set"),
+    ("coffer log prune", "coffer settings retention prune"),
+    ("coffer mcp edit", "coffer mcp update"),
+    ("coffer mcp rm", "coffer mcp delete"),
+    ("coffer mcp scope", "coffer mcp reach"),
+    ("coffer mcp handoff", "the MCP servers page's hand-off prompt"),
+    ("coffer mcp cap", "coffer mcp exposure"),
+    ("coffer secret get", "coffer secret reveal (the value shows only in the Coffer app)"),
+    ("coffer secret rm", "coffer secret delete"),
+    ("coffer secret approvals", "coffer approval list"),
+    ("coffer secret reject", "coffer approval reject"),
+    ("coffer vault show", "coffer vault history / coffer vault diff"),
     ("coffer path knowledge", "the knowledge folder named in the prompt"),
     ("coffer path memory", "the memory folder named in the prompt"),
     ("coffer path skill", "the skill master folder named in the prompt"),
-    ("coffer path agent", "the Agents page"),
+    ("coffer path agent", "coffer agent config-files"),
     ("coffer path vault", "the vault folder named in the prompt"),
-    # Earlier removals, still gone.
-    ("coffer resource", _MCP),
-    ("coffer scope", "the Reach control on the resource's page"),
+    ("coffer scope", "coffer resource reach"),
     ("coffer audit", "coffer log audit"),
-    ("coffer retention", f"{_SETTINGS} (log retention)"),
-    ("coffer engine", f"{_SETTINGS} > Coffer's model"),
-    ("coffer daemon port", "coffer config get|set|unset daemon.port"),
-    ("coffer daemon features", f"{_SETTINGS} > General (Experimental features)"),
+    ("coffer retention", "coffer settings retention"),
+    ("coffer engine", "coffer settings engine"),
+    ("coffer daemon features", "coffer settings features"),
     ("coffer credentials", "coffer secret list|set"),
     ("coffer__recall", "grep the memory root"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
@@ -189,6 +143,7 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/mcp-gateway/spec.md", "coffer__recall", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
+    ("openspec/specs/daemon/spec.md", "coffer daemon service", _ABSENT),
 )
 
 
@@ -265,7 +220,7 @@ def main() -> int:
     if hits:
         print(
             f"check_removed_commands: {len(hits)} quote(s) of removed commands; "
-            "see openspec change trim-the-cli-to-what-needs-it design §1",
+            "see the REMOVED table in scripts/check_removed_commands.py",
             file=sys.stderr,
         )
         return 1

@@ -1019,7 +1019,8 @@
       "offsetMinutes": "{{sign}}{{n}} min",
       "whenToday": "{{time}} today",
       "whenYesterday": "{{time}} yesterday",
-      "whenOn": "{{time}}, {{date}}"
+      "whenOn": "{{time}}, {{date}}",
+      "environment": "Environment"
     },
     "daemon": {
       "noMessage": "(log record with no message)"
@@ -1811,7 +1812,16 @@
     "PROVIDER_PROTOCOL_RETIRED": "The ollama protocol is no longer offered — add a local Ollama runtime on its Anthropic or OpenAI wire instead",
     "FS_TERMINAL_INVALID": "That session can’t be opened in a terminal",
     "FS_TERMINAL_FAILED": "The terminal couldn’t be started. Check the preferred terminal in Settings › General.",
-    "SESSION_IN_USE": "This session is open in a terminal. Continue there, or start a new one."
+    "SESSION_IN_USE": "This session is open in a terminal. Continue there, or start a new one.",
+    "APPROVAL_TARGET_CHANGED": "The destination changed while you were approving. Check the new target and approve again.",
+    "CUSTOM_TOOL_ARGUMENTS_INVALID": "Some arguments don't match the tool's schema; nothing was sent.",
+    "CUSTOM_TOOL_ENVIRONMENT_DISABLED": "That environment is off. Turn it on, or choose another.",
+    "CUSTOM_TOOL_ENVIRONMENT_EXISTS": "This group already has an environment with that name.",
+    "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "This group has no environment with that name.",
+    "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "Choose an environment: this group has more than one turned on.",
+    "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "That environment isn't registered in this group.",
+    "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
+    "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -2043,7 +2053,6 @@
     },
     "config": {
       "none": "No config files found.",
-      "notCreated": "Not created",
       "selectFile": "Select a file to view.",
       "desc": {
         "settings": "{{agent}} settings: permissions, model and hooks.",
@@ -4998,7 +5007,9 @@
       "noteSecret": {
         "save": "Runs once with {{secret}}; nothing is saved until you press Save.",
         "add": "Runs once with {{secret}}; nothing is saved until you add the tool."
-      }
+      },
+      "environment": "Environment",
+      "ranIn": "Ran in {{environment}}"
     },
     "editGroup": {
       "title": "Edit {{name}}",
@@ -5060,6 +5071,38 @@
     },
     "viewer": {
       "wrap": "Wrap lines"
+    },
+    "environments": {
+      "title": "Environments",
+      "help": "The places this group's tools are sent. Every call names one, so no environment is ever the current one; the tools are the same in each.",
+      "add": "Add environment",
+      "addTitle": "Add an environment to {{group}}",
+      "editTitle": "Edit environment {{name}}",
+      "name": "Name",
+      "nameHelp": "Any name you choose, such as test, uat or live. Agents pass it as coffer_environment.",
+      "baseUrlHelp": "Where this environment's requests go. A tool's path is added to it.",
+      "headersHelp": "Sent with every request in this environment. A secret header waits for approval before any request carries it.",
+      "variables": "Variables",
+      "variablesHelp": "Plain text a tool uses as {env:NAME} in its path, query, headers or body. Never put a credential here.",
+      "variableName": "Variable name",
+      "variableValue": "Value of {{name}}",
+      "removeVariable": "Remove {{name}}",
+      "addVariable": "Add variable",
+      "timeoutHelp": "Leave empty to use the group's {{seconds}} s.",
+      "switch": "Environment {{name}} on",
+      "edit": "Edit {{name}}",
+      "delete": "Delete {{name}}",
+      "deleteTitle": "Delete environment {{name}}?",
+      "deleteBody": "Calls can no longer name it. The tools of {{group}} and its other environments stay as they are.",
+      "deleteConfirm": "Delete environment",
+      "editGroupNote_one": "This group has {{count}} environment; its base URL and headers are edited under Environments.",
+      "editGroupNote_other": "This group has {{count}} environments; each one's base URL and headers are edited under Environments.",
+      "secret": {
+        "present": "Secrets set",
+        "missing": "Secret missing",
+        "pending_approval": "Waiting for approval",
+        "none": "No secret"
+      }
     }
   },
   "clis": {
@@ -5558,6 +5601,11 @@
     "list": {
       "usedBy_one": "used by {{count}}",
       "usedBy_other": "used by {{count}}"
+    },
+    "shellReveal": {
+      "title": "Secret {{ref}}",
+      "body": "You asked for it from the command line and confirmed it here. Anyone who can see the screen can read it.",
+      "hides": "Hides in {{seconds}} s · Recorded in Activity"
     }
   },
   "usage": {

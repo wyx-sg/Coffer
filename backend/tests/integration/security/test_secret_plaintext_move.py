@@ -174,7 +174,8 @@ def test_importing_a_server_value_moves_it_into_its_secret_refs(d: BoundaryDaemo
     assert re.fullmatch(r"secret/[0-9a-f]{32}", t["secret_refs"]["DB_PASSWORD"])
     assert d.value(t["secret_refs"]["DB_PASSWORD"]) == PASSWORD
     h = _get(d, api["uid"])["config"]["transport"]
-    assert "X-Api-Key" not in h["headers"]
+    # A custom-tool group keeps its headers per environment (one, lifted, here).
+    assert "X-Api-Key" not in h["environments"][0]["headers"]
     assert d.value(h["secret_refs"]["X-Api-Key"]) == APIKEY
     assert d.resolve_for(s) == {"DB_PASSWORD": PASSWORD} and d.pending() == []
     assert not any(v in moved.text for v in (PASSWORD, APIKEY))

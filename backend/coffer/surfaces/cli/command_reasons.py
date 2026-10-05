@@ -1,10 +1,11 @@
-"""Why each command is on the command line at all.
+"""Why a command that stands for no UI operation is on the command line.
 
-The web UI is where Coffer is managed; a command exists only when the web UI
-cannot do the job (spec resource-framework "Keep the command line to what
-needs it"). Every leaf command carries one of four reasons and a one-line why;
-a test walks the live command tree and fails when a command has no row here, or
-a row names a command that is gone.
+Every web UI and desktop operation has a command, recorded with its route in
+``registry`` (spec resource-framework "Offer every management operation on the
+command line"). The commands below are the rest: no page offers them, and each
+carries one of four reasons and a one-line why. A test walks the live command
+tree and fails when a leaf is neither in the registry nor here, or when a row
+here names a command that is gone or one the registry already records.
 """
 
 from __future__ import annotations
@@ -33,7 +34,6 @@ COMMAND_REASONS: dict[str, tuple[Reason, str]] = {
     ),
     "daemon stop": (Reason.OFFLINE, "the desktop shell and the upgrade hand-off name it"),
     "daemon restart": (Reason.OFFLINE, "a changed port applies only after a restart"),
-    "daemon status": (Reason.OFFLINE, "the offline banner points at it when the daemon is down"),
     "path logs": (
         Reason.OFFLINE,
         "the log files are what is left to read when the daemon will not start",
@@ -47,22 +47,4 @@ COMMAND_REASONS: dict[str, tuple[Reason, str]] = {
     "config set": (Reason.OFFLINE, "the port must be changeable when the daemon cannot start"),
     "config unset": (Reason.OFFLINE, "the port must be changeable when the daemon cannot start"),
     "run": (Reason.HANDOFF, "an agent runs a command with secrets set only in its environment"),
-    "secret list": (Reason.HANDOFF, "an agent names a secret for `run`"),
-    "secret set": (
-        Reason.HANDOFF,
-        "an agent stores a secret read from stdin without the value entering a chat",
-    ),
-    "cli list": (
-        Reason.HANDOFF,
-        "the coffer-guide skill names it: an agent has no page to read the tools Coffer manages",
-    ),
-    "log audit": (Reason.HANDOFF, "troubleshooting hand-offs read records that are not files"),
-    "log mcp": (Reason.HANDOFF, "troubleshooting hand-offs read records that are not files"),
-    "log daemon": (Reason.HANDOFF, "troubleshooting hand-offs read records that are not files"),
-    "mcp test": (Reason.HANDOFF, "the MCP install hand-off verifies the server answers"),
-    "vault problems": (
-        Reason.NO_UI,
-        "lists hand edits the vault refused; no page shows them, and editing files "
-        "directly is now the main way to change knowledge",
-    ),
 }

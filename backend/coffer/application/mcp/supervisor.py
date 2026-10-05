@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+from coffer.application.mcp.custom_tool_secrets import env_secret_resolver
 from coffer.application.mcp.ports import UpstreamConnectionPort
 from coffer.application.mcp.supervisor_failures import UpstreamFailureLedger
 from coffer.application.resource_service import ResourceService
@@ -26,6 +27,7 @@ from coffer.domain.errors import (
     UpstreamTimeout,
     UpstreamUnavailable,
 )
+from coffer.domain.mcp.http_api import HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import AnyTransport, MCPServerConfig
 from coffer.domain.resource import Resource
@@ -311,20 +313,37 @@ class SubprocessSupervisor:
     async def _build_connection(
         self, resource: Resource, config: MCPServerConfig
     ) -> UpstreamConnectionPort:
+        transport = config.transport
+        if isinstance(transport, HttpApiTransport):
+            # A custom-tool group resolves secrets per call, for the one
+            # environment the call names (spec mcp-gateway "Wait for approval
+            # before a custom tool sends its secret"): a missing or unapproved
+            # secret in one environment must not stop the others, so nothing
+            # is resolved here.
+            conn = self._upstream_factory(
+                transport,
+                {},
+                config.spawn_timeout_seconds,
+                config.request_timeout_seconds,
+                resource,
+            )
+            use = getattr(conn, "use_env_secrets", None)
+            if use is not None:
+                use(env_secret_resolver(self._secrets, resource))
+            return conn
         # materialize() is a synchronous, potentially-blocking store read
         # (the encrypted store). Offload to a thread
         # so a slow read can't freeze the whole event loop and stall every
         # other concurrent session. Named destination: the boundary injects
         # nothing into a target nobody approved (spec secret "Hold a
-        # secret for a new destination until a person approves it") — for a
-        # custom-tool group the target is its base URL.
+        # secret for a new destination until a person approves it").
         overlay = await asyncio.to_thread(
             self._secrets.materialize,
-            config.transport.secret_refs,
+            transport.secret_refs,
             mcp_destination(resource.uid, resource.name, config),
         )
         return self._upstream_factory(
-            config.transport,
+            transport,
             overlay,
             config.spawn_timeout_seconds,
             config.request_timeout_seconds,

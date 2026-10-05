@@ -8,8 +8,10 @@ import type { ToolRow } from "@/components/mcp/server/toolRows";
 import type { AgentOut } from "@/lib/api/agents";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
+import { useSaveCustomToolEnvironment } from "@/lib/hooks/useCustomToolEnvironments";
 import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { GroupDefinition } from "./GroupDefinition";
+import { GroupEnvironments } from "./GroupEnvironments";
 import { GroupTopTools } from "./GroupTopTools";
 import { headersWithSecret } from "./headerRows";
 import { groupRequires } from "./overviewRows";
@@ -34,14 +36,27 @@ export function GroupOverview({
   onReimport,
 }: Props) {
   const update = useUpdateCustomToolGroup(group.name);
+  const saveEnv = useSaveCustomToolEnvironment(group.name);
+  const envs = group.environments ?? [];
   // Replace key… on a header's secret: that header cites another secret, nothing else changes.
-  const rebind = (header: string, ref: string) =>
-    update.mutateAsync({
-      headers: headersWithSecret(group, header, ref.replace(/^secret\//, "")),
-    });
+  // With several environments a requirement is named `<environment> · <header>`.
+  const rebind = (requirement: string, ref: string) => {
+    const id = ref.replace(/^secret\//, "");
+    if (envs.length > 1) {
+      const [envName, header] = requirement.split(" · ");
+      const env = envs.find((e) => e.name === envName);
+      if (!env || !header) return Promise.resolve();
+      return saveEnv.mutateAsync({
+        name: env.name,
+        body: { headers: headersWithSecret(env, header, id) },
+      });
+    }
+    return update.mutateAsync({ headers: headersWithSecret(group, requirement, id) });
+  };
   return (
     <div className="flex flex-col gap-6">
       <GroupDefinition group={group} onReimport={onReimport} />
+      <GroupEnvironments group={group} />
       <SectionStack>
         <McpLast24h
           name={group.name}

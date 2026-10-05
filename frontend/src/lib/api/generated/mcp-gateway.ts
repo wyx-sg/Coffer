@@ -81,6 +81,41 @@ export interface paths {
         patch: operations["update_group_api_v1_custom_tools__name__patch"];
         trace?: never;
     };
+    "/api/v1/custom-tools/{name}/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Environment */
+        post: operations["add_environment_api_v1_custom_tools__name__environments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/environments/{environment}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Environment */
+        delete: operations["delete_environment_api_v1_custom_tools__name__environments__environment__delete"];
+        options?: never;
+        head?: never;
+        /** Update Environment */
+        patch: operations["update_environment_api_v1_custom_tools__name__environments__environment__patch"];
+        trace?: never;
+    };
     "/api/v1/custom-tools/{name}/reimport": {
         parameters: {
             query?: never;
@@ -168,6 +203,26 @@ export interface paths {
         head?: never;
         /** Update Tool */
         patch: operations["update_tool_api_v1_custom_tools__name__tools__tool__patch"];
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/tools/{tool}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Saved Tool
+         * @description Run a saved tool once in one environment; saves nothing, logs no invocation.
+         */
+        post: operations["test_saved_tool_api_v1_custom_tools__name__tools__tool__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/mcp/builtin": {
@@ -556,14 +611,100 @@ export interface components {
             /** Tools */
             tools: components["schemas"]["MCPToolView"][];
         };
-        /** CustomToolGroupIn */
+        /**
+         * CustomToolEnvironmentIn
+         * @description One environment as a request writes it (spec mcp-gateway "Keep a
+         *     custom-tool group's environments in the group").
+         */
+        CustomToolEnvironmentIn: {
+            /** Base Url */
+            base_url: string;
+            /**
+             * Description
+             * @default
+             */
+            description?: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled?: boolean;
+            /** Headers */
+            headers?: components["schemas"]["CustomToolHeaderIn"][];
+            /** Name */
+            name: string;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+        };
+        /** CustomToolEnvironmentOut */
+        CustomToolEnvironmentOut: {
+            /** Base Url */
+            base_url: string;
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Headers */
+            headers: components["schemas"]["CustomToolHeaderOut"][];
+            /** Name */
+            name: string;
+            /** Pending Approvals */
+            pending_approvals: string[];
+            /** Pending Secrets */
+            pending_secrets: string[];
+            /**
+             * Secret State
+             * @enum {string}
+             */
+            secret_state: "none" | "present" | "missing" | "pending_approval";
+            /** Timeout Seconds */
+            timeout_seconds: number | null;
+            /** Variables */
+            variables: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * CustomToolEnvironmentPatch
+         * @description A partial change to one environment; ``headers`` and ``variables``
+         *     replace the whole list, and ``timeout_seconds: null`` uses the group's.
+         */
+        CustomToolEnvironmentPatch: {
+            /** Base Url */
+            base_url?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Headers */
+            headers?: components["schemas"]["CustomToolHeaderIn"][] | null;
+            /** Name */
+            name?: string | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            } | null;
+        };
+        /**
+         * CustomToolGroupIn
+         * @description A new group: its ``environments``, or — for one environment named
+         *     ``default`` — a ``base_url`` and ``headers``. Send one of the two.
+         */
         CustomToolGroupIn: {
             /** Agents */
             agents?: string[] | null;
             /** Base Url */
-            base_url: string;
+            base_url?: string | null;
             /** Description */
             description?: string | null;
+            /** Environments */
+            environments?: components["schemas"]["CustomToolEnvironmentIn"][] | null;
             /** Headers */
             headers?: components["schemas"]["CustomToolHeaderIn"][];
             /** Name */
@@ -597,6 +738,8 @@ export interface components {
             description: string | null;
             /** Enabled */
             enabled: boolean;
+            /** Environments */
+            environments: components["schemas"]["CustomToolEnvironmentOut"][];
             /** Failures 24H */
             failures_24h: number;
             handoff: components["schemas"]["HandoffOut"] | null;
@@ -640,6 +783,8 @@ export interface components {
         /**
          * CustomToolGroupPatch
          * @description A partial change to a group; ``headers`` replaces the whole list.
+         *     ``base_url`` and ``headers`` change a group with ONE environment; a group
+         *     with several changes them per environment.
          */
         CustomToolGroupPatch: {
             /** Base Url */
@@ -843,12 +988,26 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        /**
+         * CustomToolSavedTestIn
+         * @description A saved tool run once in one environment.
+         */
+        CustomToolSavedTestIn: {
+            /** Arguments */
+            arguments?: {
+                [key: string]: unknown;
+            };
+            /** Environment */
+            environment?: string | null;
+        };
         /** CustomToolTestIn */
         CustomToolTestIn: {
             /** Arguments */
             arguments?: {
                 [key: string]: unknown;
             };
+            /** Environment */
+            environment?: string | null;
             tool: components["schemas"]["CustomToolIn"];
         };
         /** CustomToolTestOut */
@@ -859,6 +1018,8 @@ export interface components {
             content_type: string | null;
             /** Duration Ms */
             duration_ms: number;
+            /** Environment */
+            environment: string | null;
             /** Error */
             error: string | null;
             /** Failure */
@@ -897,6 +1058,10 @@ export interface components {
              */
             timeout_seconds?: number;
             tool: components["schemas"]["CustomToolIn"];
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -956,6 +1121,8 @@ export interface components {
             capability_type: "tool" | "resource" | "prompt";
             /** Duration Ms */
             duration_ms: number;
+            /** Environment */
+            environment: string | null;
             /** Error Message */
             error_message: string | null;
             handoff: components["schemas"]["HandoffOut"] | null;
@@ -1856,6 +2023,145 @@ export interface operations {
             };
         };
     };
+    add_environment_api_v1_custom_tools__name__environments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolEnvironmentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_environment_api_v1_custom_tools__name__environments__environment__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+                environment: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_environment_api_v1_custom_tools__name__environments__environment__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+                environment: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolEnvironmentPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     apply_reimport_api_v1_custom_tools__name__reimport_post: {
         parameters: {
             query?: never;
@@ -2112,6 +2418,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_saved_tool_api_v1_custom_tools__name__tools__tool__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolSavedTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolTestOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

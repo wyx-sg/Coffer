@@ -2,7 +2,7 @@
 
 The MCP install hand-off asks an agent to verify the server answers, and the
 agent runs this. Registering, editing and removing servers is the MCP servers
-page's job (spec resource-framework "Keep the command line to what needs it").
+page's job (spec resource-framework "Offer every management operation on the command line").
 
 A server is named by its NAME; the uid the daemon addresses it by is looked up
 once through ``_resolve`` (ADR identity-is-the-uid-inside-the-file).

@@ -3,7 +3,7 @@
 The installed memory hook entries in an agent's own settings file run it, so it
 stays on the command line, hidden because nobody types it. Notes, partitions
 and what was delivered are the Memory page's job (spec resource-framework
-"Keep the command line to what needs it").
+"Offer every management operation on the command line").
 """
 
 from __future__ import annotations

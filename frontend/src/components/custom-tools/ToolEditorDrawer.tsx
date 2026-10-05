@@ -81,6 +81,7 @@ export function ToolEditorDrawer({ group, toolName, open, onClose, onEditGroup }
           <ToolArgumentsField args={form.args} onChange={(args) => setForm({ ...form, args })} />
           <ToolTestSection
             target={{ group: group.name }}
+            environments={group.environments}
             secret={firstSecret(group) || null}
             timeoutSeconds={group.timeout_seconds}
             args={form.args}

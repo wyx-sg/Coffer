@@ -1019,7 +1019,8 @@
       "offsetMinutes": "{{sign}}{{n}} 分钟",
       "whenToday": "今天 {{time}}",
       "whenYesterday": "昨天 {{time}}",
-      "whenOn": "{{date}} {{time}}"
+      "whenOn": "{{date}} {{time}}",
+      "environment": "环境"
     },
     "daemon": {
       "noMessage": "（没有消息的日志记录）"
@@ -1811,7 +1812,16 @@
     "PROVIDER_PROTOCOL_RETIRED": "不再提供 ollama 协议——请改用本地 Ollama 运行时的 Anthropic 或 OpenAI 协议添加",
     "FS_TERMINAL_INVALID": "无法在终端中打开该会话",
     "FS_TERMINAL_FAILED": "无法启动终端。请检查设置 › 通用中的首选终端。",
-    "SESSION_IN_USE": "该会话已在终端中打开。请在那里继续，或开始一个新会话。"
+    "SESSION_IN_USE": "该会话已在终端中打开。请在那里继续，或开始一个新会话。",
+    "APPROVAL_TARGET_CHANGED": "批准过程中目标发生了变化。请检查新的目标后重新批准。",
+    "CUSTOM_TOOL_ARGUMENTS_INVALID": "部分参数不符合工具的 schema，没有发出任何请求。",
+    "CUSTOM_TOOL_ENVIRONMENT_DISABLED": "该环境已关闭。请打开它，或选择其他环境。",
+    "CUSTOM_TOOL_ENVIRONMENT_EXISTS": "这个分组已有同名环境。",
+    "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "这个分组没有这个名字的环境。",
+    "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "请选择一个环境：这个分组开启了不止一个环境。",
+    "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "这个环境没有在该分组中登记。",
+    "CUSTOM_TOOL_LAST_ENVIRONMENT": "分组至少需要一个环境，最后一个不能删除。",
+    "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -2043,7 +2053,6 @@
     },
     "config": {
       "none": "未找到配置文件。",
-      "notCreated": "未创建",
       "selectFile": "选择一个文件查看。",
       "desc": {
         "settings": "{{agent}} 设置：权限、模型和钩子。",
@@ -4998,7 +5007,9 @@
       "noteSecret": {
         "save": "使用 {{secret}} 运行一次；点击保存前不会保存任何内容。",
         "add": "使用 {{secret}} 运行一次；添加工具前不会保存任何内容。"
-      }
+      },
+      "environment": "环境",
+      "ranIn": "在 {{environment}} 中运行"
     },
     "editGroup": {
       "title": "编辑 {{name}}",
@@ -5060,6 +5071,38 @@
     },
     "viewer": {
       "wrap": "自动换行"
+    },
+    "environments": {
+      "title": "环境",
+      "help": "这个组的工具会被发往的地方。每次调用都要指明其中一个，因此不存在“当前环境”；各环境中的工具完全相同。",
+      "add": "添加环境",
+      "addTitle": "为 {{group}} 添加环境",
+      "editTitle": "编辑环境 {{name}}",
+      "name": "名称",
+      "nameHelp": "任意自定义名称，例如 test、uat 或 live。智能体调用时通过 coffer_environment 指定。",
+      "baseUrlHelp": "该环境请求发往的地址，工具的路径会接在后面。",
+      "headersHelp": "该环境中每个请求都会带上。密钥请求头需要先经批准，之后请求才会携带它。",
+      "variables": "变量",
+      "variablesHelp": "工具在路径、查询、请求头或请求体中以 {env:NAME} 使用的纯文本。不要在这里放凭据。",
+      "variableName": "变量名",
+      "variableValue": "{{name}} 的值",
+      "removeVariable": "移除 {{name}}",
+      "addVariable": "添加变量",
+      "timeoutHelp": "留空则使用组的 {{seconds}} 秒。",
+      "switch": "启用环境 {{name}}",
+      "edit": "编辑 {{name}}",
+      "delete": "删除 {{name}}",
+      "deleteTitle": "删除环境 {{name}}？",
+      "deleteBody": "之后的调用不能再指明它。{{group}} 的工具和其他环境保持不变。",
+      "deleteConfirm": "删除环境",
+      "editGroupNote_one": "这个组有 {{count}} 个环境；它的基础 URL 和请求头在“环境”中编辑。",
+      "editGroupNote_other": "这个组有 {{count}} 个环境；每个环境的基础 URL 和请求头在“环境”中编辑。",
+      "secret": {
+        "present": "密钥已设置",
+        "missing": "缺少密钥",
+        "pending_approval": "等待批准",
+        "none": "无密钥"
+      }
     }
   },
   "clis": {
@@ -5558,6 +5601,11 @@
     "list": {
       "usedBy_one": "{{count}} 处使用",
       "usedBy_other": "{{count}} 处使用"
+    },
+    "shellReveal": {
+      "title": "密钥 {{ref}}",
+      "body": "这是你在命令行中请求、并在这里确认后显示的值。能看到屏幕的人都能读到它。",
+      "hides": "{{seconds}} 秒后隐藏 · 已记录在活动中"
     }
   },
   "usage": {

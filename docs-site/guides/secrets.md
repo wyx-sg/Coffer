@@ -13,8 +13,8 @@ For storing, citing, rotating and deleting a resource's secrets — an MCP serve
 
 A coding agent can read a hostile web page, issue or README and start following the instructions in it. Such an agent runs with your shell: it can read your files, run `coffer`, and call Coffer's API exactly as you can. Coffer does not try to stop it from configuring Coffer — setting Coffer up for you is part of an agent's job. It protects the **secret** instead:
 
-1. **Only you, at the desktop app, see a secret's value.** No command, REST route or MCP tool returns a stored value or the master key. Revealing or copying a value, and backing up the master key, happen only in the desktop app, each after its own Touch ID or login-password check. The next reveal asks again.
-2. **A secret goes somewhere new only after you approve it.** Sending an existing secret to a place it has not gone before — a new MCP server, a changed command line, another git remote — waits for you to approve it in the desktop app. Until then nothing is sent.
+1. **Only you, at the desktop app, see a secret's value.** No command, REST route or MCP tool returns a stored value or the master key. Revealing or copying a value, and backing up the master key, happen only in the desktop app, each after its own Touch ID or login-password check. An agent can start one with `coffer secret reveal` or `coffer secret backup-key`, but the value shows only in the app's window, never in the command's output. The next reveal asks again.
+2. **A secret goes somewhere new only after you approve it.** Sending an existing secret to a place it has not gone before — a new MCP server, a changed command line, another git remote — waits for you to approve it in the desktop app. An agent can ask for that approval with `coffer approval approve`, but the presence check still runs in the app, in front of you. Until then nothing is sent.
 3. **Switching these protections off also takes you, at the desktop app.** No environment variable, config file or flag does it.
 4. **Agents get capabilities, not keys.** The gateway puts an HTTP server's token into the request itself, so the agent sees the tool's results and never the token.
 
@@ -156,6 +156,8 @@ Open the [Secrets page](#the-secrets-page) in the **desktop app** and choose **R
 
 The browser UI offers no reveal: the menu item reads **Reveal in the Coffer app** and is disabled.
 
+From a terminal, `coffer secret reveal <ref>` asks the desktop app to run the same reveal, starting the app if it is not running. The prompt and the value appear in the app; the command learns only whether you went through with it (exit `0`) or not (exit `11`), and never prints the value.
+
 ## Approvals
 
 A secret added on the Secrets page or with `coffer secret set --name` belongs to no resource, so the first time a resource cites it, that waits for a person's approval too. An approval is a change that would widen where a secret goes, held until you answer it in the desktop app.
@@ -194,7 +196,7 @@ A binding is also checked when you register or change the place that uses it, so
 
 When something waits, the desktop app posts a notification, **Coffer needs your approval**, naming the change, and opens the approvals dialog, one table with a row per change: the kind of change (**New use**, **Turn off protection**), the secret, where it goes (what uses it, or the target that receives it), who asked (**You · in the Coffer UI**, **You · on the command line**, **Through the API**) and when. With one change, **Approve…** runs Touch ID or your login password, with a prompt that names the change, then applies it; the server, channel or remote picks the secret up on its next attempt, with no restart. **Reject** needs no presence check, since refusing only narrows what Coffer does.
 
-In a browser, **Approve** is disabled — "Approve in the Coffer desktop app" — and only **Reject** works.
+In a browser, **Approve** is disabled — "Approve in the Coffer desktop app" — and only **Reject** works. An agent can bring the prompt to the app with `coffer approval approve <id>` (see [On the command line](#on-the-command-line)).
 
 ### Answering several at once
 
@@ -204,9 +206,33 @@ Rejecting shows a toast and nothing more: the page keeps no list of refused chan
 
 ### On the command line
 
-A command whose change leaves a secret waiting, such as registering a second server that cites a secret already sent elsewhere, prints `waiting for approval in the Coffer app` with what waits and exits `9`. `coffer secret set` itself never waits: it stores the value at once and exits `0`.
+A command whose change leaves a secret waiting, such as registering a second server that cites a secret already sent elsewhere, saves the change, prints the approval ids and the command that approves them on standard error, and exits `9`:
 
-An agent that hits exit `9` should tell you what it registered and that it waits for you, not retry.
+```text
+waiting for approval: <id>
+next: coffer approval approve <id>
+```
+
+With `--json` the same is printed as `{"status": "pending_approval", "approval_ids": [...], "next": "coffer approval approve …"}`. `coffer secret set` itself never waits: it stores the value at once and exits `0`.
+
+The `coffer approval` commands do what the approvals dialog does:
+
+| Command | What it does |
+| --- | --- |
+| `coffer approval list` | Pending approvals, newest first. `--status approved`, `rejected`, `superseded` or `all` shows the others; `--destination <uid>` one resource's. |
+| `coffer approval show <id>` | What the approval sends, to which destination and target, and its state. |
+| `coffer approval approve <id>…` | Hands exactly these approvals to the desktop app, which runs Touch ID or your login password itself. |
+| `coffer approval reject <id>…` | Refuses them. Like **Reject**, it needs no presence check. |
+
+`coffer approval approve` approves nothing by itself. It leaves a request with the daemon and waits; the desktop app picks it up, reads each approval from the daemon, shows the system prompt naming each change, its secret, where it goes (with the custom-tool environment) and the target, and applies the approvals only after you confirm. The grant is good for one request and pinned to the target each approval named when you were asked: if a target moves before you answer, nothing is applied (`APPROVAL_TARGET_CHANGED`) and the approval asks again. The command then reads each approval's state back from the daemon and exits:
+
+- `0` when every one is approved;
+- `11` when you cancelled, the check failed, or nobody answered within `--timeout` (120 seconds by default); every approval stays pending;
+- `12` (`CLI_APP_UNAVAILABLE`) when the desktop app is not running and cannot be started. When no app has checked in with the daemon lately, the command starts it (`--no-launch` stops that) and waits up to 30 seconds for it; on a machine with no app, or that is not a Mac, nothing is approved.
+
+Several ids share one prompt only when each was named and is still pending; naming one that is no longer waiting refuses the command before any prompt. Turning the protection off always gets a prompt of its own. No flag (`--yes`, `--force` or any other) skips the check, and nothing clicks or scripts the app's window.
+
+An agent that hits exit `9` should tell you what it changed and which approvals wait, and may run `coffer approval approve <id>` so the prompt appears on your screen. It should not retry the change.
 
 ### Switching the protection off
 
@@ -233,7 +259,7 @@ Every secret is encrypted with one master key. How it is kept depends on the bui
 
 Presence checks guard what lets plaintext out, not the key itself: that is why the daemon never waits for you.
 
-**Back up the key in the desktop app** (Settings › Security): choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`, audited as `master_key_exported`. No command or browser page can do it. Install the backup on another machine with **Import a master key** on **Settings › Security**, which also asks for Touch ID in the app — see [Secret store → Carry the key to another machine](/guides/secret-store#carry-the-key-to-another-machine). In a signed release the Keychain is the only copy, so make a backup.
+**Back up the key in the desktop app** (Settings › Security): choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`, audited as `master_key_exported`. `coffer secret backup-key` opens the same backup in the app, where you type the passphrase and pick the folder; no command or browser page writes the backup itself. Install the backup on another machine with **Import a master key** on **Settings › Security** (or `coffer secret import-key`, which opens it in the app), which also asks for Touch ID in the app — see [Secret store → Carry the key to another machine](/guides/secret-store#carry-the-key-to-another-machine). In a signed release the Keychain is the only copy, so make a backup.
 
 ## Related
 

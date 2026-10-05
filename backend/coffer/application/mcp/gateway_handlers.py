@@ -22,7 +22,7 @@ from coffer.application.mcp.gateway_coerce import (
     coerce_prompt_result,
     coerce_read_result,
 )
-from coffer.application.mcp.gateway_tool_gate import custom_tool_denial
+from coffer.application.mcp.gateway_tool_gate import custom_tool_denial, custom_tool_environment
 from coffer.application.mcp.invocation_outcome import (
     INBAND_TOOL_ERROR,
     answered_rpc_error,
@@ -122,6 +122,7 @@ async def record_invocation(
     duration_ms: int,
     status: Literal["ok", "error", "timeout", "denied"],
     error_message: str | None,
+    environment: str | None = None,
 ) -> None:
     await invocations.insert(
         MCPInvocation(
@@ -136,6 +137,7 @@ async def record_invocation(
             session_id=session_id,
             agent_uid=agent_uid,
             trace_id=correlation.current().trace_id,
+            environment=environment,
         )
     )
 
@@ -217,7 +219,15 @@ async def _invoke(
             duration_ms=duration_ms,
             status=status,
             error_message=error_message,
+            environment=environment,
         )
+
+    # A custom-tool call names its environment in the log, never a credential.
+    environment = (
+        custom_tool_environment(resource, params.get("arguments"))
+        if spec.capability_type == "tool"
+        else None
+    )
 
     # A disabled server is refused here, per call, and not only hidden from the
     # listings (gateway_scope): a session that listed the server before it was

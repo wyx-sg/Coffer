@@ -81,7 +81,7 @@ description: Coffer 怎样在 Claude Code 或 Codex 上为即时通讯消息渠�
 | 原因 | 如何发出信号 | 结果 |
 | --- | --- | --- |
 | 所有者打断（`POST .../interrupt`、消息渠道里的 `/stop`、列表里的**停止**） | 轮次被标记为已打断；队列被暂停 | `turn_done`，`stop_reason: "interrupted"`；到目前为止的输出以事件形式送达消息渠道。 |
-| 对话被删除 | 轮次被标记为已丢弃 | 轮次被取消；总线关闭每个订阅者。 |
+| 对话被删除 | 轮次被标记为已丢弃 | 轮次被取消；总线关闭每个订阅者。删除会等这一轮的智能体进程退出后，才请智能体删除会话，因为仍有活进程占着的 thread，Codex 拒绝删除。 |
 | 守护进程关闭 | 两个标记都没有 | `turn_error` `daemon_stopped`。 |
 
 停止所有轮次是守护进程拆除过程的一步，发生在数据库关闭之前。它先关门（之后不能再开始任何轮次，每个队列都被暂停，所以被取消的轮次结束时不会开始下一个），取消每个正在运行的轮次，并最多等它们五秒。守护进程被直接杀掉也不会留下需要清理的东西：消息渠道的下一条消息会恢复智能体的会话。
@@ -170,8 +170,8 @@ stateDiagram-v2
 
 对话没有创建对话或发送消息的路由：消息通过消息渠道在进程内进入。智能体的会话在 `GET /api/v1/agents/{uid}/sessions` 下列出（见[原生会话](#native-sessions)），对话页面则一次列出所有智能体的会话（见[所有智能体会话的一个列表](#all-agent-sessions)）。没有单独列出对话的路由：有了跨智能体的列表后，只含消息渠道的那个列表已被移除。
 
-::: info 没有 CLI
-对话由消息渠道驱动。CLI 没有对话命令，因为它只带需要它的东西（[chat 规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)）。
+::: info 命令行上
+对话由消息渠道驱动，所以没有命令能发起对话或发送消息。对话页面对一个对话所做的操作，和其他页面操作一样都有命令：`coffer agent session all` 列出所有智能体的会话，`coffer conversation rename`、`interrupt` 和 `delete` 调用和页面相同的路由（[CLI 覆盖表](/zh/reference/cli-coverage#conversation)）。
 :::
 
 ## 智能体适配器 {#agent-adapters}

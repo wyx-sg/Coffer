@@ -52,9 +52,11 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on opening
   }, [open]);
 
+  // With several environments, each one's base URL and headers are edited in Environments.
+  const single = (group.environments?.length ?? 1) <= 1;
   const seconds = Number(timeout.replace(/\s*s$/, ""));
   const timeoutOk = Number.isInteger(seconds) && seconds >= 1 && seconds <= 300;
-  const ready = baseUrl.trim() !== "" && timeoutOk;
+  const ready = (!single || baseUrl.trim() !== "") && timeoutOk;
   const error = failure ?? update.error;
   const onSave = async () => {
     setFailure(null);
@@ -68,12 +70,14 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
       return;
     }
     update.mutate(
-      {
-        description: description.trim() || null,
-        base_url: baseUrl.trim(),
-        headers: headersIn(rows),
-        timeout_seconds: seconds,
-      },
+      single
+        ? {
+            description: description.trim() || null,
+            base_url: baseUrl.trim(),
+            headers: headersIn(rows),
+            timeout_seconds: seconds,
+          }
+        : { description: description.trim() || null, timeout_seconds: seconds },
       {
         onSuccess: () => onOpenChange(false),
         onSettled: () => setSaving(false),
@@ -99,33 +103,41 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
             <Input id={`${id}-name`} className="font-mono" value={group.name} disabled readOnly />
           </FormField>
           <GroupDescriptionField value={description} onChange={setDescription} />
-          <FormField
-            label={t("customTools.fields.baseUrl")}
-            htmlFor={`${id}-base`}
-            required
-            help={t("customTools.fields.baseUrlHelp")}
-          >
-            <Input
-              id={`${id}-base`}
-              className="font-mono"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-            />
-          </FormField>
-          <FormField
-            label={t("customTools.fields.headers")}
-            help={t("customTools.fields.headersHelp")}
-          >
-            <KeyValueSecretRows
-              rows={rows}
-              onChange={setRows}
-              label={t("customTools.fields.headers")}
-              keyPlaceholder={t("customTools.editor.headerKey")}
-              addLabel={t("customTools.editor.addHeader")}
-              schemes
-              secretLabelFor={(key) => `${group.name}-${key}`}
-            />
-          </FormField>
+          {single ? (
+            <>
+              <FormField
+                label={t("customTools.fields.baseUrl")}
+                htmlFor={`${id}-base`}
+                required
+                help={t("customTools.fields.baseUrlHelp")}
+              >
+                <Input
+                  id={`${id}-base`}
+                  className="font-mono"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                />
+              </FormField>
+              <FormField
+                label={t("customTools.fields.headers")}
+                help={t("customTools.fields.headersHelp")}
+              >
+                <KeyValueSecretRows
+                  rows={rows}
+                  onChange={setRows}
+                  label={t("customTools.fields.headers")}
+                  keyPlaceholder={t("customTools.editor.headerKey")}
+                  addLabel={t("customTools.editor.addHeader")}
+                  schemes
+                  secretLabelFor={(key) => `${group.name}-${key}`}
+                />
+              </FormField>
+            </>
+          ) : (
+            <p className="text-xs text-text-muted">
+              {t("customTools.environments.editGroupNote", { count: group.environments.length })}
+            </p>
+          )}
           <FormField
             label={t("customTools.editGroup.timeout")}
             htmlFor={`${id}-timeout`}

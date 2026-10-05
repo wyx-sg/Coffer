@@ -4,6 +4,124 @@
  */
 
 export interface paths {
+    "/api/v1/desktop/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Request
+         * @description Ask the desktop shell to do something only a present person may approve.
+         */
+        post: operations["create_request_api_v1_desktop_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/requests/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Request
+         * @description The shell's poll: the next request to show, or 204 with nothing waiting.
+         */
+        post: operations["claim_request_api_v1_desktop_requests_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Request */
+        get: operations["get_request_api_v1_desktop_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/requests/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Request
+         * @description Withdraw a request the shell has not shown yet.
+         */
+        post: operations["cancel_request_api_v1_desktop_requests__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/requests/{request_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish Request
+         * @description The shell says how a request ended. It approves nothing: an approval is
+         *     applied only by the approve route, against a presence grant.
+         */
+        post: operations["finish_request_api_v1_desktop_requests__request_id__finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Desktop Status
+         * @description Whether the desktop app is running and serving requests.
+         */
+        get: operations["desktop_status_api_v1_desktop_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets": {
         parameters: {
             query?: never;
@@ -142,7 +260,9 @@ export interface paths {
         put?: never;
         /**
          * Approve
-         * @description Apply a pending approval, against a presence grant for exactly this id.
+         * @description Apply a pending approval, against a presence grant for exactly this id —
+         *     and, when the grant is pinned (``fingerprint``), for exactly the target the
+         *     person was shown: a target that moved since is refused, nothing applied.
          */
         post: operations["approve_api_v1_secrets_approvals__approval_id__approve_post"];
         delete?: never;
@@ -580,6 +700,8 @@ export interface components {
          * @description Approve every listed approval under one grant over exactly this list.
          */
         BatchApproveIn: {
+            /** Fingerprint */
+            fingerprint?: string | null;
             /** Items */
             items: components["schemas"]["BatchItemIn"][];
             /** Nonce */
@@ -622,6 +744,70 @@ export interface components {
             outcome: "approved" | "rejected" | "skipped";
             /** Reason */
             reason: ("changed" | "not_pending" | "not_found" | "not_batchable" | "failed") | null;
+        };
+        /** DesktopFinishIn */
+        DesktopFinishIn: {
+            /** Message */
+            message?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "cancelled" | "failed";
+        };
+        /** DesktopRequestIn */
+        DesktopRequestIn: {
+            /** Approval Ids */
+            approval_ids?: string[];
+            /** Enabled */
+            enabled?: boolean | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check";
+            /** Ref */
+            ref?: string | null;
+        };
+        /** DesktopRequestOut */
+        DesktopRequestOut: {
+            /** Approvals */
+            approvals: components["schemas"]["PinnedApprovalOut"][];
+            /** Enabled */
+            enabled: boolean | null;
+            /** Expires In Seconds */
+            expires_in_seconds: number;
+            /** Id */
+            id: string;
+            /** Message */
+            message: string | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check";
+            /** Ref */
+            ref: string | null;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "waiting" | "claimed" | "done" | "cancelled" | "failed" | "expired";
+        };
+        /** DesktopStatusOut */
+        DesktopStatusOut: {
+            /** Last Seen Seconds */
+            last_seen_seconds: number | null;
+            /** Shell Running */
+            shell_running: boolean;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -666,6 +852,8 @@ export interface components {
         MasterKeyExportIn: {
             /** Directory */
             directory: string;
+            /** Fingerprint */
+            fingerprint?: string | null;
             /** Nonce */
             nonce: string;
             /** Passphrase */
@@ -679,6 +867,13 @@ export interface components {
             fingerprint: string;
             /** Path */
             path: string;
+        };
+        /** PinnedApprovalOut */
+        PinnedApprovalOut: {
+            /** Fingerprint */
+            fingerprint: string;
+            /** Id */
+            id: string;
         };
         /** PresenceChallengeIn */
         PresenceChallengeIn: {
@@ -709,6 +904,8 @@ export interface components {
          * @description A grant the desktop shell signed after its presence check.
          */
         PresenceGrantIn: {
+            /** Fingerprint */
+            fingerprint?: string | null;
             /** Nonce */
             nonce: string;
             /** Signature */
@@ -748,6 +945,8 @@ export interface components {
         };
         /** RevealIn */
         RevealIn: {
+            /** Fingerprint */
+            fingerprint?: string | null;
             /** Nonce */
             nonce: string;
             /** Ref */
@@ -1086,6 +1285,267 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    create_request_api_v1_desktop_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopRequestOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    claim_request_api_v1_desktop_requests_claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopRequestOut"];
+                };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_request_api_v1_desktop_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopRequestOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_request_api_v1_desktop_requests__request_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopRequestOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    finish_request_api_v1_desktop_requests__request_id__finish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopFinishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopRequestOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    desktop_status_api_v1_desktop_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_refs_api_v1_secrets_get: {
         parameters: {
             query?: never;

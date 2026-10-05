@@ -1,12 +1,12 @@
 ---
 title: coffer daemon
-description: "Daemon lifecycle"
+description: "The Coffer daemon: start, stop, status, and its settings."
 pageClass: cli-ref
 ---
 
 # coffer daemon
 
-Daemon lifecycle
+The Coffer daemon: start, stop, status, and its settings.
 
 ```sh
 coffer daemon [OPTIONS] COMMAND [ARGS]...
@@ -22,6 +22,17 @@ coffer daemon [OPTIONS] COMMAND [ARGS]...
 | [`daemon stop`](#daemon-stop) | Send SIGTERM to the running daemon and wait for it to exit. |
 | [`daemon restart`](#daemon-restart) | Stop the running daemon (if any) and start a fresh one. |
 | [`daemon status`](#daemon-status) | Show whether the daemon is running, and the passes it is running right now. |
+| [`daemon reload`](#daemon-reload) | Ask the running daemon to restart itself. |
+| [`daemon rotate-token`](#daemon-rotate-token) | Mint a new daemon token (clients re-read daemon.json). |
+| [`daemon upgrade`](#daemon-upgrade) | Whether this daemon is older than the installed Coffer, and the hand-off. |
+| [`daemon setup-check`](#daemon-setup-check) | Look for git again while the daemon waits in its setup state. |
+| [`daemon upkeep`](#daemon-upkeep) | The rewriting passes running now. |
+| [`daemon port`](#daemon-port) | The port the daemon's next start uses. |
+| [`daemon port show`](#daemon-port-show) | The port the daemon serves and the one its next start uses. |
+| [`daemon port set`](#daemon-port-set) | Set the port of the next start. |
+| [`daemon residency`](#daemon-residency) | Whether the daemon starts at login. |
+| [`daemon residency show`](#daemon-residency-show) | Whether the daemon starts at login. |
+| [`daemon residency set`](#daemon-residency-set) | Install or remove the login service. |
 
 ## daemon start
 
@@ -74,3 +85,175 @@ coffer daemon status [OPTIONS]
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
+
+## daemon reload
+
+Ask the running daemon to restart itself.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon reload [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon rotate-token
+
+Mint a new daemon token (clients re-read daemon.json).
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon rotate-token [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon upgrade
+
+Whether this daemon is older than the installed Coffer, and the hand-off.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon upgrade [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon setup-check
+
+Look for git again while the daemon waits in its setup state.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon setup-check [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon upkeep
+
+The rewriting passes running now.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon upkeep [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon port
+
+The port the daemon's next start uses.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon port [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `set`。
+
+## daemon port show
+
+The port the daemon serves and the one its next start uses.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon port show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon port set
+
+Set the port of the next start. Body: port.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon port set [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon residency
+
+Whether the daemon starts at login.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon residency [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `set`。
+
+## daemon residency show
+
+Whether the daemon starts at login.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon residency show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon residency set
+
+Install or remove the login service. Body: login_service_installed.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon residency set [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

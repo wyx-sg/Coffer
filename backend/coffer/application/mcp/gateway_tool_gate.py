@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from pydantic import ValidationError
 
 from coffer.domain.mcp.http_api import HttpApiTransport
+from coffer.domain.mcp.http_api_environment import ENVIRONMENT_ARG
 from coffer.domain.mcp.namespace import prefix_tool
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
@@ -73,4 +74,23 @@ def custom_tool_denial(resource: Resource, tool_name: str) -> str | None:
     return None
 
 
-__all__ = ["custom_tool_denial", "hidden_tool_names", "http_api_transport"]
+def custom_tool_environment(resource: Resource, arguments: object) -> str | None:
+    """The environment a custom-tool call names, for its invocation row: the
+    chosen one when the group has it, the sole enabled one when none is chosen,
+    else ``None`` (the call is refused, and the log says no more than that)."""
+    transport = http_api_transport(resource)
+    if transport is None:
+        return None
+    chosen = arguments.get(ENVIRONMENT_ARG) if isinstance(arguments, dict) else None
+    if isinstance(chosen, str) and chosen:
+        return chosen if transport.environment(chosen) is not None else None
+    enabled = [e.name for e in transport.environments if e.enabled]
+    return enabled[0] if len(enabled) == 1 else None
+
+
+__all__ = [
+    "custom_tool_denial",
+    "custom_tool_environment",
+    "hidden_tool_names",
+    "http_api_transport",
+]

@@ -7,7 +7,7 @@ description: Coffer 如何加密它保管的每个密钥；如何存入、引用
 
 Coffer 需要的每个密钥——MCP 服务器的令牌、提供商的 API 密钥、消息渠道机器人的令牌、同步远端的推送令牌——都放在同一个加密存储里，其他地方一律按 id 引用密钥。本页介绍如何存入和引用密钥、如何轮换和删除、主密钥放在哪里，以及如何备份主密钥或把它迁到另一台机器。
 
-没有任何命令、路由或 MCP 工具会打印已存储的值。只有在桌面应用里、通过 Touch ID 或登录密码验证之后，你才能看到一个值；密钥要发往一个从未去过的地方，也必须先由你在桌面应用里批准。这条边界、审批的工作方式，以及如何允许把独立密钥交给你用 `coffer run` 运行的命令，见[密钥](/zh/guides/secrets)。
+没有任何命令、路由或 MCP 工具会打印已存储的值。只有在桌面应用里、通过 Touch ID 或登录密码验证之后，你才能看到一个值；密钥要发往一个从未去过的地方，也必须先由你在桌面应用里批准（智能体可以用 `coffer approval approve` 请求，它会把提示带到应用里）。这条边界、审批的工作方式，以及如何允许把独立密钥交给你用 `coffer run` 运行的命令，见[密钥](/zh/guides/secrets)。
 
 ## 密钥如何存储 {#how-secrets-are-stored}
 
@@ -86,7 +86,7 @@ coffer secret list
 
 它不解密任何东西，也不记入审计。`--json` 给出同样的数据，外加每个密钥的 `label`、`description` 和 `created_for`（为之创建它的资源的 uid）、各引用方所用的槽位（`cited_by`），以及每个 ref 已批准和待批准的去处。Web 界面里的[密钥页面](/zh/guides/secrets#the-secrets-page)显示同一份列表。
 
-没有任何命令能打印出值。[密钥页面](/zh/guides/secrets#the-secrets-page)的每一行会说明值是否已存储。要查看或复制一个值，请在桌面应用的[密钥页面](/zh/guides/secrets#the-secrets-page)选择 **显示值…**，每次都会要求 Touch ID 或登录密码。
+没有任何命令能打印出值。[密钥页面](/zh/guides/secrets#the-secrets-page)的每一行会说明值是否已存储。要查看或复制一个值，请在桌面应用的[密钥页面](/zh/guides/secrets#the-secrets-page)选择 **显示值…**，每次都会要求 Touch ID 或登录密码。在终端里，`coffer secret reveal <ref>` 发起同样的显示流程；值仍然只显示在应用里。
 
 ## 轮换密钥 {#rotate-a-secret}
 
@@ -153,7 +153,7 @@ Coffer 目前还没有发布用 Apple Developer ID 签名的二进制，所以�
 
 打开**桌面应用**备份主密钥：选一个至少八个字符的口令（输入两遍），用 Touch ID 或登录密码确认，选一个文件夹，应用就会把 `coffer-master-key.cfk` 以权限 `0600` 写进该文件夹。文件里是用口令派生的密钥（scrypt）加密的主密钥，外加主密钥的指纹；没有口令它什么也打不开，忘了口令 Coffer 也无法找回。它从不覆盖已有文件（第二份备份叫 `coffer-master-key-2.cfk`），主密钥和口令都不会出现在页面的响应、日志或审计里，备份以 `master_key_exported` 记入审计。把文件和口令放在安全的地方，比如你的密码管理器。
 
-没有任何命令、REST 路由或浏览器页面能写出主密钥备份。智能体能运行你能运行的任何命令，所以一个能导出主密钥的命令，就等于把所有密钥都交给了它。
+没有任何命令、REST 路由或浏览器页面能写出主密钥备份。智能体能运行你能运行的任何命令，所以一个能导出主密钥的命令，就等于把所有密钥都交给了它。`coffer secret backup-key` 只是在桌面应用里打开备份流程，你在那里完成在场验证、输入口令并选择文件夹。
 
 在开发版中，主密钥也就是 `~/.coffer/master.key` 这个文件（或钥匙串条目，服务 `coffer`，条目 `master-key`），在守护进程停止时拷贝整个 `~/.coffer/` 就能带上它。
 
@@ -185,7 +185,7 @@ Coffer 目前还没有发布用 Apple Developer ID 签名的二进制，所以�
 | 启动时报 `SECRET_LOCKED` | 钥匙串无法读取——它被锁住了，或者提示框被关掉了 | 解锁钥匙串，再次启动守护进程。 |
 | `SECRET_UNREADABLE`，并指出某个 ref | 密文用当前主密钥解不开——通常是另一台机器的主密钥加密的 | 导入对应的主密钥，或者重新设置该 ref 的值。 |
 | `SECRET_IN_USE` | 仍有资源引用该 ref | 解除或删除报错中列出的资源。 |
-| `waiting for approval in the Coffer app`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方 | 在桌面应用中批准；审批对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `waiting for approval: <id>`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方 | 运行它打印的 `next:` 命令 `coffer approval approve <id>` 并在桌面应用里确认，或在应用的审批对话框中批准，对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `PRESENCE_GRANT_INVALID` | 在桌面应用之外尝试了显示值、备份主密钥或审批 | 到桌面应用里去做。 |
 | MCP 服务器启动失败，提示缺少某个密钥 | 引用的 ref 不在存储中 | 用 `coffer secret set <ref>` 给一个已有的密钥设置值，或到密钥页面添加该密钥。 |
 

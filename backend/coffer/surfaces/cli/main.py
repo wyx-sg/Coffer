@@ -11,8 +11,10 @@ from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
     cli_cmd,
+    commands,
     config_cmd,
     daemon_cmd,
+    groups,
     log_cmd,
     memory_cmd,
     path_cmd,
@@ -56,21 +58,26 @@ def root(
     ctx.obj["verbose"] = verbose
 
 
-app.add_typer(daemon_cmd.app, name="daemon")
-app.add_typer(config_cmd.app, name="config")
-app.add_typer(log_cmd.app, name="log")
-app.add_typer(path_cmd.app, name="path")
-app.add_typer(mcp_cmd.app, name="mcp")
-app.add_typer(secret_cmd.app, name="secret")
-app.add_typer(cli_cmd.app, name="cli")
+groups.set_root(app)
+groups.adopt("daemon", daemon_cmd.app)
+groups.adopt("config", config_cmd.app)
+groups.adopt("log", log_cmd.app)
+groups.adopt("path", path_cmd.app)
+groups.adopt("mcp", mcp_cmd.app)
+groups.adopt("secret", secret_cmd.app)
+groups.adopt("cli", cli_cmd.app)
 # `coffer run [--secret …] -- cmd`: everything after `--` is the child's argv.
 app.command(
     "run",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )(run_cmd.run)
-app.add_typer(memory_cmd.app, name="memory")
-app.add_typer(proxy_cmd.app, name="proxy")
-app.add_typer(vault_cmd.app, name="vault")
+groups.adopt("memory", memory_cmd.app)
+groups.adopt("proxy", proxy_cmd.app)
+groups.adopt("vault", vault_cmd.app)
+# Every management command (spec resource-framework "Offer every management
+# operation on the command line"): importing a module adds its commands to
+# their groups and records their routes in the registry.
+commands.load()
 
 
 def run() -> None:

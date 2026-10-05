@@ -164,11 +164,11 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
   方法是在**设置 → 安全**里关闭**将主密钥存入系统钥匙串**。
 - 用 `coffer secret list` 找出被引用但缺失的密钥，然后在**密钥**页面或用 `coffer secret set <ref>` 逐个存储。
 
-### 命令以 9 退出："waiting for approval in the Coffer app" {#a-command-exits-9-waiting-for-approval-in-the-coffer-app}
+### 命令以 9 退出："waiting for approval" {#a-command-exits-9-waiting-for-approval}
 
-**原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者替换了某个已经在用的值，或者把 `secrets.require_approval` 关掉了，或者让 `coffer run` 去用一个你还没允许它使用的独立密钥（该密钥的页面会显示 **允许 `coffer run`…**，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)）。改动已经保存；在你批准之前，密钥会被扣住。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败。
+**原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者替换了某个已经在用的值，或者把 `secrets.require_approval` 关掉了，或者让 `coffer run` 去用一个你还没允许它使用的独立密钥（该密钥的页面会显示 **允许 `coffer run`…**，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)）。改动已经保存；在你批准之前，密钥会被扣住。命令已经打印了审批 id 和批准它们的命令（`next: coffer approval approve <id>`）。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败；自定义工具的调用会返回同样的工具错误，写明审批 id 和同一条命令，而且只影响在等待的那个环境。
 
-**解决办法。** 打开桌面应用，回应它显示的批准请求（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的在那里拒绝。答复之后重新运行命令。见[密钥 → 批准](/zh/guides/secrets#approvals)。
+**解决办法。** 运行打印出来的 `coffer approval approve <id>`（或让智能体运行），并确认桌面应用弹出的 Touch ID 或密码提示；也可以打开桌面应用直接回应（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的用**拒绝**或 `coffer approval reject <id>` 拒绝。改动已经保存，无需重新运行。如果 `coffer approval approve` 以 `11` 退出，说明验证被取消或超时，审批仍在等待；以 `12` 退出，说明桌面应用没在运行且无法启动——打开它再运行一次。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 ### 应用提示“This is not Coffer's daemon — nothing was sent” {#the-app-says-this-is-not-coffer-s-daemon-—-nothing-was-sent}
 
@@ -198,7 +198,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **原因。** 这是有意设计：没有任何命令、路由或 MCP 工具会返回存储的值，因为你能运行的命令，智能体都能运行。`coffer secret list` 只显示哪些值已被存储。
 
-**解决办法。** 在桌面应用里显示或复制它，它会要求 Touch ID 或你的密码。要把某个值交给一条命令，把它存成一个独立的密钥，在该密钥的页面上允许 `coffer run` 使用它（在桌面应用里用 Touch ID 或密码确认），然后用 `coffer run --secret ENV=coffer://secret/<id> -- <command>` 运行这条命令。见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)。
+**解决办法。** 在桌面应用里显示或复制它，它会要求 Touch ID 或你的密码；`coffer secret reveal <ref>` 可以从终端打开这次显示，值仍然只显示在应用里。要把某个值交给一条命令，把它存成一个独立的密钥，在该密钥的页面上允许 `coffer run` 使用它（在桌面应用里用 Touch ID 或密码确认），然后用 `coffer run --secret ENV=coffer://secret/<id> -- <command>` 运行这条命令。见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)。
 
 见[密钥存储](/zh/guides/secret-store)。
 

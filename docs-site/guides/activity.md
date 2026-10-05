@@ -113,7 +113,7 @@ coffer log mcp --server filesystem          # one server
 coffer log mcp --status error --since 1d --json
 ```
 
-Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--limit` accepts 1–500.
+Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--limit` accepts 1–500. A [custom tool](/guides/custom-tools#environments)'s call also names the environment it was made in: the Activity page shows it beside the tool (`@live`) and in the drawer, and `--json` carries it as `environment`. No header, variable or credential is recorded.
 
 An invocation has one of four statuses:
 

@@ -44,7 +44,7 @@ from coffer.application.retention_registry import (
 from coffer.application.retention_service import (
     RetentionService,
 )
-from coffer.domain.mcp.secret_target import mcp_destination
+from coffer.domain.mcp.secret_target import mcp_destinations
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination
@@ -337,7 +337,6 @@ def reaper_kwargs_from_env() -> dict[str, float]:
     return reaper_kwargs
 
 
-def _mcp_secret_destination(resource: Resource) -> tuple[SecretDestination, dict[str, str]] | None:
+def _mcp_secret_destination(resource: Resource) -> list[tuple[SecretDestination, dict[str, str]]]:
     config = MCPServerConfig.model_validate(resource.config)
-    refs = dict(config.transport.secret_refs)
-    return (mcp_destination(resource.uid, resource.name, config), refs) if refs else None
+    return mcp_destinations(resource.uid, resource.name, config)

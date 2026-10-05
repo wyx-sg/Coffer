@@ -56,12 +56,11 @@ def test_an_unreadable_config_file_is_reported_where_the_user_can_act(home: Path
     assert "could not be read" in res.output
 
 
-def test_daemon_port_and_features_are_not_daemon_subcommands(home: Path) -> None:
-    """The port and the feature switches are `coffer config` keys now."""
-    for group in ("port", "features"):
-        res = runner.invoke(app, ["daemon", group, "--help"])
-        assert res.exit_code != 0
-        assert "No such command" in res.output
+def test_the_port_and_features_ask_the_running_daemon(home: Path) -> None:
+    """`coffer config` sets the port while the daemon is down; `daemon port` and
+    `settings features` ask the running daemon, as Settings does."""
+    for argv in (["daemon", "port", "--help"], ["settings", "features", "--help"]):
+        assert runner.invoke(app, argv).exit_code == 0, argv
 
 
 def _squat_a_port() -> socket.socket:

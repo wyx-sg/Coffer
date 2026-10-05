@@ -117,3 +117,12 @@ def invocations(
 
 def text_of(result: dict[str, Any]) -> str:
     return "".join(c.get("text", "") for c in result["result"]["content"])
+
+
+def refusal(response: dict[str, Any]) -> str:
+    """What a refused call says — a JSON-RPC error, or an in-band tool error
+    (a custom tool refuses a call it cannot make before any request)."""
+    if "error" in response:
+        return str(response["error"]["message"])
+    assert response["result"].get("isError"), response
+    return text_of(response)

@@ -22,6 +22,7 @@ from tests.support.custom_tools import (
     create_group,
     get_group,
     invocations,
+    refusal,
     text_of,
     tool,
 )
@@ -242,8 +243,9 @@ def test_binding_a_stored_secret_waits_for_approval(daemon: BoundaryDaemon, api:
     assert len(group["pending_approvals"]) == 1
     [pending] = daemon.pending(destination_uid=group["uid"])
     assert pending["target"] == f"http_api {api.base_url}/"
-    failed = Agent(daemon, CLAUDE).call("billing__list_invoices")
-    assert "waiting for approval" in failed["error"]["message"]
+    failed = refusal(Agent(daemon, CLAUDE).call("billing__list_invoices"))
+    assert "SECRET_BINDING_PENDING" in failed and "waiting for approval" in failed
+    assert f"coffer approval approve {group['pending_approvals'][0]}" in failed
     assert api.seen == []
     daemon.approve(group["pending_approvals"][0])
     assert get_group(daemon, "billing")["secret_state"] == "present"
@@ -258,8 +260,8 @@ def test_moving_the_base_url_asks_again(daemon: BoundaryDaemon, api: FakeHttpApi
     assert r.status_code == 200, r.text
     moved = r.json()
     assert moved["secret_state"] == "pending_approval"
-    failed = Agent(daemon, CLAUDE).call("billing__list_invoices")
-    assert "waiting for approval" in failed["error"]["message"]
+    failed = refusal(Agent(daemon, CLAUDE).call("billing__list_invoices"))
+    assert "SECRET_BINDING_PENDING" in failed and "waiting for approval" in failed
     assert api.seen == []
     [pending] = daemon.pending(destination_uid=moved["uid"])
     assert pending["target"] == f"http_api {api.base_url}/v3"

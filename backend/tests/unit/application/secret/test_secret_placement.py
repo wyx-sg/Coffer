@@ -113,7 +113,11 @@ def test_no_template_reaches_a_stored_secret() -> None:
     )
 
     request = build_request(
-        transport, tool, {"X-API-Key": "a", "secret": "b"}, {"X-API-Key": SECRET}
+        transport,
+        transport.environments[0],
+        tool,
+        {"X-API-Key": "a", "secret": "b"},
+        {"X-API-Key": SECRET},
     )
 
     others = "".join(v for k, v in request.headers.items() if k.lower() != "x-api-key")

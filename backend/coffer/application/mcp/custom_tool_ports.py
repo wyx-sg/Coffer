@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
+from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
 from coffer.domain.mcp.openapi_import import OperationSource
 from coffer.domain.secrets import SecretApproval, SecretDestination
 
@@ -71,19 +72,28 @@ class ToolTestOutcome:
     #: How it failed before an answer: ``request``, ``timeout``, ``connect``
     #: or ``blocked``; ``None`` when the API answered.
     failure: str | None = None
+    #: The environment the request was made in.
+    environment: str | None = None
 
 
 class CustomToolRunnerPort(Protocol):
     async def run(
         self,
         transport: HttpApiTransport,
+        env: HttpApiEnvironment,
         tool: HttpApiTool,
         arguments: dict[str, Any],
         overlay: dict[str, str],
-    ) -> ToolTestOutcome: ...
+    ) -> ToolTestOutcome:
+        """One request of ``tool`` in ``env``; ``overlay`` is ``{header: value}``."""
+        ...
 
     async def run_unsaved(
-        self, transport: HttpApiTransport, tool: HttpApiTool, arguments: dict[str, Any]
+        self,
+        transport: HttpApiTransport,
+        env: HttpApiEnvironment,
+        tool: HttpApiTool,
+        arguments: dict[str, Any],
     ) -> ToolTestOutcome:
         """A request of a group that is not saved yet: its base URL was typed
         into a form, so it passes the SSRF guard first, and no secret is sent."""

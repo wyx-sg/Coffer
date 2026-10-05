@@ -44,6 +44,7 @@ import { useOpenSettings, usePageLocation } from "@/lib/settingsModal";
 import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
 import { SidebarNav } from "./SidebarNav";
 import { PendingApprovalsSheet } from "./secret/PendingApprovalsSheet";
+import { ShellRevealDialog } from "./secret/ShellRevealDialog";
 import { SplitDivider } from "./SplitDivider";
 import { CommandPalette } from "./palette/CommandPalette";
 import { useDaemonConnectionDriver } from "./shell/daemonConnection";
@@ -168,6 +169,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
         {/* Once for the whole app: a secret change waiting for a present
             human is answered wherever the user is, not on one page. */}
         <PendingApprovalsSheet />
+        <ShellRevealDialog />
         <aside
           className={cn(
             "flex shrink-0 flex-col gap-3.5 bg-surface-sidebar",

@@ -19,6 +19,7 @@ The app shows the same UI as a browser tab at the daemon's address — built fro
 - **Updates.** It checks for a newer signed release at launch and every six hours, and installs it when you choose **Download and restart** on **Settings › About**. See [Update](#update).
 - **Presence checks.** Revealing or copying a secret, backing up the master key, importing a master key and approving an approval each ask for Touch ID or your login password first. A browser cannot run that check, so a browser tab shows **Open in Coffer app** in their place. See [Presence checks and approvals](#presence-checks-and-approvals).
 - **Approval alerts.** When a secret waits to be sent somewhere new, the app posts a notification and opens a sheet to answer it.
+- **Presence checks the command line asks for.** `coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key` and `coffer app update …` leave a request with the daemon; the app picks it up within about a second and runs the same flow its own buttons run, so the Touch ID prompt, the revealed value and the backup's passphrase all stay in the app. A command that finds the app closed starts it. See [Secrets → On the command line](/guides/secrets#on-the-command-line).
 
 Everything else — opening files in your editor, choosing folders — goes through the daemon's HTTP routes exactly as it does in a browser.
 

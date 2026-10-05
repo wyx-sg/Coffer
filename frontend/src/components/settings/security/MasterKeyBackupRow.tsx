@@ -9,6 +9,7 @@
 // offering a control that could only fail.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { FolderSearch, KeyRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,8 +43,13 @@ function splitPath(path: string): { dir: string; file: string } {
 
 export function MasterKeyBackupRow() {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const inApp = presenceAvailable();
+  // `?backup=1`: the desktop app opened this page for `coffer secret backup-key`; the
+  // person still types the passphrase and passes the presence check here.
+  const { search } = useLocation();
+  const [open, setOpen] = useState(
+    () => inApp && new URLSearchParams(search).get("backup") === "1",
+  );
 
   return (
     <SettingRow
