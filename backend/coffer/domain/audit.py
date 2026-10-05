@@ -44,7 +44,6 @@ class AuditEventType(StrEnum):
     SECRET_SET = "secret_set"
     SECRET_DELETED = "secret_deleted"
     SECRET_NOTES_UPDATED = "secret_notes_updated"
-    SECRET_MIGRATED = "secret_migrated"
     MASTER_KEY_RELOCATED = "master_key_relocated"
     # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
     # somewhere-new): a value shown to a present human in the desktop app, a

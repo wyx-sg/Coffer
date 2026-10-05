@@ -28,6 +28,7 @@ const api = vi.mocked(secretsApi);
 const stored = (name: string, uses = 0): SecretRef =>
   ({
     ref: `secret/${name}`,
+    label: name,
     present: true,
     locked: false,
     bindings: [],

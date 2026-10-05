@@ -96,6 +96,7 @@ describe("useChannels hooks", () => {
       enabled: true,
       running: true,
       pending_pairing: false,
+      workspace_directory: "/home/me/.coffer/content/workspace",
       commands: [],
       people: [],
       inbound: null,

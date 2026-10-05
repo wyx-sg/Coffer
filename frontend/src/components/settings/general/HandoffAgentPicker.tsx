@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AgentOption } from "@/components/agent/AgentOption";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { getHandoffAgent, type HandoffAgent, useSetHandoffAgent } from "@/lib/preferences";
 
@@ -46,7 +47,7 @@ export function HandoffAgentPicker() {
       <SelectContent>
         {managed.map((a) => (
           <SelectItem key={a.key} value={a.key}>
-            {a.name}
+            <AgentOption type={a.key} name={a.name} />
           </SelectItem>
         ))}
       </SelectContent>

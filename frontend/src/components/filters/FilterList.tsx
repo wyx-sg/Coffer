@@ -92,6 +92,11 @@ export function FilterList({
                   )}
                 >
                   {single ? <Radio checked={checked} /> : <Box checked={checked} />}
+                  {o.icon ? (
+                    <span aria-hidden className="inline-flex shrink-0">
+                      {o.icon}
+                    </span>
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate">{o.label}</span>
                 </button>
               </div>

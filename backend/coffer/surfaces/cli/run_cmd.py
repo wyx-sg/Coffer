@@ -4,6 +4,7 @@ Spec secret "Resolve standalone secrets into one child with coffer run";
 ADR standalone-secrets-are-named-references-injected-into-one-child.
 
     coffer run --secret db-password -- psql -h db.internal
+    coffer run --secret PGPASSWORD=coffer://secret/<id> -- psql -h db.internal
     coffer run --secret PGPASSWORD=db-password --env-file app.env -- ./migrate
 
 Every ``--secret NAME`` (as ``$NAME`` upper-cased, ``-``/``.`` → ``_``) or
@@ -43,9 +44,14 @@ _NOT_STARTED = 127
 
 
 def _parse_spec(spec: str) -> tuple[str, str]:
-    """``NAME`` → (default var, NAME); ``ENV=NAME`` → (ENV, NAME)."""
+    """``NAME`` → (default var, NAME); ``ENV=NAME`` → (ENV, NAME).
+
+    The name may be written as its URI, ``coffer://secret/<id>``, the form a
+    skill cites a secret in.
+    """
     var, _, name = spec.partition("=") if "=" in spec else ("", "", spec)
     name = name.strip()
+    name = parse_secret_uri(name) or name
     if not is_valid_secret_name(name):
         typer.echo(f"invalid secret name: {name!r}", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
@@ -87,7 +93,9 @@ def _pump(source: IO[bytes], sink: IO[bytes], masker: StreamMasker) -> None:
 def run(
     ctx: typer.Context,
     secret: list[str] = typer.Option(  # noqa: B008
-        [], "--secret", help="NAME or ENV=NAME of a standalone secret (repeatable)"
+        [],
+        "--secret",
+        help="NAME, ENV=NAME or ENV=coffer://secret/<id> of a standalone secret (repeatable)",
     ),
     env_file: pathlib.Path | None = typer.Option(  # noqa: B008
         None, "--env-file", help="KEY=VALUE file; coffer://secret/<name> values are resolved"
@@ -108,7 +116,10 @@ def run(
     """
     command = list(ctx.args)
     if not command:
-        typer.echo("usage: coffer run [--secret NAME|ENV=NAME]… -- COMMAND [ARGS]…", err=True)
+        typer.echo(
+            "usage: coffer run [--secret NAME|ENV=NAME|ENV=coffer://secret/ID]… -- COMMAND [ARGS]…",
+            err=True,
+        )
         raise typer.Exit(int(ExitCode.INVALID_USAGE))
     verbose = (ctx.obj or {}).get("verbose", False)
 

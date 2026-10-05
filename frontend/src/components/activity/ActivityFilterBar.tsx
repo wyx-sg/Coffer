@@ -10,6 +10,7 @@
 // while anything is set; the counts are gone from every pill.
 import { useTranslation } from "react-i18next";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { FilterPill, FilterRow, TimeRangePill, type FilterOption } from "@/components/filters";
 import { Segmented } from "@/components/ui/segmented";
 import {
@@ -24,8 +25,9 @@ import type { ActivityTab } from "@/lib/activity/records";
 import { RANGE_PRESETS } from "@/lib/hooks/useActivityView";
 
 /** @ui-only An agent as the By filter lists it. */
-interface AgentOption {
+interface ByAgent {
   uid: string;
+  type: string;
   name: string;
 }
 
@@ -34,7 +36,7 @@ interface Props {
   filters: ActivityFilters;
   onChange: (next: ActivityFilters) => void;
   onClear: () => void;
-  agents: AgentOption[];
+  agents: ByAgent[];
   /** Loggers seen in the loaded daemon records. */
   loggers: string[];
 }
@@ -62,6 +64,7 @@ export function ActivityFilterBar({ tab, filters, onChange, onClear, agents, log
   const agentOptions: FilterOption[] = agents.map((a) => ({
     value: `agent:${a.uid}`,
     label: a.name,
+    icon: <AgentBadge type={a.type} name={a.name} size="sm" tooltip={false} />,
     group: "agents",
   }));
   const actorOptions: FilterOption[] = WHO_ACTORS.map((actor) => ({

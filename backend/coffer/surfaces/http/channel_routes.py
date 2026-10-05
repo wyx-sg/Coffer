@@ -21,6 +21,7 @@ from coffer.application.channel.credential_check import (
 from coffer.domain.channel.commands import COMMAND_ROSTER
 from coffer.domain.channel.config import ChannelConfig
 from coffer.domain.channel_type import ChannelType
+from coffer.infrastructure.vault.home import content_root
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
 from coffer.surfaces.http.dependencies import get_actor
@@ -174,6 +175,10 @@ class ChannelStatusOut(BaseModel):
     #: Every command the channel answers, in the roster's order — the Overview
     #: lists them so nobody has to type /help to learn them.
     commands: list[ChannelCommandOut] = []
+    #: Coffer's workspace: where a new conversation starts when the channel
+    #: marks no default directory, so the Settings tab can show it as the
+    #: default from the start.
+    workspace_directory: str = ""
 
 
 class NotifyIn(BaseModel):
@@ -309,6 +314,7 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         runs_on=status.runs_on,
         runs_here=status.runs_here,
         settings=status.settings,
+        workspace_directory=str(content_root() / "workspace"),
         commands=[
             ChannelCommandOut(
                 name=c.name,

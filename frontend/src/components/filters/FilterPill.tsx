@@ -5,7 +5,7 @@
 // box appears only above 8 values; the list shows six rows then scrolls;
 // ordering is selected first, then A–Z. Multi keeps the popover open, single
 // closes on pick. The footer is just "Clear".
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -19,6 +19,8 @@ import { PILL_BUTTON, pillClass } from "./pillStyles";
 export interface FilterOption {
   value: string;
   label: string;
+  /** A mark drawn before the label (an agent's logo); decoration, the label names the row. */
+  icon?: ReactNode;
   /** The `id` of a group in `groups` this row sits under. */
   group?: string;
 }

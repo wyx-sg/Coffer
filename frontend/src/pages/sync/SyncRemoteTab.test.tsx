@@ -32,7 +32,17 @@ const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 let save: ReturnType<typeof vi.fn>;
 let clear: ReturnType<typeof vi.fn>;
 let restore: ReturnType<typeof vi.fn>;
-const ref = (name: string) => ({ ref: `secret/${name}`, present: true, cited_by: [], uri: null });
+const DEPLOY_KEY = `secret/${"a1".repeat(16)}`;
+const GITLAB_TOKEN = `secret/${"b2".repeat(16)}`;
+const ref = (id: string, label: string) => ({
+  ref: id,
+  label,
+  present: true,
+  cited_by: [],
+  bindings: [],
+  mentioned_by_skills: [],
+  uri: null,
+});
 
 beforeEach(() => {
   save = vi.fn();
@@ -45,7 +55,7 @@ beforeEach(() => {
   mocked(useRestoreSyncRemote).mockReturnValue(idleMutation({ mutate: restore }));
   mocked(useMoveVault).mockReturnValue(idleMutation({ mutate: vi.fn() }));
   mocked(useSecrets).mockReturnValue({
-    data: { refs: [ref("github-deploy-key"), ref("gitlab-token")] },
+    data: { refs: [ref(DEPLOY_KEY, "github-deploy-key"), ref(GITLAB_TOKEN, "gitlab-token")] },
   });
 });
 afterEach(() => vi.clearAllMocks());
@@ -57,7 +67,7 @@ function status(remote: Partial<SyncRemote> = {}, over: Partial<SyncStatus> = {}
     areas: { ...s.areas, secrets: 8 },
     remote: {
       ...s.remote!,
-      secret_ref: "secret/github-deploy-key",
+      secret_ref: DEPLOY_KEY,
       interval_seconds: 3600,
       ...remote,
     },
@@ -98,7 +108,7 @@ describe("SyncRemoteTab", () => {
     expect(sent()).toEqual({
       url: "https://git.example.com/me/vault.git",
       branch: "vault",
-      secret_ref: "secret/github-deploy-key",
+      secret_ref: DEPLOY_KEY,
       include_secret: false,
       interval_seconds: 3600,
       enabled: true,
@@ -118,7 +128,7 @@ describe("SyncRemoteTab", () => {
     renderTab();
     fireEvent.click(screen.getByLabelText("Secret"));
     pick(/gitlab-token/);
-    expect(sent()).toMatchObject({ secret_ref: "secret/gitlab-token" });
+    expect(sent()).toMatchObject({ secret_ref: GITLAB_TOKEN });
   });
 
   test("?focus=secret opens the secret picker", () => {

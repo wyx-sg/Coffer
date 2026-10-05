@@ -4,6 +4,7 @@
 // summary reports it) and, in "Agent", who used it; by agent lists
 // the agents; by day lists the local days newest first with each day's top
 // agent, the latest week first and the rest behind "Show all".
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -18,7 +19,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useLongList } from "@/components/useLongList";
-import { agentTypeLabel } from "@/lib/agents/display";
 import type { UsageSummary, UsageSummaryRow, UsageTotals } from "@/lib/api/usage";
 import { formatDay, formatTokens } from "@/lib/usage/format";
 import { localDay, parseDay } from "@/lib/usage/range";
@@ -52,7 +52,7 @@ export function BreakdownTable({ summary, totalLabel }: Props) {
   const first = (row: UsageSummaryRow): ReactNode => {
     if (group === "agent") {
       if (!row.agent_type) return t("usage.table.unknownAgent");
-      return <span className="text-sm">{agentTypeLabel(row.agent_type)}</span>;
+      return <AgentBadge type={row.agent_type} size="sm" showName tooltip={false} />;
     }
     if (group === "day") {
       if (!row.day) return row.key;
@@ -82,8 +82,10 @@ export function BreakdownTable({ summary, totalLabel }: Props) {
   const second = (row: UsageSummaryRow): ReactNode => {
     const names = group === "day" ? row.agent_types.slice(0, 1) : row.agent_types;
     return names.length ? (
-      <span className="whitespace-nowrap text-sm text-text-muted">
-        {names.map(agentTypeLabel).join(", ")}
+      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-text-muted">
+        {names.map((type) => (
+          <AgentBadge key={type} type={type} size="sm" showName tooltip={false} />
+        ))}
       </span>
     ) : null;
   };

@@ -1,7 +1,7 @@
-// src/pages/SecretsPage.tsx — /secrets[/<ref>[/<tab>]]: every stored and cited secret, beside the open one (spec web-ui "Manage stored secrets on the Secrets page").
+// src/pages/SecretsPage.tsx — /secrets[/<ref>]: every stored and cited secret, beside the open one (spec web-ui "Manage stored secrets on the Secrets page").
 //
 // The list pane filters by name, description and reference and by status; the open secret
-// (`/secrets/<ref>`, the ref URL-encoded) has its own detail pane with Overview and Usage tabs.
+// (`/secrets/<ref>`, the ref URL-encoded) has its own detail pane.
 // Above the split, up to two banners: no value on this Mac (Add value(s)), then changes waiting
 // for approval (Review) — each closable with × = Ignore, shared with Overview. Add secret stores a
 // standalone secret under an id Coffer mints; Find plaintext keys moves values out of skills and
@@ -68,7 +68,6 @@ export function SecretsPage() {
       <SecretPane
         key={match.ref}
         row={match}
-        basePath={`/secrets/${encodeURIComponent(match.ref)}`}
         onDeleted={() => navigate("/secrets", { replace: true })}
       />
     );
