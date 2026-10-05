@@ -40,7 +40,7 @@ requires:
 
 A bare name (`- uv`) is a command with no conditions, and `- "node>=20.1"` a command with a minimum; `requires: [jq, "gh>=2.40"]` and `requires: {commands: [...]}` are read the same way. An entry Coffer cannot use — a path instead of a name, a login check that runs a different program — is skipped with a warning on the CLIs page, and so is a `tools:` name that matches no MCP server or custom tool group (see [Tools a skill needs](/guides/skills#tools-a-skill-needs)); it never stops the skill from being imported or delivered.
 
-Coffer reads `requires:` from the skill's folder every time it checks, so an edit in your editor is picked up by the next **Check again** without importing the skill again. This top-level `requires:` lists commands; it is unrelated to `metadata.requires`, which a skill library uses for [the skills a domain depends on](/guides/writing-skill-libraries#declared-dependencies).
+Coffer reads `requires:` from the skill's folder every time it checks, so an edit in your editor is picked up by the next **Check** without importing the skill again. This top-level `requires:` lists commands; it is unrelated to `metadata.requires`, which a skill library uses for [the skills a domain depends on](/guides/writing-skill-libraries#declared-dependencies).
 
 ## Commands Coffer runs itself
 
@@ -58,19 +58,19 @@ One row per command, however many skills and servers need it:
 2. **Version.** Coffer runs `<command> --version` and compares the version with the **highest** minimum any skill asks for. A version it cannot read is shown as unknown and is not called too old.
 3. **Logged in?** If a skill declared a login check, Coffer runs it only when you press **Check** (listing the page, and the attention list that polls it, never run one) — without a shell, with a 10-second limit — and looks only at whether it succeeded. **Its output is thrown away unread**: a login check can print your account name or a token, and none of it is kept, logged or shown.
 
-Each command is then **Not found**, **Too old**, **Not logged in** or **Ready**. Results are kept until you press **Check again** or the daemon restarts.
+Each command is then **Not found**, **Too old**, **Not logged in** or **Ready**. Results are kept until you press **Check** or the daemon restarts.
 
 ## The CLIs page
 
 The page is a list beside one detail page for the command you choose. The list puts **Needs you** — not found, then too old, then not logged in — above **Ready**, each command with its version or its problem and how many MCP servers and skills need it. The detail page's header carries the command's description, edited in place — any CLI has one, whether you added it or a skill or server requires it, so you can note what a tool is for. Under it are two sections. **On this machine** shows where the command was found, its version against the minimum, its login state and when Coffer last checked. **Needed by** lists every MCP server started with it (opening that server's page, with the launcher it starts with) and every skill that needs it with the minimum each asks for; a CLI nobody requires says so. One that needs you says what it costs in a plain sentence in a banner at the top — "duckdb can't start, and data-profiling fails at the step that calls uv." — with the [hand-off](#hand-the-install-to-your-agent) beside it. There is no command browser: what a tool's subcommands and options are is for the agent to read from `--help` when it uses the tool, so Coffer neither shows nor stores it. The page shows no install, update or login command, and nothing to run in a terminal.
 
-The page's one action is **Check again**, which probes every command afresh (a banner's own **Check again** probes just that one). **Add CLI** takes a command name or the path to an executable, with an optional title, minimum version, description and login check, for a tool you want checked — and your agents told about — that no skill or server declares. Only a CLI you added by hand has **Edit** and, in its **⋯** menu, **Remove**; Remove stops Coffer checking it and leaves the tool installed on this machine. A CLI that a skill or server requires has nothing on the right of its header and cannot be removed here, because it is listed for as long as something needs it.
+The page's one action is **Check**, which probes every command afresh (a banner's own **Check** probes just that one). **Add CLI** takes a command name or the path to an executable, with an optional title, minimum version, description and login check, for a tool you want checked — and your agents told about — that no skill or server declares. Only a CLI you added by hand has **Edit** and, in its **⋯** menu, **Remove**; Remove stops Coffer checking it and leaves the tool installed on this machine. A CLI that a skill or server requires has nothing on the right of its header and cannot be removed here, because it is listed for as long as something needs it.
 
 A skill's own page has a **Requires** tab listing what that skill declares, each command linking to its place here and offering the same hand-off when it needs you. And while any required command is missing, too old or not logged in, **Overview** lists it under what needs you. A launcher only MCP servers need is listed on Overview once, as the server's own "launcher isn't found on this machine" item, not a second time as a CLI.
 
 ## What your agents see
 
-Every agent on this machine can read the same list. The [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill) tells it to run `coffer cli list`, which prints every command Coffer manages — what each is for (the title you gave a CLI you added, and the description you wrote for any CLI), who needs it and whether it is ready on this machine — so an agent checks there before deciding a tool is unavailable, and learns which tool you use for a job. `coffer cli list --json` adds the hand-off prompt for any command that needs you. The command reads what Coffer found at its last check; it runs no check and no login check, so press **Check again** after you install something.
+Every agent on this machine can read the same list. The [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill) tells it to run `coffer cli list`, which prints every command Coffer manages — what each is for (the title you gave a CLI you added, and the description you wrote for any CLI), who needs it and whether it is ready on this machine — so an agent checks there before deciding a tool is unavailable, and learns which tool you use for a job. `coffer cli list --json` adds the hand-off prompt for any command that needs you. The command reads what Coffer found at its last check; it runs no check and no login check, so press **Check** after you install something.
 
 ## Hand the install to your agent
 
@@ -95,11 +95,11 @@ A launcher adds the servers that start with it (`` - Needed by the MCP servers C
 
 Pressing the button asks for no confirmation. The agent runs in your own terminal under its own permission mode, with the prompt in plain view, and Esc or Ctrl-C stops it. Without a managed agent on this machine only Copy prompt is offered.
 
-When the agent is done, press **Check again**.
+When the agent is done, press **Check**.
 
 ## Logging in
 
-Coffer never logs in for you, and the page shows no login command. A command that is not logged in hands the login to your agent the same way: its prompt names the login check that failed and the login command the skill declared, and asks your agent only to tell you what to run; you run the login and type anything it asks for yourself. Then press **Check again**.
+Coffer never logs in for you, and the page shows no login command. A command that is not logged in hands the login to your agent the same way: its prompt names the login check that failed and the login command the skill declared, and asks your agent only to tell you what to run; you run the login and type anything it asks for yourself. Then press **Check**.
 
 ## Related
 

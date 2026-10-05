@@ -2,7 +2,7 @@
 //
 // Spec web-ui "Show every CLI a skill requires on the CLIs page". A tool is
 // listed because a skill or MCP server requires it, or because the person added
-// it by hand (Add CLI: no skill needed). The header holds Check again (the
+// it by hand (Add CLI: no skill needed). The header holds Check (the
 // primary button, which re-probes every tool) and Add CLI; on the first run
 // there are none and the empty state carries Add CLI. Skipped `requires:`
 // entries are one grey line under the subtitle. The list pane groups the tools
@@ -92,7 +92,7 @@ export function ClisPage() {
               <>
                 <Button disabled={check.isPending} onClick={() => check.mutate()}>
                   <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
-                  {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
+                  {check.isPending ? t("clis.checking") : t("clis.check")}
                 </Button>
                 <Button variant="outline" onClick={() => setAdding(true)}>
                   <Plus aria-hidden />

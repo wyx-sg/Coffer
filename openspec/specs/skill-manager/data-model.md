@@ -123,7 +123,7 @@ when no skill declares it (no minimum, no login check). On the wire it is
 `CliOut.needed_by_servers` (`CliServerOut`).
 
 `ProbeResult` is the in-memory check result, one per command, kept by
-`CliRequirementService` until **Check again** or a daemon restart (no
+`CliRequirementService` until **Check** or a daemon restart (no
 table):
 
 | Field         | Type                | Notes                                                              |

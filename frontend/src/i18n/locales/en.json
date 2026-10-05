@@ -4952,7 +4952,7 @@
     "subtitle": "Command-line tools your skills and MCP servers need. Coffer checks them; an agent installs them and logs them in.",
     "title": "CLIs",
     "addTool": "Add CLI",
-    "checkAgain": "Check again",
+    "check": "Check",
     "checking": "Checking…",
     "status": {
       "missing": "Not found",
@@ -5033,7 +5033,7 @@
       "description": "Description",
       "descriptionPlaceholder": "What it’s for, in a sentence",
       "loginCheck": "Login check",
-      "loginCheckHint": "Exits 0 when you’re logged in. Runs when you press Check again.",
+      "loginCheckHint": "Exits 0 when you’re logged in. Runs when you press Check.",
       "submit": "Add",
       "addFailed": "Couldn’t add {{command}}",
       "editFailed": "Couldn’t save {{command}}"
@@ -5064,9 +5064,9 @@
       "bothBody_other": "{{servers}} can’t start, and {{skills}} fail at the step that calls {{command}}.",
       "loginFailed": "{{check}} didn’t succeed at {{time}}.",
       "hand": {
-        "missing": "Hand the install to an agent, then check again.",
-        "outdated": "Hand the update to an agent, then check again.",
-        "logged_out": "Hand the login to an agent, then check again."
+        "missing": "Hand the install to an agent, then press Check.",
+        "outdated": "Hand the update to an agent, then press Check.",
+        "logged_out": "Hand the login to an agent, then press Check."
       },
       "cofferBody": "Coffer can’t {{uses}}."
     },

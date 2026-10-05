@@ -2176,7 +2176,7 @@ start and which skills fail — and its detail page and the skill's Requires tab
 MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
 command to an agent with a prompt") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
 — **Hand off to <Agent>** starts the hand-off agent in the preferred terminal with the prompt sent, and **Copy prompt** copies it;
-with no managed agent available only Copy prompt is offered. The page's **Check again** probes every command afresh, and the banner that
+with no managed agent available only Copy prompt is offered. The page's **Check** probes every command afresh, and the banner that
 states a problem re-checks that one tool. Under the header's meta line every CLI —
 added by hand or required — carries its description, edited in place (leaving the
 field or Enter saves, an empty field clears it; spec skill-manager "Declare a
@@ -2208,7 +2208,7 @@ is probed are specified by skill-manager; this page shows what they report.
 
 #### Scenario: check again after logging in
 - **GIVEN** a CLI's detail page showing not logged in, with the hand-off to an agent and no login command shown
-- **WHEN** the user logs in and chooses Check again
+- **WHEN** the user logs in and chooses Check
 - **THEN** the page probes the command afresh and shows it as logged in
 
 #### Scenario: a CLI an MCP server starts with lists that server
@@ -2909,7 +2909,7 @@ each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
 custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
 the tools a skill requires"), each with its state and a link to its page — and
 **Skills** it needs. A row's name is shown in full, never cut short: a group's
-name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
+name column is as wide as its longest name. **Check** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
 secret that is not set MUST read "secret <name> is not set" and open the Secrets
