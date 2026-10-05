@@ -541,10 +541,9 @@ the path's read permission.
 ### Requirement: Show Update memory's progress
 While Update memory runs, `GET /api/v1/upkeep/runs` MUST list it as one `memory` run named
 `update` beside the per-partition claims: with no count while it is reading the agents' memory,
-then with `done` and `total` over the partitions it has to distil. The Memory page's header MUST
-read "Reading agents' memory…" and then "Distilling 2 of 5 partitions" from it, the Update
-memory button MUST read "Updating…" while it is listed, and each partition row whose distil pass
-is in flight MUST read "Distilling…".
+then with `done` and `total` over the partitions it has to distil. The Update memory button MUST
+read "Updating…" while it is listed, and each partition row whose distil pass is in flight MUST
+read "Distilling…"; the Memory page's header carries no status line beside the button.
 
 #### Scenario: update memory reports how many partitions it has distilled
 - **GIVEN** four partitions, three of them holding entries no pass has distilled

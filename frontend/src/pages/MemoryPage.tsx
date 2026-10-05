@@ -6,9 +6,8 @@
 // so the header groups its controls in two: Tidy all (hands every partition to
 // the default managed agent and sends the prompt at once; spec memory "Hand a
 // partition's tidying to the agent") on the left, then, after a divider, the
-// read group — a quiet line saying when the agents' memory was last read (and
-// that it is read automatically), or how far Update memory is, and Update
-// memory itself, the page's one primary button, a split button whose ▾ opens
+// read group — Update memory, the page's one primary button ("Updating…" while
+// it runs), a split button whose ▾ opens
 // the automatic-read schedule (spec memory "Update memory in one action"). When
 // the last read left an agent unread,
 // a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
@@ -21,7 +20,6 @@ import { Brain } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
@@ -32,7 +30,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { getTidyHandoff } from "@/lib/api/memory";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { memoryKey } from "@/lib/api/queryKeys";
-import { useMemoryPartitions } from "@/lib/hooks/useMemory";
+import { useMemoryPartitions, useMemoryUpdateRunning } from "@/lib/hooks/useMemory";
 
 /** Tidy all's prompt, asked of the daemon when the button is pressed. */
 const tidyAllPrompt = () => getTidyHandoff().then((handoff) => handoff.prompt);
@@ -67,7 +65,6 @@ export function MemoryPage() {
             <>
               <AgentHandoff prompt={tidyAllPrompt} label={t("memory.tidy.all")} help={false} />
               <span aria-hidden className="mx-1 h-5 w-px bg-border" />
-              <MemoryHeaderStatus />
               <MemoryUpdateButton running={updating} schedule />
             </>
           )

@@ -3154,10 +3154,6 @@
       "never": "从未",
       "running": "正在提炼…"
     },
-    "status": {
-      "reading": "正在读取智能体的记忆…",
-      "distilling": "正在提炼第 {{current}} / {{total}} 个分区"
-    },
     "failure": {
       "title": "无法读取 {{agent}} 的记忆：",
       "anAgent": "某个智能体",

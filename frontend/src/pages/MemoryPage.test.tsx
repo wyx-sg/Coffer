@@ -103,12 +103,11 @@ describe("MemoryPage", () => {
     expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
   });
 
-  test("idle, the header shows no status line, with the schedule behind Update memory's arrow", async () => {
+  test("the header has no status line, with the schedule behind Update memory's arrow", async () => {
     stub([COFFER]);
     renderPage();
     const arrow = await screen.findByTestId("memory-automatic");
     expect(arrow).toHaveAccessibleName("Read memory automatically");
-    expect(screen.queryByTestId("memory-status")).toBeNull();
     expect(screen.queryByText(/Reads automatically/)).toBeNull();
   });
 
@@ -137,7 +136,7 @@ describe("MemoryPage", () => {
     expect(within(banner).queryByRole("button", { name: "Open Activity" })).toBeNull();
   });
 
-  test("while update memory runs the header counts the partitions it distils", async () => {
+  test("while update memory runs only its button says so", async () => {
     stub([GLOBAL, COFFER]);
     vi.mocked(listUpkeepRuns).mockResolvedValue({
       runs: [
@@ -146,18 +145,9 @@ describe("MemoryPage", () => {
       ],
     });
     renderPage();
-    expect(await screen.findByText("Distilling 2 of 5 partitions")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /updating…/i })).toBeDisabled();
     expect(await screen.findByText("Distilling…")).toBeInTheDocument();
-  });
-
-  test('a run with no done/total yet reads "Reading agents\' memory…"', async () => {
-    stub([GLOBAL, COFFER]);
-    vi.mocked(listUpkeepRuns).mockResolvedValue({
-      runs: [{ kind: "memory", name: "update", started_at: ago(0), done: null, total: null }],
-    });
-    renderPage();
-    expect(await screen.findByText("Reading agents’ memory…")).toBeInTheDocument();
+    expect(screen.queryByText(/of 5 partitions|Reading agents/)).toBeNull();
   });
 
   test("partitions are an untitled table with path, sources and distil, and no count", async () => {

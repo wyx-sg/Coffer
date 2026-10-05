@@ -3154,10 +3154,6 @@
       "never": "Never",
       "running": "Distilling…"
     },
-    "status": {
-      "reading": "Reading agents’ memory…",
-      "distilling": "Distilling {{current}} of {{total}} partitions"
-    },
     "failure": {
       "title": "Couldn't read {{agent}}'s memory:",
       "anAgent": "an agent",

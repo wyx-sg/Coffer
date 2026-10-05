@@ -26,7 +26,6 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { PartitionDeliveredTab } from "@/components/memory/PartitionDeliveredTab";
 import { PartitionMemoriesTab } from "@/components/memory/PartitionMemoriesTab";
 import { PartitionMenu } from "@/components/memory/PartitionMenu";
-import { useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { distilState } from "@/components/memory/partitionFacts";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
@@ -35,7 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { useDetailTab } from "@/lib/detailTabs";
-import { useMemoryPartitions } from "@/lib/hooks/useMemory";
+import { useMemoryPartitions, useMemoryUpdateRunning } from "@/lib/hooks/useMemory";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
 const MEMORY_TABS = ["memories", "delivered"] as const;

@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
+import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 import {
   deleteNote,
   getDelivered,
@@ -167,4 +168,12 @@ export function useDeletePartition() {
       void qc.invalidateQueries({ queryKey: resourcesKey });
     },
   });
+}
+
+/** The run Update memory holds while it works (backend `UPDATE_RUN`). */
+const UPDATE_RUN = "update";
+
+/** Whether Update memory is running right now, by anyone's request: its button reads "Updating…". */
+export function useMemoryUpdateRunning(): boolean {
+  return useUpkeepRunning("memory", UPDATE_RUN);
 }
