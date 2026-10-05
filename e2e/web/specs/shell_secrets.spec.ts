@@ -46,23 +46,28 @@ function api(pathname: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
-/** A ref nothing has sent anywhere and that is not a standalone secret:
- *  stored at once, with no approval. */
-const refOf = (name: string) => `e2e/${name}`;
+/** The id Coffer minted for each secret a spec stored, by the name it gave. */
+const minted = new Map<string, string>();
+const refOf = (name: string) => {
+  const ref = minted.get(name);
+  if (!ref) throw new Error(`no secret stored as ${name}`);
+  return ref;
+};
 
+/** Store a secret named `name`; Coffer mints its id (`secret/<hex>`). */
 async function storeSecret(name: string, value: string): Promise<void> {
   const r = await api("/secrets", {
     method: "POST",
-    body: JSON.stringify({ ref: refOf(name), value }),
+    body: JSON.stringify({ label: name, value }),
   });
   if (!r.ok) throw new Error(`store failed: ${r.status} ${await r.text()}`);
+  minted.set(name, ((await r.json()) as { ref: string }).ref);
 }
 
-/** Best-effort cleanup: a secret already gone is fine. */
+/** Best-effort cleanup: a secret already gone, or never stored, is fine. */
 async function deleteSecret(name: string): Promise<void> {
-  await api(`/secrets/e2e/${encodeURIComponent(name)}`, {
-    method: "DELETE",
-  });
+  const ref = minted.get(name);
+  if (ref) await api(`/secrets/${ref}`, { method: "DELETE" });
 }
 
 async function registerCitingServer(
@@ -129,12 +134,14 @@ test("adding a secret stores it at once under a minted id, with nothing to appro
     await dialog.getByLabel("Name").fill(label);
     await dialog.getByLabel("Value").fill("e2e-not-a-real-value");
     await dialog.getByRole("button", { name: "Add secret" }).click();
-    // The minted URI is offered to copy, and the dialog waits for Done.
-    const uri = dialog.getByText(/^coffer:\/\/secret\/[0-9a-f]{32}$/);
+    // The minted URI is offered to copy, and the dialog — now titled for what
+    // it added — waits for Done.
+    const added = page.getByRole("dialog", { name: `Added ${label}` });
+    const uri = added.getByText(/^coffer:\/\/secret\/[0-9a-f]{32}$/);
     await expect(uri).toBeVisible();
     id = ((await uri.textContent()) ?? "").replace("coffer://secret/", "");
-    await dialog.getByRole("button", { name: "Done" }).click();
-    await expect(dialog).toBeHidden();
+    await added.getByRole("button", { name: "Done" }).click();
+    await expect(added).toBeHidden();
 
     // It is listed by its label, no approval waits, and no value is on the page.
     await expect(listLink(page, label)).toBeVisible();
@@ -155,9 +162,9 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
     await registerCitingServer(server, secret);
     await rejectApprovalsFor(refOf(secret));
 
-    // A row in the list opens the secret on its own page.
+    // A row in the list, shown by the secret's name, opens it on its own page.
     await page.goto("/secrets");
-    await listLink(page, server).click();
+    await listLink(page, secret).click();
     await expect(page).toHaveURL(new RegExp(`${pageOf(refOf(secret))}$`));
     const usedBy = page.getByRole("region", { name: "Used by" });
     await expect(usedBy).toContainText(server);
