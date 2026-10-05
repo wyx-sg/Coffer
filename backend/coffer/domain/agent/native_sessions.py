@@ -56,6 +56,13 @@ class NativeSessionInvalid(CofferError):  # noqa: N818
     code = "NATIVE_SESSION_INVALID"
 
 
+class NativeSessionBusy(CofferError):  # noqa: N818
+    """Another process has the session open for writing (a Codex App window, a
+    terminal), so the agent refuses to change it. Maps to 409."""
+
+    code = "NATIVE_SESSION_BUSY"
+
+
 @dataclass(frozen=True)
 class NativeSession:
     """One session as the agent reports it."""
@@ -146,6 +153,7 @@ def scrub_secrets(text: str) -> str:
 __all__ = [
     "SESSION_ID_PATTERN",
     "NativeSession",
+    "NativeSessionBusy",
     "NativeSessionInvalid",
     "NativeSessionNotFound",
     "NativeSessionPage",

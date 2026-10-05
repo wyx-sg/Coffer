@@ -328,7 +328,7 @@ Coffer 通过智能体本身读取和修改智能体自己的会话，从不解�
 
 ### 列出、重命名与删除 {#listing-renaming-and-deleting}
 
-智能体类型里的一个原生会话服务，对每种智能体类型有一个小适配器：Claude Code 走 Agent SDK 的会话函数（`list_sessions`、`rename_session`、`delete_session`），Codex 走一个短命的 `codex app-server`（覆盖所有来源类型的 `thread/list`，所以 Coffer 的消息渠道运行的会话也会被列出，还有 `thread/name/set`、`thread/delete`）。登记的智能体的配置目录不是标准位置时，Claude 适配器会在调用期间把 SDK 指向它。路由是 `GET /api/v1/agents/{uid}/sessions`（带 `q`、`limit` 和游标；搜索匹配标题和目录），以及 `.../sessions/{session_id}` 上的 `PATCH` 和 `DELETE`。一行带有会话 id、标题、目录和时间，当有对话在用这个会话时，还带有它的 id、`running`、`needs_you` 和消息渠道，所以两个列表共用一种行和一个对话框。删除一个有对话指向的会话，会连带移除这个对话的索引行。错误是 `AGENT_TYPE_UNSUPPORTED`、`NATIVE_SESSION_NOT_FOUND` 和 `NATIVE_SESSION_INVALID`。
+智能体类型里的一个原生会话服务，对每种智能体类型有一个小适配器：Claude Code 走 Agent SDK 的会话函数（`list_sessions`、`rename_session`、`delete_session`），Codex 走一个短命的 `codex app-server`（覆盖所有来源类型的 `thread/list`，所以 Coffer 的消息渠道运行的会话也会被列出，还有 `thread/name/set`、`thread/delete`）。登记的智能体的配置目录不是标准位置时，Claude 适配器会在调用期间把 SDK 指向它。路由是 `GET /api/v1/agents/{uid}/sessions`（带 `q`、`limit` 和游标；搜索匹配标题和目录），以及 `.../sessions/{session_id}` 上的 `PATCH` 和 `DELETE`。一行带有会话 id、标题、目录和时间，当有对话在用这个会话时，还带有它的 id、`running`、`needs_you` 和消息渠道，所以两个列表共用一种行和一个对话框。删除一个有对话指向的会话，会连带移除这个对话的索引行。错误是 `AGENT_TYPE_UNSUPPORTED`、`NATIVE_SESSION_NOT_FOUND`、`NATIVE_SESSION_INVALID` 和 `NATIVE_SESSION_BUSY`（另一个进程打开着这个线程时，例如一个 Codex App 窗口，Codex 拒绝改名或删除它）。
 
 对话（chat）不能导入智能体类型，所以对话的路由通过在组合根发布的一个端口来重命名和删除。
 
