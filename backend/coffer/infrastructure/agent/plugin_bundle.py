@@ -79,6 +79,14 @@ class FsPluginDetailReader:
             return None
         return read_plugin_contents(root)
 
+    def resolve_root(self, install_path: str) -> str | None:
+        """The package root ``read_contents`` would report, found without
+        reading the package; ``None`` when the install dir is missing."""
+        if not install_path:
+            return None
+        root = self._resolve_root(pathlib.Path(install_path))
+        return str(root) if root is not None else None
+
     def find_part(self, root: str, kind: str, name: str) -> PluginPart | None:
         """One skill / command / subagent / MCP server of the package at
         ``root`` (the directory ``read_contents`` reported)."""

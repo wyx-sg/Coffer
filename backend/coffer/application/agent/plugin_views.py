@@ -29,6 +29,11 @@ class PluginDetailReader(Protocol):
 
     def read_contents(self, install_path: str) -> PluginContents | None: ...
 
+    def resolve_root(self, install_path: str) -> str | None:
+        """The directory ``read_contents`` would report as ``root`` (the version
+        subdir for a Codex cache dir), without reading the package."""
+        ...
+
     def find_part(self, root: str, kind: str, name: str) -> PluginPart | None: ...
 
 

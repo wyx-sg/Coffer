@@ -17,6 +17,7 @@ import { TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { fileName, filterEvents, hookKey, hookTotals } from "@/lib/agents/hookRows";
 import type { NativeHook } from "@/lib/api/agents";
+import { useProgressiveRows } from "@/components/ui/useProgressiveRows";
 
 interface Props {
   hooks: readonly NativeHook[];
@@ -47,6 +48,7 @@ export function OwnHooksSection({ hooks, agentType }: Props) {
       (h) => (event === null || h.event === event) && (!q || h.command.toLowerCase().includes(q)),
     );
   }, [hooks, query, event]);
+  const progressive = useProgressiveRows(shown, { resetKey: `${event ?? ""}\u0000${query}` });
   const totals = hookTotals(hooks);
   const filtered = event !== null || query.trim() !== "";
 
@@ -111,7 +113,7 @@ export function OwnHooksSection({ hooks, agentType }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((h) => (
+                {progressive.visible.map((h) => (
                   <tr
                     key={hookKey(h)}
                     tabIndex={0}
@@ -147,6 +149,13 @@ export function OwnHooksSection({ hooks, agentType }: Props) {
                     </td>
                   </tr>
                 ))}
+                {progressive.sentinel ? (
+                  <tr aria-hidden>
+                    <td colSpan={5} className="p-0">
+                      {progressive.sentinel}
+                    </td>
+                  </tr>
+                ) : null}
                 {shown.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-6 text-center text-sm text-text-muted">

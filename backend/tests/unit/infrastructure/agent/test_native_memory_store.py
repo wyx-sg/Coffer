@@ -157,3 +157,69 @@ def test_scan_reports_no_path_when_no_cwd_matches(tmp_path: pathlib.Path) -> Non
     )
 
     assert FileNativeMemoryScanner().scan(projects, "memory")[0].project_path is None
+
+
+def _session(path: pathlib.Path, cwd: str) -> None:
+    import json
+
+    path.write_text(json.dumps({"cwd": cwd}) + "\n", encoding="utf-8")
+
+
+def test_scan_remembers_a_recovered_project_path(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.infrastructure.agent import native_memory_store as mod
+
+    projects = tmp_path / "projects"
+    _write(projects / "-a-b" / "memory" / "a.md")
+    _session(projects / "-a-b" / "s.jsonl", "/a/b")
+    reads: list[pathlib.Path] = []
+    real = mod._resolve_project_path
+    monkeypatch.setattr(mod, "_resolve_project_path", lambda d: (reads.append(d), real(d))[1])
+    scanner = FileNativeMemoryScanner()
+
+    first = scanner.scan(projects, "memory")
+    # The count is read fresh each time even though the path is remembered.
+    _write(projects / "-a-b" / "memory" / "b.md")
+    second = scanner.scan(projects, "memory")
+
+    assert first[0].project_path == second[0].project_path == "/a/b"
+    assert second[0].item_count == 2
+    assert len(reads) == 1
+
+
+def test_scan_retries_a_missing_path_when_a_transcript_appears(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.infrastructure.agent import native_memory_store as mod
+
+    projects = tmp_path / "projects"
+    _write(projects / "-a-b" / "memory" / "a.md")
+    reads: list[pathlib.Path] = []
+    real = mod._resolve_project_path
+    monkeypatch.setattr(mod, "_resolve_project_path", lambda d: (reads.append(d), real(d))[1])
+    scanner = FileNativeMemoryScanner()
+
+    assert scanner.scan(projects, "memory")[0].project_path is None
+    assert scanner.scan(projects, "memory")[0].project_path is None
+    assert len(reads) == 1  # the second scan trusted "no transcript says"
+
+    _session(projects / "-a-b" / "s.jsonl", "/a/b")  # creating a file moves the dir mtime
+
+    assert scanner.scan(projects, "memory")[0].project_path == "/a/b"
+    assert len(reads) == 2
+
+
+def test_scan_path_memo_is_bounded(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from coffer.infrastructure.agent import native_memory_store as mod
+
+    monkeypatch.setattr(mod, "_PATH_MEMO_MAX", 2)
+    projects = tmp_path / "projects"
+    for n in "abcd":
+        _write(projects / f"-{n}" / "memory" / "x.md")
+        _session(projects / f"-{n}" / "s.jsonl", f"/{n}")
+    scanner = FileNativeMemoryScanner()
+
+    scanner.scan(projects, "memory")
+
+    assert len(scanner._found) == 2

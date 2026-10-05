@@ -22,6 +22,7 @@ import { SearchInput } from "@/components/SearchInput";
 import { useTableSelection } from "@/components/DataTableSelection";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useProgressiveRows } from "@/components/ui/useProgressiveRows";
 import { cn } from "@/lib/utils";
 import { TabEmpty } from "./TabEmpty";
 
@@ -102,6 +103,9 @@ export function AgentKindTab<R>({
     () => (bulk?.selectable ? visible.filter(bulk.selectable) : visible),
     [visible, bulk],
   );
+  // Only the first screenful of a long list is drawn; selection, select-all and
+  // the bar's count above keep working on every row the search shows.
+  const progressive = useProgressiveRows(visible, { resetKey: query });
   const selection = useTableSelection(selectableRows, rowKey);
   const selected = bulk ? selection.selectedRows : [];
   const selectedCount = selected.length;
@@ -166,7 +170,16 @@ export function AgentKindTab<R>({
               ))}
             </tr>
           </thead>
-          <tbody>{children(visible, select)}</tbody>
+          <tbody>
+            {children(progressive.visible, select)}
+            {progressive.sentinel ? (
+              <tr aria-hidden>
+                <td colSpan={columns.length + (bulk ? 1 : 0)} className="p-0">
+                  {progressive.sentinel}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
         </table>
       </div>
     );

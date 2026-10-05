@@ -269,3 +269,30 @@ def test_a_key_import_is_checked_and_answers_the_refs_still_locked(tmp_path: Pat
         "abc123abc123",
         True,
     )
+
+
+def test_machines_reads_history_once_per_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The registry and each machine's last merge are read from HEAD's tree and
+    history, so a second listing at the same HEAD reads neither again, and a new
+    HEAD does."""
+    _mac, mini = joined(tmp_path, "Mac", "Mini")
+    mini.round()
+    git = mini.service._engine.d.git
+    logs: list[int] = []
+    real_log = git.log
+    monkeypatch.setattr(git, "log", lambda *a, **k: (logs.append(1), real_log(*a, **k))[1])
+
+    first = mini.run(mini.service.machines())
+    second = mini.run(mini.service.machines())
+
+    assert [v.descriptor.machine_id for v in first] == [v.descriptor.machine_id for v in second]
+    assert [v.last_round for v in first] == [v.last_round for v in second]
+    assert len(logs) == 1
+
+    mini.run(mini.service.rename_self("Studio", actor="user"))  # moves HEAD
+    renamed = mini.run(mini.service.machines())
+
+    assert renamed[0].descriptor.name == "Studio"
+    assert len(logs) == 2

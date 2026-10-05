@@ -15,7 +15,8 @@ was issued for.
 are answered from the conversation index (the :class:`ChannelConversationIndex`
 port — a conversation with no session yet is listed too); otherwise the merge is
 post-filtered on each row's conversation binding, reading at most
-:data:`MAX_PAGES_PER_AGENT` agent pages per agent per request.
+:data:`MAX_PAGES_PER_AGENT` agent pages (of :data:`AGENT_PAGE` rows) per agent per
+request.
 
 **Failure.** An agent whose listing raises is left out and named in
 ``unavailable``; its cursor position is kept so a later read picks it up again.
@@ -39,6 +40,9 @@ from coffer.domain.resource import Resource
 _LIST_TAG = "agent_sessions"
 #: Agent pages read per agent in one request while a source filter thins the merge.
 MAX_PAGES_PER_AGENT = 5
+#: Rows asked of an agent per call, whatever the page size of the merged list, so
+#: the first page and every later one hit the same snapshot of that agent.
+AGENT_PAGE = 50
 LOCAL = "local"
 
 _log = logging.getLogger(__name__)
@@ -230,11 +234,9 @@ class AgentSessionsListing:
         streams.sort(key=lambda s: s.key)
         return streams
 
-    async def _load(
-        self, st: _Stream, q: str | None, limit: int, unavailable: dict[str, str]
-    ) -> None:
+    async def _load(self, st: _Stream, q: str | None, unavailable: dict[str, str]) -> None:
         try:
-            page = await self._sessions.list(st.uid, q=q, limit=limit, cursor=st.c)
+            page = await self._sessions.list(st.uid, q=q, limit=AGENT_PAGE, cursor=st.c)
         except UnsupportedAgentType:
             st.done = True
             return
@@ -277,7 +279,7 @@ class AgentSessionsListing:
             loading = [s for s in streams if s.needs_load()]
             if any(s.pages >= MAX_PAGES_PER_AGENT for s in loading):
                 break  # cannot see that agent's head within the budget
-            await asyncio.gather(*(self._load(s, q, limit, unavailable) for s in loading))
+            await asyncio.gather(*(self._load(s, q, unavailable) for s in loading))
             heads = [(s, h) for s in streams if (h := s.head()) is not None]
             if not heads:
                 if any(s.needs_load() for s in streams):
@@ -307,6 +309,7 @@ def _matches(row: ListedSession, sources: set[str]) -> bool:
 
 
 __all__ = [
+    "AGENT_PAGE",
     "LOCAL",
     "MAX_PAGES_PER_AGENT",
     "AgentSessionsListing",

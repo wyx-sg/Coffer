@@ -269,7 +269,12 @@ class MemoryService:
         """Every partition, counted from ``notes/`` — the management view (see
         "Show a partition's memories read-only")."""
         rows = await self._resources.list(kind=KIND_MEMORY)
-        return [summary_of(row, placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
+        ordered = sorted(rows, key=lambda r: r.name)
+        # Reading every partition's files is blocking I/O; the daemon serves the
+        # MCP gateway from this same loop, so it runs off it.
+        return await asyncio.to_thread(
+            lambda: [summary_of(row, placement_of(row)) for row in ordered]
+        )
 
     async def partition(self, uid: str) -> PartitionSummary:
         """One partition by uid, counted from ``notes/``. Raises
@@ -277,7 +282,7 @@ class MemoryService:
         row = await self._resources.get(uid)
         if row.kind != KIND_MEMORY:
             raise ResourceNotFound(uid)
-        return summary_of(row, placement_of(row))
+        return await asyncio.to_thread(summary_of, row, placement_of(row))
 
     async def placements(self) -> list[Placement]:
         """Every partition's name and repository, from the rows alone.

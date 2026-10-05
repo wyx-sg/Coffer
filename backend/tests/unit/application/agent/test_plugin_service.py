@@ -182,6 +182,7 @@ class FakeDetailReader:
         self._contents = contents or {}
         self.calls: list[str] = []
         self.contents_calls: list[str] = []
+        self.root_calls: list[str] = []
 
     def read(self, install_path: str) -> PluginDetail | None:
         self.calls.append(install_path)
@@ -190,6 +191,11 @@ class FakeDetailReader:
     def read_contents(self, install_path: str) -> PluginContents | None:
         self.contents_calls.append(install_path)
         return self._contents.get(install_path)
+
+    def resolve_root(self, install_path: str) -> str | None:
+        self.root_calls.append(install_path)
+        found = self._contents.get(install_path)
+        return found.root if found is not None else None
 
 
 class FakeCliRunner:
@@ -908,3 +914,30 @@ async def test_get_plugin_unknown_id_is_not_found(store, audit_svc):
     with pytest.raises(PluginNotFound):
         await svc.get_plugin(_CX_UID, "ghost@npm")
     assert store._writes == []
+
+
+async def test_enabled_install_roots_lists_once_and_never_reads_contents(store, audit_svc):
+    """Resolving every enabled plugin's package root is one listing plus a root
+    lookup each — no per-plugin re-listing, no full contents read."""
+    store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
+    name_dir = _CODEX_CONFIG_DIR / "plugins" / "cache" / "npm" / "lint-tool"
+    off_dir = _CODEX_CONFIG_DIR / "plugins" / "cache" / "pypi" / "format-tool"
+    contents = PluginContents(
+        root=str(name_dir / "1.0.0"),
+        skills=(),
+        commands=(),
+        agents=(),
+        hooks=(),
+        mcp_servers=(),
+    )
+    reader = FakeDetailReader({}, {str(name_dir): contents})
+    svc = _make_svc(store, audit_svc, cache_dirs={name_dir, off_dir}, detail_reader=reader)
+
+    roots = await svc.enabled_install_roots(_CX_UID)
+
+    # format-tool is disabled, so only lint-tool resolves.
+    assert roots == [("lint-tool@npm", str(name_dir / "1.0.0"))]
+    assert reader.root_calls == [str(name_dir)]
+    assert reader.contents_calls == []
+    # One listing: each plugin is read for its summary exactly once.
+    assert reader.calls.count(str(name_dir)) == 1

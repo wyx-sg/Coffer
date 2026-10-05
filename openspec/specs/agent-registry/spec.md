@@ -1089,6 +1089,16 @@ conversations from the conversation index, so a conversation on which no turn ha
 listed, without a session. An agent whose listing fails MUST be left out of the page and
 named under `unavailable` with its reason, while the other agents are listed. The read
 carries no session text and is not audited.
+The daemon MUST keep each agent's last answer for a given position and search in memory —
+never on disk, never synced — and answer from it: within 5 seconds of the read without
+asking the agent, and up to 5 minutes later at once while one refresh of that answer runs in
+the background; an older answer is read again before replying. Concurrent reads of the same
+answer share one request to the agent, and renaming or deleting a session through the agent
+drops that agent's kept answers. An agent is asked in pages of a fixed size whatever the
+page's `limit`, so the following pages of one listing reuse the answers the first read kept.
+Asking an agent is the expensive part of the read (Codex answers `thread/list` in about a
+second whatever the size of the page), so the page is shown at once and a session started
+elsewhere appears within one refresh.
 
 #### Scenario: sessions from two agents are listed in one order
 - **GIVEN** Claude Code with sessions last active at 10:00 and 08:00, and Codex with one last active at 09:00
@@ -1111,3 +1121,9 @@ carries no session text and is not audited.
 - **GIVEN** Claude Code with sessions and a Codex whose listing fails
 - **WHEN** the listing is read
 - **THEN** Claude Code's sessions are listed and `unavailable` names Codex with the reason
+
+#### Scenario: a repeated read is answered without asking the agent again
+- **GIVEN** the listing was read a moment ago
+- **WHEN** it is read again, and then its next page is read
+- **THEN** both are answered from the kept answers and the agents are not asked again
+- **AND** after a session is renamed through its agent, the next read asks that agent again

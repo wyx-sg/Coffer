@@ -15,7 +15,6 @@ from dataclasses import dataclass
 import pytest
 
 from coffer.application.agent.hooks_service import AgentHooksService
-from coffer.application.agent.plugin_views import PluginDetailView, PluginsOut, PluginView
 from coffer.domain.agent.hooks import HookHealth, HookSource
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
@@ -34,27 +33,8 @@ class _Plugins:
 
     installed: list[tuple[str, bool, pathlib.Path]]
 
-    async def list_plugins(self, uid: str) -> PluginsOut:
-        return PluginsOut(
-            items=[
-                PluginView(id=pid, name=pid, marketplace="m", enabled=on, cache_present=True)
-                for pid, on, _root in self.installed
-            ],
-            marketplaces=[],
-            parse_errors=[],
-        )
-
-    async def get_plugin(self, uid: str, plugin_id: str) -> PluginDetailView:
-        pid, on, root = next(p for p in self.installed if p[0] == plugin_id)
-        view = PluginView(id=pid, name=pid, marketplace="m", enabled=on, cache_present=True)
-        return PluginDetailView(
-            plugin=view,
-            marketplace_source_type=None,
-            marketplace_source=None,
-            install_path=str(root),
-            can_uninstall=False,
-            contents=None,
-        )
+    async def enabled_install_roots(self, uid: str) -> list[tuple[str, str]]:
+        return [(pid, str(root)) for pid, on, root in self.installed if on]
 
 
 def _hooks(event: str, command: str, matcher: str | None = None) -> str:
