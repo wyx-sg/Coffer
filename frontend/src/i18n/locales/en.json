@@ -3300,7 +3300,8 @@
       "moreActions": "More actions for {{title}}",
       "open": "Open in terminal",
       "openIn": "Open in {{terminal}}",
-      "noSession": "No session yet: no turn has run on this conversation.",
+      "notStarted": "Not started",
+      "noSession": "No turn has run on this conversation yet, so there is no session to open. It can be opened once its first message is answered.",
       "openOptions": "Open options for {{title}}",
       "copyCommand": "Copy command"
     },

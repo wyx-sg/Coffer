@@ -35,6 +35,8 @@ Press **Open in *terminal*** on a row's split button, named after your preferred
 
 **Copy command** puts the same command on your clipboard, to run in a terminal Coffer does not know or on another shell. The command starts with a change into the session's directory.
 
+A channel conversation that has not run a turn yet has no session to open, so its row shows **Not started** instead of the split button. It can be opened once its first message is answered.
+
 Pick the terminal under **Settings › General › Preferred terminal**, built like **Preferred editor**:
 
 - **System default** is the platform's own terminal.
