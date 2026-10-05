@@ -45,6 +45,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/hold/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Held File Diff
+         * @description One file a held round would delete, its whole text as removed lines.
+         *     404 ``SYNC_ROUND_FILE_NOT_LISTED`` when no round is held or the hold does
+         *     not list the path.
+         */
+        get: operations["get_held_file_diff_api_v1_sync_hold_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/hold/restore": {
         parameters: {
             query?: never;
@@ -323,6 +345,28 @@ export interface paths {
          *     404 ``SYNC_MACHINE_NOT_FOUND`` when it was never registered here.
          */
         post: operations["restore_machine_api_v1_sync_machines__machine_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/pending/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Pending File Diff
+         * @description One file waiting to push, from the remote's tip to this Mac's ``HEAD``
+         *     (every waiting commit that touched it, as one change). 404
+         *     ``SYNC_ROUND_FILE_NOT_LISTED`` for a path nothing waiting touches.
+         */
+        get: operations["get_pending_file_diff_api_v1_sync_pending_diff_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1231,7 +1275,8 @@ export interface components {
         };
         /**
          * RoundFileDiffOut
-         * @description One file a round applied or pushed. ``text`` carries the unified
+         * @description One file a round applied or pushed, one waiting to push (``pending``)
+         *     or one a held round would delete (``held``). ``text`` carries the unified
          *     ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
          *     carry no content at all (never ciphertext).
          */
@@ -1259,7 +1304,7 @@ export interface components {
              * Side
              * @enum {string}
              */
-            side: "applied" | "pushed";
+            side: "applied" | "pushed" | "pending" | "held";
         };
         /**
          * RoundOut
@@ -1601,6 +1646,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_held_file_diff_api_v1_sync_hold_diff_get: {
+        parameters: {
+            query: {
+                /** @description A file the held round would delete; else 404. */
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundFileDiffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -2233,6 +2321,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MachineOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_pending_file_diff_api_v1_sync_pending_diff_get: {
+        parameters: {
+            query: {
+                /** @description A file the next push carries; else 404. */
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundFileDiffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

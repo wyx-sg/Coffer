@@ -190,6 +190,12 @@ export const syncApi = {
       }),
     ),
 
+  pendingDiff: (path: string): Promise<RoundFileDiff> =>
+    unwrap(api().GET("/sync/pending/diff", { params: { query: { path } } })),
+
+  heldDiff: (path: string): Promise<RoundFileDiff> =>
+    unwrap(api().GET("/sync/hold/diff", { params: { query: { path } } })),
+
   rollbackPlan: (runId: number): Promise<RollbackPlan> =>
     unwrap(api().GET("/sync/runs/{run_id}/rollback-plan", { params: { path: { run_id: runId } } })),
   rollback: (runId: number): Promise<SyncRound> =>

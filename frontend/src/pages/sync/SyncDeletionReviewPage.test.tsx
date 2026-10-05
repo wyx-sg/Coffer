@@ -1,9 +1,9 @@
 // frontend/src/pages/sync/SyncDeletionReviewPage.test.tsx
 //
 // A held round has two answers, two buttons that each act at once: Delete N
-// files (the view already listed what goes, so no dialog repeats it) and Keep
-// the files. The files are grouped by folder in bordered lists (four, then Show
-// all); the summary rides in the description line and there is no back link.
+// files (the page already showed what goes, so no dialog repeats it) and Keep
+// the files. The shared review shape: every held file down the left, folder by
+// folder; the chosen one's text, as the lines a delete removes, on the right.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -15,6 +15,7 @@ import { SyncDeletionReviewPage } from "./SyncDeletionReviewPage";
 import { makeHeldRound, makeHold } from "./syncConflictTestKit";
 import { idleMutation } from "./syncTestKit";
 
+vi.mock("@/lib/hooks/useSync", () => ({ useHeldFileDiff: vi.fn() }));
 vi.mock("@/lib/hooks/useSyncStop", () => ({
   useSyncStop: vi.fn(),
   useConfirmHold: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/lib/hooks/useSyncStop", () => ({
 }));
 
 const hooks = await import("@/lib/hooks/useSyncStop");
+const syncHooks = await import("@/lib/hooks/useSync");
 const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 const succeeding = () =>
   vi.fn((_: unknown, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.());
@@ -45,6 +47,18 @@ function show(round: StoppedRound | null) {
 }
 
 beforeEach(() => {
+  mocked(syncHooks.useHeldFileDiff).mockImplementation((path: string) => ({
+    isLoading: false,
+    error: null,
+    data: {
+      path,
+      side: "held",
+      kind: "text",
+      diff: `--- before/${path}\n+++ after/${path}\n@@ -1,2 +0,0 @@\n-first line\n-second line\n`,
+      added: 0,
+      removed: 2,
+    },
+  }));
   confirm = succeeding();
   restore = succeeding();
   mocked(hooks.useConfirmHold).mockReturnValue(idleMutation({ mutate: confirm }));
@@ -53,23 +67,31 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SyncDeletionReviewPage", () => {
-  test("says who deleted how many in the description, files grouped by folder", () => {
+  test("says who deleted how many; every held file is listed, the chosen one's text shown", () => {
     show(makeHeldRound());
     expect(screen.getByRole("heading", { name: "Review held deletions" })).toBeInTheDocument();
     expect(screen.getByText("Round held")).toBeInTheDocument();
     expect(
       screen.getByText(/14 files in 2 folders, deleted on Mac mini · the rest of what was pulled/),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("link")).toBeNull();
-    const [chat, pdf] = screen.getAllByTestId("sync-held-group");
-    expect(within(chat!).getByRole("heading")).toHaveTextContent("Knowledge · archive/chat-bot");
-    // Four paths are listed, the other eight behind Show all.
-    expect(within(chat!).getAllByRole("listitem")).toHaveLength(4);
-    expect(chat).toHaveTextContent("Showing 4 of 12");
-    fireEvent.click(within(chat!).getByRole("button", { name: "Show all" }));
-    expect(within(chat!).getAllByRole("listitem")).toHaveLength(12);
-    expect(within(pdf!).getByRole("heading")).toHaveTextContent("Skills · pdf-tools-old");
-    expect(pdf).toHaveTextContent("skills/pdf-tools-old/scripts/extract.py");
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).getAllByRole("button")).toHaveLength(14);
+    expect(screen.getByTestId("held-file-knowledge/archive/chat-bot/n1.md")).toHaveTextContent(
+      "Knowledge · archive/chat-bot",
+    );
+    // The first file is open, its whole text as removed lines.
+    const pane = screen.getByTestId("sync-review-pane");
+    expect(pane).toHaveTextContent("knowledge/archive/chat-bot/n1.md");
+    expect(pane).toHaveTextContent("Deleted on Mac mini");
+    expect(within(pane).getByTestId("sync-review-diff")).toHaveTextContent("second line");
+    fireEvent.click(screen.getByTestId("held-file-skills/pdf-tools-old/scripts/extract.py"));
+    expect(screen.getByTestId("sync-review-pane")).toHaveTextContent(
+      "skills/pdf-tools-old/scripts/extract.py",
+    );
+    expect(syncHooks.useHeldFileDiff).toHaveBeenLastCalledWith(
+      "skills/pdf-tools-old/scripts/extract.py",
+      true,
+    );
   });
 
   acceptance("vault-sync", "the held deletions view answers with one press", () => {
@@ -81,9 +103,8 @@ describe("SyncDeletionReviewPage", () => {
       groups: [{ folder: "knowledge/archive", paths, total: 30 }],
     });
     const { unmount } = show(makeHeldRound(hold));
-    // The files are listed by folder before any press, and no dialog is involved.
-    expect(screen.getAllByTestId("sync-held-group")).toHaveLength(1);
-    expect(screen.getAllByTestId("sync-held-group")[0]).toHaveTextContent("Showing 4 of 22");
+    // Every file can be read before any press, and no dialog is involved.
+    expect(within(screen.getByRole("navigation")).getAllByRole("button")).toHaveLength(22);
     fireEvent.click(screen.getByRole("button", { name: "Delete 22 files" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(confirm).toHaveBeenCalledTimes(1);

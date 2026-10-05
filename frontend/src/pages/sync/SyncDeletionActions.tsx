@@ -1,12 +1,14 @@
 // frontend/src/pages/sync/SyncDeletionActions.tsx
 //
-// The two answers to a held round (spec vault-sync "Ask the user to confirm a
-// tripped breaker"), as two buttons that each act at once: **Keep the files**
-// restores them, **Delete N files** confirms the hold. There is no second
-// dialog — the view above lists what a delete removes, and one line says what
-// each answer does. A refusal shows in place; success goes back to Sync.
+// The foot of Review held deletions (spec vault-sync "Ask the user to confirm
+// a tripped breaker"): one line saying what each answer does, Leave for later,
+// and the two answers as two buttons that each act at once — **Keep the
+// files** restores them, **Delete N files** confirms the hold. There is no
+// second dialog: the page above shows each file a delete removes. A refusal
+// shows in place; success goes back to Sync.
 import { Trash2, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
@@ -29,8 +31,8 @@ export function SyncDeletionActions({ hold, who, onDone }: Props) {
   const error = confirm.error ?? restore.error;
 
   return (
-    <div className="flex flex-col gap-3" data-testid="sync-deletions-actions">
-      <p className="text-xs text-text-muted">
+    <>
+      <p className="max-w-prose text-xs text-text-muted" data-testid="sync-deletions-hint">
         {t(`sync.deletions.hint.${hold.direction}`, { machine: who })}
       </p>
       {error ? (
@@ -38,11 +40,13 @@ export function SyncDeletionActions({ hold, who, onDone }: Props) {
           {translateApiError(t, error)}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="ml-auto flex items-center gap-2" data-testid="sync-deletions-actions">
+        <Button asChild variant="ghost">
+          <Link to="/sync">{t("sync.resolve.later")}</Link>
+        </Button>
         <Button
           type="button"
           variant="outline"
-          size="sm"
           disabled={busy}
           loading={restore.isPending}
           onClick={() => {
@@ -56,7 +60,6 @@ export function SyncDeletionActions({ hold, who, onDone }: Props) {
         <Button
           type="button"
           variant="destructive"
-          size="sm"
           disabled={busy}
           loading={confirm.isPending}
           onClick={() => {
@@ -68,6 +71,6 @@ export function SyncDeletionActions({ hold, who, onDone }: Props) {
           {t("sync.deletions.delete", { count })}
         </Button>
       </div>
-    </div>
+    </>
   );
 }

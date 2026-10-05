@@ -60,7 +60,18 @@ def file_diff(d: RoundDeps, record: RoundRecord, path: str, side: str) -> RoundF
     before, after = _pair(record, side)
     if not before or not after or not d.git.files(after) or not d.git.files(before):
         raise SyncRoundDiffUnavailable
-    old, new = d.git.read(before, path), d.git.read(after, path)
+    return between(d, path, side, before, after)
+
+
+def between(
+    d: RoundDeps, path: str, side: str, before: str | None, after: str | None
+) -> RoundFileDiff:
+    """``path`` from commit ``before`` to commit ``after``, line by line. A
+    missing commit reads as an absent file; a secret is never read."""
+    if path.startswith(SECRET + "/"):
+        return RoundFileDiff(path, side, "secret")
+    old = d.git.read(before, path) if before else None
+    new = d.git.read(after, path) if after else None
     if max(len(old or b""), len(new or b"")) > MAX_BYTES:
         return RoundFileDiff(path, side, "too_large")
     old_text, new_text = _text(old), _text(new)
@@ -81,4 +92,4 @@ def file_diff(d: RoundDeps, record: RoundRecord, path: str, side: str) -> RoundF
     return RoundFileDiff(path, side, "text", "".join(lines), added, removed)
 
 
-__all__ = ["MAX_BYTES", "MAX_LINES", "SIDES", "file_diff"]
+__all__ = ["MAX_BYTES", "MAX_LINES", "SIDES", "between", "file_diff"]

@@ -1,5 +1,6 @@
 // frontend/src/pages/sync/SyncStateLines.tsx — the quiet states of the Status tab's
-// first line (6.4.01 in sync, 6.4.02 changes to push, 6.4.04 changes pulled,
+// first line (6.4.01 in sync, 6.4.02 changes to push — with Review changes,
+// which opens the files on their own page — 6.4.04 changes pulled,
 // 6.4.13 rolled back), each a `SyncBannerLine` with the areas line under it.
 //
 // "The other Mac" is named when there is exactly one: "whatever Mac mini
@@ -7,8 +8,10 @@
 // says "the other Macs" rather than picking one.
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, Check, Undo2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import type { SyncRound, SyncStatus } from "@/lib/api/sync";
 import { useMachines } from "@/lib/hooks/useMachines";
 import { SyncAreasLine } from "./SyncAreasLine";
@@ -94,6 +97,11 @@ export function ToPush({ status, count }: { status: SyncStatus; count: number })
       tone="info"
       title={t("sync.banner.toPush", { count })}
       footnote={<SyncAreasLine areas={status.areas} />}
+      action={
+        <Button asChild variant="outline" size="sm">
+          <Link to="/sync/pending">{t("sync.banner.reviewChanges")}</Link>
+        </Button>
+      }
     >
       {status.next_round_at
         ? t("sync.banner.toPushNextAt", { time: clock(status.next_round_at), peer })

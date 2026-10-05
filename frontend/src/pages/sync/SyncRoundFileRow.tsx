@@ -10,36 +10,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LineCounts } from "@/components/change-preview/LineCounts";
-import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
 import type { SyncChange } from "@/lib/api/sync";
 import { useRoundFileDiff } from "@/lib/hooks/useSync";
 import { cn } from "@/lib/utils";
 import { ChangeMark, FILE_ROW } from "./SyncChangeMark";
-import { parseUnifiedDiff } from "./syncConflictFormat";
-import { DiffTable } from "./SyncDiffTable";
-
-const NOTE = "text-xs text-text-muted";
-
-function DiffBody({ query }: { query: ReturnType<typeof useRoundFileDiff> }) {
-  const { t } = useTranslation();
-  if (query.isLoading) return <Skeleton className="h-16 w-full" />;
-  if (query.error) {
-    return (
-      <p className="text-xs text-danger" role="alert">
-        {translateApiError(t, query.error)}
-      </p>
-    );
-  }
-  const data = query.data;
-  if (!data) return null;
-  if (data.kind === "secret") return <p className={NOTE}>{t("sync.drawer.diffSecret")}</p>;
-  if (data.kind === "binary") return <p className={NOTE}>{t("sync.drawer.diffBinary")}</p>;
-  if (data.kind === "too_large") return <p className={NOTE}>{t("sync.drawer.diffTooLarge")}</p>;
-  const diff = parseUnifiedDiff(data.diff ?? "");
-  if (diff.lines.length === 0) return <p className={NOTE}>{t("sync.drawer.diffEmpty")}</p>;
-  return <DiffTable lines={diff.lines} testId="sync-round-diff" />;
-}
+import { SyncFileDiffBody } from "./SyncFileDiffBody";
 
 export function RoundFileRow({
   runId,
@@ -86,7 +61,7 @@ export function RoundFileRow({
       </div>
       {open ? (
         <div className="px-3 pb-3">
-          <DiffBody query={query} />
+          <SyncFileDiffBody query={query} testId="sync-round-diff" />
         </div>
       ) : null}
     </li>

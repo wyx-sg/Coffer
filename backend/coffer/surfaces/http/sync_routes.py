@@ -19,6 +19,7 @@ from typing import Literal
 
 from fastapi import Query
 
+from coffer.application.sync.views import RoundFileDiff
 from coffer.domain.sync.remote import SyncRemote
 from coffer.surfaces.http import sync_stop_routes as _stop_routes  # noqa: F401  (registers)
 from coffer.surfaces.http.sync_dependencies import get_sync_service, router
@@ -96,10 +97,33 @@ async def get_run_file_diff(
     size cap carry a ``kind`` and no content. 404 ``SYNC_ROUND_FILE_NOT_LISTED``
     for a path the round did not list, 409 ``SYNC_ROUND_DIFF_UNAVAILABLE`` when
     its commits are gone."""
-    found = await get_sync_service().round_file_diff(run_id, path, side)
+    return _file_diff_out(await get_sync_service().round_file_diff(run_id, path, side))
+
+
+@router.get("/pending/diff", response_model=RoundFileDiffOut)
+async def get_pending_file_diff(
+    path: str = Query(description="A file the next push carries; else 404."),
+) -> RoundFileDiffOut:
+    """One file waiting to push, from the remote's tip to this Mac's ``HEAD``
+    (every waiting commit that touched it, as one change). 404
+    ``SYNC_ROUND_FILE_NOT_LISTED`` for a path nothing waiting touches."""
+    return _file_diff_out(await get_sync_service().pending_file_diff(path))
+
+
+@router.get("/hold/diff", response_model=RoundFileDiffOut)
+async def get_held_file_diff(
+    path: str = Query(description="A file the held round would delete; else 404."),
+) -> RoundFileDiffOut:
+    """One file a held round would delete, its whole text as removed lines.
+    404 ``SYNC_ROUND_FILE_NOT_LISTED`` when no round is held or the hold does
+    not list the path."""
+    return _file_diff_out(await get_sync_service().held_file_diff(path))
+
+
+def _file_diff_out(found: RoundFileDiff) -> RoundFileDiffOut:
     return RoundFileDiffOut(
         path=found.path,
-        side=side,
+        side=found.side,  # type: ignore[arg-type]
         kind=found.kind,  # type: ignore[arg-type]
         diff=found.diff,
         added=found.added,

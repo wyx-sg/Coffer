@@ -62,7 +62,6 @@ vi.mock("@/lib/api/secret", async (orig) => ({
 }));
 
 // B's and C's cards have tests of their own; here they only need to be placed.
-vi.mock("./SyncStoppedCard", () => ({ SyncStoppedCard: () => <div>stopped card</div> }));
 vi.mock("./SyncJoinChoices", () => ({ SyncJoinChoices: () => <div>join choices</div> }));
 vi.mock("@/components/handoff/AgentHandoff", () => ({
   AgentHandoff: ({ prompt }: { prompt: string }) => <div data-testid="handoff">{prompt}</div>,
@@ -231,11 +230,12 @@ describe("SyncStatusTab — the state line", () => {
     expect(banner()).toHaveTextContent(
       "They go out in the next round at 15:20, after this Mac pulls whatever Mac mini pushed.",
     );
-    const lines = within(screen.getByTestId("sync-waiting")).getAllByRole("listitem");
-    expect(lines[0]).toHaveTextContent("~knowledge/team-runbooks/on-call.md");
-    expect(lines[0]).toHaveTextContent("You · 14:28");
-    expect(lines[1]).toHaveTextContent("+skills/pdf-tools/SKILL.md");
-    expect(lines[1]).toHaveTextContent("Coffer · 14:30");
+    // The files are read on their own page, not listed here.
+    expect(within(banner()).getByRole("link", { name: "Review changes" })).toHaveAttribute(
+      "href",
+      "/sync/pending",
+    );
+    expect(screen.queryByText("knowledge/team-runbooks/on-call.md")).not.toBeInTheDocument();
   });
 
   test("changes pulled: from whom, and that there was nothing to push", () => {
@@ -295,7 +295,7 @@ describe("SyncStatusTab — the state line", () => {
 });
 
 describe("SyncStatusTab — a stopped round", () => {
-  test("conflicts: the card names the other Mac, links to Resolve conflicts, and B's list sits under the state", () => {
+  acceptance("vault-sync", "a conflict is shown as a banner above the runs", () => {
     vi.mocked(useSyncStop).mockReturnValue({
       data: {
         stopped: true,
@@ -309,12 +309,12 @@ describe("SyncStatusTab — a stopped round", () => {
       "href",
       "/sync/conflicts",
     );
-    const card = screen.getByText("stopped card");
-    // Between the banner and the Rounds table; a card asks something, so no areas line.
+    // A card asks something, so no areas line; the files are on the Resolve page.
     expect(screen.queryByTestId("sync-areas")).toBeNull();
-    expect(banner().compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("a.md")).not.toBeInTheDocument();
     expect(
-      card.compareDocumentPosition(screen.getByRole("table")) & Node.DOCUMENT_POSITION_FOLLOWING,
+      banner().compareDocumentPosition(screen.getByRole("table")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -331,13 +331,11 @@ describe("SyncStatusTab — a stopped round", () => {
       "href",
       "/sync/deletions",
     );
-    expect(screen.getByText("stopped card")).toBeInTheDocument();
   });
 
   test("a join's differing files are shown when the status says there are some", () => {
     renderTab(makeStatus({ join_choices: 2 }));
     expect(screen.getByText("join choices")).toBeInTheDocument();
-    expect(screen.queryByText("stopped card")).not.toBeInTheDocument();
   });
 });
 
@@ -383,8 +381,8 @@ describe("SyncStatusTab — problems", () => {
     expect(card).toHaveTextContent("protected branch hook declined");
     expect(within(card).queryByRole("button", { name: "Retry" })).toBeNull();
     expect(within(card).getByTestId("handoff")).toHaveTextContent("fix the push");
-    // Nothing is waiting to be listed while the card explains the push.
-    expect(screen.queryByTestId("sync-waiting")).not.toBeInTheDocument();
+    // No Review changes while the card explains the push.
+    expect(screen.queryByRole("link", { name: "Review changes" })).not.toBeInTheDocument();
   });
 
   test("unreachable: a plain sentence with git's message folded away", () => {

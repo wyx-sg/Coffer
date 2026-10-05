@@ -3933,14 +3933,9 @@
         "coffer": "Coffer",
         "disk": "在磁盘上编辑",
         "agent": "智能体"
-      },
-      "label": "等待推送"
+      }
     },
     "conflicts": {
-      "title": "两台 Mac 都改过",
-      "row": "{{area}} · 本机 {{mine}} · {{machine}} {{theirs}}",
-      "unresolved": "未解决",
-      "resolved": "已解决",
       "otherMachine": "另一台 Mac",
       "area": {
         "knowledge": "知识",
@@ -3949,13 +3944,6 @@
         "secret": "加密的 secret",
         "machines": "机器"
       }
-    },
-    "hold": {
-      "label": "暂扣的删除",
-      "share_one": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
-      "share_other": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
-      "files_one": "{{count}} 个文件",
-      "files_other": "{{count}} 个文件"
     },
     "resolve": {
       "title": "解决冲突",
@@ -4049,7 +4037,8 @@
       "empty": {
         "title": "没有暂扣的删除",
         "body": "目前没有等待确认删除的一轮。"
-      }
+      },
+      "deletedOn": "在 {{machine}} 上被删除"
     },
     "machines": {
       "description": "与这个仓库同步的 Mac。一台 Mac 跑完第一轮后出现在这里。",
@@ -4225,9 +4214,9 @@
     },
     "joinChoices": {
       "title": "与本机不同",
-      "body": "在你选定版本之前不会推送或替换。",
       "choose": "选择版本",
-      "chooseVersion": "选一个版本"
+      "body_one": "在你选定版本之前，{{count}} 个文件不会推送或替换。",
+      "body_other": "在你选定版本之前，{{count}} 个文件不会推送或替换。"
     },
     "header": {
       "copyUrl": "复制仓库地址",
@@ -4308,7 +4297,8 @@
       "heldOutgoing_one": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
       "heldOutgoing_other": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
       "heldBody": "一轮删除 20 个及以上文件、或超过某个区域 20% 的内容时，会等你确认。没有检出任何内容，也没有推送任何内容。查看列表后，可以在这里也删除它们，或把它们恢复。",
-      "reviewDeletions": "查看删除"
+      "reviewDeletions": "查看删除",
+      "reviewChanges": "查看改动"
     },
     "areas": {
       "documents_one": "{{count}} 篇知识文档",
@@ -4407,6 +4397,18 @@
       "oldFolder": "旧文件夹会留空；请自己删除。",
       "failed": "无法移动 vault",
       "confirm": "移动 vault"
+    },
+    "pending": {
+      "title": "查看待推送的改动",
+      "subline": "这台 Mac 上有 {{files}}远端还没有 · 下一轮会推送出去。",
+      "sublineAt": "这台 Mac 上有 {{files}}远端还没有 · 会在 {{time}} 的下一轮推送出去。",
+      "hint": "立即推送会马上跑一轮：先拉取，再推送这些改动。",
+      "back": "返回同步",
+      "pushNow": "立即推送",
+      "empty": {
+        "title": "没有等待推送的改动",
+        "body": "这台 Mac 上的改动都已在远端。"
+      }
     }
   },
   "overview": {
