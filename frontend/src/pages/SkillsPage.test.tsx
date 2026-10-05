@@ -1,6 +1,6 @@
 // frontend/src/pages/SkillsPage.test.tsx
 // The Skills page as a library beside a reading pane (spec skill-manager
-// "Cover skill management on REST and on the Skills page", "Report skill drift
+// "Manage skills on REST and on the Skills page", "Report skill drift
 // on request"): what the library lists and marks, the first-run state, the
 // selection bar and Check copies.
 // Only the network boundary is mocked — the skills, agents and generic

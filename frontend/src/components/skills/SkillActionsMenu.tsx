@@ -1,10 +1,8 @@
 // frontend/src/components/skills/SkillActionsMenu.tsx
 // The open skill's "⋯" menu (canvas 4.3 page note): Open in editor · Reveal in
-// Finder · Copy master path · History… · Delete…. History… opens the shared
-// history dialog for `skills/<name>/` in the vault (git's history, handed to the
-// person's agent to restore; spec skill-manager "Cover skill management on REST
-// and on the Skills page"); Coffer's built-in skill has none, because Coffer
-// regenerates it from the build. Turning it on or off is the reach
+// Finder · Copy master path · Delete… (spec skill-manager "Manage skills on
+// REST and on the Skills page"). The skill's history is its History tab, so the
+// menu does not repeat it. Turning it on or off is the reach
 // button's and Check copies is the Delivery tab's and the library's, so the
 // menu does not repeat them. The name is fixed and is the heading, so there is
 // no rename. Coffer's built-in skill keeps the menu but Delete is disabled —
@@ -13,7 +11,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SkillDeleteDialog } from "@/components/skills/SkillDeleteDialog";
-import { VaultHistoryDialog } from "@/components/vault/VaultHistoryDialog";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 import type { SkillOut } from "@/lib/api/skills";
@@ -31,7 +28,6 @@ export function SkillActionsMenu({ skill, onDeleted }: Props) {
   const editor = usePreferredEditor();
   const fs = useFsActions();
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const path = skill.master_path;
 
   const actions: MenuAction[] = [
@@ -55,15 +51,6 @@ export function SkillActionsMenu({ skill, onDeleted }: Props) {
           () => toast.error(t("skills.menu.copyFailed")),
         ),
     },
-    ...(skill.builtin
-      ? []
-      : [
-          {
-            key: "history",
-            label: t("skills.menu.history"),
-            onSelect: () => setHistoryOpen(true),
-          },
-        ]),
     {
       key: "delete",
       label: t("skills.menu.delete"),
@@ -78,19 +65,12 @@ export function SkillActionsMenu({ skill, onDeleted }: Props) {
     <>
       <ActionMenu label={t("skills.menu.label", { name: skill.name })} actions={actions} />
       {skill.builtin ? null : (
-        <>
-          <SkillDeleteDialog
-            skill={skill}
-            open={deleteOpen}
-            onOpenChange={setDeleteOpen}
-            onDeleted={onDeleted}
-          />
-          <VaultHistoryDialog
-            open={historyOpen}
-            onOpenChange={setHistoryOpen}
-            path={`skills/${skill.name}/`}
-          />
-        </>
+        <SkillDeleteDialog
+          skill={skill}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={onDeleted}
+        />
       )}
     </>
   );

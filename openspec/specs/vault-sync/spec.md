@@ -790,8 +790,8 @@ away on purpose, so there is nothing left to fall back on when it stops.
 ### Requirement: Restore to a revision without discarding later work
 Going back to an earlier version of a vault file or folder MUST NOT discard
 anything the vault gained since: restoring writes that version back as a new
-commit — made by the person's agent through the hand-off of [vault-storage](../vault-storage/spec.md)
-"Hand restoring an earlier version of a vault file to an agent", or by the person with git —
+commit — made from a document's or a skill's History tab ([vault-storage](../vault-storage/spec.md)
+"Show and restore any version of a vault file or folder"), or by the person with git —
 touching only the paths restored and never rewriting history, and the next round publishes it like
 any other change.
 Undoing what one round did is its rollback (see "Snapshot before checking out

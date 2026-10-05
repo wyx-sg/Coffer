@@ -1,14 +1,14 @@
 // frontend/src/components/skills/SkillDetailPane.tsx
-// The open skill in the Skills page's reading pane (spec skill-manager "Cover
-// skill management on REST and on the Skills page", canvas 4.3 SkillHeader):
-// the header, the tab strip — Files (the default), Delivery, Requires, never
-// with counts — and, under the strip, the banners of what needs the
+// The open skill in the Skills page's reading pane (spec skill-manager "Manage
+// skills on REST and on the Skills page", canvas 4.3 SkillHeader): the header,
+// the tab strip — Files (the default), Delivery, Requires, History, never with
+// counts — and, under the strip, the banners of what needs the
 // reader. Banners are split by owner: the master folder (SkillMasterBanner) and
 // what the skill depends on (SkillDependencyBanners) are drawn here, the Git
 // source's and the copies' are SkillBanners'. The Files tab carries a Git
 // skill's Source block above the files, or — when the master folder is gone —
-// an empty state saying there are no files. A skill's history is the ⋯ menu's
-// History… (SkillActionsMenu), not a tab. The page owns the address
+// an empty state saying there are no files. History is the master folder's
+// versions from the vault's history (SkillHistoryTab). The page owns the address
 // (`/skills/<name>/<tab>`); this pane only renders the tab it is given. It is
 // loaded on first open (the Files tab pulls in the Markdown
 // pipeline).
@@ -22,6 +22,7 @@ import { SkillDeliveryTab } from "@/components/skills/SkillDeliveryTab";
 import { SkillDetailHeader } from "@/components/skills/SkillDetailHeader";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { SkillGitSourcePanel } from "@/components/skills/SkillGitSource";
+import { SkillHistoryTab } from "@/components/skills/SkillHistoryTab";
 import { SkillMasterBanner } from "@/components/skills/SkillMasterBanner";
 import { SkillMissingMaster } from "@/components/skills/SkillMissingMaster";
 import { SkillRequiresTab } from "@/components/skills/SkillRequiresTab";
@@ -65,17 +66,14 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
           <TabsTrigger value="files">{t("skills.detail.tabs.files")}</TabsTrigger>
           <TabsTrigger value="delivery">{t("skills.detail.tabs.delivery")}</TabsTrigger>
           <TabsTrigger value="requires">{t("skills.detail.tabs.requires")}</TabsTrigger>
+          <TabsTrigger value="history">{t("skills.detail.tabs.history")}</TabsTrigger>
         </TabsList>
 
         {attention.length > 0 ? (
           <div className="mt-4 flex flex-col gap-2.5">
             {masterMissing ? <SkillMasterBanner skill={skill} onDeleted={onDeleted} /> : null}
             <SkillDependencyBanners skill={skill} items={attention} />
-            <SkillBanners
-              skill={skill}
-              items={rest}
-              onReviewCopy={setReviewing}
-            />
+            <SkillBanners skill={skill} items={rest} onReviewCopy={setReviewing} />
           </div>
         ) : null}
 
@@ -94,6 +92,9 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
         </TabsContent>
         <TabsContent value="requires">
           <SkillRequiresTab skill={skill} />
+        </TabsContent>
+        <TabsContent value="history">
+          <SkillHistoryTab skill={skill} />
         </TabsContent>
       </Tabs>
 

@@ -184,7 +184,7 @@ sequenceDiagram
 
 没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
 
-有四个事件不再被记录，因为 Web 界面不再编辑智能体的配置文件、记忆笔记或保险库文件，也不再恢复保险库的版本：`agent_config_file_written`、`agent_config_file_deleted`、`memory_note_edited` 和 `vault_file_restored`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。智能体提交的一次恢复是一个写明 `Coffer-Writer: agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
+有三个事件不再被记录，因为 Web 界面不再编辑智能体的配置文件或记忆笔记：`agent_config_file_written`、`agent_config_file_deleted` 和 `memory_note_edited`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。

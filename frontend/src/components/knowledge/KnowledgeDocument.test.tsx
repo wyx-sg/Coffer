@@ -2,9 +2,9 @@
 //
 // One open knowledge document (boards 5.1.01, 5.1.29): the read-only reader with
 // its single properties line (read from the frontmatter) and no side rail, the
-// pane bar (full path, no tabs, Preview / Source, Open in editor, ⋯), History…
-// opening the shared dialog on the document's path in the vault, and delete at
-// once with an Undo toast. Mocked only at the network boundary, like the
+// pane bar (full path, the Document and History tabs, Preview / Source, Open in
+// editor, ⋯), the History tab reading the document's path in the vault, and
+// delete at once with an Undo toast. Mocked only at the network boundary, like the
 // Knowledge page tests.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -25,7 +25,9 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
-vi.mock("@/lib/api/vault", () => ({ vaultApi: { historyHandoff: vi.fn() } }));
+vi.mock("@/lib/api/vault", () => ({
+  vaultApi: { history: vi.fn(), diff: vi.fn(), restore: vi.fn() },
+}));
 vi.mock("@/lib/api/agentProviders", () => ({
   agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
 }));
@@ -67,13 +69,17 @@ describe("the reader", () => {
     expect(screen.queryByText(/Invalid Date/)).toBeNull();
   });
 
-  test("the bar names the full path, has no tabs, and offers Preview / Source and Open in editor", async () => {
+  test("the bar names the full path, carries Document and History, and offers Preview / Source and Open in editor", async () => {
     renderKnowledge(OPEN);
     const where = await screen.findByRole("navigation", { name: "Where this document is" });
     expect(where).toHaveTextContent(NAME);
     expect(where).toHaveTextContent("gateway.md");
-    expect(screen.queryByRole("link", { name: "History" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Document views" })).toBeNull();
+    const views = screen.getByRole("navigation", { name: "Document views" });
+    expect(within(views).getByRole("link", { name: "Document" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(views).getByRole("link", { name: "History" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 
@@ -85,38 +91,60 @@ describe("the reader", () => {
     expect(screen.queryByRole("heading", { name: GATEWAY.title })).toBeNull();
   });
 
-  test("the ⋯ menu holds Reveal in Finder, History… and Delete document after a separator", async () => {
+  test("the ⋯ menu holds Reveal in Finder and Delete document after a separator", async () => {
     renderKnowledge(OPEN);
     fireEvent.click(
       await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
     );
     const items = screen.getAllByRole("menuitem").map((i) => i.textContent);
-    expect(items).toEqual(["Reveal in Finder", "History…", "Delete document"]);
+    expect(items).toEqual(["Reveal in Finder", "Delete document"]);
   });
 });
 
-describe("History…", () => {
-  test("opens the shared dialog on the document's path in the vault", async () => {
+describe("the History tab", () => {
+  test("reads the document's path in the vault and lists its versions", async () => {
     const path = `knowledge/${GATEWAY.path}`;
-    vi.mocked(vaultApi.historyHandoff).mockResolvedValue({
+    const row = (version: string, display_writer: string, status: string) => ({
+      version,
+      time: "2026-09-20T10:00:00Z",
+      writer: display_writer.split(":")[0],
+      display_writer,
+      actor: null,
+      machine: null,
+      summary: "",
+      operation: "edit",
+      restored_from: null,
+      removed: false,
+      paths: [{ path, status, added: 2, removed: 1 }],
+    });
+    vi.mocked(vaultApi.history).mockResolvedValue({
       path,
-      absolute_path: `/Users/dev/.coffer/vault/${path}`,
-      vault_path: "/Users/dev/.coffer/vault",
-      log_command: `git -C /Users/dev/.coffer/vault log -p -- ${path}`,
-      handoff: { prompt: "Restore it." },
+      versions: [
+        row("b".repeat(40), "agent:claude-code", "modified"),
+        row("a".repeat(40), "user", "added"),
+      ],
+      next_cursor: null,
+    });
+    vi.mocked(vaultApi.diff).mockResolvedValue({
+      path,
+      version: "b".repeat(40),
+      against: "previous",
+      files: [],
     });
     renderKnowledge(OPEN);
-    fireEvent.click(
-      await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
+    const views = await screen.findByRole("navigation", { name: "Document views" });
+    fireEvent.click(within(views).getByRole("link", { name: "History" }));
+    const list = await screen.findByRole("list", { name: "Versions" });
+    expect(vaultApi.history).toHaveBeenCalledWith(path);
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([expect.stringContaining("Claude Code"), expect.stringContaining("You")]);
+    expect(within(views).getByRole("link", { name: "History" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "History…" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByTestId("vault-history-path")).toHaveTextContent(path);
-    expect(within(dialog).getByRole("button", { name: "Copy git command" })).toBeInTheDocument();
-    await waitFor(() => expect(vaultApi.historyHandoff).toHaveBeenCalledWith(path, null));
-    // The dialog lists no versions and restores nothing itself.
-    expect(within(dialog).queryByRole("list")).toBeNull();
-    expect(within(dialog).queryByRole("button", { name: /^Restore/ })).toBeNull();
   });
 });
 

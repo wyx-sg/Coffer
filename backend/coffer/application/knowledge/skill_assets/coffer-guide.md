@@ -83,9 +83,9 @@ so make it the right one.
 The collection must already exist: only the developer creates one. Coffer
 commits every change it finds on disk to the vault's git history, so a bad edit
 can be brought back from it; never run git inside the vault on your own
-initiative, because a commit of your own would be attributed to nobody. When
-the developer hands you a restore from History…, follow that prompt: it says
-how to commit so the vault names you.
+initiative, because a commit of your own would be attributed to nobody. The
+developer reads a document's versions and restores an earlier one from its
+History tab in Coffer.
 
 ### Tidying a collection
 

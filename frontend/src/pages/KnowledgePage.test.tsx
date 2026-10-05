@@ -3,8 +3,8 @@
 // The Knowledge page's tree and read-only document pane (spec knowledge "Show a
 // collection as one tree of read-only documents in the web UI"), mocked only at
 // the network boundary: one tree of collections with their documents; the
-// document pane with Open in editor, reveal, History… and delete (at once, with
-// an Undo toast). A document is never edited here.
+// document pane with its Document and History tabs, Open in editor, reveal and
+// delete (at once, with an Undo toast). A document is never edited here.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -64,13 +64,21 @@ describe("the collection tree and the document pane", () => {
     // No Inbox node: material becomes a document on arrival.
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
 
-    // A document offers Open in editor, and Reveal, History… and Delete in its ⋯ menu.
+    // A document carries Document and History tabs, offers Open in editor, and
+    // Reveal and Delete in its ⋯ menu.
     fireEvent.click(within(nav).getByRole("button", { name: "gateway.md" }));
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+    const views = screen.getByRole("navigation", { name: "Document views" });
+    expect(
+      within(views)
+        .getAllByRole("link")
+        .map((l) => l.textContent),
+    ).toEqual(["Document", "History"]);
     fireEvent.click(screen.getByRole("button", { name: `More actions for ${GATEWAY.path}` }));
-    expect(screen.getByRole("menuitem", { name: "Reveal in Finder" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "History…" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Delete document" })).toBeInTheDocument();
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "Reveal in Finder",
+      "Delete document",
+    ]);
   });
 
   test("a collection opened from the list stays open when a document in it is opened", async () => {

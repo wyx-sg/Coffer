@@ -166,7 +166,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | 上传超过了消息中给出的大小上限。 | 拆分文档或上传更小的文件。 |
 | `INGEST_REJECTED` | 400 | 上传的内容无法转换。`details.reason` 为 `unsupported_type`、`scanned_pdf`（没有文本层的 PDF）或 `empty_conversion`；`details.doc_type` 给出类型。 | 转成支持的格式；对扫描的 PDF 做 OCR。 |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | 本机不记录知识历史，通常是因为没装 git。写入仍然可用。 | 安装 git；历史从下一次写入开始记录。 |
-| `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 改为恢复该文档的早期版本。 |
+| `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 撤销只能恢复一次删除；要恢复文档的早期版本，请改用它的**历史**标签。 |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | 放回被删除的文档会覆盖该路径上现在的文件。`details` 给出版本和文档；什么都没写。 | 先移走或重命名该路径上的文件，再恢复。 |
 | `KNOWLEDGE_ERROR` | 400 | 知识层的其他拒绝。 | 阅读 `message`。 |
 | `ENGINE_UNAVAILABLE` | 503 | 操作所需的某个二进制或转换器（ripgrep，或文档转换后端）不可用。 | 重新安装 Coffer；打包附带的二进制中包含它们。 |
@@ -211,9 +211,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
-| `VAULT_FILE_STALE` | 409 | 你读取之后，文件在磁盘上被改过（你在编辑器中的编辑、另一次保存），所以写入被拒绝，而不是覆盖它。 | 重新加载，然后用新的 fingerprint 再次保存。 |
+| `VAULT_FILE_STALE` | 409 | 你读取之后，文件在磁盘上被改过（你在编辑器中的编辑、另一次保存），所以写入被拒绝，而不是覆盖它。恢复在读取历史之后文件又变了时，也会同样被拒绝。 | 重新加载，然后用新的 fingerprint 再次保存；若是恢复，请重新打开**历史**标签再试。 |
 | `VAULT_FILE_INVALID` | 422 | 这次写入会让某个保险库文件无法通过校验。什么都没写入。 | 修正消息中指出的问题。 |
 | `VAULT_PATH_INVALID` | 400 | 该路径不是可以读取历史的保险库文件或文件夹，或位于 `secret/` 下。 | 使用相对于保险库的路径，例如 `skills/pdf/`。 |
+| `VAULT_VERSION_NOT_FOUND` | 404 | 该版本不在这个文件的历史里。 | 从该文件的**历史**标签里选一个版本。 |
 | `VAULT_GIT_FAILED` | 500 | 对保险库仓库的某个 git 操作失败。 | 阅读消息和守护进程日志。 |
 
 ## 保险库同步 {#vault-sync}

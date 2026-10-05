@@ -1,13 +1,13 @@
 // frontend/src/components/skills/SkillDetailPane.test.tsx
-// The open skill in the Skills page's reading pane (spec skill-manager "Cover skill
-// management on REST and on the Skills page", "Show the commands a skill declares it
-// needs"): its three tabs at their own paths, the Files tab opening on SKILL.md
-// read-only, each agent's copy on Delivery, the declared commands on Requires, its
-// history in the ⋯ menu's History… dialog (no tab), and the built-in skill's
-// refusals. The page is mounted the way the router mounts it; only the api modules
+// The open skill in the Skills page's reading pane (spec skill-manager "Manage
+// skills on REST and on the Skills page", "Show the commands a skill declares it
+// needs"): its four tabs at their own paths, the Files tab opening on SKILL.md
+// read-only, each agent's copy on Delivery, the declared commands on Requires, the
+// master folder's versions on History with Restore this version…, and the
+// built-in skill's refusals. The page is mounted the way the router mounts it; only the api modules
 // are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import type { AgentOut } from "@/lib/api/agents";
 import type { SkillFileNode, SkillOut } from "@/lib/api/skills";
@@ -35,7 +35,9 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     cancelStage: vi.fn(async () => undefined),
   },
 }));
-vi.mock("@/lib/api/vault", () => ({ vaultApi: { historyHandoff: vi.fn() } }));
+vi.mock("@/lib/api/vault", () => ({
+  vaultApi: { history: vi.fn(), diff: vi.fn(), restore: vi.fn() },
+}));
 vi.mock("@/lib/api/agentProviders", () => ({
   agentProvidersApi: {
     list: vi.fn(async () => ({
@@ -69,7 +71,6 @@ vi.mock("@/lib/api/client", async (orig) => ({
 
 const { skillsApi } = await import("@/lib/api/skills");
 const { vaultApi } = await import("@/lib/api/vault");
-const { fsApi } = await import("@/lib/api/fs");
 
 const CC = makeAgent();
 const CODEX = makeAgent({
@@ -144,7 +145,7 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
   // The open skill's pane waits on the library and the skill's detail.
   const tabs = await screen.findAllByRole("tab", {}, { timeout: 5_000 });
   // No counts in the tab labels.
-  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires"]);
+  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires", "History"]);
   expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();
   // SKILL.md is open and rendered, not raw.
@@ -172,61 +173,123 @@ test("the Files tab's tree and viewer sit in a split with a draggable divider", 
   expect(screen.queryByRole("button", { name: /hide/i })).toBeNull();
 });
 
-acceptance("skill-manager", "a skill's history is handed to git and an agent", async () => {
-  const VAULT = "/Users/me/.coffer/vault";
-  vi.mocked(vaultApi.historyHandoff).mockImplementation(async (path) => ({
-    path,
-    vault_path: VAULT,
-    absolute_path: `${VAULT}/${path}`,
-    log_command: `git -C ${VAULT} log -p -- ${path}`,
-    handoff: { prompt: `Restore ${path}.` },
-  }));
-  Object.defineProperty(navigator, "clipboard", {
-    value: { writeText: vi.fn().mockResolvedValue(undefined) },
-    configurable: true,
+const NEWER = "b".repeat(40);
+const OLDER = "a".repeat(40);
+
+function version(sha: string, display_writer: string, paths: [string, string][]) {
+  return {
+    version: sha,
+    time: "2026-09-20T10:00:00Z",
+    writer: display_writer.split(":")[0],
+    display_writer,
+    actor: null,
+    machine: null,
+    summary: "",
+    operation: "edit",
+    restored_from: null,
+    removed: false,
+    paths: paths.map(([path, status]) => ({ path, status, added: 1, removed: 1 })),
+  };
+}
+
+function answerHistory() {
+  vi.mocked(vaultApi.history).mockResolvedValue({
+    path: "skills/hello/",
+    versions: [
+      version(NEWER, "user", [["skills/hello/SKILL.md", "modified"]]),
+      version(OLDER, "agent:claude-code", [
+        ["skills/hello/SKILL.md", "added"],
+        ["skills/hello/run.sh", "added"],
+      ]),
+    ],
+    next_cursor: null,
   });
+  vi.mocked(vaultApi.diff).mockImplementation(async (path, sha, against) => ({
+    path,
+    version: sha,
+    against,
+    files: [
+      {
+        path: "skills/hello/SKILL.md",
+        status: "modified",
+        diff: "@@ -1 +1 @@\n-# Hi\n+# Say hello\n",
+        added: 1,
+        removed: 1,
+      },
+    ],
+  }));
+}
+
+acceptance(
+  "skill-manager",
+  "the history tab lists the folder's versions with their writers",
+  async () => {
+    answerHistory();
+    renderSkillsPage("/skills/hello/history");
+    const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
+    expect(vaultApi.history).toHaveBeenCalledWith("skills/hello/");
+    const rows = within(list).getAllByRole("button");
+    expect(rows[0]).toHaveTextContent("Changed SKILL.md");
+    expect(rows[0]).toHaveTextContent("You");
+    expect(rows[0]).toHaveTextContent("Current");
+    expect(rows[1]).toHaveTextContent("Changed 2 files");
+    expect(rows[1]).toHaveTextContent("Claude Code");
+    // The newest is chosen, shown with its diff, and offers no restore.
+    const panel = screen.getByRole("region", { name: "The chosen version" });
+    expect(await within(panel).findByText("# Say hello")).toBeInTheDocument();
+    expect(vaultApi.diff).toHaveBeenCalledWith("skills/hello/", NEWER, "previous");
+    expect(within(panel).queryByRole("button", { name: "Restore this version…" })).toBeNull();
+  },
+);
+
+acceptance(
+  "skill-manager",
+  "restoring a version asks first and restores the whole folder",
+  async () => {
+    answerHistory();
+    vi.mocked(vaultApi.restore).mockResolvedValue({
+      path: "skills/hello/",
+      version: "c".repeat(40),
+      restored_from: OLDER,
+      paths: ["skills/hello/SKILL.md"],
+    });
+    renderSkillsPage("/skills/hello/history");
+    const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
+    fireEvent.click(within(list).getAllByRole("button")[1]);
+    const panel = screen.getByRole("region", { name: "The chosen version" });
+    // Compare with current reads the folder against how it is now.
+    fireEvent.click(within(panel).getByRole("button", { name: "Compare with current" }));
+    await waitFor(() =>
+      expect(vaultApi.diff).toHaveBeenCalledWith("skills/hello/", OLDER, "current"),
+    );
+    fireEvent.click(within(panel).getByRole("button", { name: "Restore this version…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Restore this version?" });
+    expect(dialog).toHaveTextContent("files added since are removed");
+    expect(vaultApi.restore).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
+    await waitFor(() =>
+      expect(vaultApi.restore).toHaveBeenCalledWith({
+        path: "skills/hello/",
+        version: OLDER,
+        expected_current: NEWER,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  },
+);
+
+acceptance("skill-manager", "Coffer's own skill has no history", async () => {
   h.skills = [BUILTIN_SKILL, makeSkill()];
-  renderSkillsPage("/skills/hello");
-  const header = (await screen.findByRole("heading", { name: "hello", level: 2 })).closest(
-    "header",
-  ) as HTMLElement;
-  // History is a ⋯ menu item, not a tab.
-  expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
-  fireEvent.click(within(header).getByRole("button", { name: "More actions for hello" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "History…" }));
-
-  const dialog = await screen.findByRole("dialog", { name: "History" });
-  expect(within(dialog).getByTestId("vault-history-path")).toHaveTextContent("skills/hello/");
-  await waitFor(() =>
-    expect(within(dialog).getByRole("button", { name: "Copy git command" })).toBeEnabled(),
-  );
-  fireEvent.click(within(dialog).getByRole("button", { name: "Copy git command" }));
-  await waitFor(() =>
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      `git -C ${VAULT} log -p -- skills/hello/`,
-    ),
-  );
-  fireEvent.click(within(dialog).getByRole("button", { name: "Reveal in Finder" }));
-  await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(`${VAULT}/skills/hello/`));
-  // The restore is handed to the person's agent, with the prompt for this folder.
-  fireEvent.click(within(dialog).getByRole("button", { name: /Hand off to Claude Code/ }));
-  await waitFor(() =>
-    expect(fsApi.openTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ prompt: "Restore skills/hello/." }),
-    ),
-  );
-  fireEvent.keyDown(dialog, { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-
-  // The built-in skill is regenerated from the build: its menu has no History….
-  cleanup();
-  renderSkillsPage("/skills/coffer-guide");
-  const builtinHeader = (
-    await screen.findByRole("heading", { name: "coffer-guide", level: 2 })
-  ).closest("header") as HTMLElement;
-  fireEvent.click(
-    within(builtinHeader).getByRole("button", { name: "More actions for coffer-guide" }),
-  );
+  renderSkillsPage("/skills/coffer-guide/history");
+  expect(
+    await screen.findByText("Coffer’s own skill has no history", {}, { timeout: 5_000 }),
+  ).toBeInTheDocument();
+  expect(vaultApi.history).not.toHaveBeenCalled();
+  // History is a tab, so the ⋯ menu does not repeat it.
+  const header = screen
+    .getByRole("heading", { name: "coffer-guide", level: 2 })
+    .closest("header") as HTMLElement;
+  fireEvent.click(within(header).getByRole("button", { name: "More actions for coffer-guide" }));
   await screen.findByRole("menuitem", { name: "Delete…" });
   expect(screen.queryByRole("menuitem", { name: "History…" })).not.toBeInTheDocument();
 });

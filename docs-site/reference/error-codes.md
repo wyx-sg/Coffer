@@ -173,7 +173,7 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
 | `INGEST_REJECTED` | 400 | The upload cannot be converted. `details.reason` is `unsupported_type`, `scanned_pdf` (a PDF with no text layer) or `empty_conversion`; `details.doc_type` names the type. | Convert to a supported format; run OCR on a scanned PDF. |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | Knowledge history is not recorded on this machine, usually because git is not installed. Writes still work. | Install git; history starts with the next write. |
-| `KNOWLEDGE_NOT_A_DELETE` | 400 | The change you asked to restore deleted no document or collection. | Restore the document's earlier version instead. |
+| `KNOWLEDGE_NOT_A_DELETE` | 400 | The change you asked to restore deleted no document or collection. | Undo restores only a delete; restore an earlier version of a document from its **History** tab instead. |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | Putting the deleted document back would overwrite the file now at its path. `details` name the version and the document; nothing was written. | Move or rename the file at that path, then restore again. |
 | `KNOWLEDGE_ERROR` | 400 | Any other knowledge-layer refusal. | Read `message`. |
 | `ENGINE_UNAVAILABLE` | 503 | A binary or converter the operation needs (ripgrep, or a document converter backend) is unavailable. | Reinstall Coffer; the bundled binaries include them. |
@@ -218,9 +218,10 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `VAULT_FILE_STALE` | 409 | The file changed on disk since you read it (an edit in your editor, another save), so the write was refused rather than overwrite it. | Reload, then save again with the new fingerprint. |
+| `VAULT_FILE_STALE` | 409 | The file changed on disk since you read it (an edit in your editor, another save), so the write was refused rather than overwrite it. A restore is refused the same way when the file changed since its history was read. | Reload, then save again with the new fingerprint; for a restore, reopen the **History** tab and try again. |
 | `VAULT_FILE_INVALID` | 422 | The write would leave a vault file that fails validation. Nothing was written. | Fix what the message names. |
 | `VAULT_PATH_INVALID` | 400 | The path is not a vault file or folder history can be read for, or it is under `secret/`. | Use a vault-relative path such as `skills/pdf/`. |
+| `VAULT_VERSION_NOT_FOUND` | 404 | The version is not in this file's history. | Pick one from the file's **History** tab. |
 | `VAULT_GIT_FAILED` | 500 | A git operation on the vault repository failed. | Read the message and the daemon log. |
 
 ## Vault sync

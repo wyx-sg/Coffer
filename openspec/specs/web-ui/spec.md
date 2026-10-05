@@ -2863,21 +2863,12 @@ the gateway").
 - **THEN** only `list_invoices` and `void_invoice` are listed, no row carries a reach control, and Add request sits beside the search above the table
 
 ### Requirement: Draw every diff in the web UI with one renderer
-Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
+Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
 
 #### Scenario: a long changed line wraps instead of being cut off
 - **GIVEN** a change preview whose file adds a line longer than the diff is wide
 - **WHEN** the diff renders
 - **THEN** the line shows its old and new line numbers and its sign, and wraps at a word boundary with a ↳ on the continuation row
-
-### Requirement: Show where a file's history is and hand its restore to an agent
-A knowledge document's ⋯ menu and a managed skill's ⋯ menu (not the builtin skill's) MUST offer **History…**, which opens one dialog over the page: the path of the document or the skill's folder in the vault, an optional date and time to restore to, **Copy git command** — the `git -C <vault> log -p -- <path>` the daemon serves — **Reveal in Finder**, and the hand-off split button of "Hand a machine-dependent problem to an agent with one split button", labelled **Hand off to <Agent> to restore**, whose prompt is the one [vault-storage](../vault-storage/spec.md) "Hand restoring an earlier version of a vault file to an agent" builds for that path and time. The dialog MUST NOT list versions, show a diff or restore anything itself, and the page assembles no prompt of its own.
-
-#### Scenario: a document's history dialog copies the git command and hands the restore off
-- **GIVEN** a knowledge document open in its collection
-- **WHEN** the user chooses History… from its ⋯ menu, picks a time and presses the hand-off
-- **THEN** the dialog shows the document's path in the vault, Copy git command copies the served `git log` command, and the hand-off starts the agent with the prompt the daemon built for that path and time
-- **AND** the dialog lists no versions and offers no Restore of its own
 
 ### Requirement: Lay out the Skills page as the canvas draws it
 The Skills page MUST follow canvas 4.3: a compact header (title, help) over the
@@ -2894,9 +2885,9 @@ not — **Check copies of N skills**.
 
 The open skill's header MUST name it with a state pill, its source, its master
 path and when it changed, and carry **Reach** and a **⋯** menu (Open in editor,
-Reveal in Finder, Copy master path, History…, Delete…) whatever the state; each problem is
+Reveal in Finder, Copy master path, Delete…) whatever the state; each problem is
 answered in a banner under the tabs, never in the header. Its tabs — Files,
-Delivery, Requires — carry no counts. The Files tab MUST be one card: the
+Delivery, Requires, History — carry no counts. The Files tab MUST be one card: the
 folder's files with SKILL.md first beside the open file's header bar and body,
 read-only, with Open in editor and Reveal in Finder on the header bar and no Edit. A folder the skills
 store holds that no skill claims, listed under Not in your library, MUST show its
@@ -3013,3 +3004,17 @@ validates its source inline and MUST carry the Available to reach control.
 - **WHEN** the user opens the Skills page and the skill
 - **THEN** the row reads "Needs github · off" under Needs attention, the header pill reads Tool off, and a banner says github is off so the skill can't call it, with Open github linking to `/mcp-servers/github`
 - **AND** the banner offers no Copy prompt or Ask an agent
+
+### Requirement: Show a vault file's history on a History tab
+A knowledge document and a managed skill MUST each carry a **History** tab (spec knowledge "Show a collection as one tree of read-only documents in the web UI", spec skill-manager "Manage skills on REST and on the Skills page") that reads the history of the document's file or the skill's master folder in the vault ([vault-storage](../vault-storage/spec.md) "Show and restore any version of a vault file or folder"). It MUST be one bordered card split by a divider: on the left the versions, newest first, under a **Versions** header with their count — each row saying what the version did (Created, Edited, Deleted, a file added, removed or changed, N files changed, or which version a restore put back), who wrote it (You, Edited on disk, an agent by its product name, Coffer, Sync) and when, and the lines it moved — the newest marked **Current** and chosen when the tab opens; on the right the chosen version with its short id, writer and time, and every file it changed under its path, operation and line counts, drawn by the one diff renderer ("Draw every diff in the web UI with one renderer"). A version other than the current one MUST offer a switch between **Changes in this version** (against the version before it) and **Compare with current** (from that version to the path as it is now), and **Restore this version…**, which asks first — saying the result is a new version and, for a folder, that files added since are removed — and on confirmation restores it stating the newest version the tab listed, so a path changed since is refused and the refusal stays in the dialog; the restore never rewrites the past. A history that cannot be read MUST say so in one **Load error** row inside the tab with **Retry**, leaving the rest of the page working; a path with no recorded version says that its versions will be listed there. The divider moves both ways — the list narrows to 160 px and widens to leave the diff 320 px — and its position is remembered per kind. The knowledge document's and the skill's ⋯ menus offer no History… item.
+
+#### Scenario: the history tab lists versions with their writers and restores one
+- **GIVEN** a knowledge document the user created, an agent then changed, and the person then edited in their own editor
+- **WHEN** the user opens its History tab, chooses the oldest version, compares it with current and chooses Restore this version… and confirms
+- **THEN** the tab lists the three versions newest first with their writers and the lines each moved, the newest marked Current and offering no restore, and the chosen version shows its own change and then its difference from the current text
+- **AND** the confirmation says the file comes back as a new version, and confirming restores it stating the newest version listed, after which the history is read again
+
+#### Scenario: a history that fails to load says so in its tab
+- **GIVEN** the history read failing
+- **WHEN** the user opens the History tab and chooses Retry once the read works again
+- **THEN** the tab shows one Load error row with Retry, and after Retry it lists the versions

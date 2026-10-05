@@ -1,7 +1,7 @@
 """Finding hand edits once they are quiet (coffer.infrastructure.vault.scanner),
 and a version written back as a restore, which is a new commit that rewrites no
-history (the vault's history itself is git's: spec vault-storage "Hand
-restoring an earlier version of a vault file to an agent")."""
+history (spec vault-storage "Show and restore any version of a vault file or
+folder")."""
 
 from __future__ import annotations
 

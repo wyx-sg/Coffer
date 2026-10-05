@@ -17,6 +17,48 @@
     "openFailed": "Couldn't open the file in your editor.",
     "revealFailed": "Couldn't reveal the file."
   },
+  "history": {
+    "listLabel": "Versions",
+    "current": "Current",
+    "versionLabel": "The chosen version",
+    "failedTitle": "Couldn’t read the history",
+    "emptyTitle": "No versions yet",
+    "empty": "Every change to this file — yours, an agent’s, one made on disk — is listed here as a version you can compare and restore.",
+    "noChanges": "Nothing differs from the current version.",
+    "noTextChange": "No text change (a binary file, or only its mode).",
+    "against": {
+      "label": "Compare",
+      "previous": "Changes in this version",
+      "current": "Compare with current"
+    },
+    "restore": "Restore this version…",
+    "restoreTitle": "Restore this version?",
+    "restoreFileBody": "The file goes back to how it was {{when}}, as a new version. Nothing in its history is lost.",
+    "restoreFolderBody": "Every file in the folder goes back to how it was {{when}}, and files added since are removed, as a new version. Nothing in its history is lost.",
+    "restoreConfirm": "Restore",
+    "restoring": "Restoring…",
+    "restoreFailed": "Couldn’t restore this version",
+    "restored": "Restored the version of {{when}}",
+    "what": {
+      "restored": "Restored the version of {{date}}",
+      "restoredHash": "Restored version {{version}}",
+      "created": "Created",
+      "deleted": "Deleted",
+      "edited": "Edited",
+      "added": "Added {{file}}",
+      "removed": "Removed {{file}}",
+      "changed": "Changed {{file}}",
+      "files_one": "Changed {{count}} file",
+      "files_other": "Changed {{count}} files"
+    },
+    "writer": {
+      "user": "You",
+      "disk": "Edited on disk",
+      "agent": "An agent",
+      "daemon": "Coffer",
+      "sync": "Sync"
+    }
+  },
   "agentBadge": {
     "label": "{{name}}, {{state}}",
     "tooltip": "{{name}} · {{state}}",
@@ -1742,6 +1784,7 @@
     "VAULT_FILE_STALE": "The file changed since you loaded it. Reload and try again.",
     "VAULT_GIT_FAILED": "git failed while reading or writing the vault.",
     "VAULT_PATH_INVALID": "That is not a path inside the vault.",
+    "VAULT_VERSION_NOT_FOUND": "That version of the file does not exist.",
     "SKILL_COPY_NOT_OURS": "An agent's copy of this skill is no longer Coffer's link, so Coffer won't remove it. Restore it from master first, or delete that folder yourself.",
     "SKILL_COPY_NOT_DIFFERING": "That agent's copy is Coffer's link now; there is nothing to compare.",
     "SKILL_ORPHAN_NOT_FOUND": "That folder is no longer outside your library.",
@@ -1754,7 +1797,7 @@
     "MASTER_KEY_PASSPHRASE_WRONG": "That passphrase doesn't open this key file.",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "Use a passphrase of at least 8 characters.",
     "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
-    "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be restored from Recent changes.",
+    "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be undone.",
     "SYNC_SECRET_NOT_EDITABLE": "An encrypted secret can't be edited by hand. Keep this Mac's version or take the other's.",
     "SYNC_NOTHING_TO_RESTORE": "There is no stopped remote to put back.",
     "SYNC_REMOTE_EXISTS": "A remote is already set; stop syncing with it first.",
@@ -2581,7 +2624,8 @@
         "overview": "Overview",
         "files": "Files",
         "delivery": "Delivery",
-        "requires": "Requires"
+        "requires": "Requires",
+        "history": "History"
       },
       "source": {
         "builtin": "Written by Coffer"
@@ -2794,7 +2838,6 @@
       "label": "More actions for {{name}}",
       "copyPath": "Copy master path",
       "copyFailed": "Couldn't copy to the clipboard",
-      "history": "History…",
       "delete": "Delete…"
     },
     "banner": {
@@ -2923,17 +2966,11 @@
       "note": "Nothing is written until you choose."
     },
     "checkingCopies": "Checking…",
-    "checkCopiesHint": "Compare every agent’s copy with its master"
-  },
-  "vaultHistory": {
-    "title": "History",
-    "description": "A file's history is git's. Copy the command to read it yourself, or hand the restore to your agent.",
-    "path": "Path in the vault",
-    "at": "Restore to how it was on",
-    "atHint": "Optional. Leave it empty and your agent lists the versions and asks which one.",
-    "copyCommand": "Copy git command",
-    "copyFailed": "Couldn’t copy the command.",
-    "restoreWith": "Hand off to {{agent}} to restore"
+    "checkCopiesHint": "Compare every agent’s copy with its master",
+    "history": {
+      "builtinTitle": "Coffer’s own skill has no history",
+      "builtinBody": "Its files are rebuilt from the running build at every start, so there is no earlier version to go back to."
+    }
   },
   "knowledge": {
     "subtitle": "Documents you and your agents write together. Every agent can read them.",
@@ -3023,7 +3060,11 @@
       "preview": "Preview",
       "source": "Source",
       "created": "Created {{date}}",
-      "history": "History…"
+      "views": "Document views",
+      "tabs": {
+        "document": "Document",
+        "history": "History"
+      }
     },
     "deleteDocument": {
       "menu": "Delete document",
