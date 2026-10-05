@@ -2066,7 +2066,9 @@ may switch to. One of them may be the **Default**, the directory new conversatio
 start in (stored as the default agent configuration's `cwd`): each row offers
 **Set as default** (the default's row reads "default" and offers **Unset default**)
 and a remove ✕, removing the default's row clears the default, and none means the
-Coffer workspace `~/.coffer/content/workspace`. A default stored before it had to be
+Coffer workspace `~/.coffer/content/workspace`, which then heads the list as a row
+reading "default · Coffer workspace" with no actions, so where new conversations
+start shows before any directory is added. A default stored before it had to be
 listed is shown in the list and joins it with the next change. A long list scrolls
 inside its box. With no directory, `/dir` is off.
 `/dir <path>` accepts an allowed path or one beneath it, `/dir <name>` the base

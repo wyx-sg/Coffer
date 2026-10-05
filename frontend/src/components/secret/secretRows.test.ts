@@ -32,21 +32,18 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
 }
 
 describe("secretRows", () => {
-  test("a standalone secret shows its name and is referred to by its URI", () => {
-    const row = ref({ ref: "secret/npm-token", uri: "coffer://secret/npm-token" });
-    expect(displayName(row)).toBe("npm-token");
-    expect(referenceOf(row)).toBe("coffer://secret/npm-token");
-    const own = ref({ ref: "mcp_server/u1/TOKEN" });
-    expect(displayName(own)).toBe("TOKEN");
-    expect(referenceOf(own)).toBe("mcp_server/u1/TOKEN");
-  });
-
   const HEX = "0123456789abcdef0123456789abcdef";
+
+  test("a secret is referred to by its URI", () => {
+    const row = ref({ ref: `secret/${HEX}`, uri: `coffer://secret/${HEX}` });
+    expect(referenceOf(row)).toBe(`coffer://secret/${HEX}`);
+    expect(referenceOf(ref({ ref: `secret/${HEX}` }))).toBe(`secret/${HEX}`);
+  });
 
   test("the display name is the label, else a readable default, never a hex id", () => {
     // A label wins.
     expect(displayName(ref({ ref: `secret/${HEX}`, label: "GitHub token" }))).toBe("GitHub token");
-    // Unlabelled with a hex id: the first citer and the slot it cites it in (read from the binding).
+    // Unlabelled: the first citer and the slot it cites it in (read from the binding).
     const cited = ref({
       ref: `secret/${HEX}`,
       cited_by: [{ kind: "mcp_server", name: "server", uid: "u1", slot: null }],
@@ -64,16 +61,6 @@ describe("secretRows", () => {
     // No slot known: the citer alone; nothing known: the placeholder.
     expect(displayName({ ...cited, bindings: [] })).toBe("server");
     expect(displayName(ref({ ref: `secret/${HEX}` }), "Unnamed")).toBe("Unnamed");
-    // A legacy resource ref carries its slot, with an owner prefix dropped.
-    const legacy = ref({
-      ref: `mcp_server/${HEX}/JIRA_TOKEN`,
-      cited_by: [{ kind: "mcp_server", name: "jira", uid: "u2", slot: null }],
-    });
-    expect(displayName(legacy)).toBe("jira · JIRA_TOKEN");
-    // A standalone name that is itself a minted id counts as unnamed.
-    expect(
-      displayName(ref({ ref: `secret/${HEX}`, uri: `coffer://secret/${HEX}` }), "Unnamed"),
-    ).toBe("Unnamed");
   });
 
   test("names follow the spec's one-segment rule", () => {

@@ -170,7 +170,7 @@ Coffer 目前还没有发布用 Apple Developer ID 签名的二进制，所以�
 ## 哪些内容永远不会被记录 {#what-never-gets-logged}
 
 - 密钥的值从不以明文出现在保险库、`runs.db`、日志文件、审计日志或 MCP 调用日志中。
-- 密钥相关的审计事件——`secret_set`、`secret_revealed`、`secret_deleted`、`secret_notes_updated`、`secret_migrated`、`master_key_relocated`、`master_key_exported`、`secret_resolved` 以及各个 `secret_approval_*` 事件——只携带 ref、去处或被修改字段的名称，从不携带值，也不携带名称或描述的文字。`secret_resolved` 记录谁用了这个密钥以及用的槽位，每个去处每分钟最多一条。`secret_revealed` 记录的是在桌面应用中的一次显示或复制；列表不记入审计。
+- 密钥相关的审计事件——`secret_set`、`secret_revealed`、`secret_deleted`、`secret_notes_updated`、`master_key_relocated`、`master_key_exported`、`secret_resolved` 以及各个 `secret_approval_*` 事件——只携带 ref、去处或被修改字段的名称，从不携带值，也不携带名称或描述的文字。`secret_resolved` 记录谁用了这个密钥以及用的槽位，每个去处每分钟最多一条。`secret_revealed` 记录的是在桌面应用中的一次显示或复制；列表不记入审计。
 - 明文只存在于守护进程的内存中，从解密到使用它的进程启动或 HTTP 请求为止——以及你查看显示出来的值时，桌面应用的窗口里。
 - stdio MCP 服务器只收到它自己的密钥。它不继承守护进程的环境，所以读不到守护进程启动时带的其他密钥。它自己的密钥放在它的环境变量里，以你身份运行的其他程序可以读到；列表会把这类 ref 标为“readable by local processes”（本机进程可读）。
 - HTTP 上游的连接错误只报告异常类型，所以携带密钥的 URL 或请求头不会被回显到错误信息里。

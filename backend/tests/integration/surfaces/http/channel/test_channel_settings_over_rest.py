@@ -26,6 +26,7 @@ from coffer.infrastructure.channel.persistence import (
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.vault.home import content_root
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_routes import router as channel_router
@@ -256,3 +257,11 @@ async def test_status_reports_only_the_websocket_state(ctx: _Ctx) -> None:
         rendered = str(body)
         for word in ("listener", "127.0.0.1", "/seatalk/", "tunnel", "https://"):
             assert word not in rendered
+
+
+async def test_status_names_the_workspace_new_conversations_fall_back_to(ctx: _Ctx) -> None:
+    uid = (await _register(ctx, "tg", _TG))["uid"]
+
+    body = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()
+
+    assert body["workspace_directory"] == str(content_root() / "workspace")

@@ -77,20 +77,24 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
 
 const GITHUB = ref({
   ref: "mcp_server/u-gh/GITHUB_TOKEN",
+  label: "github · GITHUB_TOKEN",
   cited_by: [{ kind: "mcp_server", name: "github", uid: "u-gh", slot: null }],
 });
 const OPENAI = ref({
   ref: "provider/u-oa/api_key",
+  label: "OpenAI · api_key",
   present: false,
   cited_by: [{ kind: "provider", name: "OpenAI", uid: "u-oa", slot: null }],
 });
 const SEATALK = ref({
   ref: "secret/seatalk-app-secret",
+  label: "seatalk-app-secret",
   uri: "coffer://secret/seatalk-app-secret",
   cited_by: [{ kind: "channel", name: "SeaTalk", uid: "u-st", slot: null }],
 });
 const OLD = ref({
   ref: "secret/old-openai-key",
+  label: "old-openai-key",
   uri: "coffer://secret/old-openai-key",
   unreferenced: true,
   readable_by_local_processes: true,
@@ -196,6 +200,7 @@ describe("SecretsPage", () => {
     const locked = ref({
       ref: "secret/sentry-token",
       uri: "coffer://secret/sentry-token",
+      label: "sentry-token",
       locked: true,
       cited_by: [{ kind: "mcp_server", name: "sentry", uid: "u-se", slot: null }],
     });

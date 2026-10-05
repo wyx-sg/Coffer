@@ -70,10 +70,6 @@ id 总是由 Coffer 生成，在密钥页面和 `coffer secret set --name "<name
 
 每一种密钥都是这同一种形状。你粘贴进某个资源自己对话框的密钥——MCP 服务器的令牌、提供商的 Key——同样生成为 `secret/<id>`，并归该资源所有（见[密钥存储 → 删除密钥](/zh/guides/secret-store#delete-a-secret)）。
 
-::: details 对旧 ref 的一次性迁移
-在开始生成 id 之前的保险库，里面的 ref 带着名字：`secret/github`、`postman.AUTHORIZATION`、`agnes-apihub`、`mcp_server/<hex>/JIRA_TOKEN`、`channel/…`、`provider/…`，以及同步远端的推送令牌。守护进程在支持生成 id 的构建上第一次启动时，会把它们全部迁移到 `secret/<id>`：值、每一处引用它的配置、Coffer 自带技能文件里的 `coffer://secret/<旧名>`，以及这台 Mac 的审批和上次使用记录都会跟着走，独立密钥则把旧名字保留为它的名称。每次迁移都以 `secret_migrated` 记录在活动里。Coffer **之外**、引用了旧的 `coffer://secret/<名称>` 的脚本，必须手动改成新的 URI，密钥的 **概览** 里能看到它。这一迁移会在以后的版本中移除。
-:::
-
 ### 存入一个 {#store-one}
 
 ```sh

@@ -36,6 +36,7 @@ from coffer.application.agent.native_session_service import SourcePage
 from coffer.domain.agent.home_env import home_env
 from coffer.domain.agent.native_sessions import (
     NativeSession,
+    NativeSessionBusy,
     NativeSessionInvalid,
     NativeSessionNotFound,
     scrub_secrets,
@@ -182,14 +183,17 @@ def _cursor_of(position: list[Any] | None) -> str | None:
 
 
 def _domain_error(exc: Exception, session_id: str | None) -> Exception:
-    """An RPC refusal about a missing thread is a 404; anything else is codex
-    being unavailable. Duck-typed on ``rpc_message`` so this module need not
+    """An RPC refusal about a missing thread is a 404, one about a thread another
+    process is writing to (a Codex App window, a terminal) is a 409; anything
+    else is codex being unavailable. Duck-typed on ``rpc_message`` so this module need not
     import the chat package's ``CodexRpcError``."""
     message = getattr(exc, "rpc_message", None)
     if isinstance(message, str):
         lowered = message.lower()
         if session_id is not None and ("not found" in lowered or "no thread" in lowered):
             return NativeSessionNotFound(session_id)
+        if session_id is not None and "active writer" in lowered:
+            return NativeSessionBusy(message)
         if "invalid" in lowered and session_id is not None:
             return NativeSessionInvalid(message)
     return UpstreamUnavailable(f"codex app-server failed: {exc}")

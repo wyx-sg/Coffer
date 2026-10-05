@@ -15,12 +15,14 @@ vi.mock("@/lib/api/customTools", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/customTools")>()),
   customToolsApi: { update: vi.fn(), get: vi.fn(), list: vi.fn() },
 }));
+const TOKEN_ID = vi.hoisted(() => "c3".repeat(16));
 vi.mock("@/lib/api/secret", () => ({
   secretsApi: {
     list: vi.fn(async () => ({
       refs: [
         {
-          ref: "secret/billing-token",
+          ref: `secret/${TOKEN_ID}`,
+          label: "billing-token",
           present: true,
           locked: false,
           cited_by: [],
@@ -35,7 +37,9 @@ vi.mock("@/lib/api/secret", () => ({
 }));
 
 const update = customToolsApi.update as unknown as ReturnType<typeof vi.fn>;
-const group = makeGroup();
+const group = makeGroup({
+  headers: [{ name: "Authorization", value: null, secret: TOKEN_ID, secret_state: "present" }],
+});
 
 function open(onOpenChange = vi.fn()) {
   render(
@@ -56,7 +60,7 @@ beforeEach(() => {
 });
 
 describe("EditGroupDialog", () => {
-  test("is 640 wide, Cancel is ghost, and there is no Available to field", () => {
+  test("is 640 wide, Cancel is ghost, and there is no Available to field", async () => {
     const dialog = open();
     expect(dialog.className).toContain("max-w-[640px]");
     expect(within(dialog).queryByText("Available to")).not.toBeInTheDocument();
@@ -64,7 +68,7 @@ describe("EditGroupDialog", () => {
       "bg-transparent",
     );
     expect(
-      within(dialog).getByRole("button", { name: /Choose a secret|billing-token/ }),
+      await within(dialog).findByRole("button", { name: /Choose a secret|billing-token/ }),
     ).toBeTruthy();
   });
 
@@ -84,7 +88,7 @@ describe("EditGroupDialog", () => {
         "billing",
         expect.objectContaining({
           headers: [
-            { name: "Authorization", secret: "billing-token" },
+            { name: "Authorization", secret: TOKEN_ID },
             { name: "X-Team", value: "core" },
           ],
           timeout_seconds: 30,

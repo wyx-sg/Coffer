@@ -138,6 +138,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `AGENT_TYPE_UNSUPPORTED` | 400 | 这个类型的智能体没有 Coffer 能列出、重命名或删除的原生会话。 | 无；请在该智能体自己的界面里打开它的会话。 |
 | `NATIVE_SESSION_NOT_FOUND` | 404 | 该智能体没有列出这个 id 的会话。没有任何改动。 | 刷新「会话」标签页；该会话可能已被删除。 |
 | `NATIVE_SESSION_INVALID` | 400 | 会话 id 的格式不对、新标题为空，或智能体把该操作当作格式错误拒绝了。没有任何改动。 | 阅读 `message`；从列表中选一个会话，并给出非空标题。 |
+| `NATIVE_SESSION_BUSY` | 409 | 另一个进程正以写入方式打开这个会话（Codex App 窗口、终端），智能体拒绝改名或删除它。没有任何改动。 | 在打开它的地方关掉它，再重试。 |
 
 ## 技能 {#skills}
 

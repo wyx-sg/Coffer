@@ -78,6 +78,7 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
     enabled: channel.enabled,
     running: true,
     pending_pairing: false,
+    workspace_directory: "/home/me/.coffer/content/workspace",
     commands: [
       {
         name: "new",

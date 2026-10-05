@@ -332,7 +332,7 @@ or invocation record.
 - **THEN** an automated scan of every file under `~/.coffer` — the vault, `local/`, the history database, and every log file under `~/.coffer/logs/` — and of every database row, audit entry and invocation record reveals zero occurrences of the secret's literal value.
 
 ### Requirement: Keep secret values out of secret audit events
-The events `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`, `secret_migrated`,
+The events `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`,
 `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the
 `secret_approval_*` events MUST carry the ref, the name, the destination or the changed field names only. An audit payload
 MUST NOT carry a secret value, and a new secret event that does MUST NOT be added.
@@ -1038,27 +1038,6 @@ this route. `coffer secret set <ref>` replaces an existing secret's value only.
 - **WHEN** a client stores a value under the new ref `secret/orders-db`, and `coffer secret set --name "Orders DB"` is run
 - **THEN** the first is refused with 422 and nothing is stored, and the second stores the value at `secret/<32 hex>` labelled "Orders DB" and prints its URI
 
-### Requirement: Move every secret to a fixed id once
-At daemon start every stored or cited ref that is not `secret/<32 hex>` MUST be
-moved to one, except a proxy token: a standalone `secret/<name>` keeps its old
-name as its label; any other ref a resource cites becomes `secret/<uuid4 hex>`
-with origin `dialog` and `created_for` set to its citer's uid when exactly one resource
-cites it (a standalone secret gets origin `page`). A stored ref nothing cites
-is moved too, labelled with its old ref, with origin `page`.
-A move writes the value at the new ref and reads it back, carries this
-machine's binding, creation time, last-used stamp and the notes, repoints every
-citing resource config through the resource service and the sync remote's push
-token, rewrites `coffer://secret/<old>` in the skill master store's files,
-deletes the old ref, and is audited as `secret_migrated` naming both refs. A
-failure before any citer changed removes the new ref; one part-way leaves the
-old ref in place. A second start moves nothing.
-
-#### Scenario: start-up moves old names to fixed ids and keeps them readable
-- **GIVEN** a standalone `secret/github` cited by a skill's script, a ref `postman.AUTHORIZATION` an MCP server cites, a ref `team.TOKEN` two servers cite, and a ref `mcp_server/<32 hex>/JIRA_TOKEN` a server cites
-- **WHEN** the daemon starts
-- **THEN** `secret/github` is now `secret/<32 hex>` labelled "github" and the script cites its new URI, each server's `postman.AUTHORIZATION` and `JIRA_TOKEN` now cites a `secret/<32 hex>`, both servers sharing `team.TOKEN` cite one new ref, each with its old value and no approval waiting
-- **AND** a second start moves nothing
-
 ### Requirement: Audit every use of a secret by who used it
 Every decrypt-for-use MUST be audited as `secret_resolved`: a resource's
 destination (an MCP server's spawn or header, a channel adapter's start, a
@@ -1080,8 +1059,8 @@ rescanned on each read. The configs and skill files stay the source of truth.
 The index MUST be rebuilt in full at daemon start and whenever the file is
 missing, unreadable or of another format, and updated on every resource
 register, update, rename and delete and on a skill's file changes. Listing
-secrets, refusing the delete of a secret in use, releasing a secret when a
-resource is deleted and the move to fixed ids MUST read the index and not
+secrets, refusing the delete of a secret in use and releasing a secret when a
+resource is deleted MUST read the index and not
 rescan the resources or the skill files.
 
 #### Scenario: a new citation shows without a rescan

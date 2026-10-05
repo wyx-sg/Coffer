@@ -109,9 +109,11 @@ export function ChannelReplyFields({ settings, save }: { settings: ChannelSettin
 
 export function ChannelDirectoryFields({
   settings,
+  workspaceDirectory,
   save,
 }: {
   settings: ChannelSettings;
+  workspaceDirectory: string;
   save: Save;
 }) {
   // A default the list does not hold yet (set before the two were one list) is
@@ -129,6 +131,7 @@ export function ChannelDirectoryFields({
     <EditChannelDirectoriesField
       directories={dirs.directories}
       defaultDirectory={dirs.defaultDirectory}
+      workspaceDirectory={workspaceDirectory}
       onChange={(directories, defaultDirectory) => {
         setDirs({ directories, defaultDirectory });
         save({ directories, default_directory: defaultDirectory });
