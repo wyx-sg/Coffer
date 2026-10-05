@@ -272,7 +272,7 @@ describe("SkillsPage library", () => {
     renderSkillsPage("/skills");
     expect(await libraryRows()).toHaveLength(2);
     const off = within(screen.getByRole("region", { name: "Off" }));
-    expect(off.getByRole("link", { name: /beta/ })).toHaveTextContent("second");
+    expect(off.getByRole("link", { name: /beta/ })).not.toHaveTextContent("second");
 
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "alp" },

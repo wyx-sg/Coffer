@@ -1,6 +1,10 @@
 """Add, edit and remove the command-line tools a person declares by hand (spec
 skill-manager "Declare a command-line tool without a skill").
 
+A tool a skill or MCP server requires is not the person's to declare, but its
+description is theirs to write: that is the one field ``edit`` changes on a
+tool nobody added by hand.
+
 A tool added here needs no skill and no MCP server: it is one entry in the
 vault's ``cli-tools`` state document, and it is listed, checked and read like
 any other. When a skill also requires the command, the two are one entry;
@@ -35,8 +39,14 @@ from coffer.domain.skill.cli_declared import (
 class DeclaredToolsStore(Protocol):
     def all(self) -> list[DeclaredTool]: ...
 
+    def notes(self) -> dict[str, str]: ...
+
     def save(
         self, tools: list[DeclaredTool], *, summary: str, actor: str | None = None
+    ) -> None: ...
+
+    def set_note(
+        self, command: str, text: str | None, *, summary: str, actor: str | None = None
     ) -> None: ...
 
 
@@ -132,11 +142,14 @@ class CliToolService:
         return await self._after(command)
 
     async def edit(self, command: str, changes: dict[str, Any], *, actor: str = "api") -> CliView:
-        """``changes`` holds only the fields the caller sent; ``None`` clears one."""
+        """``changes`` holds only the fields the caller sent; ``None`` clears one.
+        A tool nobody added by hand takes only ``description``."""
         tools = self._declared.all()
         current = next((t for t in tools if t.command == command), None)
         if current is None:
-            raise CliToolNotDeclared(command)
+            if set(changes) - {"description"}:
+                raise CliToolNotDeclared(command)
+            return await self._describe(command, changes.get("description"), actor)
         edited = replace(current)
         if "title" in changes:
             edited = replace(edited, title=clean_text(changes["title"], "title"))
@@ -156,6 +169,25 @@ class CliToolService:
                 AuditEventType.CLI_TOOL_EDITED.value,
                 actor=actor,
                 details={"command": command, "fields": sorted(changes)},
+            )
+        return await self._after(command)
+
+    async def _describe(self, command: str, raw: str | None, actor: str) -> CliView:
+        """Keep the description of a tool a skill or MCP server requires."""
+        await self._requirements.get(command)  # CliNotKnown for a command nobody lists
+        text = clean_text(raw, "description", DESCRIPTION_MAX)
+        if self._declared.notes().get(command) != text:
+            await asyncio.to_thread(
+                self._declared.set_note,
+                command,
+                text,
+                summary=f"Described the command-line tool {command}",
+                actor=actor,
+            )
+            await self._audit.record(
+                AuditEventType.CLI_TOOL_EDITED.value,
+                actor=actor,
+                details={"command": command, "fields": ["description"]},
             )
         return await self._after(command)
 

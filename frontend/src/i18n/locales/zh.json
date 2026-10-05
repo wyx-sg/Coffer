@@ -5016,7 +5016,9 @@
       },
       "startsWith": "用 {{launcher}} 启动",
       "neededBy": "{{needed}}需要",
-      "addedByYou": "你添加的"
+      "addedByYou": "你添加的",
+      "description": "描述",
+      "descriptionPlaceholder": "这个工具用来做什么"
     },
     "add": {
       "title": "添加命令行工具",

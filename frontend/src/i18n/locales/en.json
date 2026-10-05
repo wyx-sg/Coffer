@@ -5016,7 +5016,9 @@
       },
       "startsWith": "starts with {{launcher}}",
       "neededBy": "needed by {{needed}}",
-      "addedByYou": "added by you"
+      "addedByYou": "added by you",
+      "description": "Description",
+      "descriptionPlaceholder": "What this tool is for"
     },
     "add": {
       "title": "Add CLI",

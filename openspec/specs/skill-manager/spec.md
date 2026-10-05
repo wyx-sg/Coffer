@@ -617,7 +617,12 @@ to work. `PATCH /api/v1/clis/{command}` changes the fields it carries (`null`
 clears one; the command itself is fixed) and `DELETE /api/v1/clis/{command}`
 drops the declaration only — a skill or server that requires the command keeps
 it listed — and both refuse a command nobody added by hand with 404
-`CLI_TOOL_NOT_DECLARED`. A name added twice is refused with 409
+`CLI_TOOL_NOT_DECLARED`, except that `PATCH` carrying only `description` MUST
+keep that description for any listed command: a command a skill or server
+requires is not the person's to declare, but what it is for is theirs to write.
+Such a description is kept in the same `cli-tools` document, under `notes`, and
+a hand-added tool's own description wins over it; a command nobody lists is
+refused with 404 `CLI_NOT_KNOWN`. A name added twice is refused with 409
 `CLI_TOOL_EXISTS`, and a bad name, path, minimum version or login check with 400
 `CLI_TOOL_INVALID`. Each add, edit and removal MUST be audited. Coffer MUST NOT
 read a command's `--help`, build a tree of its subcommands or keep one: what it
@@ -640,6 +645,12 @@ knows of a tool is its path, its version and its login state.
 - **WHEN** the user adds `jq` with the title `JSON`, then sends `PATCH /api/v1/clis/jq` with the title `null`, then `DELETE /api/v1/clis/jq`
 - **THEN** the tool is listed as added by hand after the first, its title is cleared by the second, and it is gone after the third
 - **AND** repeating the delete is refused with 404 `CLI_TOOL_NOT_DECLARED`
+
+#### Scenario: a required tool takes a description and nothing else
+- **GIVEN** a skill requiring `jq` and no declaration
+- **WHEN** the user sends `PATCH /api/v1/clis/jq` with only a description, then one with a title, then one describing a command nobody lists
+- **THEN** `jq` reads that description, still not added by hand, and the vault's `cli-tools` document keeps it under `notes`
+- **AND** the title is refused with 404 `CLI_TOOL_NOT_DECLARED` and the unknown command with 404 `CLI_NOT_KNOWN`
 
 ### Requirement: Hand a required command to an agent with a prompt
 The system MUST NOT install, update or log in to a required command itself.

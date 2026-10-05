@@ -92,9 +92,12 @@ class ToolStatesPort(Protocol):
 
 
 class DeclaredToolsPort(Protocol):
-    """The tools the person added by hand (a vault state document)."""
+    """The tools the person added by hand (a vault state document), and the
+    descriptions they wrote for tools they did not add."""
 
     def all(self) -> list[DeclaredTool]: ...
+
+    def notes(self) -> dict[str, str]: ...
 
 
 class CliPathsPort(Protocol):
@@ -225,7 +228,8 @@ class CliRequirementService:
                 warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in unknown)
         servers = await self._servers.stdio_launchers() if self._servers else ()
         added = self._declared.all() if self._declared else ()
-        return aggregate(parsed, servers, added, self._coffer), warnings
+        notes = self._declared.notes() if self._declared else {}
+        return aggregate(parsed, servers, added, self._coffer, notes), warnings
 
     async def _listing(self, *, force: bool) -> CliListing:
         required, warnings = await self._required()

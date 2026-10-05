@@ -199,7 +199,9 @@ export interface paths {
         /**
          * Edit Cli
          * @description Change a tool added by hand; a field left out stays, ``null`` clears it.
-         *     404 ``CLI_TOOL_NOT_DECLARED`` for a tool no one added by hand.
+         *     A tool a skill or MCP server requires takes only ``description``: any
+         *     other field is 404 ``CLI_TOOL_NOT_DECLARED``, and a command nobody lists
+         *     is 404 ``CLI_NOT_KNOWN``.
          */
         patch: operations["edit_cli_api_v1_clis__command__patch"];
         trace?: never;
@@ -788,6 +790,7 @@ export interface components {
         /**
          * CliEditIn
          * @description Change a hand-added tool; a field left out stays, ``null`` clears it.
+         *     A tool a skill or MCP server requires takes only ``description``.
          */
         CliEditIn: {
             /** Description */

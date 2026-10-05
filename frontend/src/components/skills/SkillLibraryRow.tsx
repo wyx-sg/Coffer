@@ -1,10 +1,10 @@
 // frontend/src/components/skills/SkillLibraryRow.tsx
 // One row of the Skills library (canvas 4.3 SkillsList): a state dot, the
-// skill's name (with "Built-in" beside Coffer's own), a second line — what
-// needs the reader (lib/skills/attention.ts: its master is gone, a folder is in
-// the way of an agent's link, a command or tool it needs is not ready, its Git
-// source is unreachable or has an update) or, with nothing to say, its
-// description in grey — and its reach on the right: All agents, or the badges
+// skill's name (with "Built-in" beside Coffer's own), a second line only when
+// something needs the reader (lib/skills/attention.ts: its master is gone, a
+// folder is in the way of an agent's link, a command or tool it needs is not
+// ready, its Git source is unreachable or has an update) — the description is
+// on the skill's page, not here — and its reach on the right: All agents, or the badges
 // of the agents it is restricted to. An Off skill shows no reach word (the
 // group says it, as in the MCP servers list). The checkbox feeds the selection
 // bar; it shows on hover, and on every row while any is ticked. The built-in
@@ -122,7 +122,7 @@ export function SkillLibraryRow({
   onOpen,
 }: Props) {
   const { t } = useTranslation();
-  // Built-in skills are never a problem to fix; they keep their description.
+  // Built-in skills are never a problem to fix.
   const attention = (skill.builtin ? [] : skillAttention(skill, clis, drift))[0];
   return (
     <li
@@ -166,11 +166,7 @@ export function SkillLibraryRow({
               </span>
             ) : null}
           </span>
-          {attention ? (
-            <Subline item={attention} agents={agents} />
-          ) : skill.description ? (
-            <span className="truncate text-xs text-text-muted">{skill.description}</span>
-          ) : null}
+          {attention ? <Subline item={attention} agents={agents} /> : null}
         </span>
         <span className="shrink-0">
           <ReachMark skill={skill} agents={agents} />
