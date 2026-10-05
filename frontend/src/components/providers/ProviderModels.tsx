@@ -23,8 +23,6 @@ import { probeFailed } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { formatRelativeTime } from "@/components/agents/list/relativeTime";
 import { Section } from "@/components/Section";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { providerPriceSource } from "@/lib/providers/priceSource";
 import { ModelPriceCell } from "./ModelPriceCell";
 import { ModelsRefresh } from "./ModelsRefresh";
@@ -106,16 +104,6 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
             date: formatPriceDate(usual.updated, i18n.language) ?? "",
           });
   const priceLine = local ? t("providers.models.priceLocal") : sourceLine;
-  const offButton = (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={cur.pending || !cur.canSetMany(rows, false)}
-      onClick={() => cur.setMany(rows, false)}
-    >
-      {t("providers.models.turnAllOff")}
-    </Button>
-  );
   const shown = all ? rows : rows.slice(0, PAGE);
 
   return (
@@ -150,30 +138,6 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
               types={types}
               type={type}
               onType={setType}
-              actions={
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={cur.pending || !cur.canSetMany(rows, true)}
-                    onClick={() => cur.setMany(rows, true)}
-                  >
-                    {t("providers.models.turnAllOn")}
-                  </Button>
-                  {cur.wouldEmpty(rows) ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span tabIndex={0}>{offButton}</span>
-                        </TooltipTrigger>
-                        <TooltipContent>{t("providers.models.keepOne")}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    offButton
-                  )}
-                </>
-              }
             />
             {rows.length === 0 ? (
               <p className="py-3 text-sm text-text-muted">{t("providers.models.noMatch")}</p>
