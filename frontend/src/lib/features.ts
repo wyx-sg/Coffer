@@ -17,6 +17,7 @@ const FEATURE_OF_KIND: Readonly<Record<string, FeatureKey>> = {
   provider: "models",
   knowledge: "knowledge",
   memory: "memory",
+  sync_remote: "sync",
 };
 
 export function featureOfKind(kind: string): FeatureKey | undefined {

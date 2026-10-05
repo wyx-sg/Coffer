@@ -21,6 +21,7 @@ presence-gated reveal in ``secret_boundary_routes``, for the desktop app.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -48,6 +49,7 @@ from coffer.domain.secrets import (
 )
 from coffer.infrastructure.secret.plaintext_scan import skills_citing_secrets
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
+from coffer.infrastructure.sync.local_state import JsonRemoteStore
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
@@ -176,6 +178,7 @@ async def list_refs(
     # on this Mac").
     locked = set(await asyncio.to_thread(store.unreadable_refs))
     skill_citers = await _skill_citers(resources)
+    sync_ref = await _sync_remote_ref()
     boundary = get_secret_boundary()
     bindings = await asyncio.to_thread(boundary.bindings)
     pending = await asyncio.to_thread(lambda: boundary.list(status="pending"))
@@ -186,7 +189,7 @@ async def list_refs(
         if r.kind == "mcp_server" and _stdio_carries(r, ref)
     }
     out: list[SecretRefOut] = []
-    for ref in sorted(stored | set(cited)):
+    for ref in sorted(stored | set(cited) | ({sync_ref} if sync_ref else set())):
         name = standalone_name(ref)
         skills = skill_citers(ref) if name else []
         rows = [
@@ -225,10 +228,15 @@ async def list_refs(
                         uid=r.uid, kind=r.kind, name=r.name, slot=_slot(resources, r, ref)
                     )
                     for r in cited.get(ref, [])
-                ],
+                ]
+                + (
+                    [SecretCiterOut(uid=_SYNC_UID, kind=_SYNC_KIND, name=_SYNC_NAME, slot="token")]
+                    if ref == sync_ref
+                    else []
+                ),
                 uri=secret_uri(name) if name else None,
                 mentioned_by_skills=skills,
-                unreferenced=not cited.get(ref) and not skills,
+                unreferenced=not cited.get(ref) and not skills and ref != sync_ref,
                 bindings=rows,
                 # A standalone secret reaches a `coffer run` child's
                 # environment; a stdio server's secret its initial environment.
@@ -236,6 +244,26 @@ async def list_refs(
             )
         )
     return SecretListOut(refs=out)
+
+
+_SYNC_KIND = "sync_remote"
+_SYNC_UID = "remote"
+_SYNC_NAME = "Vault sync"
+
+
+async def _sync_remote_ref() -> str | None:
+    """The secret this machine's sync remote pushes with, if one is set. It is
+    machine-local settings, not a resource, so the citation index does not see
+    it; it still uses the secret (spec secret "List every stored and cited
+    secret with what uses it")."""
+    remote = await asyncio.to_thread(JsonRemoteStore().get)
+    return remote.secret_ref if remote is not None and remote.secret_ref else None
+
+
+def _sync_remote_row() -> Resource:
+    """The sync remote as a citer row, for the in-use refusal."""
+    row = _skill_folder(_SYNC_NAME)
+    return dataclasses.replace(row, uid=_SYNC_UID, kind=_SYNC_KIND)
 
 
 async def _skill_citers(resources: ResourceService) -> Callable[[str], list[str]]:
@@ -332,6 +360,8 @@ async def delete_secret(
             # A master folder with no row yet still cites it; the refusal only
             # needs its kind and name to say what to edit first.
             citations.append(row if row is not None else _skill_folder(skill))
+    if await _sync_remote_ref() == ref:
+        citations.append(_sync_remote_row())
     if citations:
         # The error composes the reference strings itself, from the rows. It is
         # NOT given a list of strings built here: ``find_secret_citations``

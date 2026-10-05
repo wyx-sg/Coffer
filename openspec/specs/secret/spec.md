@@ -662,9 +662,9 @@ agent that runs the command.
 store holds and every ref a registered resource cites, each with whether the
 store holds it, whether this Mac's key can open it (`locked`), when it was
 stored (`created_at`) and when a consumer last had it decrypted on this Mac
-(`last_used_at`, stamped at most once a minute and not by a reveal), the resources that cite it with the slot each cites it under, its label, description and
+(`last_used_at`, stamped at most once a minute and not by a reveal), the resources that cite it with the slot each cites it under (and the sync remote, as kind `sync_remote`, for its push token), its label, description and
 `created_for`, its `coffer://secret/<id>` and the skills whose files cite that URI, whether
-nothing references it (`unreferenced`), the destinations it is approved for or
+nothing references it, the sync remote's push token included (`unreferenced`), the destinations it is approved for or
 waits on, and whether another process of this user can read the value where
 Coffer puts it (a standalone secret, or a stdio MCP server's environment). The
 listing reads what cites each secret from the citation index (see "Keep an index of what cites each secret"), decrypts nothing and records no audit entry; who used a secret is audited, not listed here (see "Audit every use of a secret by who used it"). It MUST leave out an
@@ -696,6 +696,12 @@ MUST forget its approved destinations.
 - **GIVEN** a stored agent model-proxy token and a stored standalone secret
 - **WHEN** the secrets are listed
 - **THEN** only the standalone secret is listed
+
+#### Scenario: the sync remote's push token counts as used
+- **GIVEN** a stored secret that only this machine's sync remote cites as its push token
+- **WHEN** the secrets are listed, then the user deletes it
+- **THEN** it is not marked unreferenced and names the sync remote as a user
+- **AND** the delete is refused with `SECRET_IN_USE` naming the sync remote
 
 ### Requirement: Keep the master key behind a storage port chosen by the build
 Where the master key lives MUST be decided by how the build was made, never by

@@ -5187,7 +5187,8 @@
       "channel": "渠道",
       "knowledge": "知识",
       "memory": "记忆",
-      "agent": "智能体"
+      "agent": "智能体",
+      "sync_remote": "同步"
     },
     "usedBy": {
       "nothing": "无",

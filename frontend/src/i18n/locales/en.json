@@ -5187,7 +5187,8 @@
       "channel": "Channel",
       "knowledge": "Knowledge",
       "memory": "Memory",
-      "agent": "Agent"
+      "agent": "Agent",
+      "sync_remote": "Sync"
     },
     "usedBy": {
       "nothing": "Nothing",

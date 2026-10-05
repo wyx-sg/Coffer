@@ -464,3 +464,36 @@ async def test_exists_reads_the_store_off_the_loop_thread() -> None:
     assert present.status_code == 200
     assert len(fake.seen) == 1
     assert all(ident != loop_thread for ident in fake.seen)
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="secret", scenario="the sync remote's push token counts as used")
+async def test_sync_remote_token_is_used_and_cannot_be_deleted(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The push token is cited by machine-local sync settings, not a resource:
+    it still lists as used (naming the sync remote) and deleting it is refused."""
+    from coffer.domain.sync.remote import SyncRemote
+    from coffer.infrastructure.sync.local_state import JsonRemoteStore
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    ref = "secret/" + "c3" * 16
+    JsonRemoteStore().put(SyncRemote(url="https://example.com/v.git", secret_ref=ref))
+    fake = _FakeSecretStore()
+    fake.store[ref] = "token-value"
+    transport = ASGITransport(_build_app(fake))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        rows = (await c.get("/api/v1/secrets")).json()["refs"]
+        row = next(r for r in rows if r["ref"] == ref)
+        assert row["unreferenced"] is False
+        assert [(x["kind"], x["name"]) for x in row["cited_by"]] == [("sync_remote", "Vault sync")]
+
+        r = await c.delete(f"/api/v1/secrets/{ref}")
+        assert r.status_code == 409
+        assert r.json()["error"]["code"] == "SECRET_IN_USE"
+        assert "Vault sync" in r.json()["error"]["message"]
+    assert ref in fake.store

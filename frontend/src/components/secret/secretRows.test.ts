@@ -86,6 +86,24 @@ describe("secretRows", () => {
     ]);
   });
 
+  test("the sync remote is a citer that opens the Sync page", () => {
+    const row = {
+      ref: "secret/c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      cited_by: [{ kind: "sync_remote", uid: "remote", name: "Vault sync", slot: "token" }],
+      mentioned_by_skills: [],
+      bindings: [],
+    } as unknown as SecretRef;
+    expect(citersOf(row)).toEqual([
+      {
+        key: "sync_remote:remote",
+        kind: "sync_remote",
+        uid: "remote",
+        name: "Vault sync",
+        href: "/sync",
+      },
+    ]);
+  });
+
   test("a refusal's resources become citers; anything malformed is dropped", () => {
     expect(
       citersFromRefusal({
