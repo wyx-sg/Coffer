@@ -27,7 +27,7 @@ The facts about the websocket path that shape the decision:
   register handshake, framing, ack and kick semantics are available only
   through SeaTalk's own Python SDK, `seatalk-oapi-sdk-py`.
 - **That SDK is distributed from an internal corporate portal**, is absent
-  from public PyPI, and carries no public licence. Coffer is MIT and
+  from public PyPI, and carries no public licence. Coffer is AGPL-3.0 and
   open-source-bound.
 - **The SDK is synchronous and thread-based and does not reconnect.**
   `connect()` blocks on the handshake, `listen()` blocks for the life of the
@@ -160,7 +160,7 @@ How it works: copy `seatalk_oapi_sdk` into Coffer's source tree.
 Pros: works out of the box for everyone.
 
 Cons: redistributes code under no public licence from an internal portal in a
-public MIT repository.
+public AGPL-3.0 repository.
 
 Loses outright on licensing.
 

@@ -125,7 +125,7 @@ reconciler would have to wrap rather than own; import confinement needs a
 contract per SDK; the Bot API methods Coffer uses are a small set, so the SDK
 adds a dependency to save a few dozen lines. For SeaTalk, the only SDK is
 distributed from an internal portal under no public licence, so it cannot be a
-declared dependency of an MIT project at all.
+declared dependency of an AGPL-3.0 project at all.
 
 Loses because the leverage is small and the ownership cost (a second lifecycle
 model per platform, a dependency that cannot be declared) is not.

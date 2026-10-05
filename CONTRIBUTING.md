@@ -82,4 +82,4 @@ Don't open public issues for security findings. See [`SECURITY.md`](./SECURITY.m
 
 ## License
 
-By contributing, you agree your contributions are licensed under the [MIT License](./LICENSE).
+By contributing, you agree your contributions are licensed under the [GNU Affero General Public License v3.0 or later](./LICENSE).

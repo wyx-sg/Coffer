@@ -250,7 +250,7 @@ export default withMermaid(
           lastUpdated: { text: 'Last updated', formatOptions: { dateStyle: 'long' } },
           docFooter: { prev: 'Previous', next: 'Next' },
           footer: {
-            message: 'Released under the MIT License.',
+            message: 'Released under the GNU AGPL v3.0.',
             copyright: 'Copyright © Coffer contributors',
           },
         },
@@ -281,7 +281,7 @@ export default withMermaid(
             linkText: '回到首页',
           },
           footer: {
-            message: '基于 MIT 许可证发布。',
+            message: '基于 GNU AGPL v3.0 许可证发布。',
             copyright: '版权所有 © Coffer 贡献者',
           },
         },

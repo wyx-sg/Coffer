@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://wyx-sg.github.io/Coffer/"><img alt="Docs" src="https://img.shields.io/badge/docs-coffer-4353D8"></a>
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-555">
 </p>
 
@@ -47,4 +47,4 @@ Or follow the [install guide](https://wyx-sg.github.io/Coffer/start/install) you
 
 ## License
 
-[MIT](./LICENSE)
+Copyright © 2026 Asen. Coffer is free software under the [GNU Affero General Public License v3.0 or later](./LICENSE): you may use, change and redistribute it, and anything you distribute or offer over a network that is built on it must be released under the same licence, with its source.

@@ -69,7 +69,7 @@ The WebSocket client library MUST be an **operator-supplied optional
 dependency**, never a vendored one. The only client for SeaTalk's websocket
 delivery is the platform's own SDK, distributed from an internal corporate
 portal, absent from public PyPI, and published under no public licence — so
-Coffer, which is MIT, MUST NOT vendor it into this repository and MUST NOT
+Coffer, which is AGPL-3.0, MUST NOT vendor it into this repository and MUST NOT
 declare it as a dependency. Reimplementing its wire protocol is not an
 alternative either: none is published. See
 [SeaTalk Inbound Over WebSocket](../../../../docs/decisions/seatalk-websocket-inbound.md).
