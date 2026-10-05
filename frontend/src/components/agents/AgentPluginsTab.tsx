@@ -125,10 +125,12 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
             <KindRow
               key={p.id}
               leading={select.leading(p, p.name)}
+              openable
               cells={[
                 <KindName key="name">
                   <button
                     type="button"
+                    data-row-open
                     onClick={() => setInfoId(p.id)}
                     className="max-w-full truncate text-left hover:underline"
                   >

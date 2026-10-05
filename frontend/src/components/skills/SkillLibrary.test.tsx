@@ -1,6 +1,7 @@
 // src/components/skills/SkillLibrary.test.tsx — the Skills library column, laid out like the MCP servers list: groups, filter rows, hover checkboxes and the selection bar at the top.
 import { useState } from "react";
 import { describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -132,5 +133,21 @@ describe("SkillLibrary", () => {
     expect(slot(/Select row: alpha/).className).toContain("hidden");
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
     expect(slot(/Select row: beta/).className).not.toContain("hidden");
+  });
+});
+
+describe("SkillLibrary row click", () => {
+  acceptance("web-ui", "a click anywhere on a list row opens its detail", () => {
+    renderLibrary();
+    const link = screen.getByRole("link", { name: /alpha/ });
+    const opened = vi.fn((e: Event) => e.preventDefault());
+    link.addEventListener("click", opened);
+    const row = link.closest("li")!;
+    fireEvent.click(row);
+    expect(opened).toHaveBeenCalledTimes(1);
+    // Cmd-click on the row and a click on its checkbox leave it alone.
+    fireEvent.click(row, { metaKey: true });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
+    expect(opened).toHaveBeenCalledTimes(1);
   });
 });

@@ -20,6 +20,7 @@ import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { toneTextClass } from "@/lib/statusColors";
 import { STATUS_TONE } from "@/lib/statusTone";
+import { openRowTarget } from "@/lib/rowClick";
 import { cn } from "@/lib/utils";
 import { serverState, shortTime, transportOf, type ServerState } from "@/lib/mcp/serverState";
 
@@ -117,8 +118,9 @@ export function McpServerListRow({
   const label = resource.name;
   return (
     <li
+      onClick={openRowTarget}
       className={cn(
-        "group flex items-center gap-2 rounded-lg pl-2.5 transition-colors duration-fast",
+        "group flex cursor-pointer items-center gap-2 rounded-lg pl-2.5 transition-colors duration-fast",
         current ? "bg-surface-selected" : "hover:bg-surface-hover",
       )}
     >
@@ -138,6 +140,7 @@ export function McpServerListRow({
       </span>
       <Link
         to={to}
+        data-row-open
         aria-current={current ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
       >

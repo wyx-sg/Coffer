@@ -228,7 +228,13 @@ fold into one row, has no search or filter. A row click MUST open that item's
 detail page, or for a sync round, its drawer. The Model providers, Channels, MCP
 servers, Custom tools, Skills and CLIs pages are lists beside a reading pane
 instead: a filterable list of rows, each a link that opens its item in the pane
-at the item's own address, so a row click opens the item there; Knowledge is
+at the item's own address, so a row click opens the item there; the same holds
+for the rows of an agent's Skills, MCP servers and Plugins tabs, where the row
+opens the dialog or page its name opens. A click anywhere on such a row MUST do
+what a click on its name does, except when it lands on a control inside the row
+(a button, link, switch, checkbox, menu item or input), carries a modifier key,
+or ends a text selection; the name stays a real link or button, so keyboard
+focus, Cmd/Ctrl-click and middle-click keep working. Knowledge is
 its collection tree beside the pane in the same way. Activity's tabs share one
 record list of their own, each row opening its record (see "Filter each
 Activity tab and expand any row"). Sync's Remote tab is not a list surface: it
@@ -239,6 +245,11 @@ small plain table.
 - **GIVEN** a list with several rows
 - **WHEN** the user ticks two rows, and then presses Esc
 - **THEN** a bar reads "2 of N selected" with the actions that apply and holds no select-all, and Esc leaves no row selected and no bar
+
+#### Scenario: a click anywhere on a list row opens its detail
+- **GIVEN** the Skills library, the MCP servers list or an agent's Plugins tab showing at least one row
+- **WHEN** the user clicks the row's empty space or a plain text cell, and then, on another row, clicks its switch or ⋯ menu
+- **THEN** the first click opens that item's detail page or dialog, and the second only toggles or opens the menu without opening a detail
 
 #### Scenario: a row click opens the item's detail page
 - **GIVEN** a list surface showing at least one row

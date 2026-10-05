@@ -12,6 +12,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { RowSelectCell } from "@/components/DataTableSelection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { shouldIgnoreRowClick } from "@/lib/rowClick";
 import { cn } from "@/lib/utils";
 import type { Column, TableSelection } from "@/components/DataTable.types";
 
@@ -122,7 +123,7 @@ export function DataRows<T>({
               data-state={selection && selectedKeys.has(key) ? "selected" : undefined}
               tabIndex={activate ? 0 : undefined}
               aria-expanded={expandable ? isOpen : undefined}
-              onClick={activate}
+              onClick={activate ? (e) => !shouldIgnoreRowClick(e) && activate() : undefined}
               onKeyDown={
                 activate
                   ? (e) => {
