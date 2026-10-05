@@ -1,6 +1,6 @@
 """A question the agent asks the owner goes out as a card in the chat and its
-answer goes back to the agent (spec channels "Ask the owner in the chat and take
-the answer back to the agent").
+answer goes back to the agent (spec channels
+"Ask the owner in the chat and take the chat's answer back to the agent").
 
 A real turn orchestrator runs a scripted agent that asks through the function the
 Claude Code hook and ``coffer__ask`` share; the channel renders the turn's events,
@@ -18,10 +18,16 @@ import pytest
 
 from coffer.application.chat import questions
 from coffer.application.chat.questions import AnswerInput
-from coffer.domain.chat.message import TextBlock
 from tests.unit.chat.test_questions import TWO, YES_NO, AskingAdapter
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, tap_event, turn_body, wait_until
+from .conftest import (
+    ChannelEnv,
+    FakeChannelAdapter,
+    _RecordingAdapter,
+    inbound,
+    tap_event,
+    wait_until,
+)
 
 _OWNER = "owner-1"
 _TIME = r"\d\d:\d\d"
@@ -40,7 +46,7 @@ def _asking(env: ChannelEnv, ask_input: dict[str, Any]) -> list[AskingAdapter]:
     async def build(conversation_id: str) -> AskingAdapter:
         adapter = AskingAdapter(conversation_id, ask_input, as_tool="AskUserQuestion")
         built.append(adapter)
-        return adapter
+        return _RecordingAdapter(adapter, env.provider, conversation_id)
 
     env.provider.build_adapter = build  # type: ignore[method-assign]
     return built
@@ -67,12 +73,7 @@ async def _tap(env: ChannelEnv, data: str, **kwargs: Any) -> None:
 
 def _user_texts(env: ChannelEnv, conversation_id: str) -> Any:
     async def read() -> list[str]:
-        messages = await env.chat.list_messages(conversation_id)
-        return [
-            turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
-            for m in messages
-            if m.role.value == "user"
-        ]
+        return env.user_texts(conversation_id)
 
     return read()
 
@@ -139,9 +140,6 @@ async def test_a_text_message_is_the_answer_and_starts_no_turn(env: ChannelEnv) 
     assert await _user_texts(env, conversation_id) == ["go"]
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="an answer given in Coffer rewrites the chat card"
-)
 async def test_an_answer_given_in_coffer_rewrites_the_card(env: ChannelEnv) -> None:
     resource, adapter, _built = await _chat(env, YES_NO)
     conversation_id = await env.active_conversation(resource)
@@ -214,7 +212,7 @@ async def test_a_tap_from_someone_else_in_the_group_is_refused(env: ChannelEnv) 
         inbound("tg", "grp-1", "@bot go", chat_kind="group", sender_id=_OWNER, thread_id="t1")
     )
     await wait_until(lambda: bool(adapter.cards))
-    conversation_id = (await env.chat.list_conversations())[0].id
+    conversation_id = (await env.conversations())[0].id
 
     await env.processor.on_callback(
         tap_event(

@@ -35,15 +35,9 @@ export class ApiError extends Error {
  */
 const DAEMON_NOT_READY = "DAEMON_NOT_READY";
 
-/** The error a caller raises when no base URL has been supplied yet. */
-export function daemonNotReadyError(): ApiError {
-  return new ApiError(DAEMON_NOT_READY, "the daemon connection has not been supplied yet");
-}
-
 /**
- * The same thing as a response, for the one caller that short-circuits inside
- * `fetch` rather than before it — the generated client's middleware, which can
- * return a `Response` but cannot throw one.
+ * A request that never left, as a response: the generated client's middleware
+ * short-circuits inside `fetch` and can return a `Response` but cannot throw one.
  */
 export function daemonNotReadyResponse(): Response {
   return new Response(

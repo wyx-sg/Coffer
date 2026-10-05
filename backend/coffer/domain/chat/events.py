@@ -1,7 +1,6 @@
 """AgentEvent union — typed events streamed by an AgentAdapter during a turn.
 
-Each class carries a ``type`` discriminator whose value is reused verbatim as
-the SSE event name on the wire:
+Each class carries a ``type`` discriminator whose value identifies the event:
 
   TurnStarted      → ``turn_start``
   TextDelta        → ``text_delta``
@@ -9,14 +8,8 @@ the SSE event name on the wire:
   ToolResult       → ``tool_result``
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
-  QueueChanged     → ``queue_changed``
   QuestionAsked    → ``question_asked``
   QuestionClosed   → ``question_closed``
-
-``QueueChanged`` is a conversation-level event (the pending-message queue, spec chat
-"Queue messages sent during a turn")
-rather than a turn-content event: it is broadcast by the orchestrator, never
-emitted by an adapter, and is not accumulated into the assistant message.
 """
 
 from __future__ import annotations
@@ -24,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from coffer.domain.chat.errors import SESSION_IN_USE_MESSAGE as SESSION_IN_USE_MESSAGE
 from coffer.domain.chat.question import QuestionBlock
 
 
@@ -92,6 +86,12 @@ STREAM_ENDED_MESSAGE = "the agent stopped responding before finishing the turn"
 #: then terminated); the partial reply is kept.
 TURN_TIMEOUT = "turn_timeout"
 
+#: ``TurnError.code`` when a native session is open somewhere else (a terminal
+#: running ``claude --resume <id>`` or ``codex resume <id>``) and the turn was
+#: refused instead of forking it (spec chat "Run a session in one place at a
+#: time"). The message is what the chat is told, word for word.
+SESSION_IN_USE = "session_in_use"
+
 
 @dataclass(frozen=True)
 class TurnError:
@@ -104,20 +104,6 @@ class TurnError:
     code: str
     message: str
     type: Literal["turn_error"] = "turn_error"
-
-
-@dataclass(frozen=True)
-class QueueChanged:
-    """The conversation's pending-message queue changed (spec chat "Express a turn
-    as typed events").
-
-    Carries the ordered texts still waiting to run as their own turns, so every
-    subscriber renders the same pending state. Conversation-level, not turn
-    content — never emitted by an adapter.
-    """
-
-    pending: list[str]
-    type: Literal["queue_changed"] = "queue_changed"
 
 
 @dataclass(frozen=True)
@@ -147,7 +133,6 @@ AgentEvent = (
     | ToolResult
     | TurnDone
     | TurnError
-    | QueueChanged
     | QuestionAsked
     | QuestionClosed
 )

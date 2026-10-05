@@ -47,7 +47,9 @@ function result(patch: Partial<CustomToolTestOut>): CustomToolTestOut {
 
 const show = (r: CustomToolTestOut, onChangeTimeout?: () => void) =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <TooltipProvider>
         <MemoryRouter>
           <ToolTestResult
@@ -64,7 +66,7 @@ const show = (r: CustomToolTestOut, onChangeTimeout?: () => void) =>
   );
 const block = () => screen.getByTestId("custom-tool-test-result");
 const viewer = () => screen.queryByTestId("custom-tool-response");
-const handoff = () => screen.queryByRole("button", { name: /Ask an agent|Copy prompt/ });
+const handoff = () => screen.queryByRole("button", { name: /Hand off to|Copy prompt/ });
 
 describe("ToolTestResult", () => {
   test("an answer is a neutral block with the URL; the response is in the viewer outside it", () => {
@@ -89,7 +91,9 @@ describe("ToolTestResult", () => {
     );
     expect(block()).toHaveClass("bg-danger-soft");
     expect(screen.getByText(/404 Not Found · 180 ms/)).toBeInTheDocument();
-    expect(screen.getByText(/The API answered with an error; its response is below/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/The API answered with an error; its response is below/),
+    ).toBeInTheDocument();
     expect(handoff()).toBeNull();
     expect(block().contains(viewer())).toBe(false);
   });
@@ -117,7 +121,9 @@ describe("ToolTestResult", () => {
       onChange,
     );
     expect(screen.getByText("No response — timed out after 30 s")).toBeInTheDocument();
-    expect(screen.getByText(/Coffer stopped waiting after deploy-api's 30 s timeout/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Coffer stopped waiting after deploy-api's 30 s timeout/),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Change timeout" }));
     expect(onChange).toHaveBeenCalled();
     expect(handoff()).toBeInTheDocument();

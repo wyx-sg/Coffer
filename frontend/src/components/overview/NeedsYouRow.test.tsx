@@ -4,17 +4,19 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-import { readHandoffState } from "@/lib/conversations/handoff";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import { OPEN_APPROVALS_EVENT } from "@/lib/hooks/useApprovals";
 import { acceptance } from "@/test/acceptance";
 import { NeedsYouRow } from "./NeedsYouRow";
 
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
+const { fsApi } = await import("@/lib/api/fs");
 const listAgents = vi.mocked(agentProvidersApi.list);
+const openTerminal = vi.mocked(fsApi.openTerminal);
 
 const PROMPT = "Please install `uvx` on this machine so MCP server fetch can start.";
 
@@ -39,11 +41,6 @@ function item(overrides: Partial<AttentionItem> = {}): AttentionItem {
   };
 }
 
-function Draft() {
-  const handoff = readHandoffState(useLocation().state);
-  return <div data-testid="draft">{handoff ? handoff.prompt : ""}</div>;
-}
-
 const onIgnore = vi.fn();
 
 function renderRow(row: AttentionItem, available: boolean) {
@@ -63,7 +60,6 @@ function renderRow(row: AttentionItem, available: boolean) {
               </ul>
             }
           />
-          <Route path="/conversations/new" element={<Draft />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -73,6 +69,8 @@ function renderRow(row: AttentionItem, available: boolean) {
 const writeText = vi.fn().mockResolvedValue(undefined);
 beforeEach(() => {
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
+  openTerminal.mockResolvedValue(undefined);
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -85,19 +83,27 @@ acceptance("web-ui", "a needs-you row offers the item's hand-off in its menu", a
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
   fireEvent.click(await screen.findByRole("button", { name: "More options" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /^Copy prompt/ }));
-  // Copying is asynchronous now (it toasts "Prompt copied" afterwards).
+  // Copying is asynchronous (it toasts "Prompt copied" afterwards).
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(PROMPT));
+  expect(openTerminal).not.toHaveBeenCalled();
 
-  fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
+  // The main part starts the hand-off agent in the preferred terminal with the prompt.
+  fireEvent.click(screen.getByRole("button", { name: "Hand off to Claude Code" }));
+  await waitFor(() =>
+    expect(openTerminal).toHaveBeenCalledWith({
+      agent: "claude_code",
+      prompt: PROMPT,
+      terminal: null,
+    }),
+  );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(await screen.findByTestId("draft")).toHaveTextContent(PROMPT);
 });
 
 test("with no managed agent available the row offers a Copy prompt button only", async () => {
   renderRow(item(), false);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
   expect(await screen.findByRole("button", { name: /^Copy prompt/ })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Ask an agent" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Hand off to/ })).not.toBeInTheDocument();
 });
 
 test("every row's menu ends with Ignore", async () => {
@@ -160,7 +166,6 @@ test("Review on waiting approvals opens the global dialog instead of leaving Ove
   fireEvent.click(await screen.findByRole("button", { name: "Review: Secret approvals" }));
   expect(opened).toHaveBeenCalledTimes(1);
   // Still on Overview: no link was followed.
-  expect(screen.queryByTestId("draft")).not.toBeInTheDocument();
   window.removeEventListener(OPEN_APPROVALS_EVENT, opened);
 });
 

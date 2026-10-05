@@ -15,7 +15,7 @@ interface FakeCall {
 
 export interface FakeDaemon {
   types: AgentTypeOut[];
-  /** The managed agents a conversation (and so Ask an agent) can run on. */
+  /** The managed agents a conversation (and so a hand-off) can run on. */
   providers: AgentProviderInfo[];
   connections: Record<string, CofferConnection>;
   /** The model binding on an agent's record, by uid. */
@@ -105,6 +105,8 @@ export function fakeCallFor(d: FakeDaemon) {
     const resource = path.match(/^\/resources\/([^/?]+)$/);
     if (resource) return { uid: decodeURIComponent(resource[1]), enabled: true };
     if (path === "/fs/pick-folder") return d.pick;
+    if (path === "/fs/terminals") return { terminals: [] };
+    if (path === "/fs/terminal") return undefined;
     if (path.startsWith("/fs/browse")) {
       const at = decodeURIComponent(path.split("?path=")[1] ?? "");
       const names = d.folders[at];

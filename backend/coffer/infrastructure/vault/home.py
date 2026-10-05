@@ -85,6 +85,15 @@ def config_backups_dir(home: Path | None = None) -> Path:
     return coffer_home(home) / "config-backups"
 
 
+def handoff_dir(home: Path | None = None) -> Path:
+    """Where a prompt waits for the terminal that will read and remove it.
+
+    ``tmp/handoff/<file>``, written mode 0600 so the prompt's text never sits on
+    a command line (spec daemon "Open an agent session in a terminal").
+    """
+    return coffer_home(home) / "tmp" / "handoff"
+
+
 def runs_db_path(home: Path | None = None) -> Path:
     """The history database: audit, invocations, conversations, rounds, usage."""
     return coffer_home(home) / "runs.db"
@@ -157,6 +166,7 @@ __all__ = [
     "daemon_lock_path",
     "derived_root",
     "eval_capture_path",
+    "handoff_dir",
     "local_root",
     "logs_dir",
     "master_key_path",

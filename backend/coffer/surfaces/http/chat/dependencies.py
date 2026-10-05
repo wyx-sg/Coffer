@@ -2,7 +2,8 @@
 
 Conversations, the agent-provider registry and the turn orchestrator were
 first built for the web chat page and outlived it: IM channels are now their
-only client. Same ``set_*`` / ``get_*`` singleton shape as
+only client (the web lists their conversations and stops their turns). Same
+``set_*`` / ``get_*`` singleton shape as
 ``surfaces.http.dependencies``, typed concretely.
 
 ``model_catalog`` is the one seam that crosses a kind: the models an agent can
@@ -14,8 +15,7 @@ agent kind.
 
 from __future__ import annotations
 
-from coffer.application.chat.attachments import ChatAttachmentService
-from coffer.application.chat.ports import ChannelMirrorPort, ModelCatalogPort
+from coffer.application.chat.ports import ChannelPlacesPort, ModelCatalogPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -86,23 +86,7 @@ def get_model_catalog() -> ModelCatalogPort:
     return _model_catalog
 
 
-_attachment_service: ChatAttachmentService | None = None
-
-
-def set_attachment_service(svc: ChatAttachmentService) -> None:
-    """Called by the composition root once on startup."""
-    global _attachment_service
-    _attachment_service = svc
-
-
-def get_attachment_service() -> ChatAttachmentService:
-    """FastAPI Depends() target."""
-    if _attachment_service is None:
-        raise RuntimeError("chat attachment service not initialised")
-    return _attachment_service
-
-
-_channel_mirror: ChannelMirrorPort | None = None
+_channel_places: ChannelPlacesPort | None = None
 _channel_note_reader: ChannelNoteResolver | None = None
 
 
@@ -119,14 +103,14 @@ def get_channel_note_reader() -> ChannelNoteResolver | None:
     return _channel_note_reader
 
 
-def set_channel_mirror(mirror: ChannelMirrorPort | None) -> None:
-    """Called by the channel kind's composition (spec chat "Mirror a web reply
-    into the channel it came from"); ``None`` unwires it."""
-    global _channel_mirror
-    _channel_mirror = mirror
+def set_channel_places(places: ChannelPlacesPort | None) -> None:
+    """Called by the channel kind's composition (spec chat
+    "Show channel conversations on the Conversations page"); ``None`` unwires it."""
+    global _channel_places
+    _channel_places = places
 
 
-def get_channel_mirror() -> ChannelMirrorPort | None:
-    """FastAPI Depends() target. ``None`` when no channel kind is wired — chat
-    then works exactly as before, with nothing mirrored."""
-    return _channel_mirror
+def get_channel_places() -> ChannelPlacesPort | None:
+    """FastAPI Depends() target. ``None`` when no channel kind is wired — the
+    list then shows no place."""
+    return _channel_places

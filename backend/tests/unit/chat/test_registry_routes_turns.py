@@ -1,11 +1,11 @@
 """The registry is the only way a turn reaches an agent, and the adapter it
-builds is self-contained: the orchestrator hands it the history and nothing
-else (spec chat "Route every turn through the agent-provider registry",
-"Keep each agent adapter self-contained")."""
+builds is self-contained: the orchestrator hands it the prompt and the
+attachments and nothing else (spec chat "Route every turn through the
+agent-provider registry", "Keep each agent adapter self-contained")."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -14,14 +14,12 @@ from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
-from coffer.domain.chat.message import Message
 from tests.support.chat_turns import start_turn
 
 from .conftest import (
     FakeAgentAdapter,
     FakeAgentProvider,
     FakeConversationRepo,
-    FakeMessageRepo,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -40,15 +38,15 @@ class _CountingProvider(FakeAgentProvider):
 
 
 class _RecordingAdapter:
-    """An adapter that records every keyword argument ``run_turn`` receives."""
+    """An adapter that records every argument ``run_turn`` receives."""
 
     model_id: str | None = None
 
     def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
+        self.calls: list[tuple[str, list[Any]]] = []
 
-    async def run_turn(self, **kwargs: Any) -> AsyncIterator[AgentEvent]:
-        self.calls.append(kwargs)
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
+        self.calls.append((prompt, list(attachments)))
         return self._events()
 
     async def _events(self) -> AsyncIterator[AgentEvent]:
@@ -61,11 +59,7 @@ def _platform(*providers: Any) -> tuple[TurnOrchestrator, ChatService]:
     registry = AgentProviderRegistry()
     for provider in providers:
         registry.register(provider, display_name=provider.agent_key.title())
-    chat = ChatService(
-        conversations=FakeConversationRepo(),
-        messages=FakeMessageRepo(),
-        registry=registry,
-    )
+    chat = ChatService(conversations=FakeConversationRepo(), registry=registry)
     return TurnOrchestrator(chat_service=chat, registry=registry), chat
 
 
@@ -92,12 +86,12 @@ async def test_a_turn_reaches_the_agent_the_conversation_names() -> None:
     assert beta.builds == [conv.id]
     assert alpha.builds == []
     assert [e.text for e in events if isinstance(e, TextDelta)] == ["from beta"]
-    assert len(beta_adapter.recorded_histories) == 1
-    assert alpha_adapter.recorded_histories == []
+    assert beta_adapter.recorded_prompts == ["hello"]
+    assert alpha_adapter.recorded_prompts == []
 
 
-@pytest.mark.acceptance(spec="chat", scenario="the orchestrator hands an adapter only the history")
-async def test_the_orchestrator_hands_an_adapter_only_the_history() -> None:
+@pytest.mark.acceptance(spec="chat", scenario="the orchestrator hands an adapter only the turn")
+async def test_the_orchestrator_hands_an_adapter_only_the_prompt() -> None:
     adapter = _RecordingAdapter()
     provider = FakeAgentProvider(adapter, agent_key="solo")
     orchestrator, chat = _platform(provider)
@@ -105,11 +99,6 @@ async def test_the_orchestrator_hands_an_adapter_only_the_history() -> None:
     conv = await chat.create_conversation(agent_key="solo")
     await _drain(await start_turn(orchestrator, conv.id, "what is on disk?"))
 
-    assert len(adapter.calls) == 1
-    call = adapter.calls[0]
-    # History and the turn's attachments are the whole of what it is given —
-    # no model, tool list or configuration is injected by the orchestrator.
-    assert set(call) == {"history", "attachments"}
-    history: Sequence[Message] = call["history"]
-    assert [m.content[0].text for m in history] == ["what is on disk?"]  # type: ignore[union-attr]
-    assert list(call["attachments"]) == []
+    # The prompt and the turn's attachments are the whole of what it is given —
+    # no history, model, tool list or configuration is injected by the orchestrator.
+    assert adapter.calls == [("what is on disk?", [])]

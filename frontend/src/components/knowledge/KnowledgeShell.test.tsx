@@ -39,6 +39,10 @@ vi.mock("@/lib/api/agentProviders", () => ({
   },
 }));
 
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: { listTerminals: vi.fn().mockResolvedValue([]), openTerminal: vi.fn() },
+}));
+
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 
 const SUBTITLE = "Documents you and your agents write together. Every agent can read them.";

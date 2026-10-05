@@ -18,7 +18,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
   usePlaintextContext: vi.fn(),
 }));
 vi.mock("@/components/handoff/AgentHandoff", () => ({
-  AgentHandoff: () => <button>Ask an agent</button>,
+  AgentHandoff: () => <button>Hand off to Claude Code</button>,
 }));
 vi.mock("@/components/secret/ScanSecretsDialog", () => ({
   ScanSecretsDialog: ({ open, only }: { open: boolean; only?: readonly string[] }) =>
@@ -120,7 +120,7 @@ describe("SyncPlaintextCard", () => {
       expect(within(card).queryByRole("button", { name: /retry/i })).toBeNull();
 
       // A secret is never handed to an agent: the card moves it into secrets itself.
-      expect(within(card).queryByRole("button", { name: "Ask an agent" })).toBeNull();
+      expect(within(card).queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
       expect(within(card).queryByRole("button", { name: /copy prompt/i })).toBeNull();
       fireEvent.click(within(card).getByRole("button", { name: "Move into secrets…" }));
       const move = screen.getByRole("dialog", { name: "Find plaintext keys" });

@@ -208,8 +208,7 @@ class ChannelThreadConversationRepoPort(Protocol):
     async def note_chat_kind(
         self, resource_uid: str, chat_id: str, thread_id: str, chat_kind: str
     ) -> None:
-        """Record which send path reaches this thread (upserting the row), so a
-        reply typed on the web can be mirrored into it."""
+        """Record which send path reaches this thread (upserting the row)."""
         ...
 
     async def record_history(
@@ -232,8 +231,7 @@ class ChannelThreadConversationRepoPort(Protocol):
 
     async def locate(self, conversation_id: str) -> ChannelThreadLocation | None:
         """Which chat and thread opened ``conversation_id``, or ``None`` when no
-        channel did (spec chat "Mirror a web reply into the channel it came
-        from")."""
+        channel did."""
         ...
 
     async def locate_many(
@@ -264,49 +262,6 @@ class ChannelThreadConversationRepoPort(Protocol):
     ) -> list[ChannelThreadConversation]:
         """The chat's parallel threads, newest (highest ordinal) first."""
         ...
-
-
-@dataclass(frozen=True)
-class OutboxEntry:
-    """One message waiting to reach a chat (one ``channel_outbox`` row): a reply
-    typed on the web (``kind="reply"``) or the agent's answer to it, collected
-    while the channel could not send (``kind="answer"``)."""
-
-    id: int
-    resource_uid: str
-    chat_id: str
-    thread_id: str
-    chat_kind: str
-    conversation_id: str
-    kind: str
-    text: str
-    created_at: datetime
-
-
-class ChannelOutboxRepoPort(Protocol):
-    """Messages Coffer still owes a chat (spec chat "Mirror a web reply into the
-    channel it came from"): kept until the channel can send them, then marked
-    delivered — never dropped because a send failed."""
-
-    async def add(
-        self,
-        *,
-        resource_uid: str,
-        chat_id: str,
-        thread_id: str,
-        chat_kind: str,
-        conversation_id: str,
-        kind: str,
-        text: str,
-    ) -> int: ...
-
-    async def pending(self, resource_uid: str) -> list[OutboxEntry]:
-        """The channel's undelivered messages, oldest first."""
-        ...
-
-    async def pending_for_conversation(self, conversation_id: str) -> list[OutboxEntry]: ...
-
-    async def mark_delivered(self, entry_id: int) -> None: ...
 
 
 @dataclass(frozen=True)

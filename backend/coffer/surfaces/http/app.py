@@ -41,6 +41,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.runtime import loop_lag
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.resource import Kind
+from coffer.infrastructure.agent.legacy_cleanup import remove_transcript_sidecar
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.attention_ignore_repo import SqlAlchemyAttentionIgnoreRepo
@@ -96,9 +97,11 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     remember_destination_sources,
 )
 from coffer.surfaces.http.secret_composition import init_secret_store
+from coffer.surfaces.http.session_conversation_wiring import wire_session_conversations
 from coffer.surfaces.http.setup_lifespan import guarded
 from coffer.surfaces.http.vault_composition import build_vault_stores
 from coffer.surfaces.http.vault_wiring import start_vault_scanning
+from coffer.surfaces.http.workspace_dependencies import get_native_session_service
 
 
 def _db_url() -> str:
@@ -223,6 +226,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         ),
         retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
     )
+    # An agent's native sessions that a channel conversation points at are also
+    # that conversation: the sessions service joins the turn platform here (the
+    # two kinds meet only in a composition root).
+    wire_session_conversations(
+        get_native_session_service(),
+        chat=chat.chat_service,
+        orchestrator=chat.orchestrator,
+        resources=resource_svc,
+        agents=kinds.agent_skill.agent_service,
+    )
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
@@ -262,6 +275,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
     # binaries and back up the history database before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
+    # Leftover of the retired transcript summary cache (derived, safe to drop).
+    await asyncio.to_thread(remove_transcript_sidecar)
 
     workers = start_background_workers(
         retention_svc=retention_svc,
@@ -269,7 +284,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         guide=kinds.guide,
         distil=kinds.memory.distil,
         memory_service=kinds.memory.service,
-        transcript_reader=kinds.agent_skill.transcript_reader,
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,

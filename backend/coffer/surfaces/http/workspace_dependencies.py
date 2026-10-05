@@ -10,8 +10,8 @@ from __future__ import annotations
 from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
+from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.application.agent.plugin_service import AgentPluginService
-from coffer.application.agent.transcript_service import AgentTranscriptService
 
 _agent_mcp_entry_service: AgentMcpEntryService | None = None
 
@@ -61,20 +61,20 @@ def get_agent_native_memory_service() -> AgentNativeMemoryService:
     return _agent_native_memory_service
 
 
-_agent_transcript_service: AgentTranscriptService | None = None
+_native_session_service: NativeSessionService | None = None
 
 
-def set_agent_transcript_service(svc: AgentTranscriptService) -> None:
+def set_native_session_service(svc: NativeSessionService) -> None:
     """Called by the composition root once on startup."""
-    global _agent_transcript_service
-    _agent_transcript_service = svc
+    global _native_session_service
+    _native_session_service = svc
 
 
-def get_agent_transcript_service() -> AgentTranscriptService:
+def get_native_session_service() -> NativeSessionService:
     """FastAPI Depends() target."""
-    if _agent_transcript_service is None:
-        raise RuntimeError("agent transcript service not initialised")
-    return _agent_transcript_service
+    if _native_session_service is None:
+        raise RuntimeError("native session service not initialised")
+    return _native_session_service
 
 
 _agent_hooks_service: AgentHooksService | None = None

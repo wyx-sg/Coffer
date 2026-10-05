@@ -1,7 +1,7 @@
 // frontend/src/components/skills/SkillBanners.test.tsx
 // The banners above an open skill's tabs: an update waiting (Review update…, an
 // outline button) and a Git source that can't be reached — Check again, then
-// the Ask an agent ▾ split button and its "?", because a network, VPN or
+// the Hand off to <Agent> ▾ split button and its "?", because a network, VPN or
 // credential problem is on this machine; the hand-off prompt names the
 // repository and git's own error.
 import { beforeEach, describe, expect, test, vi } from "vitest";

@@ -210,8 +210,7 @@ agent is not inherited.
 ### `channel_thread_history`
 
 Every conversation a chat thread opened — what `/resume` lists ("Resume an
-earlier conversation from chat") and what a reply typed on the web is mirrored
-back through (spec chat "Mirror a web reply into the channel it came from").
+earlier conversation from chat") reads.
 
 | column            | type                                         | notes                                     |
 | ----------------- | -------------------------------------------- | ----------------------------------------- |
@@ -227,9 +226,10 @@ Index on `(resource_uid, chat_id, thread_id)`.
 
 ### `channel_outbox`
 
-Messages Coffer owes a chat and has not delivered: a web reply (`kind=reply`,
-stored with its `<owner name> · from Coffer` prefix line) and the agent's answer collected behind
-it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
+**Unused.** The table once held the messages Coffer owed a chat: a web reply
+(`kind=reply`) and the agent's answer collected behind it (`kind=answer`).
+Nothing writes it since the web chat went; it remains only so a channel's
+deletion still clears any row an earlier version left (`delete_for_channel`).
 
 | column            | type                                         | notes                                   |
 | ----------------- | -------------------------------------------- | --------------------------------------- |
@@ -276,12 +276,11 @@ Index on `(resource_uid, chat_id, sent_at)`.
 | seen-event ids      | per channel      | for de-duplicating a redelivered platform event                                              |
 
 **The channel keeps no message queue of its own.** A message arriving mid-turn
-goes to the orchestrator's `enqueue_message` exactly as a web message does, so
-both surfaces drain one FIFO per conversation and a turn finishing on either
-advances it (spec chat). What the channel owns is a *refusal threshold*:
+goes to the orchestrator's `enqueue_message`, so channels drain one FIFO per
+conversation and a turn finishing advances it (spec chat). What the channel owns is a *refusal threshold*:
 `QUEUE_MAX = 10` is compared against that conversation's own pending queue, and
 past it the chat is told the bot is busy rather than the message being buffered
-here. The web composer is not bounded.
+here.
 
 Crash behavior: all of it evaporates with the daemon; turns are swept failed
 by the turn platform's startup sweep, codes are re-issued, queues are empty.
@@ -339,6 +338,7 @@ one live surface").
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
 the framework automatically. Turn activity is **not** audited: a turn happening
 is neither irreversible, security-sensitive, nor invisible afterwards — the
-conversation and its messages are the record. Pairing is audited because it
+conversation index and the
+agent's own session are the record. Pairing is audited because it
 grants a sender the right to drive turns, which is exactly the kind of change
 the log exists for.

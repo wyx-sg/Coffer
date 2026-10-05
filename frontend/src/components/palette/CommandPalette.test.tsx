@@ -361,26 +361,4 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input(), { key: "Escape" });
     await waitFor(() => expect(opener).toHaveFocus());
   });
-
-  test("conversations are asked for by the text typed, 8 at a time, never as a whole list", async () => {
-    callAnswers["/chat/conversations"] = async () => ({
-      conversations: [{ id: "c1", title: "Deploy plan", running: false, preview: null }],
-      next_cursor: null,
-    });
-    renderPalette();
-    await settled();
-    // Opened empty, the palette reads the first page of 30.
-    const queries = () =>
-      call.mock.calls
-        .filter(([path]) => path === "/chat/conversations")
-        .map(([, init]) => (init as { params: { query: Record<string, unknown> } }).params.query);
-    await waitFor(() => expect(queries()).toHaveLength(1));
-    expect(queries()[0]).toMatchObject({ limit: 30 });
-    expect(queries()[0].q).toBeUndefined();
-
-    type("deploy");
-    await waitFor(() => expect(queries()).toHaveLength(2));
-    expect(queries()[1]).toMatchObject({ q: "deploy", limit: 8 });
-    await waitFor(() => expect(options()).toContain("Deploy plan"));
-  });
 });

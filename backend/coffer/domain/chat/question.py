@@ -1,8 +1,8 @@
 """A question an agent asks the owner mid-turn (spec chat "Pause a turn on a
 question for the owner").
 
-The question is a ``question`` content block of the reply that asked: the same
-shape for ``coffer__ask`` and for Claude Code's ``AskUserQuestion``. This module
+The question is a block held in memory while its turn waits: the same shape for
+``coffer__ask`` and for Claude Code's ``AskUserQuestion``. This module
 holds the pure model — the block, its states, the validation of an ask's input
 and of the owner's answers — and nothing about how a question is waited on.
 
@@ -19,10 +19,6 @@ from typing import Any, Literal
 from coffer.domain.chat.errors import QuestionAnswerInvalid
 
 QuestionStatus = Literal["pending", "answered", "cancelled"]
-
-#: ``answered_via`` for an answer given on the Conversations page; a channel's
-#: answer carries the channel's uid instead.
-VIA_WEB = "web"
 
 MAX_QUESTIONS = 4
 MIN_OPTIONS = 2
@@ -156,59 +152,3 @@ def check_answer(spec: QuestionSpec, selected: list[str], text: str | None) -> Q
     if not selected and text is None:
         raise QuestionAnswerInvalid("an answer needs an option or some text")
     return QuestionAnswer(header=spec.header, selected=tuple(selected), text=text)
-
-
-def block_to_dict(block: QuestionBlock) -> dict[str, Any]:
-    return {
-        "type": "question",
-        "question_id": block.question_id,
-        "context": block.context,
-        "questions": [
-            {
-                "header": q.header,
-                "question": q.question,
-                "multi_select": q.multi_select,
-                "options": [{"label": o.label, "description": o.description} for o in q.options],
-            }
-            for q in block.questions
-        ],
-        "status": block.status,
-        "answers": [
-            {"header": a.header, "selected": list(a.selected), "text": a.text}
-            for a in block.answers
-        ],
-        "answered_via": block.answered_via,
-        "answered_by": block.answered_by,
-        "answered_at": block.answered_at,
-    }
-
-
-def block_from_dict(data: dict[str, Any]) -> QuestionBlock:
-    return QuestionBlock(
-        question_id=data["question_id"],
-        context=data.get("context"),
-        questions=tuple(
-            QuestionSpec(
-                header=q.get("header", ""),
-                question=q["question"],
-                multi_select=bool(q.get("multi_select", False)),
-                options=tuple(
-                    QuestionOption(label=o["label"], description=o.get("description"))
-                    for o in q["options"]
-                ),
-            )
-            for q in data["questions"]
-        ),
-        status=data.get("status", "pending"),
-        answers=tuple(
-            QuestionAnswer(
-                header=a.get("header", ""),
-                selected=tuple(a.get("selected", [])),
-                text=a.get("text"),
-            )
-            for a in data.get("answers", [])
-        ),
-        answered_via=data.get("answered_via"),
-        answered_by=data.get("answered_by"),
-        answered_at=data.get("answered_at"),
-    )

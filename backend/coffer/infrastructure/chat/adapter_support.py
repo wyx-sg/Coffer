@@ -9,8 +9,6 @@ app-server-backed (:mod:`codex_agent`) adapters both need:
 - :data:`SessionSink` — the callback an adapter calls to persist a newly
   discovered upstream session id back onto the conversation, so the next turn
   can ``--resume`` it.
-- :func:`last_user_text` — the prompt for a turn: the text of the most recent
-  user message in the history.
 - :func:`channel_system_context` — the append telling a channel-driven agent it
   is on a phone chat rather than at a terminal.
 - :func:`model_system_context` — the append naming the model Coffer put the
@@ -26,7 +24,6 @@ from dataclasses import dataclass, field
 
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.errors import AgentConfigRejected
-from coffer.domain.chat.message import Message, Role, TextBlock
 
 #: Persist a discovered upstream session id back onto the conversation.
 SessionSink = Callable[[str], Awaitable[None]]
@@ -43,14 +40,6 @@ class ParseState:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     terminal_emitted: bool = False
-
-
-def last_user_text(history: Sequence[Message]) -> str:
-    """The text of the most recent user message — the prompt for this turn."""
-    for msg in reversed(history):
-        if msg.role is Role.USER:
-            return "".join(b.text for b in msg.content if isinstance(b, TextBlock)).strip()
-    return ""
 
 
 def _where(note: ChannelNote | None) -> str:
@@ -146,7 +135,6 @@ __all__ = [
     "ParseState",
     "SessionSink",
     "channel_system_context",
-    "last_user_text",
     "model_system_context",
 ]
 

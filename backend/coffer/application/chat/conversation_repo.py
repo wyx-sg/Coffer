@@ -11,7 +11,7 @@ than appearing a second time further down.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -26,7 +26,7 @@ _TAG = "chat_conversations"
 @dataclass(frozen=True)
 class Narrowing:
     """The listing's source and agent filters, empty meaning every one: ``sources``
-    holds ``coffer`` (Coffer's own UI) and channel uids, ``agents`` agent keys."""
+    holds channel uids, ``agents`` agent keys."""
 
     sources: tuple[str, ...] = ()
     agents: tuple[str, ...] = ()
@@ -59,23 +59,26 @@ class ConversationRepo(Protocol):
     async def list(
         self,
         *,
-        archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
         contains: str | None = None,
         narrow: Narrowing = EVERY,
     ) -> list[Conversation]:
-        """Conversations newest activity first, the id breaking ties; active
-        when ``archived`` is False. ``after`` (a row's ``(updated_at, id)``) and
-        ``limit`` cut one page of that order; without them, the whole listing.
-        ``contains`` keeps the rows whose title or any message's text holds it
-        (case-insensitive); ``narrow`` keeps those of its sources and agents."""
+        """Channel conversations (the ones with a ``channel_uid``) newest
+        activity first, the id breaking ties. ``after`` (a row's
+        ``(updated_at, id)``) and ``limit`` cut one page of that order; without
+        them, the whole listing. ``contains`` keeps the rows whose title or
+        working directory holds it (case-insensitive); ``narrow`` keeps those of
+        its sources and agents."""
         ...
 
-    async def count(
-        self, *, archived: bool = False, contains: str | None = None, narrow: Narrowing = EVERY
-    ) -> int:
+    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
         """How many conversations ``list`` would return without ``after``/``limit``."""
+        ...
+
+    async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:
+        """The conversations whose agent session is one of ``session_ids`` (a
+        constant number of reads whatever their number)."""
         ...
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation: ...
@@ -92,31 +95,26 @@ class ConversationRepo(Protocol):
         """Replace the typed provider-owned per-conversation state."""
         ...
 
-    async def set_archived(
-        self, conversation_id: str, archived_at: datetime | None
-    ) -> Conversation: ...
-
     async def delete(self, conversation_id: str) -> None: ...
 
 
 async def page_conversations(
     repo: ConversationRepo,
     *,
-    archived: bool,
     limit: int,
     cursor: str | None,
     q: str | None = None,
     narrow: Narrowing = EVERY,
 ) -> Page[Conversation]:
-    """One page of the active (or archived) listing, continued by ``cursor``.
+    """One page of the listing, continued by ``cursor``.
 
-    The cursor is bound to which listing it came from: one issued for the
-    active threads sent to the archived listing is ``CursorInvalid``, and so is
-    one issued for another ``q`` (the title-and-messages search) or ``narrow``.
+    The cursor is bound to the filters it was issued for: one issued for
+    another ``q`` (the title-and-directory search) or ``narrow`` is
+    ``CursorInvalid``.
     """
     q = q.strip() if q else None
     q = q or None
-    filters: dict[str, object] = {"archived": archived}
+    filters: dict[str, object] = {}
     if q is not None:
         filters["q"] = q.casefold()
     if narrow.sources:
@@ -124,9 +122,7 @@ async def page_conversations(
     if narrow.agents:
         filters["agents"] = list(narrow.agents)
     after = time_and_id(decode_cursor(cursor, list_tag=_TAG, filters=filters), str)
-    rows = await repo.list(
-        archived=archived, limit=limit + 1, after=after, contains=q, narrow=narrow
-    )
+    rows = await repo.list(limit=limit + 1, after=after, contains=q, narrow=narrow)
     return paginate(
         rows,
         limit,

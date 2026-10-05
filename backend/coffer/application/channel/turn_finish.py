@@ -22,7 +22,7 @@ from coffer.application.channel.turn_media import deliver_media, send_reply_file
 from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
-from coffer.domain.chat.events import TurnError
+from coffer.domain.chat.events import SESSION_IN_USE, TurnError
 
 __all__ = [
     "Delivered",
@@ -210,7 +210,12 @@ async def _deliver_reply(
     if end.error is not None:
         # What the agent streamed before failing is still the user's — a stalled
         # or dropped turn often has most of an answer in it.
-        notice = failure_line(end.error.message)
+        # A refusal is said as it is: nothing failed and nothing is worth retrying.
+        notice = (
+            end.error.message
+            if end.error.code == SESSION_IN_USE
+            else failure_line(end.error.message)
+        )
         body = f"{text}\n\n{notice}" if text else notice
     elif end.stop_reason == "interrupted":
         notice = stopped_line(end.duration)

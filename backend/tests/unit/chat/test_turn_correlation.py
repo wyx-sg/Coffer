@@ -20,10 +20,9 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.runtime import correlation
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone
-from coffer.domain.chat.message import Message
 from tests.support.chat_turns import start_turn
 
-from .conftest import FakeAuditRepo, FakeConversationRepo, FakeMessageRepo, make_registry
+from .conftest import FakeAuditRepo, FakeConversationRepo, make_registry
 
 
 class _AuditingAdapter:
@@ -36,7 +35,7 @@ class _AuditingAdapter:
         self.seen: list[correlation.Correlation] = []
 
     async def run_turn(
-        self, *, history: Sequence[Message], attachments: Sequence[Any] = (), **_: object
+        self, prompt: str, attachments: Sequence[Any] = ()
     ) -> AsyncIterator[AgentEvent]:
         return self._events()
 
@@ -56,9 +55,7 @@ async def _run_one_turn(orchestrator: TurnOrchestrator, conversation_id: str) ->
 def _orchestrator(audit: AuditService) -> tuple[TurnOrchestrator, _AuditingAdapter]:
     adapter = _AuditingAdapter(audit)
     registry, _prov = make_registry(adapter=adapter)
-    chat = ChatService(
-        conversations=FakeConversationRepo(), messages=FakeMessageRepo(), registry=registry
-    )
+    chat = ChatService(conversations=FakeConversationRepo(), registry=registry)
     return TurnOrchestrator(chat_service=chat, registry=registry), adapter
 
 

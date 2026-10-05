@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+
+from coffer.domain.chat.agent_config import AgentConfig
 
 
 @dataclass(frozen=True)
@@ -13,8 +15,9 @@ class Conversation:
     Not a Resource — stored in the dedicated ``conversations`` SQLite table.
     ``agent_key`` identifies which agent the thread talks to; every writer names it
     (the store has no default to fall back on).
-    ``archived_at`` is ``None`` for an active thread, or the instant it was
-    archived; archived threads are hidden from the default list but restorable.
+    Coffer keeps the conversation's *index* only (title, agent, channel binding,
+    the native session id and directory in ``agent_config``); the text of the
+    conversation lives in the agent's own session.
 
     An optional **channel binding** (``channel_uid`` + ``peer_chat_id``) is the
     return address for relaying the agent's output back to an IM channel
@@ -37,6 +40,8 @@ class Conversation:
     title: str
     created_at: datetime
     updated_at: datetime
-    archived_at: datetime | None = None
     channel_uid: str | None = None
     peer_chat_id: str | None = None
+    #: The agent's own state for this conversation (directory, native session id,
+    #: model), as stored on the row.
+    agent_config: AgentConfig = field(default_factory=AgentConfig)

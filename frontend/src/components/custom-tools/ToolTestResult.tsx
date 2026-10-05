@@ -1,7 +1,7 @@
 // src/components/custom-tools/ToolTestResult.tsx — what one test run got (4.2.08–4.2.12), under the form's fields:
 //  · an answer: a neutral sunken block — green ✓, grey status line, the URL — the response in the viewer below it;
 //  · the API's error (4xx/5xx): a danger-soft block, no hand-off (401/403 add Change value for the secret);
-//  · no connection / timeout: a danger-soft block with Ask an agent ▾ and ? (a timeout also Change timeout).
+//  · no connection / timeout: a danger-soft block with Hand off to <Agent> ▾ and ? (a timeout also Change timeout).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, CircleAlert, Copy } from "lucide-react";

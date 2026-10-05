@@ -7,7 +7,8 @@
 // no MEMORY.md / RETIRED.md / .raw/, no native path. Delivered, at
 // /memory/<uid>/delivered, shows each agent's session-start text with an
 // agent switch and no hook state. Tidy and Tidy all hand the partition or every
-// partition to the default managed agent and send the prompt at once. Only the
+// partition to the hand-off agent, started in the preferred terminal with the
+// prompt sent at once. Only the
 // api modules are mocked.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -28,7 +29,6 @@ import {
   RETIRED,
 } from "@/components/memory/memoryTestData";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
-import { readHandoffState } from "@/lib/conversations/handoff";
 import { ApiError } from "@/lib/api/errors";
 import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
 import { MemoryPage } from "@/pages/MemoryPage";
@@ -55,6 +55,7 @@ vi.mock("@/lib/api/memory", () => ({
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
 vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 // The first-run welcome lists the connected agents; none here.
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn(async () => ({ items: [] })) } }));
 
@@ -62,6 +63,7 @@ const api = await import("@/lib/api/memory");
 const { listUpkeepRuns } = await import("@/lib/api/upkeep");
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
 const { resourcesApi } = await import("@/lib/api/resources");
+const { fsApi } = await import("@/lib/api/fs");
 
 function stub({
   partitions = [COFFER],
@@ -95,18 +97,8 @@ function stub({
       : [],
   } as Awaited<ReturnType<typeof agentProvidersApi.list>>);
   vi.mocked(api.getTidyHandoff).mockResolvedValue({ prompt: "Tidy every partition." });
-}
-
-/** The draft a hand-off opens: agent, whether it sends itself, and the prompt. */
-function DraftProbe() {
-  const handoff = readHandoffState(useLocation().state);
-  return (
-    <div data-testid="draft">
-      {handoff
-        ? `${handoff.agentKey}|${handoff.autoSend ? "send" : "draft"}|${handoff.prompt}`
-        : "empty"}
-    </div>
-  );
+  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
+  vi.mocked(fsApi.openTerminal).mockResolvedValue(undefined);
 }
 
 function LocationProbe() {
@@ -124,7 +116,6 @@ function renderAt(path: string) {
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/memory/:uid" element={<MemoryDetailPage />} />
             <Route path="/memory/:uid/:tab" element={<MemoryDetailPage />} />
-            <Route path="/conversations/new" element={<DraftProbe />} />
             <Route path="*" element={null} />
           </Routes>
           <LocationProbe />
@@ -290,9 +281,16 @@ describe("MemoryDetailPage", () => {
     stub({ managedAgent: true });
     renderAt(`/memory/${COFFER.uid}`);
     fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
-    expect(await screen.findByTestId("draft")).toHaveTextContent(
-      `claude_code|send|${COFFER.tidy_handoff.prompt}`,
+    await waitFor(() =>
+      expect(fsApi.openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        prompt: COFFER.tidy_handoff.prompt,
+        terminal: null,
+      }),
     );
+    expect(fsApi.openTerminal).toHaveBeenCalledTimes(1);
+    // The page stays where it is.
+    expect(screen.getByTestId("location")).toHaveTextContent(`/memory/${COFFER.uid}`);
   });
 
   acceptance("memory", "with no managed agent the page offers Copy prompt only", async () => {
@@ -302,7 +300,7 @@ describe("MemoryDetailPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
     expect(writeText).toHaveBeenCalledWith(COFFER.tidy_handoff.prompt);
     expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
-    expect(screen.queryByTestId("draft")).toBeNull();
+    expect(fsApi.openTerminal).not.toHaveBeenCalled();
   });
 
   acceptance(
@@ -312,10 +310,16 @@ describe("MemoryDetailPage", () => {
       stub({ managedAgent: true, partitions: [GLOBAL, COFFER] });
       renderAt("/memory");
       fireEvent.click(await screen.findByRole("button", { name: "Tidy all" }));
-      expect(await screen.findByTestId("draft")).toHaveTextContent(
-        "claude_code|send|Tidy every partition.",
+      await waitFor(() =>
+        expect(fsApi.openTerminal).toHaveBeenCalledWith({
+          agent: "claude_code",
+          prompt: "Tidy every partition.",
+          terminal: null,
+        }),
       );
+      // One session for every partition: the all-partitions prompt is fetched and sent once.
       expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
+      expect(fsApi.openTerminal).toHaveBeenCalledTimes(1);
     },
   );
 

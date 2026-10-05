@@ -36,7 +36,6 @@ from coffer.surfaces.http.knowledge_sweep_wiring import stop_knowledge_sweep
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
 from coffer.surfaces.http.sync_wiring import stop_sync_worker
-from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
 
 _logger = logging.getLogger(__name__)
 
@@ -98,7 +97,6 @@ async def shutdown(running: Running) -> None:
     await stop_knowledge_sweep(running.workers.knowledge_sweep_task)
     await stop_distil_worker(running.workers.distil_task)
     await stop_aggregate_worker(running.workers.aggregate_task)
-    await stop_transcript_warm_worker(running.workers.warm_worker, running.workers.warm_task)
     # The skill update check fetches over the network; stop it and remove
     # every staged source (spec skill-manager "Add skills from an archive").
     await best_effort("skill_sources", running.kinds.agent_skill.skill_sources.stop())
@@ -113,9 +111,10 @@ async def shutdown(running: Running) -> None:
     )
     await best_effort("channel_runtime.dispose", running.channel_runtime.dispose())
     # With nothing left to start one, stop the turns still running — here,
-    # while the database is still open, because each writes its partial reply
-    # as it unwinds (spec chat "Keep partial output when a turn is interrupted
-    # or fails").
+    # while the database is still open, because each delivers its partial text
+    # and bumps the conversation's activity as it unwinds (spec chat "Deliver
+    # partial output as events when a turn is interrupted or fails", "a
+    # shutdown stops running turns first").
     await best_effort("chat_turns", stop_all_turns())
 
     # The retention worker was asked to stop above; give it a grace period to

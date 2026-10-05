@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -46,7 +44,6 @@ from coffer.domain.chat.events import (
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Message, Role, TextBlock
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeParseState,
     ClaudeSdkAgentAdapter,
@@ -111,21 +108,8 @@ class _Factory:
         return self.session
 
 
-def _user_turn(text: str) -> list[Message]:
-    return [
-        Message(
-            id=uuid.uuid4().hex,
-            conversation_id="c1",
-            seq=0,
-            role=Role.USER,
-            content=[TextBlock(text=text)],
-            status="complete",
-            model_id=None,
-            prompt_tokens=None,
-            completion_tokens=None,
-            created_at=datetime.now(tz=UTC),
-        )
-    ]
+def _user_turn(text: str) -> str:
+    return text
 
 
 async def _dummy_sink(sid: str) -> None:
@@ -164,10 +148,10 @@ def _adapter(
 
 async def _collect(
     adapter: ClaudeSdkAgentAdapter,
-    history: list[Message],
+    prompt: str,
     attachments: Any = (),
 ):
-    stream = await adapter.run_turn(history=history, attachments=attachments)
+    stream = await adapter.run_turn(prompt, attachments=attachments)
     return [ev async for ev in stream]
 
 
@@ -230,7 +214,7 @@ def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any
 
 
 @pytest.mark.acceptance(
-    spec="chat", scenario="an image the API cannot take inline reaches the agent as a path"
+    spec="channels", scenario="an inbound image reaches a vision agent as an inline block"
 )
 def test_build_content_inlines_a_mislabelled_image_under_its_sniffed_type(tmp_path: Any) -> None:
     # A JPEG a browser or channel called image/png would be rejected by the API
@@ -708,7 +692,7 @@ async def test_adapter_streams_events_and_persists_session():
 async def test_adapter_empty_prompt_is_rejected():
     factory = _Factory([])
     adapter = _adapter(factory)
-    events = await _collect(adapter, [])
+    events = await _collect(adapter, "")
     assert len(events) == 1
     assert isinstance(events[0], TurnError)
     assert events[0].code == "empty_prompt"
@@ -742,7 +726,7 @@ async def test_cancel_interrupts_disconnects_and_persists_session():
     factory = _Factory(_basic_messages(), block_after=0)
     adapter = _adapter(factory, on_session=on_session)
 
-    stream = await adapter.run_turn(history=_user_turn("go"))
+    stream = await adapter.run_turn(_user_turn("go"))
 
     async def consume() -> None:
         async for _ in stream:
@@ -762,7 +746,6 @@ async def test_cancel_interrupts_disconnects_and_persists_session():
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 async def test_adapter_reports_the_model_the_turn_ran_on():
     # The CLI names the model on its assistant messages; the adapter exposes it so
     # the turn runner can record it on the reply it finalises.
@@ -811,7 +794,7 @@ async def test_cancel_while_connecting_disconnects_the_session():
         session_factory=factory,
         on_session=_dummy_sink,
     )
-    stream = await adapter.run_turn(history=_user_turn("go"))
+    stream = await adapter.run_turn(_user_turn("go"))
 
     async def consume() -> None:
         async for _ in stream:
@@ -987,6 +970,7 @@ class _ResumeThenFreshFactory:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a cleaned-up session resumes as a fresh one")
 @pytest.mark.acceptance(
     spec="chat",
     scenario="a resume id the agent has forgotten retries once as a fresh session",

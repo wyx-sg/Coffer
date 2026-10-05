@@ -100,8 +100,7 @@ async def open_conversation(
     turns in different threads never collide on one conversation. A group
     thread with no setting of its own takes the group's defaults, which live on
     the group's ``""`` row (see "Set a group's defaults from its main chat").
-    The conversation is recorded in the thread's history, which `/resume` lists
-    and a web reply is mirrored back through."""
+    The conversation is recorded in the thread's history, which `/resume` lists."""
     row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     kind = chat_kind or (row.chat_kind if row is not None else None)
     group = None
@@ -164,24 +163,21 @@ async def ensure_conversation(
     """Return this thread's active conversation, opening a new one when there is
     nothing usable to continue.
 
-    "Nothing usable" is three cases: the conversation was deleted, it was
-    archived (a message to an archived conversation opens a new one and never
-    revives it — spec channels "Open a new conversation when the active one is
-    archived"), or the thread sat idle longer than ``idle_hours`` (spec channels
-    "Open a new conversation after an idle period"; 0 never rolls over). Only
-    the idle case speaks, through ``say``: the old conversation stays in the list
-    and the owner should know why the agent no longer remembers it.
+    "Nothing usable" is two cases: the conversation was deleted, or the thread
+    sat idle longer than ``idle_hours`` (spec channels "Open a new conversation
+    after an idle period"; 0 never rolls over). Only the idle case speaks, through
+    ``say``: the old conversation stays in the list and the owner should know why
+    the agent no longer remembers it.
 
     ``chat_kind`` (when the caller knows it) is remembered on the thread and on
-    the conversation's history row, so a reply typed on the web knows which of
-    the platform's send paths reaches this thread."""
+    the conversation's history row."""
     row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     if row is not None and row.active_conversation_id is not None:
         try:
             current = await conversations.get_conversation(row.active_conversation_id)
         except ConversationNotFound:
             current = None
-        if current is not None and current.archived_at is None:
+        if current is not None:
             if idle_hours > 0 and now() - current.updated_at > timedelta(hours=idle_hours):
                 opened = await open_conversation(
                     conversations, threads, binding, peer, thread_id, chat_kind=chat_kind

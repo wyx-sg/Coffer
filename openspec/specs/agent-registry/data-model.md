@@ -559,7 +559,7 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
 
 1. Build `AgentService` + `AutoDetectService`.
 2. Build `AgentConfigFileService` + `AgentMcpService` + `AgentMcpEntryService` +
-   `AgentPluginService` + the native-memory and transcript readers over a
+   `AgentPluginService` + the native-memory reader and the native-session service over a
    `ConfigFileStore`.
 3. Construct the `Kind` via `make_agent_kind(...)` with its `on_delete` hook.
 4. Register it in the per-kind registry the kind-agnostic resource routes read.
@@ -567,7 +567,7 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
    files), `agent_connection_routes` (the Coffer connection, whose service
    `agent_connection_wiring` builds once the memory kind is wired too),
    `agent_workspace_routes` (MCP entries + plugins),
-   `agent_native_memory_routes`, `agent_transcript_routes`,
+   `agent_native_memory_routes`, `agent_session_routes`,
    and `agent_unmanaged_skill_routes`. The `/fs/*` routes the picker and the
    open/reveal affordances call are mounted by spec daemon, not here.
 

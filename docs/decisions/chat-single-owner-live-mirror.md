@@ -1,5 +1,7 @@
 # Chat Is a Single-Owner Live Mirror
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. Superseded in part: there is no web thread to mirror, no stored message history (`chat_messages`), no streaming-row sweep and no conversation retention. What remains from this ADR is the turn platform: one in-memory event stream per running turn, a queue per conversation, interrupt, and the conversation index. The requirement titles cited below that no longer exist are kept as history.
+
 **Status**: Accepted
 **Date**: 2026-06-20
 **Deciders**: Yuxing Wu

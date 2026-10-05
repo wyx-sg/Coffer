@@ -86,7 +86,7 @@ Coffer sends no memory content to any model. Aggregation, distil and delivery st
 
 ### Change the schedule
 
-In the Memory header, **Automatic · hourly** opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. The header shows when the agents' memory was last read (*Read 14 min ago*), and says so when an agent's memory could not be read: a warning banner then names the agent and the path, with **Retry** and **Ask an agent ▾**, whose prompt asks an agent to fix the read permission; while **Update memory** runs it reads *Distilling 2 of 5 partitions*.
+In the Memory header, **Automatic · hourly** opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. The header shows when the agents' memory was last read (*Read 14 min ago*), and says so when an agent's memory could not be read: a warning banner then names the agent and the path, with **Retry** and **Hand off to &lt;Agent&gt; ▾**, whose prompt asks an agent to fix the read permission; while **Update memory** runs it reads *Distilling 2 of 5 partitions*.
 
 A change applies without a restart. The popover offers 15 minutes to 1 day; the settings API accepts down to 60 seconds.
 
@@ -108,7 +108,7 @@ Memory → Tidy all                          (every partition, one after another
 Memory → choose the partition → Tidy
 ```
 
-**Tidy** opens a new conversation on your default managed agent with a prompt that names the partition and its folder, and **sends it at once**. **Tidy all**, in the Memory page's header, sends one prompt that names every partition with its notes folder and note count, and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into any agent that has the `coffer-guide` skill.
+**Tidy** starts your default hand-off agent in your preferred terminal with a prompt that names the partition and its folder, sent as its first message. **Tidy all**, in the Memory page's header, sends one prompt the same way that names every partition with its notes folder and note count, and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into any agent that has the `coffer-guide` skill.
 
 The prompt points the agent at the **Tidying memory** section of the `coffer-guide` skill. Following it, the agent works through one partition at a time:
 

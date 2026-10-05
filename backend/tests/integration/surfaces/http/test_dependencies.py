@@ -78,7 +78,7 @@ _PROVIDERS: list[_Provider] = [
         "_agent_mcp_entry_service",
         "_agent_plugin_service",
         "_agent_native_memory_service",
-        "_agent_transcript_service",
+        "_native_session_service",
         "_agent_hooks_service",
     ),
     # skill kind
@@ -100,7 +100,6 @@ _PROVIDERS: list[_Provider] = [
         "_turn_orchestrator",
         "_agent_registry",
         "_model_catalog",
-        "_attachment_service",
     ),
     # provider kind
     *_pairs(provider_deps, "_provider_service", "_introspection_service", "_price_resolver"),
@@ -109,13 +108,12 @@ _PROVIDERS: list[_Provider] = [
 ]
 
 # Providers a surface works without: the getter answers ``None`` while unset
-# instead of raising. The chat routes mirror a web reply into its channel only
-# when the channel kind has published its mirror (spec chat "Mirror a web reply
-# into the channel it came from"), and a channel turn's note says more than the
-# channel's name only once it has published its note reader (spec channels "Tell
-# a channel-driven agent it is on a chat channel").
+# instead of raising. The conversation list shows where a conversation lives in its
+# channel only when the channel kind has published its places, and a channel
+# turn's note says more than the channel's name only once it has published its
+# note reader (spec channels "Tell a channel-driven agent it is on a chat channel").
 _OPTIONAL_PROVIDERS: list[_Provider] = [
-    *_pairs(chat_deps, "_channel_mirror", "_channel_note_reader"),
+    *_pairs(chat_deps, "_channel_places", "_channel_note_reader"),
     # None in a graph built without the secret store.
     *_pairs(skill_deps, "_skill_secret_presence", "_skill_tool_states"),
     # A status read lists no requirements until the MCP composition publishes them.

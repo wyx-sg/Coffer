@@ -15,7 +15,6 @@ import {
   type AgentCounts,
 } from "@/lib/agents/counts";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
-import { useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 import {
   useAgentConfigFiles,
   useAgentHooks,
@@ -35,8 +34,6 @@ export function useAgentCounts(uid: string): AgentCounts {
   const entries = useAgentMcpEntries(uid);
   const plugins = useAgentPlugins(uid);
   const hooks = useAgentHooks(uid);
-  // One row is enough: the listing's `total` is the whole count.
-  const sessions = useAgentTranscripts(uid, { limit: 1 });
   const memory = useAgentNativeMemory(uid);
   const configFiles = useAgentConfigFiles(uid);
   const memoryOn = useFeatureEnabled("memory") === true;
@@ -54,7 +51,6 @@ export function useAgentCounts(uid: string): AgentCounts {
       mcp: servers.data ? mcpCounts(cofferServers, entries.data?.items) : undefined,
       plugins: pluginCounts(plugins.data?.items),
       hooks: hookCounts(hooks.data, memoryOn),
-      sessions: sessions.data?.total,
       memoryStores: memory.data?.items.length,
       configFiles: configFiles.data?.filter((f) => f.exists).length,
     };
@@ -66,7 +62,6 @@ export function useAgentCounts(uid: string): AgentCounts {
     entries.data,
     plugins.data,
     hooks.data,
-    sessions.data,
     memory.data,
     configFiles.data,
     memoryOn,

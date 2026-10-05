@@ -6,10 +6,9 @@
 // git older than the vault needs), why Coffer needs it in one sentence, the
 // hand-off with the daemon's own prompt, and Check again.
 //
-// The hand-off is the shared split button. Ask an agent opens a Coffer
-// conversation, which needs the daemon fully started; in the setup state no
-// managed agent answers, so the component falls back to Copy prompt, for the
-// person's agent outside Coffer. Check again asks the daemon to look for git
+// The hand-off is the shared split button. Handing off to an agent needs the
+// daemon fully started; in the setup state no managed agent answers, so the
+// component falls back to Copy prompt, for the person's agent outside Coffer. Check again asks the daemon to look for git
 // again; once it is there the daemon is restarted the way this host restarts
 // it and the page carries on into the app (`useCheckGitAgain`).
 import { useTranslation } from "react-i18next";

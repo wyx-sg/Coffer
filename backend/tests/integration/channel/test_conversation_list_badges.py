@@ -1,11 +1,11 @@
-"""The Conversations list's source badge, preview line and Running mark (spec
-chat "Show every conversation on the Conversations page").
+"""The Conversations list's source badge, directory and Running mark (spec chat
+"Show channel conversations on the Conversations page").
 
 Driven through the real conversation routes on the channel fixture's real chat
-platform and channel core, with ``ChannelMirror`` wired as the composition root
-wires it: each row says which channel, chat and thread it came from, its latest
-message's line and whether a turn is running — and the listing reads the same
-number of queries whatever the page holds.
+platform and channel core, with ``ChannelPlaces`` wired as the composition root
+wires it: each row says which channel, chat and thread it came from, its
+directory and native session id, and whether a turn is running — and the
+listing reads the same number of queries whatever the page holds.
 """
 
 from __future__ import annotations
@@ -20,17 +20,15 @@ import pytest_asyncio
 from fastapi import FastAPI
 from sqlalchemy import event
 
-from coffer.application.channel.mirror import ChannelMirror
+from coffer.application.channel.places import ChannelPlaces
 from coffer.application.chat import turn_state
-from coffer.domain.chat.message import Role, TextBlock, ToolUseBlock
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.resource import Resource
-from coffer.infrastructure.channel.persistence import ChannelOutboxRepo
-from coffer.infrastructure.persistence.engine import session_maker
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
 from coffer.surfaces.http.chat.dependencies import (
-    get_channel_mirror,
+    get_channel_places,
     get_chat_service,
     get_turn_orchestrator,
 )
@@ -43,20 +41,14 @@ _TOKEN = "badge-token"
 
 @pytest_asyncio.fixture
 async def client(env: ChannelEnv) -> AsyncIterator[httpx.AsyncClient]:
-    mirror = ChannelMirror(
-        resources=env.resources,
-        threads=env.threads,
-        peers=env.peers,
-        outbox=ChannelOutboxRepo(session_maker(env.engine)),
-        processor=env.processor,
-    )
+    places = ChannelPlaces(threads=env.threads)
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(conversation_router)
     app.dependency_overrides[get_chat_service] = lambda: env.chat
     app.dependency_overrides[get_turn_orchestrator] = lambda: env.orchestrator
     app.dependency_overrides[get_resource_service] = lambda: env.resources
-    app.dependency_overrides[get_channel_mirror] = lambda: mirror
+    app.dependency_overrides[get_channel_places] = lambda: places
     set_active_token(_TOKEN)
     c = httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -126,7 +118,7 @@ async def _opened_by(
 def _running(conversation_id: str) -> Iterator[None]:
     """Hold the conversation as though a turn were in flight."""
     state = turn_state.state_for(conversation_id)
-    state.active = turn_state.ActiveTurn(bus=state.bus)
+    state.active = turn_state.ActiveTurn()
     try:
         yield
     finally:
@@ -148,10 +140,8 @@ def _counting_queries(env: ChannelEnv) -> Iterator[list[str]]:
         event.remove(env.engine.sync_engine, "before_cursor_execute", _record)
 
 
-@pytest.mark.acceptance(
-    spec="chat", scenario="a channel's conversation is listed beside the web's with a badge"
-)
-async def test_each_row_names_its_source_chat_and_latest_line(
+@pytest.mark.acceptance(spec="chat", scenario="a row names the chat and thread it came from")
+async def test_each_row_names_its_source_chat_and_directory(
     env: ChannelEnv, client: httpx.AsyncClient
 ) -> None:
     resource, adapter = await _seatalk(env)
@@ -159,17 +149,17 @@ async def test_each_row_names_its_source_chat_and_latest_line(
     group_thread = await _opened_by(
         env, resource, adapter, chat_id="grp-1", thread_id="th-1", chat_kind="group"
     )
-    web = (await client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})).json()
-    await env.chat.append_message(
-        web["id"], role=Role.USER, content=[TextBlock(text="  check\n\nthe   deploy  ")]
-    )
+    await env.chat.set_agent_config(dm, AgentConfig(cwd="/work/app", session_id="sess-9"))
+    # A conversation no channel owns is not on the list.
+    orphan = await env.chat.create_conversation(agent_key="builtin")
 
     rows = await _listed(client)
 
-    web_row = rows[web["id"]]
-    assert web_row["channel_binding"] is None
-    assert web_row["preview"] == "check the deploy"
-    assert web_row["running"] is False
+    assert orphan.id not in rows
+    assert set(rows) == {dm, group_thread}
+    assert (rows[dm]["cwd"], rows[dm]["session_id"]) == ("/work/app", "sess-9")
+    assert rows[dm]["running"] is False
+    assert "preview" not in rows[dm] and "archived_at" not in rows[dm]
 
     dm_binding = rows[dm]["channel_binding"]
     assert dm_binding["platform"] == "seatalk"
@@ -180,7 +170,6 @@ async def test_each_row_names_its_source_chat_and_latest_line(
         "parallel_mark": None,
         "chat_name": None,
     }
-    assert rows[dm]["preview"] == "Hello world"
 
     thread_place = rows[group_thread]["channel_binding"]["place"]
     assert thread_place["chat_kind"] == "group"
@@ -206,17 +195,9 @@ async def test_a_parallel_thread_carries_its_mark(
     assert place["thread"] is True
 
 
-async def test_a_running_turn_is_marked_and_the_preview_skips_a_tool_only_message(
-    env: ChannelEnv, client: httpx.AsyncClient
-) -> None:
+async def test_a_running_turn_is_marked(env: ChannelEnv, client: httpx.AsyncClient) -> None:
     resource, adapter = await _seatalk(env)
     dm = await _opened_by(env, resource, adapter)
-    await env.chat.append_message(
-        dm,
-        role=Role.ASSISTANT,
-        content=[ToolUseBlock(tool_use_id="tu-1", tool_name="Bash", tool_input={})],
-        status="streaming",
-    )
 
     with _running(dm):
         row = (await _listed(client))[dm]
@@ -224,8 +205,6 @@ async def test_a_running_turn_is_marked_and_the_preview_skips_a_tool_only_messag
 
     assert row["running"] is True
     assert single["running"] is True
-    # The newest message is tool-only; the line falls back to the answer before it.
-    assert row["preview"] == "Hello world"
     assert (await _listed(client))[dm]["running"] is False
 
 
@@ -253,10 +232,8 @@ async def test_the_listing_reads_a_constant_number_of_queries(
 
     await _opened_by(env, resource, adapter, chat_id="grp-1", thread_id="th-1", chat_kind="group")
     await _opened_by(env, resource, adapter, chat_id="grp-1", thread_id="th-2", chat_kind="group")
-    for _ in range(3):
-        await client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
-    with _counting_queries(env) as six_rows:
-        assert len(await _listed(client)) == 6
+    with _counting_queries(env) as three_rows:
+        assert len(await _listed(client)) == 3
 
     assert one_row, "the listener saw the listing's queries"
-    assert len(six_rows) == len(one_row)
+    assert len(three_rows) == len(one_row)

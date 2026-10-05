@@ -81,7 +81,7 @@ async def _claude_turn_env(tmp_path: pathlib.Path, agents: _Agents) -> dict[str,
         )
         await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
         adapter = await provider.build_adapter(conv.id)
-        stream = await adapter.run_turn(history=_user_turn("hi", conv.id))
+        stream = await adapter.run_turn(_user_turn("hi", conv.id))
         _ = [ev async for ev in stream]
         assert len(captured) == 1
         return dict(captured[0].env)
@@ -102,7 +102,7 @@ async def _codex_turn_env(tmp_path: pathlib.Path, agents: _Agents) -> dict[str, 
         )
         await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
         adapter = await provider.build_adapter(conv.id)
-        stream = await adapter.run_turn(history=_user_turn("hi", conv.id))
+        stream = await adapter.run_turn(_user_turn("hi", conv.id))
         await asyncio.wait_for(_drain(stream), timeout=5)
         return factory.last_env
     finally:

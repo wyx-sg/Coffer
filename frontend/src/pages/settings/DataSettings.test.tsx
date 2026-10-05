@@ -48,15 +48,6 @@ const POLICIES: Policy[] = [
     last_pruned_rows: 284,
   },
   {
-    table_name: "conversations",
-    display_name: "Delete archived chats",
-    description: "x",
-    default_retention_days: 30,
-    retention_days: 90,
-    last_pruned_at: null,
-    last_pruned_rows: 0,
-  },
-  {
     table_name: "attachments",
     display_name: "Attachments",
     description: "x",
@@ -172,7 +163,8 @@ describe("DataSettings", () => {
     expect(within(history).getByText("48.2 MB")).toBeInTheDocument();
     expect(await within(history).findByText("Changes")).toBeInTheDocument();
     expect(within(history).getByText("Tool calls")).toBeInTheDocument();
-    expect(within(history).getByText("Conversations")).toBeInTheDocument();
+    // Conversations are not a record kind any more: Coffer keeps no conversation text.
+    expect(within(history).queryByText("Conversations")).toBeNull();
     expect(within(history).getByText("Skill working files")).toBeInTheDocument();
     expect(within(history).getByText("Config backups")).toBeInTheDocument();
     // Only the four record kinds; the other pruned tables keep their defaults.
@@ -230,10 +222,10 @@ describe("DataSettings", () => {
     mockApi();
     render(wrap(<DataSettings />));
     const history = await screen.findByTestId("settings-data-history");
-    const labels = (
-      await within(history).findAllByText(/^(Conversations|Skill working files)$/)
-    ).map((el) => el.textContent);
-    expect(labels).toEqual(["Conversations", "Skill working files"]);
+    const labels = (await within(history).findAllByText(/^(Tool calls|Skill working files)$/)).map(
+      (el) => el.textContent,
+    );
+    expect(labels).toEqual(["Tool calls", "Skill working files"]);
     // Shortening 30 days asks first and counts files.
     // The second-to-last number field in History is the Skill working files row.
     const input = within(history).getAllByRole("spinbutton").at(-2) as HTMLElement;

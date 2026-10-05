@@ -10,7 +10,6 @@ import { useTranslation } from "react-i18next";
 
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useChannels } from "@/lib/hooks/useChannels";
-import { useConversationSearch } from "@/lib/hooks/useConversationList";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useClis } from "@/lib/hooks/useClis";
 import { isFeatureOn } from "@/lib/hooks/useFeatures";
@@ -115,22 +114,6 @@ const useCliObjects = (): KindState => {
   );
   return kindState({ status: q.status, data: items });
 };
-// A conversation is named by its title; one without a title by its first line.
-// Asked by the text typed (a small title search), never for the whole list.
-const useConversationObjects = (text: string): KindState => {
-  const { t } = useTranslation();
-  const q = useConversationSearch(text);
-  const items = useMemo(
-    () =>
-      q.data?.map((c) => ({
-        uid: c.id,
-        name: c.title.trim() || c.preview?.trim() || t("palette.untitled"),
-        status: c.running ? ({ key: "running", tone: "muted" } as const) : undefined,
-      })),
-    [q.data, t],
-  );
-  return kindState({ status: q.status, data: items });
-};
 // A secret is its ref; the listing carries no value, only who uses it.
 const useSecretObjects = (): KindState => {
   const { t } = useTranslation();
@@ -155,11 +138,10 @@ const useSecretObjects = (): KindState => {
   return kindState({ status: q.status, data: items });
 };
 
-/** Each kind's list hook; `text` is what the palette's box holds (only conversations ask by it). */
+/** Each kind's list hook; `text` is what the palette's box holds. */
 export const KIND_LIST_HOOKS: Record<ObjectKind, (text: string) => KindState> = {
   agent: useAgentObjects,
   provider: useProviderObjects,
-  conversation: useConversationObjects,
   channel: useChannelObjects,
   mcpServer: useMcpServerObjects,
   customTool: useCustomToolObjects,

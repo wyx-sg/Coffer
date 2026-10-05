@@ -240,19 +240,16 @@ def _claude_session_line(sid: str, cwd: str, text: str) -> str:
     spec="agent-registry/claude-code",
     scenario="list sessions from projects and refuse a sibling as a memory store",
 )
-def test_claude_transcripts_live_under_projects_and_a_sibling_is_no_store(tmp_path, monkeypatch):
+def test_a_sibling_of_a_memory_store_is_no_store(tmp_path, monkeypatch):
     project = tmp_path / ".claude" / "projects" / "-work-repo"
     (project / "memory").mkdir(parents=True)
     (project / "memory" / "fact.md").write_text("a fact", encoding="utf-8")
-    session = project / "s1.jsonl"
-    session.write_text(_claude_session_line("s1", "/work/repo", "set up auth"), encoding="utf-8")
+    (project / "s1.jsonl").write_text(
+        _claude_session_line("s1", "/work/repo", "set up auth"), encoding="utf-8"
+    )
     app = _app(tmp_path, monkeypatch, 61160)
     with _client(app) as c:
         uid = _register(c, "claude_code", "cc")
-
-        listed = c.get(f"/api/v1/agents/{uid}/transcripts")
-        assert listed.status_code == 200, listed.text
-        assert [s["source_path"] for s in listed.json()["sessions"]] == [str(session)]
 
         sibling = c.get(f"/api/v1/agents/{uid}/native-memory/files", params={"dir": str(project)})
         assert sibling.status_code == 404, sibling.text
@@ -459,51 +456,6 @@ def test_codex_toggle_writes_only_the_plugins_enabled_field(tmp_path, monkeypatc
         before["plugins"]["p1@m1"]["enabled"] = False
         assert after == before
         assert sorted(str(p) for p in cache_root.rglob("*")) == plugins_before
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry/codex", scenario="list Codex sessions from the sessions directory"
-)
-def test_codex_transcripts_come_from_the_sessions_directory(tmp_path, monkeypatch):
-    codex_dir = _codex_fixture(tmp_path)
-    nested = codex_dir / "sessions" / "2026" / "06" / "01"
-    nested.mkdir(parents=True)
-    session = nested / "rollout-x.jsonl"
-    session.write_text(
-        "\n".join(
-            [
-                json.dumps(
-                    {
-                        "timestamp": "2026-06-01T00:00:00Z",
-                        "type": "session_meta",
-                        "payload": {"id": "x", "cwd": "/work/repo"},
-                    }
-                ),
-                json.dumps(
-                    {
-                        "timestamp": "2026-06-01T00:00:01Z",
-                        "type": "response_item",
-                        "payload": {
-                            "type": "message",
-                            "role": "user",
-                            "content": [{"type": "input_text", "text": "hello"}],
-                        },
-                    }
-                ),
-            ]
-        ),
-        encoding="utf-8",
-    )
-    # A .jsonl outside sessions/ is not a Codex transcript.
-    (codex_dir / "stray.jsonl").write_text(session.read_text(encoding="utf-8"), encoding="utf-8")
-    app = _app(tmp_path, monkeypatch, 61280)
-    with _client(app) as c:
-        uid = _register(c, "codex", "cx")
-
-        r = c.get(f"/api/v1/agents/{uid}/transcripts")
-
-        assert r.status_code == 200, r.text
-        assert [s["source_path"] for s in r.json()["sessions"]] == [str(session)]
 
 
 def _table_text(config_text: str, header: str) -> str:

@@ -7,7 +7,7 @@
 // provider-switching "Refuse to move the wire of a live connection"). Route
 // says agents reach it through Coffer's proxy.
 // Problems of the endpoint show here, in a box above the rows: Unreachable
-// (Ask an agent) and Key rejected (Replace key…).
+// (Hand off to <Agent>) and Key rejected (Replace key…).
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Lock } from "lucide-react";

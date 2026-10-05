@@ -31,7 +31,7 @@ vi.mock("@/lib/hooks/useSyncStop", () => ({
   useChooseJoin: vi.fn(),
 }));
 // The hand-off's own buttons are tested with it; here it asks for its prompt
-// the way it does, when the person picks Ask an agent.
+// the way it does, when the person picks Hand off to Claude Code.
 vi.mock("@/components/handoff/AgentHandoff", () => ({
   AgentHandoff: ({
     prompt,
@@ -42,7 +42,7 @@ vi.mock("@/components/handoff/AgentHandoff", () => ({
       type="button"
       onClick={() => typeof prompt !== "string" && void prompt({ agent: "Claude Code" })}
     >
-      Ask an agent
+      Hand off to Claude Code
     </button>
   ),
 }));
@@ -221,7 +221,7 @@ describe("SyncResolveConflictsPage", () => {
     const pane = within(screen.getByTestId(`conflict-pane-${SECRET}`));
     expect(pane.getAllByRole("radio")).toHaveLength(2);
     expect(pane.queryByRole("button", { name: /open in editor/i })).toBeNull();
-    expect(pane.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(pane.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
     expect(pane.getByTestId("sync-conflict-secret")).toHaveTextContent(
       /encrypted secret: its contents are not shown/,
     );
@@ -233,12 +233,12 @@ describe("SyncResolveConflictsPage", () => {
     expect(hooks.useFileVersions).not.toHaveBeenCalled();
   });
 
-  test("a mergeable file offers Ask an agent for this file only, with the agent named", () => {
+  test("a mergeable file offers Hand off to Claude Code for this file only, with the agent named", () => {
     seed(makeStopped([makeConflict(SKILL, MERGEABLE), makeConflict(NOTE)]));
     const { unmount } = show(SKILL);
     fireEvent.click(
       within(screen.getByTestId(`conflict-pane-${SKILL}`)).getByRole("button", {
-        name: "Ask an agent",
+        name: "Hand off to Claude Code",
       }),
     );
     expect(handoff).toHaveBeenCalledWith({ paths: [SKILL], agent: "Claude Code" });
@@ -246,7 +246,7 @@ describe("SyncResolveConflictsPage", () => {
 
     // A decision (a file changed on one side, deleted on the other) is not a merge.
     show(NOTE);
-    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
   });
 
   acceptance("vault-sync", "an agent's merge is shown to be checked and marked resolved", () => {
@@ -289,25 +289,6 @@ describe("SyncResolveConflictsPage", () => {
     expect(discard).toHaveBeenCalledWith(SKILL, expect.anything());
   });
 
-  test("Open conversation shows when the daemon knows the conversation", () => {
-    seed(
-      makeStopped([
-        makeConflict(SKILL, {
-          ...MERGEABLE,
-          agent_state: "merged_by_agent",
-          agent_name: "Claude Code",
-          agent_conversation_id: "c-9",
-          agent_merged_at: "2026-09-13T09:41:00Z",
-        }),
-      ]),
-    );
-    show(SKILL);
-    expect(screen.getByRole("link", { name: "Open conversation" })).toHaveAttribute(
-      "href",
-      "/conversations/c-9",
-    );
-  });
-
   acceptance("vault-sync", "a join's differing files are handed to an agent too", () => {
     seedJoin([
       makeConflict(NOTE, { reason: "join_differs", ...MERGEABLE }),
@@ -318,7 +299,7 @@ describe("SyncResolveConflictsPage", () => {
     expect(hooks.useOpenInEditor).toHaveBeenCalledWith({ join: true });
     expect(hooks.useHandoffRequest).toHaveBeenCalledWith({ join: true });
 
-    fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hand off to Claude Code" }));
     expect(handoff).toHaveBeenCalledWith({ paths: [NOTE], agent: "Claude Code" });
 
     // Choices are staged; Apply choices sends them together, and nothing else is sent.

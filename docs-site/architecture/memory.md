@@ -217,7 +217,7 @@ While the memory feature is on, the guide's memory section tells the agent to wo
 
 The daemon writes the prompt. Reading a partition carries `tidy_handoff`, which names the partition, its absolute directory and the guide section to follow. `GET /api/v1/memory/tidy-handoff` returns one prompt for every partition: it names the memory root and each partition with its notes directory and note count, and asks the agent to tidy them one at a time.
 
-The web UI offers **Tidy** on a partition's page and **Tidy all** in the Memory page's header. Each opens a new conversation on the default managed agent with that prompt and sends it at once. With no managed agent available it offers **Copy prompt** only. Nothing tidies a partition unattended: the aggregate and distil timers keep running, but they never merge or retire a note on their own.
+The web UI offers **Tidy** on a partition's page and **Tidy all** in the Memory page's header. Each starts the default hand-off agent in the preferred terminal with that prompt as its first message, through the same path as every other hand-off. With no managed agent available it offers **Copy prompt** only. Nothing tidies a partition unattended: the aggregate and distil timers keep running, but they never merge or retire a note on their own.
 
 ## The index line
 
@@ -396,7 +396,7 @@ Each callback answers nothing when it finds nothing, or when the tree cannot be 
 
 The agent process Coffer spawns for that turn still loads the agent's own settings: the Agent SDK reads the user's `settings.json`, and `codex app-server` runs a trusted `hooks.json`. So on a connected agent, Coffer's hook fires inside a channel turn as well, and without a rule of its own it would hand the agent the index and the notes a second time, from a ledger keyed on the agent's session id that never saw the turn's, and audit each prompt twice. Each moment therefore has one owner. The provider sets `COFFER_CHANNEL_TURN=1` in the environment of a channel turn's process (merged over the daemon's own), the agent hands that environment to every hook it runs, and `coffer memory hook` answers nothing on `SessionStart` or `UserPromptSubmit` when it sees the mark. It does not contact the daemon, so nothing is recorded.
 
-A turn from the web Conversations page is not marked and gets neither closure. It receives memory through the agent's own hook, so no turn gets memory both ways.
+A session you resume from the Conversations page runs in your terminal, outside Coffer: it is not marked and gets neither closure. It receives memory through the agent's own hook, so no turn gets memory both ways.
 
 ### Rules about every turn are not memory's job
 

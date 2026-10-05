@@ -256,7 +256,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 整理（Tidy） {#tidy}
 
-[知识集](#collection)或记忆[分区](#partition)上的按钮（列表页上还有**整理全部**），它会用你的默认托管智能体新开一个对话，并发送一条提示，让它按 `coffer-guide` 技能合并、拆分和纠正其中的内容。没有可用的托管智能体时，它提供可复制的提示。整理由你的智能体来做，Coffer 自己从不主动整理。见[知识](/zh/guides/knowledge)和[记忆](/zh/guides/memory)。
+[知识集](#collection)或记忆[分区](#partition)上的按钮（列表页上还有**整理全部**），它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能合并、拆分和纠正其中的内容。没有可用的托管智能体时，它提供可复制的提示。整理由你的智能体来做，Coffer 自己从不主动整理。见[知识](/zh/guides/knowledge)和[记忆](/zh/guides/memory)。
 
 ### 分层（Tiering） {#tiering}
 

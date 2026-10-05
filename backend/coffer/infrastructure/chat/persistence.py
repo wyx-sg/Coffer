@@ -1,8 +1,7 @@
-"""SQLAlchemy ORM models and repos for conversations + messages.
+"""SQLAlchemy repo for the conversation index (table ``conversations``).
 
-Tables: ``conversations``, ``chat_messages``.
-Implements the ``ConversationRepo`` and ``MessageRepo`` Protocols defined in
-``coffer.application.chat.service``.
+Implements the ``ConversationRepo`` Protocol defined in
+``coffer.application.chat.conversation_repo``.
 """
 
 from __future__ import annotations
@@ -10,11 +9,11 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import (
     func,
+    or_,
     select,
     update,
 )
@@ -24,28 +23,25 @@ from coffer.application.chat.conversation_repo import EVERY, Narrowing
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
-from coffer.domain.chat.message import (
-    ContentBlock,
-    Message,
-    Role,
-)
-from coffer.infrastructure.chat.persistence_codec import (
-    _TEXT_BLOCK_MARK,
-    _decode_content,
-    _encode_content,
-    _listing_filter,
-)
-from coffer.infrastructure.chat.persistence_models import (
-    ConversationModel,
-    MessageModel,
-)
-from coffer.infrastructure.chat.reply_file_store import ReplyFileStore
+from coffer.infrastructure.chat.conversation_filter import listing_filter
+from coffer.infrastructure.chat.persistence_models import ConversationModel
 from coffer.infrastructure.persistence.keyset import newest_first_after
 
 
 def _tz(dt: datetime) -> datetime:
     """Ensure a datetime is timezone-aware (UTC)."""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def _parse_config(raw: str | None) -> AgentConfig:
+    """The stored ``agent_config`` JSON (an empty ``AgentConfig`` when unset or malformed)."""
+    if not raw:
+        return AgentConfig()
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        return AgentConfig()
+    return AgentConfig.from_json(parsed) if isinstance(parsed, dict) else AgentConfig()
 
 
 # ---------------------------------------------------------------------------
@@ -66,9 +62,9 @@ class ConversationRepo:
             title=row.title,
             created_at=_tz(row.created_at),
             updated_at=_tz(row.updated_at),
-            archived_at=_tz(row.archived_at) if row.archived_at else None,
             channel_uid=row.channel_uid,
             peer_chat_id=row.peer_chat_id,
+            agent_config=_parse_config(row.agent_config),
         )
 
     async def create(self, conversation: Conversation) -> Conversation:
@@ -96,15 +92,13 @@ class ConversationRepo:
     async def list(
         self,
         *,
-        archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
         contains: str | None = None,
         narrow: Narrowing = EVERY,
     ) -> list[Conversation]:
-        """Conversations newest activity first with the id breaking ties.
-        ``archived=False`` is the active threads,
-        ``archived=True`` the archived ones. ``after`` (the previous page's last
+        """Channel conversations newest activity first with the id breaking ties.
+        ``after`` (the previous page's last
         ``(updated_at, id)``) and ``limit`` cut one page of that order; without
         them the whole listing comes back.
         """
@@ -112,7 +106,7 @@ class ConversationRepo:
             stmt = select(ConversationModel).order_by(
                 ConversationModel.updated_at.desc(), ConversationModel.id.desc()
             )
-            stmt = _listing_filter(stmt, archived=archived, contains=contains, narrow=narrow)
+            stmt = listing_filter(stmt, contains=contains, narrow=narrow)
             if after is not None:
                 stmt = stmt.where(
                     newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)
@@ -122,13 +116,27 @@ class ConversationRepo:
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
 
-    async def count(
-        self, *, archived: bool = False, contains: str | None = None, narrow: Narrowing = EVERY
-    ) -> int:
+    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
         async with self._sm() as session:
             stmt = select(func.count()).select_from(ConversationModel)
-            stmt = _listing_filter(stmt, archived=archived, contains=contains, narrow=narrow)
+            stmt = listing_filter(stmt, contains=contains, narrow=narrow)
             return int((await session.execute(stmt)).scalar_one())
+
+    async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:
+        wanted = set(session_ids)
+        if not wanted:
+            return []
+        # The id sits inside the JSON text of ``agent_config``: narrow by substring
+        # in SQL, then confirm the parsed field, so an id that merely appears in
+        # another field never matches. (Session ids are ``[A-Za-z0-9-]``, so they
+        # carry no LIKE wildcard.)
+        async with self._sm() as session:
+            stmt = select(ConversationModel).where(
+                or_(*(ConversationModel.agent_config.contains(sid) for sid in wanted))
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+        found = [self._to_domain(r) for r in rows]
+        return [c for c in found if c.agent_config.session_id in wanted]
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         async with self._sm() as session:
@@ -161,10 +169,7 @@ class ConversationRepo:
             row = await session.get(ConversationModel, conversation_id)
             if row is None:
                 raise ConversationNotFound(conversation_id)
-            if not row.agent_config:
-                return AgentConfig()
-            parsed = json.loads(row.agent_config)
-            return AgentConfig.from_json(parsed) if isinstance(parsed, dict) else AgentConfig()
+            return _parse_config(row.agent_config)
 
     async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
         """Replace the typed provider config for a conversation."""
@@ -179,23 +184,6 @@ class ConversationRepo:
                 raise ConversationNotFound(conversation_id)
             await session.commit()
 
-    async def set_archived(
-        self, conversation_id: str, archived_at: datetime | None
-    ) -> Conversation:
-        """Archive (``archived_at`` = a timestamp) or restore (``None``)."""
-        async with self._sm() as session:
-            stmt = (
-                update(ConversationModel)
-                .where(ConversationModel.id == conversation_id)
-                .values(archived_at=archived_at)
-                .returning(ConversationModel)
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                raise ConversationNotFound(conversation_id)
-            await session.commit()
-            return self._to_domain(row)
-
     async def delete(self, conversation_id: str) -> None:
         async with self._sm() as session:
             stmt = sa_delete(ConversationModel).where(ConversationModel.id == conversation_id)
@@ -203,196 +191,4 @@ class ConversationRepo:
             await session.commit()
 
 
-# ---------------------------------------------------------------------------
-# MessageRepo
-# ---------------------------------------------------------------------------
-
-
-class MessageRepo(ReplyFileStore):
-    """SQLAlchemy implementation of the ``MessageRepo`` Protocol."""
-
-    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = sm
-
-    def _to_domain(self, row: MessageModel) -> Message:
-        return Message(
-            id=row.id,
-            conversation_id=row.conversation_id,
-            seq=row.seq,
-            role=Role(row.role),
-            content=_decode_content(row.content),
-            status=row.status,  # type: ignore[arg-type]
-            model_id=row.model_id,
-            prompt_tokens=row.prompt_tokens,
-            completion_tokens=row.completion_tokens,
-            created_at=_tz(row.created_at),
-            finished_at=_tz(row.finished_at) if row.finished_at else None,
-        )
-
-    async def append(self, message: Message) -> Message:
-        async with self._sm() as session:
-            row = MessageModel(
-                id=message.id,
-                conversation_id=message.conversation_id,
-                seq=message.seq,
-                role=message.role,
-                content=_encode_content(message.content),
-                status=message.status,
-                model_id=message.model_id,
-                prompt_tokens=message.prompt_tokens,
-                completion_tokens=message.completion_tokens,
-                created_at=message.created_at,
-                finished_at=message.finished_at,
-            )
-            session.add(row)
-            await session.commit()
-            await session.refresh(row)
-            return self._to_domain(row)
-
-    async def finalize(
-        self,
-        message_id: str,
-        *,
-        content: list[ContentBlock],
-        status: str,
-        model_id: str | None,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
-        finished_at: datetime | None = None,
-    ) -> None:
-        """Update an existing (streaming) message with its final content/status.
-
-        Used to finalize the streaming placeholder written at turn start, so a
-        completed turn occupies exactly one row. ``model_id`` is the model the
-        adapter reported while the turn ran; ``None`` leaves the column as it is.
-        """
-        values: dict[str, Any] = {
-            "content": _encode_content(content),
-            "status": status,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "finished_at": finished_at,
-        }
-        if model_id is not None:
-            values["model_id"] = model_id
-        async with self._sm() as session:
-            stmt = update(MessageModel).where(MessageModel.id == message_id).values(**values)
-            await session.execute(stmt)
-            await session.commit()
-
-    async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:
-        """Overwrite a ``streaming`` row's content with the turn's output so far.
-
-        Guarded on ``status='streaming'`` so a flush that lands after the turn was
-        finalised can never clobber the final content or status."""
-        async with self._sm() as session:
-            stmt = (
-                update(MessageModel)
-                .where(MessageModel.id == message_id, MessageModel.status == "streaming")
-                .values(content=_encode_content(content))
-            )
-            await session.execute(stmt)
-            await session.commit()
-
-    async def delete_message(self, message_id: str) -> None:
-        """Delete a single message by id (used to discard a placeholder row)."""
-        async with self._sm() as session:
-            stmt = sa_delete(MessageModel).where(MessageModel.id == message_id)
-            await session.execute(stmt)
-            await session.commit()
-
-    async def list_by_conversation(
-        self, conversation_id: str, *, limit: int | None = None
-    ) -> list[Message]:
-        """Messages in ``seq`` order; ``limit`` keeps only the most recent N (still
-        oldest-first) — a turn needs the conversation's tail, not every row."""
-        stmt = select(MessageModel).where(MessageModel.conversation_id == conversation_id)
-        if limit is not None:
-            # Newest N first, then flipped back to seq order below.
-            stmt = stmt.order_by(MessageModel.seq.desc()).limit(limit)
-        else:
-            stmt = stmt.order_by(MessageModel.seq.asc())
-        async with self._sm() as session:
-            rows = list((await session.execute(stmt)).scalars().all())
-        if limit is not None:
-            rows.reverse()
-        return [self._to_domain(r) for r in rows]
-
-    async def latest_with_text(
-        self, conversation_ids: Sequence[str], *, depth: int
-    ) -> dict[str, list[Message]]:
-        """One windowed query for the whole page. A row "carries text" when its
-        JSON holds a text block — ``_encode_content``'s own spelling, which a
-        text quoted INSIDE a block cannot forge (its quotes are escaped)."""
-        if not conversation_ids:
-            return {}
-        rank = (
-            func.row_number()
-            .over(partition_by=MessageModel.conversation_id, order_by=MessageModel.seq.desc())
-            .label("rank")
-        )
-        ranked = (
-            select(MessageModel.id.label("id"), rank)
-            .where(
-                MessageModel.conversation_id.in_(list(conversation_ids)),
-                MessageModel.content.like(f"%{_TEXT_BLOCK_MARK}%"),
-            )
-            .subquery()
-        )
-        stmt = (
-            select(MessageModel)
-            .join(ranked, ranked.c.id == MessageModel.id)
-            .where(ranked.c.rank <= depth)
-            .order_by(MessageModel.conversation_id, MessageModel.seq.desc())
-        )
-        async with self._sm() as session:
-            rows = (await session.execute(stmt)).scalars().all()
-        out: dict[str, list[Message]] = {}
-        for row in rows:
-            out.setdefault(row.conversation_id, []).append(self._to_domain(row))
-        return out
-
-    async def next_seq(self, conversation_id: str) -> int:
-        """Return the next sequence number for the given conversation.
-
-        Uses ``COALESCE(MAX(seq) + 1, 0)`` so the result is correct even
-        when prior rows have been deleted and sequence numbers are non-contiguous.
-        """
-        async with self._sm() as session:
-            stmt = select(func.coalesce(func.max(MessageModel.seq) + 1, 0)).where(
-                MessageModel.conversation_id == conversation_id
-            )
-            return int((await session.execute(stmt)).scalar_one())
-
-    async def delete_by_conversation(self, conversation_id: str) -> None:
-        async with self._sm() as session:
-            stmt = sa_delete(MessageModel).where(MessageModel.conversation_id == conversation_id)
-            await session.execute(stmt)
-            await session.commit()
-
-    async def sweep_streaming(self, *, before: datetime | None = None) -> int:
-        """Flip ``status='streaming'`` rows to ``'failed'``.
-
-        Called once at startup to recover from a prior crash; ``before`` limits it
-        to rows created earlier than the daemon's own start. Returns the number of
-        rows updated.
-        """
-        async with self._sm() as session:
-            stmt = (
-                update(MessageModel)
-                .where(MessageModel.status == "streaming")
-                .values(status="failed")
-            )
-            if before is not None:
-                stmt = stmt.where(MessageModel.created_at < before)
-            result = await session.execute(stmt)
-            await session.commit()
-            return result.rowcount or 0
-
-
-__all__ = [
-    "ConversationModel",
-    "ConversationRepo",
-    "MessageModel",
-    "MessageRepo",
-]
+__all__ = ["ConversationModel", "ConversationRepo"]

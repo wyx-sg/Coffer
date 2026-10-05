@@ -41,7 +41,7 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 | `agent-registry/claude-code`, `agent-registry/codex` | How each agent type realises those facets |
 | [`channels`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) | Messaging channels to agents, independent of platform |
 | `channels/telegram`, `channels/seatalk` | The per-platform mechanics |
-| [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | The turn platform (agent adapters, conversations, the event stream) and the web Conversations page |
+| [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | The turn platform (agent adapters, conversations, the event stream) and the Conversations list that opens a session in the terminal |
 | [`secret`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md) | The encrypted secret store and the rule that everything else holds references |
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | The Coffer process: one per vault, discovery, the loopback HTTP guard, serving the UI, logs, terminal install |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | The macOS shell: window, tray, handshake, detect-or-spawn, the `.dmg` |

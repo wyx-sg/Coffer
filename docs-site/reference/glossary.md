@@ -405,9 +405,9 @@ the target asks again. See [Secrets](/guides/secrets#approvals).
 ### Tidy
 
 The button on a knowledge [collection](#collection) or a memory [partition](#partition) (and
-**Tidy all** on the list page) that opens a new conversation with your default managed agent
-and sends it a prompt to merge, split and correct what is there, following the `coffer-guide`
-skill. When no managed agent is available, it offers the prompt to copy. Coffer does the
+**Tidy all** on the list page) that starts your default hand-off agent in your preferred terminal,
+with a prompt to merge, split and correct what is there, following the `coffer-guide`
+skill, sent as the session's first message. When no managed agent is available, it offers the prompt to copy. Coffer does the
 tidying through your agent, never on its own. See [Knowledge](/guides/knowledge) and
 [Memory](/guides/memory).
 

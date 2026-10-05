@@ -1,20 +1,15 @@
-"""The detached turn task — drive the adapter, publish events, persist the result.
+"""The detached turn task — drive the adapter and publish its events.
 
 Extracted from ``TurnOrchestrator`` so the orchestrator file stays focused. The
-task publishes every ``AgentEvent`` to the conversation bus (so any number of web
-subscribers observe it) and, when the turn was started with a dedicated queue
-(a channel renderer's), to that queue too — ending it with
-a ``None`` sentinel. Every way a turn ends short keeps what it streamed (spec
-chat "Keep partial output when a turn is interrupted or fails"): a user
-interrupt finalises the partial as stopped; an adapter stream that stops
-without a terminal event is reported as ``stream_ended`` and the partial marked
-failed; a daemon shutdown cancelling the task marks it failed too. Only a
-delete (``ActiveTurn.discarded``) throws the turn away. A turn ends exactly
-once: a cancel landing after its terminal event (e.g. mid-finalize) re-runs
-the finalize under a shield and emits nothing more. While streaming, the
-reply so far is flushed onto the ``streaming`` row (throttled —
-``PartialFlusher``) so a daemon that dies outright leaves the text for the
-startup sweep.
+task publishes every ``AgentEvent`` to the turn's dedicated queue (a channel
+renderer's) — ending it with a ``None`` sentinel. Coffer keeps no copy of the reply: the
+agent's own session holds the conversation, so a turn that ends short has
+nothing to persist. A user interrupt ends the turn as ``interrupted``; an
+adapter stream that stops without a terminal event is reported as
+``stream_ended``; a daemon shutdown cancelling the task reports
+``daemon_stopped``. Only a delete (``ActiveTurn.discarded``) ends it silently.
+A turn ends exactly once: a cancel landing after its terminal event emits
+nothing more. The conversation's ``updated_at`` is bumped when the turn ends.
 
 The idle watchdog
 -----------------
@@ -24,7 +19,7 @@ bounds that: the adapters wait for the next message forever. So the task
 itself keeps time between events: if none arrives for ``idle_timeout`` seconds
 the turn is cancelled with a ``turn_timeout`` error, which runs the adapter's
 own cancellation path (interrupt + disconnect / close — the backend subprocess
-is terminated there) and keeps whatever text was streamed.
+is terminated there).
 """
 
 from __future__ import annotations
@@ -36,13 +31,6 @@ from collections.abc import AsyncIterator, Sequence
 from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
-from coffer.application.chat.turn_persistence import (
-    DEFAULT_PARTIAL_FLUSH_SECONDS,
-    PartialFlusher,
-    TurnContent,
-    finalize_assistant_message,
-    recover_placeholder_id,
-)
 from coffer.application.chat.turn_state import ActiveTurn, release_active
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
@@ -50,15 +38,11 @@ from coffer.domain.chat.events import (
     STREAM_ENDED_MESSAGE,
     TURN_TIMEOUT,
     AgentEvent,
-    QuestionAsked,
-    QuestionClosed,
     ToolCall,
     ToolResult,
     TurnDone,
     TurnError,
 )
-from coffer.domain.chat.message import AttachmentBlock, Message, Role
-from coffer.domain.chat.reply_file import ReplyFile
 
 log = logging.getLogger(__name__)
 
@@ -69,48 +53,10 @@ log = logging.getLogger(__name__)
 #: disables the watchdog).
 DEFAULT_TURN_IDLE_TIMEOUT_SECONDS = 300.0
 
-#: How much of a conversation a turn is given. The adapters resume the agent's
-#: own session, which already holds the conversation; the history here is what
-#: a fresh session or a path-native agent gets as context, and the most recent
-#: rows are the ones that matter for it. A conversation of thousands of
-#: messages must not be loaded whole on every turn.
-HISTORY_LIMIT = 200
-
 #: ``TurnError.code`` when the daemon itself cancels a turn on its way down
-#: (neither a user interrupt nor a delete); the partial is kept, marked failed —
-#: the outcome the startup sweep gives a turn a crash cut short.
+#: (neither a user interrupt nor a delete).
 DAEMON_STOPPED = "daemon_stopped"
 DAEMON_STOPPED_MESSAGE = "Coffer stopped before the turn finished"
-
-
-def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
-    """Re-materialise this turn's attachments from the persisted history.
-
-    The current user message (the last ``Role.USER`` row — it was persisted before
-    ``history`` was fetched) is the single source of truth for the turn's channel media:
-    map each of its ``AttachmentBlock`` references back to an ``Attachment`` VO the
-    adapter materialises. Reading them back from history (rather than threading a param
-    down) means the reference survives a daemon restart and stays consistent with what
-    the web Conversations page shows (see "Re-materialise attachments from persisted
-    history")."""
-    for msg in reversed(history):
-        if msg.role is Role.USER:
-            return [
-                Attachment(path=b.path, mime=b.mime, filename=b.filename, id=b.id, size=b.size)
-                for b in msg.content
-                if isinstance(b, AttachmentBlock)
-            ]
-    return []
-
-
-def _reply_files_of(adapter: AgentAdapter) -> list[ReplyFile]:
-    """The files the adapter says the reply changed; none for an adapter that does
-    not track them, and none when working them out fails."""
-    try:
-        return list(getattr(adapter, "reply_files", ()))
-    except Exception:
-        log.warning("Could not work out the files a reply changed", exc_info=True)
-        return []
 
 
 def _is_ask_tool(name: str) -> bool:
@@ -118,6 +64,15 @@ def _is_ask_tool(name: str) -> bool:
     server prefix the agent gives it: both are rendered as the question block,
     not as a tool card."""
     return name == "AskUserQuestion" or name.endswith("coffer__ask")
+
+
+def _reported_model(adapter: AgentAdapter) -> str | None:
+    """The model the adapter says the turn ran on; optional, read best-effort."""
+    try:
+        model = getattr(adapter, "model_id", None)
+    except Exception:
+        return None
+    return model if isinstance(model, str) and model else None
 
 
 class _IdleWatch:
@@ -165,29 +120,22 @@ async def run_turn_task(
     active: ActiveTurn,
     adapter: AgentAdapter,
     chat: ChatService,
+    prompt: str,
+    attachments: Sequence[Attachment] = (),
     idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
-    flush_interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
     turn: questions.TurnContext | None = None,
 ) -> None:
-    """Async task body: drive the adapter, publish events, persist the result.
+    """Async task body: drive the adapter and publish its events.
 
-    The turn's attachments (channel media) are derived from ``history``'s last user
-    message (see "Re-materialise attachments from persisted history") and handed to the
-    adapter, which materialises them in its own native shape."""
-    bus = active.bus
+    ``prompt`` and ``attachments`` (channel media) are the turn's input; the
+    adapter materialises the attachments in its own native shape."""
 
     def emit(event: AgentEvent) -> None:
-        bus.publish(event)
         if active.primary_queue is not None:
             active.primary_queue.put_nowait(event)
 
-    # Text and tool blocks in the order the turn emitted them.
-    content = TurnContent()
-    flusher = PartialFlusher(chat, content, interval=flush_interval)
     final_done: TurnDone | None = None
     error_event: TurnError | None = None
-    placeholder_id: str | None = None
-    append_task: asyncio.Task[Message] | None = None
 
     ask_tool_ids: set[str] = set()
     watch = _IdleWatch(idle_timeout)
@@ -195,61 +143,25 @@ async def run_turn_task(
         turn.on_waiting = watch.waiting
 
     async def on_question(event: AgentEvent) -> None:
-        # A question the agent raised (or that closed): part of the reply, on the
-        # bus and in the channel renderer's queue, and on disk at once — the
-        # turn now waits, with nothing else to trigger a flush.
+        # A question the agent raised (or that closed): in the channel
+        # renderer's queue.
         emit(event)
-        if isinstance(event, (QuestionAsked, QuestionClosed)):
-            content.add_question(event)
-            await flusher.flush_now(placeholder_id)
 
-    async def finalize(done: TurnDone | None, error: TurnError | None) -> None:
+    async def finish() -> None:
         if turn is not None:
             # The turn is over: whatever it still waits on can no longer be
             # answered, and the reply must say so.
             await questions.close_turn(turn)
-        # An adapter may expose the model it ran on (spec chat "Record the model an
-        # adapter reports"). It learns that while the turn streams, so it is read
-        # now, at finalize time, never before the turn starts. Best-effort.
-        model_id: str | None = getattr(adapter, "model_id", None)
-        # Likewise what the reply changed in each file, which the adapter works
-        # out as the reply ends (spec chat "Record what each reply changed in each file").
-        reply_files = _reply_files_of(adapter)
-        await finalize_assistant_message(
-            chat=chat,
-            conversation_id=conversation_id,
-            message_id=placeholder_id,
-            model_id=model_id,
-            content=content,
-            final_done=done,
-            error_event=error,
-            reply_files=reply_files,
-        )
+        try:
+            await chat.end_turn(conversation_id)
+        except Exception:
+            log.warning("Could not bump conversation %s after its turn", conversation_id)
 
     try:
-        history = await chat.list_messages(conversation_id, limit=HISTORY_LIMIT)
-        turn_attachments = _attachments_from_history(history)
-        # Write a ``streaming`` placeholder assistant row BEFORE the first event. A
-        # daemon crash mid-turn then leaves a row the startup sweep flips to ``failed``
-        # (see "Sweep streaming rows left by a crashed daemon"), carrying whatever the
-        # last partial flush wrote. It is finalised in place on completion (one row,
-        # no dup). The write runs as a shielded task: a
-        # cancellation landing between the row's commit and the id assignment leaves the
-        # task running, and the CancelledError handler recovers the id.
-        append_task = asyncio.create_task(
-            chat.append_message(
-                conversation_id,
-                role=Role.ASSISTANT,
-                content=[],
-                status="streaming",
-            )
-        )
-        placeholder_id = (await asyncio.shield(append_task)).id
         if turn is not None:
-            turn.reply_message_id = placeholder_id
             turn.on_event = on_question
 
-        events = (await adapter.run_turn(history=history, attachments=turn_attachments)).__aiter__()
+        events = (await adapter.run_turn(prompt, attachments)).__aiter__()
         while True:
             try:
                 event = await _next_event(events, watch)
@@ -276,10 +188,7 @@ async def run_turn_task(
                 continue
             if isinstance(event, ToolResult) and event.tool_use_id in ask_tool_ids:
                 continue
-            event = content.stamp(event)
             emit(event)
-            content.add(event)
-            await flusher.after(event, placeholder_id)
             if isinstance(event, TurnDone):
                 final_done = event
             elif isinstance(event, TurnError):
@@ -290,7 +199,6 @@ async def run_turn_task(
                     event.code,
                     event.message,
                 )
-            # TurnStarted / QueueChanged: forwarded only, not message content.
 
         if final_done is None and error_event is None:
             # The stream ran out with no terminal event: the agent died or lost its
@@ -304,60 +212,51 @@ async def run_turn_task(
             )
             emit(error_event)
 
-        await flusher.close()
-        await finalize(final_done, error_event)
+        if final_done is not None:
+            # Coffer stores no reply to carry the model, so the log line does.
+            log.info(
+                "Turn for conversation %s completed (model=%s)",
+                conversation_id,
+                _reported_model(adapter),
+            )
+        await finish()
     except asyncio.CancelledError:
-        # The cancel may have landed while the placeholder write was still in
-        # flight; recover the committed row's id so it is not orphaned.
-        placeholder_id = await recover_placeholder_id(placeholder_id, append_task)
-        await flusher.close()
         if active.discarded:
-            # Conversation deleted: discard the partial turn entirely — remove the
-            # placeholder so no orphan streaming row remains.
-            if placeholder_id is not None:
-                await asyncio.shield(chat.delete_message(placeholder_id))
+            # Conversation deleted: nothing to finish, nothing to report.
             log.debug("Turn for conversation %s cancelled and discarded", conversation_id)
             raise
         # A terminal event (TurnDone / TurnError) already out means the turn has
-        # ended — the cancel landed after it, e.g. mid-finalize: the turn ends as
-        # that event said, with no second terminal, and the finalize is re-run
-        # whole (same content, same status).
+        # ended — the cancel landed after it: the turn ends as that event said,
+        # with no second terminal.
         if final_done is None and error_event is None:
             if active.interrupted:
-                # User interrupt: keep whatever the agent produced, as stopped.
+                # User interrupt.
                 final_done = TurnDone(
                     prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
                 )
                 emit(final_done)
             else:
                 # Nobody asked for this cancellation: the daemon is going down.
-                # Keep the partial, marked failed — what the startup sweep gives it.
                 error_event = TurnError(code=DAEMON_STOPPED, message=DAEMON_STOPPED_MESSAGE)
                 emit(error_event)
         # Shielded so a second cancellation (e.g. the conversation is deleted while
-        # an interrupt is mid-write) cannot abort the write half-done.
-        await asyncio.shield(finalize(final_done, error_event))
+        # an interrupt is mid-write) cannot abort the finish half-done.
+        await asyncio.shield(finish())
         if not active.interrupted:
-            log.info("Turn for conversation %s stopped by shutdown; partial kept", conversation_id)
+            log.info("Turn for conversation %s stopped by shutdown", conversation_id)
             raise
         # User interrupt handled — do NOT re-raise.
     except Exception as exc:
         log.exception("Unexpected error in turn task for conversation %s", conversation_id)
         error_event = TurnError(code="INTERNAL_ERROR", message=str(exc))
         emit(error_event)
-        await flusher.close()
-        # placeholder_id may be None when the placeholder write itself failed;
-        # the finalize falls back to appending a failed row so the turn still
-        # leaves a persisted trace.
-        await finalize(final_done, error_event)
+        await finish()
     finally:
         if turn is not None:
             questions.release_turn(turn)
-        flusher.stop()
         # Ownership-checked release — only our own entry, so a racing start that
         # registered a fresh turn is not lost.
         release_active(conversation_id, active)
-        bus.end_turn()
         # Close the dedicated queue so its renderer never hangs.
         if active.primary_queue is not None:
             active.primary_queue.put_nowait(None)

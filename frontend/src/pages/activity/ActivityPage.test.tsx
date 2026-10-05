@@ -538,14 +538,12 @@ acceptance("web-ui", "a daemon log row opens in place", async () => {
   expect(screen.getByRole("button", { name: "Copy record" })).toBeInTheDocument();
   // An error about the environment leads its button row with the hand-off.
   const buttons = within(row.nextElementSibling as HTMLElement).getAllByRole("button");
-  expect(buttons[0]).toHaveAccessibleName(/Ask an agent|Copy prompt/);
+  expect(buttons[0]).toHaveAccessibleName(/Hand off to|Copy prompt/);
 
   // A Coffer-internal error offers only Copy record.
   fireEvent.click(screen.getByText("KeyError: 'uid'").closest("tr")!);
   expect(screen.getAllByRole("button", { name: "Copy record" })).toHaveLength(1);
-  expect(
-    screen.queryByRole("button", { name: /Ask an agent|Copy prompt/ }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Hand off to|Copy prompt/ })).not.toBeInTheDocument();
   fireEvent.click(row);
 
   // "Show the tool call" lands on the Tool calls tab, looking for that call.
@@ -584,7 +582,7 @@ acceptance("web-ui", "an unanswered call and an environment error carry the hand
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
   fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
   const card = within(await drawer()).getByRole("alert");
-  expect(within(card).getAllByRole("button")[0]).toHaveAccessibleName(/Ask an agent|Copy prompt/);
+  expect(within(card).getAllByRole("button")[0]).toHaveAccessibleName(/Hand off to|Copy prompt/);
   // The drawer's footer is the server's page; the old "Daemon log records" step is gone.
   expect(screen.queryByRole("button", { name: "Daemon log records" })).not.toBeInTheDocument();
 });

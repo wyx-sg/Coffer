@@ -141,7 +141,7 @@ A provider can be a model runtime on this machine: **Ollama** (≥ 0.14.0 for Cl
 
 In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible**, whichever the runtime serves. The next step starts with the models that can call tools ticked, each showing its context window.
 
-If nothing answers, the dialog says so and offers a prompt for your agent (**Ask an agent**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running.
+If nothing answers, the dialog says so and offers a prompt for your agent (**Hand off to &lt;Agent&gt;**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running.
 
 - **Detection is read-only.** It probes loopback addresses only (each runtime's default port, or the URL you give), fingerprints the runtime rather than trusting the port, and never pulls, loads or downloads a model. vLLM's default port 8000 is shared by many development servers, so it is not probed by default: type vLLM's address, then press **Detect**.
 - **A local runtime needs no key**; Coffer curates the runtime's models that can call tools, each with the context window the runtime serves it with. Ollama's served window is known once the model is loaded; before that it is unknown, and Coffer then writes no window for the model rather than guessing one.
@@ -170,7 +170,7 @@ The line under the **Models** title says once where most prices come from — "b
 
 An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer. The one exception is a connection with a selection: if a client asks it for a model outside that selection (the Codex desktop app under a workspace model policy does this on every new thread), Coffer's proxy substitutes the agent's default model for that request and logs the swap.
 
-What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, and a channel's `/model` card:
+What a model picker offers for an agent is decided in one place and served to every surface that offers a model choice, such as a channel's `/model` card:
 
 - when the provider the agent runs on curates **text** models, exactly those, in your order;
 - otherwise, the agent's own catalogue (see [Agents](/guides/agents#models)).

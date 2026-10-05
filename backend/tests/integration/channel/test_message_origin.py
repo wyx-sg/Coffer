@@ -11,19 +11,12 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.chat.message import Role, TextBlock
-
 from .conftest import ChannelEnv, inbound, wait_until
 
 
-def _text(message: object) -> str:  # type: ignore[no-untyped-def]
-    return "".join(b.text for b in message.content if isinstance(b, TextBlock))  # type: ignore[attr-defined]
-
-
 async def _user_texts(env: ChannelEnv) -> list[str]:
-    conversations = await env.chat.list_conversations()
-    messages = await env.chat.list_messages(conversations[0].id)
-    return [_text(m) for m in messages if m.role is Role.USER]
+    conversations = await env.conversations()
+    return env.raw_prompts(conversations[0].id)
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a group turn names the group it came from")
@@ -96,4 +89,4 @@ async def test_a_command_is_not_prefixed_with_an_origin_block(env: ChannelEnv) -
 
     assert any("/model" in text for _chat, text in adapter.sent)
     assert not any("[Message origin]" in text for _chat, text in adapter.sent)
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []

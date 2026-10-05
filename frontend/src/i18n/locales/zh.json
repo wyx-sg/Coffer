@@ -126,7 +126,6 @@
     },
     "couldntDelete": "无法删除 {{name}}",
     "couldntDeleteSelected": "无法删除所选项",
-    "couldntDeleteConversation": "无法删除该对话",
     "bulk": {
       "selected": "已选 {{count}} 项",
       "selectedOf": "已选 {{count}} / {{total}}",
@@ -1115,7 +1114,19 @@
       "appearance": "外观",
       "language": "语言",
       "languageHelp": "Coffer 界面使用的语言。",
-      "tablesAndFiles": "表格与文件"
+      "tablesAndFiles": "表格与文件",
+      "agentsAndTerminal": "智能体与终端",
+      "preferredTerminal": "首选终端",
+      "preferredTerminalHelp": "Coffer 打开会话或开始交接时使用的终端。",
+      "preferredTerminalSystem": "系统终端",
+      "preferredTerminalCustom": "自定义…",
+      "preferredTerminalCustomTemplate": "自定义终端命令",
+      "preferredTerminalCustomPlaceholder": "例如 kitty --directory {cwd} sh -lc {command}",
+      "preferredTerminalCustomHint": "用 {cwd} 表示文件夹，用 {command} 表示要运行的命令。",
+      "preferredTerminalNeedsCommand": "模板需要包含 {command}。",
+      "handoffAgent": "交接智能体",
+      "handoffAgentHelp": "交接按钮启动的智能体。",
+      "handoffAgentNone": "没有可用的智能体。安装 Claude Code 或 Codex 后才能交接。"
     },
     "daemon": {
       "autostart": "开机自启动",
@@ -1174,17 +1185,6 @@
           "shortenTitle": "工具调用只保留 {{days}} 天？",
           "unit_one": "次调用",
           "unit_other": "次调用"
-        },
-        "conversations_archive": {
-          "name": "自动归档闲置对话",
-          "description": "超过设定天数没有新消息的对话将被自动归档。"
-        },
-        "conversations": {
-          "name": "对话",
-          "description": "已归档的对话和消息渠道话题，从归档时开始计算",
-          "shortenTitle": "对话只保留 {{days}} 天？",
-          "unit_one": "个对话",
-          "unit_other": "个对话"
         },
         "attachments": {
           "name": "附件",
@@ -1649,6 +1649,9 @@
     "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经添加过一个智能体了。",
     "AGENT_TYPE_REGISTERED": "这种类型的智能体已经添加过了。请修改它的配置目录，而不是再添加一个。",
     "AGENT_CONFIG_PARSE_ERROR": "无法解析该智能体的配置文件",
+    "AGENT_TYPE_UNSUPPORTED": "这种类型的智能体没有 Coffer 能列出或修改的会话。",
+    "NATIVE_SESSION_NOT_FOUND": "该会话已不存在，请刷新列表。",
+    "NATIVE_SESSION_INVALID": "会话或新标题未被接受。",
     "AGENT_CONFIG_REJECTED": "该智能体配置被拒绝",
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "CHANNEL_NOT_PAIRED": "该消息渠道还没有配对的账号——请生成配对码并发给机器人",
@@ -1737,15 +1740,8 @@
     "UPSTREAM_UNAVAILABLE": "上游服务器不可达——请检查它的命令或 URL，再点「测试连接」",
     "ADOPT_SECRET_REF_EXISTS": "纳入托管只会新建密钥——其中有名字已存在，或是独立的密钥",
     "SECRET_BINDING_REJECTED": "该去向已在 Coffer 应用中被拒绝，未发送任何内容。请更换去向，或在“密钥”页重新请求批准。",
-    "ATTACHMENT_TOO_LARGE": "文件超过 20 MB 上限。",
-    "ATTACHMENT_TYPE_UNSUPPORTED": "不支持此文件类型。请添加图片、文档、音频或文本文件。",
-    "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。",
-    "ATTACHMENT_EXPIRED": "这条消息携带的文件已超过 30 天被清理，无法重新发送。请重新添加文件后发送新消息。",
     "QUESTION_CLOSED": "这个问题已经被回答，或其任务已停止，所以这次回答没有发送。",
-    "ATTACHMENT_UNAVAILABLE": "这个附件已不可用。",
     "QUESTION_ANSWER_INVALID": "这个回答与问题不符。请从选项中选择，或输入你自己的回答。",
-    "MESSAGE_NOT_FOUND": "该消息已不在此对话中。",
-    "REPLY_FILE_NOT_FOUND": "这个文件不在该回复记录的改动里。",
     "SECRET_BINDING_PENDING": "该密钥需在 Coffer 应用中批准后才会发送到这里。",
     "PRESENCE_GRANT_INVALID": "无法验证这次批准，请在 Coffer 应用中重试。",
     "APPROVAL_NOT_FOUND": "该审批已不存在。",
@@ -1805,7 +1801,10 @@
     "SYNC_VAULT_TARGET_IN_CLOUD": "该文件夹位于 iCloud Drive、Dropbox 或 Syncthing 中，请选择它们之外的文件夹。",
     "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。",
     "GIT_NEEDED": "Coffer 需要 git 才能打开 vault。安装或更新 git 后点「重新检查」。",
-    "PROVIDER_PROTOCOL_RETIRED": "不再提供 ollama 协议——请改用本地 Ollama 运行时的 Anthropic 或 OpenAI 协议添加"
+    "PROVIDER_PROTOCOL_RETIRED": "不再提供 ollama 协议——请改用本地 Ollama 运行时的 Anthropic 或 OpenAI 协议添加",
+    "FS_TERMINAL_INVALID": "无法在终端中打开该会话",
+    "FS_TERMINAL_FAILED": "无法启动终端。请检查设置 › 通用中的首选终端。",
+    "SESSION_IN_USE": "该会话已在终端中打开。请在那里继续，或开始一个新会话。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -1971,7 +1970,6 @@
     "detail": {
       "back": "返回智能体列表",
       "notFound": "没有这个智能体",
-      "newConversation": "新对话",
       "connect": "连接",
       "moreActions": "{{name}} 的更多操作",
       "notAdded": {
@@ -2462,41 +2460,12 @@
       "moreFor": "{{name}} 的更多操作"
     },
     "sessionsTab": {
-      "rowMeta_one": "{{project}} · {{count}} 条消息",
-      "rowMeta_other": "{{project}} · {{count}} 条消息",
-      "untitled": "未命名会话",
-      "noMatch": "没有匹配的会话。",
-      "loadMore": "加载更多",
-      "age": {
-        "now": "刚刚",
-        "minutes": "{{count}} 分钟",
-        "hours": "{{count}} 小时",
-        "days": "{{count}} 天",
-        "weeks": "{{count}} 周"
-      },
-      "pick": "选择一个会话来阅读。",
-      "messages_one": "{{count}} 条消息",
-      "messages_other": "{{count}} 条消息",
-      "turnRange": "第 {{from}}–{{to}} 轮，共 {{total}} 轮",
-      "earlier": "更早的轮次",
-      "later": "更晚的轮次",
-      "readOnly": "只读",
-      "roleUser": "你",
-      "noTurns": "这个会话没有对话轮次。",
-      "turnTruncated": "这一轮太长，无法完整显示。打开文件阅读其余部分。",
-      "harnessPrefix": "运行环境上下文",
-      "loadFailed": "无法加载这个会话",
-      "loadFailedBody": "读取列表之后，这个文件被移动或删除了。",
-      "refreshList": "刷新列表",
+      "ariaLabel": "会话",
       "listFailed": "无法读取会话",
       "emptyTitle": "还没有会话",
       "emptyBody": "{{agent}} 把会话保存在 {{dir}}。在项目里运行 {{program}}，会话就会出现在这里。",
-      "search": "搜索会话",
-      "project": "项目",
-      "projectChosen": "项目：{{project}}",
-      "allProjects": "所有项目",
-      "searchProjects": "搜索项目",
-      "noProjects": "没有匹配的项目"
+      "noMatch": "没有匹配的会话。",
+      "search": "搜索标题和目录"
     },
     "changeModel": {
       "title": "更改 {{name}} 的模型",
@@ -3469,223 +3438,67 @@
     }
   },
   "conversations": {
-    "subtitle": "所有对话，来自 Coffer 和你的消息渠道。",
-    "bulk": {
-      "label": "已选对话",
-      "selectRow": "选择 {{title}}",
-      "deleteTitle_one": "删除 {{count}} 个对话？",
-      "deleteTitle_other": "删除 {{count}} 个对话？",
-      "deleteBody": "这些对话及其消息会从 Coffer 中删除；智能体改过的文件会保留。",
-      "deleteConfirm_one": "删除 {{count}} 个对话",
-      "deleteConfirm_other": "删除 {{count}} 个对话",
-      "showing": "显示 {{shown}} / {{count}}",
-      "showAll": "显示全部",
-      "done": {
-        "archive_one": "已归档 {{count}} 个对话",
-        "archive_other": "已归档 {{count}} 个对话",
-        "unarchive_one": "已取消归档 {{count}} 个对话",
-        "unarchive_other": "已取消归档 {{count}} 个对话",
-        "delete_one": "已删除 {{count}} 个对话",
-        "delete_other": "已删除 {{count}} 个对话"
-      },
-      "partial": "{{ok}} 个已完成，{{skipped}} 个已跳过",
-      "noneDone_one": "{{count}} 个对话已跳过",
-      "noneDone_other": "{{count}} 个对话已跳过",
-      "runningSkipped_one": "{{count}} 个对话仍在运行，未作改动。",
-      "runningSkipped_other": "{{count}} 个对话仍在运行，未作改动。"
-    },
+    "subtitle": "你的消息渠道发起的对话。",
     "title": "对话",
-    "thinking": "正在思考…",
-    "history": {
-      "rename": "重命名",
-      "delete": "删除…",
-      "unarchive": "取消归档",
-      "unarchived": "已取消归档",
-      "archive": "归档",
-      "archivedEmpty": "没有已归档的对话"
-    },
-    "thread": {
-      "empty": "发送消息开始对话。",
-      "notFoundTitle": "未找到该对话",
-      "notFoundBody": "它可能已被删除，或者链接已失效。",
-      "notFoundCta": "新建对话"
-    },
-    "archivedThread": {
-      "notice": "该对话已归档。",
-      "unarchive": "取消归档以继续对话",
-      "unarchiving": "正在取消归档…"
-    },
-    "composer": {
-      "placeholder": "给 {{agent}} 发消息…",
-      "ariaLabel": "消息输入框",
-      "send": "发送",
-      "stop": "停止",
-      "attach": "添加附件",
-      "dropHint": "松开以添加附件",
-      "placeholderAny": "输入消息…",
-      "replyPlaceholder": "回复…",
-      "queuePlaceholder": "回复——会排队到这一轮结束"
-    },
-    "queue": {
-      "label": "队列中：",
-      "edit": "编辑排队消息",
-      "remove": "从队列移除"
-    },
-    "toolCard": {
-      "unknown": "未知工具",
-      "running": "运行中",
-      "done": "完成",
-      "doneIn": "完成 · {{duration}}",
-      "stopped": "已停止",
-      "lost": "未知",
-      "error": "出错",
-      "input": "输入",
-      "result": "结果",
-      "errorLabel": "错误",
-      "toggleAria": "切换工具调用 {{name}}"
-    },
-    "tools": {
-      "group_one": "运行了 {{count}} 个工具调用",
-      "group_other": "运行了 {{count}} 个工具调用",
-      "failed": "{{count}} 个失败"
-    },
-    "newConversation": {
-      "agent": "智能体"
-    },
-    "modelPicker": {
-      "label": "智能体模型",
-      "placeholder": "模型（可选）",
-      "inheritNoModel": "默认"
-    },
-    "draft": {
-      "line": "与 {{agent}} 在 <mono>{{dir}}</mono> 中的新对话——发送一条消息即可开始。",
-      "handoffNote": "按下发送之前不会发出任何内容。",
-      "noAgentTitle": "还没有连接智能体",
-      "noAgentBody": "对话运行在由 Coffer 管理的智能体上。请先在「智能体」页面连接 Claude Code 或 Codex。",
-      "openAgents": "打开智能体",
-      "workspace": "Coffer 的工作区",
-      "workspaceFull": "Coffer 的工作区（~/.coffer/content/workspace）",
-      "workspacePicker": {
-        "label": "工作区",
-        "choose": "选择…",
-        "typePath": "输入或粘贴文件夹路径",
-        "use": "使用"
-      }
-    },
-    "delete": {
-      "title": "删除「{{title}}」？",
-      "body": "「{{title}}」及其消息将从 Coffer 中删除；智能体改过的文件会保留。如果只是想让它不碍事，请改用归档。",
-      "confirm": "删除对话"
-    },
-    "jumpToLatest": "跳到最新",
-    "attachment": "附件",
-    "errors": {
-      "agentNotLoggedIn": "本机的 Claude Code 尚未登录。在终端运行 `claude` 完成 /login 后重试。"
-    },
-    "attachments": {
-      "uploading": "正在上传…",
-      "remove": "移除 {{name}}",
-      "notAttached": "{{name}} 未添加：{{reason}}。最多 10 个文件，每个 20 MB。",
-      "tooLarge": "文件超过 20 MB",
-      "tooMany": "这条消息已有 10 个文件",
-      "listLabel": "已添加的附件"
-    },
-    "mirror": {
-      "staysInCoffer": "回复只留在 Coffer",
-      "reason": {
-        "group_main": "这个对话是群的主聊天，从这里发的回复不会发到群主聊天里。",
-        "not_located": "这个对话没有关联到 Coffer 能写入的聊天线程。",
-        "chat_kind_unknown": "这个对话没有关联到 Coffer 能写入的聊天线程。",
-        "channel_deleted": "这个对话来自的渠道已被删除。"
-      },
-      "notDelivered": "尚未投递到 {{platform}} · 将重试"
-    },
-    "source": {
-      "coffer": "Coffer",
-      "channel": "消息渠道",
-      "dm": "私聊",
-      "group": "群聊",
-      "thread": "话题",
-      "threadN": "话题 {{n}}",
-      "topic": "话题"
-    },
     "group": {
       "today": "今天",
       "yesterday": "昨天",
       "earlier": "更早"
     },
     "list": {
-      "running": "运行中",
       "ariaLabel": "对话",
-      "needsYou": "等你处理",
       "loadFailed": "无法加载对话",
       "emptyTitle": "还没有对话",
-      "emptyBody": "在这里发起一个，或从 SeaTalk、Telegram 给你的消息渠道发消息。",
+      "emptyBody": "从 SeaTalk 或 Telegram 给你的消息渠道发消息后，对话会出现在这里。",
       "noMatches": "没有匹配的对话",
       "clearFilters": "清除筛选"
     },
     "filters": {
-      "view": "视图",
-      "source": "来源",
+      "channel": "消息渠道",
       "agent": "智能体",
-      "search": "搜索标题和消息",
-      "showArchived": "已归档",
-      "showActive": "进行中"
+      "search": "搜索标题和目录"
     },
-    "new": {
-      "action": "新建对话",
-      "title": "新建对话"
-    },
-    "header": {
-      "more": "更多操作",
-      "titleAria": "对话标题",
-      "renameHint": "回车保存 · Esc 取消"
-    },
-    "files": {
-      "title": "改动的文件"
-    },
-    "diff": {
-      "position": "第 {{n}} 个，共 {{total}} 个",
-      "previous": "上一个文件",
-      "next": "下一个文件",
-      "binary": "此文件是二进制文件",
-      "tooLarge": "此文件太大，无法显示（超过 1 MB）",
-      "empty": "此文件没有可显示的内容"
-    },
-    "question": {
+    "source": {
+      "channel": "消息渠道",
+      "dm": "私聊",
+      "group": "群聊",
+      "thread": "话题",
+      "threadN": "话题 {{n}}",
+      "topic": "话题"
+    }
+  },
+  "sessions": {
+    "row": {
+      "rename": "重命名",
+      "delete": "删除…",
+      "titleAria": "标题",
       "needsYou": "等你处理",
-      "progress": "第 {{current}} 个，共 {{total}} 个问题",
-      "submit": "提交",
-      "waitingFor": "{{agent}} 正在等你的回答。",
-      "alsoAsked": "也已在 {{platform}} 中询问。",
-      "placeholder": "直接回复，或点上面的按钮回答",
-      "answered": "已回答：",
-      "inPlatform": "在 {{platform}}",
-      "notAnswered": "未回答"
+      "running": "运行中",
+      "stop": "停止",
+      "stopAria": "停止 {{title}}",
+      "moreActions": "{{title}} 的更多操作",
+      "open": "在终端中打开",
+      "noSession": "还没有会话：这个对话还没有运行过任何一轮。",
+      "openOptions": "{{title}} 的打开选项",
+      "copyCommand": "复制命令"
     },
-    "turn": {
-      "working": "处理中 · {{duration}}",
-      "workingNoTime": "处理中",
-      "waiting": "等待你的回复",
-      "stopped": "已停止",
-      "stoppedAfter": "运行 {{duration}} 后停止",
-      "failedWord": "失败",
-      "failedAfter": "运行 {{duration}} 后失败",
-      "stoppedByYou": "已被你停止。",
-      "editNotFinished": "这次编辑没有完成；发一条消息即可继续。",
-      "commandNotFinished": "这条命令没有执行完；发一条消息即可继续。",
-      "copyReply": "复制回复",
-      "failed": "这一轮失败了：{{reason}}",
-      "failedHint": "重试会再发送同一条消息。"
+    "delete": {
+      "title": "删除「{{title}}」？",
+      "conversationBody": "该对话会同时从智能体中删除，且无法恢复；智能体改过的文件会保留。",
+      "conversationConfirm": "删除对话",
+      "sessionBody": "该会话会从智能体中删除，且无法恢复；智能体改过的文件会保留。",
+      "sessionConfirm": "删除会话",
+      "failed": "无法删除"
     },
-    "queueHeld": {
-      "message": "排队的消息无法开始，队列已暂停：{{error}}",
-      "resume": "继续队列"
-    },
-    "streamLost": {
-      "title": "与守护进程的实时连接已断开",
-      "body": "重新连接五次都失败了。这一轮可能仍在运行——重新加载会显示它目前写下的全部内容。",
-      "reload": "重新加载对话"
+    "busy": {
+      "title": "这个会话正忙",
+      "chat": "聊天",
+      "running": "这一轮正在 {{platform}} 中运行。请在 {{platform}} 中回答，或停止这一轮并在终端中继续。",
+      "waiting": "这一轮正在 {{platform}} 中等待你的回答。请在 {{platform}} 中回答，或停止这一轮并在终端中继续。",
+      "answer": "在 {{platform}} 中回答",
+      "stop": "停止这一轮并在终端中继续",
+      "stopping": "正在停止…",
+      "failed": "无法停止这一轮"
     }
   },
   "channels": {
@@ -4379,8 +4192,7 @@
       "merged": {
         "anAgent": "智能体",
         "title": "{{agent}} 已在 {{time}} 合并两个版本",
-        "body": "先看看本机会发生什么变化，再标记为已解决。下次推送时 {{machine}} 会拿到合并结果。",
-        "openConversation": "打开对话"
+        "body": "先看看本机会发生什么变化，再标记为已解决。下次推送时 {{machine}} 会拿到合并结果。"
       },
       "progress": "已解决 {{resolved}} / {{total}} 个文件",
       "progressJoin": "已选定 {{resolved}} / {{total}} 个文件",
@@ -6034,13 +5846,11 @@
       "customTool": "自定义工具",
       "cli": "命令行工具",
       "page": "页面",
-      "conversation": "对话",
       "secret": "密钥"
     },
     "bestMatch": "最佳匹配",
     "recent": "最近",
     "noResultsHint": "请检查拼写。{{shortcut}} 可按名称查找页面、服务器、技能、密钥和对话。",
-    "untitled": "未命名对话",
     "usedBy_one": "被 {{name}} 使用",
     "usedBy_other": "被 {{name}} 等 {{count}} 处使用",
     "status": {
@@ -6453,9 +6263,11 @@
     "copyPrompt": "复制提示词",
     "copyPromptHint": "用于 Coffer 外部的智能体",
     "moreOptions": "更多选项",
-    "askAgent": "交给智能体",
     "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。",
-    "promptCopied": "已复制提示词"
+    "promptCopied": "已复制提示词",
+    "handoffTo": "交给 {{agent}}",
+    "handoffToHint": "在 {{terminal}} 中启动",
+    "tooltip": "在 {{terminal}} 中启动 {{agent}} 来处理"
   },
   "upkeep": {
     "every": "每隔",
@@ -6501,5 +6313,12 @@
       "cancel": "取消",
       "apply": "应用"
     }
+  },
+  "terminal": {
+    "system": "系统终端",
+    "custom": "自定义终端",
+    "opened": "已在 {{terminal}} 中打开",
+    "copyCommand": "复制命令",
+    "commandCopied": "已复制命令"
   }
 }

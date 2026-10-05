@@ -13,25 +13,22 @@ from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
 )
+from coffer.application.chat.turn_state import peek
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.domain.chat.events import (
     AgentEvent,
     TextDelta,
-    ToolCall,
-    ToolResult,
     TurnDone,
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Role, TextBlock
 from tests.support.chat_turns import start_turn
 
 from .conftest import (
     FakeAgentAdapter,
     FakeAgentProvider,
     FakeConversationRepo,
-    FakeMessageRepo,
-    make_message,
     make_registry,
 )
 
@@ -45,19 +42,14 @@ def make_orchestrator(
     *,
     adapter: Any = None,
     provider: Any = None,
-) -> tuple[TurnOrchestrator, FakeConversationRepo, FakeMessageRepo, FakeAgentProvider]:
+) -> tuple[TurnOrchestrator, FakeConversationRepo, FakeAgentProvider]:
     conv_repo = FakeConversationRepo()
-    msg_repo = FakeMessageRepo()
     if adapter is None and provider is None:
         adapter = FakeAgentAdapter(events or [])
     registry, prov = make_registry(adapter=adapter, provider=provider)
-    chat_svc = ChatService(
-        conversations=conv_repo,
-        messages=msg_repo,
-        registry=registry,
-    )
+    chat_svc = ChatService(conversations=conv_repo, registry=registry)
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
-    return orchestrator, conv_repo, msg_repo, prov
+    return orchestrator, conv_repo, prov
 
 
 async def drain_queue(queue: asyncio.Queue[AgentEvent | None]) -> list[AgentEvent]:
@@ -78,7 +70,7 @@ class _BlockingAdapter:
         self._lead = lead
         self.model_id = model_id
 
-    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
         lead = self._lead
 
         async def gen() -> AsyncIterator[AgentEvent]:
@@ -89,12 +81,17 @@ class _BlockingAdapter:
         return gen()
 
 
+_DONE = TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")
+
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat", scenario="a turn streams its typed events in order and stores none of them"
+)
 async def test_happy_path_collects_events() -> None:
     scripted: list[AgentEvent] = [
         TurnStarted(),
@@ -102,7 +99,7 @@ async def test_happy_path_collects_events() -> None:
         TextDelta(text=" world"),
         TurnDone(prompt_tokens=10, completion_tokens=5, stop_reason="end_turn"),
     ]
-    orchestrator, _conv, _msg, _prov = make_orchestrator(scripted)
+    orchestrator, _conv, _prov = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await start_turn(orchestrator, conv.id, "Hi there")
@@ -110,170 +107,103 @@ async def test_happy_path_collects_events() -> None:
 
     assert any(isinstance(e, TextDelta) for e in events)
     assert any(isinstance(e, TurnDone) for e in events)
+    # The renderer got the turn's events in the order the adapter produced them.
+    assert events == scripted
+    # Nothing of the turn's text was written: the index row is the only record.
+    stored = await _conv.get(conv.id)
+    assert stored is not None
+    assert "Hello" not in repr(stored)
 
 
 @pytest.mark.asyncio
-async def test_happy_path_persists_assistant_message() -> None:
-    scripted: list[AgentEvent] = [
-        TextDelta(text="Paris is the capital"),
-        TurnDone(prompt_tokens=20, completion_tokens=8, stop_reason="end_turn"),
-    ]
-    orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
+@pytest.mark.acceptance(spec="chat", scenario="the orchestrator hands an adapter only the turn")
+async def test_the_adapter_is_given_the_prompt_and_the_attachments() -> None:
+    adapter = FakeAgentAdapter([_DONE])
+    orchestrator, _, _ = make_orchestrator(adapter=adapter)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+    image = Attachment(path="/tmp/coffer-media/a.jpg", mime="image/jpeg", filename="a.jpg")
+
+    await drain_queue(await start_turn(orchestrator, conv.id, "remember this", attachments=[image]))
+
+    assert adapter.recorded_prompts == ["remember this"]
+    assert adapter.recorded_attachments == [[image]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a turn carries no history")
+async def test_a_later_turn_is_given_only_its_own_message() -> None:
+    adapter = FakeAgentAdapter([_DONE])
+    orchestrator, _, provider = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await start_turn(orchestrator, conv.id, "What is the capital of France?")
-    await drain_queue(queue)
+    await drain_queue(await start_turn(orchestrator, conv.id, "first question"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "second question"))
 
-    messages = msg_repo.all_messages()
-    assert len(messages) == 2  # user + assistant
-    assistant = messages[1]
-    assert assistant.role == Role.ASSISTANT
-    assert assistant.status == "complete"
-    assert assistant.finished_at is not None
-    assert messages[0].finished_at is None  # a user message never streams
-    assert assistant.prompt_tokens == 20
-    assert assistant.completion_tokens == 8
-    texts = [b.text for b in assistant.content if isinstance(b, TextBlock)]
-    assert "Paris is the capital" in "".join(texts)
+    # Each turn is its message and nothing earlier; the adapter is built from the
+    # conversation id alone, so it resumes the stored native session itself.
+    assert adapter.recorded_prompts == ["first question", "second question"]
+    assert all("first question" not in p for p in adapter.recorded_prompts[1:])
+    assert adapter.recorded_attachments == [[], []]
+    assert provider.init_calls and provider.deleted == []
 
 
 @pytest.mark.asyncio
-async def test_persisted_reply_keeps_text_and_tool_calls_in_the_order_the_turn_emitted_them() -> (
-    None
-):
-    scripted: list[AgentEvent] = [
-        TextDelta(text="Let me "),
-        TextDelta(text="look."),
-        ToolCall(tool_use_id="tu-1", tool_name="read_file", tool_input={"path": "a"}),
-        ToolResult(tool_use_id="tu-1", tool_name="read_file", output={"ok": 1}, error=None),
-        TextDelta(text="It says hi."),
-        TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn"),
-    ]
-    orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
+@pytest.mark.acceptance(spec="chat", scenario="a completed turn is not replayed")
+async def test_a_completed_turn_leaves_nothing_to_replay() -> None:
+    scripted: list[AgentEvent] = [TurnStarted(), TextDelta(text="secret reply"), _DONE]
+    orchestrator, _, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await drain_queue(await start_turn(orchestrator, conv.id, "read a"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "go"))
+    await asyncio.sleep(0)
 
-    assistant = msg_repo.all_messages()[1]
-    assert [
-        (b.type, getattr(b, "text", None) or getattr(b, "tool_use_id", None))
-        for b in assistant.content
-    ] == [
-        ("text", "Let me look."),
-        ("tool_use", "tu-1"),
-        ("tool_result", "tu-1"),
-        ("text", "It says hi."),
-    ]
+    # What a late subscriber could read: the pending-queue snapshot (empty), and no
+    # turn in flight or held with the turn's content.
+    assert orchestrator.pending(conv.id) == []
+    assert conv.id not in active_turns()
+    state = peek(conv.id)
+    assert state is None or (state.active is None and state.queue == [])
 
 
-@pytest.mark.acceptance(spec="chat", scenario="token usage is recorded on the assistant message")
 @pytest.mark.asyncio
-async def test_completed_turn_records_token_usage() -> None:
-    scripted: list[AgentEvent] = [
-        TextDelta(text="done"),
-        TurnDone(prompt_tokens=12, completion_tokens=6, stop_reason="end_turn"),
-    ]
-    orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
+@pytest.mark.acceptance(spec="chat", scenario="a reported model reaches the turn's log line")
+async def test_a_reported_model_reaches_the_turn_log_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    scripted: list[AgentEvent] = [TurnStarted(), TextDelta(text="hi"), _DONE]
+    orchestrator, _, _ = make_orchestrator(adapter=FakeAgentAdapter(scripted, model_id="model-x"))
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+    with caplog.at_level("INFO", logger="coffer.application.chat.turn_runner"):
+        await drain_queue(await start_turn(orchestrator, conv.id, "go"))
+    assert any("model-x" in r.getMessage() for r in caplog.records)
 
-    queue = await start_turn(orchestrator, conv.id, "ping")
-    await drain_queue(queue)
-
-    assistant = msg_repo.all_messages()[1]
-    assert assistant.prompt_tokens == 12
-    assert assistant.completion_tokens == 6
-
-
-@pytest.mark.asyncio
-async def test_history_passed_to_adapter_includes_the_user_message() -> None:
-    adapter = FakeAgentAdapter(
-        [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")]
-    )
-    orchestrator, _, _, _ = make_orchestrator(adapter=adapter)
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "remember this")
-    await drain_queue(queue)
-
-    assert len(adapter.recorded_histories) == 1
-    history = adapter.recorded_histories[0]
-    assert history[-1].role == Role.USER
-    assert isinstance(history[-1].content[0], TextBlock)
-    assert history[-1].content[0].text == "remember this"
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="a long conversation is not loaded whole")
-async def test_only_the_most_recent_two_hundred_messages_reach_the_adapter() -> None:
-    """A conversation is not bounded, but what one turn carries is.
-
-    Handing the whole thread to the adapter makes an old conversation slower
-    and more expensive with every turn, and eventually unrunnable. The window
-    is ``HISTORY_LIMIT`` and it is the most RECENT messages, not the first.
-    """
-    from coffer.application.chat.turn_runner import HISTORY_LIMIT
-
-    adapter = FakeAgentAdapter(
-        [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")]
-    )
-    orchestrator, _conv_repo, msg_repo, _prov = make_orchestrator(adapter=adapter)
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-    for i in range(HISTORY_LIMIT + 20):
-        await msg_repo.append(make_message(i, f"old {i}", conversation_id=conv.id))
-
-    queue = await start_turn(orchestrator, conv.id, "the newest thing")
-    await drain_queue(queue)
-
-    history = adapter.recorded_histories[0]
-    assert len(history) == HISTORY_LIMIT
-    # The window is the tail: the turn's own user message is in it, the first
-    # messages of the conversation are not.
-    assert history[-1].content[0].text == "the newest thing"  # type: ignore[union-attr]
-    texts = [b.text for m in history for b in m.content if isinstance(b, TextBlock)]
-    assert "old 0" not in texts
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
-async def test_model_id_recorded_from_adapter() -> None:
-    adapter = FakeAgentAdapter(
-        [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")],
-        model_id="m-xyz",
-    )
-    orchestrator, _, msg_repo, _ = make_orchestrator(adapter=adapter)
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "hi")
-    await drain_queue(queue)
-
-    assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
-    assert assistant.model_id == "m-xyz"
-
-
-@pytest.mark.asyncio
-async def test_model_learned_mid_turn_is_recorded_at_finalize() -> None:
-    """A real adapter only learns its model once the stream is under way (the SDK's
-    first assistant message, the app-server's thread result): it is read when the
-    reply is finalised, not before the turn starts."""
-
-    class _LateModelAdapter:
-        model_id: str | None = None
-
-        async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    # An adapter that names no model (no attribute at all) is still a valid adapter.
+    class _NoModel:
+        async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
             async def gen() -> AsyncIterator[AgentEvent]:
-                yield TurnStarted()
-                self.model_id = "learned-mid-turn"
-                yield TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")
+                for ev in scripted:
+                    yield ev
 
             return gen()
 
-    orchestrator, _, msg_repo, _ = make_orchestrator(adapter=_LateModelAdapter())
+    orchestrator2, _, _ = make_orchestrator(adapter=_NoModel())
+    conv2 = await orchestrator2._chat.create_conversation(agent_key="builtin")
+    events = await drain_queue(await start_turn(orchestrator2, conv2.id, "go"))
+    assert isinstance(events[-1], TurnDone)
+
+
+@pytest.mark.asyncio
+async def test_a_turn_names_its_conversation_after_the_first_words_and_bumps_it() -> None:
+    orchestrator, conv_repo, _ = make_orchestrator([_DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+    assert conv.title == "New conversation"
 
-    await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "plan the offsite"))
 
-    assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
-    assert assistant.model_id == "learned-mid-turn"
+    named = await conv_repo.get(conv.id)
+    assert named is not None
+    assert named.title == "plan the offsite"
+    assert named.updated_at > conv.updated_at
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +215,7 @@ async def test_model_learned_mid_turn_is_recorded_at_finalize() -> None:
 async def test_build_adapter_error_propagates_and_releases_slot() -> None:
     err = AgentConfigRejected("missing_secret", "agent could not build its adapter")
     provider = FakeAgentProvider(adapter=None, build_error=err)
-    orchestrator, _, _, _ = make_orchestrator(provider=provider)
+    orchestrator, _, _ = make_orchestrator(provider=provider)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     with pytest.raises(AgentConfigRejected):
@@ -301,34 +231,17 @@ async def test_build_adapter_error_propagates_and_releases_slot() -> None:
 
 
 @pytest.mark.asyncio
-async def test_turn_error_persists_failed_message() -> None:
-    scripted: list[AgentEvent] = [
-        TurnStarted(),
-        TurnError(code="PROVIDER_ERROR", message="API rate limit exceeded"),
-    ]
-    orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "test")
-    await drain_queue(queue)
-
-    assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
-    assert len(assistants) == 1
-    assert assistants[0].status == "failed"
-
-
-@pytest.mark.asyncio
 async def test_turn_error_is_logged_server_side(caplog: pytest.LogCaptureFixture) -> None:
     """A turn that ends in a TurnError must leave a server-side log trace —
-    the SSE event alone disappears with the client connection."""
+    the event alone disappears with the renderer."""
     scripted: list[AgentEvent] = [
         TurnStarted(),
         TurnError(code="PROVIDER_ERROR", message="API rate limit exceeded"),
     ]
-    orchestrator, _, _, _ = make_orchestrator(scripted)
+    orchestrator, _, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    with caplog.at_level("WARNING", logger="coffer.application.chat.turn_orchestrator"):
+    with caplog.at_level("WARNING", logger="coffer.application.chat.turn_runner"):
         queue = await start_turn(orchestrator, conv.id, "test")
         await drain_queue(queue)
 
@@ -337,17 +250,12 @@ async def test_turn_error_is_logged_server_side(caplog: pytest.LogCaptureFixture
     assert "API rate limit exceeded" in records[0].getMessage()
 
 
-# ---------------------------------------------------------------------------
-# cancel_turn (delete path — discard)
-# ---------------------------------------------------------------------------
-
-
 class _RaisingAdapter:
     """Yields one event, then raises a non-cancellation error mid-stream."""
 
     model_id = None
 
-    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TextDelta(text="partial")
             raise RuntimeError("boom")
@@ -356,10 +264,10 @@ class _RaisingAdapter:
 
 
 @pytest.mark.asyncio
-async def test_unexpected_adapter_error_yields_internal_error_and_failed_message() -> None:
+async def test_unexpected_adapter_error_yields_internal_error() -> None:
     """An unexpected exception from the adapter surfaces as TurnError
-    (INTERNAL_ERROR) and finalizes the assistant message as failed."""
-    orchestrator, _, msg_repo, _ = make_orchestrator(adapter=_RaisingAdapter())
+    (INTERNAL_ERROR) and the turn's slot is released."""
+    orchestrator, _, _ = make_orchestrator(adapter=_RaisingAdapter())
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await start_turn(orchestrator, conv.id, "hi")
@@ -368,17 +276,17 @@ async def test_unexpected_adapter_error_yields_internal_error_and_failed_message
     errors = [e for e in events if isinstance(e, TurnError)]
     assert len(errors) == 1
     assert errors[0].code == "INTERNAL_ERROR"
-
-    assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
-    assert assistant.status == "failed"
     assert conv.id not in active_turns()
 
 
+# ---------------------------------------------------------------------------
+# cancel_turn (delete path — discard)
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
-async def test_cancel_turn_discards_the_partial_turn() -> None:
-    orchestrator, _, msg_repo, _ = make_orchestrator(
-        adapter=_BlockingAdapter([TextDelta(text="partial")])
-    )
+async def test_cancel_turn_discards_the_turn_without_a_terminal_event() -> None:
+    orchestrator, _, _ = make_orchestrator(adapter=_BlockingAdapter([TextDelta(text="partial")]))
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await start_turn(orchestrator, conv.id, "hi")
@@ -386,28 +294,28 @@ async def test_cancel_turn_discards_the_partial_turn() -> None:
     assert isinstance(first, TextDelta)
 
     orchestrator.cancel_turn(conv.id)
-    await drain_queue(queue)  # returns once the sentinel arrives
+    rest = await drain_queue(queue)  # returns once the sentinel arrives
 
-    # No assistant message is persisted on the discard path.
-    assert not [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
+    # A deleted conversation's turn ends silently.
+    assert not [e for e in rest if isinstance(e, (TurnDone, TurnError))]
     assert conv.id not in active_turns()
 
 
 @pytest.mark.asyncio
 async def test_cancel_turn_noop_when_no_active_turn() -> None:
-    orchestrator, _, _, _ = make_orchestrator([])
+    orchestrator, _, _ = make_orchestrator([])
     orchestrator.cancel_turn("nonexistent-conv-id")  # must not raise
 
 
 # ---------------------------------------------------------------------------
-# interrupt_turn (keep the partial output)
+# interrupt_turn
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="chat", scenario="stop a running turn")
-async def test_interrupt_persists_the_partial_message() -> None:
-    orchestrator, _, msg_repo, _ = make_orchestrator(
+async def test_interrupt_ends_the_turn_as_interrupted() -> None:
+    orchestrator, _, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial answer")])
     )
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
@@ -421,19 +329,12 @@ async def test_interrupt_persists_the_partial_message() -> None:
 
     # A terminal TurnDone(stop_reason="interrupted") closes the stream.
     assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in rest)
-
-    # The partial assistant message is persisted (status stopped).
-    assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
-    assert assistant.status == "stopped"
-    assert assistant.finished_at is not None
-    texts = [b.text for b in assistant.content if isinstance(b, TextBlock)]
-    assert "partial answer" in "".join(texts)
     assert conv.id not in active_turns()
 
 
 @pytest.mark.asyncio
 async def test_interrupt_noop_when_no_active_turn() -> None:
-    orchestrator, _, _, _ = make_orchestrator([])
+    orchestrator, _, _ = make_orchestrator([])
     orchestrator.interrupt_turn("nonexistent-conv-id")  # must not raise
 
 
@@ -444,10 +345,7 @@ async def test_interrupt_noop_when_no_active_turn() -> None:
 
 @pytest.mark.asyncio
 async def test_active_turns_cleared_after_completion() -> None:
-    scripted: list[AgentEvent] = [
-        TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn"),
-    ]
-    orchestrator, _, _, _ = make_orchestrator(scripted)
+    orchestrator, _, _ = make_orchestrator([_DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await start_turn(orchestrator, conv.id, "hi")
@@ -456,98 +354,17 @@ async def test_active_turns_cleared_after_completion() -> None:
     assert conv.id not in active_turns()
 
 
-# ---------------------------------------------------------------------------
-# Placeholder edge cases: early failure, cancel-during-append
-# ---------------------------------------------------------------------------
-
-
-class _PlaceholderFailRepo(FakeMessageRepo):
-    """Raises on the streaming-placeholder append; everything else works."""
-
-    async def append(self, message: Any) -> Any:
-        if message.status == "streaming":
-            raise RuntimeError("db down")
-        return await super().append(message)
-
-
-@pytest.mark.asyncio
-async def test_placeholder_write_failure_still_persists_failed_message() -> None:
-    """If the placeholder write itself fails, the turn must still leave a
-    persisted failed assistant message (not vanish from the trail)."""
-    conv_repo = FakeConversationRepo()
-    msg_repo = _PlaceholderFailRepo()
-    adapter = FakeAgentAdapter(
-        [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")]
-    )
-    registry, _ = make_registry(adapter=adapter)
-    chat_svc = ChatService(conversations=conv_repo, messages=msg_repo, registry=registry)  # type: ignore[arg-type]
-    orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
-    conv = await chat_svc.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "hi")
-    events = await drain_queue(queue)
-
-    # The client sees a TurnError…
-    assert any(isinstance(e, TurnError) and e.code == "INTERNAL_ERROR" for e in events)
-    # …and the failure is persisted, not silently dropped.
-    assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
-    assert len(assistants) == 1
-    assert assistants[0].status == "failed"
-
-
-class _SlowPlaceholderRepo(FakeMessageRepo):
-    """Parks the streaming-placeholder append on a gate (simulating an INSERT
-    whose surrounding awaits outlive a cancellation)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.gate = asyncio.Event()
-
-    async def append(self, message: Any) -> Any:
-        if message.status == "streaming":
-            await self.gate.wait()
-        return await super().append(message)
-
-
-@pytest.mark.asyncio
-async def test_interrupt_during_placeholder_append_leaves_no_orphan_streaming_row() -> None:
-    """An interrupt that lands while the placeholder append is still in flight
-    must recover the committed row and finalize it — no orphan streaming row."""
-    conv_repo = FakeConversationRepo()
-    msg_repo = _SlowPlaceholderRepo()
-    adapter = FakeAgentAdapter(
-        [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")]
-    )
-    registry, _ = make_registry(adapter=adapter)
-    chat_svc = ChatService(conversations=conv_repo, messages=msg_repo, registry=registry)  # type: ignore[arg-type]
-    orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
-    conv = await chat_svc.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "hi")
-    await asyncio.sleep(0)  # let the task reach the parked append
-
-    orchestrator.interrupt_turn(conv.id)
-    msg_repo.gate.set()  # the in-flight append completes after the cancel
-    events = await drain_queue(queue)
-
-    assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in events)
-    assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
-    assert len(assistants) == 1
-    assert assistants[0].status != "streaming"  # recovered + finalized, not orphaned
-
-
 @pytest.mark.asyncio
 async def test_turn_completion_bumps_conversation_updated_at() -> None:
-    """Finalizing a turn must refresh the conversation's updated_at so the
+    """Ending a turn refreshes the conversation's updated_at so the
     recency-ordered conversation list reflects turn *completion*, not just the
-    turn-start writes (user message + placeholder)."""
-    orchestrator, conv_repo, _, _ = make_orchestrator(
+    turn start."""
+    orchestrator, conv_repo, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     queue = await start_turn(orchestrator, conv.id, "hi")
-    # First event means the placeholder row (and its touch) already happened.
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(first, TextDelta)
     mid_turn = await conv_repo.get(conv.id)
@@ -559,67 +376,3 @@ async def test_turn_completion_bumps_conversation_updated_at() -> None:
     finished = await conv_repo.get(conv.id)
     assert finished is not None
     assert finished.updated_at > mid_turn.updated_at
-
-
-# ---------------------------------------------------------------------------
-# Startup sweep
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_in_flight_turn_leaves_a_streaming_assistant_row() -> None:
-    """While a turn streams, a placeholder assistant message with
-    status='streaming' must exist, so a daemon crash leaves a row the startup
-    sweep can flip to 'failed' (spec chat "Sweep streaming rows left by a
-    crashed daemon") rather than a silently-missing reply."""
-    orchestrator, _, msg_repo, _ = make_orchestrator(
-        adapter=_BlockingAdapter([TextDelta(text="partial")])
-    )
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "hi")
-    first = await asyncio.wait_for(queue.get(), timeout=5.0)
-    assert isinstance(first, TextDelta)
-
-    assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
-    assert len(assistants) == 1
-    assert assistants[0].status == "streaming"
-
-    orchestrator.cancel_turn(conv.id)  # cleanup
-    await drain_queue(queue)
-
-
-@pytest.mark.asyncio
-async def test_completed_turn_finalizes_the_same_row_not_a_duplicate() -> None:
-    """A completed turn finalizes the streaming placeholder in place — exactly
-    one assistant message, no duplicate row."""
-    scripted: list[AgentEvent] = [
-        TextDelta(text="done"),
-        TurnDone(prompt_tokens=3, completion_tokens=2, stop_reason="end_turn"),
-    ]
-    orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = await start_turn(orchestrator, conv.id, "hi")
-    await drain_queue(queue)
-
-    assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
-    assert len(assistants) == 1
-    assert assistants[0].status == "complete"
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="a crashed turn leaves no message stuck streaming")
-async def test_sweep_streaming_flips_streaming_to_failed() -> None:
-    msg_repo = FakeMessageRepo()
-    msg_repo._messages = [
-        make_message(0, "partial", status="streaming"),
-        make_message(1, "done", status="complete"),
-        make_message(2, "partial", status="streaming"),
-    ]
-
-    count = await TurnOrchestrator.sweep_streaming_messages(msg_repo)  # type: ignore[arg-type]
-    assert count == 2
-    statuses = [m.status for m in msg_repo._messages]
-    assert statuses.count("failed") == 2
-    assert "streaming" not in statuses

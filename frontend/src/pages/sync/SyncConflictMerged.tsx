@@ -5,11 +5,9 @@
 // on this Mac underneath. The merge is never an answer by itself — the person
 // checks it and marks it resolved, which takes the copy as saved (refused, with
 // the line, while a conflict marker is left in it). Back to two choices throws
-// the merge away. Open conversation shows only when the daemon knows which
-// conversation the agent ran in.
+// the merge away. The agent ran in its own terminal, so the card links nowhere.
 import { MessageSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import type { ConflictFile } from "@/lib/api/sync";
@@ -63,13 +61,6 @@ export function SyncConflictMerged({ file, pending, leaving, error, onResolve, o
             >
               {t("sync.resolve.editing.markResolved")}
             </Button>
-            {file.agent_conversation_id ? (
-              <Button asChild size="sm" variant="ghost">
-                <Link to={`/conversations/${encodeURIComponent(file.agent_conversation_id)}`}>
-                  {t("sync.resolve.merged.openConversation")}
-                </Link>
-              </Button>
-            ) : null}
             <Button
               type="button"
               size="sm"

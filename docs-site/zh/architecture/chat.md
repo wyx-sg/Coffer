@@ -1,56 +1,57 @@
 ---
 title: 对话与轮次
-description: Coffer 怎样在 Claude Code 或 Codex 上运行一个轮次、把它流式推给每个正在观看的界面，并让即时通讯消息渠道驱动和 Web「对话」页面同一批对话。
+description: Coffer 怎样在 Claude Code 或 Codex 上为即时通讯消息渠道运行一个轮次、把它流式推给消息渠道、只保留对话的索引，并把会话交给你的终端。
 ---
 
 # 对话与轮次 {#chat-and-turns}
 
-本页讲 Coffer 的轮次平台：对话模型、按对话一次只跑一个轮次的编排器、驱动 Claude Code 和 Codex 的适配器、把轮次流式推给每个观看界面的事件总线，以及即时通讯消息渠道怎样作为第二个客户端接入。它写给想理解机制及其背后理由的工程师。日常使用请看[对话指南](/zh/guides/chat)和[消息渠道指南](/zh/guides/channels)。
+本页讲 Coffer 的轮次平台：对话索引、按对话一次只跑一个轮次的编排器、驱动 Claude Code 和 Codex 的适配器、把轮次流式推给发起它的消息渠道的内存事件总线、即时通讯消息渠道如何接入，以及「对话」和「会话」列表如何把一个会话交给你的终端。它写给想了解机制及其背后原因的工程师。日常使用见[对话指南](/zh/guides/chat)和[消息渠道指南](/zh/guides/channels)。
 
 ## 问题 {#the-problem}
 
-保险库的所有者想在不止一个地方和他的编程智能体对话：手机（通过 Telegram 或 SeaTalk）和桌面浏览器。两边需要同样的保证。不管是谁发起的，一个轮次都必须以同样的方式到达智能体。在手机上发起的轮次，必须能在浏览器里看到、打断和继续。任何轮次都不能悄无声息地结束，包括守护进程在回复到一半时挂掉的情况。
+保险库的所有者想在手机上（通过 Telegram 或 SeaTalk）触达运行在桌面上的编程智能体。无论是谁发起的，轮次都必须以同样的方式到达智能体，必须能从聊天里被打断和继续，而且任何轮次都不能悄无声息地结束，包括守护进程在回复中途死掉的时候。Coffer 还必须让开智能体的路：智能体本来就有自己的会话记录和自己的界面（Claude 桌面应用、Codex 应用、终端），所以 Coffer 不重建聊天客户端，也不保存一份说过的话的副本。
 
-还有一个成本约束。Coffer 驱动两个智能体和两个即时通讯平台，而且两边都还会增加。如果每个消息渠道都得认识每个智能体，集成成本就是 N × M。这个设计把它保持在 N + M。
+还有一个成本约束。Coffer 驱动两个智能体和两个即时通讯平台，而且两边都会继续增加。如果每个消息渠道都得认识每个智能体，集成成本就是 N × M。这个设计把它保持在 N + M。
 
 ## 设计决策 {#design-decisions}
 
-**一个轮次平台，多个界面。** 对话、待处理队列、轮次生命周期和事件流都属于同一个平台。Web「对话」页面和每个消息渠道都是它的客户端。消息一旦到达编排器，下游就没有任何东西知道它来自哪个界面，智能体也分不出手机轮次和浏览器轮次。
+**一个轮次平台，消息渠道是它的客户端。** 对话、待处理队列、轮次生命周期和事件流属于同一个平台。每个消息渠道都是它的客户端。消息一到编排器，下游就不知道它来自哪个消息渠道，智能体也分不出 SeaTalk 的轮次和 Telegram 的轮次。
 
-**单一所有者，一条时间线，两块屏幕。** 消息渠道是和所有者配对的：「即时通讯对端」永远是拿着手机的保险库所有者本人。所以在浏览器里看手机上的对话，是同一个人的连续体验，而不是多用户协作。Coffer 没有对端身份模型，没有按用户的可见性规则，也不存在谁能打断谁的问题。Web 页面显示每个对话，包括由消息渠道开启的那些，并用一个徽章标出它还能在哪个消息渠道上访问。
+**智能体自己的会话就是记录。** Coffer 为每个对话保存一行索引（哪个消息渠道线程、哪个智能体、哪个目录、哪个原生会话 id），不保存任何说过的话。智能体每个轮次都恢复自己的会话，所以上下文留在智能体存放它的地方。想读或继续一个对话的人，在智能体自己的界面里做；Coffer 的 Web 界面只列出对话，并在终端里打开这一行。
 
-**发起轮次和观看轮次是分开的。** `POST .../messages` 发起或排队一个轮次，并立即返回 `202`。所有输出都通过一个订阅 `GET .../events` 流出。发送方不是特例：「我发起的轮次」和「我手机发起的轮次」走同一条路径，一个重放缓冲区确保发送方不会错过早期事件。
+**随便发，排队，从不拒绝。** 轮次运行期间发的消息会进入每个对话一个的 FIFO 待处理队列。每条排队的消息成为它自己的轮次，消息不会合并。消息渠道会告诉每条等待的消息它的位置（「⏳ Queued (n)」），每个对话最多接受十条待处理消息；第十一条会被丢弃并说明原因（见[入站流水线](#the-inbound-pipeline)）。
 
-**随便发；只排队，从不拒绝。** 轮次运行期间发送的消息会进入一个按对话的 FIFO 待处理队列。每条排队的消息各自成为一个轮次，消息不会被合并。Web 输入框从不锁定。消息渠道会告诉每条等待的消息它排在第几位（「⏳ Queued (n)」），每个对话最多接受十条待处理消息；第十一条会被丢弃并说明原因（见[入站流水线](#the-inbound-pipeline)）。
+**一个会话同一时间只在一个地方运行。** 在终端里打开的会话和写入同一个会话的消息渠道轮次，会让这个会话分叉。轮次恢复一个会话之前，守护进程会查找有没有终端已经把它打开了，如果有，就告诉消息渠道，而不是启动轮次（见[一个会话，一个地方](#one-session-one-place)）。
 
-**适配器是自足的。** 编排器只给适配器对话历史和本轮的附件，别的什么都不给。适配器自带模型、工具和配置。增加第三个智能体，只需要注册一个提供方和一个适配器。对话 schema、编排器和客户端都不用改。
+**适配器自成一体。** 编排器只给适配器轮次的提示词和附件，别的什么都不给。适配器自带模型、工具和配置。增加第三个智能体，意味着注册一个提供方和一个适配器。对话索引、编排器和消息渠道都不用变。
 
-**完全权限，以所有者配对作为关卡。** 两个智能体都不需要逐个工具审批（Claude Code 是 `bypassPermissions`；Codex 是 `never` 询问加 `danger-full-access`）。信任边界是驱动对话的已配对所有者，而不是一个在手机上没人会去回答的逐工具提示。
+**完全权限，所有者配对是关卡。** 两个智能体都不做逐工具审批运行（Claude Code 用 `bypassPermissions`；Codex 用 `never` 询问加 `danger-full-access`）。信任边界是驱动对话的已配对所有者，而不是一个在手机上没人在场回答的逐工具提示。
 
 ## 对话模型 {#conversation-model}
 
-对话不是[资源](/zh/architecture/resource-framework)。它是自己那张 SQLite 对话表里的一行，消息在旁边一张对话消息表里。对话状态不在机器之间同步。
+对话不是[资源](/zh/architecture/resource-framework)。它是自己的 SQLite 对话表里的一行，是指向智能体自己会话的索引。没有消息表：Coffer 不存任何对话文本。对话状态不会在机器之间同步。
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` | 不透明的对话 id。 |
-| `agent_key` | 对话所属的智能体（`claude_code` 或 `codex`）。存储层没有默认值：每个写入方都明确写出智能体。 |
-| `agent_config` | 由提供方拥有的 JSON：`cwd`、`session_id`（要续接的上游会话）、和 `model`。 |
-| `title` | 一开始是占位文字。除非所有者已经给对话改过名，否则会被第一条用户消息的文字替换。 |
-| `archived_at` | 对话活跃时为 `null`。 |
-| `channel_uid`、`peer_chat_id` | 可选的消息渠道绑定：把输出转发到即时通讯会话时的回信地址。它存的是消息渠道不可变的 uid，所以改名后依然有效。 |
+| `agent_key` | 对话所属的智能体（`claude_code` 或 `codex`）。没有存储默认值：每个写入方都明确指定智能体。 |
+| `agent_config` | 由提供方拥有的 JSON：`cwd`、`session_id`（智能体自己的会话，用于恢复）和 `model`。 |
+| `title` | 起初是占位符。除非所有者已经重命名过，否则会被替换成第一条用户消息的文字。重命名也会重命名原生会话。 |
+| `channel_uid`、`peer_chat_id` | 拥有这个对话的消息渠道线程。存的是消息渠道不可变的 uid，所以重命名后仍然有效。每一行都有。 |
 
-一条消息存储它的 `role`、一个有序的内容块列表（`text`、`tool_use`、`tool_result`、`attachment`）、一个 `status`（`streaming`、`complete` 或 `failed`），对于助手消息，还有智能体报告时的 `model_id` 和 token 用量。
+轮次流式输出的是带类型的事件联合体，它是线上契约，不是存储。智能体自己的会话保存消息、工具调用和结果，「会话」列表从智能体那里读取它们。轮次同样**不**写进[审计日志](/zh/architecture/observability)：轮次不是不可逆的，不涉及安全敏感，事后也不是看不见的，因为智能体的会话里有它。
 
-对话的时间线就是智能体所做之事的记录。轮次刻意**不**写入[审计日志](/zh/architecture/observability)。一个轮次既不是不可逆的，也不涉及安全，事后也不是不可见的，所以每个轮次一条审计记录只会重复时间线。
+::: warning 旧会话会随智能体的清理而消失
+因为 Coffer 不留副本，对话只和智能体的会话一样长寿。Claude Code 会在 `cleanupPeriodDays`（默认约 30 天）之后删除会话。会话被清理的消息渠道对话会作为全新会话继续。如何修改这个设置见[对话](/zh/guides/chat#chat-and-the-agent-s-own-sessions)。
+:::
 
 ### 工作目录与会话 {#working-directory-and-session}
 
-每个轮次都在对话的 `cwd` 里运行。如果没有提供，就在 Coffer 管理的工作目录 `~/.coffer/content/workspace` 里运行，首次使用时创建。显式提供的 `cwd` 必须是已存在的目录，否则对话在写入任何东西之前就创建失败。
+每个轮次都在对话的 `cwd` 里运行。没有指定时，它在 Coffer 管理的工作区 `~/.coffer/content/workspace` 里运行，首次使用时创建。明确指定的 `cwd` 必须是已存在的目录，否则在写入任何东西之前创建对话就会失败。
 
-每个轮次结束后，上游会话 id 会写回 `agent_config.session_id`，让下一个轮次续接同一个 Claude Code 会话或 Codex 线程。因为智能体自己的会话已经保存了对话内容，平台只把最近 **200** 条消息作为历史传过去。这段历史是一个全新会话所需要的。有几千条消息的对话从不会被完整加载。
+上游会话 id 会在每个轮次之后写回 `agent_config.session_id`，所以下一个轮次恢复同一个 Claude Code 会话或 Codex 线程。平台只把新的提示词和附件交给智能体，从不交历史，因为被恢复的会话已经保存了历史。全新会话（第一个轮次，或下面的重试）从没有历史开始。
 
-如果智能体不再认识存储的会话 id，这个轮次会以全新会话重试**一次**。只有第二次失败才会成为轮次错误。没有这次重试，一个过期的 id 会让对话永久不可用，而不只是上下文不连续。
+如果智能体不再认识存下的会话 id，这个轮次会作为全新会话重试**一次**。只有第二次失败才成为轮次错误。没有这次重试，一个过期的 id 会让对话永久不可用，而不只是不连续。
 
 ### 轮次使用哪份智能体配置 {#which-agent-configuration-a-turn-runs-against}
 
@@ -58,99 +59,87 @@ description: Coffer 怎样在 Claude Code 或 Codex 上运行一个轮次、把�
 
 ## 轮次编排器 {#the-turn-orchestrator}
 
-轮次编排器是一条消息的唯一入口，Web 的 `POST` 和消息渠道都一样。它知道智能体提供方注册表，但对任何具体智能体一无所知。
+轮次编排器是一条消息的唯一入口，消息总是来自消息渠道。它知道智能体提供方注册表，但对任何具体智能体一无所知。
 
 每个对话的状态放在一条记录里：事件总线、正在进行的轮次、待处理队列和一个暂停标志。这个状态按设计是进程全局、单守护进程的。它只在有东西需要时存在（有进行中的轮次、排队的消息或已附着的订阅者），否则就被逐出，所以一个服务过一万个对话的守护进程并不会持有一万条总线。
 
 ### 发送一条消息 {#enqueue-message}
 
 1. 检查对话是否存在（否则 404）。
-2. 如果没有活跃的轮次、队列没有暂停并且队列为空，立即开始这个轮次。
-3. 否则把一个待处理条目（文字、附件、标题提示和一个可选的开始 Hook，消息渠道用它来渲染轮次）追加到队列，并广播 `queue_changed`。
-4. 发送消息会清除暂停标志，所以打断之后再普通地发一条，就会恢复被挂起的队列。
+2. 如果没有活动轮次、队列没有暂停且队列为空，就立即开始轮次。
+3. 否则把一个待处理条目（文字、附件、标题提示和一个可选的启动 Hook，消息渠道用它来渲染轮次）追加到队列，并广播 `queue_changed`。
+4. 发送消息会清除暂停标志，所以打断之后的一次普通发送会恢复被搁置的队列。
 
-开始一个轮次会在编排器让出执行权之前同步地占住这个对话的位置，所以两个并发的发送不可能都开始轮次。然后它向注册表要这个对话的提供方，让它构建一个适配器，提交用户消息（一个文字块加上对其附件的引用），并拉起脱离的轮次任务。该任务结束时，编排器弹出队首并开始它的轮次。
+开始轮次会在编排器让出给任何其他事情之前，同步占住对话的位置，所以两个并发的发送不会都开始轮次。然后它向注册表要对话的提供方，让它构建适配器，并派生出脱离的轮次任务。任务结束时，编排器弹出队列头部，开始它的轮次。
 
-排队的轮次如果**启动**失败，既不会丢，也不会循环重试。消息回到队首，队列暂停，并向此刻已附着的订阅者发布一个 `turn_error`。这个错误不属于任何轮次，所以不会保留在重放缓冲里：之后打开或重连的页面看到的是被挂起的队列，而不是一个它无能为力的失败。对于消息渠道的消息，编排器还会交给消息渠道的渲染器一个携带失败信息然后结束的流，因为手机上没有队列标签可看。
+一个排队的轮次如果**启动**失败，既不会丢失，也不会陷入循环重试。消息回到队列头部，队列被暂停，一个 `turn_error` 发布给那一刻已连接的订阅者。这个错误不属于任何轮次，所以不会保存在重放缓冲区里。编排器还会交给消息渠道的渲染器一个携带失败并随后结束的流，因为手机上没有队列标签可看。
 
 ### 打断、删除与关闭 {#interrupt-delete-and-shutdown}
 
-轮次提前结束的几种方式，靠进行中轮次上的标记区分，由取消它的一方设置：
+轮次提前结束的几种方式，由取消它的一方在进行中的轮次上打的标记区分：
 
-| 原因 | 怎样发出信号 | 结果 |
+| 原因 | 如何发出信号 | 结果 |
 | --- | --- | --- |
-| 所有者打断（`POST .../interrupt`，消息渠道里的 `/stop`） | 轮次被标记为已打断；队列暂停 | `turn_done`，`stop_reason: "interrupted"`；部分回复保留为 `complete`。 |
-| 对话被删除 | 轮次被标记为已丢弃 | 删除占位行；总线关闭每个订阅者。 |
-| 守护进程关闭 | 两个标记都没有 | `turn_error` `daemon_stopped`；部分回复保留为 `failed`。 |
+| 所有者打断（`POST .../interrupt`、消息渠道里的 `/stop`、列表里的**停止**） | 轮次被标记为已打断；队列被暂停 | `turn_done`，`stop_reason: "interrupted"`；到目前为止的输出以事件形式送达消息渠道。 |
+| 对话被删除 | 轮次被标记为已丢弃 | 轮次被取消；总线关闭每个订阅者。 |
+| 守护进程关闭 | 两个标记都没有 | `turn_error` `daemon_stopped`。 |
 
-停止所有轮次是守护进程清理中的一步，在数据库关闭之前运行。它先关门（之后不能再开始任何轮次，每个队列都暂停，这样一个被取消轮次的结束不会启动下一个），取消每个运行中的轮次，并最多等五秒让它们完成写入。没能及时收尾的轮次留给启动清扫处理。
+停止所有轮次是守护进程拆除过程的一步，发生在数据库关闭之前。它先关门（之后不能再开始任何轮次，每个队列都被暂停，所以被取消的轮次结束时不会开始下一个），取消每个正在运行的轮次，并最多等它们五秒。守护进程被直接杀掉也不会留下需要清理的东西：消息渠道的下一条消息会恢复智能体的会话。
 
 ## 轮次任务 {#the-turn-task}
 
-轮次任务驱动一个适配器直到完成。它是一个脱离的后台任务，所以它比发起它的 HTTP 请求或消息渠道回调活得更久。这就是为什么发送消息的浏览器标签页关掉之后，回复仍会完成并被保存。
+轮次任务驱动一个适配器直到完成。它是一个脱离的后台任务，所以它比发起它的消息渠道回调活得更久。
 
 ```mermaid
 sequenceDiagram
-    participant UI as Web Conversations page
-    participant API as 轮次路由
+    participant CH as 消息渠道
     participant O as 轮次编排器
     participant R as 轮次任务
     participant A as 智能体适配器
-    participant DB as 消息存储
     participant Bus as 对话总线
 
-    UI->>API: GET .../events (SSE)
-    API->>Bus: 订阅（重放缓冲区 + 队列快照）
-    UI->>API: POST .../messages
-    API->>O: 把消息排队
-    O->>DB: 追加用户消息
-    O->>R: 拉起脱离的任务
-    API-->>UI: 202 {queued: false}
-    R->>DB: 追加助手行，状态 streaming
-    R->>A: 运行轮次（历史、附件）
+    CH->>O: 把消息入队（带渲染 Hook）
+    O->>R: 启动脱离的任务
+    R->>A: 运行轮次（提示词、附件）
     loop 每个事件
         A-->>R: turn_start / text_delta / tool_call / tool_result
-        R->>Bus: publish
-        Bus-->>UI: SSE 事件
-        R->>DB: 写入部分内容（每秒最多一次）
+        R->>Bus: 发布
+        Bus-->>CH: 事件送到渲染器
     end
     A-->>R: turn_done
-    R->>DB: 定稿该行，状态 complete
     R->>Bus: 结束轮次（丢弃重放缓冲区）
-    R->>O: 任务结束，推进队列
+    R->>O: 任务完成，推进队列
 ```
 
-这个任务保证的事情：
+任务保证：
 
-- **第一个事件之前先有占位行。** 在适配器产出任何东西之前，就写入一个状态为 `streaming` 的助手行，轮次结束时原地定稿：只有一行，从不重复。守护进程启动时，一次清扫会把所有残留的 `streaming` 行（创建于本守护进程启动之前，所以启动之后才开始的轮次不会被动到）改成 `failed`。没有哪个对话重新打开时会显示一个永远不会到来的回复。
-- **节流的部分保存。** 累积的块每秒最多一次被写到 `streaming` 行上。如果某个事件被节流跳过，会安排一次在间隔到期时进行的补写。所以在一次长时间工具运行之前刚流出的文字，大约一秒内就落盘了。被直接杀掉的守护进程会保留到最后一次保存为止流出的内容。
-- **闲置看门狗。** 智能体可能卡住但不死：一个挂起的工具，或者一个在等没人会回答的提示的命令行。如果 `COFFER_TURN_IDLE_TIMEOUT_SECONDS`（默认 `300`；`0` 表示关闭）内没有事件到达，就在适配器的事件流内部取消等待。这会走适配器自己的取消路径，打断并终止子进程。然后轮次以 `turn_error` `turn_timeout` 结束。
-- **不会悄悄完成。** 如果适配器的流在没有 `turn_done` 或 `turn_error` 的情况下结束，任务会自己发出 `turn_error` `stream_ended`。它不依赖适配器来做这件事，因为在一条话说到一半被切断的回复上打个勾，就是在说谎。
-- **恰好一个终结事件。** 在终结事件之后才到达的取消（比如在最终写入期间），会在屏蔽后续取消的保护下重新执行定稿，并且不再发出任何东西。
+- **没有为轮次写入任何东西。** 任务只记录智能体报告的会话 id，并在开始和结束时更新对话的 `updated_at`。回复本身只以事件的形式存在，以及存在于智能体自己的会话里。
+- **空闲看门狗。** 智能体可能卡住而不死：一个挂起的工具，或一个等着没人会回答的提示的 CLI。如果 `COFFER_TURN_IDLE_TIMEOUT_SECONDS`（默认 `300`；`0` 禁用）内没有事件到达，适配器事件流内部的等待会被取消。这会运行适配器自己的取消路径，中断并终止子进程。轮次随后以 `turn_error` `turn_timeout` 结束。
+- **没有悄无声息的完成。** 如果适配器的流没有 `turn_done` 或 `turn_error` 就结束了，任务会自己发出 `turn_error` `stream_ended`。它不依赖适配器来做这件事，因为在半句话被截断的回复上打一个对勾是撒谎。
+- **恰好一个终结事件。** 终结事件之后才到的取消会在不受进一步取消影响的情况下重新运行定稿，并且不再发出任何东西。
+- **部分输出是送达，不是存储。** 被打断或失败的轮次会把到目前为止产生的内容以事件形式送达消息渠道，然后是终结事件。
 
 有三个轮次错误码属于平台而不是某个智能体：`stream_ended`、`turn_timeout` 和 `daemon_stopped`。
 
-### 轮次与消息的状态 {#turn-and-message-states}
+### 轮次状态 {#turn-states}
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
     Idle --> Running: 消息到达，队列为空
-    Idle --> Idle: 暂停时消息到达（排队）
+    Idle --> Idle: 暂停期间消息到达（排队）
     Running --> Running: 消息到达（排队）
     Running --> Idle: turn_done 或 turn_error，队列为空
     Running --> Running: 轮次结束，下一条排队消息开始
     Running --> Paused: 打断
-    Paused --> Running: 任何发送或 PUT pending
+    Paused --> Running: 任何发送
     Running --> [*]: 对话被删除
     Paused --> [*]: 对话被删除
 ```
 
-轮次写入的助手行有自己的生命周期：`streaming` → `complete`（正常结束或所有者打断），或 `streaming` → `failed`（适配器错误、`stream_ended`、`turn_timeout`、`daemon_stopped`，或崩溃后的启动清扫）。
+## 事件 {#events}
 
-## 事件与实时镜像 {#events-and-the-live-mirror}
-
-一个轮次是一串有类型的事件。每个事件的 `type` 同时也是它在线上的 SSE 事件名，所以客户端按同一套词汇分发，不需要翻译表：
+一个轮次是一串带类型的事件。每个事件的 `type` 就是它在线上的名字，所以消费者按同一套词汇分派，不需要转换表：
 
 | 事件 | 载荷 | 由谁发出 |
 | --- | --- | --- |
@@ -158,35 +147,31 @@ stateDiagram-v2
 | `text_delta` | `text` | 适配器 |
 | `tool_call` | `tool_use_id`、`tool_name`、`tool_input` | 适配器 |
 | `tool_result` | `tool_use_id`、`tool_name`、`output`、`error` | 适配器 |
-| `turn_done` | `prompt_tokens`、`completion_tokens`、`stop_reason` | 适配器，或打断时由轮次任务发出 |
+| `turn_done` | `prompt_tokens`、`completion_tokens`、`stop_reason` | 适配器，或在打断时由轮次任务发出 |
 | `turn_error` | `code`、`message` | 适配器或轮次任务 |
-| `queue_changed` | `pending`（有序的文字） | 只由编排器发出 |
+| `queue_changed` | `pending`（有序文字） | 仅编排器 |
 
-对话总线把每个事件扇出到每个订阅者的队列，并为晚到的订阅者保留两样东西：
+对话总线只在内存里把每个事件扇出到每个订阅者队列，并为晚到的订阅者保留两样东西：
 
-- 当前轮次事件的**重放缓冲区**。轮次开始时清空，轮次结束时丢弃，因为从那以后内容已经持久化，晚到的订阅者从历史里加载它。如果再重放一遍，轮次就会被渲染两次。
-- **最新的**一个 `queue_changed` 快照，而不是它的历史，因为队列是对话级的状态，不是轮次内容。
+- 当前轮次事件的**重放缓冲区**，轮次开始时清空，结束时丢弃。从中不会存下任何东西，所以轮次结束后就没有什么可重放的。
+- 只有**最新的** `queue_changed` 快照，没有它的历史，因为队列是对话级的状态，不是轮次内容。
 
-客户端订阅时，缓冲区和快照会在它的队列加入订阅者集合之前被同步地放进去。因为并发的发布只能在之后的某个事件循环 tick 上运行，所以不可能有实时事件抢在重放之前到达。
-
-SSE 路由跨轮次保持打开。没有轮次运行时，它保持连接，把下一个轮次（无论从哪个界面发起）推送过来。它在对话被删除（总线发送一个流结束标记）或客户端断开时结束。Web 客户端在流中断时都会重新订阅：无论连接是正常关闭还是读取或请求抛出了错误，也无论轮次是否进行到一半，采用线性退避，重试次数有上限。之后它把错误显示出来，而不是反复冲击这个端点。
+订阅者连接时，缓冲区和快照会在它的队列加入订阅者集合之前同步入队。因为并发的发布只能在之后的事件循环时刻运行，所以不会有实时事件抢在重放之前到达。Web 界面不订阅：它的列表从轮次状态读取 `running` 和 `needs_you`，并在变更通知后刷新。
 
 ### 路由 {#routes}
 
 | 路由 | 用途 |
 | --- | --- |
-| `POST /api/v1/chat/conversations/{id}/messages` | 发起或排队一个轮次。返回 `202 {queued}`；不携带输出。 |
-| `GET /api/v1/chat/conversations/{id}/events` | SSE 订阅：先重放进行中的轮次，然后实时跟随。 |
-| `PUT /api/v1/chat/conversations/{id}/pending` | 替换待处理队列（重排、删除、恢复）。会解除暂停。 |
-| `POST /api/v1/chat/conversations/{id}/interrupt` | 停止运行中的轮次并暂停队列。返回 `204`。 |
-| `GET\|PATCH /api/v1/chat/conversations/{id}/agent-config` | 读取或设置模型；保留 `cwd` 和会话 id。 |
-| `GET /api/v1/agent-providers` | 已登记的智能体，带显示名和可用性。 |
-| `GET /api/v1/agent-providers/{agent_key}/models` | 为某个智能体提供的模型；未知的 key 返回 404。 |
+| `GET /api/v1/chat/conversations` | 按最近活动列出消息渠道的对话。`q` 搜索标题和目录；`source` 接受消息渠道 uid；每行带 `running`、`needs_you`、`cwd` 和 `has_session`。 |
+| `GET\|PATCH\|DELETE /api/v1/chat/conversations/{id}` | 读取一个；重命名（智能体先重命名它的会话）；删除（智能体先删除它的会话）。 |
+| `POST /api/v1/chat/conversations/{id}/interrupt` | 停止正在运行的轮次并暂停队列。`204`。 |
+| `GET /api/v1/agent-providers` | 已注册的智能体，带显示名和可用性。 |
+| `GET /api/v1/agent-providers/{agent_key}/models` | 为一个智能体提供的模型；未知的键返回 404。 |
 
-用 `PUT .../pending` 替换队列时，会把新文字和已有条目做调和：每段文字复用第一个未被使用、文字相同的条目。因此在浏览器里重排过的队列，会保留每条消息渠道消息的附件和它的消息渠道渲染器。只有之前没排过队的文字才会成为一个新的、空白的条目。
+对话没有创建对话或发送消息的路由：消息通过消息渠道在进程内进入。智能体的会话在 `GET /api/v1/agents/{uid}/sessions` 下列出（见[原生会话](#native-sessions)）。
 
-::: info 没有命令行
-对话通过 REST 在 Web 页面和消息渠道里驱动。命令行没有对话命令，因为它只承载确实需要它的东西（[chat 规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)）。
+::: info 没有 CLI
+对话由消息渠道驱动。CLI 没有对话命令，因为它只带需要它的东西（[chat 规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)）。
 :::
 
 ## 智能体适配器 {#agent-adapters}
@@ -194,7 +179,7 @@ SSE 路由跨轮次保持打开。没有轮次运行时，它保持连接，把�
 平台的接缝是两份契约：
 
 - **智能体提供方**，每种智能体类型一个。它校验并存储新对话的 `agent_config`，为一个轮次构建配置好的适配器，在对话被删除时拆除智能体状态，并报告可用性：智能体的二进制能否在用户的 `PATH`（登录 shell 的 `PATH` 与守护进程继承的 `PATH` 合并）上找到，**并且**该类型有一个智能体登记在 Coffer 中。「对话」只与受管智能体交谈，所以不可用的智能体会被列出但不能被选中，对没有已注册智能体的类型发起轮次会被拒绝（`AGENT_CONFIG_REJECTED`，原因 `agent_not_managed`），而不是拿命令行默认的配置目录去运行。
-- **智能体适配器**，每个轮次一个。给定历史和附件，它产出一个异步的事件流。适配器必须以一个终结事件结束，并且在取消时必须清理并重新抛出。它可以暴露一个 `model_id`，在轮次流式进行时获知（Claude CLI 在助手消息里给出，Codex app-server 在线程结果里给出）。轮次任务在定稿回复时读取它，并记录在助手消息上。
+- **智能体适配器**，每个轮次一个。给定提示词和附件，它产出一个异步的事件流。适配器必须以一个终结事件结束，并且在取消时必须清理并重新抛出。它可以暴露一个 `model_id`，在轮次流式进行时获知（Claude CLI 在助手消息里给出，Codex app-server 在线程结果里给出）。轮次任务在定稿回复时读取它，并记录在助手消息上。
 
 一个注册表持有这些提供方。它们在组合根里注册。没有任何界面直接指名某个提供方。
 
@@ -228,37 +213,25 @@ Codex 适配器通过 `codex app-server` 驱动 Codex：stdio 上的 JSON-RPC 2.
 2. 对于由消息渠道驱动的对话，[记忆](/zh/architecture/memory)索引。组合根构建记忆组合器，并把它交给两个提供方，旁边还有一个按提示词的检索器，把消息渠道轮次消息中点名的笔记加进它的提示词。索引为空或记忆树读不了时，它什么都不返回。见[消息渠道轮次](/zh/architecture/memory#channel-turns)。
 3. 在每个轮次上，一段模型说明：写明 Coffer 让智能体用的是哪个模型，或者说明正在用智能体自己的默认模型，并附几个备选。智能体看不到 Coffer 的选择，被问到时会自己编一个，所以这段说明写明它优先于智能体自己的猜测。
 
-来自 Web「对话」页面的轮次，和你自己在终端里开启的会话一样，在智能体连接到 Coffer 时通过智能体自己的记忆 Hook 获得记忆。没有哪个轮次会两种方式都拿到。
+你从「对话」页面恢复的会话在你的终端里运行，和你自己开启的会话一样，在智能体连接到 Coffer 时通过智能体自己的记忆 Hook 获得记忆。没有哪个轮次会两种方式都拿到。
 
 ## 附件与文档提取 {#attachments-and-document-extraction}
 
-附件有两种方式进入对话。消息渠道把每个文件下载到 `~/.coffer/content/channel-media` 下，交给编排器一个附件（路径、mime 类型、文件名）。Web 输入框先把每个文件上传到 `POST /api/v1/chat/attachments`，然后在 `POST …/messages` 的 `attachment_ids` 里带上拿回的 id；路由把它们解析成同样的附件值，并以同样的附件参数调用和消息渠道相同的编排器入口。从这里开始两者就是同一条代码路径。无论哪种方式，对话数据库在用户消息里只保存引用（一个附件块：`path`、`mime`、`filename`），从不保存字节。
-
-### Web 上传 {#web-uploads}
-
-一个对话附件服务负责上传的限制和发送时的解析；一个基于文件的媒体存储保存这些文件。
-
-- **限制。** 每次调用一个文件，最大 20 MB（`ATTACHMENT_TOO_LARGE`，413，并写明限制）。HTTP 框架在解析 multipart 请求体时会把它缓存到临时文件，所以上传路由先行一步：它检查令牌，在读取请求体之前，就以同样的 413 拒绝声明的 `Content-Length` 超过限制加 64 KiB multipart 余量的请求，并以只接受一个文件和少量字段的方式解析表单。没有声明长度的请求体会被解析，然后按同一个文件字节上限拒绝。类型由一条规则决定：声明为图片、音频或文档类型的保留，然后查一张固定的扩展名表，字节是不含 NUL 的 UTF-8 的一律算文本。其他都是 `ATTACHMENT_TYPE_UNSUPPORTED`（415）。图片的类型随后会被它的魔数字节所证明的类型替换（PNG、JPEG、GIF、WEBP）；字节不属于其中任何一种的会存为 `application/octet-stream`，从不当作图片。这张表是固定的，而不用 Python 标准库的 mime 查找，因为后者会读取宿主机的 mime 文件。
-- **存储。** 每次上传是 `~/.coffer/content/chat-media` 下的两个平铺文件：字节存为 `<id><ext>`，让按路径读取的智能体仍能看到扩展名；以及 `<id>.json`，保存显示名、类型、大小和存储文件名，在字节之后写入。id 是 32 个随机的十六进制字符；存储层不会把任何不是这种形状 id 的东西拼进路径。
-- **发送。** 一条消息带文字、最多十个 `attachment_ids`，或两者都有。指向不存在文件的 id 是 `ATTACHMENT_NOT_FOUND`（422），不会持久化或排队任何东西。只有文件没有文字的消息，会保存消息渠道里无说明照片所得到的那段替代文字，因为智能体请求不能包含空的文字块；由它开启的对话以文件名命名。
-- **重发。** 页面上的「重试」调用 `POST …/messages/{message_id}/resend`：对话服务找到用户行（否则 `MESSAGE_NOT_FOUND`，404），附件服务从该行的块重建文字和附件值，路由像发送一样把它们排队，所以不管文件来自页面还是消息渠道，重试都会带上原消息的文件。被媒体清扫删掉的引用文件是 `ATTACHMENT_EXPIRED`（410），不会持久化或排队任何东西。在失败提示的行落库之前，页面改为重发它的乐观回显，那里保留着文件的上传 id。
-- **保留。** `~/.coffer/content/chat-media` 与 `channel-media` 一起由 `attachments` 保留策略清理：文件的 mtime 早于策略窗口时被删除（默认 30 天；用户可以在设置 → 数据 → 本地内容里修改，或永久保留附件）。年龄规则是一条与类型无关的规则，保留服务用策略的窗口对每个目录各跑一次清扫，清理结果把两个目录删掉的文件合在同一个键 `attachments` 下报告。
-
-页面保存输入框中每个文件的状态（上传中、就绪、失败），通过共享的 API 客户端上传，并在任何文件正在上传或失败时按住**发送**。已发送消息的乐观回显带着文件的名字和类型，所以在该行落库之前它的标签就显示出来了，只有附件的回显按这些名字与它的行匹配。没有图片预览：那需要一个把字节再送回来的路由，而路径始终留在守护进程内部。这个决策记录在 [Chat Attachment Uploads](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md) 中。
+消息渠道把每个文件下载到 `~/.coffer/content/channel-media`，并把一个附件（路径、MIME 类型、文件名）交给编排器。附件以引用的形式随轮次传递；消息里不存任何东西，字节也不会离开磁盘。没有 Web 上传：对话页面不发送消息。`attachments` 保留策略按时间清理 `channel-media`（默认 30 天；可以调整，或在设置 → 数据 → 本地内容下永久保留）。
 
 ### 物化 {#materialisation}
 
-轮次任务不以参数形式接收附件。它从持久化历史里的最后一条用户消息把附件读回来。这个引用是唯一的真相来源，所以它能挺过守护进程重启，并且和页面显示的一致。路径从不出现在线上：只有读取字节的适配器才看得到它。
+附件随轮次交给适配器，而不是从历史里重新读取，所以只有读取字节的适配器会看到路径。它永远不会上线。
 
-然后每个适配器按自己的形式物化附件，顺序如下：
+每个适配器随后按各自的形态物化附件，顺序如下：
 
-1. **音频**在指定了语音转文字连接时被转写并并入提示词（见[内部引擎](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)）。默认关闭。这是用户内容唯一可能为了转写而离开本机的地方。没有连接或出现任何失败时，音频作为普通文件交出去。
-2. **文档**（PDF、Word、PowerPoint、Excel 等）由一个文档提取器转成文本，它延迟导入可选的 `markitdown` 库。如果库缺失或提取失败，文档降级为文件附件。
-3. **其他一切：** 只有在通过内联检查时，Claude Code 才以内联方式收到图片，作为一个 base64 图片块：它的字节嗅探为 PNG、JPEG、GIF 或 WEBP，并且 base64 编码后不超过 5 MB（即 Messages API 的单图上限）。块的媒体类型是嗅探出的类型，而不是存储的类型，所以一张标错类型的消息渠道照片不会因为「image does not match media type」被拒绝。其他任何文件，包括没通过任一检查的图片，都变成一段写明保存路径的文字说明。规则在发送时应用，所以消息渠道媒体和 Web 上传共用它。Codex 在 app-server 协议上原生按路径工作，总是收到路径说明，所以它没有内联上限要遵守。
+1. **音频**在指定了语音转文字连接时会被转写并折叠进提示词（见[内部引擎](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)）。这默认是关的。这是用户内容唯一可能为转写离开机器的地方。没有连接，或者任何失败时，音频会作为普通文件交出。
+2. **文档**（PDF、Word、PowerPoint、Excel 等）由文档提取器转换成文字，它会延迟导入可选的 `markitdown` 库。库缺失或提取失败时，文档退化为文件附件。
+3. **其余一切：**只有通过内联检查时，Claude Code 才会内联收到图片（base64 图片块）：它的字节嗅探为 PNG、JPEG、GIF 或 WEBP，且 base64 编码后不超过 5 MB（Messages API 的单图上限）。块的媒体类型是嗅探到的类型，而不是存下的类型，所以被错标的消息渠道照片不会因为「图片与媒体类型不符」而被拒绝。任何其他文件，包括没通过任一检查的图片，都会变成一条写明保存路径的文字说明。Codex 通过 app-server 协议原生支持路径，所以总是收到路径说明，也就没有需要遵守的内联上限。
 
 ## 消息渠道作为第二个界面 {#channels-as-a-second-surface}
 
-消息渠道是 `channel` 类型的[资源](/zh/architecture/resource-framework)：一个绑定到保险库的 Telegram 机器人或 SeaTalk 应用，带密钥引用、一个默认智能体、一个反向的智能体范围（这个消息渠道可以驱动的智能体），以及 `runs_on`，即由哪台机器的守护进程运行它的适配器。消息渠道层通过恰好两个接缝接触轮次平台：对话用对话服务，轮次用编排器的排队入口，在进程内调用，就像 Web 页面通过 HTTP 调用一样。
+消息渠道是 `channel` 类型的[资源](/zh/architecture/resource-framework)：一个绑定到保险库的 Telegram 机器人或 SeaTalk 应用，带密钥引用、一个默认智能体、一个反向的智能体范围（这个消息渠道可以驱动的智能体），以及 `runs_on`，即由哪台机器的守护进程运行它的适配器。消息渠道层通过恰好两个接缝接触轮次平台：对话用对话服务，轮次用编排器的排队入口，在进程内调用。
 
 ### 共享核心之上的薄适配器 {#thin-adapters-over-a-shared-core}
 
@@ -332,13 +305,9 @@ flowchart TD
 - **SeaTalk 上的群主聊天。** 在 SeaTalk 群的主聊天里 @ 机器人会开启一个新会话串，所以在那里发送的设置会配置一个没人会继续的会话串。传输层会把这类消息标记为群主聊天，在那里发出的命令改为写入群的默认值；在那里发 `/stop` 会打断群里的每个轮次。
 - **卡片承载操作。** `/status` 和 `/help` 是带 Stop、New、Model、Resume 和 Dir 按钮的卡片。按钮带着命令的名字，点一下执行的和手动输入完全一样，并经过和消息相同的所有者关卡。
 
-### 镜像 Web 端的回复 {#mirroring-a-web-reply}
+### 聊天之后对话去哪里 {#where-a-conversation-goes-after-the-chat}
 
-由消息渠道开启的对话是一个对话、两块屏幕，所以在「对话」页面上输入的回复也必须送到手机上。对话层不能导入消息渠道类型，所以依赖方向是反过来的：**对话层声明一个镜像端口**——「这个对话是否被镜像、镜像到哪里、投递这条回复」——**由消息渠道类型实现它**，在组合根把两者接起来。
-
-- **回复可以去哪里。** 通过按会话串的历史定位对话：它的消息渠道、会话、会话串和会话类型。私聊、私聊里的会话串以及群会话串都可以投递。群主聊天不可以：那是整个群的公共空间，在桌前输入的一条回复、再跟上一个群里没人问过的回答，不属于那里。这样的回复留在 Coffer 里。对话视图会写明目标（平台和会话串标记），让页面在发送之前就能说出回复会去哪里。
-- **发送什么。** 回复被发到那个会话或会话串，并在第一行标上 `<你的名字> · from Coffer`，轮次以和消息渠道驱动的轮次相同的渲染 Hook 排队，所以智能体的回答会和原本一样到达该会话。
-- **用发件箱，从不丢弃。** 当消息渠道没有在本机运行，或平台拒绝发送时，回复会以待发状态写入发件箱，回答的最终文字也收集在它后面。失败时什么都不会丢。消息渠道调和器的 tick 会按顺序冲刷一个运行中消息渠道的待发条目，失败后退避，并把它们标记为已投递；在那之前，对话会把它们列为未投递。只有发送路由会做镜像，所以页面上的「重试」永远不会把一条回复发两次。
+消息渠道打开的对话会列在对话页面上，但页面从不向聊天发送：没有 Web 回复，也没有镜像端口。人在那里做的是打开会话（见[在终端中打开会话](#opening-a-session-in-a-terminal)），或者停止、重命名、删除它。重命名或删除先作用于智能体自己的会话，再作用于索引行；删除之后，消息渠道的下一条消息会打开一个新的对话。
 
 ### 渲染 {#rendering}
 
@@ -351,7 +320,25 @@ flowchart TD
 
 干净的成功不发送结尾摘要，因为回复本身就是完成信号。失败、被打断或触及上限的轮次会发一条，而长轮次的提醒会在相应位置带上同样的信息。
 
-Web 页面同时在总线上观看同一个轮次。这就是消息渠道对话的实时镜像的工作方式：消息渠道只保留它的渲染器 Hook，从不自己维护缓冲区；在浏览器里排在手机发起的轮次之后的消息，会在那个轮次结束时运行。
+消息渠道只保留它的渲染器 Hook，从不自己维护缓冲区。从聊天里在运行中的轮次后面发的消息会排队，在那个轮次结束时运行。
+
+## 原生会话与终端 {#native-sessions}
+
+Coffer 通过智能体本身读取和修改智能体自己的会话，从不解析它的文件。手写的对话记录解析器、它的摘要缓存和预热任务都没有了。
+
+### 列出、重命名与删除 {#listing-renaming-and-deleting}
+
+智能体类型里的一个原生会话服务，对每种智能体类型有一个小适配器：Claude Code 走 Agent SDK 的会话函数（`list_sessions`、`rename_session`、`delete_session`），Codex 走一个短命的 `codex app-server`（覆盖所有来源类型的 `thread/list`，所以 Coffer 的消息渠道运行的会话也会被列出，还有 `thread/name/set`、`thread/delete`）。登记的智能体的配置目录不是标准位置时，Claude 适配器会在调用期间把 SDK 指向它。路由是 `GET /api/v1/agents/{uid}/sessions`（带 `q`、`limit` 和游标；搜索匹配标题和目录），以及 `.../sessions/{session_id}` 上的 `PATCH` 和 `DELETE`。一行带有会话 id、标题、目录和时间，当有对话在用这个会话时，还带有它的 id、`running`、`needs_you` 和消息渠道，所以两个列表共用一种行和一个对话框。删除一个有对话指向的会话，会连带移除这个对话的索引行。错误是 `AGENT_TYPE_UNSUPPORTED`、`NATIVE_SESSION_NOT_FOUND` 和 `NATIVE_SESSION_INVALID`。
+
+对话（chat）不能导入智能体类型，所以对话的路由通过在组合根发布的一个端口来重命名和删除。
+
+### 在终端中打开会话 {#opening-a-session-in-a-terminal}
+
+`POST /api/v1/fs/terminal` 接受终端、智能体、目录，以及要恢复的会话或新会话的提示词。`GET /api/v1/fs/terminals` 列出这台机器上找到的终端，只读取是否存在，和 `/fs/editors` 一样。客户端从不发送命令行：守护进程自己构造 `cd '<cwd>' && claude --resume <id>` 或 `codex resume <id>`，之前会检查会话 id 只由字母、数字和连字符组成。提示词放在 `~/.coffer/tmp/handoff/` 下一个 `0600` 的文件里，由命令读取并删除，所以它的文字不会出现在命令行或 shell 历史里。每种终端有一个小适配器来启动它，用参数向量，守护进程里不经过 shell：Terminal 和 iTerm 走 `osascript`，Warp 走启动配置，Orca 走它的 CLI，Linux 终端走它们各自的命令，自定义模板则拆成参数并代入 `{cwd}` 和 `{command}`。
+
+### 一个会话，一个地方 {#one-session-one-place}
+
+在 Web 上，轮次正在运行或在等待提问的行会先打开一个对话框：在消息渠道里回答，或者停止轮次（普通的打断，它也会取消提问），然后打开终端。反过来，消息渠道的轮次在恢复原生会话之前，轮次平台会问有没有守护进程自己进程树之外的进程，在参数里带着这个会话 id。如果有，轮次不会开始，聊天里会被告知该会话在终端里打开着；Codex 自己的「active writer」拒绝也会映射到同样的回复。在智能体自己的列表里选出来打开的会话，参数里没有 id，是看不到的；Codex 的写入锁仍然保护 Codex。
 
 ## 并发规则 {#concurrency-rules}
 
@@ -359,11 +346,11 @@ Web 页面同时在总线上观看同一个轮次。这就是消息渠道对话�
 - **多个对话并行。** 不同对话上的轮次，包括同一个群的不同会话串，作为独立任务并发运行。
 - **单一守护进程。** 轮次状态、队列和总线都在进程内。没有跨进程扇出，待处理队列在重启时会丢失。这与进行中的轮次在重启时被标记为失败是一致的：未提交的消息从来就不是一行记录。
 - **检查所有权的释放。** 正在结束的轮次只清除它自己的进行中记录，所以一个和它竞争的启动永远不会被逐出。
-- **保留策略。** 框架的[保留策略任务](/zh/architecture/observability#retention)会归档闲置 7 天的对话（`conversations_archive`），并在归档 30 天后删除已归档的对话及其消息（`conversations`），除非该对话在这段时间内又有新消息写入（从手机恢复的已归档对话不会在使用途中被删除）。两个时间窗口都和其他保留的表一样可以调整。
+- **保留策略。** 对话没有保留策略。索引行一直存在，直到人删除这个对话或它的会话，或者消息渠道被删除；智能体自己的会话能保留多久由智能体自己的清理决定。
 
 ## 取舍与备选方案 {#trade-offs-and-alternatives}
 
-**一个订阅，还是流式的 POST。** 一个流式输出自己轮次的 POST，加上一个给其他人的订阅，会是两条事件路径，而且两者之间有竞争。单一订阅让发送方成为一个普通订阅者，代价是每个活跃对话一个重放缓冲区。
+**只把事件送到消息渠道，还是通用订阅。** 给 Web 页面开一条流式路由，会是第二条事件路径，而且它和消息渠道那条之间有竞争。没有页面观看轮次之后，消息渠道的渲染器是唯一的消费者，重放缓冲区的存在是为了让一开始就连上的渲染器不漏掉任何东西。
 
 **顺序 FIFO，还是合并。** 把所有待处理消息合并成下一个轮次，能给智能体更完整的上下文，也用更少的轮次。Coffer 逐条处理，因为结果可预测，每个排队的行都恰好对应一个轮次。
 
@@ -379,16 +366,18 @@ Web 页面同时在总线上观看同一个轮次。这就是消息渠道对话�
 
 | 包 | 职责 |
 | --- | --- |
-| `backend/coffer/domain/chat/` | 对话、消息及其各种块、智能体配置、附件、事件类型、错误 |
-| `backend/coffer/application/chat/` | 编排器、轮次任务及其看门狗、按对话的状态、部分保存、总线、适配器契约与注册表、附件处理 |
-| `backend/coffer/infrastructure/chat/` | Claude SDK 和 Codex app-server 适配器、系统上下文组合、持久化、文档提取、转写、媒体存储 |
-| `backend/coffer/surfaces/http/` | 对话、轮次（SSE）、附件和智能体提供方路由，以及把仓储、注册表、编排器、启动清扫和闲置超时接起来的组合 |
+| `backend/coffer/domain/chat/` | 对话、智能体配置、附件、事件类型、错误 |
+| `backend/coffer/application/chat/` | 编排器、轮次任务及其看门狗、按对话的状态、总线、适配器契约与注册表 |
+| `backend/coffer/infrastructure/chat/` | Claude SDK 和 Codex app-server 适配器、系统上下文组合、对话索引、文档提取、转写 |
+| `backend/coffer/application/agent/`、`infrastructure/agent/` | 原生会话服务和它按智能体的适配器 |
+| `backend/coffer/application/fs/` | 在终端里打开智能体会话、终端适配器 |
+| `backend/coffer/surfaces/http/` | 对话、打断、智能体提供方、智能体会话和 `/fs/terminal` 路由，以及把它们接起来的组合 |
 | `backend/coffer/application/channel/` | 入站流水线、配对、命令、轮次驱动器、渲染器、运行时调和器 |
 | `backend/coffer/infrastructure/channel/` | Telegram 和 SeaTalk 传输层、实时文字界面、Markdown 渲染、媒体 |
-| `frontend/` | 「对话」页面、它的事件订阅与有界重连 |
+| `frontend/` | 「对话」和「会话」列表，以及交给终端 |
 
 ## 相关页面 {#related}
 
 - 规格：[chat](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)、[channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)、[channels/telegram](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/telegram/spec.md)、[channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)
-- 决策记录：[Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md)、[Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md)、[Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)、[The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md)、[SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)、[Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
+- 决策记录：[Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md)、[Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md)、[Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)、[SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)、[Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
 - 页面：[守护进程与进程](/zh/architecture/daemon)、[持久化](/zh/architecture/persistence)、[记忆](/zh/architecture/memory)、[安全模型](/zh/architecture/security)、[对话指南](/zh/guides/chat)、[消息渠道指南](/zh/guides/channels)

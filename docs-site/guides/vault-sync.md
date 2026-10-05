@@ -86,7 +86,7 @@ Joining is always explicit, even on the first machine. The **Sync** page shows s
 - **A new machine takes the union.** Files only the remote has come down, files only this machine has go up, identical files need nothing. A file both hold with different content is left exactly as it is here, and not pushed, until you choose. Nothing is deleted on either side.
 - **A returning machine resumes from its last base.** The remote already holds this machine's descriptor (you reinstalled Coffer or lost `~/.coffer`), naming the commit it last reached. The join is an ordinary merge from there: deletions made while it was away are applied here, its own edits are kept, and nothing deleted comes back.
 
-Settle the files a join left different, one at a time or all at once. The **Status** tab lists them under **Differ from this Mac**, with **Choose versions** and **Ask an agent**. **Choose versions** opens the same Resolve page a stopped round's conflicts use: each file offers **Keep this Mac's**, **Take &lt;machine&gt;'s**, **Open in editor** and **Ask an agent**, and the page ends in **Apply choices**. To merge a differing file by hand, **Open in editor** opens the marked-up copy; **Mark resolved** takes it as this machine's version, which the next round pushes.
+Settle the files a join left different, one at a time or all at once. The **Status** tab lists them under **Differ from this Mac**, with **Choose versions** and **Hand off to &lt;Agent&gt;**. **Choose versions** opens the same Resolve page a stopped round's conflicts use: each file offers **Keep this Mac's**, **Take &lt;machine&gt;'s**, **Open in editor** and **Hand off to &lt;Agent&gt;**, and the page ends in **Apply choices**. To merge a differing file by hand, **Open in editor** opens the marked-up copy; **Mark resolved** takes it as this machine's version, which the next round pushes.
 
 Until a machine has joined, rounds move nothing and end as `join required`.
 
@@ -147,21 +147,20 @@ When a round needs you, **Overview** lists it under **Needs you**, and the deskt
 
 When two machines change the same lines of the same file before either syncs, git cannot merge them. The round stops. Nothing is checked out and nothing is pushed, so the vault on this machine stays as it was.
 
-The **Status** tab lists the files under **Changed on both Macs**, with **Resolve conflicts** and **Ask an agent** (which hands every file an agent may merge over at once). **Resolve conflicts** opens one page for all files. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**. To merge by hand, **Open in editor** opens a marked-up copy under `~/.coffer/derived/sync-conflicts/`: edit it and remove every conflict marker. A copy that still has a marker is refused, and the message names the line. The vault's own file never receives a marker. One file can also be handed to an agent on its own. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
+The **Status** tab lists the files under **Changed on both Macs**, with **Resolve conflicts** and **Hand off to &lt;Agent&gt;** (which hands every file an agent may merge over at once). **Resolve conflicts** opens one page for all files. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**. To merge by hand, **Open in editor** opens a marked-up copy under `~/.coffer/derived/sync-conflicts/`: edit it and remove every conflict marker. A copy that still has a marker is refused, and the message names the line. The vault's own file never receives a marker. One file can also be handed to an agent on its own. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
 
 ### Merge with an agent
 
-Merging two edits of one file is a job for your agent. On a stopped round, **Ask an agent** (all the files at once, from the card; or one file, from the Resolve page) opens a new conversation with a prompt, and its menu's **Copy prompt** copies it. The prompt states the goal and the constraints, with no shell command in it:
+Merging two edits of one file is a job for your agent. On a stopped round, **Hand off to &lt;Agent&gt;** (all the files at once, from the card; or one file, from the Resolve page) starts your hand-off agent in your preferred terminal with a prompt as its first message, and its menu's **Copy prompt** copies it. The prompt states the goal and the constraints, with no shell command in it:
 
 - the vault, to read for context;
 - each file, when each machine changed it, and the marked-up copy Coffer wrote under `~/.coffer/derived/sync-conflicts/` for the merge;
 - keep what each side added, and ask you where the two contradict;
 - write only those copies: the vault's own files and its git history are left alone, because Coffer writes the merged file into the vault.
 
-An agent's merge is never an answer by itself. When a copy holds a merge, the file reads **Merged by an agent · check it** and shows the merge's diff from this machine's version, with three choices:
+An agent's merge is never an answer by itself. When a copy holds a merge, the file reads **Merged by an agent · check it** and shows the merge's diff from this machine's version, with two choices:
 
 - **Mark resolved** takes the copy as the file's answer. Coffer refuses while the copy still has a conflict marker, naming the line.
-- **Open conversation** returns to the agent's conversation.
 - **Back to two choices** forgets the copy and the hand-off, and the file is open to **Keep this Mac's** or **Take &lt;machine&gt;'s** again.
 
 Then **Continue round**.
@@ -220,7 +219,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 | `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
 | `plaintext found` | A file the round would push holds what looks like a plaintext secret; nothing was pushed. | **Move into secrets…** and sync again, or **Push anyway…** if it is not a secret. |
-| `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine (**Ask an agent** on the card), then press **Check again**. |
+| `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine (**Hand off to &lt;Agent&gt;** on the card), then press **Check again**. |
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Press **Move the vault…** on the Status tab: Coffer pauses rounds and agent writes, moves the folder (to `~/.coffer/vault` unless you choose another place outside any synchronised folder), checks the git repository there and resumes. The old folder is left empty; delete it yourself. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |

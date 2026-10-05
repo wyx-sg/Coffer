@@ -21,7 +21,7 @@ Coffer is one daemon on your machine that your coding agents connect to (today C
 - **Knowledge and memory** as plain files every agent reads.
 - **Model providers** behind a local proxy that holds the keys and meters usage.
 - **Secrets** stored encrypted; agents use them without ever holding them.
-- **Conversations and chat channels** to drive your agents from the web or your phone.
+- **Chat channels and conversations** to drive your agents from your phone, then pick the session up in your terminal.
 - **Vault sync** across your machines through a git remote you own.
 
 ## Install

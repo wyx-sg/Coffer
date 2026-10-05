@@ -11,8 +11,7 @@
 // through it. Every child spells its own segments out, so a feature whose
 // writes are all narrow needs no root and does not get one for symmetry.
 //
-// Two keys keep a flat shape on purpose, documented where they are declared:
-// `messagesKey` (a sibling of the conversation, not a child) and
+// One key keeps a flat shape on purpose, documented where it is declared:
 // `endpointModelsKey` (deliberately NOT under `providersKey`).
 //
 // Every key that names one resource is keyed on its UID, never on its name. A
@@ -72,17 +71,11 @@ export const agentUnmanagedSkillFileKey = (
   path: string,
 ) => ["agents", uid, "unmanaged-skills", location, name, "file", path] as const;
 export const agentNativeMemoryKey = (uid: string) => ["agents", uid, "native-memory"] as const;
-/** One page of an agent's transcript list; `params` omitted = the whole
- *  subtree, for invalidation. */
-export const agentTranscriptsKey = <P extends object>(uid: string, params?: P) =>
-  params
-    ? (["agents", uid, "conversations", params] as const)
-    : (["agents", uid, "conversations"] as const);
-/** One session's body, keyed by its FILE: `session_id` repeats across the
- *  sidechain files a single conversation can leave behind, so the path is the
- *  only thing that names exactly one of them. */
-export const agentTranscriptSessionKey = (uid: string, sourcePath: string, offset: number) =>
-  ["agents", uid, "conversations", "session", sourcePath, offset] as const;
+/** An agent's native sessions: `q` omitted = the whole subtree, for invalidation. */
+export const agentSessionsKey = (uid: string, q?: string) =>
+  q === undefined
+    ? (["agents", uid, "sessions"] as const)
+    : (["agents", uid, "sessions", { q }] as const);
 
 // --- agentProviders — the turn platform's agent registry (/agent-providers) ---
 
@@ -151,6 +144,7 @@ export const daemonFeaturesKey = ["daemon", "features"] as const;
 
 export const fsBrowseKey = (path: string) => ["fs", "browse", path] as const;
 export const fsEditorsKey = ["fs", "editors"] as const;
+export const fsTerminalsKey = ["fs", "terminals"] as const;
 
 // --- audit / retention -----------------------------------------------------
 
@@ -210,43 +204,19 @@ export const memoryReadingKey = ["memory", "reading"] as const;
  *  pass ending must not drag a kind's whole subtree into the same invalidation. */
 export const upkeepRunsKey = ["upkeep", "runs"] as const;
 
-// --- chat — conversations, their messages and per-conversation agent config ---
+// --- chat — the channel conversations list ---
 
 export const conversationsKey = ["conversations"] as const;
-/** Every conversation list's head (what a sent message refreshes without re-reading the pages). */
-export const conversationHeadsKey = ["conversations", "lists", "head"] as const;
-/** The list's source and agent pills: part of its key, in a stable order. */
+/** The list's channel and agent pills: part of its key, in a stable order. */
 type ListNarrowing = { source?: readonly string[]; agent?: readonly string[] };
 const narrowKey = ({ source = [], agent = [] }: ListNarrowing) => ({
   source: [...source].sort(),
   agent: [...agent].sort(),
 });
 
-/** The pages a conversation list has read so far, for one view (archived, title search). */
-export const conversationPagesKey = (archived: boolean, q: string, narrow: ListNarrowing = {}) =>
-  ["conversations", "lists", "pages", { archived, q, ...narrowKey(narrow) }] as const;
-/** The newest few rows of that view, re-read to keep the pages current. */
-export const conversationHeadKey = (archived: boolean, q: string, narrow: ListNarrowing = {}) =>
-  ["conversations", "lists", "head", { archived, q, ...narrowKey(narrow) }] as const;
-/** What the command palette lists: a small read, by the text typed. */
-export const paletteConversationsKey = (q: string) =>
-  ["conversations", "lists", "palette", { q }] as const;
-export const conversationKey = (id: string) => ["conversations", id] as const;
-/** A conversation's managed-agent config (model). A CHILD of the
- *  conversation, so removing `conversationKey(id)` drops it too. */
-export const agentConfigKey = (conversationId: string) =>
-  ["conversations", conversationId, "agentConfig"] as const;
-/** The files one assistant reply changed (list), and one file's diff. Recorded
- *  once the reply ends and never edited, so they are cached for the session. */
-export const replyFilesKey = (conversationId: string, messageId: string) =>
-  ["conversations", conversationId, "replyFiles", messageId] as const;
-export const replyFileDiffKey = (conversationId: string, messageId: string, path: string) =>
-  ["conversations", conversationId, "replyFiles", messageId, path] as const;
-/** A conversation's messages. A SIBLING of `conversationKey`, not a child:
- *  every rename/archive/create invalidates `conversationsKey`, and a child
- *  key would make each of those refetch an open thread — mid-stream, that
- *  would clobber the partial the turn hooks are writing into this key. */
-export const messagesKey = (conversationId: string) => ["messages", conversationId] as const;
+/** The pages a conversation list has read so far, for one view (search text, channels, agents). */
+export const conversationPagesKey = (q: string, narrow: ListNarrowing = {}) =>
+  ["conversations", "lists", "pages", { q, ...narrowKey(narrow) }] as const;
 
 // --- secrets — the secret boundary's approvals -------------------------
 export const secretsKey = ["secrets"] as const;

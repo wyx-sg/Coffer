@@ -1,10 +1,9 @@
 // frontend/src/components/knowledge/KnowledgeTidy.test.tsx
 //
 // Tidy on a collection's page and Tidy all in the Knowledge header (spec
-// knowledge "Hand a tidy to the agent"): pressing either opens the draft
-// conversation on the default managed agent with the prompt marked to send
-// itself; with no managed agent only Copy prompt is offered. Mocked only at the
-// network boundary.
+// knowledge "Hand a tidy to the agent"): pressing either asks the daemon to start
+// the hand-off agent in the preferred terminal with the prompt sent; with no managed
+// agent only Copy prompt is offered. Mocked only at the network boundary.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 
@@ -31,10 +30,13 @@ vi.mock("@/lib/api/knowledge", () => ({
 }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
+const { fsApi } = await import("@/lib/api/fs");
 const listAgents = vi.mocked(agentProvidersApi.list);
+const openTerminal = vi.mocked(fsApi.openTerminal);
 
 const ALL_PROMPT = "Tidy every collection, one at a time.";
 const writeText = vi.fn().mockResolvedValue(undefined);
@@ -47,6 +49,8 @@ const withAgent = (available: boolean) =>
 beforeEach(() => {
   answerFromFixtures();
   api.getTidyHandoff.mockResolvedValue({ prompt: ALL_PROMPT });
+  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
+  openTerminal.mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 });
 afterEach(() => {
@@ -61,9 +65,18 @@ describe("Tidy on a collection's page", () => {
       withAgent(true);
       renderKnowledge(`/knowledge/${UID}`);
       fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
-      expect(await screen.findByTestId("draft")).toHaveTextContent(
-        `claude_code|send|${COLLECTION.tidy_handoff.prompt}`,
+      // The hand-off agent starts in the preferred terminal with the collection's prompt, once.
+      await waitFor(() =>
+        expect(openTerminal).toHaveBeenCalledWith({
+          agent: "claude_code",
+          prompt: COLLECTION.tidy_handoff.prompt,
+          terminal: null,
+        }),
       );
+      expect(openTerminal).toHaveBeenCalledTimes(1);
+      // The page stays where it is.
+      expect(screen.getByRole("button", { name: "Tidy" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
     },
   );
 
@@ -77,7 +90,7 @@ describe("Tidy on a collection's page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Copy prompt" }).at(-1) as HTMLElement);
     expect(writeText).toHaveBeenCalledWith(COLLECTION.tidy_handoff.prompt);
     expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
-    expect(screen.queryByTestId("draft")).toBeNull();
+    expect(openTerminal).not.toHaveBeenCalled();
   });
 });
 
@@ -86,8 +99,17 @@ describe("Tidy all in the page header", () => {
     withAgent(true);
     renderKnowledge("/knowledge");
     fireEvent.click(await screen.findByRole("button", { name: "Tidy all" }));
-    expect(await screen.findByTestId("draft")).toHaveTextContent(`claude_code|send|${ALL_PROMPT}`);
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        prompt: ALL_PROMPT,
+        terminal: null,
+      }),
+    );
+    // The all-collections prompt is asked for once, when the button is pressed.
     expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
+    expect(openTerminal).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("heading", { name: "Knowledge" })).toBeInTheDocument();
   });
 
   test("with no managed agent Tidy all offers Copy prompt, which fetches the prompt", async () => {
@@ -95,6 +117,6 @@ describe("Tidy all in the page header", () => {
     renderKnowledge("/knowledge");
     fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(ALL_PROMPT));
-    expect(screen.queryByTestId("draft")).toBeNull();
+    expect(openTerminal).not.toHaveBeenCalled();
   });
 });

@@ -4,11 +4,9 @@
 // requires on the CLIs page"). A throwaway skill declares two commands under
 // `requires:` — one that cannot exist and `sh`, which always does — and is
 // imported over REST. The test then walks the list (Needs you before Ready),
-// the command's pane and its hand-off (Copy prompt, and Ask an agent opening
-// the draft with the prompt in its composer — never sent: an e2e run installs
-// nothing) and the skill's Requires tab. A stand-in `codex` on the daemon's PATH plus a
-// registered codex agent make a managed agent available (spec chat "Offer and
-// run only managed agents"). The skill is removed afterwards. The scenarios'
+// the command's pane and its hand-off (Hand off to <Agent> where a managed
+// agent is installed, else Copy prompt — an e2e run installs nothing) and the
+// skill's Requires tab. The skill is removed afterwards. The scenarios'
 // markers are on the unit tests (ClisPage.test.tsx, SkillRequiresTab.test.tsx).
 
 import { expect, test } from "@playwright/test";
@@ -18,9 +16,7 @@ import * as path from "node:path";
 import {
   beforeEachInjectToken,
   readDaemonToken,
-  registerManagedCodex,
   resolveResourceUid,
-  type ManagedCodex,
 } from "./_helpers";
 
 beforeEachInjectToken();
@@ -62,18 +58,7 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
     "X-Coffer-Token": token,
     "X-Coffer-Actor": "e2e",
   };
-  const conversationCount = async (): Promise<number> => {
-    const res = await fetch(
-      `http://127.0.0.1:${port}/api/v1/chat/conversations`,
-      { headers },
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { conversations: unknown[] };
-    return body.conversations.length;
-  };
-  let agent: ManagedCodex | null = null;
   try {
-    agent = await registerManagedCodex();
     const imported = await fetch(
       `http://127.0.0.1:${port}/api/v1/skills/import`,
       {
@@ -114,29 +99,15 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
     await expect(banner).toContainText(`${MISSING} isn’t found on this machine`);
     await expect(banner).toContainText(skillName);
     await expect(page.getByText("Not on PATH")).toBeVisible();
-    // The hand-off is one split button: Ask an agent, with Copy prompt in its menu.
-    await expect(page.getByRole("button", { name: "Ask an agent" })).toBeVisible();
-    await page.getByRole("button", { name: "More options" }).click();
-    await expect(page.getByRole("menuitem", { name: /Copy prompt/ })).toBeVisible();
-    await page.keyboard.press("Escape");
+    // The hand-off is the split button Hand off to <Agent> when a managed agent
+    // is installed on the runner, and a plain Copy prompt button when none is.
+    await expect(
+      page.getByRole("button", { name: /^(Hand off to .+|Copy prompt)$/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask an agent" })).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Install|Update/ }),
     ).toHaveCount(0);
-
-    // Ask an agent → the draft, the prompt in its composer.
-    const before = await conversationCount();
-    await page.getByRole("button", { name: "Ask an agent" }).click();
-    await expect(page).toHaveURL(/\/conversations\/new$/);
-    const box = page.getByRole("textbox", { name: /message input/i });
-    await expect(box).toHaveValue(
-      new RegExp(`Please install the command-line tool \`${MISSING}\``),
-    );
-    // Pre-filled, never sent: still the draft, and no conversation was created.
-    await page.waitForTimeout(500);
-    await expect(page).toHaveURL(/\/conversations\/new$/);
-    expect(await conversationCount()).toBe(before);
-    await page.goBack();
-    await expect(page).toHaveURL(new RegExp(`/clis/${MISSING}$`));
 
     // 3. Needed by → the skill's Requires tab, whose rows link back to /clis/<command>.
     await page.getByRole("link", { name: skillName }).click();
@@ -162,6 +133,5 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
       }).catch(() => undefined);
     }
     fs.rmSync(src, { recursive: true, force: true });
-    await agent?.dispose();
   }
 });

@@ -101,7 +101,7 @@ class QueuedInbound:
     what a group reply opens by @mentioning (see "Mention the asker in a group answer"),
     with the display name a platform that spells mentions by name needs;
     and ``title_hint`` is the human's own words, carried apart from the driving text
-    (spec chat "Persist conversations and messages in SQLite"; "" when nothing was
+    (spec chat "Keep the conversation index without its text"; "" when nothing was
     nameable). ``conversation_thread_id`` is which of the chat's conversations the
     turn joins — ``thread_id`` itself, or ``""`` for a casual direct-chat
     reply-in-thread that belongs to the direct chat's conversation (see "Key
@@ -235,7 +235,7 @@ class TurnDriver:
             # history); ``title_hint`` is the human's own words out of the same
             # message, so a conversation still under its placeholder title is
             # named after what the person asked and not after a header every
-            # channel turn shares (spec chat "Persist conversations and messages in SQLite").
+            # channel turn shares (spec chat "Keep the conversation index without its text").
             queued = await self._turns.enqueue_message(
                 conversation_id,
                 item.text,
@@ -248,23 +248,6 @@ class TurnDriver:
             return
         if queued:
             await _say(queued_notice())
-
-    def render_sink(
-        self,
-        binding: ChannelBinding,
-        peer: ChannelPeer,
-        item: QueuedInbound,
-        conversation_id: str,
-    ) -> Callable[[asyncio.Queue[Any]], None]:
-        """An ``on_start`` sink that renders the turn into ``item``'s chat/thread
-        exactly like a channel-driven turn — for a turn another surface queued on
-        a channel's conversation (spec chat "Mirror a web reply into the channel
-        it came from")."""
-
-        def on_start(queue: asyncio.Queue[Any]) -> None:
-            self._spawn_render(binding, peer, item, conversation_id, queue)
-
-        return on_start
 
     def _spawn_render(
         self,

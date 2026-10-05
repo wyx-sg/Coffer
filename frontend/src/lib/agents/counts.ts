@@ -29,8 +29,6 @@ export interface AgentCounts {
      * more, or the agent will not run it until the user approves it (Codex). */
     cofferState: "missing" | "untrusted" | null;
   };
-  /** Transcript sessions on disk. */
-  sessions?: number;
   /** Native memory stores. */
   memoryStores?: number;
   /** Config files and folders the agent has on disk (the ones that exist). */

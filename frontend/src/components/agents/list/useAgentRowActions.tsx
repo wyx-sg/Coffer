@@ -6,7 +6,7 @@
 // Coffer can make: Connect (not connected, or a newly found agent), or Repair.
 // A healthy row has none. An agent whose program is not on this Mac has no fix
 // Coffer can make: it gets `handoff`, the daemon's install prompt, which the list
-// row shows as the shared Ask an agent split button (Foundations 0.7.04) before
+// row shows as the shared Hand off to <Agent> split button (Foundations 0.7.04) before
 // the ⋯; the detail page shows it in the Overview instead. The menu never
 // repeats a visible action. Connect, Repair and
 // Disconnect all open the Review changes dialog; a connected agent's config

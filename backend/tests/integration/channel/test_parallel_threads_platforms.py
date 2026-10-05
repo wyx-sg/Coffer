@@ -23,7 +23,7 @@ from tests.integration.infrastructure.channel.conftest import (
     make_telegram_adapter,
 )
 
-from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, turn_body, wait_until
+from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, wait_until
 
 _OWNER_ID = 4242
 
@@ -38,11 +38,7 @@ def _callbacks(env: ChannelEnv) -> AdapterCallbacks:
 
 
 async def _user_texts(env: ChannelEnv, conversation_id: str) -> list[str]:
-    return [
-        turn_body("".join(getattr(b, "text", "") for b in m.content))
-        for m in await env.chat.list_messages(conversation_id)
-        if m.role == "user"
-    ]
+    return env.user_texts(conversation_id)
 
 
 # -- SeaTalk -------------------------------------------------------------------

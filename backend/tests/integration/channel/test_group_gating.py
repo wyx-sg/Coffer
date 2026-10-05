@@ -19,13 +19,8 @@ from coffer.domain.channel.envelopes import InboundAttachment
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
-from coffer.domain.chat.message import Message, Role, TextBlock
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, wait_until
-
-
-def _text(message: object) -> str:  # type: ignore[no-untyped-def]
-    return "".join(b.text for b in message.content if isinstance(b, TextBlock))  # type: ignore[attr-defined]
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 
 
 class _AttachmentRecordingAdapter:
@@ -42,7 +37,7 @@ class _AttachmentRecordingAdapter:
         self.recorded_attachments: list[tuple[Attachment, ...]] = []
 
     async def run_turn(
-        self, *, history: Sequence[Message], attachments: Sequence[Attachment] = (), **_: object
+        self, prompt: str, attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
         self.recorded_attachments.append(tuple(attachments))
         return self._yield()
@@ -70,7 +65,7 @@ async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
     )
 
     assert adapter.sent == []
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
     assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
@@ -105,7 +100,7 @@ async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
     assert "owners can use it here" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     # No turn was started and no peer row was created for the unverified sender.
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
     assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
@@ -132,7 +127,7 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     assert chat_id == "grp-1"
     assert "owners can use it here" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
     # No peer row was created for the intruder's turn attempt.
     assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
@@ -207,12 +202,11 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     assert thread_id == "th-1"
     assert chat_kind == "group"
 
-    conversations = await env.chat.list_conversations()
+    conversations = await env.conversations()
     assert len(conversations) == 1
-    messages = await env.chat.list_messages(conversations[0].id)
-    user_messages = [m for m in messages if m.role == Role.USER]
-    assert len(user_messages) == 1
-    user_text = turn_body(_text(user_messages[0]))
+    user_texts = env.user_texts(conversations[0].id)
+    assert len(user_texts) == 1
+    user_text = user_texts[0]
     assert user_text.startswith("[Thread messages]")
     assert "Alice: what's the status?" in user_text
     assert "Bob: waiting on the deploy" in user_text
@@ -315,12 +309,9 @@ async def test_owner_mention_in_a_thread_skips_fetch_when_unsupported(env: Chann
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert adapter.fetch_thread_calls == []
-    conversations = await env.chat.list_conversations()
+    conversations = await env.conversations()
     assert len(conversations) == 1
-    messages = await env.chat.list_messages(conversations[0].id)
-    user_messages = [m for m in messages if m.role == Role.USER]
-    assert len(user_messages) == 1
-    assert turn_body(_text(user_messages[0])) == "@bot what's up"
+    assert env.user_texts(conversations[0].id) == ["@bot what's up"]
 
 
 async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:

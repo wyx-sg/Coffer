@@ -2,31 +2,28 @@
 turn", "Release turn state nobody needs").
 
 Single-daemon by design: everything the orchestrator holds for one conversation
-— the live-event bus, the in-flight turn, the pending queue and its pause flag —
-lives in ONE :class:`TurnState` per conversation, in one module-level dict.
+— the in-flight turn, the pending queue and its pause flag — lives in ONE
+:class:`TurnState` per conversation, in one module-level dict.
 Shared by the ``TurnOrchestrator`` and the detached turn task (``turn_runner``);
 kept in its own module so the two can both reference it without an import
 cycle.
 
-A state exists only while something needs it: a turn in flight, a message
-waiting, or a subscriber attached. :func:`evict_if_idle` releases the rest, so a
-daemon that has served ten thousand conversations does not carry ten thousand
-buses.
+A state exists only while something needs it: a turn in flight or a message
+waiting. :func:`evict_if_idle` releases the rest, so a daemon that has served ten
+thousand conversations does not carry ten thousand states.
 """
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from coffer.application.chat.bus import ConversationBus
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent
 
 #: What a channel-driven message is handed when its turn starts: the dedicated
-#: event queue (ending in ``None``) its renderer drains. Web messages have none —
-#: the web observes via the bus.
+#: event queue (ending in ``None``) its renderer drains.
 TurnSink = Callable[["asyncio.Queue[AgentEvent | None]"], None]
 
 
@@ -34,11 +31,9 @@ TurnSink = Callable[["asyncio.Queue[AgentEvent | None]"], None]
 class PendingMessage:
     """One message waiting for its turn (spec chat "Queue messages sent during a turn").
 
-    ``text`` is what the turn commits as the user message; ``attachments`` and
-    ``title_hint`` are what a channel adds to it (spec channels "Persist inbound
-    attachments as references", spec chat "Persist conversations and messages in
-    SQLite"); ``on_start`` is how a channel gets its renderer attached to the turn the
-    moment it begins. A web message carries only its text.
+    ``text`` is the turn's prompt; ``attachments`` and ``title_hint`` are what a
+    channel adds to it; ``on_start`` is how a channel gets its renderer attached to
+    the turn the moment it begins.
     """
 
     text: str
@@ -51,10 +46,8 @@ class PendingMessage:
 class ActiveTurn:
     """In-process record of one conversation's in-flight turn."""
 
-    bus: ConversationBus
-    # A dedicated event queue for a channel-driven turn (see ``PendingMessage``);
-    # ``None`` for a web turn, which observes via the bus instead. When present
-    # it receives every event plus a ``None`` end-of-stream sentinel.
+    # A dedicated event queue for a channel-driven turn (see ``PendingMessage``).
+    # When present it receives every event plus a ``None`` end-of-stream sentinel.
     primary_queue: asyncio.Queue[AgentEvent | None] | None = None
     task: asyncio.Task[None] | None = None
     # Why the task was cancelled, set by whoever cancels it: ``interrupted`` (the
@@ -69,7 +62,6 @@ class ActiveTurn:
 class TurnState:
     """Everything the orchestrator holds for one conversation."""
 
-    bus: ConversationBus = field(default_factory=ConversationBus)
     active: ActiveTurn | None = None
     queue: list[PendingMessage] = field(default_factory=list)
     # Set by an interrupt; blocks auto-advance until the owner resumes (any
@@ -79,28 +71,12 @@ class TurnState:
 
     @property
     def idle(self) -> bool:
-        """Nothing in flight, nothing waiting, nobody watching."""
-        return self.active is None and not self.queue and self.bus.subscriber_count == 0
+        """Nothing in flight, nothing waiting."""
+        return self.active is None and not self.queue
 
 
 # conversation_id → state. Mutated in place (never re-bound) so importers share it.
 _STATES: dict[str, TurnState] = {}
-
-
-def reconcile_queue(queue: list[PendingMessage], texts: Sequence[str]) -> list[PendingMessage]:
-    """The queue ``texts`` describes, reusing an existing entry for each text it
-    still contains (first unused match wins) so a reordered or partly-dropped
-    queue keeps every message's attachments and renderer."""
-    unused = list(queue)
-    result: list[PendingMessage] = []
-    for text in texts:
-        match = next((m for m in unused if m.text == text), None)
-        if match is not None:
-            unused.remove(match)
-            result.append(match)
-        else:
-            result.append(PendingMessage(text=text))
-    return result
 
 
 def state_for(conversation_id: str) -> TurnState:
@@ -136,8 +112,7 @@ def evict_if_idle(conversation_id: str) -> bool:
 
 def is_running(conversation_id: str) -> bool:
     """Whether a turn is in flight for the conversation right now — the
-    in-process truth, which a ``streaming`` message row only mirrors (the
-    Conversations list's Running mark)."""
+    in-process truth (the Conversations list's Running mark)."""
     state = _STATES.get(conversation_id)
     return state is not None and state.active is not None
 
@@ -179,7 +154,7 @@ def is_stopping() -> bool:
 
 
 async def stop_all_turns(*, timeout: float = 5.0) -> int:
-    """Stop every in-flight turn and wait for each to finish writing its partial.
+    """Stop every in-flight turn and wait for each to finish.
 
     Called by the daemon's teardown before the database is disposed. First it
     closes the door: no turn starts after this (``is_stopping``) and every
@@ -187,14 +162,12 @@ async def stop_all_turns(*, timeout: float = 5.0) -> int:
     into a fresh one mid-teardown. Queued messages stay queued; the queue is
     in-memory, so they go with the daemon, uncommitted (spec chat "Queue
     messages sent during a turn"). A turn cancelled this way is neither an
-    interrupt nor a delete, so its runner keeps the partial reply and marks it
-    failed (spec chat "Keep partial output when a turn is interrupted or
-    fails").
+    interrupt nor a delete, so its runner reports it as ``daemon_stopped``.
 
     A start already underway when the door closed — its slot reserved, its
     task not yet spawned — is waited for too, and cancelled if it got as far
     as spawning. Waiting is bounded: whatever does not settle within
-    ``timeout`` is left to the startup sweep. Returns how many turns were
+    ``timeout`` is left behind. Returns how many turns were
     cancelled.
     """
     global _stopping_loop

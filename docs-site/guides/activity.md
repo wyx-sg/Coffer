@@ -43,7 +43,7 @@ The time range offers **Last hour**, **Last 24 h**, **Last 7 days**, **Last 30 d
 
 On the **Daemon log** a row opens in place instead, under its own line, with its traceback, **Copy record** and, when the record names a server and a tool, **Show the tool call**, which switches to Tool calls searching for that call.
 
-**Handing a failure to an agent.** Only a failure that depends on this machine offers **Ask an agent ▾**: a call whose server never answered, in its drawer, and an opened daemon error about an external service or the environment. A denied call, an error the server itself returned and a Coffer-internal error offer no hand-off; such a daemon error offers **Copy record** alone.
+**Handing a failure to an agent.** Only a failure that depends on this machine offers **Hand off to &lt;Agent&gt; ▾**: a call whose server never answered, in its drawer, and an opened daemon error about an external service or the environment. A denied call, an error the server itself returned and a Coffer-internal error offer no hand-off; such a daemon error offers **Copy record** alone.
 
 **New records arrive on their own.** While you are at the top of the list with nothing open, new records appear at the top as they are written. Once you scroll down or open a record the list holds still, and an **↑ N new** button counts what is waiting; choose it, or scroll back to the top, to bring them in. There is no pause or refresh button. A tab whose log fails to load shows one warning banner with the error and **Retry** for that log only; the other records keep working, and on Everything the banner says which records below are complete.
 
@@ -166,12 +166,10 @@ A background worker prunes on daemon start and every six hours after. Each recor
 | `audit_log` | 365 days | Deletes older audit entries. |
 | `mcp_invocations` | 30 days | Deletes older invocation rows. |
 | `sync_runs` | 90 days | Deletes older sync-round history. |
-| `conversations_archive` | 7 days | Archives chats with no new message for this long. |
-| `conversations` | 30 days | Deletes archived chats (with their messages) this long after archival. |
 
 Set each window in **Settings → Data → History**.
 
-A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **Tool calls** (`mcp_invocations`) and **Conversations** (`conversations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
+A number of days must be at least 1. The web UI's **History** block shows the two a person usually tunes — **Changes** (`audit_log`) and **Tool calls** (`mcp_invocations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
 
 The daemon log is a file, not a table, so it has no policy: `daemon.log` rotates at 10 MB and keeps three rotations. Per-process shim logs and rolled-aside upstream logs in `~/.coffer/logs/` are deleted after seven days.
 

@@ -1,9 +1,8 @@
 """A message to a stale conversation opens a new one, and a message with no
 sender is refused.
 
-Spec channels "Open a new conversation after an idle period", "Open a new
-conversation when the active one is archived" and "Refuse a message with an
-empty sender id".
+Spec channels "Open a new conversation after an idle period" and "Refuse a
+message with an empty sender id".
 """
 
 from __future__ import annotations
@@ -47,7 +46,7 @@ async def test_an_idle_chat_opens_a_new_conversation_and_says_so(env: ChannelEnv
     assert second is not None and second != first
     assert any(NOTICE in text for text in adapter.texts())
     # The old conversation is still there, in the list.
-    assert (await env.chat.get_conversation(first)).archived_at is None
+    assert (await env.chat.get_conversation(first)).id == first
 
 
 @pytest.mark.acceptance(
@@ -112,25 +111,6 @@ async def test_the_idle_period_applies_per_thread(env: ChannelEnv) -> None:
 
     assert await env.active_conversation(resource, "grp-1", "t1") != t1
     assert await env.active_conversation(resource, "grp-1", "t2") == t2
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="a message to an archived conversation opens a new one"
-)
-async def test_a_message_to_an_archived_conversation_opens_a_new_one(env: ChannelEnv) -> None:
-    resource, adapter = await env.paired_channel()
-    await _say(env, adapter, "first")
-    first = await env.active_conversation(resource)
-    assert first is not None
-    await env.chat.archive_conversation(first)
-
-    await _say(env, adapter, "second")
-
-    second = await env.active_conversation(resource)
-    assert second is not None and second != first
-    # The archived one is neither revived nor deleted, and nothing was announced.
-    assert (await env.chat.get_conversation(first)).archived_at is not None
-    assert not any("new conversation" in text for text in adapter.texts())
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a message with an empty sender id is refused")

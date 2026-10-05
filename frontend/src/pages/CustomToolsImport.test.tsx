@@ -197,7 +197,7 @@ describe("CustomToolsPage import", () => {
       expect(url).toHaveAttribute("aria-invalid", "true");
       expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
       expect(
-        within(dialog).getByRole("button", { name: /Ask an agent|Copy prompt/ }),
+        within(dialog).getByRole("button", { name: /Hand off to|Copy prompt/ }),
       ).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Review tools" })).toBeDisabled();
     },
