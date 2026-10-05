@@ -322,6 +322,15 @@ describe("AgentsPage", () => {
     expect(screen.getAllByTestId("skeleton-row").length).toBeGreaterThan(0);
   });
 
+  test("the counts help links the pages where reach is chosen", async () => {
+    renderPage();
+    expect(await screen.findByRole("link", { name: "MCP servers" })).toHaveAttribute(
+      "href",
+      "/mcp-servers",
+    );
+    expect(screen.getByRole("link", { name: "Skills" })).toHaveAttribute("href", "/skills");
+  });
+
   test("a failed read shows the error with Retry", async () => {
     daemon.fail = () => new ApiError("INTERNAL_ERROR", "kaboom");
     renderPage();

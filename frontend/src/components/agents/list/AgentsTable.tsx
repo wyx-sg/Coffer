@@ -9,8 +9,8 @@
 // 5px each side, so every width below is the content width plus 10. The list
 // has two rows, so there is no search, no selection and no bulk bar. An added
 // row opens the agent; a row not added has no page to open.
-import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { Link, useNavigate } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
 import { agentTabPath } from "@/lib/agents/routes";
@@ -26,6 +26,8 @@ import {
   ModelCell,
   ProviderCell,
 } from "./AgentRowCells";
+
+const HELP_LINK = "text-accent-text underline-offset-2 hover:underline";
 
 export interface AgentListRow {
   row: AgentTypeOut;
@@ -117,8 +119,17 @@ export function AgentsTable({ rows, isLoading }: Props) {
         footer={false}
         fixed
       />
-      {/* What the three counts mean, under the table rather than behind a "?" on one column. */}
-      <p className="text-xs text-text-muted">{t("agents.list.countsHelp")}</p>
+      {/* What the three counts mean, under the table rather than behind a "?" on one column.
+          The pages it names are links: that is where reach is chosen. */}
+      <p className="text-xs text-text-muted">
+        <Trans
+          i18nKey="agents.list.countsHelp"
+          components={{
+            mcp: <Link to="/mcp-servers" className={HELP_LINK} />,
+            skills: <Link to="/skills" className={HELP_LINK} />,
+          }}
+        />
+      </p>
     </div>
   );
 }
