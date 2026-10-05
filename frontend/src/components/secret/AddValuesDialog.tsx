@@ -23,7 +23,7 @@ import type { SecretRef } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
 import { useSetSecret } from "@/lib/hooks/useSecrets";
 import { joinNames } from "@/lib/skills/names";
-import { citersOf, shortName } from "./secretRows";
+import { citersOf, displayName } from "./secretRows";
 
 interface Props {
   open: boolean;
@@ -86,7 +86,7 @@ export function AddValuesDialog({ open, onOpenChange, rows }: Props) {
           </DialogHeader>
           <ul className="max-h-[360px] divide-y divide-border-subtle overflow-y-auto rounded-lg border border-border-subtle">
             {rows.map((row) => {
-              const name = shortName(row);
+              const name = displayName(row, t("secrets.unnamed"));
               const users = citersOf(row).map((c) => c.name);
               return (
                 <li

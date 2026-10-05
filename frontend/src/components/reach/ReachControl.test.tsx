@@ -120,7 +120,7 @@ describe("the panel", () => {
     mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
     fireEvent.change(screen.getByRole("textbox", { name: "Filter agents" }), {
-      target: { value: "cod" },
+      target: { value: "codex" },
     });
     expect(screen.queryByTestId("scope-agent-claude")).toBeNull();
     expect(screen.getByTestId("scope-agent-codex")).toBeInTheDocument();

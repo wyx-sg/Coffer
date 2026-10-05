@@ -51,14 +51,14 @@ export function BulkAgentRows({
               checked={shown === total && total > 0}
               indeterminate={shown > 0 && shown < total}
               disabled={disabled || !active}
-              aria-label={agent.name}
+              aria-label={agent.label}
               onChange={() => onCycle(agent.uid)}
             />
             <span aria-hidden className="inline-flex">
-              <AgentBadge type={agent.type} name={agent.name} size="md" tooltip={false} />
+              <AgentBadge type={agent.type} name={agent.label} size="md" tooltip={false} />
             </span>
             <span className="min-w-0 flex-1 truncate text-sm font-normal text-text">
-              {agent.name}
+              {agent.label}
             </span>
             <span className="shrink-0 text-xs text-text-subtle">
               {t("scope.bulkCount", { count: before, total })}

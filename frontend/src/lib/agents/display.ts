@@ -14,6 +14,15 @@ export function agentTypeLabel(type: string): string {
   return AGENT_TYPE_LABELS[type as AgentType] ?? type;
 }
 
+/** What a person reads for an agent: its display name, else its type's product name, else its key. */
+export function agentDisplayName(agent: {
+  type?: string | null;
+  name: string;
+  display_name?: string;
+}): string {
+  return agent.display_name || (agent.type ? agentTypeLabel(agent.type) : agent.name);
+}
+
 // A leading user-home segment on the three platforms the daemon runs on. The
 // API returns absolute paths and does not expose the home directory, so the
 // prefix is recognised by shape.

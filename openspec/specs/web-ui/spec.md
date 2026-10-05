@@ -1226,7 +1226,9 @@ does not support MUST get a neutral agent glyph on the same tile. Every agent
 sits on the same neutral tile, so colour outside the mark stays reserved for
 state: a healthy agent's badge is plain, and only a problem adds a status mark.
 A badge shown without its name MUST carry the name, and its state when it has
-one, in its accessible label and its tooltip.
+one, in its accessible label and its tooltip. This holds inside selects, filters
+and checklists too: an option or a chosen value names the agent by its mark and
+its display name ("Claude Code"), never by its registry key ("claude-code").
 
 #### Scenario: a supported agent is shown by its official mark
 - **GIVEN** a Claude Code agent and a Codex agent
@@ -1238,6 +1240,11 @@ one, in its accessible label and its tooltip.
 - **GIVEN** an agent type other than Claude Code or Codex
 - **WHEN** it renders as an agent badge
 - **THEN** the badge shows the neutral agent glyph on the neutral tile, labelled with the agent's name
+
+#### Scenario: an agent in a select or filter carries its mark and display name
+- **GIVEN** a select or filter that lists agents, such as a channel's default agent
+- **WHEN** it shows an option or its chosen value
+- **THEN** the agent's official mark sits beside its display name, and the registry key is not shown
 
 ### Requirement: Pair every status colour with its word
 A status MUST never be conveyed by colour alone: the dot MUST always sit beside
@@ -2156,8 +2163,10 @@ The page MUST carry:
 - **List** — every secret the store holds or a resource cites, sorted by its
   displayed name, with whether this Mac holds it, so a reference cited but
   missing reads as missing on this Mac (spec [secret](../secret/spec.md) "List
-  every stored and cited secret with what uses it"). Search, and a status filter
-  of All, In use and Not used, narrow it. The page has no owner line, no
+  every stored and cited secret with what uses it"). The list's controls are
+  those of the other library lists: a filter box, then a **Status: All / In use /
+  Not used** filter chip (a select), then the secrets grouped under **In use**
+  and **Not used** headings. The page has no owner line, no
   owner-type filter, no by-owner view and no "Delete unused".
 - **Used by** — for each secret, what cites it, by kind, current name and slot,
   each opening that thing's page; a secret nothing cites reads Nothing and is
@@ -2179,22 +2188,20 @@ The page MUST carry:
   with **Add values** (spec [secret](../secret/spec.md) "Show a secret this Mac
   cannot open as missing on this Mac"); it offers no master-key import.
 - **List and detail** — the page is a split view like the other library pages:
-  `/secrets/<id>/<tab>` with the list on the left and the chosen secret on the
-  right. A list row shows the secret's label — or, without one, a standalone
-  secret's name, else the first citer's name and the slot, never a hex
-  segment — with its description as a muted second line, its status (missing on
-  this Mac, waiting for approval) and how many things use it; search matches
-  the label, description and id. The detail's header holds the label and
-  description, each edited in place (spec [secret](../secret/spec.md) "Label and
-  describe a secret without changing its reference"), with Replace value… and
-  Reveal value… beside them and Copy reference and Delete… in its ⋯ menu. Its
-  **Overview** tab shows the id and `coffer://secret/<id>`, each with Copy,
-  whether this Mac holds it and whether local processes can read it, created
-  and last used, and everything that uses it — by kind, current name and slot,
-  each opening its page — with the approvals it holds or waits for. Its
-  **Usage** tab lists the secret's recent uses from the audit log — who, which
-  slot, when; a `coffer run` by its command and folder — with a link to all of
-  them in Activity.
+  `/secrets/<id>` with the list on the left and the chosen secret on the
+  right. A list row shows the secret's label — or, without one, the first
+  citer's name and the slot, never a hex id — with its description as a muted
+  second line, its status (missing on this Mac, waiting for approval) and how
+  many things use it; search matches the label, description and id. The
+  detail's header holds the label and description, each edited in place (spec
+  [secret](../secret/spec.md) "Label and describe a secret without changing its
+  reference"), with Replace value… and Reveal value… beside them and Copy
+  reference and Delete… in its ⋯ menu. The detail shows the overview directly,
+  with no tabs: the id and `coffer://secret/<id>`, each with Copy, whether this
+  Mac holds it and whether local processes can read it, created and last used,
+  and everything that uses it — by kind, current name and slot, each opening
+  its page — with the approvals it holds or waits for. Individual uses are not
+  listed on the page; they are audit entries, read in Activity.
 - **Find plaintext keys** — the entry point that moves plaintext secrets out of
   what Coffer manages and into the store (spec [secret](../secret/spec.md)
   "Move plaintext secrets in managed resources into the store").
@@ -2219,7 +2226,7 @@ secret capability's, specified with it.
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
 - **WHEN** the user opens `/secrets`
 - **THEN** both are listed, the first as present and the second as missing on this Mac
-- **AND** choosing a row shows its citer on the Overview tab by kind and current name, which opens that resource's page
+- **AND** choosing a row shows its citer in the detail by kind and current name, which opens that resource's page
 
 #### Scenario: a secret in use cannot be deleted from the secrets page
 - **GIVEN** a stored secret cited by a registered channel
@@ -2238,11 +2245,11 @@ secret capability's, specified with it.
 - **WHEN** it is opened, with secrets and with none
 - **THEN** its header offers Find plaintext keys beside Add secret, and the empty page offers both
 
-#### Scenario: a secret opens on its own detail page with overview and usage
+#### Scenario: a secret opens on its own detail page with what uses it
 - **GIVEN** the Secrets page listing a secret an MCP server cites under a hex ref, which the server has used
 - **WHEN** its row is chosen
-- **THEN** the list row reads as the server's name and the slot, the address becomes `/secrets/<id>`, and the Overview tab shows the id, the times and the server under Used by, which opens the server's page
-- **AND** the Usage tab lists the server's use, and a label and description typed in the header show on the row while the id stays the same
+- **THEN** the list row reads as the server's name and the slot, the address becomes `/secrets/<id>`, and the detail shows the id, the times and the server under Used by, which opens the server's page, with no tabs
+- **AND** a label and description typed in the header show on the row while the id stays the same
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen

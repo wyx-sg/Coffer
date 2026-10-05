@@ -1,10 +1,8 @@
 # backend/coffer/surfaces/http/secret_notes_routes.py
-"""/api/v1/secrets/notes and /api/v1/secrets/uses — what a person said about a
-secret, and who used it (spec secret "Label and describe a secret without
-changing its reference" and "Audit every use of a secret by who used it").
+"""/api/v1/secrets/notes — what a person said about a secret (spec secret
+"Label and describe a secret without changing its reference").
 
-Neither returns a value. The notes are one vault state document keyed by ref;
-the uses are read from the audit log's ``secret_resolved`` rows.
+It returns no value. The notes are one vault state document keyed by ref.
 """
 
 from __future__ import annotations
@@ -12,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -29,7 +27,7 @@ from coffer.surfaces.http.dependencies import (
 from coffer.surfaces.http.secret_composition import get_secret_store
 from coffer.surfaces.http.secret_notes_wiring import get_secret_notes
 from coffer.surfaces.http.secret_routes import _checked_ref
-from coffer.surfaces.http.secret_schemas import SecretNotesIn, SecretNotesOut, SecretUseOut
+from coffer.surfaces.http.secret_schemas import SecretNotesIn, SecretNotesOut
 
 router = APIRouter(
     prefix="/api/v1/secrets",
@@ -83,37 +81,3 @@ async def put_notes(
         stored = await asyncio.to_thread(notes.get, ref)
     merged = stored or SecretNote()
     return SecretNotesOut(ref=ref, label=merged.label, description=merged.description)
-
-
-@router.get("/uses", response_model=list[SecretUseOut])
-async def list_uses(
-    ref: str,
-    limit: int = Query(20, ge=1, le=100),
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-) -> list[SecretUseOut]:
-    """Who had this secret decrypted for use, newest first, read from the audit
-    log's ``secret_resolved`` rows (a resource's destination, or a `coffer run`
-    child). Never a value."""
-    ref = _checked_ref(ref)
-    page = await audit.page(event_type=AuditEventType.SECRET_RESOLVED.value, q=ref, limit=200)
-    out: list[SecretUseOut] = []
-    for e in page.items:
-        d = e.details
-        if d.get("ref") != ref:
-            continue
-        run = "destination_kind" not in d
-        out.append(
-            SecretUseOut(
-                at=e.timestamp.isoformat(),
-                actor=e.actor,
-                destination_kind="run" if run else str(d["destination_kind"]),
-                destination_uid=None if run else d.get("destination_uid"),
-                destination_name=str(d.get("name") if run else d.get("destination_name", "")),
-                slot=d.get("slot"),
-                argv0=d.get("argv0"),
-                cwd=d.get("cwd"),
-            )
-        )
-        if len(out) == limit:
-            break
-    return out

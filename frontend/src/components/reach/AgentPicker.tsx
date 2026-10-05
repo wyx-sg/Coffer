@@ -62,10 +62,14 @@ export function AgentPicker({
     ...sortAgents(registered).map((a) => ({ ...a, known: true })),
     ...selected
       .filter((uid) => !known.has(uid))
-      .map((uid) => ({ uid, name: uid, type: "", installed: true, known: false })),
+      .map((uid) => ({ uid, name: uid, label: uid, type: "", installed: true, known: false })),
   ];
   const needle = query.trim().toLowerCase();
-  const shown = needle ? rows.filter((a) => a.name.toLowerCase().includes(needle)) : rows;
+  const shown = needle
+    ? rows.filter(
+        (a) => a.label.toLowerCase().includes(needle) || a.name.toLowerCase().includes(needle),
+      )
+    : rows;
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-2", className)} data-testid="scope-agent-axis">

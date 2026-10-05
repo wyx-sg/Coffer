@@ -181,10 +181,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
   { path: "secrets", element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage") },
   { path: "secrets/:id", element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage") },
   {
-    path: "secrets/:id/:tab",
-    element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage"),
-  },
-  {
     path: "activity",
     element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
   },

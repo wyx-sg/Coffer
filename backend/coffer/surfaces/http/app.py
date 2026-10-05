@@ -248,7 +248,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # reads them from here on.
     remember_destination_sources(resource_svc, audit)
     # What cites each secret, and the one-time move of old refs to minted ids.
-    await wire_secret_index(resource_svc, secret_store, audit, events)
+    await wire_secret_index(resource_svc, events)
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.

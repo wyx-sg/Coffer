@@ -34,20 +34,20 @@ export function ReachAgentRow({ agent, checked, disabled, failure, onToggle, onR
         <Checkbox
           checked={checked}
           disabled={disabled}
-          aria-label={agent.name}
+          aria-label={agent.label}
           onChange={(e) => onToggle(agent.uid, e.target.checked)}
         />
         {/* The name beside it is the visible text, so the badge is decoration. */}
         <span aria-hidden className="inline-flex">
           <AgentBadge
             type={agent.type}
-            name={agent.name}
+            name={agent.label}
             size="md"
             tooltip={false}
             state={agent.installed ? undefined : "not-installed"}
           />
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-normal text-text">{agent.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-normal text-text">{agent.label}</span>
         {failure ? (
           <span className="shrink-0 text-xs font-label text-danger">{t("scope.failed")}</span>
         ) : null}
@@ -69,7 +69,7 @@ export function ReachAgentRow({ agent, checked, disabled, failure, onToggle, onR
               size="sm"
               onClick={() => onToggle(agent.uid, false)}
             >
-              {t("scope.untick", { name: agent.name })}
+              {t("scope.untick", { name: agent.label })}
             </Button>
           </span>
         </div>

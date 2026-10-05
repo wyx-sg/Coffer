@@ -341,28 +341,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/secrets/uses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Uses
-         * @description Who had this secret decrypted for use, newest first, read from the audit
-         *     log's ``secret_resolved`` rows (a resource's destination, or a `coffer run`
-         *     child). Never a value.
-         */
-        get: operations["list_uses_api_v1_secrets_uses_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/secrets/{ref}": {
         parameters: {
             query?: never;
@@ -998,28 +976,6 @@ export interface components {
              * @enum {string}
              */
             master_key_storage: "file" | "keychain" | "keychain_access_group";
-        };
-        /**
-         * SecretUseOut
-         * @description One time a secret was decrypted for use, and by whom (from the audit log).
-         */
-        SecretUseOut: {
-            /** Actor */
-            actor: string;
-            /** Argv0 */
-            argv0: string | null;
-            /** At */
-            at: string;
-            /** Cwd */
-            cwd: string | null;
-            /** Destination Kind */
-            destination_kind: string;
-            /** Destination Name */
-            destination_name: string;
-            /** Destination Uid */
-            destination_uid: string | null;
-            /** Slot */
-            slot: string | null;
         };
     };
     responses: never;
@@ -1710,49 +1666,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretScanOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_uses_api_v1_secrets_uses_get: {
-        parameters: {
-            query: {
-                ref: string;
-                limit?: number;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SecretUseOut"][];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

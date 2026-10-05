@@ -59,15 +59,6 @@ export function useDeleteSecret() {
   });
 }
 
-/** Where this Mac last handed a secret's value out (the sheet's Recent uses); read while `enabled`. */
-export function useSecretUses(ref: string, enabled = true) {
-  return useQuery({
-    queryKey: [...secretsKey, "uses", ref],
-    queryFn: () => secretsApi.uses(ref),
-    enabled,
-  });
-}
-
 /** Add a standalone secret under a minted id. The dialog renders a failure inline. */
 export function useAddSecret() {
   const refresh = useRefreshSecrets();

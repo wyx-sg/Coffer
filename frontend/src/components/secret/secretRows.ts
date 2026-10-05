@@ -1,8 +1,7 @@
 // src/components/secret/secretRows.ts — pure helpers the Secrets page reads its rows through.
 //
-// A row is one ref the store holds or a resource cites. A standalone secret
-// (`secret/<name>`) is referred to by its `coffer://secret/<name>`; any other ref is its own
-// reference. What a row is called is `displayName`. What
+// A row is one ref the store holds or a resource cites. Every secret is `secret/<minted id>`,
+// referred to by its `coffer://secret/<id>`. What a row is called is `displayName`. What
 // uses a ref is every resource citing it plus every skill whose files cite
 // its URI, each with the page it opens (spec web-ui "Manage stored secrets on
 // the Secrets page").
@@ -23,54 +22,28 @@ export function standaloneName(ref: string): string | null {
 export const LABEL_MAX = 64;
 export const DESCRIPTION_MAX = 200;
 
-const HEX_ID = /^[0-9a-f]{32}$/i;
-
-/** A minted id (32 hex characters), which is never a name worth showing. */
-export function isMintedId(segment: string): boolean {
-  return HEX_ID.test(segment);
-}
-
-/** What the list calls a secret: its label; else a standalone secret's name; else the first citer's
- *  name and the slot it cites it in; else a legacy ref's short name. A minted hex id is never shown —
- *  `unnamed` stands in when nothing else names it (spec web-ui "Manage stored secrets on the
- *  Secrets page"). */
+/** What the list calls a secret: its label; else the first citer's name and the slot it cites it
+ *  in. A minted hex id is never shown — `unnamed` stands in when nothing else names it (spec web-ui
+ *  "Manage stored secrets on the Secrets page"). */
 export function displayName(row: SecretRef, unnamed = "Unnamed secret"): string {
   const label = row.label?.trim();
   if (label) return label;
-  const standalone = standaloneName(row.ref);
-  if (standalone !== null && !isMintedId(standalone)) return standalone;
   const first = row.cited_by[0];
   const citer = first?.name ?? row.mentioned_by_skills[0];
-  // The slot: a resource's own legacy ref ends in it; a `secret/<id>` ref cannot say, so it is read
-  // from the binding where the first citer cites it.
-  const last = row.ref.split("/").pop() ?? row.ref;
-  const fromRef = standalone === null && !isMintedId(last) ? shortName(row) : null;
-  const bound = first
-    ? row.bindings.find((b) => b.destination_kind === first.kind && b.destination_uid === first.uid)
-        ?.slot
-    : undefined;
-  const slot = fromRef ?? bound ?? null;
+  // The slot is read from the binding where the first citer cites it.
+  const slot = first
+    ? (row.bindings.find(
+        (b) => b.destination_kind === first.kind && b.destination_uid === first.uid,
+      )?.slot ?? null)
+    : null;
   if (citer) return slot ? `${citer} · ${slot}` : citer;
   return slot ?? unnamed;
 }
 
-/** The last path segment of a ref; `postman.AUTHORIZATION` drops its owner's name prefix. This is
- *  the name the list shows for a resource's own ref (`mcp_server/<uid>/JIRA_TOKEN`). */
-export function shortName(row: SecretRef): string {
-  const segments = row.ref.split("/");
-  const last = segments[segments.length - 1] || row.ref;
-  const dot = last.indexOf(".");
-  if (segments.length === 1 && dot > 0) {
-    const prefix = last.slice(0, dot).toLowerCase();
-    if (row.cited_by.some((c) => c.name.toLowerCase() === prefix)) return last.slice(dot + 1);
-  }
-  return last;
-}
-
-/** The name an approval's secret goes by: the list's short name, else the ref without its namespace. */
+/** The name an approval's secret goes by: the list's display name, else the ref without its namespace. */
 export function approvalSecretName(approval: Approval, rows: readonly SecretRef[]): string {
   const row = rows.find((r) => r.ref === approval.ref);
-  return row ? shortName(row) : (approval.ref ?? "").replace(SECRET_PREFIX, "");
+  return row ? displayName(row) : (approval.ref ?? "").replace(SECRET_PREFIX, "");
 }
 
 /** What "Copy reference" copies — the URI a file cites, else the ref a resource cites. */
@@ -91,7 +64,7 @@ export interface Citer {
 const enc = encodeURIComponent;
 
 /** The page a citer opens: kinds keyed by fixed name use it, the rest their uid. */
-export function citerHref(kind: string, name: string, uid: string): string | null {
+function citerHref(kind: string, name: string, uid: string): string | null {
   switch (kind) {
     case "mcp_server":
       return `/mcp-servers/${enc(name)}`;

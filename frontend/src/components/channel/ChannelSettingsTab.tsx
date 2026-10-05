@@ -33,11 +33,19 @@ interface Props {
   channel: ResourceOut;
   /** The channel's typed settings, defaults filled in — what its fields start from. */
   settings: ChannelSettings;
+  /** Coffer's workspace, where new conversations start while no default is marked. */
+  workspaceDirectory: string;
   onReplaceSecret: () => void;
   onDelete: () => void;
 }
 
-export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelete }: Props) {
+export function ChannelSettingsTab({
+  channel,
+  settings,
+  workspaceDirectory,
+  onReplaceSecret,
+  onDelete,
+}: Props) {
   const { t } = useTranslation();
   const id = useId();
   const { save } = useChannelAutoSave(channel);
@@ -157,7 +165,11 @@ export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelet
         description={t("channels.settings.directories.description")}
         testId="channel-directories"
       >
-        <ChannelDirectoryFields settings={settings} save={save} />
+        <ChannelDirectoryFields
+          settings={settings}
+          workspaceDirectory={workspaceDirectory}
+          save={save}
+        />
       </SettingsSection>
 
       {/* The one destructive action is a row, not a section of its own. */}

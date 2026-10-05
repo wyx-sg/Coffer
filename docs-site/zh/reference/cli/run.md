@@ -18,6 +18,6 @@ Each resolution is audited. Output is masked: exact secret values print as \*\*\
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `--secret` <span class="cli-chip">选项</span> | text（可重复） |  | NAME or ENV=NAME of a standalone secret (repeatable) |
+| `--secret` <span class="cli-chip">选项</span> | text（可重复） |  | NAME, ENV=NAME or ENV=coffer://secret/&lt;id&gt; of a standalone secret (repeatable) |
 | `--env-file` <span class="cli-chip">选项</span> | path |  | KEY=VALUE file; coffer://secret/&lt;name&gt; values are resolved |
 | `--no-masking` <span class="cli-chip">选项</span> | 开关 |  | Pass the child's output through unfiltered |

@@ -5,6 +5,7 @@
 // list. It shows no result count.
 import { useTranslation } from "react-i18next";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { FilterPill, type FilterOption } from "@/components/filters";
@@ -50,6 +51,7 @@ export function ConversationsFilterBar({
   const agentOptions: FilterOption[] = agents.map((a) => ({
     value: a.agent_key,
     label: a.display_name,
+    icon: <AgentBadge type={a.agent_key} name={a.display_name} size="sm" tooltip={false} />,
   }));
 
   return (
