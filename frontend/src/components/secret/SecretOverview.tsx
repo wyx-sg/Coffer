@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { citersOf, isMissingHere, standaloneName, type Citer } from "./secretRows";
 import { shortDate } from "./secretTimes";
 import { useKindLabel } from "./useKindLabel";
+import { useShownCiter } from "./useShownCiter";
 
 const TERM = "flex h-7 items-center text-xs text-text-muted";
 /** Every value cell is one row tall, so a row with a Copy button lines up with one without. */
@@ -39,13 +40,14 @@ function CopyLine({ text, label }: { text: string; label: string }) {
   );
 }
 
-function UsedByLine({ citer, row }: { citer: Citer; row: SecretRef }) {
+function UsedByLine({ citer: cited, row }: { citer: Citer; row: SecretRef }) {
   const { t } = useTranslation();
   const kindLabel = useKindLabel();
   const pageOpen = useKindPageOpen();
+  const citer = useShownCiter()(cited);
   const Icon = kindMeta(citer.kind).icon;
   const bindings = row.bindings.filter(
-    (b) => b.destination_kind === citer.kind && b.destination_uid === citer.uid,
+    (b) => b.destination_kind === cited.kind && b.destination_uid === cited.uid,
   );
   const binding = bindings[0];
   const body = (

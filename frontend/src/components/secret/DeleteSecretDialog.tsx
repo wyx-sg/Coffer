@@ -28,6 +28,7 @@ import { useDeleteSecret } from "@/lib/hooks/useSecrets";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { citersFromRefusal, citersOf, displayName, referenceOf, type Citer } from "./secretRows";
 import { useKindLabel } from "./useKindLabel";
+import { useShownCiter } from "./useShownCiter";
 
 interface Props {
   row: SecretRef | null;
@@ -40,6 +41,7 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
   const { t } = useTranslation();
   const kindLabel = useKindLabel();
   const pageOpen = useKindPageOpen();
+  const shown = useShownCiter();
   return (
     <>
       <DialogHeader>
@@ -51,7 +53,7 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
         </DialogDescription>
       </DialogHeader>
       <ul className="divide-y divide-border-subtle rounded-md border border-border-subtle">
-        {citers.map((c) => (
+        {citers.map(shown).map((c) => (
           <li key={c.key} className="flex items-center gap-3 px-3 py-2">
             <span className="min-w-0 flex-1 truncate text-sm text-text">{c.name}</span>
             <span className="text-xs text-text-muted">{kindLabel(c.kind)}</span>

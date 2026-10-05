@@ -239,6 +239,8 @@ class OpenApiOperationOut(BaseModel):
 class OpenApiReadOut(BaseModel):
     title: str | None
     version: str | None
+    #: The spec's ``info.description``; the form pre-fills the group's description.
+    description: str | None = None
     base_url: str | None
     #: The header the spec's security scheme puts a credential in (``Authorization``
     #: for bearer, basic and OAuth; the key's name for an API key); the form

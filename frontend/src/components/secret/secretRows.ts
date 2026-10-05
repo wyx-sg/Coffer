@@ -89,6 +89,13 @@ function citerHref(kind: string, name: string, uid: string): string | null {
   }
 }
 
+/** How a citer reads and opens: a custom-tool group is an `mcp_server` on the wire, but it
+ *  reads as a custom tool and opens on its own page. Match bindings on the wire kind. */
+export function shownCiter(citer: Citer, groups: ReadonlySet<string>): Citer {
+  if (citer.kind !== "mcp_server" || !groups.has(citer.name)) return citer;
+  return { ...citer, kind: "custom_tool", href: `/custom-tools/${enc(citer.name)}` };
+}
+
 /** Every resource citing the ref, then every skill citing its URI not already named. */
 export function citersOf(row: SecretRef): Citer[] {
   const out: Citer[] = row.cited_by.map((c) => ({

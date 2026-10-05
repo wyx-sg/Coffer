@@ -50,10 +50,23 @@ class DraftOperation:
     source: OperationSource | None = None
 
 
+#: A group description's limit (the resource's ``description``).
+_GROUP_DESCRIPTION_LIMIT = 2000
+
+
+def _info_description(info: dict[str, Any]) -> str | None:
+    text = info.get("description")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return text.strip()[:_GROUP_DESCRIPTION_LIMIT]
+
+
 @dataclass(frozen=True)
 class OpenApiReading:
     title: str | None
     version: str | None
+    #: ``info.description``: what the form pre-fills as the new group's description.
+    description: str | None
     base_url: str | None
     #: The header the spec's security scheme puts a credential in, if any.
     auth_header: str | None
@@ -265,6 +278,7 @@ def read_openapi(
     return OpenApiReading(
         title=info.get("title") if isinstance(info.get("title"), str) else None,
         version=str(info["version"]) if info.get("version") is not None else None,
+        description=_info_description(info),
         base_url=_base_url(resolved, source_url),
         auth_header=_auth(resolved),
         operations=operations,

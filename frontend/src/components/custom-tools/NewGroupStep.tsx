@@ -1,5 +1,5 @@
-// src/components/custom-tools/NewGroupStep.tsx — the new group a hand-made request goes into: name, base
-// URL, headers and default reach. Create group moves on to its first request; nothing is saved until Add.
+// src/components/custom-tools/NewGroupStep.tsx — the new group a hand-made request goes into: name,
+// description, base URL, headers and default reach. Create group moves on to its first request; nothing is saved until Add.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +10,7 @@ import { agentPrefix } from "@/lib/customTools/groups";
 import { isGroupName } from "@/lib/customTools/drafts";
 import type { GroupDraft } from "./addFlow";
 import { FormField } from "./FormField";
+import { GroupDescriptionField } from "./GroupDescriptionField";
 import { GroupHeaderRows } from "./GroupHeaderRows";
 import { GroupReachField } from "./GroupReachField";
 import { useGroupNameError } from "./useGroupNameError";
@@ -49,6 +50,10 @@ export function NewGroupStep({ group, onGroup, taken, ...actions }: Props) {
             onChange={(e) => onGroup({ ...group, name: e.target.value.trim() })}
           />
         </FormField>
+        <GroupDescriptionField
+          value={group.description}
+          onChange={(description) => onGroup({ ...group, description })}
+        />
         <FormField
           label={t("customTools.fields.baseUrl")}
           htmlFor={`${id}-base`}

@@ -166,13 +166,13 @@ flowchart TD
 
 ```text
 coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
-  -> { tools: [{ name, description, inputSchema, score }], total_searched }
+  -> { tools: [{ name, description, inputSchema, score, group_description? }], total_searched }
 ```
 
 它不分层地聚合可见服务器的工具，去掉所有 `coffer__` 工具，然后给其余工具排序。排序器是一个确定性的简化版 BM25：
 
 - **分词。** 按 camelCase 边界切开，文本转小写，保留 `[a-z0-9]+` 连续串。名字文本是 `"<server> <tool>"`。先把命名空间切开，这样服务器 token 只算一次，而不是两次。
-- **词频。** 每个名字 token 加 `3.0`，每个描述 token 加 `1.0`。文档长度是它的权重之和。
+- **词频。** 每个名字 token 加 `3.0`，每个描述 token 加 `1.0`。文档长度是它的权重之和。自定义工具分组的说明算进它每个工具的描述文本，并作为 `group_description` 随结果返回。
 - **得分。** 对工具中出现的每个不同查询词 `t`：
   `idf(t) = ln(1 + (N - df + 0.5) / (df + 0.5))`，这个词贡献
   `idf(t) · f · (k1 + 1) / (f + k1 · (1 - b + b · len / avg_len))`，其中 `k1 = 1.5`，`b = 0.75`。

@@ -64,6 +64,26 @@ def test_a_custom_tool_reaches_the_agent_under_its_prefix(daemon: BoundaryDaemon
 
 
 @pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a group's description finds its tools in a search"
+)
+def test_a_groups_description_finds_its_tools(daemon: BoundaryDaemon, api: FakeHttpApi):
+    create_group(
+        daemon,
+        "acme",
+        api.base_url,
+        [tool("list_items", "GET", "/items", description="List items")],
+        description="Weather forecasts for warehouse sites",
+    )
+    found = json.loads(
+        text_of(Agent(daemon, CLAUDE).call("coffer__search_tools", {"query": "weather forecast"}))
+    )
+    assert found["tools"][0]["name"] == "acme__list_items"
+    assert found["tools"][0]["group_description"] == "Weather forecasts for warehouse sites"
+    # tools/list keeps the tool's own description.
+    assert Agent(daemon, CLAUDE).tools()["acme__list_items"]["description"] == "List items"
+
+
+@pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a custom tool call sends the rendered request with the secret"
 )
 @pytest.mark.acceptance(spec="web-ui", scenario="the secret never reaches the agent")

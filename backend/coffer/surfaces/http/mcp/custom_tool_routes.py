@@ -102,6 +102,7 @@ async def read_openapi(
     return OpenApiReadOut(
         title=r.title,
         version=r.version,
+        description=r.description,
         base_url=r.base_url,
         auth_header=r.auth_header,
         source_kind=result.kind,

@@ -47,6 +47,19 @@ def hidden_tool_names(resources: Sequence[Resource]) -> frozenset[str]:
     return frozenset(hidden)
 
 
+def group_descriptions(resources: Sequence[Resource]) -> dict[str, str]:
+    """``{group name: description}`` for the custom-tool groups that have one.
+
+    Spec mcp-gateway "Describe a custom-tool group": ``coffer__search_tools``
+    scores a group's tools against its description too.
+    """
+    return {
+        r.name: r.description
+        for r in resources
+        if r.description and http_api_transport(r) is not None
+    }
+
+
 def custom_tool_denial(resource: Resource, tool_name: str) -> str | None:
     """Why a call on ``tool_name`` is refused, or None."""
     transport = http_api_transport(resource)

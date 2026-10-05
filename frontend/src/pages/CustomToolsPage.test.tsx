@@ -107,9 +107,16 @@ describe("CustomToolsPage", () => {
     fireEvent.click(adds[0]);
 
     const dialog = await screen.findByRole("dialog");
-    const putItIn = within(dialog).getByRole("radiogroup", { name: "Put it in" });
-    expect(within(putItIn).getByRole("radio", { name: /billing/ })).toBeInTheDocument();
-    fireEvent.click(within(putItIn).getByRole("radio", { name: /New group/ }));
+    // A select you can type into, on New group until another is picked.
+    const putItIn = within(dialog).getByRole("combobox", { name: "Put it in" });
+    expect(putItIn).toHaveTextContent("New group");
+    fireEvent.click(putItIn);
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Search" }), {
+      target: { value: "bill" },
+    });
+    expect(within(dialog).getByRole("option", { name: /billing/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("option", { name: /New group/ })).toBeNull();
+    fireEvent.click(putItIn);
     const ways = within(dialog).getByRole("radiogroup", { name: "How to add it" });
     expect(within(ways).getByRole("radio", { name: /Import an OpenAPI spec/ })).toBeInTheDocument();
     expect(
@@ -357,7 +364,8 @@ describe("CustomToolsPage", () => {
     renderAt("/custom-tools");
     fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
     let dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("radio", { name: /^billing/ }));
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Put it in" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: /^billing/ }));
     expect(within(dialog).queryByRole("radio", { name: /Import an OpenAPI spec/ })).toBeNull();
     expect(within(dialog).getByText(/uses its base URL and secret/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
@@ -403,13 +411,15 @@ describe("CustomToolsPage", () => {
     renderAt("/custom-tools");
     fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
     let dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("radio", { name: /New group/ }));
     fireEvent.click(within(dialog).getByRole("radio", { name: /Add one request by hand/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
     dialog = await screen.findByRole("dialog", { name: "New group" });
     fireEvent.change(within(dialog).getByLabelText(/Group name/), {
       target: { value: "search-api" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Description"), {
+      target: { value: "Full-text search over the wiki" },
     });
     fireEvent.change(within(dialog).getByLabelText(/Base URL/), {
       target: { value: "https://search.internal.example/v1" },
@@ -443,6 +453,7 @@ describe("CustomToolsPage", () => {
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
     expect(api.create.mock.calls[0][0]).toMatchObject({
       name: "search-api",
+      description: "Full-text search over the wiki",
       base_url: "https://search.internal.example/v1",
       tools: [expect.objectContaining({ name: "find", path: "/find" })],
     });

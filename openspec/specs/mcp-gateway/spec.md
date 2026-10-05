@@ -79,7 +79,7 @@ list-changed notifications) between clients and upstream MCP servers.
 - **Built-in tool retrieval.** `coffer__search_tools`
   ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)) has the contract
   `coffer__search_tools(query: string [required], top_k?: int = 5, max 20) -> { tools: [{ name, description,
-  inputSchema, score }], total_searched: N }`. It ranks the **live** aggregated upstream catalogue against the
+  inputSchema, score, group_description? }], total_searched: N }`. It ranks the **live** aggregated upstream catalogue against the
   query and returns the top-k **real** upstream tool schemas, which the agent then calls directly; it is a
   retrieval primitive and MUST NOT select-and-invoke on the agent's behalf. Ranking MUST be a pure,
   deterministic, local keyword ranker (BM25-lite over each tool's name + description, with name tokens
@@ -595,6 +595,27 @@ nothing persisted.
 - **GIVEN** a group `billing`
 - **WHEN** a tool with path `/invoices/{id}` and an argument schema that declares no `id` is added
 - **THEN** the addition is refused as a validation error naming `id`, and the group is unchanged
+
+### Requirement: Describe a custom-tool group
+A custom-tool group MUST carry an optional **description** saying what its API is
+for, set when the group is created (by hand or from an OpenAPI import) and
+changed later. Reading an OpenAPI document MUST return its `info.description`
+(trimmed, at most 2000 characters) so the import can start the new group with
+it. `coffer__search_tools` MUST score each of a group's tools against the
+group's description as well as the tool's own, and return the description
+beside each of the group's tools it finds as `group_description`. A tool's entry
+in `tools/list` MUST keep the tool's own description, with nothing added.
+
+#### Scenario: a group's description finds its tools in a search
+- **GIVEN** a group `acme` described as weather forecasts for warehouse sites, with one tool `list_items` described only as "List items"
+- **WHEN** an agent calls `coffer__search_tools` with the query "weather forecast"
+- **THEN** `acme__list_items` is the first result, carrying the group's description as `group_description`
+- **AND** `tools/list` still offers `acme__list_items` with the description "List items"
+
+#### Scenario: an OpenAPI document's description is read for the new group
+- **GIVEN** an OpenAPI document whose `info.description` is set, and one without it
+- **WHEN** each is read for import
+- **THEN** the first returns that description, trimmed, and the second returns none
 
 ### Requirement: Make a custom tool's request in the gateway
 On `tools/call` for a custom tool the gateway MUST render the request from the

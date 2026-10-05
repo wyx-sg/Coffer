@@ -78,6 +78,7 @@ const op = (key: string, name: string, tag: string) => {
 
 const reading = {
   title: "Billing API",
+  description: "Invoices and charges in the billing system",
   version: "2.3.0",
   base_url: "https://billing.internal.example/v2",
   auth_header: "Authorization",
@@ -105,7 +106,6 @@ describe("CustomToolsPage import", () => {
       renderAt("/custom-tools");
       fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
       let dialog = await screen.findByRole("dialog");
-      fireEvent.click(within(dialog).getByRole("radio", { name: /New group/ }));
       expect(within(dialog).getByRole("radio", { name: /Import an OpenAPI spec/ })).toBeChecked();
       fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
@@ -128,6 +128,10 @@ describe("CustomToolsPage import", () => {
       expect(within(dialog).getByRole("checkbox", { name: "create_invoice" })).not.toBeChecked();
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "list_charges" }));
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "create_invoice" }));
+      // The spec's info.description pre-fills the group's description.
+      expect(within(dialog).getByLabelText("Description")).toHaveValue(
+        "Invoices and charges in the billing system",
+      );
       // The spec's security scheme pre-fills one Authorization row, with no value yet.
       expect(within(dialog).getByLabelText("Headers name")).toHaveValue("Authorization");
       fireEvent.change(within(dialog).getByLabelText("Value of Authorization"), {
@@ -153,6 +157,7 @@ describe("CustomToolsPage import", () => {
       await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
       const body = api.create.mock.calls[0][0] as {
         name: string;
+        description: string | null;
         base_url: string;
         headers: { name: string; value?: string }[];
         agents: string[] | null;
@@ -160,6 +165,7 @@ describe("CustomToolsPage import", () => {
         source: { kind: string; location: string; skipped: string[] };
       };
       expect(body.name).toBe("invoices");
+      expect(body.description).toBe("Invoices and charges in the billing system");
       expect(body.base_url).toBe("https://billing.internal.example/v2");
       expect(body.headers).toEqual([{ name: "Authorization", value: "Bearer abc" }]);
       expect(body.agents).toBeNull();
@@ -187,7 +193,6 @@ describe("CustomToolsPage import", () => {
       renderAt("/custom-tools");
       fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
       let dialog = await screen.findByRole("dialog");
-      fireEvent.click(within(dialog).getByRole("radio", { name: /New group/ }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
       dialog = await screen.findByRole("dialog", { name: "Import an OpenAPI spec" });
       expect(within(dialog).getByText("Import an OpenAPI spec · new group")).toBeInTheDocument();
@@ -221,7 +226,6 @@ describe("CustomToolsPage import", () => {
       renderAt("/custom-tools");
       fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
       let dialog = await screen.findByRole("dialog");
-      fireEvent.click(within(dialog).getByRole("radio", { name: /New group/ }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
       dialog = await screen.findByRole("dialog", { name: "Import an OpenAPI spec" });
       fireEvent.click(within(dialog).getByRole("radio", { name: "File" }));

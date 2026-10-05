@@ -60,7 +60,7 @@ from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_session_callbacks,
 )
-from coffer.application.mcp.gateway_tool_gate import hidden_tool_names
+from coffer.application.mcp.gateway_tool_gate import group_descriptions, hidden_tool_names
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
 from coffer.application.mcp.gateway_tools_list import build_tools_listing
 from coffer.application.mcp.ports import (
@@ -235,11 +235,15 @@ class MCPGatewaySession:
     async def _enabled_mcp_servers(self) -> list[str]:
         return await enabled_mcp_servers(self._resources, self._session_agent_uid)
 
-    async def _servers_and_hidden(self) -> tuple[list[str], frozenset[str], dict[str, str]]:
-        """Visible server names, tools hidden from this agent, per-tool exposure overrides."""
+    async def _servers_and_hidden(
+        self,
+    ) -> tuple[list[str], frozenset[str], dict[str, str], dict[str, str]]:
+        """Visible server names, tools hidden from this agent, per-tool exposure
+        overrides, and the custom-tool groups' descriptions."""
         rows = await visible_mcp_servers(self._resources, self._session_agent_uid)
         hidden = hidden_tool_names(rows)
-        return [r.name for r in rows], hidden, await exposure_overrides(self._prefs, rows)
+        exposure = await exposure_overrides(self._prefs, rows)
+        return [r.name for r in rows], hidden, exposure, group_descriptions(rows)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -277,7 +281,7 @@ class MCPGatewaySession:
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
-        servers, hidden, exposure = await self._servers_and_hidden()
+        servers, hidden, exposure, _ = await self._servers_and_hidden()
         listing = await build_tools_listing(
             discovery=self._discovery,
             ensure_subscribed=self._ensure_subscribed,
@@ -306,10 +310,11 @@ class MCPGatewaySession:
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
         name = str(params.get("name") or "")
         if name == TOOL_SEARCH_NAME:
-            servers, hidden, exposure = await self._servers_and_hidden()
+            servers, hidden, exposure, about = await self._servers_and_hidden()
             return await run_tool_search(
                 params,
                 exposure=exposure,
+                about=about,
                 discovery=self._discovery,
                 ensure_subscribed=self._ensure_subscribed,
                 servers=servers,

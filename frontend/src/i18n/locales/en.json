@@ -4720,6 +4720,7 @@
       "nameTaken": "A group with this name already exists.",
       "putItIn": "Put it in",
       "newGroupSub": "Its own name, base URL and secret",
+      "noGroupMatches": "No group matches",
       "startNew": "Start the new group",
       "existingNote": "A request added to {{group}} uses its base URL and secret. Import an OpenAPI spec only when you create a new group.",
       "change": "Change",
@@ -4969,7 +4970,8 @@
       "timeoutInvalid": "Use a whole number from 1 to 300.",
       "name": "Name",
       "nameHelp": "Fixed — agents call its tools as {{prefix}}.",
-      "descriptionHelp": "Only you see it; agents don't."
+      "descriptionHelp": "Agents read it when they search for a tool, so say what this API is for.",
+      "descriptionPlaceholder": "e.g. Invoices and payments in the billing system"
     },
     "reimport": {
       "action": "Re-import",
@@ -5251,7 +5253,7 @@
     },
     "kind": {
       "mcp_server": "MCP server",
-      "custom_tool": "MCP server",
+      "custom_tool": "Custom tool",
       "skill": "Skill",
       "provider": "Model provider",
       "channel": "Channel",

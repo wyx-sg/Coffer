@@ -1,4 +1,4 @@
-// src/components/custom-tools/GroupDefinition.tsx — a group's definition as read-only rows (4.2.01): the name agents
+// src/components/custom-tools/GroupDefinition.tsx — a group's definition as read-only rows (4.2.01): its description, the name agents
 // see, the base URL, the headers Coffer adds (a secret header reads `name ← 🔑 secret`, no prefix), the timeout and
 // the spec it came from. Its reach is the header's Reach control, not a row here.
 import { useTranslation } from "react-i18next";
@@ -24,6 +24,13 @@ export function GroupDefinition({ group, onReimport }: Props) {
     <Section title={t("customTools.definition.title")} as="h2" gap="tight" labelled>
       <p className="text-xs text-text-muted">{t("customTools.definition.description")}</p>
       <div>
+        {group.description ? (
+          <DefinitionRow
+            label={t("customTools.editGroup.description")}
+            value={group.description}
+            copyable={false}
+          />
+        ) : null}
         <DefinitionRow
           label={t("customTools.definition.agentsSee")}
           value={agentPrefix(group.name)}

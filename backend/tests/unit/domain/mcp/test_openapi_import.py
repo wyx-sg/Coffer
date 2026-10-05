@@ -65,6 +65,15 @@ def test_operations_become_draft_tools_with_holes_and_a_body_argument():
     assert any("not JSON" in w for w in r.warnings)
 
 
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="an OpenAPI document's description is read for the new group"
+)
+def test_the_specs_info_description_is_read_for_the_group():
+    r = read_openapi({**_DOC, "info": {**_DOC["info"], "description": "  Bills and nodes \n"}})
+    assert r.description == "Bills and nodes"
+    assert read_openapi(_DOC).description is None
+
+
 def test_a_document_that_is_not_openapi_3_is_refused():
     with pytest.raises(OpenApiError):
         read_openapi({"swagger": "2.0"})

@@ -47,8 +47,11 @@ def create_group(
     secret: bool = True,
     approve: bool = True,
     agents: list[str] | None = None,
+    description: str | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {"name": name, "base_url": base_url, "tools": tools}
+    if description is not None:
+        body["description"] = description
     if secret:
         if d.value(f"secret/{SECRET_NAME}") is None:
             d.store(f"secret/{SECRET_NAME}", SECRET_VALUE)
