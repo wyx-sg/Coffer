@@ -47,6 +47,8 @@ interface Props {
   toolCount: number;
   /** The agents that reach it, already worded ("Claude Code and Codex"); "" when none. */
   agentNames: string;
+  /** Who turning it on gives it to: `null` is every agent, "" none registered here. */
+  turnOnNames: string | null;
   /** A failed test the user just ran; a passed one is a toast, not shown here. */
   test: TestResult | null;
   onOpenLog: () => void;
@@ -63,6 +65,7 @@ export function McpStatusCallout({
   isHttp,
   toolCount,
   agentNames,
+  turnOnNames,
   test,
   onOpenLog,
   onViewErrors,
@@ -125,7 +128,11 @@ export function McpStatusCallout({
           </CalloutButton>
         }
       >
-        {agentNames ? t("mcp.page.offBodyAgents", { agents: agentNames }) : t("mcp.page.offBody")}
+        {turnOnNames === null
+          ? t("mcp.page.offBodyEveryone")
+          : turnOnNames
+            ? t("mcp.page.offBodyAgents", { agents: turnOnNames })
+            : t("mcp.page.offBody")}
       </Callout>
     );
   }

@@ -82,7 +82,7 @@ export function useApplySkillReach() {
     mutationFn: async (vars: { uids: string[]; mode: ReachMode; scope: Scope | null }) => {
       for (const uid of vars.uids) {
         if (vars.mode === "disabled") await resourcesApi.disable(uid);
-        else if (vars.mode === "restricted") await scopeApi.put(uid, vars.scope ?? { agents: [] });
+        else if (vars.mode === "restricted" && vars.scope) await scopeApi.put(uid, vars.scope);
       }
     },
     onSettled: () => {

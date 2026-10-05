@@ -15,6 +15,13 @@ spec mcp-gateway "Gate server exposure by scope per session",
 spec mcp-gateway "Take the agent identity from the handshake",
 PRs #296, #380, #404, #406
 
+> **Amended 2026-10-05.** The empty allow-list (`{"agents": []}`, called
+> dormant) was removed. A resource reaches nobody only by being switched off
+> (`enabled`), which keeps the agents that were chosen; every write that carries
+> a scope refuses an empty list with 422 `SCOPE_INVALID`, and a one-time startup
+> step turned stored empty lists into off + unscoped. The kind-level
+> `default_scope` hook went with it. The text below is edited to match.
+
 ## Context
 
 Some resources are only useful to one of the agents Coffer manages
@@ -46,12 +53,11 @@ a fact about this machine: it lives in `local/reach.json` beside `enabled`,
 never in the resource's vault file and never synced
 ([Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md)).
 A resource with no record there reaches as registration would have made it:
-enabled, with the kind's `default_scope` or unrestricted.
+enabled and unrestricted.
 
 ```
 scope == None                           → every agent
 scope == {"agents": ["01J…<agent uid>"]} → that agent only
-scope == {"agents": []}                 → dormant: matches nothing
 ```
 
 One predicate, `is_active(scope, agent_uid)` in `backend/coffer/domain/scope.py`,
@@ -72,7 +78,7 @@ seam where it already knows the asking agent.
 | `mcp_server` | yes | The gateway session: `tools/list` / `resources/list` / `prompts/list` are built from the scope-filtered server list (`application/mcp/gateway_scope.py`), and the call seam re-checks before asking the supervisor for a connection (`application/mcp/gateway_handlers.py`), so a guessed `<server>__<tool>` name is refused as `TOOL_DISABLED` and logged as `denied`. Management routes (including the connection test) are not scope-gated. |
 | `skill` | yes | Delivery: a skill reaches an agent iff it is `enabled` and `is_active(scope, agent)`; anything else is reclaimed (`application/skill/link_reconcile.py`, the skill-link reconcile target). See [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md). |
 | `channel` | yes, **inverted** | A channel is consumed by no agent, so its scope names the agents it may *drive*; `/new <agent>`, the default agent and adapter start all read it. See [Channel Owner Gate](channel-owner-gate.md). |
-| `provider` | yes | Projection: a connection is written into the config of the agents its scope reaches (`application/provider/targets.py`); `compatible_agents` became this scope plus a `default_scope` pre-fill from the wire. See [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md). |
+| `provider` | yes | Projection: a connection is written into the config of the agents its scope reaches (`application/provider/targets.py`); `compatible_agents` became this scope plus a connection that starts unscoped on every wire. See [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md). |
 | `agent` | no | It *is* the agent; there is nothing for an agent scope to narrow. |
 | `knowledge`, `memory` | no | Withdrawn 2026-09-18 (Option F). |
 
@@ -124,7 +130,7 @@ either be bypassed by every administrative path or break them.
 The scope shipped as a machine × agent matrix in PR #296 (2026-07) and returned
 as a second `AND`-ed machine allow-list in PR #381 (2026-09-14), removed the
 next day in PR #382 (each stored row was resolved against the machine it was
-on, taking dormant when unsure). Lost because reach does not travel between
+on, taking a scope that matched nothing when unsure). Lost because reach does not travel between
 machines at all; argued in
 [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md).
 
@@ -181,7 +187,7 @@ not an isolation boundary between mutually distrusting principals.
 ## Decision
 
 A resource's per-agent scope is one framework-owned, nullable allow-list of
-agent **uids** on `Resource`: `None` is every agent, `[]` is dormant, and
+agent **uids** on `Resource`: `None` is every agent, a list is never empty (`[]` is refused), and
 `is_active(scope, agent_uid)` is the only predicate. Each kind declares
 `supports_scope`; `mcp_server`, `skill`, `channel` and `provider` do, and
 `agent`, `knowledge` and `memory` do not. The framework owns the value, its
@@ -205,10 +211,9 @@ Rules a future change must respect:
   different tool sets to different sessions at the same time.
 - Scoping a skill out reclaims an already-delivered copy, so a scope edit has
   filesystem effects; it is audited like any delivery change.
-- For `channel` and `provider` dormant means *off* — a channel that may drive
-  no agent does not start its adapter; a connection that reaches no agent is
-  projected nowhere. Dormant is still not disabled: the row stays visible and
-  editable, and surfaces label it as "no agent selected", not "disabled".
+- Reaching no agent is *off* on every kind — a switched-off channel does not
+  start its adapter; a switched-off connection is projected nowhere — and off
+  keeps the agents that were chosen. The row stays visible and editable.
 - Because `channel` pre-validates scope writes against its `default_agent`, a
   narrowing can be refused, and the user occasionally needs two edits in order.
   What that buys is that stopping a channel is always explicit.

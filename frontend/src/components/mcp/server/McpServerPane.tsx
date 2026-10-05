@@ -43,7 +43,7 @@ import { McpServerHeader } from "./McpServerHeader";
 import { McpStatusCallout } from "./McpStatusCallout";
 import { McpToolsTab } from "./McpToolsTab";
 import { McpTopTools } from "./McpTopTools";
-import { reachedAgents } from "./reachWords";
+import { namesOnTurnOn, reachedAgents } from "./reachWords";
 import { joinNames, serverState, transportOf } from "@/lib/mcp/serverState";
 import { failedTest, type TestResult } from "./testResult";
 
@@ -88,6 +88,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
     reachedAgents(resource, agents).map((a) => a.display_name),
     i18n.language,
   );
+  const turnOnNames = namesOnTurnOn(resource, agents, i18n.language);
   // Only a failed test speaks in the Overview; a pass is a toast.
   const test: TestResult | null =
     (runTest.data as TestResult | undefined) ??
@@ -191,6 +192,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
                 isHttp={transport.type === "http"}
                 toolCount={toolCount}
                 agentNames={agentNames}
+                turnOnNames={turnOnNames}
                 test={test}
                 onOpenLog={() => setLogOpen(true)}
                 onViewErrors={viewErrors}

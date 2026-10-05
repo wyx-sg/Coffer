@@ -234,7 +234,7 @@ delivered(skill, agent)  ⟺  skill.enabled
 object to construct at the composition root and no machine id to bind into one;
 the delivery call sites call the predicate directly. The pair it reads is the
 skill's reach, in `local/reach.json`, and reach never leaves this machine
-(spec vault-sync "Keep reach machine-local") — so a skill dormant here and
+(spec vault-sync "Keep reach machine-local") — so a skill switched off here and
 delivered on the laptop is two machines' records with two answers, not one
 scope with two axes.
 

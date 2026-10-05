@@ -22,8 +22,10 @@
 //
 // OFF IS A CHOICE, NEVER AN INFERENCE. It is an intent with its own endpoint and
 // audit events, and it deliberately leaves the scope untouched so switching
-// back restores what the user had ticked. Choosing Chosen agents with nothing
-// ticked is NOT Off: it reaches nobody and is reported as "No agent selected".
+// back restores what the user had ticked. Off is also the only way to reach no
+// agent: Chosen agents never holds an empty list, so switching to it with
+// nothing ticked saves nothing until the first tick, and the last ticked agent
+// cannot be unticked (the panel says to turn the resource off instead).
 // The list sits dimmed under Off and All agents, ticks kept — the plainest
 // statement that the selection survived.
 //
@@ -113,14 +115,17 @@ export function ReachControl({
     if (next === "everywhere") return onEverywhere();
     // Always a list, never `{agents: null}`: that state is "All agents".
     setDraft({ agents: selected });
-    onRestricted({ agents: selected }, null);
+    // Nothing ticked yet: show the list and wait for the first tick. An empty
+    // list is never written.
+    if (selected.length > 0) onRestricted({ agents: selected }, null);
   };
 
   const toggle = (uid: string, checked: boolean) => {
     const agents = checked ? [...selected, uid] : selected.filter((entry) => entry !== uid);
     setChoice("restricted");
     setDraft({ agents });
-    onRestricted({ agents }, checked ? uid : null);
+    // Only reachable empty through a failed row's "Untick": nothing to save.
+    if (agents.length > 0) onRestricted({ agents }, checked ? uid : null);
   };
 
   const onOpenChange = (open: boolean) => {
@@ -145,7 +150,7 @@ export function ReachControl({
         <PopoverTrigger asChild>
           <ReachButton
             live={live}
-            label={reachLabel(t, live, initialScope)}
+            label={reachLabel(t, live)}
             chosen={chosenAgents(initialScope, registered)}
             disabled={busy}
             aria-label={ariaLabel}
@@ -174,6 +179,7 @@ export function ReachControl({
             registered={registered}
             selected={selected}
             onToggle={toggle}
+            lockLast
             summary={summary}
             saveState={saveState}
             failure={failure}

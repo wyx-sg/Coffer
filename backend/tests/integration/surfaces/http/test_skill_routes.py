@@ -144,9 +144,15 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # scope the skill away from the agent — the copy is reclaimed. The
         # allow-list holds agent UIDS: a scope references another resource, and
         # a name is the one part of that reference the user may change.
+        # An empty list is refused (off is how a skill reaches nobody)...
         r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}})
+        assert r.status_code == 422, r.text
+        assert link.exists()
+        # ...so scope it to an agent this machine does not have instead.
+        elsewhere = "ffffffffffffffffffffffffffffffff"
+        r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [elsewhere]}})
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"agents": []}
+        assert r.json()["scope"] == {"agents": [elsewhere]}
         assert not link.exists()
         assert c.get(f"/api/v1/skills/{uid}").json()["bindings"] == []
 

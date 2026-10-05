@@ -50,7 +50,7 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | `created_at`  | `datetime`       | UTC, the file's `created_at` key, written at creation and never updated; a file without one reads as the file's modification time |
 | `updated_at`  | `datetime`       | UTC, the modification time of the file on this machine; not in the file |
 | `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server`, `skill` and `knowledge` (a collection is named by its folder); the file's `title` key, present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
-| `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local: the `agents` of the resource's record in `local/reach.json`, never in the file. A resource with no record has its kind's `default_scope` |
+| `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local: the `agents` of the resource's record in `local/reach.json`, never in the file. A resource with no record is unscoped |
 
 There is no derived `ref`: a resource carries its `uid`, its `kind` and its
 `name` as three plain fields, and nothing combines them into a fourth.
@@ -80,7 +80,6 @@ any framework-level adapter.
 | `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
 | `secret_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any write                             |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
-| `default_scope`             | `Callable[[dict], Scope \| None] \| None`                                  | the scope a new row is created with, consulted once at register (`provider` pre-fills the wire's own default) |
 | `validate_delete`           | `Callable[[Resource], None] \| None`                                       | pre-write guard for `delete`: raising refuses the deletion before anything is torn down, on the kind's own DELETE and the kind-agnostic one alike (spec resource-framework "Let a kind refuse a deletion before anything is torn down"). Only `skill` supplies one, refusing its builtin skill with `RESOURCE_PROTECTED` |
 | **Storage**                 |                                                                            | read by the resource store (`FileResourceRepo`) when it files a resource                                |
 | `storage`                   | `StorageClass`                                                             | the class the kind's files are filed in: `vault` (default; `vault/resources/<kind>/`, committed, synced when a remote is set), `local` for `agent` (`local/resources/agent/`, never committed), `derived` for `memory` (`derived/resources/memory/`, rebuilt). The directory is the policy: nothing else decides whether a resource travels |
@@ -98,7 +97,9 @@ the domain layer never references a surface.
 ### `Scope` (`domain/scope.py`)
 
 One allow-list. `None` on a `Resource` means unscoped — active for every agent;
-`agents=[]` matches nothing, i.e. dormant. There is no machine axis: reach is
+`agents` is never empty: `validate_scope` refuses `[]` for every kind
+(`SCOPE_INVALID`), and a resource that reaches nobody is off (`enabled` false),
+which keeps the agents that were chosen. There is no machine axis: reach is
 machine-local (`local/reach.json`), so no sync round carries it or writes over
 it (spec vault-sync, "Keep reach machine-local"). An unknown property on the
 wire is rejected rather than ignored, because dropping a withdrawn axis would
@@ -237,9 +238,9 @@ name is taken by an unrelated file) and removes the old one in the same commit.
 { "<uid>": { "enabled": true, "agents": ["<agent uid>"], "projects": null } }
 ```
 
-`agents: null` is unrestricted and `[]` dormant; `projects` is reserved and
-always `null`. A resource with no record has `enabled: true` and its kind's
-`default_scope`. `set_enabled` and `update_scope` write only this file and make
+`agents: null` is unrestricted and a list is never empty; `projects` is reserved and
+always `null`. A resource with no record has `enabled: true` and `agents: null`. A one-time startup step rewrites any record holding `agents: []`
+to `enabled: false, agents: null`. `set_enabled` and `update_scope` write only this file and make
 no commit.
 
 ### Audit log — `runs.db`

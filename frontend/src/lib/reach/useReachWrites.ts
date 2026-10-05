@@ -171,7 +171,10 @@ export function useReachWrites(kind: string, uid: string, enabled: boolean, scop
       null,
     );
 
-  const restricted = (next: Scope, changed: string | null = null) =>
+  // A chosen list is never empty: Off is the only way to reach nobody, so an
+  // empty list is dropped here rather than written.
+  const restricted = (next: Scope, changed: string | null = null) => {
+    if (next.agents !== null && next.agents.length === 0) return;
     submit(
       { enabled: true, scope: next },
       async () => {
@@ -180,6 +183,7 @@ export function useReachWrites(kind: string, uid: string, enabled: boolean, scop
       },
       changed,
     );
+  };
 
   /** Refreshes the lists once the writes have landed — call it when the panel closes. */
   const flush = useCallback(() => {

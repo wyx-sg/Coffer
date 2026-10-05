@@ -217,11 +217,9 @@ class Gate:
            the agents it may DRIVE (ADR per-agent-resource-scope), so a channel
            outside its own allow-list can drive nothing. Both write paths hold
            ``default_agent`` inside a non-empty scope (``on_update_config`` and
-           ``validate_scope_for``), so the only case this normally reaches is
-           the deliberate one — an empty allow-list, dormant, the owner
-           switched the channel off — but it stays as written rather than
-           narrowing to that check, as defence-in-depth for a row the scope-path
-           validation never saw.
+           ``validate_scope_for``), so this is defence-in-depth for a row the
+           scope-path validation never saw (a file edited by hand, or a scope
+           that arrived before the agent list did).
         3. The agent it names is not registered here. New with uids, and the
            honest reading of a reference that resolves to nothing: this vault
            has no such agent, so there is no key to route a turn by. It is also
@@ -243,7 +241,7 @@ class Gate:
 
     def _not_started(self, r: Resource, default_agent: str | None, reason: str) -> None:
         """Why a bot is quiet, in the record, without reconstructing it by hand —
-        once per reason: a channel left dormant on purpose would otherwise log
+        once per reason: a channel left unroutable would otherwise log
         the same line every tick, all day."""
         if self._unrouted.get(r.uid) == (reason, default_agent):
             return

@@ -52,11 +52,11 @@ __all__ = [
 GROUP_DEFAULT_SUFFIX = " — default for new threads in this group"
 
 #: What `/new <agent>` says when the channel's scope leaves it no agent to
-#: offer. Reachable only in the narrow window where a scope edit has landed but
-#: the runtime has not yet stopped the (now dormant) channel — it must still
-#: name the cause rather than answering with an empty list.
+#: offer: every agent its scope names is one this machine has not added. It
+#: must still name the cause rather than answering with an empty list.
 NO_AGENT_IN_SCOPE = (
-    "This bot is scoped to no agent, so it can run nothing. Widen its scope in Coffer to use it."
+    "None of the agents this bot may use is set up on this machine. "
+    "Change its reach in Coffer to use it."
 )
 
 

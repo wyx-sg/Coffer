@@ -89,10 +89,10 @@ async def test_update_scope_round_trips_agent_list_through_real_repo(tmp_path):
     fetched = await svc.get(created.uid)
     assert fetched.scope == agents
 
-    # The dormant scope (an empty agents axis) round-trips distinctly from None.
-    dormant = await svc.update_scope(created.uid, Scope(agents=[]), actor="cli")
-    assert dormant.scope == Scope(agents=[])
-    assert (await svc.get(created.uid)).scope == Scope(agents=[])
+    # An empty agents list is refused and leaves the stored scope as it was.
+    with pytest.raises(ScopeInvalidError):
+        await svc.update_scope(created.uid, Scope(agents=[]), actor="cli")
+    assert (await svc.get(created.uid)).scope == agents
 
     # Clearing scope (back to unscoped) round-trips to None as well.
     cleared = await svc.update_scope(created.uid, None, actor="cli")

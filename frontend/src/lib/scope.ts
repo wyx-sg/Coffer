@@ -30,12 +30,10 @@ function sameAgents(a: string[] | null, b: string[] | null): boolean {
  * always judged against the agents registered on the machine that is asking.
  *
  * Judged on evidence. An agent list that has not loaded yet yields `false`
- * rather than a wrong `true`: claiming a resource is dormant because a query is
- * still in flight would be worse than saying nothing. An explicitly empty list
- * is the one verdict that needs no evidence — it names nobody, anywhere.
+ * rather than a wrong `true`: claiming a resource is inactive because a query
+ * is still in flight would be worse than saying nothing.
  */
 export function isDormantHere(scope: Scope | null, agentUids: string[]): boolean {
   if (scope === null || scope.agents === null) return false;
-  if (scope.agents.length === 0) return true;
   return agentUids.length > 0 && !scope.agents.some((uid) => agentUids.includes(uid));
 }

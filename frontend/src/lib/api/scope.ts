@@ -16,7 +16,8 @@ import type { components as ResourceFrameworkWire } from "@/lib/api/generated/re
 /**
  * A resource's activation scope: the allow-list of agents it reaches.
  *
- * `null` is unrestricted; `[]` matches nothing, i.e. dormant. The whole scope
+ * `null` is unrestricted; a list names at least one agent (`[]` is refused —
+ * a resource that reaches nobody is switched off). The whole scope
  * being `null` (see `ResourceScope.scope`) means active for every agent.
  *
  * `agents` holds agent UIDS, not agent names: a scope is a stored pointer at

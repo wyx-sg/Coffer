@@ -88,12 +88,12 @@ Tried twice. PR #296 (2026-07) shipped a machine × agent matrix in `scope`; PR
   machine they are not sitting at.
 - **Cons.** It cannot be verified from where it is set — the user picks machine
   ids out of a registry describing machines they cannot see, and a mistyped or
-  retired id makes a resource dormant somewhere they cannot look; and two
+  retired id makes a resource reach nobody somewhere they cannot look; and two
   machines editing one resource's reach put a permission through a text merge,
   so whichever round ran last decides what the other machine exposes.
 - **Why it loses.** PR #382 removed the axis the following day. The removal
   resolved each stored row against the machine id the daemon was actually
-  using and took dormant whenever it could not tell, so it narrowed rather than
+  using and took "matches nothing" whenever it could not tell, so it narrowed rather than
   widened, and the scope's wire schema refuses a payload that still carries a
   `machines` key with a 422 rather than storing what is left, which would read
   as every agent.
@@ -198,7 +198,8 @@ reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output
 - Two machines can legitimately disagree about one resource's reach, and
   neither is wrong.
 - The docs state that reach is for this machine only and is not synced; an
-  empty agent list reads "No agent selected" on the control.
+  empty agent list is refused (2026-10-05: reaching nobody is off, which the
+  control names), so no control reads "No agent selected".
 - The machine registry belongs to sync alone; nothing about permissions reads
   it.
 - A newly converged resource is live here at its kind's default reach; a user

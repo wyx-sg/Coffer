@@ -1131,15 +1131,18 @@ def test_a_disabled_connection_serves_no_agent(tmp_path, monkeypatch):
         assert cc not in _route_keys(c)
 
 
-def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatch):
-    """An empty agent axis reaches nobody, so the proxy serves nobody on it."""
+def test_scoping_a_connection_away_from_an_agent_retires_its_reach(tmp_path, monkeypatch):
+    """A scope that names no agent registered here reaches nobody on this machine."""
     app = _app(tmp_path, monkeypatch, 59940)
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body("acme"))
         assert _activate(c, uid).status_code == 200
+        elsewhere = "ffffffffffffffffffffffffffffffff"
         assert (
-            c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}}).status_code
+            c.put(
+                f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [elsewhere]}}
+            ).status_code
             == 200
         )
         assert cc not in _route_keys(c)

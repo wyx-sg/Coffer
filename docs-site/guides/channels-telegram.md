@@ -152,7 +152,7 @@ On the channel's page, choose **Replace token** (in the header when Telegram rej
 **The bot does not answer at all.**
 Open the channel's page under **Channels**.
 
-- The header says it is not running — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
+- The header says it is not running — the channel is switched off, has no usable default agent, or is bound to another machine. The status and the channel's page say which.
 - **Who can use it** on the **Overview** lists nobody — pair first. An unpaired bot answers nobody.
 - The header says it runs on another machine — only that machine polls the bot. Choose **Run it here…**, or change **Runs on** on the **Settings** tab.
 - The channel names a machine no longer in this vault, so it runs nowhere. Choose **Run it here**, or change **Runs on** on the **Settings** tab.

@@ -11,7 +11,7 @@ from coffer.application.channel.kind import make_channel_kind
 from coffer.domain.channel.config import ChannelConfigModel
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
+from coffer.domain.scope import Scope, ScopeValidationError, validate_scope
 
 _NOW = datetime(2026, 9, 13, tzinfo=UTC)
 
@@ -199,12 +199,6 @@ def test_channel_kind_declares_scope():
     assert make_channel_kind().supports_scope is True
 
 
-def test_channel_kind_has_no_starting_scope():
-    # Unlike ``provider``, a new channel is unscoped — every agent — so
-    # nothing changes for a channel created before scope reached this kind.
-    assert make_channel_kind().default_scope is None
-
-
 @pytest.mark.acceptance(
     spec="channels",
     scenario="a channel may only route to the agents in its scope",
@@ -230,13 +224,12 @@ def test_update_unscoped_channel_admits_every_registered_agent():
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="edit a dormant channel's configuration",
+    scenario="edit a switched-off channel's configuration",
 )
-def test_update_on_a_dormant_channel_is_allowed():
-    # ``scope == []`` means the channel is OFF, the same as for every other
-    # kind — it must not also mean frozen, or a channel the owner deliberately
-    # switched off could never have its bot token corrected.
-    _update_validate({"channel_type": "telegram", "default_agent": _CLAUDE}, scope=Scope(agents=[]))
+def test_update_on_a_switched_off_channel_is_allowed():
+    # Off is the ``enabled`` flag, which neither validator reads — a channel the
+    # owner switched off must still accept a corrected bot token.
+    _update_validate({"channel_type": "telegram", "default_agent": _CLAUDE}, scope=None)
 
 
 # -- the same invariant on the SCOPE write path (``validate_scope_for``) -------
@@ -330,10 +323,11 @@ def test_a_channel_naming_no_agent_has_nothing_for_a_scope_to_exclude():
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="a channel scoped to no agent is dormant",
+    scenario="an empty agent list is refused for a channel",
 )
-def test_the_dormant_scope_is_always_accepted():
-    _validate_scope(Scope(agents=[]), {"channel_type": "telegram", "default_agent": _CLAUDE})
+def test_an_empty_agent_list_is_refused_for_a_channel():
+    with pytest.raises(ScopeValidationError):
+        validate_scope(Scope(agents=[]), supports_scope=make_channel_kind().supports_scope)
 
 
 def test_clearing_the_scope_is_always_accepted():

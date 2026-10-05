@@ -15,9 +15,8 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from coffer.application.provider.internal_default_guard import EXCLUSIVE_FLAGS, refusing_hooks
-from coffer.domain.provider.config import ProviderConfig, starts_dormant
+from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Kind, Resource
-from coffer.domain.scope import Scope
 
 
 def _provider_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
@@ -26,30 +25,6 @@ def _provider_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
     if isinstance(ref, str) and ref:
         return {"secret_ref": ref}
     return {}
-
-
-def _provider_default_scope(config: dict[str, Any]) -> Scope | None:
-    """The scope a brand-new connection starts with: dormant, or unscoped.
-
-    The hook is a pure function of the CONFIG — the framework calls it inside
-    ``register`` with nothing but the validated dict — so it cannot name an
-    agent at all now that a scope holds agent uids
-    (ADR identity-is-the-uid-inside-the-file). It does not need to:
-
-    - a stored, retired ``ollama`` connection with no reach record reads
-      ``Scope(agents=[])``, dormant, because the framework's own default for an
-      unset scope — every agent — would advertise a reach a connection with
-      no key can never have; and
-    - every other wire starts ``None``, unscoped. That is not a widening of the
-      explicit ``[claude_code, codex]`` list it replaces: that list named every
-      agent type Coffer supports, which is what "unscoped" means, and unlike
-      the list it goes on covering an agent the user registers tomorrow instead
-      of quietly excluding it.
-    """
-    protocol = config.get("protocol")
-    if starts_dormant(str(protocol) if protocol is not None else ""):
-        return Scope(agents=[])
-    return None
 
 
 class _Rows(Protocol):
@@ -82,7 +57,6 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
         # switch, the per-agent key lookup, the import reconcile and the boot
         # self-heal all read it.
         supports_scope=True,
-        default_scope=_provider_default_scope,
         validate_config=on_register,
         on_update_config=on_update,
     )

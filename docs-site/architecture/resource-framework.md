@@ -204,7 +204,8 @@ The framework defines the shape of a scope and the one rule every enforcement po
 | --- | --- |
 | `null` | Active for every agent. |
 | `{"agents": ["<uid>", …]}` | Active only for those agents. A uid that matches no registered agent is legal and never matches. |
-| `{"agents": []}` | Dormant: active for no agent. Not the same as disabled. |
+
+A scope never holds an empty list: `{"agents": []}` is refused with 422 `SCOPE_INVALID` on every kind. Reaching no agent is what **off** is for — the `enabled` flag — and being off keeps the agents that were chosen.
 
 The rule: a scope that is unset, or carries no agent list, is active for every session, identified or not. A scope with an agent list is active only for a session whose agent uid is in that list.
 
@@ -212,7 +213,7 @@ An unidentified session — a shim configured by hand without `--agent-uid` — 
 
 ### The inverted scope of channels
 
-For every other kind, scope names the agents a resource is *delivered to*. A channel is consumed by no agent: it is an inbound surface. So a channel's scope names the agents the channel may **drive**. `/new <agent>` in the chat names and accepts only those agents, and the channel's `default_agent` must stay inside a non-empty scope — enforced on both write paths, by the kind's config-change check for the config and by its scope check for the scope. A channel with `{"agents": []}` does not start its adapter at all. A dormant channel's config stays editable, so a wrong token can be fixed without reactivating it.
+For every other kind, scope names the agents a resource is *delivered to*. A channel is consumed by no agent: it is an inbound surface. So a channel's scope names the agents the channel may **drive**. `/new <agent>` in the chat names and accepts only those agents, and the channel's `default_agent` must stay inside the scope — enforced on both write paths, by the kind's config-change check for the config and by its scope check for the scope. A channel that should drive nothing is switched off, like any other kind, and a switched-off channel does not start its adapter. Its config stays editable, so a wrong token can be fixed without turning it on.
 
 ### The seven kinds
 
@@ -223,8 +224,8 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/vault/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and its scope admits that agent; anything else is reclaimed. |
 | `knowledge` | One collection, a directory under `~/.coffer/vault/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
 | `memory` | One partition (a repository, or `global`) under `~/.coffer/derived/memory/`, derived from agents' native memory. Derived, never synced. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
-| `channel` | Transport config, secret refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a dormant channel. |
-| `provider` | Wire protocol, base URL, one `secret_ref`. | Yes, pre-filled by the default scope from the wire | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
+| `channel` | Transport config, secret refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a switched-off channel. |
+| `provider` | Wire protocol, base URL, one `secret_ref`. | Yes | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
 `knowledge` and `memory` carry no scope and no switch because both serve files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them.
 

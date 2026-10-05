@@ -22,12 +22,10 @@ _AGENTS = ("uid-claude", "uid-codex", "uid-cursor")
 def test_a_scope_matches_agents_and_carries_no_machine_axis() -> None:
     every = None
     listed = Scope.from_json({"agents": ["uid-claude", "uid-codex"]})
-    dormant = Scope.from_json({"agents": []})
     unknown = Scope.from_json({"agents": ["uid-not-registered-here"]})
 
     assert all(is_active(every, a) for a in _AGENTS)
     assert [a for a in _AGENTS if is_active(listed, a)] == ["uid-claude", "uid-codex"]
-    assert not any(is_active(dormant, a) for a in _AGENTS)
     # Legal — it parsed above without complaint — and simply never matches.
     assert unknown is not None and unknown.agents == ["uid-not-registered-here"]
     assert not any(is_active(unknown, a) for a in _AGENTS)

@@ -123,7 +123,7 @@ class CustomToolGroupIn(BaseModel):
     base_url: str
     headers: list[CustomToolHeaderIn] = Field(default_factory=list)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
-    #: The group's reach: agent uids, or ``null`` for every agent.
+    #: The group's reach: agent uids (at least one), or ``null`` for every agent.
     agents: list[str] | None = None
     tools: list[CustomToolIn] = Field(default_factory=list)
     source: OpenApiSourceIn | None = None

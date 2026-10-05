@@ -32,6 +32,8 @@ interface Props<M extends string> {
   registered: PickableAgent[];
   selected: string[];
   onToggle: (uid: string, checked: boolean) => void;
+  /** The last ticked agent cannot be unticked: Chosen agents never holds none. */
+  lockLast?: boolean;
   /** A quiet line under the list (the inherited control's "turn its switch off"). */
   footnote?: string;
   summary: string;
@@ -50,6 +52,7 @@ export function ReachPanel<M extends string>({
   registered,
   selected,
   onToggle,
+  lockLast = false,
   footnote,
   summary,
   saveState,
@@ -111,7 +114,7 @@ export function ReachPanel<M extends string>({
         className="flex-1"
         registered={registered}
         selected={selected}
-        dormant={picked === listMode && selected.length === 0}
+        lockLast={lockLast}
         active={picked === listMode}
         busy={busy}
         failure={failure}

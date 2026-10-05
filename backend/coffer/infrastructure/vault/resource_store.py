@@ -132,15 +132,8 @@ class FileResourceRepo:
 
     # --- reading --------------------------------------------------------------
 
-    def _default_reach(self, kind: str, config: dict[str, Any]) -> Reach:
-        kind_def = self._kinds.get(kind)
-        scope = None
-        if kind_def is not None and kind_def.default_scope is not None:
-            try:
-                scope = kind_def.default_scope(config)
-            except Exception:
-                logger.warning("resource.default_scope_failed", exc_info=True)
-        return Reach(enabled=True, scope=scope)
+    def _default_reach(self) -> Reach:
+        return Reach(enabled=True, scope=None)
 
     def _snapshot(self) -> dict[str, Resource]:
         entries = self.files.by_uid()
@@ -148,7 +141,7 @@ class FileResourceRepo:
         out: dict[str, Resource] = {}
         for uid, entry in entries.items():
             config = for_application(entry.doc.config)
-            held = reach.get(uid) or self._default_reach(entry.doc.kind, config)
+            held = reach.get(uid) or self._default_reach()
             out[uid] = self._resource(entry, config, held)
         self._hints.remember(
             {
@@ -329,8 +322,7 @@ class FileResourceRepo:
         entry = self.files.by_uid().get(uid)
         if entry is None:
             raise ResourceNotFound(uid)
-        config = for_application(entry.doc.config)
-        current = self._reach.get(uid) or self._default_reach(entry.doc.kind, config)
+        current = self._reach.get(uid) or self._default_reach()
         self._reach.put(uid, change(current))
 
     async def set_enabled(self, uid: str, enabled: bool) -> Resource:

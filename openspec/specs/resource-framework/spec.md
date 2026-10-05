@@ -144,17 +144,21 @@ happens to a resource once a kind has made one.
 
 ### Requirement: Carry a per-agent reach on every resource
 The system MUST carry a framework-level per-agent reach on every resource — one
-allow-list of agents, `null` meaning every agent, `[]` meaning none
+allow-list of agents, `null` meaning every agent, otherwise a non-empty list of them
 ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)) — and MUST
 serve it for every kind through one kind-agnostic pair of routes rather than per kind,
 reporting whether the kind supports reach at all so a client can render the right
 control without knowing the kinds itself. A reach is machine-local: it is kept, with the
 resource's `enabled` flag, in this machine's reach record `~/.coffer/local/reach.json`, keyed
 by the resource's uid, and never in the resource's own file, so a reach write makes no vault
-commit; a resource with no record there takes its kind's default
+commit; a resource with no record there is enabled and unscoped
 ([vault-sync](../vault-sync/spec.md) "Keep reach machine-local").
 
-A non-null reach on a kind that declares none, and a payload carrying a property the
+There is no empty list: a resource reaches nobody only by being switched off (its
+`enabled` flag, which every toggleable kind carries, a channel included), and being off
+keeps the agents that were chosen. A scope of `{"agents": []}` MUST be refused on every
+kind, on the scope route and on every other write that carries a scope, with `422`
+`SCOPE_INVALID`. A non-null reach on a kind that declares none, and a payload carrying a property the
 schema does not define, MUST both be refused rather than stored or silently widened — a
 client still sending a withdrawn axis means "only there", and keeping what is left would
 store "every agent". A reach write MUST be audited and MUST fire the kind's post-write
@@ -174,11 +178,23 @@ write path.
 - **THEN** the read returns the one agent, and after the second `PUT` the reach is every agent again
 - **AND** each write is audited as a scope update, and a kind that supports no reach refuses a non-null scope
 
+#### Scenario: an empty agent list is refused
+- **GIVEN** a resource of a kind that supports reach, reaching one agent
+- **WHEN** a client sends `PUT /api/v1/resources/{uid}/scope` with `{"agents": []}`
+- **THEN** the write is refused with `422` `SCOPE_INVALID` and the reach is unchanged
+- **AND** the same list on any other write that carries a scope is refused the same way, and switching the resource off is the way to reach nobody
+
+#### Scenario: a reach record left with no agent is switched off at startup
+- **GIVEN** a machine's reach record holding `{"enabled": true, "agents": []}` for one resource and `{"enabled": false, "agents": []}` for another, written before an empty list was refused
+- **WHEN** the daemon starts
+- **THEN** both records read `enabled` false with no agent restriction (`agents` null), so turning either on gives it to every agent
+- **AND** a second start changes nothing
+
 #### Scenario: reach is kept on this machine, not in the resource's file
 - **GIVEN** a registered resource
 - **WHEN** it is disabled, and later this machine's reach record is deleted and the resource is read again
 - **THEN** the disable made no vault commit and the reach record holds the resource's uid with `enabled` false, while the resource's file carries neither `enabled` nor a scope
-- **AND** with the record gone the resource reads as enabled with its kind's default reach
+- **AND** with the record gone the resource reads as enabled and unscoped
 
 ### Requirement: Run the kind's cleanup before a deletion completes
 Deleting a resource MUST run the kind's own cleanup hook while the resource can still be
