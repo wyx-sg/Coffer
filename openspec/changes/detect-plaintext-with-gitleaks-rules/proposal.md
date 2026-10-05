@@ -51,9 +51,9 @@ lets the rules be refreshed when gitleaks publishes new ones.
   deleted. Dismissing a finding works as it does today: untick it on the
   Secrets page; **Push anyway** allows the exact blobs.
 - **Rule refresh.** `make refresh-secret-rules` rewrites the rule file for the
-  pinned release and `--check` says whether it would change; a weekly workflow
-  opens a pull request when gitleaks publishes a newer release, with only the
-  rule file, its header and the pin changed. The scheduled run never fails CI.
+  pinned release and `--check` says whether it would change; it runs by hand
+  before a release, and moving to a newer gitleaks release is a pin bump plus
+  the regenerated file.
 - **Tests.** Every imported rule gets a positive and a negative sample built at
   test time; Coffer's allowlist and rules, the three callers, and the
   translation (on fixed rule fragments, offline) each have tests. No sample
@@ -85,8 +85,8 @@ lets the rules be refreshed when gitleaks publishes new ones.
 - Contracts: `rule` on secret scan findings, sync plaintext findings and masked
   values (`make contracts`).
 - Frontend: Find plaintext keys dialog, Sync page plaintext card, en/zh copy.
-- Tooling: `scripts/sync_gitleaks_rules.py`, a Makefile target, a scheduled
-  workflow.
+- Tooling: `scripts/sync_gitleaks_rules.py`, a Makefile target, the release
+  checklist.
 - Docs: `docs-site/guides/secrets.md`, `docs-site/guides/vault-sync.md`,
   `docs-site/architecture/vault-sync.md`, `docs-site/architecture/security.md`
   and their `docs-site/zh/` pages.

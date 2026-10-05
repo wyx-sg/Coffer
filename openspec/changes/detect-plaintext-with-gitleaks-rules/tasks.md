@@ -26,8 +26,7 @@
 
 ## 4. Rule refresh
 
-- [ ] 4.1 `.github/workflows/secret-rules.yml` (design D7): weekly + `workflow_dispatch`, compare the pin with the latest release, regenerate, run the rule tests, open a PR with `RULES_PR_TOKEN` or an issue without it
-- [ ] 4.2 Document the token secret and the refresh in `.agents/workflow.md`
+- [ ] 4.1 Add `make refresh-secret-rules` next to `make refresh-prices` in `RELEASING.md`, `docs-site/contributing/development.md` (+ zh) and `.agents/harness.md` (design D7)
 
 ## 5. Docs
 

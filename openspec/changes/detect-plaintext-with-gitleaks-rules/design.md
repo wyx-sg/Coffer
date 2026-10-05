@@ -53,7 +53,7 @@ runs and a reviewer sees each translation in the diff. Translation rules (all
 
 Rejected: **`google-re2`** (the RE2 binding) would remove translation and give
 RE2's linear-time guarantee — 0.17 s on the 1 MB blob below — but adds a native
-dependency to four frozen binaries for a gain D3 already gets.
+dependency to four frozen binaries for a gain D3 already gets (decided: `re`).
 
 ### D2. Executor semantics follow gitleaks, positions follow Coffer
 
@@ -125,7 +125,7 @@ line, or the value itself is one):
 An MCP server entry is scanned as the line `KEY: value`, so the imported rules
 see the key as context; a finding whose value lies inside `value` is that key's.
 
-### D5. Keep `generic-api-key` — *to confirm*
+### D5. Keep `generic-api-key`, and add Coffer's rules
 
 Fictional vault: 702 files, 35,662 lines, 2.7 MB (300 knowledge notes, 200
 memory notes, 60 skills with a script and a `SKILL.md`, 80 MCP server
@@ -152,10 +152,10 @@ anyway). Dropping the rule loses every unprefixed random key (`api_key =
 "<32 random>"`, `client_secret: …`), the most common shape in hand-written
 scripts. Recommendation: keep it.
 
-### D6. Decoded content is not scanned — *to confirm*
+### D6. Decoded content is not scanned
 
 gitleaks decodes base64, hex and percent-encoded segments up to depth 5 and
-scans the result. Recommendation: not in this change. A vault is hand-written
+scans the result. This change does not. A vault is hand-written
 text; the encoded credential worth catching (Kubernetes `Secret` data) has its
 own rule (`kubernetes-secret-yaml`), and a basic-auth header is caught by the
 curl rules. Decoding would add a second offset space — a finding inside a
@@ -164,26 +164,18 @@ into secrets would replace wholesale — and pasted images and lock files are
 the base64 a vault does hold, so it would add scan time and false positives
 for little recall. It can be added later behind the same executor.
 
-### D7. Rule refresh — *to confirm*
+### D7. Rules are refreshed by hand before a release
 
-- **Manual, at release**: `make refresh-secret-rules` (like
-  `make refresh-prices`) rewrites the file for the pin in the script;
-  `--check` exits 1 if it would change. Bumping the pin is a one-line edit
-  plus the regenerated file.
-- **Scheduled pull request**: `.github/workflows/secret-rules.yml`, weekly and
-  on `workflow_dispatch`, compares the pin with gitleaks' latest release; if
-  newer, it runs the script at that release, runs the rule tests, and opens a
-  PR from `chore/gitleaks-rules-<version>` touching only the rule file, its
-  header and the pin. The job's failure (untranslatable rule, failing sample)
-  surfaces as a red scheduled run and no PR; it never touches `main`'s checks.
-  A PR opened with the default `GITHUB_TOKEN` does not trigger `verify.yml`, so
-  its required checks would not run; the workflow uses a fine-grained token
-  secret (`RULES_PR_TOKEN`, contents + pull-requests write on this repo) to
-  open it, or, without that secret, opens an issue naming the new release
-  instead.
+`make refresh-secret-rules` (like `make refresh-prices`) rewrites the rule file
+for the release pinned in `scripts/sync_gitleaks_rules.py`; `--check` exits 1
+when the file would change. Moving to a newer gitleaks release is a one-line
+pin bump plus the regenerated file, reviewed and tested like any change. The
+release checklist runs it. Nothing scheduled runs, so an upstream release
+never turns CI red.
 
-Recommendation: both — the scheduled PR to notice, the Make target to run by
-hand.
+Rejected: a weekly workflow opening a pull request. A PR opened with the
+default `GITHUB_TOKEN` does not trigger `verify.yml`, so it needs a separate
+repository token for little gain at this release cadence.
 
 ### D8. Tests never put a sample secret in the repository
 
@@ -199,7 +191,7 @@ hand.
   attribute) and get hand-written samples adapted from the upstream rule's
   `tps`/`fps`, assembled from string pieces so no line of the test file matches
   the rule. A rule added by a future release without a sample fails the test
-  until one is generated or written, which is what makes the scheduled PR safe.
+  until one is generated or written, so a refresh cannot ship an untested rule.
 - **Hand-written fixtures** (Coffer's allowlist and rules, the callers) use
   obviously fake values (`hunter2-not-real`, repeated characters behind a real
   prefix, concatenated pieces) that the repository's gitleaks scan does not
@@ -231,8 +223,8 @@ compiled rules are built once per process.
 
 - [`generic-api-key` still flags some hex hashes] → the person unticks or
   pushes anyway, as today; the finding names the rule so the reason is visible.
-- [A future gitleaks release uses syntax D1 cannot translate] → the script and
-  the scheduled PR fail loudly; the shipped rules stay at the old release.
+- [A future gitleaks release uses syntax D1 cannot translate] → the script
+  fails loudly; the shipped rules stay at the old release.
 - [Translation drifts from RE2 semantics in a way the samples do not catch] →
   every rule's generated sample round-trips through the translated pattern, and
   translation fixtures cover each rewrite rule.
