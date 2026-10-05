@@ -111,7 +111,7 @@ function renderPage(url = "/secrets") {
 }
 
 const names = () =>
-  within(screen.getByRole("list", { name: "Secrets" }))
+  within(screen.getByRole("group", { name: "Secrets" }))
     .getAllByRole("link")
     .map((a) => a.querySelector("span.font-label")?.textContent);
 const where = () => screen.getByTestId("where").textContent;
@@ -153,17 +153,22 @@ describe("SecretsPage list", () => {
     expect(where()).toBe(`/secrets/${encodeURIComponent(JIRA.ref)}`);
   });
 
-  test("the status segments have no counts and narrow the list", async () => {
+  test("the Status filter has no counts, narrows the list, and the list is grouped", async () => {
     renderPage();
     await screen.findByText("groq · key");
-    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "In use" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Not used" }));
-    expect(names()).toEqual(["old-a", "old-b"]);
+    // In use, then Not used, each under its heading.
+    expect(screen.getByRole("region", { name: "In use" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Not used" })).toBeInTheDocument();
+    const status = screen.getByRole("combobox", { name: "Status" });
+    expect(status).toHaveTextContent("All");
+    // Radix Select opens from the keyboard in jsdom (no PointerEvent).
+    fireEvent.keyDown(status, { key: "ArrowDown" });
+    expect(screen.queryByRole("option", { name: /Waiting|Refused/ })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("option", { name: "Not used" }));
+    await waitFor(() => expect(names()).toEqual(["old-a", "old-b"]));
     expect(where()).toBe("/secrets?status=unused");
-    // No Waiting / Refused segments, no type dropdown, no by-owner view.
-    expect(screen.queryByRole("button", { name: /Waiting|Refused/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    // One filter only: no type dropdown, no by-owner view.
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "By owner" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Delete unused/ })).not.toBeInTheDocument();
   });

@@ -5737,17 +5737,9 @@
       "label": "Name",
       "labelPlaceholder": "What you call this secret",
       "uri": "URI",
-      "copyUri": "Copy URI",
-      "recentUses": "Recent uses",
-      "notUsedHere": "Not used on this Mac yet",
-      "runCommand": "coffer run {{command}}",
-      "viewAllActivity": "View all in Activity"
+      "copyUri": "Copy URI"
     },
     "unnamed": "Unnamed secret",
-    "tabs": {
-      "overview": "Overview",
-      "usage": "Usage"
-    },
     "list": {
       "usedBy_one": "used by {{count}}",
       "usedBy_other": "used by {{count}}"

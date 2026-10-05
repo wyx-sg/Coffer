@@ -28,11 +28,11 @@ Coffer does not yet ship binaries signed with an Apple Developer ID. Until it do
 
 **Secrets** in the sidebar's System group (`/secrets`) is the one place in the web UI that lists and manages stored secrets. Secrets come only from Coffer: a secret field inside a resource's own dialog — an MCP server's token, a provider's key — either picks a stored secret from this page or takes a pasted value and saves it here with the form, and a header or environment row is plain text with a 🔑 button at the end of the field that picks a stored secret instead. A value pasted into a plain row that looks like a secret offers to be stored. Nothing secret sits in a resource's own settings, only the secret's id. This page is where you see all of them together and what each one is for.
 
-The page is a split view. The list is on the left; the secret you choose is on the right, at `/secrets/<id>/<tab>`.
+The page is a split view. The list is on the left; the secret you choose is on the right, at `/secrets/<id>`.
 
 Every secret has a fixed **id** — its reference, what configs and files cite — and a **name** you can change at any time, with an optional **description**. Changing the name or the description touches nothing that cites the secret.
 
-**The list.** **Find a secret** (or `/`) filters by name, description or id, and the **Status** pill narrows it to **All**, **In use** (something cites the secret) or **Not used** (nothing cites it, so it is safe to delete). Each row shows the name with its description as a muted second line, a status (**No value on this Mac**, **Waiting for approval**, and a terminal icon where other programs running as you can read the value), and how many things use it ("used by 2"). A secret you have not named shows the thing that uses it and the slot it fills, such as **confluence · CONFLUENCE_PERSONAL_TOKEN**. The header carries **Add secret** and **Find plaintext keys**.
+**The list.** **Find a secret** (or `/`) filters by name, description or id, and the **Status** chip narrows it to **All**, **In use** (something cites the secret) or **Not used** (nothing cites it, so it is safe to delete). The secrets are grouped under **In use** and **Not used** headings. Each row shows the name with its description as a muted second line, a status (**No value on this Mac**, **Waiting for approval**, and a terminal icon where other programs running as you can read the value), and how many things use it ("used by 2"). A secret you have not named shows the thing that uses it and the slot it fills, such as **confluence · CONFLUENCE_PERSONAL_TOKEN**. The header carries **Add secret** and **Find plaintext keys**.
 
 To delete several at once, tick rows (or the header checkbox for the whole list); a bar over the list reads "3 of 8 selected" with **Delete…**, and **Esc** clears the selection. The confirmation names the secrets it will delete and says which selected ones it skips because they are in use or waiting for approval.
 
@@ -40,11 +40,7 @@ To delete several at once, tick rows (or the header checkbox for the whole list)
 
 A row reads **No value on this Mac** when this Mac has no value to hand out for it: a resource or skill cites it but it was never stored here, or its encrypted value came with the vault from another Mac whose master key this one does not have (encrypted secrets don't sync by default). Whatever uses it cannot start until it has a value. The detail's **Add value** (or a field in **Add values**) stores one; like any write it may [wait for your approval](#approvals). While any secret is missing, a banner at the top counts them ("3 secrets have no value on this Mac"), names them, and offers **Add values**: one dialog with a field per missing secret, where a field left empty stays missing and **Save N values** stores the rest. The same count appears on [Overview](/guides/web-ui#overview), whose button opens this page. The other way to open every secret at once is the other Mac's master key, which is imported in the [vault sync](/guides/vault-sync) join flow or in Settings › Security, not on this page. Coffer finds a secret it cannot open by checking the encrypted value's signature against this Mac's key, without decrypting anything.
 
-Choosing a row opens that secret in the right-hand pane. Its header holds the **name** and **description**, each edited in place (a name of up to 64 characters, a description of up to 200; both sync with your vault), with **Replace value…** and **Reveal value…** beside them and a **⋯** menu. Two tabs sit under the header.
-
-**Overview** shows the secret's id and its `coffer://secret/<id>` URI, each with **Copy**; whether this Mac holds the value and whether other local processes can read it; when it was created and last used; and **Used by** — everything that uses it, by kind (MCP server, model provider, channel, skill, …), current name and slot, with the approvals it holds or waits for. Choosing a name opens that thing's page.
-
-**Usage** lists the secret's recent uses from the audit log: who used it, for which slot, and when — a `coffer run` by its command and folder. **View all in Activity** opens the full log. A secret nobody has used on this Mac reads **Not used on this Mac yet**.
+Choosing a row opens that secret in the right-hand pane. Its header holds the **name** and **description**, each edited in place (a name of up to 64 characters, a description of up to 200; both sync with your vault), with **Replace value…** and **Reveal value…** beside them and a **⋯** menu. Under the header the detail shows the secret's id and its `coffer://secret/<id>` URI, each with **Copy**; whether this Mac holds the value and whether other local processes can read it; when it was created and last used; and **Used by** — everything that uses it, by kind (MCP server, model provider, channel, skill, …), current name and slot, with the approvals it holds or waits for. Choosing a name opens that thing's page. Individual uses are not listed here; they are in [Activity](/guides/activity).
 
 | Control | What it does |
 | --- | --- |
@@ -115,14 +111,14 @@ A resource can cite a standalone secret too, as `secret/<id>` in its secret refs
 `coffer run` resolves standalone secrets through the daemon and starts one command with the values set **only in that command's environment**. A secret's id is not a variable name, so name the variable yourself:
 
 ```sh
-coffer run --secret PGPASSWORD=<id> -- psql -h db.internal orders
+coffer run --secret PGPASSWORD=coffer://secret/<id> -- psql -h db.internal orders
 coffer run --env-file connection.env -- ./query.sh
 ```
 
 | Option | Meaning |
 | --- | --- |
-| `--secret ENV=<id>` | Set `secret/<id>` as the variable `ENV`. Repeatable. This is the form to use. |
-| `--secret <id>` | Set `secret/<id>` as a variable whose name is derived from the id (upper-cased, `-` and `.` turned into `_`). Since an id is a string of hex characters, the derived name is rarely what the command wants; prefer `ENV=<id>`. |
+| `--secret ENV=coffer://secret/<id>` | Set `secret/<id>` as the variable `ENV`. Repeatable. This is the form to use, and the form a skill cites: the secret then lists the skill under **Used by**. `ENV=<id>` works too. |
+| `--secret coffer://secret/<id>` or `--secret <id>` | Set `secret/<id>` as a variable whose name is derived from the id (upper-cased, `-` and `.` turned into `_`). Since an id is a string of hex characters, the derived name is rarely what the command wants; prefer `ENV=coffer://secret/<id>`. |
 | `--env-file FILE` | Read `KEY=VALUE` lines. Plain values are passed through; each `coffer://secret/<id>` value is resolved. |
 | `--no-masking` | Pass the command's output through untouched, for tools that need a real terminal. |
 
@@ -206,7 +202,7 @@ The [Secrets page](#the-secrets-page) shows the same list. The table has a **Nam
 
 Deleting a secret is refused while a resource cites it or a skill's files cite its URI; the message names them.
 
-Every time Coffer decrypts a secret to use it — a server starting, a channel connecting, a provider key fetched, a sync push, `coffer run` — it records `secret_resolved` in [Activity](/guides/activity), naming who used it and the slot, never the value. The same secret and destination is recorded at most once a minute. Read them on the secret's **Usage** tab or with `coffer log audit --event-type secret_resolved`.
+Every time Coffer decrypts a secret to use it — a server starting, a channel connecting, a provider key fetched, a sync push, `coffer run` — it records `secret_resolved` in [Activity](/guides/activity), naming who used it and the slot, never the value. The same secret and destination is recorded at most once a minute. Read them in Activity or with `coffer log audit --event-type secret_resolved`.
 
 ## The master key and its backup
 

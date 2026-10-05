@@ -625,8 +625,11 @@ A standalone secret MUST live in the store under `secret/<id>`, where `<id>` is 
 minted 32 hex characters (older names are moved to one at start), and MUST be
 cited from files as `coffer://secret/<id>`
 ([Standalone Secrets Are Named `coffer://secret/` References](../../../docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)).
-`coffer run [--secret NAME|ENV=NAME]… [--env-file FILE] [--no-masking] -- cmd
-args…` MUST resolve every named secret, every `coffer://secret/` value in the
+`coffer run [--secret NAME|ENV=NAME|ENV=coffer://secret/<id>]… [--env-file FILE] [--no-masking] -- cmd
+args…` MUST accept a secret as its name or as its `coffer://secret/<id>` URI
+(a bare URI sets the variable the name would; skills cite a secret in the URI
+form, which the citation index sees, so the secret lists the skill under Used
+by), and MUST resolve every named secret, every `coffer://secret/` value in the
 env file and every such value in its own environment through
 `POST /api/v1/secrets/resolve`, which MUST answer standalone names
 only and MUST record one `secret_resolved` entry per name carrying the ref, the name,
@@ -664,7 +667,7 @@ stored (`created_at`) and when a consumer last had it decrypted on this Mac
 nothing references it (`unreferenced`), the destinations it is approved for or
 waits on, and whether another process of this user can read the value where
 Coffer puts it (a standalone secret, or a stdio MCP server's environment). The
-listing reads what cites each secret from the citation index (see "Keep an index of what cites each secret"), decrypts nothing and records no audit entry; who used a secret is read from `GET /api/v1/secrets/uses` (see "Audit every use of a secret by who used it"). It MUST leave out an
+listing reads what cites each secret from the citation index (see "Keep an index of what cites each secret"), decrypts nothing and records no audit entry; who used a secret is audited, not listed here (see "Audit every use of a secret by who used it"). It MUST leave out an
 agent's model-proxy token (`proxy-token/<agent name>`): Coffer mints it and the
 agent fetches it itself, so no person enters, replaces or cites it. A delete MUST also be
 refused with `SECRET_IN_USE` while a skill in the master store cites a
@@ -1062,15 +1065,13 @@ destination (an MCP server's spawn or header, a channel adapter's start, a
 provider's key, the sync push) with `{ref, destination_kind, destination_uid,
 destination_name, slot}`, and a `coffer run` resolve with `{ref, name, argv0,
 cwd}`; never a value or the rest of a command line. A (ref, destination, slot)
-MUST be audited at most once a minute. `GET /api/v1/secrets/uses?ref=<ref>&limit=20`
-MUST answer those rows newest first as `{at, actor, destination_kind,
-destination_uid, destination_name, slot, argv0, cwd}`, where a `coffer run`
-child is `destination_kind` `run`.
+MUST be audited at most once a minute. The rows are read in Activity; no secrets
+route lists them.
 
 #### Scenario: a server start and a coffer run each show as a use
 - **GIVEN** a standalone secret and a stored secret an MCP server resolves
 - **WHEN** the server's secret is resolved for its destination and `coffer run` resolves the standalone secret
-- **THEN** `GET /api/v1/secrets/uses` for each ref names the destination (the server and its slot, or `run` with the program), and no row contains a value
+- **THEN** one `secret_resolved` entry per ref names the destination (the server and its slot, or the program and folder of the `coffer run`), and no entry contains a value
 
 ### Requirement: Keep an index of what cites each secret
 What cites each secret MUST be kept in an index under `derived/`

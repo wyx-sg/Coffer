@@ -110,7 +110,7 @@ async function rejectApprovalsFor(ref: string): Promise<void> {
 /** The list pane's link for a secret, found by the name it is shown under. */
 const listLink = (page: Page, text: string) =>
   page
-    .getByRole("list", { name: "Secrets" })
+    .getByRole("group", { name: "Secrets" })
     .getByRole("link")
     .filter({ hasText: text });
 

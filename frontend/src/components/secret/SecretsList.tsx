@@ -1,8 +1,10 @@
 // src/components/secret/SecretsList.tsx — the Secrets page's list pane: search and status, then the secrets.
 //
-// Search (name, description, reference) and the status segments (All · In use · Not used) live in
-// the URL (`?q=` `?status=`) and are applied to every secret at once. Ticking a secret swaps them
-// for the selection bar (bulk delete). A row opens `/secrets/<ref>` in the pane beside it.
+// The same shape as the other library lists (MCP servers, Skills): a filter box, a "Status: All"
+// filter chip under it, then the secrets grouped In use · Not used. Search (name, description,
+// reference) and status live in the URL (`?q=` `?status=`) and are applied to every secret at
+// once. Ticking a secret swaps them for the selection bar (bulk delete). A row opens
+// `/secrets/<ref>` in the pane beside it.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -11,16 +13,26 @@ import { ListSelectAll } from "@/components/ListSelectAll";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/SearchInput";
-import { Segmented } from "@/components/ui/segmented";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { SecretRef } from "@/lib/api/secret";
 import { useSecretListState } from "@/lib/hooks/useSecretListState";
 import { STATUSES, type SecretStatus } from "@/lib/secrets/listState";
 import { SecretListRow } from "./SecretListRow";
 import { SecretsBulkBar } from "./SecretsBulkBar";
-import { decorate, defaultOrder, filterItems } from "./secretListView";
+import { decorate, defaultOrder, filterItems, type SecretItem } from "./secretListView";
 
 /** How many secrets the list renders before "Load more"; search and filters cover them all. */
 const BATCH = 50;
+
+/** The list's groups, in order: what something uses, then what nothing does. */
+const GROUPS = ["inUse", "unused"] as const;
+const groupOf = (i: SecretItem) => (i.row.unreferenced ? "unused" : "inUse");
 
 interface Props {
   rows: SecretRef[];
@@ -39,7 +51,11 @@ export function SecretsList({ rows, isLoading, error, onRetry, selectedRef }: Pr
   const [limit, setLimit] = useState(BATCH);
 
   const items = useMemo(() => decorate(rows, t("secrets.unnamed")), [rows, t]);
-  const shown = useMemo(() => defaultOrder(filterItems(items, state)), [items, state]);
+  // Grouped first, so "Load more" walks the list in the order it is shown.
+  const shown = useMemo(() => {
+    const ordered = defaultOrder(filterItems(items, state));
+    return GROUPS.flatMap((g) => ordered.filter((i) => groupOf(i) === g));
+  }, [items, state]);
   // A secret that has gone from the list (deleted, or filtered out) is no longer ticked.
   const picked = useMemo(() => shown.filter((i) => pickedRefs.has(i.row.ref)), [shown, pickedRefs]);
   // A new search or status starts again at the first batch.
@@ -66,14 +82,28 @@ export function SecretsList({ rows, isLoading, error, onRetry, selectedRef }: Pr
               onChange={(q) => update({ q })}
               placeholder={t("secrets.search")}
               ariaLabel={t("secrets.search")}
-              shortcut="/"
             />
-            <Segmented<SecretStatus>
-              label={t("secrets.filters.status.label")}
-              value={state.status}
-              onChange={(status) => update({ status })}
-              options={STATUSES.map((s) => ({ value: s, label: t(`secrets.filters.status.${s}`) }))}
-            />
+            <div className="flex items-center gap-2">
+              <Select
+                value={state.status}
+                onValueChange={(status) => update({ status: status as SecretStatus })}
+              >
+                <SelectTrigger
+                  className="h-control-sm w-auto max-w-56 gap-1.5 text-xs"
+                  aria-label={t("secrets.filters.status.label")}
+                >
+                  <span className="text-text-muted">{t("secrets.filters.status.label")}:</span>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {t(`secrets.filters.status.${s}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </>
         )}
       </div>
@@ -90,19 +120,36 @@ export function SecretsList({ rows, isLoading, error, onRetry, selectedRef }: Pr
         ) : shown.length === 0 ? (
           <ListNoMatch kind="secrets" query={state.q} onClear={clear} />
         ) : (
-          <ul className="flex flex-col gap-0.5" aria-label={t("secrets.title")}>
-            {shown.slice(0, limit).map((item) => (
-              <SecretListRow
-                key={item.row.ref}
-                item={item}
-                to={`/secrets/${encodeURIComponent(item.row.ref)}${search}`}
-                current={item.row.ref === selectedRef}
-                selecting={picked.length > 0}
-                checked={pickedRefs.has(item.row.ref)}
-                onCheckedChange={(on) => toggle(item.row.ref, on)}
-              />
-            ))}
-          </ul>
+          <div role="group" aria-label={t("secrets.title")}>
+            {GROUPS.map((group) => {
+              const rows = shown.slice(0, limit).filter((i) => groupOf(i) === group);
+              if (rows.length === 0) return null;
+              return (
+                <section
+                  key={group}
+                  className="mb-3"
+                  aria-label={t(`secrets.filters.status.${group}`)}
+                >
+                  <h2 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted">
+                    {t(`secrets.filters.status.${group}`)}
+                  </h2>
+                  <ul className="flex flex-col gap-0.5">
+                    {rows.map((item) => (
+                      <SecretListRow
+                        key={item.row.ref}
+                        item={item}
+                        to={`/secrets/${encodeURIComponent(item.row.ref)}${search}`}
+                        current={item.row.ref === selectedRef}
+                        selecting={picked.length > 0}
+                        checked={pickedRefs.has(item.row.ref)}
+                        onCheckedChange={(on) => toggle(item.row.ref, on)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         )}
         {shown.length > limit ? (
           <div className="flex flex-col items-center gap-1.5 px-2 pt-3 text-xs text-text-muted">

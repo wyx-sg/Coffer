@@ -21,7 +21,6 @@ vi.mock("@/lib/api/secret", () => ({
     remove: vi.fn(),
     add: vi.fn(),
     setNotes: vi.fn(),
-    uses: vi.fn(),
     scan: vi.fn(),
     importFindings: vi.fn(),
     pendingApprovals: vi.fn(),
@@ -114,7 +113,6 @@ function renderPage(path = "/secrets") {
             <Routes>
               <Route path="/secrets" element={<SecretsPage />} />
               <Route path="/secrets/:id" element={<SecretsPage />} />
-              <Route path="/secrets/:id/:tab" element={<SecretsPage />} />
               <Route path="*" element={<Where />} />
             </Routes>
             <Where />
@@ -125,7 +123,7 @@ function renderPage(path = "/secrets") {
   );
 }
 
-const at = (ref: string, tab = "") => `/secrets/${encodeURIComponent(ref)}${tab}`;
+const at = (ref: string) => `/secrets/${encodeURIComponent(ref)}`;
 const openMenu = (name: string) =>
   fireEvent.click(screen.getByRole("button", { name: `Actions for ${name}` }));
 const HEX = "0123456789abcdef0123456789abcdef";
@@ -134,7 +132,6 @@ beforeEach(() => {
   inShell = false;
   api.list.mockResolvedValue({ refs: [GITHUB, OPENAI, SEATALK, OLD] });
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
-  api.uses.mockResolvedValue([]);
   attention = { items: [], ignored: [] };
   api.remove.mockResolvedValue(undefined);
   api.set.mockResolvedValue(undefined);
@@ -145,27 +142,21 @@ afterEach(() => {
 });
 
 describe("SecretsPage", () => {
-  acceptance(
-    "web-ui",
-    "a secret opens on its own detail page with overview and usage",
-    async () => {
-      renderPage();
-      // The list reads names, not ids; nothing is open until a row is.
-      const row = await screen.findByRole("link", { name: /OpenAI · api_key/ });
-      expect(screen.getByText("Nothing selected")).toBeInTheDocument();
-      fireEvent.click(row);
-      expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at("provider/u-oa/api_key"));
-      // Overview: the reference, whether this Mac holds it, and Used by with a link.
-      expect(await screen.findByText("provider/u-oa/api_key")).toBeInTheDocument();
-      expect(
-        screen.getByText("No value on this Mac", { selector: "dd *, dd" }),
-      ).toBeInTheDocument();
-      const usedBy = screen.getByRole("region", { name: "Used by" });
-      expect(within(usedBy).getByText("OpenAI")).toBeInTheDocument();
-      fireEvent.click(within(usedBy).getByRole("link", { name: /OpenAI/ }));
-      expect(screen.getAllByTestId("where")[0]).toHaveTextContent("/model-providers/u-oa");
-    },
-  );
+  acceptance("web-ui", "a secret opens on its own detail page with what uses it", async () => {
+    renderPage();
+    // The list reads names, not ids; nothing is open until a row is.
+    const row = await screen.findByRole("link", { name: /OpenAI · api_key/ });
+    expect(screen.getByText("Nothing selected")).toBeInTheDocument();
+    fireEvent.click(row);
+    expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at("provider/u-oa/api_key"));
+    // Overview: the reference, whether this Mac holds it, and Used by with a link.
+    expect(await screen.findByText("provider/u-oa/api_key")).toBeInTheDocument();
+    expect(screen.getByText("No value on this Mac", { selector: "dd *, dd" })).toBeInTheDocument();
+    const usedBy = screen.getByRole("region", { name: "Used by" });
+    expect(within(usedBy).getByText("OpenAI")).toBeInTheDocument();
+    fireEvent.click(within(usedBy).getByRole("link", { name: /OpenAI/ }));
+    expect(screen.getAllByTestId("where")[0]).toHaveTextContent("/model-providers/u-oa");
+  });
 
   acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
     renderPage();
@@ -191,56 +182,13 @@ describe("SecretsPage", () => {
     expect(within(usedBy).queryByRole("link")).toBeNull();
   });
 
-  test("the Usage tab lists where the value was handed out, with a link to Activity", async () => {
-    api.uses.mockResolvedValue([
-      {
-        at: new Date(Date.now() - 2 * 60_000).toISOString(),
-        actor: "daemon",
-        destination_kind: "mcp_server",
-        destination_uid: "u-gh",
-        destination_name: "github",
-        slot: "GITHUB_TOKEN",
-        argv0: null,
-        cwd: null,
-      },
-      {
-        at: new Date(Date.now() - 3600_000).toISOString(),
-        actor: "cli",
-        destination_kind: "run",
-        destination_uid: null,
-        destination_name: "run",
-        slot: null,
-        argv0: "npm",
-        cwd: "/work/app",
-      },
-    ]);
-    renderPage(at(GITHUB.ref));
-    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Usage" }));
-    const usage = within(await screen.findByRole("tabpanel"));
-    expect(await usage.findByRole("link", { name: /github/ })).toHaveAttribute(
-      "href",
-      "/mcp-servers/github",
-    );
-    expect(usage.getByText("2 min ago")).toBeInTheDocument();
-    expect(usage.getByText("coffer run npm")).toBeInTheDocument();
-    expect(usage.getByText("/work/app")).toBeInTheDocument();
-    expect(api.uses).toHaveBeenCalledWith(GITHUB.ref);
-    expect(screen.getByRole("link", { name: "View all in Activity" })).toHaveAttribute(
-      "href",
-      `/activity?tab=changes&q=${encodeURIComponent(GITHUB.ref)}`,
-    );
-  });
-
-  test("a secret never handed out says so on the Usage tab", async () => {
-    renderPage(at(OLD.ref, "/usage"));
-    expect(await screen.findByText("Not used on this Mac yet")).toBeInTheDocument();
-  });
-
   test("a secret nothing uses is found under Not used", async () => {
     renderPage();
     await screen.findByText("old-openai-key");
-    fireEvent.click(screen.getByRole("button", { name: "Not used" }));
-    expect(screen.getByText("old-openai-key")).toBeInTheDocument();
+    const status = screen.getByRole("combobox", { name: "Status" });
+    fireEvent.keyDown(status, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Not used" }));
+    await waitFor(() => expect(screen.getByText("old-openai-key")).toBeInTheDocument());
     expect(screen.queryByText(/GITHUB_TOKEN/)).not.toBeInTheDocument();
   });
 
@@ -260,7 +208,7 @@ describe("SecretsPage", () => {
     expect(within(banner).queryByRole("link")).toBeNull();
     expect(within(banner).getByRole("button", { name: "Add values" })).toBeInTheDocument();
     // The row says so, and the pane's own action is Add value, with reveal off.
-    const list = screen.getByRole("list", { name: "Secrets" });
+    const list = screen.getByRole("group", { name: "Secrets" });
     expect(within(list).getAllByText("No value on this Mac")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Reveal in the Coffer app" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Add value" }));
@@ -465,7 +413,7 @@ describe("SecretsPage", () => {
     expect(await within(usedBy).findByText("Waiting for approval")).toBeInTheDocument();
     expect(within(usedBy).getByText("app_secret")).toBeInTheDocument();
     expect(
-      within(screen.getByRole("list", { name: "Secrets" })).getByText("Waiting for approval"),
+      within(screen.getByRole("group", { name: "Secrets" })).getByText("Waiting for approval"),
     ).toBeInTheDocument();
   });
 

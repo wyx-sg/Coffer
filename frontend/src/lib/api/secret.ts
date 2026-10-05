@@ -22,7 +22,6 @@ export type ApprovalBatchResult = Schemas["BatchResultOut"];
 /** One stored or cited ref: presence, its label and description, and what uses it — never a value. */
 export type SecretRef = Schemas["SecretRefOut"];
 /** One time the value was handed out on this Mac (a `secret_resolved` audit event). */
-export type SecretUse = Schemas["SecretUseOut"];
 /** What adding a standalone secret returns: its minted ref and the URI files cite. */
 export type AddedSecret = Schemas["SecretMintedOut"];
 export type SecretScan = Schemas["SecretScanOut"];
@@ -39,8 +38,6 @@ export const secretsApi = {
   remove: (ref: string) =>
     unwrapVoid(getApiClient().DELETE("/secrets/{ref}", { params: { path: { ref } } })),
   /** Where this Mac last handed the value out, newest first. */
-  uses: (ref: string, limit = 20) =>
-    unwrap(getApiClient().GET("/secrets/uses", { params: { query: { ref, limit } } })),
   /** Add a standalone secret under a minted id, labelled `label`; answers its ref and URI. */
   add: (label: string, value: string) =>
     unwrap(getApiClient().POST("/secrets", { body: { label, value } })) as Promise<AddedSecret>,

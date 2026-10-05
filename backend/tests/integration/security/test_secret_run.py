@@ -139,3 +139,37 @@ def test_a_resources_secret_cannot_be_resolved_by_coffer_run(cli: BoundaryDaemon
     for body in (minted.text, unknown.text, via_cli.output):
         assert "ghp_resource_token" not in body
     assert d.audit("secret_resolved") == []
+
+
+def test_coffer_run_accepts_the_uri_form_a_skill_cites(cli: BoundaryDaemon) -> None:
+    d = cli
+    d.store("secret/0123456789abcdef0123456789abcdef", "tok-0123456789")
+    uri = "coffer://secret/0123456789abcdef0123456789abcdef"
+    probe = "import os; v = 'tok-0123456789'; print(os.environ['API'] == v, os.environ['DEF'] == v)"
+
+    result = _runner.invoke(
+        cli_app,
+        [
+            "run",
+            "--secret",
+            f"API={uri}",
+            "--secret",
+            "DEF=" + uri,
+            "--",
+            sys.executable,
+            "-c",
+            probe,
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "True True" in result.output
+
+
+def test_coffer_run_parse_spec_strips_the_uri_and_defaults_the_variable() -> None:
+    from coffer.surfaces.cli.run_cmd import _parse_spec
+
+    uid = "0123456789abcdef0123456789abcdef"
+    assert _parse_spec(f"API=coffer://secret/{uid}") == ("API", uid)
+    assert _parse_spec(f"coffer://secret/{uid}") == (uid.upper(), uid)
+    assert _parse_spec("db-password") == ("DB_PASSWORD", "db-password")
