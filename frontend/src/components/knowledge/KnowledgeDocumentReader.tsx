@@ -1,7 +1,8 @@
 // frontend/src/components/knowledge/KnowledgeDocumentReader.tsx
 //
 // The open document, read-only (boards 5.1.01, 0.6.03): in one reading column,
-// 720 wide and centred — its title, then ONE quiet line of properties (when it
+// 720 wide and centred — its title (the body's own leading `# Heading` when it
+// has one, so the page never shows two), then ONE quiet line of properties (when it
 // was created and by whom, read from its frontmatter; a part with no data is
 // left out), then the body. Preview renders the Markdown; Source shows the raw
 // text in the code viewer. Every document is the same here, whoever wrote it
@@ -14,7 +15,7 @@ import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { FileOut } from "@/lib/api/knowledge";
 import { agentLabel } from "@/lib/knowledge/changes";
-import { withoutTitleHeading } from "@/lib/knowledge/titleHeading";
+import { splitTitleHeading } from "@/lib/knowledge/titleHeading";
 
 interface Props {
   file: FileOut;
@@ -24,7 +25,10 @@ interface Props {
 
 export function KnowledgeDocumentReader({ file, source }: Props) {
   const { t, i18n } = useTranslation();
-  const body = useMemo(() => withoutTitleHeading(file.body, file.title), [file.body, file.title]);
+  const { title, body } = useMemo(
+    () => splitTitleHeading(file.body, file.title),
+    [file.body, file.title],
+  );
 
   // Created: the frontmatter's `created_at` and `actor` — nothing else records it.
   let created: string | null = null;
@@ -51,7 +55,7 @@ export function KnowledgeDocumentReader({ file, source }: Props) {
   return (
     <div className="min-h-0 flex-1 overflow-auto px-8 py-7">
       <div className="mx-auto max-w-[720px]">
-        <h1 className="text-xl font-bold">{file.title}</h1>
+        <h1 className="text-xl font-bold">{title}</h1>
         <p className="mb-5 mt-1.5 text-xs text-text-muted">{created}</p>
         <FindableMarkdown>{body}</FindableMarkdown>
       </div>

@@ -28,6 +28,8 @@ interface Props {
   path: string;
   /** Names the remembered divider position. */
   storageKey: string;
+  /** How the split reaches the window's bottom (VersionHistorySplit). */
+  fill?: "window" | "parent";
 }
 
 function writerIcon(displayWriter: string): LucideIcon {
@@ -37,7 +39,7 @@ function writerIcon(displayWriter: string): LucideIcon {
   return User;
 }
 
-export function VaultHistoryView({ path, storageKey }: Props) {
+export function VaultHistoryView({ path, storageKey, fill }: Props) {
   const { t, i18n } = useTranslation();
   const history = useVaultHistory(path);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export function VaultHistoryView({ path, storageKey }: Props) {
   return (
     <VersionHistorySplit
       storageKey={storageKey}
+      fill={fill}
       versions={versions}
       getKey={(v) => v.version}
       selectedIndex={index}
