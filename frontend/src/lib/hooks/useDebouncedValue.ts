@@ -1,8 +1,7 @@
 // frontend/src/lib/hooks/useDebouncedValue.ts
 //
-// One shared debounce for the search boxes over paged lists. DataTable owns the
-// page and page-size state itself, so a list surface needs nothing from here
-// but the delay before a typed filter becomes a request.
+// One shared debounce for the search boxes over cursor-paged lists: the delay
+// before a typed filter becomes a request.
 import { useEffect, useState } from "react";
 
 // Debounce (ms) before the filter value is applied, so typing doesn't fire a

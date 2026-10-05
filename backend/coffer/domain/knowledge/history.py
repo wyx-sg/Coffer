@@ -1,6 +1,6 @@
-"""Value objects for a collection's history (spec knowledge "Keep every
-document's history", "Follow edits across
-collections in one feed").
+"""Value objects for the knowledge changes feed (spec knowledge "Commit every
+knowledge write naming its writer", "Follow edits across collections in one
+feed").
 
 Knowledge lives inside the vault repository under ``knowledge/``, so its
 history is the vault's history of that directory: every accepted write is one
@@ -9,8 +9,7 @@ every-vault-write-is-a-validated-commit-naming-its-writer), and its trailers are
 the vault's :class:`~coffer.domain.vault.writers.CommitMeta`. These types are
 what a surface reads back out of it, with every path knowledge-root-relative:
 one commit as a :class:`Change`, the documents it touched as
-:class:`DocumentChange`, one document's version of it as
-:class:`DocumentVersion`.
+:class:`DocumentChange`.
 
 Nothing here is persisted by this layer: git is the record, and these are the
 shape of an answer read from it.
@@ -48,8 +47,9 @@ from coffer.domain.vault.writers import (
 WRITERS = (WRITER_USER, WRITER_AGENT, WRITER_CURATION, WRITER_SYNC, WRITER_DISK)
 
 #: What the change was — knowledge's own operation words beside the vault's.
-#: A person's save of a body is ``save``; material promoted to a document on
-#: arrival ``promote``; the rest name themselves.
+#: A person's description edit (and, in older history, a document saved in the
+#: web UI) is ``save``; material promoted to a document on arrival ``promote``;
+#: the rest name themselves.
 OP_SAVE = "save"
 OP_PROMOTE = "promote"
 OP_REMOVE = "remove"
@@ -88,27 +88,6 @@ class Change:
 
 
 @dataclass(frozen=True)
-class DocumentVersion:
-    """One version of one document: the change that produced it."""
-
-    change: Change
-    path: str
-    #: True when this change removed the document.
-    removed: bool = False
-
-
-@dataclass(frozen=True)
-class DocumentDiff:
-    """What one change did to one document, as a unified diff."""
-
-    path: str
-    status: str
-    diff: str
-    added: int = 0
-    removed: int = 0
-
-
-@dataclass(frozen=True)
 class ChangesPage:
     """One page of the recent-changes feed."""
 
@@ -139,6 +118,4 @@ __all__ = [
     "Change",
     "ChangesPage",
     "DocumentChange",
-    "DocumentDiff",
-    "DocumentVersion",
 ]

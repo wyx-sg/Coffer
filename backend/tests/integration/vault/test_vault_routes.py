@@ -1,175 +1,44 @@
-"""``/api/v1/vault`` — history, diff, content, restore and recent changes of
-any vault file (coffer.surfaces.http.vault_routes; spec vault-storage "Show,
-compare and restore any version of a vault file").
+"""``/api/v1/vault`` — the restore hand-off and the hand edits the vault kept
+out (coffer.surfaces.http.vault_routes; spec vault-storage "Hand restoring an
+earlier version of a vault file to an agent", "List the hand edits the vault
+kept out").
 
-The headline case runs the whole app: a skill file saved twice through the
-skill editor has two versions naming their writer, and a restore is a new
-commit through the same compare-and-swap. The rest run the router alone over
-the vault writer. Every test runs in its own HOME (tests/conftest.py).
+The vault's history is git's: the router lists, diffs and restores no version,
+and the hand-off route writes nothing. The router runs alone over the vault
+writer; every test runs in its own HOME (tests/conftest.py).
 """
 
 from __future__ import annotations
 
-import pathlib
-import textwrap
-from typing import Any
-
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from starlette.testclient import TestClient
 
-from coffer.domain.vault.content_ids import fingerprint
-from coffer.domain.vault.writers import WRITER_USER, CommitMeta
+from coffer.domain.vault.writers import (
+    OP_RESTORE,
+    WRITER_AGENT,
+    WRITER_USER,
+    CommitMeta,
+    message,
+)
 from coffer.domain.vault.writes import Expect
+from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_repository, vault_writer
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.vault_routes import router as vault_router
 
 TOKEN = "t-vault-routes"
 USER = CommitMeta(writer=WRITER_USER, operation="edit", summary="Saved", actor="ui")
 
 
-def _mounted(app: FastAPI) -> FastAPI:
-    """The app with the vault router, unless the route table already has it."""
-    if not any(getattr(r, "path", "").startswith("/api/v1/vault/") for r in app.routes):
-        app.include_router(vault_router)
-    return app
-
-
-# --- the whole app: a skill file's history ------------------------------------
-
-
-def _skill_folder(folder: pathlib.Path, name: str) -> pathlib.Path:
-    folder.mkdir(parents=True)
-    (folder / "SKILL.md").write_text(
-        textwrap.dedent(
-            f"""\
-            ---
-            name: {name}
-            description: A skill named {name}.
-            ---
-
-            first
-            """
-        )
-    )
-    return folder
-
-
-def test_a_skill_file_saved_twice_has_two_versions_and_restores_as_a_new_one(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'runs.db'}")
-    monkeypatch.setenv("COFFER_PORT_RANGE_START", "59900")
-    monkeypatch.setenv("COFFER_PORT_RANGE_END", "59909")
-    set_active_token(TOKEN)
-    app = _mounted(create_app())
-    src = _skill_folder(tmp_path / "src", "hist-skill")
-    path = "skills/hist-skill/SKILL.md"
-    with TestClient(app, headers={"X-Coffer-Token": TOKEN}) as c:
-        r = c.post("/api/v1/skills/import", json={"path": str(src)})
-        assert r.status_code == 201, r.text
-        uid = r.json()["uid"]
-        vault_writer().settle()  # the import, as the scanner would find it
-
-        fp = c.get(f"/api/v1/skills/{uid}/files/content", params={"path": "SKILL.md"})
-        fp = fp.json()["fingerprint"]
-        saved: list[dict[str, Any]] = []
-        for text in ("second\n", "third\n"):
-            r = c.put(
-                f"/api/v1/skills/{uid}/files/content",
-                json={"path": "SKILL.md", "content": text, "expected_fingerprint": fp},
-            )
-            assert r.status_code == 200, r.text
-            fp = r.json()["fingerprint"]
-            saved.append(r.json())
-
-        r = c.get("/api/v1/vault/history", params={"path": path})
-        assert r.status_code == 200, r.text
-        versions = r.json()["versions"]
-        saves, older = versions[:2], versions[2:]
-        assert [v["writer"] for v in saves] == ["user", "user"]
-        assert [v["display_writer"] for v in saves] == ["user", "user"]
-        assert [[(p["path"], p["status"]) for p in v["paths"]] for v in saves] == [
-            [(path, "modified")]
-        ] * 2
-        assert older, "the imported version is listed too"
-        newest, first_save = saves[0]["version"], saves[1]["version"]
-
-        # The save's audit row names the commit it made.
-        audit = c.get("/api/v1/audit", params={"event_type": "skill_updated"}).json()
-        assert newest in {e["details"].get("version") for e in audit["entries"]}
-
-        r = c.get("/api/v1/vault/diff", params={"path": path, "version": newest})
-        assert r.status_code == 200, r.text
-        assert "-second" in r.json()["diff"] and "+third" in r.json()["diff"]
-
-        r = c.get("/api/v1/vault/content", params={"path": path, "version": first_save})
-        assert r.json()["content"].endswith("second\n")
-
-        # A stale fingerprint is refused and changes nothing.
-        r = c.post(
-            "/api/v1/vault/restore",
-            json={"path": path, "version": first_save, "expected_fingerprint": "0" * 64},
-        )
-        assert r.status_code == 409, r.text
-        assert r.json()["error"]["code"] == "VAULT_FILE_STALE"
-        assert vault_repository().head() == newest
-
-        now = c.get("/api/v1/vault/content", params={"path": path}).json()
-        assert now["version"] is None and now["fingerprint"] == fp
-        r = c.post(
-            "/api/v1/vault/restore",
-            json={"path": path, "version": first_save, "expected_fingerprint": now["fingerprint"]},
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["restored_from"] == first_save and body["paths"] == [path]
-        head = vault_repository().log(limit=1)[0]
-        assert head.version == body["version"] and head.meta.restored_from == first_save
-        assert head.meta.writer == WRITER_USER
-        assert (vault_root() / path).read_text().endswith("second\n")
-        # History was added to, never rewritten.
-        again = c.get("/api/v1/vault/history", params={"path": path}).json()["versions"]
-        assert [v["version"] for v in again[1:]] == [v["version"] for v in versions]
-        assert again[0]["restored_from"] == first_save
-
-        audit = c.get("/api/v1/audit", params={"event_type": "vault_file_restored"}).json()
-        (row,) = audit["entries"]
-        assert row["details"]["restored_from"] == first_save
-
-
-# --- the router alone ------------------------------------------------------------
-
-
-class _Audit:
-    def __init__(self) -> None:
-        self.events: list[tuple[str, str, dict[str, Any]]] = []
-
-    async def record(
-        self, event_type: str, *, actor: str = "system", details: dict[str, Any] | None = None
-    ) -> None:
-        self.events.append((event_type, actor, details or {}))
-
-
 @pytest.fixture
-def audit() -> _Audit:
-    return _Audit()
-
-
-@pytest.fixture
-def client(audit: _Audit) -> AsyncClient:
+def client() -> AsyncClient:
     set_active_token(TOKEN)
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(vault_router)
-    app.dependency_overrides[get_audit_service] = lambda: audit
-    app.dependency_overrides[get_actor] = lambda: "ui"
     return AsyncClient(
         transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
     )
@@ -181,99 +50,137 @@ def _write(path: str, data: bytes, expected: str | Expect = Expect.HEAD) -> str:
     return version
 
 
-async def test_restoring_a_folder_removes_files_the_version_did_not_have(
-    client: AsyncClient, audit: _Audit
+@pytest.mark.acceptance(
+    spec="vault-storage",
+    scenario="the restore hand-off names the file, the time and the commit rules",
+)
+async def test_the_restore_hand_off_names_the_file_the_time_and_the_commit_rules(
+    client: AsyncClient,
 ) -> None:
-    first = _write("skills/pdf/SKILL.md", b"v1\n", Expect.ABSENT)
-    _write("skills/pdf/SKILL.md", b"v2\n")
-    _write("skills/pdf/extra.md", b"later\n", Expect.ABSENT)
+    _write("knowledge/shopee/cache.md", b"one\n", Expect.ABSENT)
+    head = vault_repository().head()
     async with client:
-        history = await client.get("/api/v1/vault/history", params={"path": "skills/pdf/"})
-        assert [len(v["paths"]) for v in history.json()["versions"]] == [1, 1, 1]
+        timed = await client.post(
+            "/api/v1/vault/history/handoff",
+            json={"path": "knowledge/shopee/cache.md", "at": "2026-09-01T10:30:00Z"},
+        )
+        untimed = await client.post(
+            "/api/v1/vault/history/handoff", json={"path": "knowledge/shopee/cache.md"}
+        )
+        folder = await client.post(
+            "/api/v1/vault/history/handoff", json={"path": "knowledge/shopee/"}
+        )
+    assert timed.status_code == 200, timed.text
+    vault = str(vault_root())
+    body = timed.json()
+    assert body["path"] == "knowledge/shopee/cache.md"
+    assert body["absolute_path"] == f"{vault}/knowledge/shopee/cache.md"
+    assert body["vault_path"] == vault
+    assert body["log_command"] == f"git -C {vault} log -p -- knowledge/shopee/cache.md"
+    prompt = body["handoff"]["prompt"]
+    assert "knowledge/shopee/cache.md" in prompt
+    assert "2026-09-01T10:30:00+00:00" in prompt
+    assert f"git repository at {vault}" in prompt
+    for rule in ("reset", "amend", "rebase", "force push"):
+        assert rule in prompt
+    for trailer in (
+        "Coffer-Writer: agent",
+        "Coffer-Operation: restore",
+        "Coffer-Restored-From:",
+    ):
+        assert trailer in prompt
+    assert "touching only knowledge/shopee/cache.md" in prompt
+    # Asked without a time, the agent lists the versions and asks which one.
+    assert untimed.status_code == 200, untimed.text
+    assert "list the file's recent versions" in untimed.json()["handoff"]["prompt"].lower()
+    assert "2026" not in untimed.json()["handoff"]["prompt"]
+    # A folder also has the files its version did not have removed.
+    assert folder.json()["log_command"].endswith("log -p -- knowledge/shopee")
+    assert (
+        "remove the files inside it that version did not have" in folder.json()["handoff"]["prompt"]
+    )
+    # The route writes nothing.
+    assert vault_repository().head() == head
+
+
+async def test_a_path_with_a_space_is_quoted_in_the_git_command(client: AsyncClient) -> None:
+    async with client:
         r = await client.post(
-            "/api/v1/vault/restore",
-            json={"path": "skills/pdf/", "version": first, "expected_fingerprint": None},
+            "/api/v1/vault/history/handoff", json={"path": "knowledge/my notes/a b.md"}
         )
     assert r.status_code == 200, r.text
-    assert sorted(r.json()["paths"]) == ["skills/pdf/SKILL.md", "skills/pdf/extra.md"]
-    assert sorted(vault_repository().tree("HEAD", "skills/pdf/")) == ["skills/pdf/SKILL.md"]
-    assert not (vault_root() / "skills/pdf/extra.md").exists()
-    assert [e[0] for e in audit.events] == ["vault_file_restored"]
-    assert audit.events[0][1] == "ui"
+    assert r.json()["log_command"].endswith("log -p -- 'knowledge/my notes/a b.md'")
 
 
-async def test_restore_of_a_file_states_what_it_read(client: AsyncClient) -> None:
-    first = _write("knowledge/a.md", b"one\n", Expect.ABSENT)
-    _write("knowledge/a.md", b"two\n")
+@pytest.mark.acceptance(spec="vault-storage", scenario="a secret's history is never handed over")
+async def test_a_secrets_history_is_never_handed_over(client: AsyncClient) -> None:
     async with client:
-        stale = await client.post(
-            "/api/v1/vault/restore",
-            json={"path": "knowledge/a.md", "version": first, "expected_fingerprint": None},
-        )
-        good = await client.post(
-            "/api/v1/vault/restore",
-            json={
-                "path": "knowledge/a.md",
-                "version": first,
-                "expected_fingerprint": fingerprint(b"two\n"),
-            },
-        )
-    assert stale.status_code == 409, stale.text
-    assert good.status_code == 200, good.text
-    assert (vault_root() / "knowledge/a.md").read_bytes() == b"one\n"
+        refused = [
+            await client.post("/api/v1/vault/history/handoff", json={"path": path})
+            for path in ("secret/github.enc", "secret/", "../etc/passwd", "/etc/passwd")
+        ]
+    for r in refused:
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "VAULT_PATH_INVALID"
+        assert "handoff" not in r.json()
 
 
 @pytest.mark.acceptance(
-    spec="vault-storage", scenario="recent changes list the vault's commits newest first"
+    spec="vault-storage",
+    scenario="a version written back and committed outside Coffer is a new commit",
 )
-async def test_content_diff_and_changes(client: AsyncClient) -> None:
+def test_a_version_written_back_and_committed_outside_coffer_is_a_new_commit() -> None:
     first = _write("knowledge/a.md", b"one\n", Expect.ABSENT)
-    _write("skills/x/SKILL.md", b"x\n", Expect.ABSENT)
-    async with client:
-        content = await client.get(
-            "/api/v1/vault/content", params={"path": "knowledge/a.md", "version": first}
-        )
-        missing = await client.get(
-            "/api/v1/vault/content", params={"path": "knowledge/a.md", "version": "f" * 40}
-        )
-        not_a_version = await client.get(
-            "/api/v1/vault/diff", params={"path": "knowledge/a.md", "version": "HEAD~1"}
-        )
-        changes = await client.get("/api/v1/vault/changes", params={"prefix": "knowledge"})
-        everything = await client.get("/api/v1/vault/changes", params={"limit": 2})
-    assert content.json() == {
-        "path": "knowledge/a.md",
-        "version": first,
-        "content": "one\n",
-        "binary": False,
-        "size": 4,
-        "fingerprint": fingerprint(b"one\n"),
-    }
-    assert missing.status_code == 404
-    assert not_a_version.status_code == 404
-    assert [c["version"] for c in changes.json()["changes"]] == [first]
-    assert changes.json()["changes"][0]["paths"][0]["path"] == "knowledge/a.md"
-    assert len(everything.json()["changes"]) == 2
-    assert everything.json()["next_cursor"] == "2"  # the first commit is older still
+    second = _write("knowledge/a.md", b"two\n")
+    root = vault_root()
 
+    # What the agent does with the hand-off's prompt: write the first version's
+    # bytes back, and commit them with the three trailers.
+    (root / "knowledge" / "a.md").write_bytes(
+        git.text(git.run(root, "show", f"{first}:knowledge/a.md")).encode()
+    )
+    trailers = CommitMeta(
+        writer=WRITER_AGENT,
+        operation=OP_RESTORE,
+        summary="Restore knowledge/a.md",
+        restored_from=first,
+    )
+    git.run(root, "add", "--", "knowledge/a.md")
+    git.run(root, "commit", "-m", message(trailers))
 
-async def test_secret_ciphertext_and_paths_outside_the_vault_are_refused(
-    client: AsyncClient,
-) -> None:
-    first = _write("knowledge/a.md", b"one\n", Expect.ABSENT)
-    async with client:
-        secret = await client.get("/api/v1/vault/content", params={"path": "secret/github.enc"})
-        escape = await client.get("/api/v1/vault/history", params={"path": "../etc/passwd"})
-        restore = await client.post(
-            "/api/v1/vault/restore",
-            json={"path": "secret/x.enc", "version": first, "expected_fingerprint": None},
-        )
-    assert secret.status_code == 400 and secret.json()["error"]["code"] == "VAULT_PATH_INVALID"
-    assert escape.status_code == 400
-    assert restore.status_code == 400
+    repo = vault_repository()
+    head = repo.log(limit=1)[0]
+    assert head.version not in (first, second)
+    assert head.meta.writer == WRITER_AGENT
+    assert (head.meta.operation, head.meta.restored_from) == (OP_RESTORE, first)
+    assert repo.read("HEAD", "knowledge/a.md") == b"one\n"
+    # No earlier commit was rewritten.
+    assert [c.version for c in repo.log()][1:3] == [second, first]
 
 
 async def test_the_routes_need_the_token(client: AsyncClient) -> None:
     async with client:
-        r = await client.get("/api/v1/vault/problems", headers={"X-Coffer-Token": "not-the-token"})
-    assert r.status_code == 401
+        problems = await client.get(
+            "/api/v1/vault/problems", headers={"X-Coffer-Token": "not-the-token"}
+        )
+        handoff = await client.post(
+            "/api/v1/vault/history/handoff",
+            json={"path": "knowledge/a.md"},
+            headers={"X-Coffer-Token": "not-the-token"},
+        )
+    assert problems.status_code == 401
+    assert handoff.status_code == 401
+
+
+async def test_the_routes_that_listed_diffed_and_restored_versions_are_gone(
+    client: AsyncClient,
+) -> None:
+    async with client:
+        gone = [
+            await client.get("/api/v1/vault/history", params={"path": "knowledge/a.md"}),
+            await client.get("/api/v1/vault/diff", params={"path": "a", "version": "abcd"}),
+            await client.get("/api/v1/vault/content", params={"path": "knowledge/a.md"}),
+            await client.get("/api/v1/vault/changes"),
+            await client.post("/api/v1/vault/restore", json={}),
+        ]
+    assert [r.status_code for r in gone] == [404, 404, 404, 404, 404]

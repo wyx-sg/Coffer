@@ -20,13 +20,8 @@ import type { components } from "@/lib/api/generated/knowledge";
 
 type Schemas = components["schemas"];
 
-/** One file's frontmatter + body, plus the absolute paths for file actions and
- *  the `fingerprint` a save hands back. */
+/** One file's frontmatter + body, plus the absolute paths for file actions. */
 export type FileOut = Schemas["FileOut"];
-
-/** A document's new body from the web UI's editor; the frontmatter stays as
- *  it is on disk, so none of it is sent. */
-export type FileSave = Schemas["FileSave"];
 
 /** One collection: a top-level folder, described by its own `README.md`. It
  *  has no title — it is shown by its folder name. `tidy_handoff` is the prompt
@@ -45,19 +40,8 @@ export type IngestedDocumentOut = Schemas["IngestedDocumentOut"];
 export type HandoffOut = Schemas["HandoffOut"];
 
 /** One change to knowledge: one commit in the vault's history, naming its
- *  writer (see "Keep every document's history"). */
+ *  writer (see "Commit every knowledge write naming its writer"). */
 export type ChangeOut = Schemas["ChangeOut"];
 
-/** The recent-changes timeline, newest first. */
+/** The changes feed, newest first. */
 export type ChangesOut = Schemas["ChangesOut"];
-
-/** A document's versions, newest first. */
-export type DocumentHistoryOut = Schemas["DocumentHistoryOut"];
-
-export type DocumentVersionOut = Schemas["DocumentVersionOut"];
-
-/** What one version did to a document, as a unified diff. */
-export type VersionDiffOut = Schemas["VersionDiffOut"];
-
-/** A document's body as one version left it. */
-export type VersionBodyOut = Schemas["VersionBodyOut"];

@@ -8,8 +8,6 @@ import type { AdoptMcpEntryBody, AdoptSkillVars } from "@/lib/api/agents-workspa
 import { translateApiError } from "@/lib/api/errors";
 import {
   agentTypesKey,
-  agentConfigChildKey,
-  agentConfigFileKey,
   agentConfigFilesKey,
   agentHooksKey,
   agentPluginKey,
@@ -97,14 +95,6 @@ export function useAgentConfigFiles(uid: string) {
     queryKey: agentConfigFilesKey(uid),
     queryFn: async () => (await agentsApi.listConfigFiles(uid)).items,
     enabled: !!uid,
-  });
-}
-
-export function useAgentConfigFile(uid: string, key: string | null) {
-  return useQuery({
-    queryKey: agentConfigFileKey(uid, key ?? ""),
-    queryFn: () => agentsApi.readConfigFile(uid, key as string),
-    enabled: !!uid && !!key,
   });
 }
 
@@ -232,16 +222,6 @@ export function useUninstallPlugin(agentUid: string) {
       qc.invalidateQueries({ queryKey: agentPluginsKey(agentUid) });
     },
     onError,
-  });
-}
-
-// --- Config-file children (specs agent-registry/skill-manager workspace amendment) — read-only ---
-
-export function useAgentConfigChild(uid: string, key: string, relpath: string) {
-  return useQuery({
-    queryKey: agentConfigChildKey(uid, key, relpath),
-    queryFn: () => agentsApi.readConfigChild(uid, key, relpath),
-    enabled: !!uid && !!key && !!relpath,
   });
 }
 

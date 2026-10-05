@@ -66,7 +66,7 @@ An absent key or `null` means "the built-in default" for an interval and
 Every write to the settings MUST record an `internal_engine_model_set` audit
 entry naming the actor and carrying the values after the write. A change another
 machine made arrives as a sync commit to the settings document, and is as visible
-in that document's history as one made here ([vault-storage](../vault-storage/spec.md) "Show, compare and restore any version of a vault file").
+in that document's history as one made here ([vault-storage](../vault-storage/spec.md) "Keep the vault a git repository whether or not it syncs").
 
 #### Scenario: record every settings write with its actor and values
 - **GIVEN** the internal-engine settings,
@@ -302,8 +302,9 @@ per pass rather than per target.
 
 ### Requirement: Show and change the memory passes on the Memory page
 The web UI MUST show and change each unattended pass on the page whose content it upkeeps,
-not in Settings: an **Automatic** control in the page header reads "Automatic · hourly" (or
-the chosen interval; "Automatic · off" while switched off) and opens a popover. Edits MUST save
+not in Settings: the ▾ half of the page header's **Update memory** split button opens a popover,
+and the header's status line names the schedule ("Reads automatically every hour · 14 min ago";
+just "Read 14 min ago" while switched off). Edits MUST save
 on their own — a switch on toggle, an interval on selection — through
 `PUT /api/v1/internal-engine-config/upkeep`, one pass per request, and the interval's default
 option MUST name the real number.
@@ -312,16 +313,16 @@ option MUST name the real number.
   and `distil` together (two writes, one per pass) and read as on only while both are on; its
   interval is the `aggregate` interval, the cadence at which the agents' memory is read, while
   `distil` keeps its own slower interval and turns what was read into notes. The popover shows "Last
-  read 14 min ago · next in 46 min" for `aggregate`. The control appears on the partitions page
-  and on a partition's page, because reading needs no model.
+  read 14 min ago · next in 46 min" for `aggregate`. The ▾ appears on the partitions page only,
+  because reading needs no model.
 
-The Knowledge page carries no Automatic control, because its sweep has no switch or interval to
+The Knowledge page carries no automatic control, because its sweep has no switch or interval to
 set.
 
 #### Scenario: the memory popover switches reading and distilling together
 - **GIVEN** aggregation and distillation both switched on, aggregation read 14 minutes ago and due
   again in 46 minutes
-- **WHEN** the Memory header's Automatic control is opened and the operator switches it off and
+- **WHEN** the ▾ beside Update memory in the Memory header is opened and the operator switches it off and
   then picks an interval
 - **THEN** the popover shows "Read memory automatically", the interval and the last/next line,
   switching it off writes `aggregate` off and `distil` off as two requests, and the interval

@@ -206,27 +206,6 @@ def test_disconnect_an_agent_from_coffer_over_rest(home: pathlib.Path) -> None:
 # --- config files -------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="write a config file over REST")
-def test_write_a_config_file_over_rest(home: pathlib.Path) -> None:
-    settings = home / ".claude" / "settings.json"
-    settings.write_text('{"theme": "light"}', encoding="utf-8")
-    with _client() as c:
-        uid = _register(c)
-
-        ok = c.put(
-            f"/api/v1/agents/{uid}/config-files/settings", json={"content": '{"theme": "dark"}'}
-        )
-        assert ok.status_code == 200, ok.text
-        assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
-        backup = ConfigFileStore().latest_backup(settings)
-        assert backup is not None and backup.read_text() == '{"theme": "light"}'
-        assert "agent_config_file_written" in _audit_types(c, uid)
-
-        bad = c.put(f"/api/v1/agents/{uid}/config-files/settings", json={"content": "{not json"})
-        assert bad.status_code == 422, bad.text
-        assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
-
-
 # --- direct MCP entries -------------------------------------------------------
 
 

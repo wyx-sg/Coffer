@@ -183,15 +183,10 @@ def test_a_new_citation_shows_without_a_rescan(
         d.register_stdio("citer", "c", {"TOKEN": ref})
         assert [c["name"] for c in _row(d, ref)["cited_by"]] == ["citer"]
         uid = d.client.post("/api/v1/skills/import", json={"path": str(src)}).json()["uid"]
+        # A skill file is edited on disk, in the person's own editor.
         content = d.client.get(f"/api/v1/skills/{uid}/files/content", params={"path": "SKILL.md"})
-        d.client.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "SKILL.md",
-                "content": content.json()["content"] + f"\ncoffer://{ref}\n",
-                "expected_fingerprint": content.json()["fingerprint"],
-            },
-        )
+        skill_md = pathlib.Path(content.json()["abs_path"])
+        skill_md.write_text(content.json()["content"] + f"\ncoffer://{ref}\n")
         _eventually(lambda: _row(d, ref)["mentioned_by_skills"] == ["hello"])
         answer = {k: _row(d, ref)[k] for k in ("cited_by", "mentioned_by_skills")}
 

@@ -3,12 +3,9 @@
 // and bulk-action bar. Split out of DataTableSelection.tsx to keep both files
 // within the component size budget.
 //
-// The header checkbox toggles the CURRENT PAGE; when the whole page is selected
-// and more rows exist, SelectAllBar offers escalation to "select all matching".
-// For a client-paginated table that selects every filtered key; for a
-// server-paginated one it raises an `allMatching` flag (the caller acts on the
-// full set via its own API + the active filters).
-import { useEffect, useState } from "react";
+// The header checkbox toggles the rows RENDERED (the whole list, or its first
+// 100 when it is longer); when all of them are selected and more rows match,
+// SelectAllBar offers escalation to "select all matching" — every filtered key.
 import { useTranslation } from "react-i18next";
 
 import type { TableSelection } from "@/components/DataTable.types";
@@ -22,8 +19,6 @@ export interface PageSelectAll {
   banner: "offer" | "active" | null;
   selectAll: () => void;
   clearAll: () => void;
-  /** Server-mode "select all matching" intent — passed to renderBulkActions. */
-  allMatching: boolean;
   /** Bulk-bar count: the full total once all-matching / all-loaded is active. */
   count: number;
   total: number;
@@ -43,37 +38,25 @@ export function usePageSelectAll<T>(opts: {
   rowKey: (r: T) => string;
   canSelect: (r: T) => boolean;
   total: number;
-  server: boolean;
   /** When this changes (search/filter), the all-matching escalation resets. */
   resetKey: string;
 }): PageSelectAll {
   const { sel } = opts;
-  const [allMatching, setAllMatching] = useState(false);
-  useEffect(() => setAllMatching(false), [opts.resetKey]);
-
   const pageKeys = opts.pageRows.filter(opts.canSelect).map(opts.rowKey);
   const pageAllSelected = pageKeys.length > 0 && pageKeys.every((k) => sel.keys.has(k));
   const pageSomeSelected = !pageAllSelected && pageKeys.some((k) => sel.keys.has(k));
   const moreBeyondPage = opts.total > opts.pageRows.length;
 
-  const allLoadedKeys = opts.server ? [] : opts.filtered.filter(opts.canSelect).map(opts.rowKey);
-  const allLoadedSelected =
-    !opts.server && allLoadedKeys.length > 0 && allLoadedKeys.every((k) => sel.keys.has(k));
+  const allLoadedKeys = opts.filtered.filter(opts.canSelect).map(opts.rowKey);
+  const allLoadedSelected = allLoadedKeys.length > 0 && allLoadedKeys.every((k) => sel.keys.has(k));
 
   const togglePage = () => {
     sel.setMany(pageKeys, !pageAllSelected);
-    if (pageAllSelected) setAllMatching(false);
   };
-  const selectAll = () => {
-    if (opts.server) setAllMatching(true);
-    else sel.setMany(allLoadedKeys, true);
-  };
-  const clearAll = () => {
-    sel.clear();
-    setAllMatching(false);
-  };
+  const selectAll = () => sel.setMany(allLoadedKeys, true);
+  const clearAll = () => sel.clear();
 
-  const active = (opts.server && allMatching) || (allLoadedSelected && moreBeyondPage);
+  const active = allLoadedSelected && moreBeyondPage;
   const banner: "offer" | "active" | null = active
     ? "active"
     : pageAllSelected && moreBeyondPage
@@ -87,7 +70,6 @@ export function usePageSelectAll<T>(opts: {
     banner,
     selectAll,
     clearAll,
-    allMatching: opts.server && allMatching,
     count: active ? opts.total : sel.selectedRows.length,
     total: opts.total,
   };
@@ -137,7 +119,7 @@ export function TableBulkBar<T>({
   selectedRows: T[];
 }) {
   const { t } = useTranslation();
-  const show = selectedRows.length > 0 || ps.allMatching;
+  const show = selectedRows.length > 0;
   return (
     <>
       {ps.banner ? (
@@ -158,7 +140,6 @@ export function TableBulkBar<T>({
           {selection.renderBulkActions({
             selectedRows,
             clear: ps.clearAll,
-            allMatching: ps.allMatching,
           })}
         </ListSelectionBar>
       ) : null}

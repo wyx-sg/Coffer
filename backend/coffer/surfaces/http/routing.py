@@ -50,7 +50,7 @@ from coffer.surfaces.http.feature_routes import router as feature_router
 from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.fs_terminal_routes import router as fs_terminal_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
-from coffer.surfaces.http.knowledge import history_router as knowledge_history_router
+from coffer.surfaces.http.knowledge import change_router as knowledge_change_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.builtin_routes import router as mcp_builtin_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
@@ -132,8 +132,8 @@ def include_all_routers(app: FastAPI) -> None:
         fs_terminal_router,
         skill_copy_router,  # before skill_router: /skills/orphans is not a uid
         skill_delete_router,  # DELETE /skills/{uid} and the bulk delete
+        skill_source_router,  # before skill_router: /skills/update-check is not a uid
         skill_router,
-        skill_source_router,
         skill_file_router,
         cli_router,  # the commands skills require (spec skill-manager)
         # MCP
@@ -147,7 +147,7 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_invocation_aggregate_router,
         mcp_page_router,  # the MCP server page's 24 h summary, log and tiering reads
         knowledge_router,  # the one knowledge kind (experimental: knowledge)
-        knowledge_history_router,  # … and its history
+        knowledge_change_router,  # … and its changes feed
         *memory_routers,  # the one memory kind
         # the turn platform's own surfaces (spec chat; spec channels's agents run on it)
         agent_provider_router,

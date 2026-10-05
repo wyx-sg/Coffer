@@ -121,7 +121,7 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 | --------------------------------------------------------------- | ------------------------------------------------------- |
 | Server data (anything from the daemon)                          | TanStack Query, via a `useX` hook                       |
 | Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
-| User preference that must survive reload                        | `localStorage`, every read and write wrapped in try/catch (`src/lib/preferences.ts` holds the page size and editor; other modules own their key) |
+| User preference that must survive reload                        | `localStorage`, every read and write wrapped in try/catch (`src/lib/preferences.ts` holds the editor, terminal and hand-off agent; other modules own their key) |
 | **Addressable** app state (which resource is open) | the **URL** (router param), not `useState`              |
 | Detail-page tab                                                 | the **path** (`/<kind>/<id>/<tab>`) via `useDetailTab` (`lib/detailTabs.ts`) |
 | Selected file; tab on a list page (Sync, Activity)              | the **URL search param** (`?file=`, `?tab=`) via `useSearchParams` |
@@ -138,7 +138,7 @@ default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 (`lib/detailTabs.ts`), which sends an unknown `:tab` to the bare address; skills and MCP
 servers are keyed by their fixed name, agents by their type, renamable kinds
 by uid. Skills, MCP servers, agents, knowledge
-(`/knowledge/<uid>/history`, `/knowledge/<uid>/inbox`) and memory partitions
+(`/knowledge/<uid>/inbox`) and memory partitions
 (`/memory/<uid>/delivered`) follow it; the tabs of a list page that has no
 detail to nest under (Sync, Activity) are `?tab=`, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
@@ -295,20 +295,29 @@ return useMutation({
     (`--titlebar-inset`), scrim included.
   - **A toast can carry a second line**: `toast.success(title, { description })`
     for what was kept or added ("Added 2 servers" / "Kept the folder").
-  - **A list or table that can hold more than ~100 rows pages by cursor and
-    loads on scroll — never everything at once.** It opens on one small page
-    (`FIRST_PAGE` 30), reads the next `MORE_PAGE` 50 when its end scrolls into
-    view, and search and filters are query parameters of the route (debounced,
-    with the stale request aborted), not a filter over what happens to be
-    loaded. Build it from `useInfiniteList` (`lib/hooks/useInfiniteList.ts`: an
-    infinite query over the server's `next_cursor`, the abort signal passed to
-    the request function) and, under the rows, `LoadMoreFooter` with
-    `autoLoad` (`components/ui/load-more.tsx`: the `LoadMoreSentinel` plus the
-    always-visible "N loaded · Load more" fallback) and a `Skeleton` row while
-    a page loads. A list that is bounded by nature (a few dozen skills, MCP
-    servers, providers) keeps `DataTable`'s in-memory "Load N more". A live
-    list re-reads only its first page and holds what arrives above the
-    reader's scroll position behind a "↑ N new" control.
+  - **A list has one loading interaction: scroll.** Two classes:
+    - **A list that can hold more than ~100 rows pages by cursor and loads on
+      scroll — never everything at once.** It opens on one small page
+      (`FIRST_PAGE` 30), reads the next `MORE_PAGE` 50 when its end scrolls into
+      view, and search and filters are query parameters of the route (debounced,
+      with the stale request aborted), not a filter over what happens to be
+      loaded. Build it from `useInfiniteList` (`lib/hooks/useInfiniteList.ts`: an
+      infinite query over the server's `next_cursor`, the abort signal passed to
+      the request function) and, under the rows, `LoadMoreFooter` with
+      `autoLoad` (`components/ui/load-more.tsx`: the `LoadMoreSentinel` plus the
+      always-visible "N loaded · Load more" fallback) and a `Skeleton` row while
+      a page loads. A live list re-reads only its first page and holds what
+      arrives above the reader's scroll position behind a "↑ N new" control.
+    - **A list that is bounded by nature (a few dozen skills, MCP servers,
+      providers, tools) is in memory and shows whole.** `DataTable` does this
+      itself; any other in-memory list uses `useGrowingList`
+      (`lib/hooks/useGrowingList.ts`) with a `LoadMoreSentinel` under the rows.
+      As a safety net, past `RENDER_BATCH` (100) rows the first 100 render and
+      the rest are added 100 at a time when the end scrolls into view — no
+      button, no count, no page-size preference. A bounded list that in real
+      use exceeds ~200 rows is not bounded: move it to cursor paging. Its list
+      endpoint returns summary fields only (detail is read per item), so a
+      first page stays small.
   - Every button inside a table — row actions and selection-bar actions
     alike — is a `TableActionButton` (`components/table/`): small outline
     button, icon + text label, `destructive` for anything that removes. Row
@@ -410,7 +419,8 @@ return useMutation({
   Disconnect, moving a connected agent's config directory, and Change model. The
   preview shows the daemon's own lines; Apply sends the fingerprints the preview
   read and a file edited since is refused (`CONFIG_FILE_STALE`) with Reload
-  preview. Deleting a provider something runs on is the same shape.
+  preview. Every diff of changed lines (these previews, skill copy and folder
+  reviews, a custom-tool re-import) is drawn by the one `FileDiff` renderer. Deleting a provider something runs on is the same shape.
 - **Detail pages with many tabs: six, then More ⌄.** `components/DetailTabsMore`
   keeps the six most used in the strip and puts the rest in a More menu; while a
   tab inside More is open the trigger wears its name and the underline, and a
@@ -427,9 +437,10 @@ return useMutation({
 - **Save on change everywhere** — settings, reach, providers, channel options,
   feature switches: the control writes as it changes (text on Enter/blur, once
   valid) and a failed write is said under the control ("Couldn't save the
-  change: …"). No Save buttons. Only **document editors** — `SKILL.md`,
-  knowledge documents, raw agent config files — keep an explicit **Save** and
-  the unsaved-changes guard.
+  change: …"). No Save buttons and no unsaved-changes guard: the web UI has no
+  document editor. `SKILL.md`, knowledge documents, memories and agent config
+  files are read-only, with **Open in editor** and **Reveal in Finder**
+  (`fileActions`); the person's editor does the editing.
 - **Count badges** — tab and list counts that mean "needs you" are all
   `danger-strong`, capped at `9+`.
 - **Dialogs** — Cancel is a `ghost` button beside the primary action.
@@ -539,7 +550,6 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | Hand a machine-bound chore to an agent | Hand off to <Agent> ▾ (menu: Hand off to <other agent>, Copy prompt, toast "Prompt copied") | 交给 <Agent> ▾（菜单：交给 <另一个智能体>，复制提示词，提示“已复制提示词”） | Two separate buttons, Ask an agent, 询问智能体 |
 | Pick another source/machine/directory | Change | 更改 | 更换 |
 | A change (noun) | change | 改动 | 变更, 更改 |
-| Drop unsaved edits | Discard | 放弃 | 丢弃 |
 | Look over before applying | Review | 查看 | 审阅, 检查 (that is Check) |
 | The preview of what a write to an agent's config will change, then **Apply** (Connect, Repair, Disconnect, moving the config directory, Change model) | Review changes | 审阅改动 (the one place Review reads 审阅) | |
 | Pick another provider/model for an agent (Overview › Model › Change…) | Change model (dialog title "Change <Agent>’s model") | 更改模型 | Switch provider, Model tab |

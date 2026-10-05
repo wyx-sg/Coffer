@@ -1,12 +1,13 @@
 // frontend/src/components/skills/SkillDetailPane.test.tsx
-// The open skill in the Skills page's reading pane (spec skill-manager "Cover skill management on REST and the web", "Show the commands a skill
-// declares it needs"): its four tabs at their own paths, the Files tab opening
-// on SKILL.md, each agent's copy on Delivery, the declared commands on
-// Requires (History has its own file), and the built-in skill's refusals. The
-// page is mounted the way the router mounts it; only the api modules are
-// mocked.
+// The open skill in the Skills page's reading pane (spec skill-manager "Cover skill
+// management on REST and on the Skills page", "Show the commands a skill declares it
+// needs"): its three tabs at their own paths, the Files tab opening on SKILL.md
+// read-only, each agent's copy on Delivery, the declared commands on Requires, its
+// history in the ⋯ menu's History… dialog (no tab), and the built-in skill's
+// refusals. The page is mounted the way the router mounts it; only the api modules
+// are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import type { AgentOut } from "@/lib/api/agents";
 import type { SkillFileNode, SkillOut } from "@/lib/api/skills";
@@ -27,12 +28,27 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     remove: vi.fn(async () => ({ kept_copies: [] })),
     filesTree: vi.fn(),
     fileContent: vi.fn(),
-    writeFileContent: vi.fn(),
     verify: vi.fn(async () => ({ entries: [] })),
     repair: vi.fn(),
     compareCopy: vi.fn(),
     resolveCopy: vi.fn(),
     cancelStage: vi.fn(async () => undefined),
+  },
+}));
+vi.mock("@/lib/api/vault", () => ({ vaultApi: { historyHandoff: vi.fn() } }));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: {
+    list: vi.fn(async () => ({
+      agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
+    })),
+  },
+}));
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: {
+    listTerminals: vi.fn(async () => []),
+    openTerminal: vi.fn(async () => undefined),
+    reveal: vi.fn(async () => undefined),
+    open: vi.fn(async () => undefined),
   },
 }));
 vi.mock("@/lib/api/agents", async (importOriginal) => ({
@@ -52,6 +68,8 @@ vi.mock("@/lib/api/client", async (orig) => ({
 }));
 
 const { skillsApi } = await import("@/lib/api/skills");
+const { vaultApi } = await import("@/lib/api/vault");
+const { fsApi } = await import("@/lib/api/fs");
 
 const CC = makeAgent();
 const CODEX = makeAgent({
@@ -112,7 +130,6 @@ beforeEach(() => {
     binary: false,
     truncated: false,
     size: 40,
-    fingerprint: "fp-1",
   }));
 });
 afterEach(() => vi.clearAllMocks());
@@ -127,7 +144,7 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
   // The open skill's pane waits on the library and the skill's detail.
   const tabs = await screen.findAllByRole("tab", {}, { timeout: 5_000 });
   // No counts in the tab labels.
-  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires", "History"]);
+  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires"]);
   expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();
   // SKILL.md is open and rendered, not raw.
@@ -141,29 +158,10 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
   );
   expect(document.body.textContent).toContain("# Say hello");
 
-  // Edit, then Save, writes through the conditional save.
-  vi.mocked(skillsApi.writeFileContent).mockResolvedValue({
-    path: "SKILL.md",
-    abs_path: "/Users/me/.coffer/skills/hello/SKILL.md",
-    folder_abs_path: "/Users/me/.coffer/skills/hello",
-    content: "# Hi",
-    binary: false,
-    truncated: false,
-    size: 4,
-    fingerprint: "fp-2",
-  });
-  fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-  fireEvent.change(screen.getByRole("textbox", { name: /SKILL\.md/ }), {
-    target: { value: "# Hi" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-  await waitFor(() =>
-    expect(skillsApi.writeFileContent).toHaveBeenCalledWith("sk-11aa", {
-      path: "SKILL.md",
-      content: "# Hi",
-      expected_fingerprint: "fp-1",
-    }),
-  );
+  // The file is read-only: it opens in the person's editor, and nothing here edits it.
+  expect(screen.getByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Reveal in Finder" })).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
 });
 
 test("the Files tab's tree and viewer sit in a split with a draggable divider", async () => {
@@ -172,6 +170,65 @@ test("the Files tab's tree and viewer sit in a split with a draggable divider", 
   expect(divider).toHaveAttribute("aria-orientation", "vertical");
   expect(divider).toHaveAttribute("aria-valuenow");
   expect(screen.queryByRole("button", { name: /hide/i })).toBeNull();
+});
+
+acceptance("skill-manager", "a skill's history is handed to git and an agent", async () => {
+  const VAULT = "/Users/me/.coffer/vault";
+  vi.mocked(vaultApi.historyHandoff).mockImplementation(async (path) => ({
+    path,
+    vault_path: VAULT,
+    absolute_path: `${VAULT}/${path}`,
+    log_command: `git -C ${VAULT} log -p -- ${path}`,
+    handoff: { prompt: `Restore ${path}.` },
+  }));
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    configurable: true,
+  });
+  h.skills = [BUILTIN_SKILL, makeSkill()];
+  renderSkillsPage("/skills/hello");
+  const header = (await screen.findByRole("heading", { name: "hello", level: 2 })).closest(
+    "header",
+  ) as HTMLElement;
+  // History is a ⋯ menu item, not a tab.
+  expect(screen.queryByRole("tab", { name: "History" })).not.toBeInTheDocument();
+  fireEvent.click(within(header).getByRole("button", { name: "More actions for hello" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "History…" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "History" });
+  expect(within(dialog).getByTestId("vault-history-path")).toHaveTextContent("skills/hello/");
+  await waitFor(() =>
+    expect(within(dialog).getByRole("button", { name: "Copy git command" })).toBeEnabled(),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Copy git command" }));
+  await waitFor(() =>
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      `git -C ${VAULT} log -p -- skills/hello/`,
+    ),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Reveal in Finder" }));
+  await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(`${VAULT}/skills/hello/`));
+  // The restore is handed to the person's agent, with the prompt for this folder.
+  fireEvent.click(within(dialog).getByRole("button", { name: /Hand off to Claude Code/ }));
+  await waitFor(() =>
+    expect(fsApi.openTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Restore skills/hello/." }),
+    ),
+  );
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+  // The built-in skill is regenerated from the build: its menu has no History….
+  cleanup();
+  renderSkillsPage("/skills/coffer-guide");
+  const builtinHeader = (
+    await screen.findByRole("heading", { name: "coffer-guide", level: 2 })
+  ).closest("header") as HTMLElement;
+  fireEvent.click(
+    within(builtinHeader).getByRole("button", { name: "More actions for coffer-guide" }),
+  );
+  await screen.findByRole("menuitem", { name: "Delete…" });
+  expect(screen.queryByRole("menuitem", { name: "History…" })).not.toBeInTheDocument();
 });
 
 acceptance("skill-manager", "the delivery tab shows each agent's copy", async () => {

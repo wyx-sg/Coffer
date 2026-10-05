@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
 import { StatusDot } from "@/components/status/StatusDot";
+import { useSecretName } from "@/components/secret/SecretNameLink";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AgentOut } from "@/lib/api/agents";
 import type { ResourceOut } from "@/lib/api/resources";
@@ -47,6 +48,7 @@ function Subline({
   tiering: ToolTiering | undefined;
 }) {
   const { t } = useTranslation();
+  const missingSecret = useSecretName(detail?.missing_secret_ref ?? "");
   const warn = cn("truncate text-xs", toneTextClass(STATUS_TONE[state.tone]));
   if (state.kind === "launcherMissing") {
     return (
@@ -59,7 +61,7 @@ function Subline({
     return (
       <span className={warn}>
         {t("mcp.page.reason.secret", {
-          secret: detail?.missing_secret,
+          secret: detail?.missing_secret_ref ? missingSecret : detail?.missing_secret,
         })}
       </span>
     );

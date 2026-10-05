@@ -24,7 +24,7 @@ Because the delivered path is a link, a person editing a skill from inside an ag
 
 ## History
 
-The master folders are inside the vault repository, so a skill has a history: every save through Coffer is a commit written by `user`, and an edit made in an editor or by an agent's own file tools is committed as `disk` once the file has been quiet. A save from the web UI states the fingerprint of what it read, so an edit made on disk in the meantime is refused rather than overwritten. The skill's **History** tab lists the versions with who wrote each, shows each version's changes file by file, and restores a version as a new commit after asking. See [Editing the vault by hand](/guides/vault-files).
+The master folders are inside the vault repository, so a skill has a history: an edit made in an editor or by an agent's own file tools is committed as `disk` once the file has been quiet, and Coffer's own writes (an import, an update, a replace) are commits written by `user`. The web UI writes no file inside a skill's folder: the **Files** tab is read-only, with **Open in editor** and **Reveal in Finder**, so no save can race an edit made on disk. The skill's **⋯** menu has **History…**, which shows the folder's path in the vault, copies `git log -p` for it and hands the restore to an agent with a prompt the daemon builds; the agent writes the earlier content back as one new commit. Coffer lists no versions and restores none itself. See [Editing the vault by hand](/guides/vault-files).
 
 Coffer's own `coffer-guide` is the exception: it is rendered from the running build, so it lives under `~/.coffer/derived/skills/coffer-guide/`, outside the vault, and has no history.
 
@@ -69,17 +69,15 @@ The pin travels with the skill to your other machines through vault sync; the sk
 
 ## Checking for updates
 
-Coffer checks each Git-imported skill for newer commits when you ask, and on its own every six hours. A check clones into staging again, resolves the ref, and counts the commits since the pin that change the skill's folder. A ref that moved without touching the folder is up to date. The result — when it ran, whether git reached the repository and git's message if not, what the ref points at, how many commits and files that is — is kept in `~/.coffer/local/skill-source-status.json`, on this machine only. It is an observation, not part of the vault, so sync never carries it. The six-hourly check skips a skill checked within the last six hours, so a daemon that restarts often does not fetch every repository on every start.
+Coffer checks each Git-imported skill for newer commits when you ask, and on its own on this machine's schedule (every six hours by default; **Settings › General › Check skills for updates** also offers every day, every week or only on request, kept in `~/.coffer/daemon-config.json` and not synced). A check clones into staging again, resolves the ref, and counts the commits since the pin that change the skill's folder. A ref that moved without touching the folder is up to date. The result — when it ran, whether git reached the repository and git's message if not, what the ref points at, how many commits and files that is — is kept in `~/.coffer/local/skill-source-status.json`, on this machine only. It is an observation, not part of the vault, so sync never carries it. The background check skips a skill checked within the chosen interval, so a daemon that restarts often does not fetch every repository on every start.
 
 An unreachable repository changes nothing: the skill keeps working from its pinned copy, and its page shows git's message and when the last check succeeded.
 
-## Taking an update
+## Handing an update to an agent
 
-Reviewing an update stages the pinned folder and the new commit's folder side by side and compares them file by file: what is added, removed and changed, with a diff for text files. Nothing is applied until you confirm.
+Coffer applies no update itself. When a check finds an update, the skill offers **Hand off to &lt;Agent&gt; to update**, and the web UI asks the daemon for the prompt at the moment the button is pressed (`POST /api/v1/skills/{uid}/source/handoff`), so it is never stale. The daemon stages upstream as a check does, to list the commits between the pin and the new commit and the files edited in the master folder since the pin, builds the prompt from the one hand-off module every hand-off uses, and removes the stage. The prompt names the master folder as the only place to edit, the two commits with their subjects, the repository (without a credential), ref and folder to read upstream from, the local edits, or that there are none, and asks the agent to bring the new content in keeping those edits, to ask where the two disagree, and to show the diff. The route is refused with `SKILL_UPDATE_NOT_PENDING` when nothing newer changes the folder, and writes nothing to the master store or the pin. There is no update preview, no compare, no skipped-commit state and no apply: an update is no longer a conflict Coffer has to name.
 
-Applying validates the new folder — its `SKILL.md` must still name the same skill, because a skill's name is fixed — swaps it into the master folder in one step, moves the pin to the new commit, and records the update in the audit log with both commits. The folder's name does not change, so the skill's reach and every delivered link stay exactly as they were, and agents see the new files at once.
-
-If the master folder was edited since the pin, the update is a **conflict**. You choose: keep your edits (the pin stays, and Coffer does not offer that commit again — only a newer one), take the update (your edits are discarded), or compare one file at a time across your folder, the pinned commit and the new commit.
+Recording is the person's: **I merged it** (`POST /skills/{uid}/source/merged`, with the upstream commit) moves the pin to that commit without touching the master folder's files, and audits `skill_update_merged` with both commits. The pin's content hash becomes that commit's own content, so a folder that kept local edits still counts as locally edited against its new base, and the next hand-off lists exactly the edits carried over. Only an update that is waiting can be recorded; anything else is `SKILL_UPDATE_NOT_PENDING`.
 
 ## Resolving what repair will not touch
 
@@ -88,9 +86,9 @@ Automatic repair only puts back a missing or repointed link; it never overwrites
 - **A folder in the way.** The drift report lists a real folder at an agent's link path, whether the delivery was made before or is only wanted now. Comparing it diffs the folder against the master; keeping master moves the folder under `~/.coffer/content/backup/skills/<agent>/` and links master again, and keeping the agent's version swaps its files into the master first. Only that one agent's copy changes.
 - **A delete over a foreign copy.** Deleting a skill is refused, with nothing changed, while any agent's path holds a folder Coffer did not make — deleting would either leave it behind or remove someone else's files.
 - **A folder no skill claims.** A folder in the skills store with no record can be registered in place or moved to `~/.coffer/content/backup/skills/orphans/`; it is never hard-deleted.
-- **A missing master.** Every read of a skill says whether its master folder is on disk, so a skill that is off still shows that its folder is gone.
+- **A missing master.** Every read of a skill says whether its master folder is on disk, so a skill that is off still shows that its folder is gone. The page offers a hand-off whose prompt points the agent at the backup folders, the agents' skill folders, the skill's source and the vault's git history, and **Delete skill…**; Coffer restores nothing itself.
 
-A Git skill's source can also be changed: the new repository, ref and folder are staged like an update, measured against the current folder, and recorded only when the preview is applied.
+A Git skill's source can also be changed: the new repository, ref and folder are staged like an add from Git and must hold one valid skill with the same name; the answer lists the names of the files that would be added, removed or changed against the current folder (no diff). Confirming swaps the folder in atomically, keeps reach and links, records the new source pinned to the new commit and audits an update; cancelling the stage changes nothing.
 
 ## What a skill says it needs
 

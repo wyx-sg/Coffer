@@ -1,29 +1,21 @@
 // frontend/src/components/agents/AgentConfigFilesTab.test.tsx
-// The Config files tab (boards 2.1.40–2.1.48): every allowlisted file in one
-// tree grouped by where it lives (instructions beside settings, a not-created
-// file marked so), the selected file in the URL, a read-only preview behind an
-// explicit Edit, JSON checked while typing, a stale save that keeps the draft,
-// a missing file that can be created, a directory entry that lists its files,
-// and the unsaved-draft guard (the shell's, registered by the draft).
+// The Config files tab: every allowlisted file as one read-only row — name,
+// folder, size and modified time, Open in editor and Reveal in Finder — with a
+// directory entry's files under it and a not-created file marked. Only the
+// network boundary (`agentsApi`, `fsApi`) is mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
-import type { ReactNode } from "react";
 
 import { AgentConfigFilesTab } from "./AgentConfigFilesTab";
-import { UnsavedGuardProvider } from "@/components/shell/UnsavedGuard";
 import { agentsApi, type AgentOut, type ConfigFileInfo } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
+import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import "@/i18n";
 
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgentConfigFiles: vi.fn(),
-  useAgentConfigFile: vi.fn(),
-  useAgentConfigChild: vi.fn(),
-}));
-const hooks = await import("@/lib/hooks/useAgents");
+vi.mock("@/lib/api/agents", () => ({ agentsApi: { listConfigFiles: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
 
 const AGENT = {
   uid: "agt_cc",
@@ -31,12 +23,6 @@ const AGENT = {
   name: "claude_code",
   display_name: "Claude Code",
   config_dir: "/home/u/.claude",
-  state: "installed_active",
-  version: "2.1.281",
-  model: null,
-  tier_models: null,
-  created_at: "2026-09-01T00:00:00Z",
-  updated_at: "2026-09-01T00:00:00Z",
 } as AgentOut;
 
 const entry = (over: Partial<ConfigFileInfo>): ConfigFileInfo => ({
@@ -60,281 +46,122 @@ const FILES: ConfigFileInfo[] = [
     path: "/home/u/.claude/settings.local.json",
     exists: false,
     size: null,
+    modified_at: null,
   }),
-  entry({ key: "instructions", path: "/home/u/.claude/CLAUDE.md", format: "markdown" }),
+  entry({ key: "instructions", path: "/home/u/.claude/CLAUDE.md", format: "markdown", size: 2048 }),
   entry({
     key: "subagents",
     path: "/home/u/.claude/agents",
     format: "markdown",
     kind: "directory",
     size: null,
+    modified_at: null,
     files: [
-      { relpath: "code-reviewer.md", size: 2048, modified_at: "2026-09-03T00:00:00Z" },
-      { relpath: "test-runner.md", size: 1024, modified_at: "2026-08-11T00:00:00Z" },
-    ],
-  }),
-  entry({ key: "global", path: "/home/u/.claude.json", folder_path: "/home/u" }),
-];
-
-function stub(opts: { content?: string; exists?: boolean; child?: string } = {}) {
-  vi.mocked(hooks.useAgentConfigFiles).mockReturnValue({
-    data: FILES,
-    isPending: false,
-    error: null,
-    refetch: vi.fn(),
-  } as unknown as ReturnType<typeof hooks.useAgentConfigFiles>);
-  vi.mocked(hooks.useAgentConfigFile).mockImplementation(
-    (_uid, key) =>
-      ({
-        data: key
-          ? {
-              key,
-              format: key === "instructions" ? "markdown" : "json",
-              exists: opts.exists ?? true,
-              content: opts.exists === false ? "" : (opts.content ?? '{"theme": "dark"}'),
-              fingerprint: "fp1",
-              path: FILES.find((f) => f.key === key)?.path ?? "",
-              folder_path: "/home/u/.claude",
-            }
-          : undefined,
-        isPending: false,
-        refetch: vi.fn(async () => ({})),
-      }) as unknown as ReturnType<typeof hooks.useAgentConfigFile>,
-  );
-  vi.mocked(hooks.useAgentConfigChild).mockImplementation(
-    (_uid, key, relpath) =>
-      ({
-        data: relpath
-          ? {
-              key,
-              format: "markdown",
-              exists: true,
-              content: opts.child ?? "# reviewer",
-              fingerprint: "fpc",
-              path: `/home/u/.claude/agents/${relpath}`,
-              folder_path: "/home/u/.claude/agents",
-            }
-          : undefined,
-        isPending: false,
-        refetch: vi.fn(async () => ({})),
-      }) as unknown as ReturnType<typeof hooks.useAgentConfigChild>,
-  );
-}
-
-function Location() {
-  return <output data-testid="location">{useLocation().search}</output>;
-}
-
-function renderTab(search = "") {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const router = createMemoryRouter(
-    [
       {
-        path: "*",
-        element: (
-          <UnsavedGuardProvider>
-            <AgentConfigFilesTab agent={AGENT} />
-            <Location />
-          </UnsavedGuardProvider>
-        ),
+        relpath: "code-reviewer.md",
+        path: "/home/u/.claude/agents/code-reviewer.md",
+        size: 2048,
+        modified_at: "2026-09-03T00:00:00Z",
+      },
+      {
+        relpath: "team/test-runner.md",
+        path: "/home/u/.claude/agents/team/test-runner.md",
+        size: 1024,
+        modified_at: "2026-08-11T00:00:00Z",
       },
     ],
-    { initialEntries: [`/agents/claude_code/config${search}`] },
-  );
-  const ui: ReactNode = (
+  }),
+  entry({ key: "global", path: "/home/u/.claude.json", folder_path: "/home/u", size: 90 }),
+];
+
+function renderTab(items: ConfigFileInfo[] = FILES) {
+  vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items });
+  vi.mocked(fsApi.open).mockResolvedValue(undefined);
+  vi.mocked(fsApi.reveal).mockResolvedValue(undefined);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+      <AgentConfigFilesTab agent={AGENT} />
+    </QueryClientProvider>,
   );
-  return render(ui);
 }
 
-const fileParam = () =>
-  new URLSearchParams(screen.getByTestId("location").textContent ?? "").get("file");
+const rowOf = async (name: string) =>
+  within((await screen.findByText(name)).closest("li") as HTMLElement);
 
 afterEach(() => {
   vi.clearAllMocks();
-  vi.restoreAllMocks();
   localStorage.clear();
 });
 
 describe("AgentConfigFilesTab", () => {
-  // Config files lists the instructions file beside the settings files.
-  acceptance("agent-registry", "the agent detail page carries six tabs and a More menu", () => {
-    stub();
+  // The Config files half of the detail-page scenario: the instructions file is
+  // listed beside the settings files.
+  acceptance(
+    "agent-registry",
+    "the agent detail page carries six tabs and a More menu",
+    async () => {
+      renderTab();
+      expect(await screen.findByText("settings.json")).toBeInTheDocument();
+      expect(screen.getByText("Config files · Claude Code")).toBeInTheDocument();
+      expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
+      expect(screen.getByText("settings.local.json")).toBeInTheDocument();
+      expect(screen.getByText(".claude.json")).toBeInTheDocument();
+    },
+  );
+
+  test("each row names the file, its folder, size and modified time", async () => {
     renderTab();
-    expect(screen.getByText("Config files · Claude Code")).toBeInTheDocument();
-    expect(screen.getByText("~/.claude")).toBeInTheDocument();
-    expect(screen.getByText("settings.json")).toBeInTheDocument();
-    expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
-    // No role labels beside the names.
-    expect(screen.queryByText("Instructions")).not.toBeInTheDocument();
-    expect(screen.getByRole("treeitem", { name: "agents" })).toBeInTheDocument();
-    // Directories start open.
-    expect(screen.getByText("code-reviewer.md")).toBeInTheDocument();
-    // Not hidden: shown and marked.
-    const local = screen.getByRole("treeitem", { name: /settings\.local\.json/ });
-    expect(within(local).getByText("not created")).toBeInTheDocument();
-    // The file kept beside the config directory sits at the top, named from home.
-    expect(screen.queryByText("~ (home)")).not.toBeInTheDocument();
-    expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
-    expect(screen.getByText(/select a file to view/i)).toBeInTheDocument();
-  });
-
-  test("picking a file keeps it in ?file= and opens it read-only behind Edit", () => {
-    stub();
-    renderTab();
-    fireEvent.click(screen.getByText("settings.json"));
-    expect(fileParam()).toBe("settings");
-    expect(screen.getByText("~/.claude/settings.json")).toBeInTheDocument();
-    expect(document.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
-    expect(document.querySelector("textarea")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    expect(screen.getByRole("textbox")).toHaveValue('{"theme": "dark"}');
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
-  });
-
-  test("?file= opens that file on load", () => {
-    stub();
-    renderTab("?file=instructions");
-    expect(screen.getByText(/instructions claude code reads at the start/i)).toBeInTheDocument();
-    // Markdown opens rendered, with the Preview / Source switch.
-    expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("aria-pressed", "true");
-  });
-
-  test("an invalid JSON draft names the line and holds Save back", () => {
-    stub();
-    renderTab("?file=settings");
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: '{\n  "a": 1\n  "b": 2\n}' },
-    });
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-    expect(screen.getByText(/line 3, column \d+: not valid json/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"a": 2}' } });
-    expect(screen.getByText("Valid JSON")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeEnabled();
-  });
-
-  test("a save refused as stale keeps the draft and offers copy and reload", async () => {
-    stub();
-    vi.spyOn(agentsApi, "writeConfigFile").mockRejectedValue(
-      new ApiError("CONFIG_FILE_STALE", "changed on disk"),
-    );
-    renderTab("?file=settings");
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"theme": "light"}' } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    const row = await rowOf("CLAUDE.md");
+    expect(row.getByText("~/.claude")).toBeInTheDocument();
+    expect(row.getByText(/^2 KB · 2026-09-01 /)).toBeInTheDocument();
     expect(
-      await screen.findByText(/settings.json changed on disk since you opened it/i),
+      row.getByText("Instructions Claude Code reads at the start of every session."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Not saved")).toBeInTheDocument();
-    expect(vi.mocked(agentsApi.writeConfigFile)).toHaveBeenCalledWith("agt_cc", "settings", {
-      content: '{"theme": "light"}',
-      expected_fingerprint: "fp1",
-    });
-    expect(screen.getByRole("textbox")).toHaveValue('{"theme": "light"}');
-    expect(screen.getByRole("button", { name: /copy my edits/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /discard and reload/i })).toBeInTheDocument();
   });
 
-  test("a file not created yet offers to create it; saving writes it", async () => {
-    stub({ exists: false });
-    const write = vi.spyOn(agentsApi, "writeConfigFile").mockResolvedValue(FILES[1]);
-    renderTab("?file=settings_local");
-    expect(screen.getByText("settings.local.json doesn’t exist yet")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /create settings.local.json/i }));
-    expect(screen.getByRole("textbox")).toHaveValue("{}\n");
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+  test("a directory entry lists its files, nested ones by their relative path", async () => {
+    renderTab();
+    const dir = await rowOf("agents/");
+    expect(dir.getByText("Custom subagents, one Markdown file each.")).toBeInTheDocument();
+    expect(dir.queryByRole("button", { name: "Open in editor" })).toBeNull();
+    const child = await rowOf("code-reviewer.md");
+    expect(child.getByText("~/.claude/agents")).toBeInTheDocument();
+    expect(child.getByText(/^2 KB · 2026-09-03 /)).toBeInTheDocument();
+    fireEvent.click(child.getByRole("button", { name: "Open in editor" }));
     await waitFor(() =>
-      expect(write).toHaveBeenCalledWith("agt_cc", "settings_local", {
-        content: "{}\n",
-        expected_fingerprint: "fp1",
-      }),
+      expect(fsApi.open).toHaveBeenCalledWith("/home/u/.claude/agents/code-reviewer.md", undefined),
     );
-  });
-
-  test("a directory entry lists its files; picking one opens it", () => {
-    stub();
-    renderTab("?file=subagents");
-    // The folder's path on the toolbar, its purpose on the status line.
-    expect(screen.getByText("~/.claude/agents/")).toBeInTheDocument();
-    expect(screen.getByText(/custom subagents, one markdown file each/i)).toBeInTheDocument();
-    // Each row: name, size · date.
-    expect(screen.getByText("2 KB · Sep 3")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByText("test-runner.md")[1]);
-    expect(fileParam()).toBe("subagents/test-runner.md");
-    expect(screen.getByRole("heading", { name: "reviewer" })).toBeInTheDocument();
-  });
-
-  test("a directory entry creates a file from a template and deletes one after asking", async () => {
-    stub();
-    const write = vi.spyOn(agentsApi, "writeConfigChild").mockResolvedValue(FILES[1]);
-    const del = vi.spyOn(agentsApi, "deleteConfigChild").mockResolvedValue(undefined);
-    renderTab("?file=subagents");
-
-    fireEvent.click(screen.getByRole("button", { name: "More for test-runner.md" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
-    const confirm = await screen.findByRole("dialog");
-    expect(confirm).toHaveTextContent("Delete test-runner.md?");
-    fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(del).toHaveBeenCalledWith("agt_cc", "subagents", "test-runner.md"));
-    fireEvent.click(screen.getByRole("button", { name: "New file" }));
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent("New file in agents/");
-    const create = within(dialog).getByRole("button", { name: "Create" });
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "bad/name" } });
-    expect(create).toBeDisabled();
-    fireEvent.change(within(dialog).getByRole("textbox"), {
-      target: { value: "release-checker.md" },
-    });
-    fireEvent.click(create);
+    const nested = await rowOf("team/test-runner.md");
+    fireEvent.click(nested.getByRole("button", { name: "Reveal in Finder" }));
     await waitFor(() =>
-      expect(write).toHaveBeenCalledWith("agt_cc", "subagents", "release-checker.md", {
-        content: "---\nname: release-checker\ndescription: \n---\n\n",
-      }),
+      expect(fsApi.reveal).toHaveBeenCalledWith("/home/u/.claude/agents/team/test-runner.md"),
     );
   });
 
-  test("switching files with a dirty draft asks first; keep editing stays", async () => {
-    stub();
-    renderTab("?file=settings");
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"theme": "light"}' } });
-
-    fireEvent.click(screen.getByText("CLAUDE.md"));
-    const dialog = await screen.findByRole("dialog", { name: "Leave without saving?" });
-    expect(dialog).toHaveTextContent("You edited settings.json in Claude Code.");
-    expect(fileParam()).toBe("settings");
-    fireEvent.click(within(dialog).getByRole("button", { name: /keep editing/i }));
-    expect(screen.getByRole("textbox")).toHaveValue('{"theme": "light"}');
+  test("an empty or missing directory entry has no rows under it", async () => {
+    renderTab([
+      entry({ key: "subagents", path: "/home/u/.claude/agents", kind: "directory", files: [] }),
+    ]);
+    expect(await screen.findByText("No files yet.")).toBeInTheDocument();
   });
 
-  test("discarding at the guard opens the file picked", async () => {
-    stub();
-    renderTab("?file=settings");
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "changed" } });
-    fireEvent.click(screen.getByText("CLAUDE.md"));
-    fireEvent.click(
-      within(await screen.findByRole("dialog")).getByRole("button", { name: /discard changes/i }),
+  test("the header reveals the agent's config directory", async () => {
+    renderTab();
+    await screen.findByText("settings.json");
+    // The header's icon button comes first, before any row's.
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal in Finder" })[0]);
+    await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith("/home/u/.claude"));
+  });
+
+  test("a failed listing says so and offers a retry", async () => {
+    vi.mocked(agentsApi.listConfigFiles).mockRejectedValue(new ApiError("INTERNAL", "boom"));
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <AgentConfigFilesTab agent={AGENT} />
+      </QueryClientProvider>,
     );
-    await waitFor(() => expect(fileParam()).toBe("instructions"));
-    expect(document.querySelector("textarea")).toBeNull();
-  });
-
-  test("a dirty draft blocks page unload; a clean one does not", () => {
-    stub();
-    const fire = () => {
-      const e = new Event("beforeunload", { cancelable: true });
-      window.dispatchEvent(e);
-      return e.defaultPrevented;
-    };
-    renderTab("?file=settings");
-    expect(fire()).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "{ }" } });
-    expect(fire()).toBe(true);
+    expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 });

@@ -302,16 +302,15 @@ rows (`cleanup_bindings_for_skill`, `cleanup_bindings_for_agent`).
 ### `local/skill-source-status.json`
 
 One entry per Git-imported skill, keyed by the skill's uid: what this machine
-last learned about its repository (spec skill-manager "Update a Git-imported
-skill from its source"). Observation, not vault state — never committed or
+last learned about its repository (spec skill-manager "Hand a Git-imported
+skill's update to an agent"). Observation, not vault state — never committed or
 synced; the pin itself is in the skill's config. Written by
 `SkillSourceStatusRepo` (`infrastructure/skill/source_status_repo.py`); the
 skill kind removes an entry when its skill is deleted.
 
 ```json
 { "<skill uid>": { "checked_at": "<iso>", "last_success_at": "<iso>", "error": null,
-                   "latest_commit": "<sha>", "commits_ahead": 3, "files_changed": 2,
-                   "dismissed_commit": null } }
+                   "latest_commit": "<sha>", "commits_ahead": 3, "files_changed": 2 } }
 ```
 
 | Key                | Notes                                                                     |
@@ -322,14 +321,14 @@ skill kind removes an entry when its skill is deleted.
 | `latest_commit`    | nullable; what the ref pointed at when the last check succeeded           |
 | `commits_ahead`    | commits after the pin that change the skill's folder (0 when absent)      |
 | `files_changed`    | files those commits change (0 when absent)                                |
-| `dismissed_commit` | nullable; the commit the user chose Keep mine against                     |
 
-An update is available when `latest_commit` differs from the pin and from
-`dismissed_commit` and `commits_ahead > 0`.
+An update is available when `latest_commit` differs from the pin and
+`commits_ahead > 0`. There is no skipped-commit state: an update is handed to an
+agent, not kept aside.
 
 ### Staged sources (in memory)
 
-A staged folder, archive, Git checkout or update preview is held in the
+A staged folder, archive, Git checkout, update hand-off or source change is held in the
 daemon's memory (`application/skill/staging.py`) with a directory under the
 system's temp space, for at most an hour. Nothing about a stage is persisted.
 
@@ -378,11 +377,11 @@ Skill **removal** has no dedicated event — deleting a skill goes through
 ```
 
 The master folders are in the vault, so every change to one is a commit and has
-a history (the Skills page's History tab reads it through the vault's history
-routes). An in-app file save is one commit through the vault writer, refused
-when the caller's `expected_fingerprint` no longer matches (see "Save an
-existing skill file conditionally"); a folder written any other way — an
-import, an update, an adoption, a person's editor — is committed as found on
+a history (the skill's **History…** dialog hands restoring a version to an agent,
+spec web-ui "Show where a file's history is and hand its restore to an agent"). Coffer
+writes no file inside a master folder on the person's behalf ("Show a skill's
+master folder read-only"); a folder written any way — an import, an update by
+the person's agent, an adoption, a person's editor — is committed as found on
 disk (writer `disk`) by the vault's scanner. `MasterStore`
 (`infrastructure/skill/master_store.py`) is the one place that decides whether
 a name's folder is under `vault/skills/` or `derived/skills/`, so the seed,
@@ -464,18 +463,11 @@ skill subpackage, same style as `lifecycle_ops.py`):
 Stateless helpers beside `service.py` (same pattern as
 `drift_view.py`) that expose a skill's master folder to
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
-in-app viewer and surface each node's absolute on-disk path so the UI can offer
+read-only Files tab and surface each node's absolute on-disk path so the UI can offer
 open-in-external-editor / reveal-in-file-manager affordances (spec.md
-`## Purpose`). A
-**write** helper (`write_skill_file`) is the only mutation here, and it serves
-the in-app editor and programmatic clients alike ("Save an existing skill file conditionally") — one
-endpoint, one code path. The conditional half of that write (comparing the
-caller's `expected_fingerprint` against the bytes on disk and raising for a 409)
-lives one layer up in `content_ops.py`, so the containment helpers stay free of
-request semantics.
-The write itself is one vault commit in `content_ops.py` (the vault writer's
-compare-and-swap on the caller's fingerprint), audited as `skill_updated`
-with the new `version`; reads audit nothing. Containment is enforced by resolving every candidate path and
+`## Purpose`). There is no write helper: nothing in Coffer writes a file inside a
+skill's folder on the person's behalf ("Show a skill's master folder read-only"). Reads audit
+nothing. Containment is enforced by resolving every candidate path and
 requiring it to stay inside the resolved master folder, reusing the path-escape
 approach from `domain/skill/validator.py`.
 
@@ -483,7 +475,6 @@ approach from `domain/skill/validator.py`.
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `build_file_tree(master_folder) -> FileNode`                       | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs. Each node carries its absolute on-disk path.                                                                                 |
 | `read_skill_file(master_folder, relpath) -> FileContent`           | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary; returns the file's absolute path and containing folder's absolute path.                                               |
-| `write_skill_file(master_folder, relpath, content) -> FileContent` | Overwrite ("Save an existing skill file conditionally") of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
 
 #### File-node shape (`FileNode` / `SkillFileNodeOut`)
 
@@ -502,8 +493,7 @@ One node in the recursive tree. The root node has `path == ""`.
 
 #### File-content shape (`FileContent` / `SkillFileContentOut`)
 
-A single file's contents — what the in-app viewer renders and edits, and what
-the write returns (see "Save an existing skill file conditionally").
+A single file's contents — what the read-only viewer renders (see "Show a skill's master folder read-only").
 
 | Field             | Type   | Notes                                                                            |
 | ----------------- | ------ | -------------------------------------------------------------------------------- |
@@ -514,7 +504,6 @@ the write returns (see "Save an existing skill file conditionally").
 | `truncated`       | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
 | `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |
 | `size`            | `int`  | true byte size of the file on disk (independent of any truncation)               |
-| `fingerprint`     | `str`  | digest of the file's RAW BYTES on disk — never of the returned `content`, so an oversized or binary file's fingerprint still round-trips and an edit past the truncation point is still detected. A write carries it back to be conditional (409 on mismatch); omitting it stays last-writer-wins |
 
 ### `SyncEngine` (`infrastructure/skill/sync_engine.py`)
 

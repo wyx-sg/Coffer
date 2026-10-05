@@ -1,6 +1,6 @@
 """What this machine last learned about a Git-imported skill's source.
 
-Spec skill-manager "Update a Git-imported skill from its source". A check's
+Spec skill-manager "Hand a Git-imported skill's update to an agent". A check's
 result is an observation made here — when it ran, whether git reached the
 repository, what the ref points at now — so it is local state
 (``local/skill-source-status.json``) and never carried by vault sync; the pin
@@ -28,8 +28,9 @@ class SourceStatus:
     #: Commits after the pin that change the skill's folder, and the files they change.
     commits_ahead: int = 0
     files_changed: int = 0
-    #: A commit the user chose Keep mine against; it is not offered again.
-    dismissed_commit: str | None = None
+    #: The commits in the range (id, subject), as git lists them, capped; shown when
+    #: the source's host has no compare page to link to.
+    commits: tuple[tuple[str, str], ...] = ()
 
     def update_available(self, pinned: str) -> bool:
         """Whether the last successful check found commits worth offering."""
@@ -37,7 +38,6 @@ class SourceStatus:
             self.latest_commit is not None
             and self.latest_commit != pinned
             and self.commits_ahead > 0
-            and self.latest_commit != self.dismissed_commit
         )
 
     def with_(self, **changes: object) -> SourceStatus:

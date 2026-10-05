@@ -59,7 +59,7 @@ description: Coffer 的全部任务型指南集中在一页，按你要做的事
 <LinkList>
 
 - [运行守护进程](/zh/guides/daemon) 启动、停止和检查守护进程。
-- [手工编辑保险库](/zh/guides/vault-files) 编辑保险库里的普通文件，并恢复任意版本。
+- [手工编辑保险库](/zh/guides/vault-files) 编辑保险库里的普通文件，并通过 git 或你的智能体找回较早的版本。
 - [保险库同步](/zh/guides/vault-sync) 通过 git 让每台 Mac 共用一个保险库。
 - [活动与审计](/zh/guides/activity) 查看改了什么，以及每一次工具调用。
 - [实验功能](/zh/guides/experimental-features) 开关尚未就绪的能力。

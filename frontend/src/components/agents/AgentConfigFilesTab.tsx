@@ -1,36 +1,26 @@
-// frontend/src/components/agents/AgentConfigFilesTab.tsx — spec agent-registry.
-// The agent detail page's Config files tab (boards 2.1.40–2.1.48): ONE bordered
-// surface — the curated config-file allowlist as a tree on the left (settings
-// and instructions files side by side, grouped by where they live;
-// ConfigFileTree) and the selected file on the right (ConfigEditorPane), or a
-// directory entry's files (ConfigDirectoryPane). It stays a document editor:
-// reading first, an explicit Edit · Revert · Save, an unsaved guard.
-// Secret and machine-state files are not on the allowlist, so never here.
-//
-// An unsaved draft is guarded by the shell, not here: the file picker, the tab
-// strip and every other way out are location changes, and the shell's guard
-// dialog asks first (useUnsavedGuard, registered by the draft itself). The
-// selected file is in the URL (`?file=`).
-import { useState } from "react";
+// frontend/src/components/agents/AgentConfigFilesTab.tsx — spec agent-registry
+// "Open config files in an external editor or reveal them".
+// The agent detail page's Config files tab: the curated config-file allowlist as
+// a read-only list. Each file is a row — its name, its folder, its size and when
+// it changed — with Open in editor and Reveal in Finder; a directory entry
+// (Claude Code's agents/) lists its files under it, each with the same two. A
+// file not created yet reads "Not created" and offers Reveal on its folder only,
+// because opening creates nothing. Coffer shows no content here and edits
+// nothing: a config file is changed in the person's own editor, or by their
+// agent. Secret and machine-state files are not on the allowlist, so never here.
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 
 import { LoadError } from "@/components/LoadError";
-import { ConfigDirectoryPane } from "@/components/agents/ConfigDirectoryPane";
-import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
-import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
-import { NewConfigFileDialog } from "@/components/agents/NewConfigFileDialog";
-import { FileBrowserFrame } from "@/components/files/FileBrowserFrame";
-import { FileTreePanel } from "@/components/files/FileTree";
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { baseName } from "@/lib/agents/configFiles";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import type { AgentOut } from "@/lib/api/agents";
-import { useFsActions } from "@/lib/fsActions";
-import { useCreateConfigChild, useDeleteConfigChild } from "@/lib/hooks/useConfigDirFiles";
-import { useToast } from "@/components/ui/toast";
-import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
+import type { AgentOut, ConfigFileInfo } from "@/lib/api/agents";
+import { useFileActionItems } from "@/lib/fileActionItems";
+import { useAgentConfigFiles } from "@/lib/hooks/useAgents";
+import { cn, formatBytes, formatDateTime } from "@/lib/utils";
 
 // Keys with a description under `agents.config.desc.<key>`. Listing them keeps
 // an unknown/new key from rendering a raw i18n string.
@@ -44,144 +34,156 @@ const DESCRIBED_KEYS = new Set([
   "hooks",
 ]);
 
-const QUIET = "flex min-h-0 flex-1 items-center justify-center text-sm text-text-muted";
+type Child = NonNullable<ConfigFileInfo["files"]>[number];
 
-interface Props {
-  agent: AgentOut;
+interface RowProps {
+  name: string;
+  /** Second line under the name: what the file is for. */
+  description?: string | null;
+  /** The folder the file sits in, as the row shows it. */
+  folder: string;
+  /** Size · modified, or null when the file is not created yet. */
+  facts: { size: number | null; modifiedAt: string | null } | null;
+  /** The absolute path Open and Reveal act on. */
+  path: string;
+  /** Where Reveal goes when `path` does not exist: its folder. */
+  folderPath: string;
+  /** Directories offer Reveal only. */
+  openable?: boolean;
+  child?: boolean;
 }
 
-export function AgentConfigFilesTab({ agent }: Props) {
+function ConfigFileRow({
+  name,
+  description,
+  folder,
+  facts,
+  path,
+  folderPath,
+  openable = true,
+  child = false,
+}: RowProps) {
   const { t } = useTranslation();
-  const agentName = agentTypeLabel(agent.type);
-  const s = useConfigEditorState(agent.uid, agentName);
-  const { reveal } = useFsActions();
-  const { toast } = useToast();
-  const createChild = useCreateConfigChild(agent.uid);
-  const deleteChild = useDeleteConfigChild(agent.uid);
-  const [newFileOpen, setNewFileOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{
-    key: string;
-    relpath: string;
-    path: string;
-  } | null>(null);
-
-  const description =
-    s.selectedKey && DESCRIBED_KEYS.has(s.selectedKey) && !s.selectedChild
-      ? t(`agents.config.desc.${s.selectedKey}`, { agent: agentName })
-      : null;
-  // The content response resolves the actual file on disk; the listing covers
-  // a top-level file before its content has loaded.
-  const filePath = s.activeContent?.path ?? (s.selectedChild ? undefined : s.selectedInfo?.path);
-
-  const list = s.files.isPending ? (
-    <p className="px-2 text-sm text-text-muted">{t("common.loading")}</p>
-  ) : s.files.error ? (
-    <LoadError className="px-2" error={s.files.error} onRetry={() => void s.files.refetch()} />
-  ) : s.allFiles.length === 0 ? (
-    <p className="px-2 text-sm text-text-muted">{t("agents.config.none")}</p>
-  ) : (
-    <ConfigFileTree
-      files={s.allFiles}
-      dirty={s.draft.dirty}
-      selectedKey={s.selectedKey}
-      selectedChild={s.selectedChild}
-      collapsed={s.collapsed}
-      onSelectFile={s.selectFile}
-      onSelectDirectory={s.selectDirectory}
-      onSelectChild={s.selectChild}
-    />
+  const [open, revealFile] = useFileActionItems(path);
+  const [, revealFolder] = useFileActionItems(folderPath);
+  const reveal = facts ? revealFile : revealFolder;
+  return (
+    <li
+      className={cn(
+        "flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border-subtle py-2.5 pr-3 last:border-b-0",
+        child ? "pl-9" : "pl-3",
+      )}
+    >
+      <div className="min-w-0 flex-1 basis-60">
+        <div className="truncate font-mono text-sm text-text">{name}</div>
+        {description ? <div className="text-xs text-text-muted">{description}</div> : null}
+        <div className="truncate font-mono text-xs text-text-subtle" title={folderPath}>
+          {folder}
+        </div>
+      </div>
+      <div className="shrink-0 whitespace-nowrap text-xs text-text-muted">
+        {facts
+          ? [
+              facts.size !== null ? formatBytes(facts.size) : null,
+              facts.modifiedAt ? formatDateTime(facts.modifiedAt) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : t("agents.config.notCreated")}
+      </div>
+      <div className="flex shrink-0 gap-1.5">
+        {facts && openable ? (
+          <Button variant="outline" size="sm" onClick={open.onClick}>
+            <open.icon aria-hidden /> {open.label}
+          </Button>
+        ) : null}
+        <Button variant="outline" size="sm" onClick={reveal.onClick}>
+          <reveal.icon aria-hidden /> {reveal.label}
+        </Button>
+      </div>
+    </li>
   );
+}
 
-  const detail =
-    s.selectedInfo && s.isDirSelected ? (
-      <ConfigDirectoryPane
-        agentUid={agent.uid}
-        entry={s.selectedInfo}
-        description={description}
-        onSelectChild={(relpath) => s.selectChild(s.selectedInfo?.key ?? "", relpath)}
-        onNewFile={() => setNewFileOpen(true)}
-        onDeleteChild={(relpath) => {
-          const entry = s.selectedInfo;
-          if (!entry) return;
-          deleteChild.reset();
-          setDeleteTarget({ key: entry.key, relpath, path: `${entry.path}/${relpath}` });
-        }}
-      />
-    ) : s.selectedInfo ? (
-      <ConfigEditorPane
-        key={`${s.selectedKey}/${s.selectedChild ?? ""}`}
-        name={s.selectedChild ?? baseName(s.selectedInfo.path)}
-        filePath={filePath}
-        description={description}
-        format={s.activeContent?.format ?? s.selectedInfo.format}
-        content={s.activeContent?.content ?? ""}
-        loading={s.activeQuery.isPending}
-        draft={s.draft}
-        missing={s.missing}
-        agentName={agentName}
-      />
-    ) : (
-      <div className={QUIET}>{t("agents.config.selectFile")}</div>
-    );
-
+function EntryRows({ entry, agentName }: { entry: ConfigFileInfo; agentName: string }) {
+  const { t } = useTranslation();
+  const isDir = entry.kind === "directory";
+  const children: Child[] = entry.files ?? [];
   return (
     <>
-      <FileBrowserFrame
-        side={
-          <FileTreePanel
-            title={t("agents.configTab.title", { agent: agentName })}
-            action={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t("fileActions.reveal")}
-                title={t("fileActions.reveal")}
-                onClick={() =>
-                  void reveal(agent.config_dir).catch(() =>
-                    toast.error(t("fileActions.revealFailed")),
-                  )
-                }
-              >
-                <FolderOpen aria-hidden />
-              </Button>
-            }
-          >
-            {list}
-          </FileTreePanel>
+      <ConfigFileRow
+        name={isDir ? `${baseName(entry.path)}/` : baseName(entry.path)}
+        description={
+          DESCRIBED_KEYS.has(entry.key)
+            ? t(`agents.config.desc.${entry.key}`, { agent: agentName })
+            : null
         }
-        main={detail}
+        folder={abbreviateHomePath(entry.folder_path)}
+        facts={entry.exists ? { size: entry.size, modifiedAt: entry.modified_at } : null}
+        path={entry.path}
+        folderPath={entry.folder_path}
+        openable={!isDir}
       />
-      {s.selectedInfo && s.isDirSelected ? (
-        <NewConfigFileDialog
-          open={newFileOpen}
-          onOpenChange={setNewFileOpen}
-          entry={s.selectedInfo}
-          onCreate={async (relpath, content) => {
-            const key = s.selectedInfo?.key ?? "";
-            await createChild.mutateAsync({ key, relpath, content });
-            s.selectChild(key, relpath);
-          }}
-        />
+      {isDir && entry.exists && children.length === 0 ? (
+        <li className="border-b border-border-subtle py-2 pl-9 text-xs text-text-muted">
+          {t("agents.config.emptyDir")}
+        </li>
       ) : null}
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
-        }}
-        title={t("agents.configTab.deleteTitle", { name: deleteTarget?.relpath ?? "" })}
-        description={t("agents.configTab.deleteBody", {
-          path: deleteTarget ? abbreviateHomePath(deleteTarget.path) : "",
-          agent: agentName,
-        })}
-        confirmLabel={t("common.delete")}
-        pending={deleteChild.isPending}
-        error={deleteChild.error}
-        onConfirm={() =>
-          deleteTarget
-            ? deleteChild.mutateAsync({ key: deleteTarget.key, relpath: deleteTarget.relpath })
-            : undefined
-        }
-      />
+      {children.map((c) => (
+        <ConfigFileRow
+          key={c.relpath}
+          child
+          name={c.relpath}
+          folder={abbreviateHomePath(entry.path)}
+          facts={{ size: c.size, modifiedAt: c.modified_at }}
+          path={c.path}
+          folderPath={entry.path}
+        />
+      ))}
     </>
+  );
+}
+
+export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
+  const { t } = useTranslation();
+  const agentName = agentTypeLabel(agent.type);
+  const files = useAgentConfigFiles(agent.uid);
+  const [, revealDir] = useFileActionItems(agent.config_dir);
+
+  let body;
+  if (files.error) {
+    body = <LoadError error={files.error} onRetry={() => void files.refetch()} />;
+  } else if (files.isPending) {
+    body = <Skeleton className="h-40 w-full" aria-busy />;
+  } else if (files.data.length === 0) {
+    body = <p className="text-sm text-text-muted">{t("agents.config.none")}</p>;
+  } else {
+    body = (
+      <ul className="overflow-hidden rounded-lg border border-border-subtle">
+        {files.data.map((entry) => (
+          <EntryRows key={entry.key} entry={entry} agentName={agentName} />
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <Section
+      title={t("agents.configTab.title", { agent: agentName })}
+      as="h2"
+      actions={
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={revealDir.label}
+          title={revealDir.label}
+          onClick={revealDir.onClick}
+        >
+          <FolderOpen aria-hidden />
+        </Button>
+      }
+    >
+      {body}
+    </Section>
   );
 }

@@ -19,7 +19,6 @@ import type {
   MemoryFileTreeOut,
   NoteListOut,
   NoteOut,
-  NoteSave,
   PartitionListOut,
   ReadingOut,
   RetiredListOut,
@@ -53,7 +52,7 @@ export function getTidyHandoff(): Promise<HandoffOut> {
   return unwrap(getApiClient().GET("/memory/tidy-handoff"));
 }
 
-// --- one partition's memories ("Present a partition as its memories") -------
+// --- one partition's memories ("Show a partition's memories read-only") -------
 
 export function listNotes(uid: string): Promise<NoteListOut> {
   return unwrap(getApiClient().GET("/memory/partitions/{uid}/notes", partition(uid)));
@@ -63,20 +62,6 @@ export function getNote(uid: string, slug: string): Promise<NoteOut> {
   return unwrap(
     getApiClient().GET("/memory/partitions/{uid}/notes/{slug}", {
       params: { path: { uid, slug } },
-    }),
-  );
-}
-
-/** Save a memory's body ("Edit a memory in the web UI or in an editor"): the
- *  frontmatter is kept. `expected_fingerprint` is the one the read carried; a
- *  note changed since is refused with 409 `MEMORY_NOTE_CONFLICT`, whose
- *  `details` carry the note's current body and fingerprint. Resolves with the
- *  note as saved, new fingerprint included. */
-export function saveNote(uid: string, slug: string, payload: NoteSave): Promise<NoteOut> {
-  return unwrap(
-    getApiClient().PUT("/memory/partitions/{uid}/notes/{slug}", {
-      params: { path: { uid, slug } },
-      body: payload,
     }),
   );
 }

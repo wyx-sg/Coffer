@@ -13,8 +13,10 @@
 // Git repository"): a folder, an archive or a repository is STAGED first — the
 // daemon answers what it found and writes nothing — then CONFIRMED with the
 // chosen names (and the taken ones to replace), or CANCELLED, which removes
-// the stage. An update preview of a Git-imported skill is a stage too, so the
-// same cancel closes it.
+// the stage. A change of a Git-imported skill's source is a stage too, so the
+// same cancel closes it. A skill's update is not applied by Coffer: its
+// hand-off goes to the person's agent (spec skill-manager "Hand a Git-imported
+// skill's update to an agent").
 
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components as SkillManagerWire } from "@/lib/api/generated/skill-manager";
@@ -24,11 +26,6 @@ type Schemas = SkillManagerWire["schemas"];
 export type SkillOut = Schemas["SkillOut"];
 export type SkillFileNode = Schemas["SkillFileNodeOut"];
 
-/** Body of a skill-file save. `expected_fingerprint` is required — every
- *  vault write compares: the daemon refuses it with 409 SKILL_FILE_STALE when
- *  the file changed on disk since the read that produced the fingerprint. The
- *  master folder is also the user's own working copy, so that race is routine. */
-export type SkillFileWrite = Schemas["SkillFileWriteRequest"];
 export type SkillFileContentOut = Schemas["SkillFileContentOut"];
 
 export type SkillSourceStatus = Schemas["SkillSourceStatusOut"];
@@ -37,9 +34,10 @@ export type SkillStaging = Schemas["SkillStagingOut"];
 export type StagedSkill = Schemas["StagedSkillOut"];
 export type SkillStagingConfirm = Schemas["SkillStagingConfirmRequest"];
 export type SkillStageGit = Schemas["SkillStageGitRequest"];
-export type SkillUpdatePreview = Schemas["SkillUpdatePreviewOut"];
+export type SkillSourceChange = Schemas["SkillSourceChangeOut"];
+export type SkillSourceChangeFile = Schemas["SkillSourceChangeFileOut"];
 export type SkillFileChange = Schemas["SkillFileChangeOut"];
-export type SkillUpdateApply = Schemas["SkillUpdateApplyRequest"];
+export type SkillUpdateCheckInterval = Schemas["SkillUpdateCheckSettingBody"]["interval"];
 export type SkillDriftEntry = Schemas["DriftEntryOut"];
 export type SkillBulkDeleteResult = Schemas["SkillBulkDeleteResult"];
 export type SkillRepairReport = Schemas["RepairReportOut"];
@@ -76,13 +74,6 @@ export const skillsApi = {
         params: { path: skillPath(uid), query: { path } },
       }),
     ),
-  writeFileContent: (uid: string, body: SkillFileWrite) =>
-    unwrap(
-      getApiClient().PUT("/skills/{uid}/files/content", {
-        params: { path: skillPath(uid) },
-        body,
-      }),
-    ),
 
   // ----- sources: stage → confirm | cancel -----
   stageFolder: (path: string) =>
@@ -117,36 +108,36 @@ export const skillsApi = {
   // ----- a Git-imported skill's updates -----
   checkSource: (uid: string) =>
     unwrap(getApiClient().POST("/skills/{uid}/source/check", { params: { path: skillPath(uid) } })),
-  previewUpdate: (uid: string) =>
+  /** The prompt that hands the skill's update to an agent; refused 409 when none is waiting. */
+  updateHandoff: (uid: string) =>
     unwrap(
-      getApiClient().POST("/skills/{uid}/source/preview", { params: { path: skillPath(uid) } }),
+      getApiClient().POST("/skills/{uid}/source/handoff", { params: { path: skillPath(uid) } }),
     ),
-  compareUpdate: (uid: string, stagingId: string, path: string) =>
+  /** "I merged it": pin the skill to the commit the agent merged. */
+  recordMerged: (uid: string, commit: string) =>
     unwrap(
-      getApiClient().GET("/skills/{uid}/source/compare", {
-        params: { path: skillPath(uid), query: { staging_id: stagingId, path } },
-      }),
-    ),
-  applyUpdate: (uid: string, body: SkillUpdateApply) =>
-    unwrap(
-      getApiClient().POST("/skills/{uid}/source/apply", {
-        params: { path: skillPath(uid) },
-        body,
-      }),
-    ),
-  keepMine: (uid: string, commit: string | null) =>
-    unwrap(
-      getApiClient().POST("/skills/{uid}/source/keep", {
+      getApiClient().POST("/skills/{uid}/source/merged", {
         params: { path: skillPath(uid) },
         body: { commit },
       }),
     ),
+  /** How often this machine checks skills for updates in the background. */
+  updateCheck: () => unwrap(getApiClient().GET("/skills/update-check")),
+  setUpdateCheck: (interval: SkillUpdateCheckInterval) =>
+    unwrap(getApiClient().PUT("/skills/update-check", { body: { interval } })),
 
   changeSource: (uid: string, body: SkillStageGit) =>
     unwrap(
       getApiClient().POST("/skills/{uid}/source/change", {
         params: { path: skillPath(uid) },
         body,
+      }),
+    ),
+  applySourceChange: (uid: string, stagingId: string) =>
+    unwrap(
+      getApiClient().POST("/skills/{uid}/source/change/apply", {
+        params: { path: skillPath(uid) },
+        body: { staging_id: stagingId },
       }),
     ),
 

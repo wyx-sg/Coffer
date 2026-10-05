@@ -7,8 +7,8 @@ paragraph of its ``README.md``. Editing that description rewrites exactly that
 paragraph and leaves the rest of the README — anything a person wrote under it —
 as it was.
 
-Restoring a deleted collection (spec knowledge "Restore a deleted collection or
-document from Recent changes") puts back, byte for byte, every file the delete
+Restoring a deleted collection (spec knowledge "Undo a knowledge delete from its
+toast") puts back, byte for byte, every file the delete
 removed: its documents, its README and any inbox items.
 Documents go through the same guard every document write does; the README and
 an inbox item are the two non-document paths a collection holds, and each is

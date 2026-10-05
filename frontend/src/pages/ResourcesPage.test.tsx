@@ -51,6 +51,21 @@ vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({
     GET: vi.fn(async (path: string, opts: { params: { path: { uid: string } } }) => {
+      if (path === "/secrets")
+        return {
+          data: {
+            refs: [
+              {
+                ref: "LINEAR_API_KEY",
+                label: "Linear key",
+                present: false,
+                cited_by: [],
+                mentioned_by_skills: [],
+                bindings: [],
+              },
+            ],
+          },
+        };
       const uid = opts.params.path.uid;
       if (path.endsWith("/status")) return { data: statusOf[uid] ?? { status: "unknown" } };
       if (path.endsWith("/tiering"))
@@ -267,7 +282,7 @@ describe("ResourcesPage", () => {
     renderAt();
     const attention = await screen.findByRole("region", { name: "Needs attention" });
     await within(attention).findByText(/Connection refused · since/);
-    expect(within(attention).getByText("Secret missing · Authorization")).toBeInTheDocument();
+    expect(await within(attention).findByText("Secret missing · Linear key")).toBeInTheDocument();
     expect(within(attention).getByText("uvx isn't found on this machine")).toBeInTheDocument();
     const healthy = screen.getByRole("region", { name: "Healthy" });
     expect(within(healthy).getByText("github")).toBeInTheDocument();

@@ -21,7 +21,6 @@ import {
   useAdoptUnmanagedSkill,
   useAgent,
   useAgentTypes,
-  useAgentConfigFile,
   useAgentConfigFiles,
   useAgentMcpEntries,
   useAgentConnect,
@@ -197,7 +196,7 @@ describe("usePatchAgent", () => {
   });
 });
 
-describe("useAgentConfigFiles / useAgentConfigFile", () => {
+describe("useAgentConfigFiles", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   test("GETs the config-file list and unwraps items", async () => {
@@ -211,25 +210,6 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0].key).toBe("settings.json");
     expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/u-cur\/config-files$/);
-  });
-
-  test("GETs a single config file when a key is selected, not before", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(200, { key: "settings.json", content: "{}" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result, rerender } = renderHook(
-      ({ key }: { key: string | null }) => useAgentConfigFile("u-cur", key),
-      { wrapper: wrapper(), initialProps: { key: null as string | null } },
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    rerender({ key: "settings.json" });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(
-      /\/agents\/u-cur\/config-files\/settings.json$/,
-    );
   });
 });
 

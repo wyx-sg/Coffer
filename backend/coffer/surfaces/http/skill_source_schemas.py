@@ -15,13 +15,15 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.application.skill.source_change_ops import SourceChangePreview
 from coffer.application.skill.staging import ImportStage, StagedSkill
-from coffer.application.skill.update_ops import CompareView, UpdatePreview
-from coffer.domain.skill.folder_diff import FileChange, TextVersion
+from coffer.domain.skill.compare_url import compare_url
+from coffer.domain.skill.folder_diff import FileChange
 from coffer.domain.skill.requirements import CommandRequirement
 from coffer.domain.skill.source import ArchiveImportSource, GitImportSource
 from coffer.domain.skill.source_status import SourceStatus
-from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
+from coffer.domain.skill.update_check import UpdateCheckChoice
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 # ---------- read-model parts ----------
 
@@ -112,6 +114,11 @@ class SkillSkillRequirementOut(BaseModel):
     missing_agent_names: list[str]
 
 
+class SkillCommitOut(BaseModel):
+    id: str
+    subject: str
+
+
 class SkillSourceStatusOut(BaseModel):
     """What this machine last learned about a Git-imported skill's source."""
 
@@ -122,14 +129,19 @@ class SkillSourceStatusOut(BaseModel):
     latest_commit: str | None
     commits_ahead: int
     files_changed: int
-    dismissed_commit: str | None
-    #: The ref moved past the pin with commits that change the folder, and
-    #: the user did not choose Keep mine against that commit.
+    #: The ref moved past the pin with commits that change the folder.
     update_available: bool
+    #: The commits in the range with their subjects, shown where the source's
+    #: host has no compare page.
+    commits: list[SkillCommitOut]
+    #: The compare page on the source's host (GitHub, GitLab) from the pin to
+    #: ``latest_commit`` while an update is available; null for any other host.
+    compare_url: str | None
 
 
-def status_out(status: SourceStatus | None, pinned: str) -> SkillSourceStatusOut:
+def status_out(status: SourceStatus | None, source: GitImportSource) -> SkillSourceStatusOut:
     s = status or SourceStatus(skill_uid="")
+    available = s.update_available(source.commit)
     return SkillSourceStatusOut(
         checked_at=s.checked_at,
         last_success_at=s.last_success_at,
@@ -137,8 +149,13 @@ def status_out(status: SourceStatus | None, pinned: str) -> SkillSourceStatusOut
         latest_commit=s.latest_commit,
         commits_ahead=s.commits_ahead,
         files_changed=s.files_changed,
-        dismissed_commit=s.dismissed_commit,
-        update_available=s.update_available(pinned),
+        update_available=available,
+        commits=[SkillCommitOut(id=i, subject=subject) for i, subject in s.commits]
+        if available
+        else [],
+        compare_url=compare_url(source.url, source.commit, s.latest_commit)
+        if available and s.latest_commit
+        else None,
     )
 
 
@@ -226,11 +243,6 @@ class SkillStagingConfirmRequest(BaseModel):
 # ---------- updates ----------
 
 
-class SkillCommitOut(BaseModel):
-    id: str
-    subject: str
-
-
 class SkillFileChangeOut(BaseModel):
     path: str
     status: Literal["added", "removed", "modified"]
@@ -254,79 +266,52 @@ def change_out(c: FileChange) -> SkillFileChangeOut:
     )
 
 
-class SkillUpdatePreviewOut(BaseModel):
-    """What taking the source's newest commit would do. Staged until
-    ``apply`` or ``DELETE /skills/stage/{staging_id}``."""
+class SkillUpdateHandoffOut(BaseModel):
+    """The newest commit upstream and the prompt that hands bringing it into
+    the skill's master folder to the person's agent (spec skill-manager "Hand a
+    Git-imported skill's update to an agent")."""
 
-    staging_id: str
-    from_commit: str
-    to_commit: str
-    #: The ref is still at the pinned commit.
-    up_to_date: bool
-    commits: list[SkillCommitOut]
-    changes: list[SkillFileChangeOut]
-    #: The folder was edited since the pin; applying discards the edit.
-    conflict: bool
-    #: The local edits, as changes from the pinned commit's folder.
-    local_changes: list[SkillFileChangeOut]
-    #: With a conflict: merging the update into the local edits, handed to
-    #: the person's agent; ``POST /skills/{uid}/source/merged`` records it
-    #: (spec skill-manager "Record an update merged into local edits").
-    handoff: HandoffOut | None
+    commit: str
+    handoff: HandoffOut
 
 
-def preview_out(p: UpdatePreview) -> SkillUpdatePreviewOut:
-    return SkillUpdatePreviewOut(
-        staging_id=p.stage_id,
-        from_commit=p.from_commit,
-        to_commit=p.to_commit,
-        up_to_date=p.from_commit == p.to_commit,
-        commits=[SkillCommitOut(id=c.id, subject=c.subject) for c in p.commits],
-        changes=[change_out(c) for c in p.changes],
-        conflict=p.conflict,
-        local_changes=[change_out(c) for c in p.local_changes],
-        handoff=handoff_out(p.handoff),
-    )
-
-
-class SkillTextVersionOut(BaseModel):
-    #: Null when this version has no such file.
-    text: str | None
-    binary: bool
-    truncated: bool
-
-
-def _text(v: TextVersion) -> SkillTextVersionOut:
-    return SkillTextVersionOut(text=v.text, binary=v.binary, truncated=v.truncated)
-
-
-class SkillUpdateCompareOut(BaseModel):
-    """One file in the master folder, the pinned commit and the new commit."""
+class SkillSourceChangeFileOut(BaseModel):
+    """A file a change of source would add, remove or change — its name only."""
 
     path: str
-    local: SkillTextVersionOut
-    pinned: SkillTextVersionOut
-    incoming: SkillTextVersionOut
+    status: Literal["added", "removed", "modified"]
 
 
-def compare_out(v: CompareView) -> SkillUpdateCompareOut:
-    return SkillUpdateCompareOut(
-        path=v.path, local=_text(v.local), pinned=_text(v.pinned), incoming=_text(v.incoming)
+class SkillSourceChangeOut(BaseModel):
+    """What moving the skill to another source would do, against its current
+    folder. Staged until ``/source/change/apply`` or
+    ``DELETE /skills/stage/{staging_id}``."""
+
+    staging_id: str
+    commit: str
+    files: list[SkillSourceChangeFileOut]
+
+
+class SkillSourceChangeApplyRequest(BaseModel):
+    staging_id: str = Field(min_length=1)
+
+
+def change_preview_out(p: SourceChangePreview) -> SkillSourceChangeOut:
+    return SkillSourceChangeOut(
+        staging_id=p.stage_id,
+        commit=p.commit,
+        files=[SkillSourceChangeFileOut(path=f.path, status=f.status) for f in p.files],  # type: ignore[arg-type]
     )
 
 
-class SkillUpdateApplyRequest(BaseModel):
-    staging_id: str = Field(min_length=1)
-    #: Take theirs: apply even though the folder was edited since the pin.
-    discard_local_edits: bool = False
+class SkillUpdateCheckSettingBody(BaseModel):
+    """How often this machine checks Git-imported skills for updates in the
+    background: every 6 hours, every day, every week, or only when asked."""
 
-
-class SkillUpdateKeepRequest(BaseModel):
-    #: The commit not to offer again; the latest one seen when omitted.
-    commit: str | None = None
+    interval: UpdateCheckChoice
 
 
 class SkillUpdateMergedRequest(BaseModel):
-    #: The upstream commit the local edits were merged with — the preview's
-    #: ``to_commit``, in full or by a unique prefix of at least 7 characters.
+    #: The upstream commit the skill's folder was merged with — the hand-off's
+    #: ``commit``, in full or by a unique prefix of at least 7 characters.
     commit: str = Field(min_length=7, max_length=64)

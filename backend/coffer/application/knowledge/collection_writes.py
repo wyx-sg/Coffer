@@ -9,10 +9,10 @@ and the guide skill is re-rendered, because the description is what an agent
 recognises the collection by.
 
 **Restore a delete.** Deleting a document or a whole collection keeps it in the
-history (spec knowledge "Restore a deleted collection or document from Recent
-changes"). Restoring names the delete's change and puts back every file it
-removed, exactly as it was just before, as one new commit naming the user: a
-document into its collection; a collection as a new ``resources`` row under its
+history (spec knowledge "Undo a knowledge delete from its toast"). Restoring
+names the delete's change and puts back every file it removed, exactly as it
+was just before, as one new commit naming the user: a document into its
+collection; a collection as a new ``resources`` row under its
 old name with its documents, README and waiting items. Refused rather than
 overwritten when the document, or a collection of that name, exists again.
 """
@@ -31,7 +31,6 @@ from coffer.domain.knowledge.errors import (
     CollectionExists,
     KnowledgeNotADelete,
     KnowledgeRestoreConflict,
-    KnowledgeVersionNotFound,
 )
 from coffer.domain.knowledge.history import (
     OP_DELETE,
@@ -93,7 +92,7 @@ async def restore_deleted(
         raise KnowledgeNotADelete(change.version)
     removed = _removed(change)
     if not removed:
-        raise KnowledgeVersionNotFound(change.version)
+        raise KnowledgeNotADelete(change.version)
     before = f"{change.version}^"
     new_collection = operation == OP_REMOVE
     if new_collection:

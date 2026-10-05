@@ -5,7 +5,7 @@ description: How Coffer's knowledge layer works — a directory of Markdown file
 
 # Knowledge
 
-This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how new material becomes documents at once, how an agent writes and tidies those documents by rules the `coffer-guide` skill teaches, how every write is kept as a version you can restore, how the catalogue reaches agents through that skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
+This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how new material becomes documents at once, how an agent writes and tidies those documents by rules the `coffer-guide` skill teaches, how every write is kept as a version git can show and an agent can bring back, how the catalogue reaches agents through that skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
 
 ## The problem
 
@@ -28,8 +28,8 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | Material is promoted to a document at once. An upload becomes a document as it arrives, and a file dropped into a hidden `.inbox/` is adopted by the next sweep. | Nothing waits for a model connection or a pass. What was submitted is readable by every agent within the minute. |
 | Coffer runs no model over knowledge. Where a fact belongs, which documents answer the same question and which statement is stale are judged by the agent, by rules the `coffer-guide` skill teaches. | The agent a person already uses has file tools, a stronger model and the person watching. A second, unattended model of Coffer's own needed its own connection, and without one its work did not happen. |
 | Tidying starts only when a person presses **Tidy**. Coffer starts no agent run of its own. | An unattended agent run would spend the person's quota without their knowledge and leave conversations nobody started. |
-| Every accepted write is one git commit naming its writer. | Agents rewrite the only copy. A history of who changed what makes every change inspectable and every version restorable. |
-| The newer statement wins unless the older one is shown to be right. No writer is exempt. | A statement is judged by when it was made and the evidence behind it, never by who wrote it: a person's edit and an agent's can both be stale or wrong. History and restore are the recovery path. |
+| Every accepted write is one git commit naming its writer. | Agents rewrite the only copy. A history of who changed what makes every change inspectable and every version one `git` or one hand-off to an agent away. |
+| The newer statement wins unless the older one is shown to be right. No writer is exempt. | A statement is judged by when it was made and the evidence behind it, never by who wrote it: a person's edit and an agent's can both be stale or wrong. The vault's history and an agent's restore are the recovery path. |
 | No document may name another knowledge file. The guide teaches it as a writing rule. | Paths move as the corpus is reorganised. The catalogue resolves subjects to paths, and the catalogue is generated. |
 | No retrieval tool. The catalogue rides in Coffer's own skill. | Agents read files with the tools they already use. The layer's job is to put the right absolute paths in front of the model. |
 | Agents add knowledge by writing into a collection's documents with their own file tools. No agent-facing tool: Coffer's only built-in MCP tool is `coffer__search_tools`. | Agents already write files. The guide tells them where, and the sweep commits what they changed. |
@@ -79,7 +79,7 @@ reviewed_by: alice          # a key a person added; always preserved
 ---
 ```
 
-Coffer writes five keys, in a fixed order: `title`, `description`, `actor` (`agent` or `user`), `created_at` and `updated_at`. Any other key a person added is kept, with its parsed value unchanged, whenever Coffer rewrites the file. This matters because agents and Coffer's own saves rewrite documents, and dropping an unknown key would quietly delete a person's `tags:`.
+Coffer writes five keys, in a fixed order: `title`, `description`, `actor` (`agent` or `user`), `created_at` and `updated_at`. Any other key a person added is kept, with its parsed value unchanged, whenever Coffer rewrites the file. This matters because agents and Coffer's own rewrites change documents, and dropping an unknown key would quietly delete a person's `tags:`.
 
 ### One module owns every path
 
@@ -95,7 +95,7 @@ Every entrance ends in a document. None of them waits.
 | A document written straight into a collection | An agent's own file tools, or a person's editor |
 | A Markdown file dropped into `<collection>/.inbox/` | An agent outside Coffer, another machine, or an older guide; the sweep adopts it |
 
-There is no entrance that creates a document at a path, and the web UI has no form for typing one in: a person writes through the editor (a save of an existing document's body) or uploads.
+There is no entrance that creates a document at a path, and the web UI has no form for typing one in: a person writes in their own editor or uploads. The web UI shows a document read-only and opens it in the editor.
 
 ```mermaid
 flowchart TD
@@ -147,7 +147,7 @@ Neither the original bytes nor the extracted text is kept as a file beside the d
 
 Writing, editing or deleting a document directly, in your editor or with an agent's own file tools, is a complete way to change knowledge. No import or registration step is needed, and the change is live on the next read. The sweep commits it as an edit on disk (see [History](#history)). Deleting a document through Coffer is a person's action in the web UI. Coffer offers no tool that deletes anything.
 
-The web UI can also edit a document in place. A save replaces a document's **body** and keeps its frontmatter. Reading a document yields a fingerprint of the file, and the save must send back the one the editor loaded: a file that changed on disk since, whether by a person's own editor or an agent, is refused as a conflict and left untouched. The refusal carries the document as it is on disk now, its body and its fingerprint, so the editor can offer Reload, Compare and Copy my text without a second save over the file; saving the person's text again needs the new fingerprint. Each save records one `knowledge_edited` audit event and is one commit naming the user (see [History](#history)).
+The web UI does not edit documents: a document's pane is read-only (Preview and Source) with **Open in editor** and **Reveal in Finder**, so there is no save route, no file fingerprint and no stale-save refusal. Coffer's route table has nothing that writes a document's text.
 
 ## Tidying is the agent's job
 
@@ -187,7 +187,7 @@ Two rules are about judgement and so live in the guide, not in code:
 - **The newer statement wins, unless the older one is shown to be right.** When new material contradicts a document, the document is corrected unless a source, a date, a command's output or the code shows the older statement is right. The superseded statement stays legible with the date it changed, for example "(previously recorded as X; corrected 2026-09-20)".
 - **No writer is exempt.** A person, an agent and a tidy are judged by when a statement was made and the evidence behind it, never by who wrote it.
 
-What protects the data is mechanical. A save from the web UI is refused when the file changed since it was loaded, so an agent's edit is never silently reverted. A rewrite that Coffer itself makes keeps every frontmatter key it did not set. Every agent edit is a version in the history, and a version can be restored.
+What protects the data is mechanical. Coffer saves no text of a person's on the page, so a stale copy in the browser cannot revert an agent's edit. A rewrite that Coffer itself makes keeps every frontmatter key it did not set. Every agent edit is a version in the history, and a version can be restored.
 
 ## The sweep
 
@@ -214,35 +214,31 @@ The sweep runs on every machine. It writes only what it promotes, and that write
 
 ## History
 
-Every accepted write to a collection is one git commit naming its **writer**, following the decision that every vault write is a validated commit naming its writer. A document's history is therefore a list of versions, each with a writer, a time and a diff, and any change can be inspected and any version restored.
+Every accepted write to a collection is one git commit naming its **writer**, following the decision that every vault write is a validated commit naming its writer. A document's history is therefore a list of versions, each with a writer, a time and a diff, read with git, and any version can be brought back by an agent.
 
 ### Writers
 
 | Writer | What it covers |
 | --- | --- |
-| `user` | A person's save, delete or restore, and collection create, rename and remove. |
+| `user` | A person's upload, delete or undo of a delete, a collection's description edit, and collection create, rename and remove. |
 | `agent` | An agent's submission promoted on arrival, naming the agent. |
 | `curation` | A commit an earlier version of Coffer made as a curation pass. It stays in the history under this label. |
 | `sync` | Paths that vault sync applied. |
 | `disk` | Anything else found changed in the tree: a person's own editor, an agent's own file tools. |
 
-Changes made outside Coffer are never counted as Coffer's. The vault's scanner commits whatever a person or an agent's own tools changed as **Edited on disk** once the file has been quiet, and it does the same at every sweep tick and before every history read.
+Changes made outside Coffer are never counted as Coffer's. The vault's scanner commits whatever a person or an agent's own tools changed as **Edited on disk** once the file has been quiet, and it does the same at every sweep tick and before every read of the changes feed.
 
 ### Where it lives
 
-The history is the vault repository's own: collections sit under `knowledge/` in `~/.coffer/vault`, so a document's history is that file's history in the one repository, and the knowledge routes read it from there.
+The history is the vault repository's own: collections sit under `knowledge/` in `~/.coffer/vault`, so a document's history is that file's history in the one repository, read with `git -C ~/.coffer/vault log -p -- knowledge/<collection>/<path>`. Coffer's own routes read it for one thing, the changes feed an undo needs.
 
 Knowledge commits carry the vault's trailers plus the knowledge ones (`Coffer-Writer`, `Coffer-Operation`, `Coffer-Actor`, `Coffer-Agent`, `Coffer-Collection`, `Coffer-Item`, `Coffer-Status`, `Coffer-Restored-From`). Git runs with the user's global and system configuration pinned to `/dev/null`, so a personal hook, signing rule or alias cannot change what is recorded. The vault needs git: without it the daemon [waits for git](/architecture/daemon#waiting-for-git) and hands the install to an agent.
 
-### Reading and restoring a document
+### Undoing a delete, and older versions
 
-A document's versions are listed newest first with their writer and time, and each version's diff can be read. Restoring a version writes that version's bytes back as a new commit naming the user; the history before it stays intact. A deleted document is restored the same way, from the version before its deletion.
+Coffer shows no version list, diff or restore of a document. A document's **History…** dialog gives the path, a `git log -p` command and a hand-off: the daemon builds a prompt (`POST /api/v1/vault/history/handoff`) that names the file and the time, says the vault is a git repository whose history is never rewritten, and asks the agent to write the earlier content back as one new commit whose trailers are `Coffer-Writer: agent`, `Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`. The restore is the agent's own commit; the history before it stays intact. A deleted document comes back the same way, from the version before its deletion.
 
-A delete, of one document or of a whole collection, is itself a change in the feed, listing every file it removed. Restoring it reads each removed file from the commit before the delete and writes it back byte for byte, as one new commit naming the user and carrying `Coffer-Restored-From`. A document goes back into its collection. A collection gets a new resource file under its old name, then its documents, its README and any files still in its inbox. Nothing is written when the restore would overwrite: a document at the same path or a collection of the same name is refused, as is restoring a change that is not a delete. A restore records a `knowledge_edited` audit event naming the delete it undid.
-
-### Recent changes
-
-One feed lists the changes across every collection, or one, newest first. Each change carries its writer, its time, its collections and, for each document it touched, whether the document was added, modified or removed with its line counts. One change can be read in full, with each document's diff.
+What Coffer does restore is its own delete, while the toast's **Undo** is open. A delete, of one document or of a whole collection, is itself a change in the feed (`GET /knowledge/changes`), listing every file it removed. Undo (`POST /knowledge/changes/{version}/restore`) reads each removed file from the commit before the delete and writes it back byte for byte, as one new commit naming the user and carrying `Coffer-Restored-From`. A document goes back into its collection. A collection gets a new resource file under its old name, then its documents, its README and any files still in its inbox. Nothing is written when the restore would overwrite: a document at the same path or a collection of the same name is refused, as is restoring a change that is not a delete. A restore records a `knowledge_edited` audit event naming the delete it undid. Because a collection's registration cannot be brought back from git, **Delete collection** asks first; a document delete does not, since its file is one restore away.
 
 ## The coffer-guide skill
 
@@ -284,7 +280,7 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 
 ## Trade-offs
 
-- **Agents rewrite documents, and Coffer reviews nothing before they do.** The safeguards are the ones any file edit has: every change is a version naming its writer, any document can be restored to any version, and a tidy ends with the agent's own report of what it merged, split, corrected and deleted. A tidy that went wrong is repaired by restoring versions.
+- **Agents rewrite documents, and Coffer reviews nothing before they do.** The safeguards are the ones any file edit has: every change is a version naming its writer, any document can be brought back to any version through git or an agent, and a tidy ends with the agent's own report of what it merged, split, corrected and deleted. A tidy that went wrong is repaired by handing the restore of a version to an agent.
 - **Notes duplicate until someone tidies.** A fact an agent writes beside an existing one, or a document promoted from an upload, stands as it arrived. The person sees the overlap and the **Tidy** button, and nothing merges documents behind their back.
 - **The history grows with every write.** Nothing prunes it. It sits beside the documents and holds text that was later folded away or deleted.
 - **User content can leave the machine only through the agent the person chose.** Coffer sends no knowledge to any model. Tidy sends it to the agent's own provider, as every conversation does.
@@ -296,10 +292,10 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 
 | Package | Responsibility |
 | --- | --- |
-| `application/knowledge/` | Collections, submission and promotion, normalising a dropped inbox file, uploads, the sweep, the tidy prompts, history reads, restore, recent changes, and the `coffer-guide` text |
+| `application/knowledge/` | Collections, submission and promotion, normalising a dropped inbox file, uploads, the sweep, the tidy prompts, the changes feed, undoing a delete, the restore hand-off's prompt, and the `coffer-guide` text |
 | `infrastructure/knowledge/` | Paths and their guards, file reads and writes, frontmatter, naming, the catalogue, the history repository, converters |
 | `domain/handoff` | The one place every hand-off prompt, Tidy included, is rendered |
-| `surfaces/http/` | Sweep wiring and start; the renderer-to-skill-seed join; the web UI's knowledge and history routes |
+| `surfaces/http/` | Sweep wiring and start; the renderer-to-skill-seed join; the web UI's knowledge routes and the history hand-off |
 
 All paths are under `backend/coffer/`.
 

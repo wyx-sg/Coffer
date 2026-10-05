@@ -96,12 +96,8 @@ describe("McpToolsTab", () => {
 
   acceptance("mcp-gateway", "a server's Tools tab lists every tool", () => {
     renderTab();
-    expect(rowCount()).toBe(50);
-    expect(screen.getByTestId("mcp-tools-shown")).toHaveTextContent("Showing 50 of 78");
-
-    fireEvent.click(screen.getByRole("button", { name: "Show 28 more" }));
     expect(rowCount()).toBe(78);
-    expect(screen.getByTestId("mcp-tools-shown")).toHaveTextContent("Showing 78 of 78");
+    expect(screen.queryByText(/^Showing/)).toBeNull();
     expect(screen.queryByRole("button", { name: /Show \d+ more/ })).toBeNull();
   });
 
@@ -111,7 +107,6 @@ describe("McpToolsTab", () => {
       target: { value: "tool_77" },
     });
     expect(rowCount()).toBe(1);
-    expect(screen.getByTestId("mcp-tools-shown")).toHaveTextContent("Showing 1 of 1");
   });
 
   acceptance("web-ui", "a search does not match descriptions", () => {
@@ -128,7 +123,6 @@ describe("McpToolsTab", () => {
     expect(screen.getByRole("combobox", { name: "Exposure of tool_00" })).toHaveTextContent(
       "Auto · Listed",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Show 28 more" }));
     expect(screen.getByRole("combobox", { name: "Exposure of tool_77" })).toHaveTextContent(
       "Auto · Behind search",
     );

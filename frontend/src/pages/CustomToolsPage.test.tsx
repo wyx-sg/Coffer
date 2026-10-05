@@ -46,6 +46,15 @@ vi.mock("@/lib/api/secret", () => ({
     list: vi.fn(async () => ({
       refs: [
         {
+          ref: "secret/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          label: "Grafana token",
+          present: false,
+          locked: false,
+          cited_by: [],
+          mentioned_by_skills: [],
+          bindings: [],
+        },
+        {
           ref: "secret/billing-token",
           present: true,
           locked: false,
@@ -82,7 +91,9 @@ describe("CustomToolsPage", () => {
       .filter((text) => /deploy-api|grafana/.test(text));
     expect(names[0]).toContain("deploy-api");
     expect(names[1]).toContain("grafana");
-    expect(within(attention).getByText("Secret missing · grafana-token")).toBeInTheDocument();
+    expect(
+      await within(attention).findByText("Secret missing · Grafana token"),
+    ).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Healthy" })).getByText("billing"),
     ).toBeInTheDocument();

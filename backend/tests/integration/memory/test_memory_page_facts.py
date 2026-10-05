@@ -1,6 +1,6 @@
 """The facts the Memory page reads, over the real daemon: each partition's
 sources and distil state, each memory's agents, and the last read of
-the agents' memory (spec memory "Present a partition as its memories",
+the agents' memory (spec memory "Show a partition's memories read-only",
 "Report the last read of the agents' memory").
 
 Same boot as ``test_spec_scenarios_http``: the real app on a throwaway HOME,

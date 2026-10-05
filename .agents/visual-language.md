@@ -170,5 +170,5 @@ the image diff is reviewed like code.
 - **Count badges** are all `danger-strong` (red), capped at `9+`; on the rail
   they shrink to dots. An Experimental tag sits beside a page title, not on a
   sidebar row.
-- **Save on change.** Controls write as they change; only document editors have
-  an explicit Save and the unsaved-changes guard. A dialog's Cancel is `ghost`.
+- **Save on change.** Controls write as they change; there is no Save button and no
+  unsaved-changes guard, because the web UI edits no document. A dialog's Cancel is `ghost`.

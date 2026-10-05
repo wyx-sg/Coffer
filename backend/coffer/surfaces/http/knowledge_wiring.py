@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
 from coffer.application.knowledge import guide_render
-from coffer.application.knowledge.history_service import KnowledgeHistoryService
+from coffer.application.knowledge.change_service import KnowledgeChangeService
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.service import (
@@ -42,7 +42,7 @@ from coffer.infrastructure.platform.host import machine_label
 from coffer.surfaces.http.event_dependencies import announce_change
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
-    set_history_service,
+    set_change_service,
     set_ingest_service,
     set_knowledge_service,
 )
@@ -78,14 +78,14 @@ def wire_knowledge_kind(
         resources=resource_svc,
         audit=audit,
         on_catalogue_changed=on_catalogue_changed,
-        # Every write a commit naming its writer (spec knowledge "Keep every
-        # document's history"), in the vault's repository.
+        # Every write a commit naming its writer (spec knowledge "Commit every
+        # knowledge write naming its writer"), in the vault's repository.
         history=KNOWLEDGE_HISTORY,
         announce=lambda uid: announce_change(KIND_KNOWLEDGE, uid),
     )
     set_knowledge_service(service)
-    set_history_service(
-        KnowledgeHistoryService(
+    set_change_service(
+        KnowledgeChangeService(
             knowledge=service,
             history=KNOWLEDGE_HISTORY,
             audit=audit,

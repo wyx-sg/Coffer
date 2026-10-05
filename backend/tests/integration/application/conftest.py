@@ -64,7 +64,7 @@ async def agent_bundle(tmp_path: pathlib.Path):
         platform=HostPlatform(), resource_service=rs, audit=audit, config_file_store=store
     )
     detect = AutoDetectService(agent_service=svc, catalog=agent_catalog())
-    config_files = AgentConfigFileService(agent_service=svc, audit=audit, store=store)
+    config_files = AgentConfigFileService(agent_service=svc, store=store)
     mcp = AgentMcpService(
         agent_service=svc,
         audit=audit,

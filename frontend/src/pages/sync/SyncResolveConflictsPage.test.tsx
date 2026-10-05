@@ -165,7 +165,7 @@ describe("SyncResolveConflictsPage", () => {
   });
 
   test("Open in editor, then Mark resolved answers edited — a copy with markers is refused in place", () => {
-    seed(makeStopped([makeConflict(SKILL)]), { edited: "<<<<<<< this Mac\nmine\n=======\n" });
+    seed(makeStopped([makeConflict(SKILL)]));
     mocked(hooks.useAnswerFile).mockReturnValue(
       idleMutation({
         mutate: answer,
@@ -181,8 +181,12 @@ describe("SyncResolveConflictsPage", () => {
     expect(files().getByTestId(`conflict-file-${SKILL}`)).toHaveTextContent(
       "Editing in your editor",
     );
-    expect(screen.getByTestId("sync-conflict-saved")).toHaveTextContent("<<<<<<< this Mac");
-    expect(hooks.useFileVersions).toHaveBeenCalledWith(SKILL, true, { live: true });
+    // Coffer shows nothing of the copy: the editor is where it is read.
+    expect(screen.getByTestId("sync-conflict-editing")).toHaveTextContent(
+      "Save the file in your editor, then mark it resolved",
+    );
+    expect(screen.queryByText("The file as saved")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /open in editor/i })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Mark resolved" }));
     expect(answer).toHaveBeenCalledWith({ path: SKILL, answer: "edited" });
@@ -267,25 +271,25 @@ describe("SyncResolveConflictsPage", () => {
       agent_state: "merged_by_agent",
       agent_merged_at: "2026-09-13T09:41:00Z",
     } as const;
-    seed(makeStopped([merged, makeConflict(NOTE)]), {
-      merged: "merged\n",
-      merged_diff: "@@ -1,1 +1,2 @@\n-mine\n+mine\n+and theirs\n",
-    });
+    seed(makeStopped([merged, makeConflict(NOTE)]));
     show(SKILL);
     expect(files().getByTestId(`conflict-file-${SKILL}`)).toHaveTextContent(
       "Merged by an agent · check it",
     );
     const card = within(screen.getByTestId("sync-conflict-merged"));
     expect(card.getByText(/Claude Code merged both versions at/)).toBeInTheDocument();
-    // The merge is shown against this Mac's version, and is no answer yet.
-    expect(screen.getByTestId("sync-conflict-diff")).toHaveTextContent("and theirs");
+    // The merge is checked in the copy itself: no merged text or diff here, and no answer yet.
+    expect(card.getByText(/Open the copy in your editor to check the merge/)).toBeInTheDocument();
+    expect(screen.queryByTestId("sync-conflict-diff")).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
     expect(card.queryByRole("link", { name: "Open conversation" })).toBeNull();
     expect(screen.getByRole("button", { name: "Continue round" })).toBeDisabled();
 
-    fireEvent.click(card.getByRole("button", { name: "Mark resolved" }));
+    fireEvent.click(card.getByRole("button", { name: "Open in editor" }));
+    expect(editor).toHaveBeenCalledWith(SKILL, expect.anything());
+    fireEvent.click(screen.getByRole("button", { name: "Mark resolved" }));
     expect(answer).toHaveBeenCalledWith({ path: SKILL, answer: "edited" });
-    fireEvent.click(card.getByRole("button", { name: "Back to two choices" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to two choices" }));
     expect(discard).toHaveBeenCalledWith(SKILL, expect.anything());
   });
 
@@ -313,9 +317,7 @@ describe("SyncResolveConflictsPage", () => {
   });
 
   test("a join's Mark resolved is sent at once and refused in place", () => {
-    seedJoin([makeConflict(NOTE, { reason: "join_differs", ...MERGEABLE })], {
-      edited: "<<<<<<< this Mac\n",
-    });
+    seedJoin([makeConflict(NOTE, { reason: "join_differs", ...MERGEABLE })]);
     mocked(hooks.useChooseJoin).mockReturnValue(
       idleMutation({
         mutate: chooseJoin,

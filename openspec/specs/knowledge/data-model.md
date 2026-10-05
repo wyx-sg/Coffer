@@ -115,7 +115,7 @@ Login state is owned by `account.session`.
 
 These are the keys **Coffer writes**, not the only keys a document may carry. A
 person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
-rewrite Coffer makes — a body saved from the web UI — renders the known keys in a fixed order and then everything else unharmed,
+rewrite Coffer makes — a collection's description edit, say — renders the known keys in a fixed order and then everything else unharmed,
 values carried through as parsed rather than stringified. There is still no `id`
 — the path is the identity (see "Use the file path as a document's identity") —
 and none of the keys that described retired machinery (`lane`, `source_path`,
@@ -189,7 +189,7 @@ of them is persisted and none of them can be stale.
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `fingerprint` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); `fingerprint` is the sha256 of the file's bytes, which a save hands back (see "Save a document edited in the web UI"). |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
@@ -214,12 +214,10 @@ types and add the shapes that describe an answer no domain type does:
 `HandoffOut` (`prompt` and the facts it was written from), carried on a
 collection's read as `tidy_handoff`, and answered by `GET /knowledge/tidy-handoff` for
 all collections (see "Hand a tidy to the agent"); and
-`IngestedDocumentOut` (`path`, `title`, `description`, `converter`). The one
-write-a-document model is `FileSave` (`path`, `body`, `expected_fingerprint`): a
-person's edited body, saved over a document whose frontmatter is kept verbatim,
-refused with `KNOWLEDGE_FILE_CONFLICT` when the file's fingerprint moved since
-the read (see "Save a document edited in the web UI"). Every other entrance
-submits material, which becomes a document at once. The mirroring is
+`IngestedDocumentOut` (`path`, `title`, `description`, `converter`). There is no
+write-a-document model: every entrance submits material, which becomes a
+document at once, and a person's own text reaches a document through their
+editor. The mirroring is
 deliberate rather than redundant: the domain types describe what is on disk and
 the wire models describe what a client is promised, so removing a field from the
 wire never means hiding one from the layer.
@@ -260,7 +258,7 @@ already holding the root withholds nothing at all.
 ## The history
 
 Every accepted write to a collection is one commit, naming its writer, in the
-vault repository (see "Keep every document's history"; ADR every-vault-write-is-a-validated-commit-naming-its-writer): the
+vault repository (see "Commit every knowledge write naming its writer"; ADR every-vault-write-is-a-validated-commit-naming-its-writer): the
 knowledge history is the vault's history pathspec-limited to `knowledge/`, with
 every path handed back knowledge-root-relative (`KnowledgeHistory`,
 `infrastructure/knowledge/history.py`, a view over the process's one vault
@@ -268,14 +266,15 @@ writer). The vault's `.git/info/exclude` ignores every
 hidden entry under `knowledge/`, so a promoted file's document is the commit and
 the hidden drop zone is never versioned.
 
-There is still no table and no index: the history is git's, read back through
-`git log` when a surface asks.
+There is still no table and no index: the history is git's, read with `git log`
+by a person or an agent; the daemon reads it for one thing, the changes feed
+behind a delete's Undo (`GET /knowledge/changes`, `POST /knowledge/changes/{version}/restore`).
 
-**One commit per operation.** A person's save, delete or restore; material
+**One commit per operation.** A person's upload, delete or Undo of a delete, or description edit; material
 promoted on arrival; a collection created, renamed or removed. Before any of them, whatever changed under
 `knowledge/` that no open operation owns is committed first as a `disk` write,
 so a person's own editor is never counted as Coffer's; the sweep and every
-history read do the same. A sync round's merge is a `sync` commit by
+read of the changes feed do the same. A sync round's merge is a `sync` commit by
 construction.
 
 **Trailers.** Each commit's message is a summary line and the vault's trailers
@@ -289,14 +288,14 @@ construction.
 | `Coffer-Machine` | the machine that made the commit |
 | `Coffer-Agent` | an agent writer's name |
 | `Coffer-Collection` | the collection's name |
-| `Coffer-Restored-From` | the commit a restore reverses to |
+| `Coffer-Restored-From` | the commit a restore reverses to (an Undo, or an agent's restore of the history hand-off) |
 
 Commits an earlier version of Coffer made as curation passes keep their
 `Coffer-Item`, `Coffer-Status` and `Coffer-Undoes` trailers in the history and
 are read back under their writer's label.
 
-The value objects a surface reads back — `Change`, `DocumentChange`,
-`DocumentVersion`, `DocumentDiff`, `ChangeDetail`, `ChangesPage` — are in `backend/coffer/domain/knowledge/history.py`. A change's
+The value objects the changes feed reads back — `Change`, `DocumentChange`,
+`ChangesPage` — are in `backend/coffer/domain/knowledge/history.py`. A change's
 `version` is its commit id.
 
 ## Errors
@@ -309,17 +308,12 @@ holds the first group:
 | `CollectionNotFound` | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 |
 | `CollectionExists` | `KNOWLEDGE_COLLECTION_EXISTS` | 409 |
 | `KnowledgeFileNotFound` | `KNOWLEDGE_FILE_NOT_FOUND` | 404 |
-| `KnowledgeFileConflict` | `KNOWLEDGE_FILE_CONFLICT` | 409 |
 | `UnsafeKnowledgePath` | `KNOWLEDGE_PATH_UNSAFE` | 400 |
 | `UploadTooLarge` | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 |
 | `KnowledgeHistoryUnavailable` | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 |
-| `KnowledgeVersionNotFound` | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 |
 | `KnowledgeError` (base) | `KNOWLEDGE_ERROR` | 400 |
 
 `KNOWLEDGE_COLLECTION_NOT_FOUND` answers a name no registered collection holds.
-`KNOWLEDGE_FILE_CONFLICT` answers a save whose `expected_fingerprint` no longer
-matches the file's bytes; the file is left untouched, and `details` carries
-`saved: false` with the document's `current_body` and `current_fingerprint`.
 A uid-addressed route given a uid no resource answers to gives the generic
 `RESOURCE_NOT_FOUND` (404) instead.
 
@@ -352,9 +346,8 @@ agent (recorded by the sweep when it adopts the file), an upload or a
 channel — records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller
 (`actor_reported: true` when the actor came from the file's own frontmatter),
 with the document path it was promoted to (see "Adopt a file dropped into the
-inbox"); a save from the web UI records
-`KNOWLEDGE_EDITED` with the path, and so does a restore (with `restored_from`)
-a delete records `KNOWLEDGE_DELETED`. `KNOWLEDGE_CURATED` rows an
+inbox"); an Undo of a delete records
+`KNOWLEDGE_EDITED` with the path and `restored_from`; a delete records `KNOWLEDGE_DELETED`. `KNOWLEDGE_CURATED` rows an
 earlier version of Coffer recorded for curation passes stay in the audit log and
 keep rendering under their label.
 

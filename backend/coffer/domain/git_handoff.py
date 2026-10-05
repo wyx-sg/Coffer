@@ -1,5 +1,5 @@
 """The hand-offs for a machine with no ``git``, or one too old (spec knowledge
-"Keep every document's history"; the skill Git
+"Commit every knowledge write naming its writer"; the skill Git
 import; spec daemon "Wait in a setup state when git is missing or too old").
 
 Coffer reads git history and Git repositories with the machine's own ``git``

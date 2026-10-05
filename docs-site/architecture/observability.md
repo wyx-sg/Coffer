@@ -173,16 +173,18 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
 | Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
-| Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
+| Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
 | Channels | `channel_pairing_issued`, `channel_paired` |
-| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person), `vault_file_restored` |
+| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person) |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `sync_plaintext_pushed`, `master_key_exported`, `master_key_imported` |
 | Providers | `provider_switched`, `provider_transcribe_default_set`, `provider_projection_refused` |
 
 No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.
+
+Four events are no longer recorded, because the web UI no longer edits an agent's config file, a memory note or a vault file, and no longer restores a vault version: `agent_config_file_written`, `agent_config_file_deleted`, `memory_note_edited` and `vault_file_restored`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. A restore an agent commits is a vault commit naming `Coffer-Writer: agent`; the vault's git history answers who changed the file.
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.

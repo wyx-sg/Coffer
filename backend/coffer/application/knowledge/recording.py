@@ -1,5 +1,5 @@
 """Record a knowledge write as one commit naming its writer (spec knowledge
-"Keep every document's history").
+"Commit every knowledge write naming its writer").
 
 Every write the service makes goes through here, so the rule
 is stated once: open the operation's commit in the vault repository (which

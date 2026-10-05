@@ -24,7 +24,12 @@ from coffer.application.memory.context import compose_context
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.note import TYPE_PROJECT, Note
-from coffer.infrastructure.memory import note_edit, paths, store
+from coffer.infrastructure.memory import paths, store
+from coffer.infrastructure.memory.frontmatter import (
+    atomic_write,
+    render_frontmatter,
+    split_frontmatter,
+)
 from coffer.infrastructure.memory.raw_store import (
     StoredRawEntry,
     delete_raw_entry,
@@ -236,10 +241,11 @@ async def test_a_merge_done_by_origins_and_a_deleted_file_is_not_undone(vault: _
 
 
 def _edit(slug: str, body: str) -> None:
-    fingerprint = note_edit.note_fingerprint(_PARTITION, slug)
-    note_edit.save_body(
-        _PARTITION, slug, body, expected_fingerprint=fingerprint, stamp="2026-10-04T00:00:00+00:00"
-    )
+    """A person's edit in their own editor: the body replaced, the frontmatter kept."""
+    path = paths.note_path(_PARTITION, slug)
+    frontmatter, _old = split_frontmatter(path.read_text(encoding="utf-8"))
+    frontmatter["updated_at"] = "2026-10-04T00:00:00+00:00"
+    atomic_write(path, render_frontmatter(frontmatter, body + "\n"))
 
 
 @pytest.mark.asyncio

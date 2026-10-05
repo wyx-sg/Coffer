@@ -160,7 +160,7 @@ Coffer touches an agent's files through a short list of documented surfaces:
 
 | Surface | Coffer reads | Coffer writes |
 | --- | --- | --- |
-| Allowlisted config files | yes | yes, when you save in the editor |
+| Allowlisted config files | yes (listed, never their content) | never on your behalf; you edit them in your own editor |
 | MCP entries in the agent's config | yes | install/uninstall of `coffer`, remove, adopt |
 | Plugins | inventory and enabled state | the enabled switch; uninstall by the type's own strategy |
 | Model provider keys | yes (checked on every reconcile pass) | when you switch a [provider](/guides/providers), and to bring a projection whose values went stale back in line |
@@ -168,18 +168,17 @@ Coffer touches an agent's files through a short list of documented surfaces:
 | Sessions (the agent's own conversation records) | yes, through the agent | rename and delete, through the agent, when you ask |
 | Codex `auth.json` | never | never |
 
-Every write:
+Every write Coffer makes:
 
-- addresses a file by its allowlist **key**, never by a path you supply — an unknown key is a 404 with no file access;
-- validates `json` and `toml` content before writing and refuses malformed input with the file untouched;
 - replaces the file atomically (temp file plus rename);
+- refuses to write onto a file that changed since Coffer read it — the agent rewrote it in between — with `CONFIG_FILE_STALE`, leaving the file untouched;
 - copies the previous content to `~/.coffer/config-backups` (one timestamped file per write, never next to the agent's file); the **Config backups** retention policy deletes old ones after 30 days by default and always keeps each file's newest;
 - edits Codex's `config.toml` with `tomlkit`, so your comments, key order and Codex's own internal tables (`[marketplaces.*]`, `[hooks.state.*]`, `[projects.*]`) survive byte-for-byte;
 - records an audit entry.
 
 When a config file cannot be parsed, the MCP and Plugins tabs show the parse error and switch to read-only for that file; the rest of the agent page keeps working.
 
-## Edit config files
+## Config files
 
 Each type has a fixed allowlist:
 
@@ -194,12 +193,12 @@ Each type has a fixed allowlist:
 | | `instructions` | `<config_dir>/AGENTS.md` |
 | | `hooks` | `<config_dir>/hooks.json` |
 
-**Web UI:** open the agent and choose **Config files**. Select a file to view it; the viewer becomes editable behind **Edit**. Beside the content you can open the file in your external editor or reveal it in the file manager. An unsaved draft asks before you switch files, tabs or pages, in the same **Leave without saving?** dialog every editor uses.
+**Web UI:** open the agent and choose **Config files**. The tab is a read-only list: each row names the file, its folder, its size and when it changed, with **Open in editor** and **Reveal in Finder**. A directory entry lists each file inside it as its own row. A file that does not exist yet reads **Not created** and offers only **Reveal in Finder**, because opening a file creates nothing. Coffer shows no file's content here and has no editor, **New file** or **Delete**: you change a config file in your own editor (the one chosen in **Settings › General**), or ask the agent to. Coffer's own changes to these files — connecting, repairing, a plugin switch, an MCP entry, a provider switch — go through **Review changes** first.
 
-Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
+**API:** `GET /agents/{uid}/config-files` lists the files with their key, path, folder, format, size and modified time. There is no route that reads or writes a file's content.
 
-::: tip Concurrent edits are refused, not overwritten
-Every read returns a fingerprint of the content. The editor sends it back with the save, and if the file changed on disk in the meantime — the agent itself rewrote it, or you saved it elsewhere — the write is refused with `CONFIG_FILE_STALE` and the file is left as it is. Re-open and save again.
+::: tip Your edits are never overwritten
+Coffer keeps the previous content of every file it writes under `~/.coffer/config-backups`, and refuses to write onto a file that changed after Coffer read it. If you or the agent edit a file while Coffer is about to write it, Coffer's write is refused with `CONFIG_FILE_STALE` and your edit stays.
 :::
 
 ## Manage the agent's own MCP entries
@@ -264,7 +263,7 @@ For Codex it also says whether Codex will run the hook. Codex skips an entry you
 
 It also shows when the hook last fired, from the [audit log](/guides/activity). **Never fired** on an agent you use every day is the sign that the agent is not running the hook; the block says the likely cause and links to **Activity**, and Overview lists it under **Needs you**.
 
-**The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over the command and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in Config files**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in **Config files**.
+**The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over the command and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in your editor.
 
 ## Models
 
@@ -349,7 +348,7 @@ Coffer sends the same request the single-item action sends, once per item and on
 | The agent reads **Config left behind** | Its program is not on your login shell's `PATH`; only its config directory is left | Reinstall the agent (**Hand off to &lt;Agent&gt; ▾** on its row), or put its program on your `PATH`. |
 | Detected as **Installed, never run** | The program is installed but has never created its config directory | Connect it anyway: registering at the standard directory creates it. |
 | Registering is refused with `AGENT_TYPE_REGISTERED` | An agent of that type is already registered; there is one per type | To use another directory, choose **Use a different config directory…** from the row's **⋯** menu instead. |
-| A save fails with `CONFIG_FILE_STALE` | The file changed after you opened it | Re-open the file and save again. |
+| A Coffer change fails with `CONFIG_FILE_STALE` | The agent's file changed after Coffer read it | Run the action again; Coffer reads the file afresh. |
 | Plugin uninstall is missing | `claude` is not on `PATH` | Run `claude plugin uninstall <id>` yourself. |
 
 ## Related

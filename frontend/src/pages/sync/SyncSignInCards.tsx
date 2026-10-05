@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { KeyRound } from "lucide-react";
 
+import { SecretNameLink } from "@/components/secret/SecretNameLink";
 import { Button } from "@/components/ui/button";
 import type { SyncProblem } from "@/lib/api/sync";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
@@ -21,9 +22,7 @@ interface Props {
 function SecretName({ name }: { name: string }) {
   return (
     <>
-      <code className="rounded-xs bg-code px-1 py-0.5 font-mono text-xs text-text">
-        {name}
-      </code>{" "}
+      <SecretNameLink secretRef={name} />{" "}
     </>
   );
 }
@@ -52,9 +51,6 @@ export function AuthFailedCard({ problem, host, onIgnore }: Props) {
       <Actions>
         <Button asChild variant="outline" size="sm">
           <Link to="/sync?tab=remote&focus=secret">{t("sync.problem.chooseSecret")}</Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/secrets">{t("sync.problem.openSecrets")}</Link>
         </Button>
       </Actions>
     </SyncBannerCard>

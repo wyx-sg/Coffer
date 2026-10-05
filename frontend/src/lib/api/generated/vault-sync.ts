@@ -862,16 +862,8 @@ export interface components {
         };
         /** FileVersionsOut */
         FileVersionsOut: {
-            /** Base */
-            base: string | null;
             /** Binary */
             binary: boolean;
-            /** Edited */
-            edited: string | null;
-            /** Merged */
-            merged: string | null;
-            /** Merged Diff */
-            merged_diff: string | null;
             /** Ours */
             ours: string | null;
             /** Path */

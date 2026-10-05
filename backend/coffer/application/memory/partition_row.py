@@ -50,8 +50,8 @@ class MemoryPartitionConfig(BaseModel):
 
 @dataclass(frozen=True)
 class PartitionSummary:
-    """One partition as the management surface lists it (see "Present a partition as its
-    memories").
+    """One partition as the management surface lists it (see "Show a partition's memories
+    read-only").
 
     ``unresolvable`` is computed here rather than stored, and it is the whole of "Report
     unresolvable partitions": a partition whose repository is no longer on this disk can
@@ -74,7 +74,7 @@ class PartitionSummary:
     unresolvable: bool
     #: When a distil pass last finished over this partition, or ``None`` if none
     #: has — what the table's Distil column and the header's "distilled 2 h ago"
-    #: read (spec memory "Present a partition as its memories").
+    #: read (spec memory "Show a partition's memories read-only").
     distilled_at: datetime | None = None
     #: The agents (resource names) this partition's memory came from.
     sources: tuple[str, ...] = ()

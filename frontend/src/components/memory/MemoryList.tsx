@@ -1,7 +1,6 @@
 // frontend/src/components/memory/MemoryList.tsx — a partition's memories, then its Retired group.
 //
-// The left column of the Memories tab (spec memory "Present a partition as its
-// memories"): each memory as its title and one-line description, the selected
+// The left column of the Memories tab (spec memory "Show a partition's memories read-only"): each memory as its title and one-line description, the selected
 // one highlighted. Under them, a collapsed "Retired (n)" group, read-only:
 // each retired memory with the reason it left. There is no Restore and no
 // action in the list: the selected memory's Edit sits on the pane beside it. The Retired group is pinned under the list

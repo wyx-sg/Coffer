@@ -135,7 +135,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Fix.** Install or update git. **Copy prompt** on the screen (or the prompt the command printed) hands the chore to your agent, which picks the way that fits your machine. Then press **Check again**: once git is there, Coffer restarts its daemon and opens normally. From a terminal, `coffer daemon restart` does the same.
 
-### The UI lost its language, page size or sidebar state
+### The UI lost its language or sidebar state
 
 **Cause.** The browser keeps those preferences per origin, and the origin includes the port. The daemon is now on a different port than before, so the browser treats it as a different site.
 
@@ -182,8 +182,8 @@ See [Secret store](/guides/secret-store).
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| The **Sync** page shows `deletions held` (**Review deletions**) | The deletion breaker held a round. | Read the list on **Review held deletions**, then **Delete** the files or **Restore** them. After a reinstall, restore. |
-| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | **Resolve conflicts** on the **Sync** page: answer each file, then **Continue round**. To have your agent merge them, press **Hand off to &lt;Agent&gt;**; when its merge shows as **Merged by an agent · check it**, check the diff and press **Mark resolved**. |
+| The **Sync** page shows `deletions held` (**Review deletions**) | The deletion breaker held a round. | Read the list on **Review held deletions**, then press **Delete N files** or **Keep the files**. After a reinstall, keep the files. |
+| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | **Resolve conflicts** on the **Sync** page: answer each file, then **Continue round**. To have your agent merge them, press **Hand off to &lt;Agent&gt;**; when its merge shows as **Merged by an agent · check it**, read the copy with **Open in editor** and press **Mark resolved**. |
 | `join required` | This machine has not joined the remote. | **Join and pull** on the **Sync** page |
 | Secrets cannot be decrypted | This machine lacks the master key. | **Import a master key** on **Settings › Security** |
 | Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and choose it under **Secret** on the **Remote** tab, or use an SSH key that needs no passphrase prompt. |

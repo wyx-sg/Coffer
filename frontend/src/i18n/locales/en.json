@@ -111,19 +111,6 @@
     "saved": "Saved",
     "showPassword": "Show",
     "hidePassword": "Hide",
-    "discardChanges": {
-      "title": "Discard unsaved changes?",
-      "body": "Your edits to this file will be lost.",
-      "confirm": "Discard"
-    },
-    "leaveGuard": {
-      "title": "Leave without saving?",
-      "body": "You edited {{file}} in {{owner}}. If you leave now, those edits are lost.",
-      "discard": "Discard changes",
-      "keep": "Keep editing",
-      "saveAndLeave": "Save and leave",
-      "saveFailed": "Couldn’t save {{file}}"
-    },
     "couldntDelete": "Couldn’t delete {{name}}",
     "couldntDeleteSelected": "Couldn’t delete the selection",
     "bulk": {
@@ -167,9 +154,6 @@
   },
   "files": {
     "readOnly": "Read-only",
-    "unsaved": "Unsaved changes",
-    "unsavedChanges": "Unsaved changes",
-    "notSaved": "Not saved",
     "viewLabel": "Show as",
     "preview": "Preview",
     "source": "Source",
@@ -515,8 +499,6 @@
       "noToolsYet": "Coffer hasn't listed its tools yet — it lists them once the server answers.",
       "showAllInTools": "Show all {{count}} in Tools",
       "allTools": "All tools",
-      "showingOf": "Showing {{shown}} of {{total}}",
-      "showMore": "Show {{count}} more",
       "filterCaps": "Search",
       "mostBehindSearchValue": "Most behind search",
       "listedAndBehind": "{{listed}} listed · {{behind}} by search",
@@ -1070,8 +1052,6 @@
       "features": "Features"
     },
     "general": {
-      "pageSize": "Rows per page",
-      "pageSizeHelp": "How many rows a table shows before paging.",
       "theme": "Theme",
       "themeHelp": "System follows the macOS appearance.",
       "themeSystem": "System",
@@ -1099,6 +1079,12 @@
       "preferredTerminalNeedsCommand": "The template needs {command}.",
       "handoffAgent": "Hand-off agent",
       "handoffAgentHelp": "The agent a hand-off button starts.",
+      "skillUpdateCheck": "Check skills for updates",
+      "skillUpdateCheckHelp": "How often this Mac looks for newer versions of skills added from Git. Check for updates on a skill always works.",
+      "skillUpdateCheck6h": "Every 6 hours",
+      "skillUpdateCheck1d": "Every day",
+      "skillUpdateCheck7d": "Every week",
+      "skillUpdateCheckManual": "Only when I ask",
       "handoffAgentNone": "No agent is available. Install Claude Code or Codex to hand work off."
     },
     "daemon": {
@@ -1669,10 +1655,8 @@
     "KNOWLEDGE_COLLECTION_EXISTS": "A knowledge collection with that name already exists",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "Knowledge collection not found",
     "KNOWLEDGE_ERROR": "The knowledge layer rejected that operation",
-    "KNOWLEDGE_FILE_CONFLICT": "This document changed on disk since you opened it — your text was not saved. Reload, compare, or copy your text first.",
     "KNOWLEDGE_FILE_NOT_FOUND": "Knowledge file not found",
     "KNOWLEDGE_HISTORY_UNAVAILABLE": "Document history is unavailable: git is not installed on this machine",
-    "KNOWLEDGE_VERSION_NOT_FOUND": "That version isn't in this document's history",
     "KNOWLEDGE_PATH_UNSAFE": "That path is outside the knowledge collection",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "This file is too large to upload. The limit is 20 MB.",
     "MASTER_KEY_FILE_INVALID": "That is not a Coffer master key file",
@@ -1683,7 +1667,6 @@
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
     "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
-    "MEMORY_NOTE_CONFLICT": "That memory changed on disk since you opened it — your text was not saved. Reload, compare, or copy your text first.",
     "MEMORY_NOTE_NOT_FOUND": "That memory note wasn't found",
     "MEMORY_RAW_ENTRY_NOT_FOUND": "That raw memory entry wasn't found",
     "MEMORY_UNREADABLE": "That memory file could not be read",
@@ -1706,7 +1689,6 @@
     "SCOPE_INVALID": "That reach isn't valid for this resource kind",
     "SHIM_NOT_FOUND": "Couldn’t find coffer-mcp-shim, the program an agent starts to reach Coffer. An agent can find or reinstall it; then try again.",
     "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable — check its permissions",
-    "SKILL_FILE_STALE": "The skill file changed on disk since you loaded it. Reload and retry.",
     "SKILL_INVALID": "The skill is invalid",
     "SYNC_CANNOT_RETIRE_SELF": "A machine cannot retire itself",
     "SYNC_NOTHING_TO_ROLL_BACK": "There is no round to roll back to",
@@ -1739,7 +1721,6 @@
     "OPENAPI_FILE_NEEDED": "This group was imported from a file: choose the file again to re-import",
     "SKILL_STAGING_NOT_FOUND": "That staged source is gone — it was added, cancelled or expired. Start again.",
     "SKILL_SOURCE_UNREACHABLE": "Git could not reach the skill's repository.",
-    "SKILL_UPDATE_CONFLICT": "The skill was edited since its pinned commit. Keep your edits, or take the update and discard them.",
     "SKILL_UPDATE_NOT_PENDING": "That commit is not the update waiting for this skill. Open the update again.",
     "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from.",
     "PORT_OUT_OF_RANGE": "Choose a port from 1024 to 65535.",
@@ -1761,7 +1742,6 @@
     "VAULT_FILE_STALE": "The file changed since you loaded it. Reload and try again.",
     "VAULT_GIT_FAILED": "git failed while reading or writing the vault.",
     "VAULT_PATH_INVALID": "That is not a path inside the vault.",
-    "VAULT_VERSION_NOT_FOUND": "That version of the file does not exist.",
     "SKILL_COPY_NOT_OURS": "An agent's copy of this skill is no longer Coffer's link, so Coffer won't remove it. Restore it from master first, or delete that folder yourself.",
     "SKILL_COPY_NOT_DIFFERING": "That agent's copy is Coffer's link now; there is nothing to compare.",
     "SKILL_ORPHAN_NOT_FOUND": "That folder is no longer outside your library.",
@@ -1790,7 +1770,6 @@
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
-    "loadMore": "Load {{count}} more",
     "loadingMore": "Loading more…",
     "loaded": "{{count}} loaded",
     "loadMoreShort": "Load more"
@@ -1798,7 +1777,6 @@
   "agents": {
     "hooks": {
       "parseError": "Couldn’t read {{file}}: {{error}}",
-      "openInConfig": "Open in Config files",
       "state": {
         "current": "Current",
         "stale": "Out of date",
@@ -2008,9 +1986,7 @@
     },
     "config": {
       "none": "No config files found.",
-      "notCreated": "not created",
-      "editorLabel": "Contents of {{key}}",
-      "selectFile": "Select a file to view.",
+      "notCreated": "Not created",
       "emptyDir": "No files yet.",
       "desc": {
         "settings": "{{agent}} settings: permissions, model and hooks.",
@@ -2155,7 +2131,6 @@
       "removeBody": "{{agent}} loses this server in its next session. A backup copy is kept in Coffer’s folder, and nothing in Coffer changes.",
       "removeDuplicateBody": "{{agent}} keeps getting {{name}} through Coffer. A backup copy is kept in Coffer’s folder, and nothing in Coffer changes.",
       "parseError": "Can’t read {{file}}: {{error}}. Its entries are read-only until the file is valid again.",
-      "openConfigFiles": "Open in Config files",
       "emptyTitle": "{{agent}} has no MCP servers of its own",
       "emptyDescription": "Servers in {{agent}}’s own config that bypass Coffer show up here.",
       "entry": {
@@ -2411,35 +2386,7 @@
       }
     },
     "configTab": {
-      "revert": "Revert",
-      "validJson": "Valid JSON",
-      "invalidJson": "Not valid JSON · Save is off until it is",
-      "staleTitle": "{{name}} changed on disk since you opened it",
-      "staleBody": "Your edits aren’t saved. Copy them somewhere safe, then reload the current file.",
-      "copyEdits": "Copy my edits",
-      "copyFailed": "Couldn’t copy — select the text and copy it by hand.",
-      "missingTitle": "{{name}} doesn’t exist yet",
-      "missingBody": "{{agent}} reads it if it’s there. Create it when you want to set something in it.",
-      "create": "Create {{name}}",
-      "directoryHint": "Select a file to open it.",
-      "deleteTitle": "Delete {{name}}?",
-      "deleteBody": "This deletes {{path}} from disk, so {{agent}} loses it. There is no copy to restore from.",
-      "deleteFile": "Delete…",
-      "newFile": "New file",
-      "newFileTitle": "New file in {{dir}}",
-      "newFileBody": "One Markdown file per subagent. Coffer starts it from a short template you can edit.",
-      "newFileName": "File name",
-      "newFileSavedAs": "Saved as {{path}}",
-      "newFileInvalid": "Use a plain file name ending in .md, without slashes.",
-      "newFileExists": "A file with this name is already there.",
-      "newFileCreate": "Create",
-      "title": "Config files · {{agent}}",
-      "treeLabel": "Config files",
-      "invalidAt": "Line {{line}}, column {{column}}: not valid JSON",
-      "discardAndReload": "Discard and reload",
-      "folder": "Folder",
-      "openFile": "Open file",
-      "moreFor": "More for {{name}}"
+      "title": "Config files · {{agent}}"
     },
     "sessionsTab": {
       "ariaLabel": "Sessions",
@@ -2631,8 +2578,7 @@
         "overview": "Overview",
         "files": "Files",
         "delivery": "Delivery",
-        "requires": "Requires",
-        "history": "History"
+        "requires": "Requires"
       },
       "source": {
         "builtin": "Written by Coffer"
@@ -2660,19 +2606,8 @@
     },
     "files": {
       "tree": "Files",
-      "editorLabel": "Contents of {{path}}",
-      "unsaved": "Unsaved changes",
-      "notSaved": "Not saved",
-      "conflictTitle": "{{file}} changed on disk after you opened it",
-      "conflictBody": "Something outside Coffer rewrote it. Your edit is still here, not saved. Compare the two and choose which to keep.",
       "lockBuiltin": "Written by Coffer — read-only",
-      "lockNotMine": "Not in your library — read-only",
-      "compare": "Compare…",
-      "copyMine": "Copy my text",
-      "discardTitle": "Discard your edit to {{file}}?",
-      "discardBody": "You changed {{file}} in {{owner}} and haven’t saved it. Leaving now throws the edit away; agents keep the saved version.",
-      "discardConfirm": "Discard edit",
-      "keepEditing": "Keep editing"
+      "lockNotMine": "Not in your library — read-only"
     },
     "checkCopies": "Check copies",
     "bulk": {
@@ -2791,41 +2726,6 @@
       "skillDelivered": "Delivered to the same agents",
       "skillNotDelivered": "Not delivered to {{agents}}"
     },
-    "history": {
-      "title": "No versions yet",
-      "none": "Every change to this skill’s files — yours, an agent’s, one made on disk — will be listed here as a version you can compare and restore.",
-      "builtinTitle": "Coffer’s own skill has no history",
-      "builtinBody": "Its files are rebuilt from the running build at every start, so there is no earlier version to go back to.",
-      "failedTitle": "Couldn’t read this skill’s history",
-      "listLabel": "Versions",
-      "current": "Current",
-      "versionLabel": "The chosen version",
-      "noFiles": "This version changed no file of the skill.",
-      "noTextChange": "No text change (a binary file, or only its mode).",
-      "restore": "Restore this version…",
-      "from": "From",
-      "to": "To",
-      "start": "Start",
-      "what": {
-        "restored": "Restored the version of {{date}}",
-        "restoredHash": "Restored version {{version}}",
-        "added": "Added {{file}}",
-        "removed": "Removed {{file}}",
-        "edited": "Edited {{file}}",
-        "changed": "Changed {{file}}",
-        "files_one": "Changed {{count}} file",
-        "files_other": "Changed {{count}} files"
-      },
-      "note": {
-        "restored": "Coffer put back the version of {{date}}.",
-        "agent": "{{agent}} changed this skill’s files through Coffer.",
-        "disk_one": "You changed {{file}} in your own editor; Coffer kept it as a version.",
-        "disk_other": "You changed {{count}} files in your own editor; Coffer kept them as a version.",
-        "user_one": "You edited {{file}} in Coffer’s editor.",
-        "user_other": "You edited {{count}} files in Coffer.",
-        "current": "This is the current version."
-      }
-    },
     "copies": {
       "title": "Check copies",
       "checking": "Checking every agent’s copy…",
@@ -2880,7 +2780,7 @@
       "body_one": "Deletes the master folder and removes its link from the agent that has it: {{agents}}.",
       "body_other": "Deletes the master folder and removes its link from the {{count}} agents that have it: {{agents}}.",
       "bodyNone": "Deletes the master folder. No agent has it now.",
-      "noUndo": "This can’t be undone from here. History keeps the files, so you can add it back from a version.",
+      "noUndo": "This can’t be undone from here. The vault’s git history keeps the files, so your agent can restore it.",
       "confirm": "Delete skill",
       "refusedTitle": "Nothing was deleted",
       "refusedBody": "is a regular folder now, not Coffer’s link — {{agent}} changed it. Coffer only removes what it made. Delete the skill and leave that folder to {{agent}}, or cancel and review the edit first.",
@@ -2891,6 +2791,7 @@
       "label": "More actions for {{name}}",
       "copyPath": "Copy master path",
       "copyFailed": "Couldn't copy to the clipboard",
+      "history": "History…",
       "delete": "Delete…"
     },
     "banner": {
@@ -2908,13 +2809,11 @@
       "unreachableTitle": "Can’t reach {{repo}}",
       "unreachableBody": "Last check at {{time}}: {{error}} The skill keeps working from its pinned copy; only updates are paused.",
       "updateTitle": "An update is available from {{repo}}",
-      "updateBody_one": "{{ref}} moved {{count}} commit past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until you review it.",
-      "updateBody_other": "{{ref}} moved {{count}} commits past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until you review it.",
-      "reviewUpdate": "Review update…",
+      "updateBody_one": "{{ref}} moved {{count}} commit past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until your agent has brought it in.",
+      "updateBody_other": "{{ref}} moved {{count}} commits past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until your agent has brought it in.",
       "defaultBranch": "The default branch",
       "repoTop": "the repository",
-      "masterBody": "{{path}} was removed outside Coffer. Its reach and History are still here; the last version is from {{when}}.",
-      "masterBodyNoHistory": "{{path}} was removed outside Coffer. Its reach is still here, but no earlier version is left to put back.",
+      "masterBody": "{{path}} was removed outside Coffer. Its reach is still here; an agent can look for a copy to put back.",
       "requiresBody": "{{name}} is still delivered, but its steps stop at the first call to a command that isn’t ready. Hand the install and the login to an agent, then check again.",
       "tool": {
         "off": "{{tool}} is off, so {{name}} can’t call it",
@@ -2949,7 +2848,7 @@
       "agentHelp_other": "Makes its files the master, so {{agents}} get them too.",
       "happenMasterAgent": "Its folder moves to ~/.coffer/content/backup/{{name}} and Coffer’s link takes its place.",
       "happenMasterOthers": "Nothing changes; it already gets the master.",
-      "happenAgentCoffer": "{{name}} takes {{agent}}’s files. Today’s master is kept in History.",
+      "happenAgentCoffer": "{{name}} takes {{agent}}’s files. Today’s master is kept in the vault’s history.",
       "happenAgentOthers": "Gets the files at once through its link.",
       "happenAgentAgent": "Its folder becomes Coffer’s link again.",
       "captionMaster": "The diff shows the change to the side you are not keeping: {{agent}}’s folder → the master.",
@@ -2957,13 +2856,9 @@
       "failed": "Couldn’t settle this folder"
     },
     "missing": {
-      "restore": "Restore it from History",
-      "restoreButton": "Restore from History",
       "deleteButton": "Delete skill…",
-      "restored": "Restored {{name}} from History",
       "emptyTitle": "No files to show",
-      "emptyBody": "The folder they lived in is gone. Restore it to see and edit them again, or look at any version in History.",
-      "openHistory": "Open History"
+      "emptyBody": "The folder they lived in is gone. Once a copy is put back, the files show here again."
     },
     "orphan": {
       "section": "Not in your library",
@@ -2992,22 +2887,30 @@
       "checking": "Checking…",
       "take": "Change to {{commit}}",
       "noteForm": "Nothing is replaced yet.",
-      "note": "The current version stays in History.",
+      "note": "The current version stays in the vault’s history.",
       "refHelp": "Leave empty for the default branch.",
       "pathHelp": "Where SKILL.md is. Leave empty when it is at the top.",
-      "cofferTakes": "Replaces {{name}}’s files with the source at {{to}}.",
+      "noFiles": "The new source holds the same files.",
+      "filesChange_one": "{{count}} file would change:",
+      "filesChange_other": "{{count}} files would change:",
+      "status": {
+        "added": "Added",
+        "removed": "Removed",
+        "modified": "Changed"
+      },
       "done": "{{name}} now follows {{repo}}",
       "failed": "Couldn’t change the source"
     },
     "update": {
-      "coffer": "Coffer.",
-      "agentSees": "Sees the new files at once through its link.",
-      "note": "Only {{name}} changes. You can restore the pinned version from History.",
-      "bothSides": " changed on both sides",
-      "cofferMoves_one": "Moves {{name}} from {{from}} to {{to}} ({{count}} commit). The pinned version stays in History.",
-      "cofferMoves_other": "Moves {{name}} from {{from}} to {{to}} ({{count}} commits). The pinned version stays in History.",
-      "done": "Updated {{name}} to {{commit}}",
-      "failed": "Couldn’t apply the update"
+      "handoff": "Hand off to {{agent}} to update",
+      "merged": "I merged it",
+      "mergedTitle": "Record {{name}} as merged?",
+      "mergedBody": "Coffer pins the skill to {{commit}} and leaves its files as your agent left them. Do this once the update is in the master folder.",
+      "mergedDone": "{{name}} is pinned to {{commit}}",
+      "mergedFailed": "Couldn’t record the merge",
+      "viewUpstream": "View upstream changes",
+      "range": "Commits",
+      "copyRange": "Copy the commit range"
     },
     "addReach": {
       "availableTo": "Available to",
@@ -3017,48 +2920,17 @@
       "note": "Nothing is written until you choose."
     },
     "checkingCopies": "Checking…",
-    "checkCopiesHint": "Compare every agent’s copy with its master",
-    "fileConflict": {
-      "title": "{{file}} changed on both sides",
-      "subtitle": "You edited it in Coffer; something outside Coffer rewrote it.",
-      "choose": "Which side to keep",
-      "keepMine": "Keep my edit",
-      "keepMineHelp": "Saves your text over the file. The version on disk stays in History.",
-      "takeDisk": "Take the version on disk",
-      "takeDiskHelp": "Reloads the file and drops your edit. Copy your text first if you still need it.",
-      "saveMine": "Save my edit",
-      "useDisk": "Use the version on disk",
-      "captionMine": "The diff shows the change to the side you are not keeping: the version on disk → your edit.",
-      "captionDisk": "The diff shows the change to the side you are not keeping: your edit → the version on disk.",
-      "failed": "Couldn’t save {{file}}"
-    },
-    "restore": {
-      "title": "Restore the version of {{date}}",
-      "coffer": "Writes the {{date}} files as a new version on top of today’s. Nothing in History is removed.",
-      "agent": "Sees the restored files at once through its link.",
-      "confirm_one": "Restore {{count}} file",
-      "confirm_other": "Restore {{count}} files",
-      "failed": "Couldn’t restore this version",
-      "loading": "Comparing with the current files…",
-      "note": "You can come back to today’s version the same way.",
-      "same": "The skill already matches this version.",
-      "toast": "Restored the version of {{date}}"
-    },
-    "conflict": {
-      "cofferTake": "Moves {{name}} to {{to}}. Your edits are replaced and kept in History.",
-      "cofferKeep": "{{name}} stays pinned at {{pinned}} with your edits.",
-      "agentTake": "Sees the new files at once through its link.",
-      "agentKeep": "Nothing changes; it keeps getting your version.",
-      "captionTake": "The diff shows the change to the side you are not keeping: your version → the update.",
-      "captionKeep": "The diff shows the change to the side you are not keeping: the update → your version."
-    }
+    "checkCopiesHint": "Compare every agent’s copy with its master"
   },
-  "vault": {
-    "writer": {
-      "user": "You",
-      "daemon": "Coffer",
-      "sync": "Git"
-    }
+  "vaultHistory": {
+    "title": "History",
+    "description": "A file's history is git's. Copy the command to read it yourself, or hand the restore to your agent.",
+    "path": "Path in the vault",
+    "at": "Restore to how it was on",
+    "atHint": "Optional. Leave it empty and your agent lists the versions and asks which one.",
+    "copyCommand": "Copy git command",
+    "copyFailed": "Couldn’t copy the command.",
+    "restoreWith": "Hand off to {{agent}} to restore"
   },
   "knowledge": {
     "subtitle": "Documents you and your agents write together. Every agent can read them.",
@@ -3071,8 +2943,7 @@
     },
     "tree": {
       "empty": "No documents yet",
-      "emptyFolder": "Nothing here yet",
-      "unsaved": "Unsaved changes"
+      "emptyFolder": "Nothing here yet"
     },
     "stats": {
       "documents": "Documents",
@@ -3086,7 +2957,8 @@
       "copyPath": "Copy path",
       "descriptionSaved": "Description updated",
       "descriptionUndoFailed": "Couldn’t restore the description",
-      "clickToEdit": "Click to edit"
+      "clickToEdit": "Click to edit",
+      "copyFailed": "Couldn’t copy the path"
     },
     "create": {
       "title": "New collection",
@@ -3108,6 +2980,12 @@
     },
     "deleteCollection": {
       "menu": "Delete collection…",
+      "title": "Delete {{name}}?",
+      "body_one": "{{count}} document goes with it. Undo is offered for a few seconds; after that only git still has its files.",
+      "body_other": "{{count}} documents go with it. Undo is offered for a few seconds; after that only git still has their files.",
+      "confirm": "Delete collection",
+      "pending": "Deleting…",
+      "failed": "Couldn’t delete {{name}}",
       "deleted": "Deleted {{name}}",
       "undoFailed": "Couldn’t restore {{name}}"
     },
@@ -3134,59 +3012,20 @@
       "failedTitle": "Couldn't upload this file"
     },
     "document": {
-      "tab": "Document",
       "where": "Where this document is",
       "more": "More actions for {{path}}",
-      "views": "Document views",
       "createdBy": "Created {{date}} by {{who}}",
       "you": "you",
       "view": "View",
       "preview": "Preview",
       "source": "Source",
-      "created": "Created {{date}}"
-    },
-    "editor": {
-      "label": "Edit {{path}}",
-      "conflictTitle": "This document changed on disk while you were editing",
-      "compare": "Compare",
-      "reload": "Reload",
-      "copyMine": "Copy my text",
-      "copyFailed": "Couldn't copy your text",
-      "unsaved": "Unsaved changes",
-      "notSaved": "Not saved",
-      "copied": "Your text is on the clipboard",
-      "reloaded": "Reloaded the version on disk",
-      "discard": "Discard",
-      "reloadAsk": "Reload…",
-      "reloadTitle": "Reload the version on disk?",
-      "reloadBody": "Your unsaved text is replaced by what is on disk. Copy it first if you want to keep it.",
-      "reloadConfirm": "Reload",
-      "conflictOther": "{{who}} changed {{file}} at {{time}}. Your text isn’t saved yet.",
-      "conflictUnknown": "{{file}} changed on disk. Your text isn’t saved yet."
+      "created": "Created {{date}}",
+      "history": "History…"
     },
     "deleteDocument": {
-      "menu": "Delete document…",
+      "menu": "Delete document",
       "deletedToast": "Deleted {{name}}",
       "undoFailed": "Couldn’t restore {{name}}"
-    },
-    "history": {
-      "tab": "History",
-      "current": "Current",
-      "none": "No versions recorded yet.",
-      "versionLabel": "The chosen version",
-      "restore": "Restore this version",
-      "restored": "Restored as a new version",
-      "failedTitle": "Couldn’t read this document’s history",
-      "openActivity": "Open Activity",
-      "versions": "Versions",
-      "restoredToast": "Restored the {{when}} version as a new version",
-      "diffMode": "Which diff",
-      "changesInVersion": "Changes in this version",
-      "compareCurrent": "Compare with current",
-      "removedVersion": "This version removed the document; there is nothing to compare.",
-      "needsGitTitle": "History needs git",
-      "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
-      "checkAgain": "Check again"
     },
     "writer": {
       "user": "You",
@@ -3194,74 +3033,6 @@
       "curation": "Curation",
       "sync": "Sync",
       "disk": "Edited on disk"
-    },
-    "changes": {
-      "op": {
-        "save": "edited {{document}}",
-        "delete": "deleted {{document}}",
-        "promote": "added {{document}} as written",
-        "restore": "restored an earlier version of {{document}}",
-        "edit": "edited {{document}} outside Coffer",
-        "sync": "brought in changes from another machine",
-        "create": "created the collection",
-        "rename": "moved {{document}}",
-        "remove": "removed {{document}}",
-        "baseline": "recorded the collection as it was"
-      },
-      "version": {
-        "save": "Edited in Coffer",
-        "delete": "Deleted",
-        "promote": "Added as written",
-        "restore": "Restored an earlier version",
-        "edit": "Edited on disk",
-        "sync": "Pulled from another Mac",
-        "create": "Created",
-        "rename": "Moved",
-        "remove": "Removed with its collection",
-        "baseline": "Recorded as it was"
-      },
-      "verb": {
-        "save": "edited",
-        "delete": "deleted",
-        "promote": "added as written",
-        "restore": "restored",
-        "edit": "edited on disk",
-        "sync": "pulled from another Mac",
-        "create": "created the collection",
-        "rename": "moved",
-        "remove": "deleted the collection",
-        "baseline": "recorded the collection as it was",
-        "restoreCollection": "restored the collection"
-      }
-    },
-    "recent": {
-      "title": "Recent changes",
-      "window": "Last 7 days",
-      "collectionFilter": "Collection",
-      "today": "Today",
-      "yesterday": "Yesterday",
-      "empty": "No changes in the last 7 days.",
-      "failed": "Couldn't read recent changes",
-      "more_one": "and {{count}} more",
-      "more_other": "and {{count}} more",
-      "restore": "Restore",
-      "restoring": "Restoring…",
-      "restored": "Restored",
-      "restoredToast": "Restored {{name}}",
-      "detail": {
-        "delete": "Removed from the collection; its versions stay in the vault's history.",
-        "remove_one": "The collection and its {{count}} file were deleted; they stay in the vault's history.",
-        "remove_other": "The collection and its {{count}} files were deleted; they stay in the vault's history.",
-        "restore": "Put back as a new version; the history before it stays.",
-        "sync_one": "{{count}} line changed on another Mac.",
-        "sync_other": "{{count}} lines changed on another Mac."
-      },
-      "authorFilter": "Author",
-      "clearFilters": "Clear filters",
-      "needsGitTitle": "Recent changes needs git",
-      "needsGitBody": "Install git on this Mac to see what changed. Your documents are fine.",
-      "checkAgain": "Check again",
-      "openActivity": "Open Activity"
     },
     "when": {
       "today": "Today {{time}}",
@@ -3271,24 +3042,13 @@
       "title": "No collections yet",
       "body": "A collection is a folder of Markdown documents for one subject. Agents read every collection and write what they learn into it."
     },
-    "compare": {
-      "title": "Which version to keep?",
-      "note": "The one you don’t keep stays in this document’s History.",
-      "keepMine": "Keep my edit",
-      "keepDisk": "Take the version on disk",
-      "mineMeta": "Unsaved · started {{when}}",
-      "diskMeta": "{{who}} · {{when}}",
-      "diskUnknown": "On disk now",
-      "modify": "Modify",
-      "captionMine": "The diff shows what changes in the file if you keep your edit.",
-      "captionDisk": "The diff shows what changes in the file if you take the version on disk.",
-      "back": "Back to editing",
-      "saveMine": "Save my edit",
-      "useDisk": "Use the disk version"
-    },
     "tidy": {
       "one": "Tidy",
       "all": "Tidy all"
+    },
+    "landing": {
+      "title": "Pick a collection",
+      "body": "Choose a collection on the left to read its documents, or create a new one."
     }
   },
   "memory": {
@@ -3347,10 +3107,6 @@
         "history": "Distil history in Activity"
       }
     },
-    "editor": {
-      "conflictTitle": "This memory changed on disk while you were editing",
-      "label": "Edit {{title}}"
-    },
     "memories": {
       "listLabel": "Memories",
       "retired": "Retired",
@@ -3400,6 +3156,7 @@
     },
     "status": {
       "read": "Read {{when}}",
+      "readAuto": "Reads automatically {{cadence}} · {{when}}",
       "failed_one": "{{count}} agent failed",
       "failed_other": "{{count}} agents failed",
       "reading": "Reading agents’ memory…",
@@ -4036,7 +3793,6 @@
       "retry": "Retry",
       "openRemote": "Open Remote settings",
       "chooseSecret": "Choose secret",
-      "openSecrets": "Open in Secrets",
       "reveal": "Reveal in Finder",
       "theRemote": "the remote",
       "git_missing": {
@@ -4159,23 +3915,19 @@
       "flipNote": "The diff flips when you change the choice. Nothing is written until you continue the round.",
       "flipNoteJoin": "The diff flips when you change the choice. Nothing is applied until you apply your choices.",
       "resolvedByAgent": "Resolved with the agent’s merge · the saved file is what this Mac keeps and pushes.",
-      "handedOff": "Handed to {{agent}} at {{time}}. Its merge shows here when it is done.",
+      "handedOff": "Handed to {{agent}} at {{time}}. Its merge is saved in the copy when it is done.",
       "binary": "This is a binary file, so there is no line-by-line difference to show.",
       "noDiff": "The two versions are the same.",
       "secret": "An encrypted secret: its contents are not shown. Choose which Mac’s value to keep.",
       "resolvedInEditor": "Resolved in your editor · the saved file is what this Mac keeps and pushes.",
-      "editing": {
-        "title": "Editing in your editor",
-        "body": "Edit the file to the version you want and save it. Coffer checks it when you mark it resolved.",
-        "markResolved": "Mark resolved",
-        "back": "Back to two choices",
-        "saved": "The file as saved",
-        "notSaved": "The marked-up copy has not been written yet."
-      },
-      "merged": {
+      "copy": {
         "anAgent": "An agent",
-        "title": "{{agent}} merged both versions at {{time}}",
-        "body": "Check what changes on this Mac, then mark it resolved. {{machine}} gets the merge in the next push."
+        "editingTitle": "Editing in your editor",
+        "editingBody": "Save the file in your editor, then mark it resolved. Coffer checks it then.",
+        "mergedTitle": "{{agent}} merged both versions at {{time}} · check it",
+        "mergedBody": "Open the copy in your editor to check the merge before you mark it resolved.",
+        "markResolved": "Mark resolved",
+        "back": "Back to two choices"
       },
       "progress": "{{resolved}} of {{total}} files resolved",
       "progressJoin": "{{resolved}} of {{total}} files chosen",
@@ -4212,46 +3964,13 @@
       "folders_other": "{{count}} folders",
       "thisMac": "this Mac",
       "anotherMachine": "another Mac",
-      "delete": {
-        "title": {
-          "incoming": "Delete here too",
-          "outgoing": "Delete on the other Macs too"
-        },
-        "body": {
-          "incoming": "This Mac matches {{machine}}. A safety snapshot is taken first, so the round can be rolled back.",
-          "outgoing": "The remote and every other Mac lose them in their next round. A safety snapshot is taken first, so the round can be rolled back."
-        },
-        "button_one": "Delete {{count}} file…",
-        "button_other": "Delete {{count}} files…"
+      "hint": {
+        "incoming": "Delete removes them here too, after a safety snapshot, so the round can be rolled back. Keep the files holds them here and pushes them back, so {{machine}} gets them again in its next round.",
+        "outgoing": "Delete removes them on the remote and every other Mac in their next round, after a safety snapshot. Keep the files puts them back on this Mac, so nothing is deleted anywhere."
       },
-      "restore": {
-        "title": "Restore them",
-        "body": {
-          "incoming": "Keeps the files here and pushes them back, so {{machine}} gets them again in its next round.",
-          "outgoing": "Puts the files back on this Mac, so nothing is deleted anywhere."
-        },
-        "button_one": "Restore {{count}} file",
-        "button_other": "Restore {{count}} files",
-        "pending": "Restoring…"
-      },
-      "confirm": {
-        "titleIncoming_one": "Delete {{count}} file on this Mac too?",
-        "titleIncoming_other": "Delete {{count}} files on this Mac too?",
-        "titleOutgoing_one": "Delete {{count}} file on every Mac?",
-        "titleOutgoing_other": "Delete {{count}} files on every Mac?",
-        "body": {
-          "incoming": "This Mac matches {{machine}}. A safety snapshot is taken first, so you can roll the round back.",
-          "outgoing": "The remote and every other Mac lose them in their next round. A safety snapshot is taken first, so you can roll the round back."
-        },
-        "files": "Files",
-        "filesValue": "{{count}} in {{folders}}",
-        "deletedBy": "Deleted by",
-        "snapshot": "Snapshot",
-        "snapshotValue": "Taken before deleting",
-        "button_one": "Delete {{count}} file",
-        "button_other": "Delete {{count}} files",
-        "pending": "Deleting…"
-      },
+      "keep": "Keep the files",
+      "delete_one": "Delete {{count}} file",
+      "delete_other": "Delete {{count}} files",
       "empty": {
         "title": "Nothing is held",
         "body": "No round is waiting on deletions right now."
@@ -5806,9 +5525,6 @@
       "findProvider": "Find a provider"
     }
   },
-  "diff": {
-    "none": "No changes to the text."
-  },
   "splitView": {
     "resizeList": "Resize the list"
   },
@@ -6068,7 +5784,7 @@
     "delete": {
       "title": "Delete {{name}}?",
       "confirm": "Delete {{name}}? This can't be undone.",
-      "confirmWithSecret": "Delete {{name}}? Its secret {{ref}} is deleted from this Mac too. This can't be undone.",
+      "confirmWithSecret": "Delete {{name}}? Its secret {{secret}} is deleted from this Mac too. This can't be undone.",
       "agentTitle": "{{agent}} goes back to its own login",
       "agentBody": "Coffer removes its model and provider lines from {{path}}",
       "agentBodyNoFile": "Coffer clears its connection to this provider",
@@ -6225,24 +5941,6 @@
       "checkedAt": "Checked at {{time}}",
       "on": "on",
       "checkAgain": "Check again"
-    },
-    "update": {
-      "title": "Update {{name}}",
-      "loading": "Preparing the update…",
-      "upToDate": "Already up to date",
-      "upToDateBody": "{{name}} is at the newest commit of its source.",
-      "apply": "Update to {{commit}}"
-    },
-    "conflict": {
-      "title": "{{name}} changed on both sides",
-      "body": "You edited it here since the pinned {{pinned}}, and the update {{to}} changes it too.",
-      "keep": "Keep my edits",
-      "keepHelp": "Stays pinned at {{pinned}} with your change. Coffer tells you again when there is a newer update.",
-      "take": "Take the update",
-      "takeHelp": "Moves to {{to}}. Your edits are replaced and kept in History."
-    },
-    "compare": {
-      "binary": "Binary file"
     }
   },
   "handoff": {
@@ -6267,12 +5965,10 @@
       "days_other": "{{count}} days",
       "default": "Default ({{interval}})"
     },
-    "pill": {
-      "label": "Automatic · {{state}}",
-      "hourly": "hourly",
-      "daily": "daily",
-      "every": "every {{interval}}",
-      "off": "off"
+    "cadence": {
+      "hourly": "every hour",
+      "daily": "every day",
+      "every": "every {{interval}}"
     }
   },
   "drawer": {

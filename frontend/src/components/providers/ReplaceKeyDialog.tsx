@@ -5,7 +5,6 @@
 // behind the same ref at once (the agents' config files only name the ref, so
 // they do not change).
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { KeyRound } from "lucide-react";
 
@@ -26,7 +25,7 @@ import type { ProviderUse } from "@/lib/providers/usedBy";
 import { ProbeResult } from "./ProbeResult";
 import { useEndpointTest } from "./useEndpointTest";
 import { useUserNames } from "./useUserNames";
-import { secretReferenceOf } from "@/lib/secretValue";
+import { SecretNameLink } from "@/components/secret/SecretNameLink";
 
 interface Props {
   open: boolean;
@@ -86,9 +85,13 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
             <span className="text-xs font-label text-text">{t("providers.replace.secret")}</span>
             <span className="inline-flex items-center gap-1.5">
               <KeyRound className="size-3.5 text-text-muted" aria-hidden />
-              <span className="font-mono text-xs">
-                {provider.secret_ref ? secretReferenceOf(provider.secret_ref) : null}
-              </span>
+              {provider.secret_ref ? (
+                <SecretNameLink
+                  secretRef={provider.secret_ref}
+                  className="text-xs"
+                  onNavigate={onClose}
+                />
+              ) : null}
             </span>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -105,15 +108,7 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
                 test.reset();
               }}
             />
-            <p className="text-xs text-text-muted">
-              {t("providers.replace.hint")}{" "}
-              <Link
-                to="/secrets"
-                className="font-label text-accent-text no-underline hover:underline"
-              >
-                {t("providers.key.manage")}
-              </Link>
-            </p>
+            <p className="text-xs text-text-muted">{t("providers.replace.hint")}</p>
           </div>
           <ProbeResult
             result={test.result}

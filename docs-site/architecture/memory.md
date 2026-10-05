@@ -51,7 +51,7 @@ A partition is a top-level directory under `~/.coffer/derived/memory/`:
 | Path | Written by | Role |
 | --- | --- | --- |
 | `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. It is the distil pass's input only: the web UI does not list or read it. |
-| `notes/` | distil, and edits by people or agents | Useful. One note per file, with provenance naming every raw entry behind it. A person can edit a note in the web UI or on disk (see [Editing a note](#editing-a-note)), and an agent tidies them (see [Tidying](#tidying-is-the-agent-s-job)). |
+| `notes/` | distil, and edits by people or agents | Useful. One note per file, with provenance naming every raw entry behind it. A person can edit a note on disk, in their own editor (see [Editing a note](#editing-a-note)), and an agent tidies them (see [Tidying](#tidying-is-the-agent-s-job)). |
 | `MEMORY.md` | distil only | Findable. One line per note, newest first (the same lines and order delivery uses). |
 | `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. An agent never writes it; it marks a note and the pass records the retirement. |
 
@@ -187,7 +187,7 @@ This record is not an exclusion. It names no entry ids, because nobody judged th
 
 ### Editing a note
 
-A person can edit a note: the web UI's **Edit** replaces the note's body and keeps its frontmatter, and editing the file under `notes/` in any editor needs nothing from Coffer. The web UI's save carries a fingerprint of the note as it was read. If the note changed since (an agent merged or rewrote it, or the file was edited on disk), the save is refused and the editor is handed the note as it is now, so nothing is overwritten and nothing is lost.
+A person can edit a note by editing the file under `notes/` in any editor, which needs nothing from Coffer. The web UI shows a note read-only, with **Open in editor** and **Reveal in Finder**; it has no save route, no note fingerprint and no conflict to resolve, because Coffer holds none of the person's text. What the editor saves is what the page shows next.
 
 An edited note is the note, not a suggestion. The distil pass never rewrites an existing note's body, so the edit persists until the note is retired or the derived tree is deleted.
 
@@ -351,7 +351,7 @@ The ledger survives a daemon restart without a table of its own. Every fire that
 
 ### Audit and the delivery views
 
-Every **delivering** fire is one `memory_delivery_fired` audit event naming the agent as both the resource and the actor, with details giving its `moment` (`session_start` or `prompt`), the `session_id` and the notes it carried as `<partition>/<slug>`. The event never carries a note's text. A session start is recorded on every fire; a prompt fire only when it delivered a note. A person's edit to a note is audited as `memory_note_edited`, and a hand deletion as `memory_note_deleted`, each naming the partition, the note and the user.
+Every **delivering** fire is one `memory_delivery_fired` audit event naming the agent as both the resource and the actor, with details giving its `moment` (`session_start` or `prompt`), the `session_id` and the notes it carried as `<partition>/<slug>`. The event never carries a note's text. A session start is recorded on every fire; a prompt fire only when it delivered a note. A hand deletion of a note is audited as `memory_note_deleted`, naming the partition, the note and the user. Edits made in an editor are not recorded by Coffer; rows of the earlier `memory_note_edited` event still read in the audit log.
 
 The web UI's read-only **Delivered view** of one partition answers what an agent is given:
 

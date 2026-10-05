@@ -43,7 +43,7 @@ export function KnowledgeStatsLine({ collection }: Props) {
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1500);
       },
-      () => toast.error(t("knowledge.editor.copyFailed")),
+      () => toast.error(t("knowledge.collection.copyFailed")),
     );
 
   return (

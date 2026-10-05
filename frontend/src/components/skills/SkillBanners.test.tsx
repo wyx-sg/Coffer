@@ -1,6 +1,6 @@
 // frontend/src/components/skills/SkillBanners.test.tsx
-// The banners above an open skill's tabs: an update waiting (Review update…, an
-// outline button) and a Git source that can't be reached — Check again, then
+// The banners above an open skill's tabs: an update waiting (SkillUpdateBanner,
+// tested on its own) and a Git source that can't be reached — Check again, then
 // the Hand off to <Agent> ▾ split button and its "?", because a network, VPN or
 // credential problem is on this machine; the hand-off prompt names the
 // repository and git's own error.
@@ -20,38 +20,29 @@ const api = vi.mocked(skillsApi);
 function renderBanners(
   status: Parameters<typeof gitSkill>[0],
   items: Parameters<typeof SkillBanners>[0]["items"],
-  onReviewUpdate = vi.fn(),
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <SkillBanners
-          skill={gitSkill(status)}
-          items={items}
-          onReviewCopy={vi.fn()}
-          onReviewUpdate={onReviewUpdate}
-        />
+        <SkillBanners skill={gitSkill(status)} items={items} onReviewCopy={vi.fn()} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { onReviewUpdate };
 }
 
 describe("SkillBanners", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  test("an update waiting says what moved and offers Review update…", () => {
-    const { onReviewUpdate } = renderBanners(
-      { update_available: true, commits_ahead: 3, files_changed: 2 },
-      [{ kind: "updateAvailable" }],
-    );
+  test("an update waiting says what moved and offers I merged it", () => {
+    renderBanners({ update_available: true, commits_ahead: 3, files_changed: 2 }, [
+      { kind: "updateAvailable" },
+    ]);
     const banner = screen.getByTestId("skill-banner-update");
     expect(banner).toHaveTextContent("An update is available from github.com/acme/agent-skills");
     expect(banner).toHaveTextContent("main moved 3 commits past the pinned a1b2c3d");
-    const review = within(banner).getByRole("button", { name: "Review update…" });
-    fireEvent.click(review);
-    expect(onReviewUpdate).toHaveBeenCalled();
+    expect(within(banner).getByRole("button", { name: "I merged it" })).toBeInTheDocument();
+    expect(within(banner).queryByRole("button", { name: "Review update…" })).toBeNull();
   });
 
   test("an unreachable source: Check again, then the hand-off, then its ?", async () => {

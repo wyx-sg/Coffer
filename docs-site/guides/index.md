@@ -59,7 +59,7 @@ One page per task. Each guide shows the place in the app, and a command only whe
 <LinkList>
 
 - [Running the daemon](/guides/daemon) Start, stop and check the daemon.
-- [Editing the vault by hand](/guides/vault-files) Edit the vault\'s plain files and restore any version.
+- [Editing the vault by hand](/guides/vault-files) Edit the vault\'s plain files and bring back an earlier version through git or your agent.
 - [Vault sync](/guides/vault-sync) Keep the vault on every Mac through git.
 - [Activity and audit](/guides/activity) See what changed and every tool call.
 - [Experimental features](/guides/experimental-features) Switch capabilities that are not ready yet.

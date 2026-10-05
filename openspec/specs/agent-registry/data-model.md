@@ -102,14 +102,12 @@ Validators:
 
 Pure domain module (no I/O beyond `os.environ`-based path construction, same
 pattern as `types.py`). Defines the curated set of config files each agent type
-exposes. The UI viewer renders a file's content and lets the user **edit it in
-place behind an explicit Edit**, with the unsaved draft guarded three ways
-(switching file, switching tab, leaving the page); it also offers
-open-in-external-editor / reveal for the edits that want a real editor (the HTTP
-`ConfigFileInfo` / `ConfigFileContent` views carry both the file `path` and its
-containing-folder `folder_path` for those affordances — see "Open config files
-in an external editor or reveal them"). The REST API and CLI expose the same
-write.
+exposes. The UI lists them read-only and offers open-in-external-editor /
+reveal on each row (the HTTP `ConfigFileInfo` view carries both the file `path`
+and its containing-folder `folder_path` for those affordances — see "Open config
+files in an external editor or reveal them"). No surface serves a file's content
+or writes one on the person's behalf; Coffer's own writers go through the store
+("Back up and compare-and-swap every write Coffer makes to an agent's config").
 
 `ConfigFileFormat` — `StrEnum` of `json`, `toml`, `markdown`.
 Drives save-time validation: `json` parses with `json.loads`, `toml` with
@@ -152,11 +150,8 @@ which is spec knowledge's domain):
 hand-edited config). `~/.claude.json` is included (per product decision) and
 protected by a timestamped backup under `~/.coffer/config-backups/` on every write.
 
-`validate_content(fmt: ConfigFileFormat, text: str) -> None` raises
-`ConfigFileFormatInvalid` for malformed structured content.
-
 `spec_for(agent_type, key) -> ConfigFileSpec` raises `ConfigFileNotAllowed`
-when `key` is not in the type's allowlist (drives the 404 + no-FS-access rule).
+when `key` is not in the type's allowlist.
 
 ### Directory Config Entry
 
@@ -204,8 +199,8 @@ The MCP config file for each type is itself an allowlisted config file
 (`global` for Claude Code, `config` for Codex). The Coffer
 connection's `mcp` part writes to it via the atomic-write/backup path
 described under `AgentMcpService`; it can also be edited like any other
-allowlisted config file through `AgentConfigFileService.write_file`. Both paths
-share the same atomic-write + backup machinery.
+allowlisted config file; its writes go through the store's atomic-write + backup
+machinery with the fingerprint of what was read.
 
 ## Storage
 
@@ -238,7 +233,6 @@ Add to `AuditEventType` (`domain/audit.py`):
 
 | Value                       | When emitted                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `agent_config_file_written` | A config file was saved through Coffer (atomic write + backup); details carry the config-file `key` |
 | `agent_mcp_installed`       | Coffer's MCP server entry was written into an agent's MCP config                                    |
 | `agent_mcp_uninstalled`     | Coffer's MCP server entry was removed from an agent's MCP config                                    |
 
@@ -246,13 +240,12 @@ The workspace amendment adds:
 
 | Value                       | When emitted                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------- |
-| `agent_config_file_deleted`  | A directory-entry child file was deleted (prior content preserved as a backup under `~/.coffer/config-backups/`) |
 | `agent_mcp_entry_removed`    | A direct MCP entry was removed from the agent's own config                      |
 | `agent_mcp_entry_adopted`    | A direct MCP entry was adopted into a registered `mcp_server` resource          |
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
 | `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI               |
 
-The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
+The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. The enum values `agent_config_file_written` and `agent_config_file_deleted` stay so recorded rows still read, but nothing emits them any more: no surface writes or deletes a config file on the person's behalf. Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 
@@ -318,15 +311,8 @@ allowlist via a `ConfigFileStorePort`.
 | Method                                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_files(uid) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                         |
-| `read_file(uid, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` (the `path`/`folder_path` pair backs open-in-external-editor / reveal). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
-| `write_file(uid, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read ("Reject stale config-file writes by fingerprint"); `store.write_text_atomic` (atomic + backup); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
-| `read_child(uid, key, relpath) -> ConfigFileContent`                                             | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                                                                                                                                                             |
-| `write_child(uid, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file`.                                                                                                                                                                                                                                                                             |
-| `delete_child(uid, key, relpath, *, actor) -> None`                                              | Delete one child file, preserving the prior content as a backup under `~/.coffer/config-backups/`; records `agent_config_file_deleted`.                                                                                                                                                                                                                                                                                                        |
 
-`ConfigFileContent.fingerprint` is a content fingerprint used for
-optimistic-concurrency writes (see "Reject stale config-file writes by
-fingerprint") — reads return it, writes carry it back.
+The service only lists. Coffer's own writers (connect, repair, plugin toggle, MCP install and remove, provider projection, the reconciler) call `ConfigFileStorePort.write_text_atomic` directly, passing the fingerprint of the text they read, and each records its own audit event; a mismatch raises `ConfigFileStale` (409 `CONFIG_FILE_STALE`) ("Back up and compare-and-swap every write Coffer makes to an agent's config").
 
 ### `AgentMcpService` (`application/agent/mcp_service.py`)
 
@@ -530,14 +516,9 @@ import infrastructure directly).
 - `delete_with_backup(path) -> bool` — copy content to a timestamped backup (as a
   write does), then remove the file; `False` when
   already absent.
-- `remove_tree(path) -> bool` — remove a directory tree with no backup, used
-  only for content Coffer rendered itself and can regenerate; `False` when
-  already absent.
 - `fingerprint(text: str | None) -> str` — sha256 hex digest backing the
-  "Reject stale config-file writes by fingerprint" check; `""` for a missing
-  file (`None`).
-- `resolved_within(path, root) -> bool` — whether `path` resolves, following
-  symlinks, inside `root`.
+  "Back up and compare-and-swap every write Coffer makes to an agent's config"
+  check; `""` for a missing file (`None`).
 
 ## Kind wiring (`backend/coffer/application/agent/kind.py`)
 

@@ -155,10 +155,10 @@ def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path)
 
 
 def test_the_tree_lists_documents_but_neither_the_readme_nor_the_inbox(client) -> None:  # type: ignore[no-untyped-def]
-    """One tree per collection ("Show a collection as one tree of documents in the web UI").
-    The README describes it rather than being content in it ("Keep the collection
-    README out of the corpus"), and the hidden inbox is not listed ("Hide
-    dot-prefixed entries except the inbox")."""
+    """One tree per collection ("Show a collection as one tree of read-only
+    documents in the web UI"). The README describes it rather than being content
+    in it ("Keep the collection README out of the corpus"), and the hidden inbox
+    is not listed ("Hide dot-prefixed entries except the inbox")."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
     document = _submit(client, collection="shopee", title="Note", description="d", body="b")
     inbox_dir = paths.inbox_dir("shopee")
@@ -197,7 +197,7 @@ def test_a_path_escaping_the_root_is_refused(client) -> None:  # type: ignore[no
 def test_no_hidden_entry_is_reachable_and_the_inbox_is_one(  # type: ignore[no-untyped-def]
     client, tmp_path
 ) -> None:
-    """Nothing hidden is listed, read, saved or deleted, the inbox included
+    """Nothing hidden is listed, read or deleted, the inbox included
     ("Hide dot-prefixed entries except the inbox", "Guard every path through one
     module")."""
     _create_collection(client, "shopee")
@@ -218,13 +218,8 @@ def test_no_hidden_entry_is_reachable_and_the_inbox_is_one(  # type: ignore[no-u
             assert resp.status_code == 400, (route, path, resp.text)
             assert resp.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
     deleted = client.delete("/api/v1/knowledge/file", params={"path": "shopee/.inbox/waiting.md"})
-    saved = client.put(
-        "/api/v1/knowledge/file",
-        json={"path": "shopee/.inbox/waiting.md", "body": "edited", "expected_fingerprint": "0"},
-    )
-    for resp in (deleted, saved):
-        assert resp.status_code == 400, resp.text
-        assert resp.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
+    assert deleted.status_code == 400, deleted.text
+    assert deleted.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
     assert (root / ".inbox" / "waiting.md").read_text(encoding="utf-8") == "later"
 
 
@@ -333,8 +328,9 @@ def test_there_is_no_material_route_and_no_create_at_path_route(client) -> None:
     }
     assert ("POST", "/api/v1/knowledge/collections") in routes  # the table is not empty
     assert not [p for _, p in routes if p.endswith("/material")]
-    # The one route that writes a document only replaces the body of one that exists.
-    assert {m for m, p in routes if p == "/api/v1/knowledge/file"} == {"GET", "PUT", "DELETE"}
+    # No route saves a document, and none lists, diffs or restores a version of one.
+    assert {m for m, p in routes if p == "/api/v1/knowledge/file"} == {"GET", "DELETE"}
+    assert not [p for _, p in routes if "/history" in p]
     assert client.post("/api/v1/knowledge/material", json={}).status_code in (404, 405)
 
 
@@ -347,44 +343,6 @@ def test_a_collection_description_of_only_spaces_is_refused(client) -> None:  # 
         f"/api/v1/knowledge/collections/{uid}/description", json={"description": "  "}
     )
     assert resp.status_code == 422, resp.text
-
-
-def test_saving_keeps_the_frontmatter_and_audits_the_edit(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """``PUT /file`` replaces the body only ("Save a document edited in the web UI"):
-    every frontmatter key — a person's own included — is kept byte for byte."""
-    _create_collection(client, "shopee")
-    head = "---\ntitle: Cache\ndescription: How the cache works\ntags:\n- infra\n---"
-    on_disk = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "cache.md"
-    on_disk.write_text(f"{head}\n\nold body\n", encoding="utf-8")
-    path = "shopee/cache.md"
-    fingerprint = client.get("/api/v1/knowledge/file", params={"path": path}).json()["fingerprint"]
-
-    resp = client.put(
-        "/api/v1/knowledge/file",
-        json={"path": path, "body": "new body", "expected_fingerprint": fingerprint},
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["body"].strip() == "new body"
-    assert resp.json()["fingerprint"] != fingerprint
-    assert on_disk.read_text(encoding="utf-8") == f"{head}\n\nnew body\n"
-
-    audit = client.get("/api/v1/audit", params={"event_type": "knowledge_edited"})
-    assert audit.status_code == 200, audit.text
-    assert [e["details"]["path"] for e in audit.json()["entries"]] == [path]
-
-
-@pytest.mark.parametrize(
-    "path",
-    ["shopee", "shopee/README.md", "shopee/../outside.md", "shopee/missing.md"],
-)
-def test_saving_refuses_anything_but_an_existing_document(client, path: str) -> None:  # type: ignore[no-untyped-def]
-    _create_collection(client, "shopee")
-    resp = client.put(
-        "/api/v1/knowledge/file",
-        json={"path": path, "body": "b", "expected_fingerprint": "0" * 64},
-    )
-    assert resp.status_code in (400, 404), resp.text
-    assert resp.json()["error"]["code"] in ("KNOWLEDGE_PATH_UNSAFE", "KNOWLEDGE_FILE_NOT_FOUND")
 
 
 # ----- deleting a document -------------------------------------------------
@@ -414,8 +372,8 @@ def test_deleting_a_document_an_agent_wrote_is_allowed(client, tmp_path) -> None
 
 def test_deleting_the_readme_is_refused(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """The README describes the collection rather than being a document in it
-    ("Keep the collection README out of the corpus"); removing it goes through the
-    editor, not this route."""
+    ("Keep the collection README out of the corpus"); removing it is a change
+    made in the person's editor, not through this route."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
 
     resp = client.delete("/api/v1/knowledge/file", params={"path": "shopee/README.md"})

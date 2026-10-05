@@ -1,5 +1,5 @@
-"""Listing a partition's directory as a file tree (spec memory "Present a partition as
-its memories").
+"""Listing a partition's directory as a file tree (spec memory "Show a partition's memories
+read-only").
 
 The partition surface shows Coffer's own writing as it is on disk: ``MEMORY.md``,
 the ``notes/`` folder of one Markdown file per topic, and ``RETIRED.md`` when

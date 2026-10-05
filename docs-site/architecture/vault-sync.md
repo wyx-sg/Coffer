@@ -113,10 +113,10 @@ Most concurrent edits are not conflicts: git merges different files, and differe
 Each conflicting file gets one of three answers:
 
 - **Keep this machine's** (`mine`).
-- **Take the other's** (`theirs`), shown with the diff of what changes here.
+- **Take the other's** (`theirs`), shown with what it changes here and the diff of it.
 - **Edit.** Coffer writes a marked-up copy of git's merge under `derived/sync-conflicts/` and opens it in your editor. The vault's own file never receives a conflict marker. Marking it resolved is refused while a marker is left, and the refusal names the line.
 
-A fourth way to reach the edit answer hands the merge to an agent, because merging two people's edits is judgement Coffer does not make (Principle IV). The person hands over every file an agent may merge, or one file (`POST /api/v1/sync/stop/handoff`), and Coffer records the hand-off with its time. The prompt states the goal and the constraints and carries no shell command: the vault to read, each file with when each machine changed it and the marked-up copy Coffer has already written for the merge, keep what each side added and ask where they contradict, and write only those copies, never the vault or its git history. An agent's merge is shown, never taken: a file reads `handed_off` until its copy holds a merge and no marker, then `merged_by_agent` with the merge and its diff from this machine's version, and stays unresolved until the person marks it resolved, which is the edit answer read from the copy and refused while a marker is left. **Back to two choices** forgets the copy and the hand-off. The prompt is built by the sync domain. It never carries a secret: a `secret/*.enc` file in a stop offers only mine and theirs, gets no editor copy, refuses a hand-off or an edited answer (`SYNC_SECRET_NOT_EDITABLE`), and is only counted in the prompt.
+A fourth way to reach the edit answer hands the merge to an agent, because merging two people's edits is judgement Coffer does not make (Principle IV). The person hands over every file an agent may merge, or one file (`POST /api/v1/sync/stop/handoff`), and Coffer records the hand-off with its time. The prompt states the goal and the constraints and carries no shell command: the vault to read, each file with when each machine changed it and the marked-up copy Coffer has already written for the merge, keep what each side added and ask where they contradict, and write only those copies, never the vault or its git history. An agent's merge is shown, never taken: a file reads `handed_off` until its copy holds a merge and no marker, then `merged_by_agent`, and stays unresolved until the person marks it resolved, which is the edit answer read from the copy and refused while a marker is left. Coffer shows neither the copy's text nor a diff of the merge: the person reads the copy in the editor (**Open in editor**) before answering. **Back to two choices** forgets the copy and the hand-off. The prompt is built by the sync domain. It never carries a secret: a `secret/*.enc` file in a stop offers only mine and theirs, gets no editor copy, refuses a hand-off or an edited answer (`SYNC_SECRET_NOT_EDITABLE`), and is only counted in the prompt.
 
 A remote's refusal is handed over the same way. A rejected push, a refused sign-in and an unreachable remote put a prompt on the status's `problem`: the URL without credentials, the branch, the secret's name and git's message scrubbed of token shapes. A missing `git` is the problem `git_missing`, with the shared install hand-off.
 
@@ -138,8 +138,8 @@ It counts **losses, not deletions**. A resource file is lost only when its uid i
 
 A hold is answered one of two ways, and either continues the round:
 
-- **Confirm** applies the deletions (**Delete n files**).
-- **Restore** keeps the files (**Restore n files**). Incoming, the merged tree takes this machine's versions of them, so they stay here and go back up. Outgoing, the deleted files are written back from the shared base as a commit of yours, and the next round pushes them.
+- **Confirm** applies the deletions (**Delete N files**).
+- **Restore** keeps the files (**Keep the files**; the route is still `/sync/hold/restore`). Incoming, the merged tree takes this machine's versions of them, so they stay here and go back up. Outgoing, the deleted files are written back from the shared base as a commit of yours, and the next round pushes them.
 
 ## Joining
 

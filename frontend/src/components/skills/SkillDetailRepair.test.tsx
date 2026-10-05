@@ -145,7 +145,7 @@ acceptance(
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete hello?" });
     expect(dialog).toHaveTextContent("from the 2 agents that have it: Claude Code and Codex");
-    expect(dialog).toHaveTextContent("History keeps the files");
+    expect(dialog).toHaveTextContent("The vault’s git history keeps the files");
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete skill" }));
     // The error stays in the dialog; nothing else changed.
     expect(await within(dialog).findByText("Nothing was deleted")).toBeInTheDocument();
@@ -177,6 +177,7 @@ test("the skill menu carries the page note's actions, not the reach button's or 
     "Open in editor",
     "Reveal in Finder",
     "Copy master path",
+    "History…",
     "Delete…",
   ]);
 });
@@ -190,10 +191,12 @@ acceptance("web-ui", "a skill whose master folder is gone offers the ways forwar
     .getByRole("heading", { name: "hello", level: 2 })
     .closest("header") as HTMLElement;
   expect(within(header).getByText("Master missing")).toBeInTheDocument();
-  // Both ways forward are in the banner; no earlier version exists here to put back.
-  expect(within(banner).getByRole("button", { name: "Restore from History" })).toBeDisabled();
-  // The Files tab is an empty state pointing at History.
+  // Both ways forward are in the banner: the hand-off that looks for a copy, and Delete skill….
+  expect(within(banner).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+  expect(within(banner).queryByRole("button", { name: /Restore from History/ })).toBeNull();
+  // The Files tab says there are no files to show.
   expect(await screen.findByText("No files to show")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Open History" })).toBeNull();
   fireEvent.click(within(banner).getByRole("button", { name: "Delete skill…" }));
   expect(await screen.findByRole("dialog", { name: "Delete hello?" })).toBeInTheDocument();
 });

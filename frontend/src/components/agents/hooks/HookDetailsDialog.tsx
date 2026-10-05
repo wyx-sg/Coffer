@@ -3,10 +3,9 @@
 // Wide (640). The command in full in a pre, then Event (with its one-line
 // explanation), Matcher, Type, Timeout, File and the entry's JSON position, so
 // the hook can be found in its file. Nothing here writes: a hook is changed in
-// its own file, which "Open in Config files" opens.
+// its own file, which "Open in editor" opens in the person's editor.
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { Check, Copy, FileText } from "lucide-react";
+import { Check, Copy, ExternalLink } from "lucide-react";
 
 import {
   Dialog,
@@ -19,15 +18,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { hookEntryPath } from "@/lib/agents/hookRows";
-import { agentTabPath } from "@/lib/agents/routes";
 import type { NativeHook } from "@/lib/api/agents";
+import { useFileActionItems } from "@/lib/fileActionItems";
 import { useCopyText } from "@/lib/hooks/useCopyText";
 
 interface Props {
   hook: NativeHook | null;
   agentType: string;
-  /** The Config files key that holds the hook's file, when one does. */
-  fileKey: string | null;
   onClose: () => void;
 }
 
@@ -53,10 +50,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export function HookDetailsDialog({ hook, agentType, fileKey, onClose }: Props) {
+export function HookDetailsDialog({ hook, agentType, onClose }: Props) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { copied, copy } = useCopyText();
+  const [open] = useFileActionItems(hook?.path ?? "");
   return (
     <Dialog open={hook !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[640px]">
@@ -113,22 +110,9 @@ export function HookDetailsDialog({ hook, agentType, fileKey, onClose }: Props) 
                 {copied ? t("common.copied") : t("agents.hooks.details.copy")}
               </Button>
               <span className="flex flex-col-reverse gap-2 sm:flex-row">
-                {fileKey ? (
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      navigate(
-                        agentTabPath(
-                          agentType,
-                          "config",
-                          `?${new URLSearchParams({ file: fileKey })}`,
-                        ),
-                      )
-                    }
-                  >
-                    <FileText aria-hidden /> {t("agents.hooks.openInConfig")}
-                  </Button>
-                ) : null}
+                <Button variant="outline" onClick={open.onClick}>
+                  <ExternalLink aria-hidden /> {open.label}
+                </Button>
                 <Button variant="ghost" onClick={onClose}>
                   {t("common.close")}
                 </Button>

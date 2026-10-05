@@ -2,21 +2,21 @@
 //
 // Search, "N of M on", All on · All off; each row its switch, URI or name,
 // one-line description (a prompt's arguments after it) and its last-24-hours
-// reads or uses; every item is loaded, 50 rows at a time ("Showing N of M",
-// Show more). The gateway lists every resource and prompt as the server
+// reads or uses; every item is loaded and rendered whole (100 at a time as
+// the end scrolls into view, past 100). The gateway lists every resource and prompt as the server
 // offers it, so there is no exposure setting here; the Prompts tab says above
 // its toolbar where they show up.
 import { useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui/button";
+import { LoadMoreSentinel } from "@/components/ui/load-more";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { Skeleton } from "@/components/ui/skeleton";
 import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 import type { components } from "@/lib/api/types";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
-import { useShowMore } from "@/lib/hooks/useShowMore";
+import { useGrowingList } from "@/lib/hooks/useGrowingList";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
 import { ToggleSwitch } from "../CapabilityRowCells";
@@ -80,7 +80,7 @@ export function McpCapabilityTab({
   const usage = usageByTool(summary);
   const q = query.trim().toLowerCase();
   const shown = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
-  const page = useShowMore(shown, q);
+  const page = useGrowingList(shown, q);
   const ns = kind === "resource" ? "resources" : "prompts";
 
   const setAll = (op: "enable" | "disable") =>
@@ -156,18 +156,7 @@ export function McpCapabilityTab({
         onAllOff={() => setAll("disable")}
       />
       {body}
-      {shown.length > 0 ? (
-        <p className="flex items-center gap-2 px-2 text-xs text-text-muted">
-          <span data-testid="mcp-caps-shown">
-            {t("mcp.page.showingOf", { shown: page.shown.length, total: page.total })}
-          </span>
-          {page.hasMore ? (
-            <Button variant="link" size="sm" onClick={page.showMore}>
-              {t("mcp.page.showMore", { count: page.next })}
-            </Button>
-          ) : null}
-        </p>
-      ) : null}
+      <LoadMoreSentinel active={page.hasMore} onVisible={page.more} version={page.shown.length} />
     </div>
   );
 }

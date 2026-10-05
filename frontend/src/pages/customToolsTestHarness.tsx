@@ -46,7 +46,12 @@ const grafana = makeGroup({
   health_reason: "secret_missing",
   secret_state: "missing",
   headers: [
-    { name: "Authorization", value: null, secret: "grafana-token", secret_state: "missing" },
+    {
+      name: "Authorization",
+      value: null,
+      secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      secret_state: "missing",
+    },
   ],
   tools: [makeTool({ name: "search_dashboards", path: "/search" })],
 });

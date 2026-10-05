@@ -1,8 +1,8 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
 Create a collection, list them, walk one level of a collection, read a
-document, save an edited document's body, upload a document, delete a document
-and fetch the prompt that hands a tidy to the person's agent (spec knowledge
+document, upload a document, delete a document and fetch the prompt that hands
+a tidy to the person's agent (spec knowledge
 "Manage knowledge in the web UI"). These routes
 are the web UI's own: one the page does not call does not exist. Deleting a
 collection goes through the kind-agnostic Resource route, since collection
@@ -17,14 +17,12 @@ delivered skill carries ("Expose no knowledge tool", invariant 4).
 A collection's hidden ``.inbox`` is not listed and not readable ("Hide
 dot-prefixed entries except the inbox").
 
-**New knowledge arrives as material; a person's edit arrives as a body.**
+**New knowledge arrives as material; a person's edit is the editor's.**
 ``/upload`` submits material, which becomes a document at the collection root
-("Promote submitted material at once"). There is no route that creates a
-document at a path. ``PUT /file``
-is the one route that writes a document, and only the body of one a person
-already has open: it keeps the frontmatter and refuses a stale fingerprint
-("Save a document edited in the web UI"). Editing in their own editor, from the
-page's open-in-editor action, remains the other way, live on the very next read.
+("Promote submitted material at once"). There is no route that creates or saves
+a document at a path: a person edits in their own editor, from the page's
+open-in-editor action, live on the very next read ("Treat a direct file edit as
+a complete change").
 
 **No handler here takes an agent, and neither does the service.** A collection
 carries no per-agent reach and no enabled switch: every one is served to every
@@ -74,7 +72,6 @@ from coffer.surfaces.http.knowledge.schemas import (
     CollectionOut,
     DirectoryOut,
     FileOut,
-    FileSave,
     FileSummaryOut,
     IngestedDocumentOut,
     TreeOut,
@@ -161,22 +158,6 @@ async def read_file(
     # reads"), which is what the
     # page's open-in-editor and reveal actions hand back to the daemon.
     return _file_out(await svc.read(path))
-
-
-@router.put("/file", response_model=FileOut)
-async def save_file(
-    body: FileSave,
-    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-    actor: str = Depends(_actor_kind),
-) -> FileOut:
-    # A person's edit from the page's editor ("Save a document edited in the
-    # web UI"): the body is replaced, the frontmatter kept, and a stale
-    # fingerprint is a 409 that leaves the file alone. Like ``delete_file``,
-    # a hidden path is refused by the path guard before anything is read.
-    saved = await svc.save_document(
-        body.path, body.body, expected_fingerprint=body.expected_fingerprint, actor=actor
-    )
-    return _file_out(saved)
 
 
 @router.delete("/file", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

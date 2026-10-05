@@ -1,7 +1,7 @@
 // frontend/src/components/upkeep/AutomaticPopovers.test.tsx
 //
-// The Automatic control in the Memory header (spec internal-engine "Show and change the memory
-// passes on the Memory page"): it opens a popover
+// The automatic-read schedule behind the ▾ of Memory's Update memory button (spec internal-engine
+// "Show and change the memory passes on the Memory page"): it opens a popover
 // whose edits write the aggregate and distil passes.
 import { beforeEach, expect, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -66,8 +66,7 @@ acceptance("internal-engine", "the memory popover switches reading and distillin
       distil: pass({ default_interval_s: 21600 }),
     },
   };
-  renderIt(<MemoryAutomaticPopover />);
-  expect(screen.getByTestId("memory-automatic")).toHaveTextContent("Automatic · hourly");
+  renderIt(<MemoryAutomaticPopover trigger={<button data-testid="memory-automatic">v</button>} />);
   const dialog = open("memory-automatic");
   expect(dialog).toHaveTextContent("Read memory automatically");
   expect(dialog).toHaveTextContent(/Last read 14m ago · next in 46m/);

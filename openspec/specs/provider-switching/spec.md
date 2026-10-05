@@ -146,8 +146,8 @@ ref spelling the name.
 The system MUST project into the agent's `<config_dir>/settings.json` (`~/.claude/settings.json`
 for the default config directory) through
 [agent-registry](../agent-registry/spec.md)'s config-write machinery — the atomic write with its
-timestamped backup ([agent-registry](../agent-registry/spec.md) "Write config files atomically with a backup and an audit entry") and the fingerprint that refuses a write onto content that
-changed underneath it ([agent-registry](../agent-registry/spec.md) "Reject stale config-file writes by fingerprint") — merging only the managed keys and preserving
+timestamped backup and the fingerprint that refuses a write onto content that
+changed underneath it ([agent-registry](../agent-registry/spec.md) "Back up and compare-and-swap every write Coffer makes to an agent's config") — merging only the managed keys and preserving
 everything else. Coffer MERGES into the user's existing file and never replaces it; a file that does
 not exist is created with only the managed keys, and switching an agent onto a connection MUST NOT touch any key
 outside the managed set. The managed key set per agent and the ownership markers that make

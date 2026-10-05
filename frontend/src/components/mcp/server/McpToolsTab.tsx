@@ -1,8 +1,8 @@
 // src/components/mcp/server/McpToolsTab.tsx — the open server's Tools tab: Search tools, N of M on, All on · All off, the table (design 4.1.10).
 //
 // Every tool in the server's own order, with its switch,
-// rendered 50 at a time ("Showing N of M", Show more) while the search runs over
-// all of them. The toolbar's menu sets the exposure of the filtered tools. A list rebuilt
+// rendered whole (100 at a time as the end scrolls into view, past 100) while the
+// search runs over all of them. The toolbar's menu sets the exposure of the filtered tools. A list rebuilt
 // from the saved switches (the server could not be reached) says so: the
 // switches still apply when it answers.
 import { useState } from "react";
@@ -10,13 +10,13 @@ import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { useTranslation } from "react-i18next";
 
 import { CapabilityToolbar } from "./CapabilityToolbar";
-import { Button } from "@/components/ui/button";
+import { LoadMoreSentinel } from "@/components/ui/load-more";
 import { Skeleton } from "@/components/ui/skeleton";
 import { mcpCapabilitiesKey, mcpTieringKey } from "@/lib/api/queryKeys";
 import type { components } from "@/lib/api/types";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { useSetToolExposure } from "@/lib/hooks/useMcpToolExposure";
-import { useShowMore } from "@/lib/hooks/useShowMore";
+import { useGrowingList } from "@/lib/hooks/useGrowingList";
 import type { ToolExposureMode } from "@/lib/api/mcpServers";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
@@ -60,7 +60,7 @@ export function McpToolsTab({
   const q = query.trim().toLowerCase();
   const matching = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
   const fromCache = capabilities?.from_cache ?? false;
-  const page = useShowMore(matching, q);
+  const page = useGrowingList(matching, q);
   const exposure = useSetToolExposure();
   const exposureActions: MenuAction[] = (
     [
@@ -123,18 +123,11 @@ export function McpToolsTab({
               label={t("mcp.server.tabs.tools")}
             />
           )}
-          {matching.length > 0 ? (
-            <p className="flex items-center gap-2 px-2 text-xs text-text-muted">
-              <span data-testid="mcp-tools-shown">
-                {t("mcp.page.showingOf", { shown: page.shown.length, total: page.total })}
-              </span>
-              {page.hasMore ? (
-                <Button variant="link" size="sm" onClick={page.showMore}>
-                  {t("mcp.page.showMore", { count: page.next })}
-                </Button>
-              ) : null}
-            </p>
-          ) : null}
+          <LoadMoreSentinel
+            active={page.hasMore}
+            onVisible={page.more}
+            version={page.shown.length}
+          />
         </>
       )}
     </div>
