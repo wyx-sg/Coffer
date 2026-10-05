@@ -3936,10 +3936,6 @@
       }
     },
     "conflicts": {
-      "title": "Changed on both Macs",
-      "row": "{{area}} · this Mac {{mine}} · {{machine}} {{theirs}}",
-      "unresolved": "Unresolved",
-      "resolved": "Resolved",
       "otherMachine": "the other Mac",
       "area": {
         "knowledge": "Knowledge",
@@ -3948,13 +3944,6 @@
         "secret": "Encrypted secrets",
         "machines": "Machines"
       }
-    },
-    "hold": {
-      "label": "Held deletions",
-      "share_one": "{{count}} file · {{percent}}% of the folder",
-      "share_other": "{{count}} files · {{percent}}% of the folder",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
     },
     "resolve": {
       "title": "Resolve conflicts",

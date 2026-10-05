@@ -3936,10 +3936,6 @@
       }
     },
     "conflicts": {
-      "title": "两台 Mac 都改过",
-      "row": "{{area}} · 本机 {{mine}} · {{machine}} {{theirs}}",
-      "unresolved": "未解决",
-      "resolved": "已解决",
       "otherMachine": "另一台 Mac",
       "area": {
         "knowledge": "知识",
@@ -3948,13 +3944,6 @@
         "secret": "加密的 secret",
         "machines": "机器"
       }
-    },
-    "hold": {
-      "label": "暂扣的删除",
-      "share_one": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
-      "share_other": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
-      "files_one": "{{count}} 个文件",
-      "files_other": "{{count}} 个文件"
     },
     "resolve": {
       "title": "解决冲突",
