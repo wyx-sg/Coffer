@@ -127,6 +127,25 @@ describe("SecretField", () => {
     expect(await screen.findByText("GitHub token")).toBeInTheDocument();
   });
 
+  acceptance("web-ui", "a long secret menu scrolls under its search box", async () => {
+    api.list.mockResolvedValue({
+      refs: Array.from({ length: 40 }, (_, i) => stored(`key-${String(i).padStart(2, "0")}`)),
+    });
+    wrap(<FieldHarness />);
+    fireEvent.click(screen.getByRole("button", { name: /choose a secret for api key/i }));
+    const list = await screen.findByRole("listbox");
+    expect(await within(list).findAllByRole("option")).toHaveLength(40);
+    // Only the list scrolls; the search box and New secret… sit outside it, in a menu capped to the window.
+    expect(list).toHaveClass("overflow-y-auto");
+    const search = screen.getByLabelText("Filter secrets");
+    const newSecret = screen.getByRole("button", { name: "New secret…" });
+    expect(list).not.toContainElement(search);
+    expect(list).not.toContainElement(newSecret);
+    expect(list.parentElement?.className).toContain("--radix-popover-content-available-height");
+    fireEvent.change(search, { target: { value: "key-3" } });
+    expect(within(list).getAllByRole("option")).toHaveLength(10);
+  });
+
   acceptance(
     "web-ui",
     "a pasted value becomes a new secret written when the form is saved",
