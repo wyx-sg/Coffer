@@ -56,14 +56,25 @@ from coffer.surfaces.http.secret_notes_wiring import optional_secret_notes
 from coffer.surfaces.http.secret_schemas import ApprovalOut
 
 #: One resource's secrets as the boundary sees them: where they go, and which
-#: ref each slot cites. ``None`` when the resource sends nothing anywhere.
-ResourceDestination = Callable[[Resource], tuple[SecretDestination, dict[str, str]] | None]
+#: ref each slot cites. ``None`` (or an empty list) when the resource sends
+#: nothing anywhere; a list when it sends to several places (a custom-tool
+#: group's environments).
+Found = tuple[SecretDestination, dict[str, str]]
+ResourceDestination = Callable[[Resource], Found | list[Found] | None]
 Current = list[tuple[SecretDestination, Mapping[str, str], str]]
 
 
 _RESOURCE_DESTINATIONS: dict[str, ResourceDestination] = {}
 #: Destinations that are not resources (the sync remote), each an async reader.
 _OTHER_SOURCES: list[Callable[[], Awaitable[Current]]] = []
+
+
+def destinations_of(describe: ResourceDestination, resource: Resource) -> list[Found]:
+    """``describe(resource)`` as a list, whichever shape the kind answers in."""
+    found = describe(resource)
+    if found is None:
+        return []
+    return found if isinstance(found, list) else [found]
 
 
 def register_resource_destination(kind: str, destination: ResourceDestination) -> None:
@@ -266,11 +277,12 @@ async def current_destinations(resources: ResourceService, audit: AuditService) 
             continue
         for resource in rows:
             try:
-                found = describe(resource)
+                found = destinations_of(describe, resource)
             except Exception:
                 continue
-            if found is not None:
-                out.append((found[0], found[1], await _last_actor(audit, resource)))
+            if found:
+                actor = await _last_actor(audit, resource)
+                out.extend((dest, refs, actor) for dest, refs in found)
     for source in list(_OTHER_SOURCES):
         out.extend(await source())
     return out
@@ -323,11 +335,8 @@ class ResourceBindingSettler:
         boundary = optional_secret_boundary()
         if describe is None or boundary is None:
             return
-        found = describe(resource)
-        if found is None:
-            return
-        dest, refs = found
-        await asyncio.to_thread(boundary.bind, dest, refs, actor=actor)
+        for dest, refs in destinations_of(describe, resource):
+            await asyncio.to_thread(boundary.bind, dest, refs, actor=actor)
 
 
 _sources: tuple[ResourceService, AuditService] | None = None
@@ -365,6 +374,7 @@ __all__ = [
     "approval_out",
     "boundary_resolver",
     "current_destinations",
+    "destinations_of",
     "get_presence_grants",
     "get_secret_boundary",
     "init_secret_boundary",

@@ -116,17 +116,31 @@ def _plaintext_value(key: str, value: str) -> bool:
     return bool(_SERVER_KEY.search(key) or _CREDENTIAL.match(v) or TOKEN_SHAPES.search(v))
 
 
+def _buckets(transport: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
+    """``(field, key prefix, values)`` of every static env and header map — a
+    custom-tool group's per environment, keyed by its slot (``<key>:<header>``,
+    the bare header for an environment lifted from before environments)."""
+    out: list[tuple[str, str, dict[str, Any]]] = []
+    for bucket, field in (("env", "env"), ("headers", "header")):
+        values = transport.get(bucket)
+        if isinstance(values, dict):
+            out.append((field, "", values))
+    for env in transport.get("environments") or []:
+        if isinstance(env, dict) and isinstance(env.get("headers"), dict):
+            key = str(env.get("key") or "")
+            out.append(("header", f"{key}:" if key else "", env["headers"]))
+    return out
+
+
 def scan_server(uid: str, name: str, config: dict[str, Any]) -> list[Hit]:
     """Hits in one MCP server's static ``env`` / ``headers`` (any transport)."""
     transport = config.get("transport")
     if not isinstance(transport, dict):
         return []
     hits: list[Hit] = []
-    for bucket, field in (("env", "env"), ("headers", "header")):
-        values = transport.get(bucket)
-        if not isinstance(values, dict):
-            continue
-        for key, value in values.items():
+    for field, prefix, values in _buckets(transport):
+        for raw_key, value in values.items():
+            key = f"{prefix}{raw_key}"
             if not isinstance(value, str) or not _plaintext_value(str(key), value):
                 continue
             finding = Finding(

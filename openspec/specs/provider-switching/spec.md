@@ -1329,7 +1329,7 @@ Create, switch, revert-to-built-in, rename, edit, enable and disable, scope and 
 available via (a) the REST API and (b) the web surfaces — the Model providers library for create and
 delete, the Agent detail page for the switch and the revert, the connection's own page for the
 rename, the edit, the scope control and the enabled switch (see "Rename a connection without moving
-anything else"). Coffer has no `provider` command group: the list carries no Active column, and a
+anything else"). The `coffer provider` and `coffer model` commands call the same routes ([resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"). The list carries no Active column, and a
 connection's lifecycle verbs are the ones every kind's page offers. Editing a connection MUST be
 available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `models`,
 `secret_value`, `description`) and from its detail page, including correcting the wire.

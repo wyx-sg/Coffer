@@ -45,6 +45,8 @@ from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
 from coffer.surfaces.http.daemon_restart_routes import router as daemon_restart_router
 from coffer.surfaces.http.daemon_upgrade_routes import router as daemon_upgrade_router
+from coffer.surfaces.http.desktop_request_routes import reset_desktop_requests
+from coffer.surfaces.http.desktop_request_routes import router as desktop_request_router
 from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
 from coffer.surfaces.http.feature_routes import router as feature_router
@@ -94,6 +96,8 @@ from coffer.surfaces.http.vault_routes import router as vault_router
 
 def include_all_routers(app: FastAPI) -> None:
     """Mount every sub-router, grouped by spec (kind-agnostic core first)."""
+    # The command line's requests to the desktop shell live as long as this app.
+    reset_desktop_requests()
     routers: tuple[APIRouter, ...] = (
         daemon_routes.router,
         daemon_port_router,  # spec daemon (the port of the next start)
@@ -112,6 +116,7 @@ def include_all_routers(app: FastAPI) -> None:
         # Before the ref routes: their `{ref:path}` would otherwise match
         # `/approvals/...` for a DELETE nobody meant.
         secret_boundary_router,
+        desktop_request_router,  # spec secret: the command line's asks of the desktop shell
         secret_router,
         secret_notes_router,
         settings_router,

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from coffer.application.mcp.custom_tool_handoff import failing_group_handoff
-from coffer.application.mcp.custom_tool_views import GroupView, ToolView
+from coffer.application.mcp.custom_tool_views import EnvironmentView, GroupView, ToolView
 from coffer.application.mcp.custom_tools import secret_name_of
 from coffer.domain.mcp.namespace import prefix_tool
 from coffer.domain.mcp.openapi_import import DraftOperation
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.custom_tool_schemas import (
+    CustomToolEnvironmentOut,
     CustomToolGroupOut,
     CustomToolHeaderOut,
     CustomToolIn,
@@ -40,21 +41,43 @@ def tool_out(group: str, view: ToolView) -> CustomToolOut:
     )
 
 
-def group_out(view: GroupView) -> CustomToolGroupOut:
-    r, t = view.resource, view.transport
-    headers = [
+def _headers_out(ev: EnvironmentView) -> list[CustomToolHeaderOut]:
+    e = ev.environment
+    return [
         CustomToolHeaderOut(name=name, value=value, secret=None, secret_state="none")
-        for name, value in t.headers.items()
+        for name, value in e.headers.items()
     ] + [
         CustomToolHeaderOut(
             name=name,
             value=None,
             secret=secret_name_of(ref),
-            scheme=t.auth_schemes.get(name),
-            secret_state=view.header_states.get(name, "present"),
+            scheme=e.auth_schemes.get(name),
+            secret_state=ev.header_states.get(name, "present"),
         )
-        for name, ref in t.secret_refs.items()
+        for name, ref in e.secret_refs.items()
     ]
+
+
+def environment_out(ev: EnvironmentView) -> CustomToolEnvironmentOut:
+    e = ev.environment
+    return CustomToolEnvironmentOut(
+        name=e.name,
+        description=e.description,
+        enabled=e.enabled,
+        base_url=str(e.base_url),
+        headers=_headers_out(ev),
+        variables=e.variables,
+        timeout_seconds=e.timeout_seconds,
+        secret_state=ev.secret_state,
+        pending_approvals=ev.pending_approvals,
+        pending_secrets=ev.pending_secrets,
+    )
+
+
+def group_out(view: GroupView) -> CustomToolGroupOut:
+    r, t = view.resource, view.transport
+    first = view.environments[0]
+    headers = _headers_out(first)
     source = (
         OpenApiSourceOut(
             kind=t.source.kind,
@@ -72,8 +95,9 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
         name=r.name,
         description=r.description,
         enabled=r.enabled,
-        base_url=str(t.base_url),
+        base_url=str(first.environment.base_url),
         headers=headers,
+        environments=[environment_out(ev) for ev in view.environments],
         timeout_seconds=t.timeout_seconds,
         scope=r.scope.agents if r.scope is not None else None,
         source=source,
@@ -89,7 +113,7 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
             HandoffOut(
                 prompt=failing_group_handoff(
                     group=r.name,
-                    base_url=str(t.base_url),
+                    base_url=str(first.environment.base_url),
                     status=view.last_call_status,
                     error=view.last_call_error,
                     machine=host_machine(),

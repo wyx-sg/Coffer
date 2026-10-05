@@ -170,8 +170,8 @@ When a subscriber attaches, the buffer and snapshot are enqueued synchronously b
 
 Chat has no route that creates a conversation or sends a message: a message enters through a channel, in-process. The sessions of an agent are listed under `GET /api/v1/agents/{uid}/sessions` (see [Native sessions](#native-sessions)), and the Conversations page lists them for all agents at once (see [One list of every agent's sessions](#all-agent-sessions)). There is no route that lists conversations on their own: the channel-only list was removed once the cross-agent listing covered it.
 
-::: info No CLI
-Conversations are driven from channels. The CLI has no chat commands, because it carries only what needs it ([chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)).
+::: info On the command line
+Conversations are driven from channels, so no command starts one or sends a message. What the Conversations page does to a conversation has a command like every other page action: `coffer agent session all` lists every agent's sessions, and `coffer conversation rename`, `interrupt` and `delete` call the same routes as the page ([CLI coverage](/reference/cli-coverage#conversation)).
 :::
 
 ## Agent adapters

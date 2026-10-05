@@ -153,6 +153,11 @@ export function ToolTestResult({
           )}
           {title}
         </p>
+        {result.environment ? (
+          <p className="text-xs text-text-muted">
+            {t("customTools.test.ranIn", { environment: result.environment })}
+          </p>
+        ) : null}
         {result.url ? <UrlLine method={method} url={result.url} /> : null}
         {hint ? <p className="text-xs leading-[1.45] text-text-muted">{hint}</p> : null}
         {actions}

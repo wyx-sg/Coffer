@@ -39,6 +39,8 @@ class MCPInvocationModel(Base):
     #: deleted agent's calls stay in the history.
     agent_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     trace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: A custom-tool call's environment (migration 0151); null otherwise.
+    environment: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_invocations_trace", "trace_id"),
@@ -116,6 +118,7 @@ def inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
         session_id=row.session_id,
         agent_uid=row.agent_uid,
         trace_id=row.trace_id,
+        environment=row.environment,
     )
 
 
@@ -130,5 +133,6 @@ def inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
         error_message=inv.error_message,
         session_id=inv.session_id,
         agent_uid=inv.agent_uid,
+        environment=inv.environment,
         trace_id=inv.trace_id,
     )

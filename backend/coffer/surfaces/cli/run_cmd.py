@@ -94,12 +94,12 @@ def _pump(source: IO[bytes], sink: IO[bytes], masker: StreamMasker) -> None:
 
 def run(
     ctx: typer.Context,
-    secret: list[str] = typer.Option(  # noqa: B008
+    secret: list[str] = typer.Option(
         [],
         "--secret",
         help="NAME, ENV=NAME or ENV=coffer://secret/<id> of a standalone secret (repeatable)",
     ),
-    env_file: pathlib.Path | None = typer.Option(  # noqa: B008
+    env_file: pathlib.Path | None = typer.Option(
         None, "--env-file", help="KEY=VALUE file; coffer://secret/<name> values are resolved"
     ),
     no_masking: bool = typer.Option(

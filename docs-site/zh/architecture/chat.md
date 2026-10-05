@@ -170,8 +170,8 @@ stateDiagram-v2
 
 对话没有创建对话或发送消息的路由：消息通过消息渠道在进程内进入。智能体的会话在 `GET /api/v1/agents/{uid}/sessions` 下列出（见[原生会话](#native-sessions)），对话页面则一次列出所有智能体的会话（见[所有智能体会话的一个列表](#all-agent-sessions)）。没有单独列出对话的路由：有了跨智能体的列表后，只含消息渠道的那个列表已被移除。
 
-::: info 没有 CLI
-对话由消息渠道驱动。CLI 没有对话命令，因为它只带需要它的东西（[chat 规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)）。
+::: info 命令行上
+对话由消息渠道驱动，所以没有命令能发起对话或发送消息。对话页面对一个对话所做的操作，和其他页面操作一样都有命令：`coffer agent session all` 列出所有智能体的会话，`coffer conversation rename`、`interrupt` 和 `delete` 调用和页面相同的路由（[CLI 覆盖表](/zh/reference/cli-coverage#conversation)）。
 :::
 
 ## 智能体适配器 {#agent-adapters}

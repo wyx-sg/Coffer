@@ -50,7 +50,7 @@ Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/
 
 | 入口 | 用途 |
 | --- | --- |
-| **CLI**（`coffer …`） | 一份很短的命令清单：启动、停止和检查守护进程，在带密钥的环境里运行命令，读取 Coffer 的日志。见 [CLI 参考](/zh/reference/cli)。 |
+| **CLI**（`coffer …`） | 网页和桌面应用里的每一个操作都有对应命令，Agent 也能管理 Coffer；另外还能启动、停止守护进程，在带密钥的环境里运行命令。见 [CLI 参考](/zh/reference/cli) 和 [CLI 覆盖表](/zh/reference/cli-coverage)。 |
 | **Web 界面** | 浏览和编辑一切。守护进程在自己的地址（`http://127.0.0.1:38470/`）上提供它，打开时你已经处于登录状态。见 [Web 界面](/zh/guides/web-ui)。 |
 | **桌面应用** | 同样的界面，放在一个原生 macOS 窗口里，带 Dock 图标和菜单栏图标。它会替你启动守护进程。见[桌面应用](/zh/guides/desktop-app)。 |
 | **MCP 端点** | 智能体通过 `coffer-mcp-shim` 连接的地方。智能体看到的是上游工具，外加 Coffer 自己的 `coffer__*` 工具。见[连接客户端](/zh/guides/connect-a-client)。 |

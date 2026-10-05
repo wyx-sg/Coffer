@@ -201,6 +201,9 @@ export function CallBody({
         </Fact>
         <Fact label={t(`activity.drawer.capability.${call.capability_type}`)}>
           <Mono>{call.capability_key}</Mono>
+          {call.environment ? (
+            <Aside>{` · ${t("activity.drawer.environment")} ${call.environment}`}</Aside>
+          ) : null}
         </Fact>
         <Fact label={t("activity.drawer.took")}>{formatDuration(call.duration_ms)}</Fact>
         <Fact label={t("activity.drawer.callId")}>

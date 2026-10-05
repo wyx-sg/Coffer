@@ -170,7 +170,7 @@ Coffer 存储的配置：
 | 复制它的配置 | **⋯** → **复制配置为 JSON**（只有密钥名，从不含值） |
 | 删除 | **⋯** → **删除…** |
 
-在终端里，`coffer mcp test <name>` 做同样的检查（失败时退出码 7）；表中其余操作都在 Web 界面完成。命令行只保留程序会运行的、守护进程不可用时也必须能用的、Coffer 交接提示词让智能体运行的，以及 Web 界面做不到的命令。
+表中每一行也都有一条调用同一路由的命令，所以智能体可以在终端里完成：`coffer mcp show <name>`、`coffer mcp update <name>`、`coffer mcp test <name>`（同样的检查；失败时退出码 7）、`coffer mcp enable` / `disable`、`coffer mcp reach`、`coffer mcp tools` 和 `coffer mcp tool enable|disable`、`coffer mcp status`、`coffer mcp calls`、`coffer mcp server-log` 以及 `coffer mcp delete`。`coffer mcp add` 注册服务器，`coffer mcp test-config` 在保存前试一份配置。选项见 [`coffer mcp`](/zh/reference/cli/mcp)。
 
 **编辑**对话框显示名字（固定）、只有你能看到的描述、命令和参数或 URL，以及环境变量或请求头。每一行是键、值和删除按钮。值是明文；字段末尾的 🔑 按钮可以改为选一个已存的密钥，看起来像密钥的值会提示你存进 Coffer（“这看起来像密钥，要存进 Coffer 吗？”）。密钥只存在于 Coffer：服务器的设置里只有密钥的名字，没有值，而你粘贴的密钥会在保存服务器时存进密钥页面。命令型服务器还有可选的**工作目录**。**测试**会在你保存前试一下编辑后的配置——添加对话框里也一样——如果失败出在这台机器上（找不到命令、进程退出、连接失败或超时），当场就有**交给 &lt;Agent&gt; ▾**。保存失败时对话框保持打开并给出原因。删除密钥行时，只有当该密钥是 Coffer 为这个服务器创建的，才会删除密钥本身。保存编辑会关闭与该服务器的所有活动连接，所以任何智能体的下一次调用都会用新配置启动它。
 

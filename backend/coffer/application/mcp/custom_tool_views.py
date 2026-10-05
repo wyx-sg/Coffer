@@ -21,8 +21,8 @@ from coffer.application.mcp.custom_tool_ports import (
     ToolOutcomesPort,
 )
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
-from coffer.domain.mcp.secret_target import mcp_destination
-from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
+from coffer.domain.mcp.secret_target import environment_destination
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import standalone_name
 
@@ -42,16 +42,28 @@ class ToolView:
 
 
 @dataclass(frozen=True)
+class EnvironmentView:
+    """One environment's secrets as the page shows them."""
+
+    environment: HttpApiEnvironment
+    #: The worst state of its secret headers; ``none`` with no secret header.
+    secret_state: SecretState
+    #: Each secret header's own state, keyed by header name.
+    header_states: dict[str, SecretState]
+    pending_approvals: list[str]
+    pending_secrets: list[str]
+
+
+@dataclass(frozen=True)
 class GroupView:
     resource: Resource
     transport: HttpApiTransport
     health: GroupHealth
     health_reason: str | None
-    #: The worst state across the group's secret headers (missing, then
-    #: waiting for approval, then present); ``none`` with no secret header.
+    #: The worst state across the enabled environments' secret headers
+    #: (missing, then waiting for approval, then present); ``none`` with none.
     secret_state: SecretState
-    #: Each secret header's own state, keyed by header name.
-    header_states: dict[str, SecretState]
+    environments: list[EnvironmentView]
     pending_approvals: list[str]
     #: The names of the secrets whose approval is pending.
     pending_secrets: list[str]
@@ -78,29 +90,25 @@ class GroupViewer:
         self._boundary = boundary
         self._clock = clock
 
-    async def _secret_states(
-        self, resource: Resource, transport: HttpApiTransport
-    ) -> tuple[dict[str, SecretState], list[str], list[str]]:
-        """``(state per secret header, pending approval ids, pending secret names)``."""
+    async def _environment(self, resource: Resource, env: HttpApiEnvironment) -> EnvironmentView:
         states: dict[str, SecretState] = {}
         present: dict[str, str] = {}
-        for header, ref in transport.secret_refs.items():
+        for header, ref in env.secret_refs.items():
             if self._secrets is not None and not await asyncio.to_thread(self._secrets.exists, ref):
                 states[header] = "missing"
             else:
                 states[header] = "present"
-                present[header] = ref
+                present[env.slot(header)] = ref
         boundary = self._boundary()
-        if boundary is None or not present:
-            return states, [], []
-        config = MCPServerConfig(transport=transport)
-        dest = mcp_destination(resource.uid, resource.name, config)
+        if boundary is None or not present or not env.enabled:
+            return EnvironmentView(env, _worst(states), states, [], [])
+        dest = environment_destination(resource.uid, resource.name, env)
         pending = await asyncio.to_thread(boundary.check, dest, present)
         for approval in pending:
-            if approval.slot in states:
-                states[approval.slot] = "pending_approval"
+            if approval.slot in present:
+                states[env.header_of(approval.slot)] = "pending_approval"
         names = [standalone_name(a.ref or "") or (a.ref or "") for a in pending]
-        return states, [a.id for a in pending], names
+        return EnvironmentView(env, _worst(states), states, [a.id for a in pending], names)
 
     async def views(self, groups: list[tuple[Resource, HttpApiTransport]]) -> list[GroupView]:
         if not groups:
@@ -114,8 +122,11 @@ class GroupViewer:
         )
         out: list[GroupView] = []
         for resource, transport in groups:
-            header_states, pending, pending_secrets = await self._secret_states(resource, transport)
-            secret_state = _worst(header_states)
+            envs = [await self._environment(resource, e) for e in transport.environments]
+            enabled = [e for e in envs if e.environment.enabled]
+            secret_state = _worst({str(i): e.secret_state for i, e in enumerate(enabled)})
+            pending = [a for e in enabled for a in e.pending_approvals]
+            pending_secrets = [n for e in enabled for n in e.pending_secrets]
             last = (
                 await self._outcomes.last_tool_call(resource.uid, since=since)
                 if self._outcomes is not None
@@ -138,7 +149,7 @@ class GroupViewer:
                     health=health,
                     health_reason=reason,
                     secret_state=secret_state,
-                    header_states=header_states,
+                    environments=envs,
                     pending_approvals=pending,
                     pending_secrets=pending_secrets,
                     calls=sum(c for c, _ in per_tool.values()),
@@ -154,6 +165,7 @@ class GroupViewer:
 
 
 def _worst(states: dict[str, SecretState]) -> SecretState:
+    """The worst state of several (``none`` when there are none)."""
     for state in ("missing", "pending_approval", "present"):
         if state in states.values():
             return state
@@ -176,4 +188,12 @@ def _health(
     return "idle", None
 
 
-__all__ = ["HEALTH_ORDER", "GroupHealth", "GroupView", "GroupViewer", "SecretState", "ToolView"]
+__all__ = [
+    "HEALTH_ORDER",
+    "EnvironmentView",
+    "GroupHealth",
+    "GroupView",
+    "GroupViewer",
+    "SecretState",
+    "ToolView",
+]

@@ -87,6 +87,8 @@ class InvocationOut(BaseModel):
     #: null when the session reported none. Nullable but NOT defaulted, like
     #: ``resource_name``: the projection sets it on every row.
     agent_uid: str | None
+    #: The environment a custom-tool call was made in; null for any other call.
+    environment: str | None = None
     #: For a call its server never answered (refused, timed out, would not
     #: start): the chore of finding out why, for the person's agent. Null for
     #: every other call — a success, a denial, or an upstream that answered

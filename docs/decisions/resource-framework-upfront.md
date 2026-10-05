@@ -178,7 +178,7 @@ Rules a future change must respect:
   is decided in [Per-Agent Resource Scope](per-agent-resource-scope.md).
 - Because the framework spans every layer, the code layout had to be decided in
   the same spec: [Code Layout — Layer-First](code-layout-layer-first.md).
-- The CLI carries only what needs it (a program runs it, it must work when the
-  daemon is down, a hand-off prompt tells an agent to run it, or the web UI
-  cannot do it); every management operation is REST plus a web page, answered
-  by the same services for every kind. Spec resource-framework records the rule.
+- Every management operation is REST plus a web page plus a `coffer` command
+  over the same route, answered by the same services for every kind; see
+  [Every Web UI and Desktop Operation Has a `coffer` Command Over the Same Route](command-line-parity-with-the-web-ui.md).
+  Spec resource-framework records the rule.

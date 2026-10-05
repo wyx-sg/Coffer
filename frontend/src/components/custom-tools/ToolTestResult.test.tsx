@@ -38,6 +38,7 @@ function result(patch: Partial<CustomToolTestOut>): CustomToolTestOut {
     body: '{"healthy":true}',
     truncated: false,
     content_type: "application/json",
+    environment: null,
     error: null,
     failure: null,
     handoff: null,

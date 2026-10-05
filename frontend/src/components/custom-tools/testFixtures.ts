@@ -28,19 +28,35 @@ export function makeTool(overrides: Partial<CustomTool> = {}): CustomTool {
 
 export function makeGroup(overrides: Partial<CustomToolGroup> = {}): CustomToolGroup {
   const name = overrides.name ?? "billing";
+  const headers: CustomToolGroup["headers"] = overrides.headers ?? [
+    {
+      name: "Authorization",
+      value: null,
+      scheme: null,
+      secret: `${name}-token`,
+      secret_state: "present",
+    },
+  ];
+  const baseUrl = overrides.base_url ?? `https://${name}.internal.example/v2`;
   return {
     uid: `uid-${name}`,
     name,
     description: null,
     enabled: true,
-    base_url: `https://${name}.internal.example/v2`,
-    headers: [
+    base_url: baseUrl,
+    headers,
+    environments: [
       {
-        name: "Authorization",
-        value: null,
-        scheme: null,
-        secret: `${name}-token`,
-        secret_state: "present",
+        name: "default",
+        description: "",
+        enabled: true,
+        base_url: baseUrl,
+        headers,
+        variables: {},
+        timeout_seconds: null,
+        secret_state: headers.some((h) => h.secret) ? "present" : "none",
+        pending_approvals: [],
+        pending_secrets: [],
       },
     ],
     timeout_seconds: 30,

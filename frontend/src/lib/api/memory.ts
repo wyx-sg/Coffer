@@ -1,7 +1,7 @@
 // frontend/src/lib/api/memory.ts
 //
 // Request helpers for the `memory` kind's REST family (`/api/v1/memory/*`,
-// spec memory "Manage memory in the web UI"). Partition
+// spec memory "Manage memory in the web UI and on the command line"). Partition
 // deletion is deliberately absent: a partition is one `memory` Resource, so it
 // goes through the kind-agnostic `DELETE /api/v1/resources/{uid}`.
 //

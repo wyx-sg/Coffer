@@ -1,7 +1,7 @@
 """`coffer daemon` subcommand group: start / stop / restart / status.
 
 These work when the daemon is down, which is why they are on the command line
-(spec resource-framework "Keep the command line to what needs it"). The port it
+(spec resource-framework "Offer every management operation on the command line"). The port it
 listens on is the one setting that works the same way: `coffer config set
 daemon.port`."""
 

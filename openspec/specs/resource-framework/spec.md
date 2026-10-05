@@ -471,58 +471,6 @@ carries the list under `--json`.
 - **THEN** the first lists both passes with their kind, target and start time, oldest first,
 - **AND** the second lists none, and the table form of `coffer daemon status` says that no pass is running.
 
-### Requirement: Keep the command line to what needs it
-A `coffer` command MUST exist only for one of four reasons, and the web UI is where everything
-else is managed:
-
-- **program** — a program Coffer installs or writes runs it (the memory hook entry point, an agent's
-  key helper);
-- **offline** — it must work when the daemon is down or cannot start (the daemon's start, stop,
-  restart and status, locating the log files, the daemon's own pre-bind
-  settings);
-- **hand-off** — a prompt Coffer gives an agent tells it to run the command, because what it reads or
-  writes is not a file (running a command with secrets in its environment, naming and storing a
-  secret, reading the audit, MCP and daemon logs, testing an MCP server after installing it,
-  listing the command-line tools Coffer manages);
-- **no-ui** — the web UI cannot do it (listing the hand edits the vault refused).
-
-Each command MUST be recorded with its reason in one place in the CLI package. A test MUST walk the
-live command tree and assert that it equals the recorded list in both directions, that every entry
-names one of the four reasons, and that every group's `--help` renders. A web UI operation owes no
-command line counterpart: the REST routes that serve only the web UI are its interface, and a
-mutation or a read of state that is not a file needs no command to be shippable. The rule is policy
-over every spec and is stated as such in [`.agents/openspec.md`](../../../.agents/openspec.md); this
-requirement is where it becomes testable, because the assertion runs over the entire command tree
-across every spec and so has no narrower home.
-
-#### Scenario: the command tree holds only commands the web UI does not replace
-- **GIVEN** the CLI's live command tree
-- **WHEN** it is read
-- **THEN** every command it holds is one a web UI page does not replace: the recorded list names the memory hook, the proxy key helper, the daemon lifecycle verbs, `path logs`, `path skill-data`, `config`, `run`, `secret list` and `secret set`, `cli list`, the three `log` commands, `mcp test` and `vault problems`, and no group exists for a kind the web UI manages
-- **AND** a web UI operation with no command line counterpart ships without a reviewer being asked for one
-
-#### Scenario: every command has a recorded reason
-- **GIVEN** the recorded list of commands
-- **WHEN** it is read beside the live command tree
-- **THEN** every command carries one of `program`, `offline`, `hand-off` or `no-ui` and a one-line why
-- **AND** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it
-
-#### Scenario: a command missing from the list fails the test
-- **GIVEN** a command in the live tree that the recorded list does not name, and a recorded entry whose command is gone
-- **WHEN** the test compares the tree with the list
-- **THEN** it fails in both directions, naming the unrecorded command and the stale entry
-
-#### Scenario: a plain file is read with the reader's own tools
-- **GIVEN** a plain file that its owning spec declares directly readable or editable
-- **WHEN** a person or an agent needs it
-- **THEN** it is read and edited with their own tools at the path the web UI, the spec or the hand-off prompt names, and no command is added for it
-- **AND** `coffer path logs` is an exception, because the log files are what is left to read when the daemon will not start, and `coffer path skill-data` is the other, because a skill's script has no other way to learn where its working files go
-
-#### Scenario: a kept command surfaces the daemon's errors
-- **GIVEN** any failure surfaced by the management API,
-- **WHEN** it reaches a kept command that calls the daemon,
-- **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
-
 ### Requirement: Carry an optional editable title on the kinds that have one
 A resource of a kind that carries a title MUST carry an optional **`title`**: free text of at
 most 80 characters that a person chooses for display, separate from the resource's `name`. The
@@ -977,3 +925,89 @@ many a window of `n` days would delete (the newest of each file excluded), and d
 - **GIVEN** the `config_backups` policy at 30 days and five backups of one file, aged 1, 3, 10, 20 and 40 days
 - **WHEN** a client asks for the preview for 7 days
 - **THEN** the answer carries 5 now and 3 to delete, and every file is still there
+
+### Requirement: Offer every management operation on the command line
+Every management operation a person can do on a web UI page or in the desktop
+app MUST have a `coffer` command, so an agent can do it as well: creating,
+reading, changing and deleting resources, switching them on and off, their
+reach, connecting agents, model providers, MCP servers, custom tools, channels,
+managed CLIs, skills, knowledge and memory management, secrets and approvals,
+activity, sync and settings. A command MUST call the same REST route the page
+calls, so the daemon's validation, audit and lifecycle are the same whoever
+acts; it MUST NOT reimplement a route or reach the vault's files, `runs.db` or
+ciphertext directly. Exempt are only plain file contents a spec declares
+directly readable or editable — knowledge documents, memory notes, a skill's
+files, an agent's own config and native-memory files — which an agent reads and
+edits with its own tools, and acts whose whole meaning is the window a person
+sits at (a native folder picker, opening a file in an editor, terminal or
+Finder). Registering, binding, reach, delivery and history restore stay
+commands even where what they manage is a file. A command that needs a
+person's presence (approving, revealing, writing a key backup) MUST hand that
+step to the desktop app's own presence check.
+
+Every such command MUST be recorded in one registry in the CLI package with
+the UI operation it stands for and the route(s) it calls; the few commands that
+stand for no UI operation (a program runs them, they work while the daemon is
+down, or a hand-off names them) are recorded with that reason instead. A test
+MUST compare the registry with every route the web UI calls and every command
+the desktop shell exposes, and fail on a route or shell command with no command
+and no recorded exemption; MUST run every declared command against a recording
+transport and assert it calls the route it records; and MUST assert every leaf
+of the live command tree is either recorded or has a reason, and every group's
+`--help` renders. The coverage table — UI operation, route, command, acceptance
+test — is generated from the registry into the CLI reference, in English and
+Chinese.
+
+Every command MUST share one contract: `--json` prints the daemon's answer on
+standard output and a failure as `{"error": {"code", "message", "details"},
+"exit_code"}` on standard error; a body is read from `--data '<json>'`,
+`--data @file` or `--data -` (standard input), with repeatable `--set
+key=value` merged over it; nothing prompts unless standard input is a terminal
+and the command asks for a secret; the daemon's error codes pass through
+unchanged; and the exit codes are 0 ok, 2 usage, 3 daemon unreachable, 4 not
+found, 5 conflict, 6 invalid input, 7 upstream test failed, 8 secret, 9 approval
+pending (with the approval ids and the command that approves them), 10 git
+needed, 11 presence not confirmed, 12 desktop app unavailable and 13 a wait
+ran out. An operation that runs on after its request returns offers a status
+command and a way to wait for its result. The rule is policy over every spec
+and is stated as such in [`.agents/openspec.md`](../../../.agents/openspec.md);
+this requirement is where it becomes testable, because the assertion runs over
+the entire command tree across every spec and so has no narrower home.
+
+#### Scenario: the command line covers every web UI and desktop operation
+- **GIVEN** the routes the web UI calls through its typed client and the desktop shell's commands
+- **WHEN** they are compared with the CLI's registry
+- **THEN** every route has a command or a recorded exemption naming a plain file or the window, and every desktop command has a command or a reason
+- **AND** an exemption for a route the web UI no longer calls fails the comparison
+
+#### Scenario: a route the web UI calls without a command fails the test
+- **GIVEN** a route the web UI starts calling that no command records
+- **WHEN** the comparison runs
+- **THEN** it fails naming the route
+
+#### Scenario: every command is a UI operation or has a recorded reason
+- **GIVEN** the CLI's live command tree
+- **WHEN** it is read beside the registry and the recorded reasons
+- **THEN** every leaf is either a recorded UI operation or carries `program`, `offline`, `hand-off` or `no-ui` with a one-line why, never both
+- **AND** every group's `--help` renders
+
+#### Scenario: each declared command calls the route it records
+- **GIVEN** every command declared over one route
+- **WHEN** each is run against a transport that records its requests
+- **THEN** each sends the method and route it records, with its body from `--data` and `--set`
+
+#### Scenario: a command takes JSON from a file or stdin and fails with a stable code
+- **GIVEN** a command that takes a body
+- **WHEN** it is run with `--data -` on standard input, with `--data @file`, with JSON that does not parse, and against a daemon answering 404 with `--json`
+- **THEN** the first two send the body read, the third exits 6 with the code `CLI_INVALID_INPUT`, and the last exits 4 printing the daemon's error envelope and the exit code as JSON on standard error
+
+#### Scenario: a plain file is read with the reader's own tools
+- **GIVEN** a plain file that its owning spec declares directly readable or editable
+- **WHEN** a person or an agent needs it
+- **THEN** it is read and edited with their own tools at the path the web UI, the spec or the hand-off prompt names, and no command reads or writes its content
+- **AND** `coffer path logs` and `coffer path skill-data` still say where the log files and a skill's working files are
+
+#### Scenario: a kept command surfaces the daemon's errors
+- **GIVEN** any failure surfaced by the management API,
+- **WHEN** it reaches a command that calls the daemon,
+- **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.

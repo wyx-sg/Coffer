@@ -1603,7 +1603,7 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 Settings › Security MUST be the one place in the web UI that shows the daemon's access token. It
 MUST be hidden until **Show** is chosen, offer **Copy**, and offer **Rotate**, which asks for
 confirmation — saying that clients configured with the old token stop working — then calls
-`POST /api/v1/daemon/rotate-token` (spec [daemon](../daemon/spec.md) "Rotate the token over REST"). The page MUST install the token the call returns and carry on without a
+`POST /api/v1/daemon/rotate-token` (spec [daemon](../daemon/spec.md) "Rotate the token over REST and on the command line"). The page MUST install the token the call returns and carry on without a
 reload; the confirmation MUST close only on success, and a failed rotation MUST leave the dialog
 open with the error and the old token in use. While the daemon cannot be reached, the controls are
 disabled.
@@ -1757,7 +1757,7 @@ sidebar already switches language) and no installed-resource-kind list
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
 login** switch. It MUST read and write it through
-[daemon](../daemon/spec.md) "Change residency from the settings page".
+[daemon](../daemon/spec.md) "Change residency from the settings page or the command line".
 A clicked switch MUST move to the clicked value at once and then settle on what the daemon reports:
 the switch is disabled until the daemon has first answered, a successful write shows the value the
 daemon answers with, the switch is shown unavailable rather than off on a host with no login
