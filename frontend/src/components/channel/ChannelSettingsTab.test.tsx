@@ -65,6 +65,7 @@ function renderSettings(channel: ResourceOut = makeChannel()) {
     <ChannelSettingsTab
       channel={channel}
       settings={makeSettings(channel)}
+      workspaceDirectory="/home/me/.coffer/content/workspace"
       onReplaceSecret={() => {}}
       onDelete={() => {}}
     />,
@@ -221,6 +222,26 @@ describe("working directories", () => {
     const list = screen.getByRole("list", { name: "Directories" });
     expect(list).toHaveTextContent("/srv/old");
     expect(list).toHaveTextContent(/default/);
+  });
+
+  test("with no default marked, Coffer's workspace is shown as the default", () => {
+    installApi();
+    renderSettings(makeChannel({ config: { directories: ["/srv/app"] } }));
+    const list = screen.getByRole("list", { name: "Directories" });
+    expect(list).toHaveTextContent("/home/me/.coffer/content/workspace");
+    expect(list).toHaveTextContent("default · Coffer workspace");
+  });
+
+  test("a marked default replaces the workspace row", () => {
+    installApi();
+    renderSettings(
+      makeChannel({
+        config: { directories: ["/srv/app"], default_agent_config: { cwd: "/srv/app" } },
+      }),
+    );
+    expect(screen.getByRole("list", { name: "Directories" })).not.toHaveTextContent(
+      "/home/me/.coffer/content/workspace",
+    );
   });
 
   test("a long list scrolls inside its box", () => {

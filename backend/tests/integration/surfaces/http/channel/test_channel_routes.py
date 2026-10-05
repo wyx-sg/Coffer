@@ -33,6 +33,7 @@ from coffer.infrastructure.channel.persistence import (
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.vault.home import content_root
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_routes import (
@@ -264,6 +265,8 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "runs_here": True,  # this runtime has no machine, so nothing is foreign
         "title": None,  # none set, so a surface shows the name
         "handoff": None,  # nothing to hand to an agent
+        # Where new conversations start while the channel marks no default.
+        "workspace_directory": str(content_root() / "workspace"),
         # The typed configuration with every default filled in: the one place a
         # surface reads a default from, instead of carrying its own copy.
         "settings": {

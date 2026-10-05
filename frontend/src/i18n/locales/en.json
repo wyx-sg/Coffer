@@ -3913,6 +3913,7 @@
         "title": "Working directories",
         "list": "Directories",
         "defaultTag": "default",
+        "workspaceTag": "default · Coffer workspace",
         "setDefault": "Set as default",
         "setDefaultAria": "Set {{path}} as the default",
         "unsetDefault": "Unset default",

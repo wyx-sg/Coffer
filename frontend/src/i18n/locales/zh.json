@@ -3913,6 +3913,7 @@
         "title": "工作目录",
         "list": "目录",
         "defaultTag": "默认",
+        "workspaceTag": "默认 · Coffer 工作区",
         "setDefault": "设为默认",
         "setDefaultAria": "把 {{path}} 设为默认",
         "unsetDefault": "取消默认",
