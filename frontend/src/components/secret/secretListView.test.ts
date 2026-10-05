@@ -1,9 +1,8 @@
-// src/components/secret/secretListView.test.ts — the Secrets list's short names, filters, default order and URL state.
+// src/components/secret/secretListView.test.ts — the Secrets list's names, filters, default order and URL state.
 import { describe, expect, test } from "vitest";
 
 import type { SecretRef } from "@/lib/api/secret";
 import { parseListState, withListState, type SecretListState } from "@/lib/secrets/listState";
-import { shortName } from "./secretRows";
 import { decorate, defaultOrder, filterItems, isDeletable } from "./secretListView";
 
 function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
@@ -33,18 +32,22 @@ const state = (over: Partial<SecretListState> = {}): SecretListState => ({
 
 const JIRA = ref({
   ref: "mcp_server/26dddfa9ff00/JIRA_PERSONAL_TOKEN",
+  label: "jira · JIRA_PERSONAL_TOKEN",
   cited_by: [{ kind: "mcp_server", name: "jira", uid: "26dd", slot: null }],
 });
 const SEATALK = ref({
   ref: "channel/4c838e8fa72e/app-secret",
+  label: "seatalk · app-secret",
   cited_by: [{ kind: "channel", name: "seatalk", uid: "4c83", slot: null }],
 });
 const GROQ = ref({
   ref: "provider/b7b7526c/key",
+  label: "groq · key",
   cited_by: [{ kind: "provider", name: "groq", uid: "b7b7", slot: null }],
 });
 const POSTMAN = ref({
   ref: "postman.AUTHORIZATION",
+  label: "postman · AUTHORIZATION",
   cited_by: [{ kind: "custom_tool", name: "postman", uid: "p1", slot: null }],
 });
 // A destination is waiting for approval to receive it.
@@ -60,16 +63,11 @@ const GROQ_WAITING = ref({
     },
   ],
 });
-const OLD = ref({ ref: "secret/old-key", uri: "coffer://secret/old-key", unreferenced: true });
-
-describe("secret names", () => {
-  test("a ref shows its last segment, and a dotted name drops its owner's prefix", () => {
-    expect(shortName(JIRA)).toBe("JIRA_PERSONAL_TOKEN");
-    expect(shortName(SEATALK)).toBe("app-secret");
-    expect(shortName(GROQ)).toBe("key");
-    expect(shortName(POSTMAN)).toBe("AUTHORIZATION");
-    expect(shortName(ref({ ref: "aws.access_key" }))).toBe("aws.access_key");
-  });
+const OLD = ref({
+  ref: "secret/old-key",
+  label: "old-key",
+  uri: "coffer://secret/old-key",
+  unreferenced: true,
 });
 
 describe("secret list view", () => {
@@ -112,7 +110,7 @@ describe("secret list view", () => {
       GROQ_WAITING,
       POSTMAN,
       OLD,
-      ref({ ref: "secret/zeta", uri: "coffer://secret/zeta", present: false }),
+      ref({ ref: "secret/zeta", label: "zeta", uri: "coffer://secret/zeta", present: false }),
     ]);
     expect(defaultOrder(withMissing).map((i) => i.short)).toEqual([
       "groq · key",

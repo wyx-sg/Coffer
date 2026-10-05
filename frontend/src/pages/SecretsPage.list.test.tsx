@@ -58,19 +58,23 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
 
 const JIRA = ref({
   ref: "mcp_server/26dddfa9ff00/JIRA_PERSONAL_TOKEN",
+  label: "jira · JIRA_PERSONAL_TOKEN",
   cited_by: [{ kind: "mcp_server", name: "jira", uid: "u-jira", slot: null }],
 });
 const SEATALK = ref({
   ref: "channel/4c838e8fa72e/app-secret",
+  label: "seatalk · app-secret",
   cited_by: [{ kind: "channel", name: "seatalk", uid: "u-st", slot: null }],
 });
 const GROQ = ref({
   ref: "provider/b7b7526c/key",
+  label: "groq · key",
   cited_by: [{ kind: "provider", name: "groq", uid: "u-groq", slot: null }],
   readable_by_local_processes: true,
 });
 const OLD_A = ref({
   ref: "secret/old-a",
+  label: "old-a",
   uri: "coffer://secret/old-a",
   unreferenced: true,
   last_used_at: "2026-09-01T10:00:00Z",
@@ -78,6 +82,7 @@ const OLD_A = ref({
 });
 const OLD_B = ref({
   ref: "secret/old-b",
+  label: "old-b",
   uri: "coffer://secret/old-b",
   unreferenced: true,
   last_used_at: "2026-09-20T10:00:00Z",
@@ -141,7 +146,7 @@ describe("SecretsPage list", () => {
     });
     api.list.mockResolvedValue({ refs: [JIRA, hex, OLD_A] });
     renderPage();
-    // A legacy resource ref reads "citer · slot"; a hex id with a binding reads the same way.
+    // An unlabelled secret reads "citer · slot"; a labelled one reads its label.
     expect(await screen.findByText("jira · JIRA_PERSONAL_TOKEN")).toBeInTheDocument();
     expect(screen.getByText("server · API_KEY")).toBeInTheDocument();
     expect(screen.queryByText(/0123456789abcdef/)).not.toBeInTheDocument();
@@ -220,6 +225,7 @@ describe("SecretsPage list", () => {
       ref({
         ref: `secret/key-${String(i).padStart(4, "0")}`,
         uri: `coffer://secret/key-${String(i).padStart(4, "0")}`,
+        label: `key-${String(i).padStart(4, "0")}`,
         unreferenced: true,
       }),
     );

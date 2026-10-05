@@ -64,7 +64,7 @@ function approval(over: Partial<Approval> = {}): Approval {
 const GITHUB: SecretRef = {
   ref: "secret/github-token",
   uri: "coffer://secret/github-token",
-  label: null,
+  label: "github-token",
   description: null,
   created_for: null,
   present: true,

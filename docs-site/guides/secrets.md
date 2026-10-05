@@ -74,10 +74,6 @@ Coffer always mints the id, on the Secrets page and with `coffer secret set --na
 
 Every secret of every kind has this one shape. A secret you paste into a resource's own dialog — an MCP server's token, a provider's key — is minted as `secret/<id>` too, and belongs to that resource (see [Secret store → Delete a secret](/guides/secret-store#delete-a-secret)).
 
-::: details One-time move of older refs
-Vaults from before ids were minted held refs with names in them: `secret/github`, `postman.AUTHORIZATION`, `agnes-apihub`, `mcp_server/<hex>/JIRA_TOKEN`, `channel/…`, `provider/…` and the sync remote's push token. The first time the daemon starts on a build with minted ids, it moves every one of them to `secret/<id>`: the value, every config that cites it, the `coffer://secret/<old>` in Coffer's own skill files and this Mac's approval and last-used records go with it, and a standalone secret keeps its old name as its name. Each move is recorded in Activity as `secret_migrated`. A script **outside** Coffer that quotes an old `coffer://secret/<name>` must be updated by hand to the new URI, which the secret's **Overview** shows. This move will be removed in a later release.
-:::
-
 ### Store one
 
 ```sh
