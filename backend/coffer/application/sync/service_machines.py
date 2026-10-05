@@ -47,11 +47,20 @@ class MachinesMixin:
     async def _locked(self, fn: Callable[[], Any]) -> Any:
         raise NotImplementedError  # pragma: no cover - provided by SyncService
 
+    #: ``(HEAD, descriptors)`` and ``(HEAD, last sync summary per machine)`` of the
+    #: last read. A commit id names its tree and its history for good, so an
+    #: answer read at one is never stale at that id; the next HEAD replaces it.
+    _descriptors_memo: tuple[str, dict[str, MachineDescriptor]] | None = None
+    _merges_memo: tuple[str, dict[str, str]] | None = None
+
     def _descriptors(self) -> dict[str, MachineDescriptor]:
         git = self._engine.d.git
         head = git.head()
         if head is None:
             return {}
+        memo = self._descriptors_memo
+        if memo is not None and memo[0] == head:
+            return dict(memo[1])
         files = git.files(head, MACHINES)
         data = git.blobs(list(files.values()))
         out: dict[str, MachineDescriptor] = {}
@@ -62,18 +71,24 @@ class MachinesMixin:
             )
             if machine and parsed is not None:
                 out[machine] = parsed
+        self._descriptors_memo = (head, dict(out))
         return out
 
     def _last_merges(self, machines: set[str]) -> dict[str, str]:
         git = self._engine.d.git
-        if git.head() is None:
+        head = git.head()
+        if head is None:
             return {}
-        found: dict[str, str] = {}
-        for commit in git.log(start="HEAD", limit=_LOG_WINDOW):
-            who = commit.meta.machine
-            if who in machines and who not in found and commit.meta.writer == WRITER_SYNC:
-                found[who] = commit.meta.summary
-        return found
+        memo = self._merges_memo
+        if memo is None or memo[0] != head:
+            latest: dict[str, str] = {}
+            for commit in git.log(start=head, limit=_LOG_WINDOW):
+                who = commit.meta.machine
+                if who is not None and who not in latest and commit.meta.writer == WRITER_SYNC:
+                    latest[who] = commit.meta.summary
+            memo = (head, latest)
+            self._merges_memo = memo
+        return {who: summary for who, summary in memo[1].items() if who in machines}
 
     async def machines(self) -> list[MachineView]:
         """Every machine in the registry, this one first; this machine is

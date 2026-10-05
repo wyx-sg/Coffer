@@ -72,21 +72,45 @@ def memory_root() -> pathlib.Path:
     return derived_root() / "memory"
 
 
+def _dir_signature(directory: pathlib.Path) -> tuple[tuple[str, int, int], ...]:
+    try:
+        with os.scandir(directory) as it:
+            entries = [
+                (e.name, st.st_mtime_ns, st.st_size)
+                for e in it
+                if e.is_file() and e.name.endswith(".md")
+                for st in (e.stat(),)
+            ]
+    except OSError:
+        return ()
+    return tuple(sorted(entries))
+
+
 def notes_signature(name: str) -> tuple[tuple[str, int, int], ...]:
     """What a partition's ``notes/`` holds, cheaply: each file's name, mtime and
     size. A ranking index built from the notes is rebuilt when this changes;
     empty when the directory does not exist."""
     try:
-        directory = notes_dir(name)
-        with os.scandir(directory) as it:
-            entries = [
-                (e.name, e.stat().st_mtime_ns, e.stat().st_size)
-                for e in it
-                if e.is_file() and e.name.endswith(".md")
-            ]
-    except (OSError, UnsafeMemoryPath):
+        return _dir_signature(notes_dir(name))
+    except UnsafeMemoryPath:
         return ()
-    return tuple(sorted(entries))
+
+
+def raw_signature(name: str) -> tuple[tuple[str, int, int], ...]:
+    """The same cheap fingerprint of a partition's ``.raw/`` entries."""
+    try:
+        return _dir_signature(raw_dir(name))
+    except UnsafeMemoryPath:
+        return ()
+
+
+def retired_signature(name: str) -> tuple[int, int] | None:
+    """``(mtime, size)`` of the partition's ``RETIRED.md``; ``None`` when absent."""
+    try:
+        st = retired_path(name).stat()
+    except (OSError, UnsafeMemoryPath):
+        return None
+    return (st.st_mtime_ns, st.st_size)
 
 
 def check_segment(segment: str) -> None:

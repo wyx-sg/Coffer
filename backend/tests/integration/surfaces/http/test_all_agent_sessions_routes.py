@@ -17,6 +17,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from coffer.application.agent.native_session_service import SourcePage
+from coffer.application.agent.session_listing_snapshot import SnapshotSessionSource
 from coffer.domain.agent.native_sessions import NativeSession
 from coffer.domain.agent.types import AgentType
 from coffer.domain.chat.agent_config import AgentConfig
@@ -44,10 +45,12 @@ class _FakeSource:
     def __init__(self, rows: list[NativeSession]) -> None:
         self.rows = rows
         self.fail: Exception | None = None
+        self.calls = 0
 
     async def list(
         self, config_dir: pathlib.Path, *, q: str | None, limit: int, position: list[Any] | None
     ) -> SourcePage:
+        self.calls += 1
         if self.fail is not None:
             raise self.fail
         start = int(position[0]) if position else 0
@@ -185,3 +188,36 @@ def test_one_agent_failing_leaves_the_others_listed(client: TestClient) -> None:
     codex.fail = None
     retry = client.get(URL, params={"cursor": body["next_cursor"]}).json()
     assert _ids(retry) == ["x9"] and retry["unavailable"] == []
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="a repeated read is answered without asking the agent again"
+)
+def test_a_repeated_read_is_answered_without_asking_the_agent_again(client: TestClient) -> None:
+    rows = [_row(f"{i:02d}c", i % 24) for i in range(40)]
+    claude, codex = _FakeSource(rows), _FakeSource([_row("x9", 9)])
+    claude.rename = _noop  # type: ignore[attr-defined]
+    service = workspace_dependencies.get_native_session_service()
+    service._sources[AgentType.CLAUDE_CODE] = SnapshotSessionSource(claude)  # type: ignore[index]
+    service._sources[AgentType.CODEX] = SnapshotSessionSource(codex)  # type: ignore[index]
+
+    first = client.get(URL, params={"limit": 10}).json()
+    assert len(first["sessions"]) == 10 and (claude.calls, codex.calls) == (1, 1)
+
+    again = client.get(URL, params={"limit": 10}).json()
+    assert again["sessions"] == first["sessions"]
+    following = client.get(URL, params={"limit": 10, "cursor": first["next_cursor"]}).json()
+    assert len(following["sessions"]) == 10
+    assert (claude.calls, codex.calls) == (1, 1)  # neither agent was asked again
+
+    uid = next(
+        a["uid"] for a in client.get("/api/v1/agents").json()["items"] if a["type"] == "claude_code"
+    )
+    r = client.patch(f"/api/v1/agents/{uid}/sessions/{SID_LINKED}", json={"title": "Renamed"})
+    assert r.status_code == 204, r.text
+    client.get(URL, params={"limit": 10})
+    assert (claude.calls, codex.calls) == (2, 1)  # only the renamed agent is asked again
+
+
+async def _noop(*_args: Any) -> None:
+    return None

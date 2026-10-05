@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.agent.mcp_entry_service import ParseErrorInfo
-from coffer.application.agent.plugin_views import PluginDetailView, PluginsOut
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
@@ -51,8 +50,7 @@ class _AgentLookup(Protocol):
 
 
 class _Plugins(Protocol):
-    async def list_plugins(self, uid: str) -> PluginsOut: ...
-    async def get_plugin(self, uid: str, plugin_id: str) -> PluginDetailView: ...
+    async def enabled_install_roots(self, uid: str) -> list[tuple[str, str]]: ...
 
 
 @dataclass(frozen=True)
@@ -185,15 +183,9 @@ class AgentHooksService:
         """Each enabled plugin's hook file, where its package is on disk. A
         disabled plugin's hooks do not run, so they are not listed."""
         out: list[tuple[HookSource, str, pathlib.Path, str | None]] = []
-        listing = await self._plugins.list_plugins(uid)
-        for view in listing.items:
-            if not view.enabled or not view.cache_present:
-                continue
-            detail = await self._plugins.get_plugin(uid, view.id)
-            if detail.install_path is None:
-                continue
-            path = pathlib.Path(detail.install_path) / PLUGIN_HOOKS_FILE
-            out.append((HookSource.PLUGIN, f"plugin:{view.id}", path, view.id))
+        for plugin_id, root in await self._plugins.enabled_install_roots(uid):
+            path = pathlib.Path(root) / PLUGIN_HOOKS_FILE
+            out.append((HookSource.PLUGIN, f"plugin:{plugin_id}", path, plugin_id))
         return out
 
     async def _coffer_hook(

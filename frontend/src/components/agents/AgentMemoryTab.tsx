@@ -27,6 +27,7 @@ import type { AgentOut } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { useProgressiveRows } from "@/components/ui/useProgressiveRows";
 
 /** More stores than this and a project search appears. */
 const SEARCH_FROM = 8;
@@ -65,6 +66,8 @@ export function AgentMemoryTab({ agent, onRepair }: Props) {
     const q = query.trim().toLowerCase();
     return q ? all.filter((s) => projectLabel(s).toLowerCase().includes(q)) : all;
   }, [all, query]);
+
+  const progressive = useProgressiveRows(stores, { resetKey: query });
 
   const open = (s: NativeMemoryStore) =>
     navigate(agentMemoryStorePath(agent.type, s.memory_dir, s.path ?? s.project));
@@ -114,7 +117,7 @@ export function AgentMemoryTab({ agent, onRepair }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {stores.map((s) => (
+                {progressive.visible.map((s) => (
                   <tr
                     // Codex rows share one memory_dir, so key by the routed project too.
                     key={`${s.memory_dir}::${s.path ?? s.project}`}
@@ -149,6 +152,13 @@ export function AgentMemoryTab({ agent, onRepair }: Props) {
                     </td>
                   </tr>
                 ))}
+                {progressive.sentinel ? (
+                  <tr aria-hidden>
+                    <td colSpan={4} className="p-0">
+                      {progressive.sentinel}
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

@@ -215,3 +215,47 @@ async def test_a_failing_target_becomes_an_item() -> None:
         Severity.ERROR,
     )
     assert "unreadable" in item.reason
+
+
+class _Gated(_Source):
+    """Waits for every gated source to be asked before any answers — only
+    possible if the sources are asked concurrently."""
+
+    def __init__(self, name: str, items: list[AttentionItem], gate: Any) -> None:
+        super().__init__(name, items)
+        self._gate = gate
+
+    async def items(self) -> Sequence[AttentionItem]:
+        self._gate.arrived += 1
+        if self._gate.arrived == self._gate.total:
+            self._gate.event.set()
+        await self._gate.event.wait()
+        return await super().items()
+
+
+class _Gate:
+    def __init__(self, total: int) -> None:
+        import asyncio
+
+        self.total = total
+        self.arrived = 0
+        self.event = asyncio.Event()
+
+
+@pytest.mark.asyncio
+async def test_sources_are_asked_concurrently_and_errors_keep_source_order() -> None:
+    import asyncio
+
+    gate = _Gate(2)
+    sources = [
+        _Gated("a", [_item("agent", Severity.INFO)], gate),
+        _Broken("b", []),
+        _Gated("c", [_item("mcp", Severity.ERROR)], gate),
+        _Broken("d", []),
+    ]
+    service = AttentionService(sources, feature_enabled=lambda _f: True)
+
+    report = await asyncio.wait_for(service.report(), timeout=2)
+
+    assert [i.kind for i in report.items] == ["mcp", "agent"]  # severity order, not source order
+    assert [e.source for e in report.errors] == ["b", "d"]  # source order
