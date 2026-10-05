@@ -28,9 +28,9 @@ const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
 
 /** A blank secret draft — what the form opens on and resets to. */
 export const EMPTY_SECRET_DRAFT: ChannelSecretDraft = {
-  botToken: "",
+  botToken: null,
   appId: "",
-  appSecret: "",
+  appSecret: null,
 };
 
 /** Everything the add form holds that the schema has an opinion about. */

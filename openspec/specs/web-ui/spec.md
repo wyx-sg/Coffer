@@ -2153,7 +2153,9 @@ close it and return to the page underneath.
 
 ### Requirement: Choose secrets in one field and one set of rows
 Secrets live only in Coffer, so wherever a form takes a secret it MUST use the
-one **secret field**: a single picker, "🔑 name ▾", that never shows the value
+one **secret field** — the add forms included (a model provider's API key, a
+channel's bot token or app secret, the sync remote's push token), so each offers
+both a stored secret and a new value: a single picker, "🔑 name ▾", that never shows the value
 and offers no plain-text password input. The menu lists the stored secrets with
 how many things use each and a **New secret…** item, under a search box that
 matches a secret's name or description; however many secrets are stored the menu
@@ -2197,6 +2199,16 @@ row's scheme MUST be stored without it. The form has no Secret | Plain toggle.
 - **GIVEN** the Sync › Remote tab with Secret set to None
 - **WHEN** the user pastes a token into the Secret field
 - **THEN** the token is written to Secrets as a new secret and the remote is saved citing it, the value never shown
+
+#### Scenario: an add form picks a stored secret or takes a new one
+- **GIVEN** a stored secret "Team gateway key" and the Add model provider dialog on a custom endpoint
+- **WHEN** the user picks that secret in the API key field and presses Test
+- **THEN** the test cites the stored secret by its ref and sends no key value
+
+#### Scenario: a channel's token can be a secret Coffer already holds
+- **GIVEN** a stored secret "Ops bot token"
+- **WHEN** the user adds a Telegram channel and picks it as the bot token
+- **THEN** nothing is written to Secrets and the channel's config cites the stored secret's ref
 
 #### Scenario: a header row's value is plain until a secret is picked
 - **GIVEN** a header row `Authorization` with an empty value

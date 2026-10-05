@@ -43,7 +43,7 @@ export function useSecretChoices() {
    *  standalone name never holds one. */
   const rowOf = (name: string) => {
     const ref = name.includes("/") ? name : `${SECRET_PREFIX}${name}`;
-    return query.data?.refs.find((r) => r.ref === ref);
+    return query.data?.refs?.find((r) => r.ref === ref);
   };
   /** What a chosen secret is called: its display name, else the placeholder. */
   const displayOf = (name: string) => {

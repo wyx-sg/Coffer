@@ -144,7 +144,9 @@ function renderDialog(platform: "telegram" | "seatalk" | null = "telegram") {
 
 function fillTelegram() {
   fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "tg" } });
-  fireEvent.change(screen.getByLabelText(/bot token/i), { target: { value: "123:abc" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /bot token/i }), {
+    target: { value: "123:abc" },
+  });
 }
 
 function submit() {
@@ -275,10 +277,13 @@ describe("AddChannelDialog", () => {
     const alerts = await screen.findAllByRole("alert");
     expect(alerts.map((a) => a.textContent)).toEqual([
       "Enter the App ID.",
-      "Enter the App secret.",
+      "Choose a stored secret or paste the App secret.",
     ]);
     expect(screen.queryByText(/must contain/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/app secret/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("textbox", { name: /app secret/i })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
     expect(api.POST).not.toHaveBeenCalled();
   });
 
@@ -286,7 +291,9 @@ describe("AddChannelDialog", () => {
     const api = registeringApi();
     renderDialog();
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Team bot!" } });
-    fireEvent.change(screen.getByLabelText(/bot token/i), { target: { value: "123:abc" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /bot token/i }), {
+      target: { value: "123:abc" },
+    });
     submit();
 
     // The display name is the title; the resource's name is derived from it.
@@ -308,7 +315,9 @@ describe("AddChannelDialog", () => {
     });
     renderDialog();
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Team bot!" } });
-    fireEvent.change(screen.getByLabelText(/bot token/i), { target: { value: "123:abc" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /bot token/i }), {
+      target: { value: "123:abc" },
+    });
     submit();
 
     await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
@@ -325,7 +334,9 @@ describe("AddChannelDialog", () => {
       renderSeatalk();
       fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
       fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
-      fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
+      fireEvent.change(screen.getByRole("textbox", { name: /app secret/i }), {
+        target: { value: "s1" },
+      });
       submit();
 
       await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
@@ -356,7 +367,7 @@ describe("AddChannelDialog", () => {
     renderSeatalk();
 
     expect(screen.getByLabelText(/app id/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/app secret/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /app secret/i })).toBeInTheDocument();
     // No transport to choose and nothing a webhook needed.
     expect(
       screen.queryByRole("button", { name: /^webhook$|^websocket$/i }),
@@ -441,12 +452,49 @@ describe("AddChannelDialog", () => {
   });
 });
 
+acceptance("web-ui", "a channel's token can be a secret Coffer already holds", async () => {
+  const stored = `secret/${"d4".repeat(16)}`;
+  const api = registeringApi({
+    GET: vi.fn(async (path: string) =>
+      path === "/secrets"
+        ? {
+            data: {
+              refs: [
+                {
+                  ref: stored,
+                  label: "Ops bot token",
+                  present: true,
+                  cited_by: [],
+                  bindings: [],
+                  mentioned_by_skills: [],
+                  uri: null,
+                },
+              ],
+            },
+          }
+        : { data: { resources: [] } },
+    ) as ApiClientMock["GET"],
+  });
+  renderDialog();
+  fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "tg" } });
+  fireEvent.click(screen.getByRole("button", { name: /choose a secret for bot token/i }));
+  fireEvent.click(await screen.findByRole("option", { name: /Ops bot token/ }));
+  submit();
+
+  // Nothing is written to Secrets: the channel cites the stored secret as it is.
+  await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+  expect(api.POST.mock.calls[0][0]).toBe("/resources");
+  expect(
+    (api.POST.mock.calls[0][1] as { body: { config: Record<string, unknown> } }).body.config
+      .bot_token_ref,
+  ).toBe(stored);
+});
+
 describe("step 2 checks as it asks", () => {
   test("a pasted Telegram token is checked and the bot named", async () => {
     registeringApi();
     renderDialog();
-    fillTelegram();
-    fireEvent.change(screen.getByLabelText(/bot token/i), {
+    fireEvent.change(screen.getByRole("textbox", { name: /bot token/i }), {
       target: { value: "7412345:AAHsomethinglong" },
     });
     expect(await screen.findByText("Found @alexc_coffer_bot", {}, { timeout: 3000 })).toBeVisible();
@@ -460,7 +508,10 @@ describe("step 2 checks as it asks", () => {
     expect(connect).toBeEnabled();
     fireEvent.click(connect);
     const alerts = await screen.findAllByRole("alert");
-    expect(alerts.map((a) => a.textContent)).toEqual(["Enter a name.", "Enter the bot token."]);
+    expect(alerts.map((a) => a.textContent)).toEqual([
+      "Enter a name.",
+      "Choose a stored secret or paste the bot token.",
+    ]);
     expect(api.POST).not.toHaveBeenCalled();
     expect(
       screen.getByText(

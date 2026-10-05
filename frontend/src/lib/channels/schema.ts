@@ -17,7 +17,7 @@
 import { z } from "zod";
 
 import type { ChannelType } from "@/lib/api/channels";
-import { mintSecretRef } from "@/lib/secretRef";
+import { secretRef, type SecretFieldValue } from "@/lib/secretValue";
 import { TITLE_MAX_LENGTH } from "@/lib/resourceTitle";
 
 // There is no DEFAULT_AGENT constant any more. `default_agent` holds an agent
@@ -69,17 +69,29 @@ export function channelSlug(displayName: string, taken: Iterable<string> = []): 
  * websocket connection, so there is no signature, public URL or tunnel to
  * configure.
  */
+/** A secret field's choice: a stored secret, or a pasted value that is not empty. */
+const secretChoice = (message: string) =>
+  z.custom<NonNullable<SecretFieldValue>>(
+    (v) =>
+      v != null &&
+      typeof v === "object" &&
+      ((v as { kind?: string }).kind === "stored" ||
+        ((v as { kind?: string }).kind === "new" &&
+          String((v as { value?: unknown }).value ?? "").trim() !== "")),
+    message,
+  );
+
 export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
   z.object({
     channel_type: z.literal("telegram"),
     name: channelNameSchema,
-    bot_token: z.string().min(1, `${ERR}.botToken`),
+    bot_token: secretChoice(`${ERR}.botToken`),
   }),
   z.object({
     channel_type: z.literal("seatalk"),
     name: channelNameSchema,
     app_id: z.string().min(1, `${ERR}.appId`),
-    app_secret: z.string().min(1, `${ERR}.appSecret`),
+    app_secret: secretChoice(`${ERR}.appSecret`),
   }),
 ]);
 
@@ -90,8 +102,8 @@ export interface ChannelPlan {
    *  title, and the resource name is derived from it at registration. */
   name: string;
   config: Record<string, unknown>;
-  /** Secret-store writes to perform BEFORE registering the resource. */
-  secrets: { ref: string; value: string }[];
+  /** Secret-store writes to perform BEFORE registering the resource; `label` names a new one. */
+  secrets: { ref: string; value: string; label?: string }[];
 }
 
 /**
@@ -125,30 +137,43 @@ export function planChannel(
   defaultAgentUid: string,
 ): ChannelPlan {
   if (values.channel_type === "telegram") {
-    const ref = mintSecretRef();
+    const token = citeSecret(values.bot_token);
     return {
       name: values.name,
       config: {
         channel_type: "telegram" satisfies ChannelType,
-        bot_token_ref: ref,
+        bot_token_ref: token.ref,
         default_agent: defaultAgentUid,
         runs_on: runsOn,
       },
-      secrets: [{ ref, value: values.bot_token }],
+      secrets: token.writes,
     };
   }
   // The bot dials out and the register handshake (app id + app secret)
   // authenticates the connection, so the app secret is the only secret.
-  const appSecretRef = mintSecretRef();
+  const appSecret = citeSecret(values.app_secret);
   return {
     name: values.name,
     config: {
       channel_type: "seatalk" satisfies ChannelType,
       app_id: values.app_id,
-      app_secret_ref: appSecretRef,
+      app_secret_ref: appSecret.ref,
       default_agent: defaultAgentUid,
       runs_on: runsOn,
     },
-    secrets: [{ ref: appSecretRef, value: values.app_secret }],
+    secrets: appSecret.writes,
   };
+}
+
+/** The ref a channel cites for a secret field's choice, and the write a new value needs: a stored
+ *  secret is cited as it is (nothing written), a pasted one is written under its minted id. */
+function citeSecret(choice: NonNullable<SecretFieldValue>): {
+  ref: string;
+  writes: ChannelPlan["secrets"];
+} {
+  if (choice.kind === "stored") {
+    return { ref: choice.name.includes("/") ? choice.name : secretRef(choice.name), writes: [] };
+  }
+  const ref = secretRef(choice.name);
+  return { ref, writes: [{ ref, value: choice.value, label: choice.label }] };
 }

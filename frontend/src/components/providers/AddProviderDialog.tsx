@@ -20,7 +20,8 @@ import { AddProviderFooter } from "./AddProviderFooter";
 import { AddEndpointStep } from "./AddEndpointStep";
 import { AddLocalRuntime } from "./AddLocalRuntime";
 import { AddModelsStep, type CandidateModel } from "./AddModelsStep";
-import { createBody, localCandidates, localProtocolsOf } from "./addProviderPlan";
+import { createBody, keyOf, localCandidates, localProtocolsOf } from "./addProviderPlan";
+import { labelNewKey } from "./labelNewKey";
 import { ProbeResult } from "./ProbeResult";
 import { endpointSchema, type EndpointValues } from "./providerSchemas";
 import { StepMarker } from "./StepMarker";
@@ -40,7 +41,7 @@ function seed(id: PresetId): EndpointValues {
     name: "",
     protocol: p.protocol || "openai",
     baseUrl: p.local ? "" : p.baseUrl,
-    secret: "",
+    secret: null,
   };
 }
 
@@ -139,7 +140,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
   const probe = (v: EndpointValues) => ({
     provider: v.protocol,
     base_url: v.baseUrl.trim(),
-    secret_value: v.secret,
+    ...keyOf(v.secret),
   });
 
   const candidates: CandidateModel[] = local
@@ -161,6 +162,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
     const body = createBody(form.getValues(), runtime, candidates, selected);
     try {
       const created = await create.mutateAsync(body);
+      await labelNewKey(form.getValues("secret"), created.secret_ref);
       onCreated(created);
       onClose();
     } catch {

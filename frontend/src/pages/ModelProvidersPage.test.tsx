@@ -33,7 +33,13 @@ vi.mock("@/lib/api/resources", () => ({
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
 vi.mock("@/lib/api/secret", () => ({
-  secretsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
+  secretsApi: {
+    pendingApprovals: vi.fn(),
+    secretBoundary: vi.fn(),
+    rejectApproval: vi.fn(),
+    list: vi.fn(async () => ({ refs: [] })),
+    setNotes: vi.fn(async () => ({})),
+  },
 }));
 
 const { agentsState, engineState, listModels } = vi.hoisted(() => ({
@@ -360,6 +366,40 @@ describe("ModelProvidersPage", () => {
     // Reach is the resource's scope, never a create field.
     expect(body).not.toHaveProperty("compatible_agents");
     await waitFor(() => expect(where()).toBe(`/model-providers/${UIDS.myconn}`));
+  });
+
+  acceptance("web-ui", "an add form picks a stored secret or takes a new one", async () => {
+    serve([]);
+    vi.mocked(secretsApi.list).mockResolvedValue({
+      refs: [
+        {
+          ref: `secret/${"c3".repeat(16)}`,
+          label: "Team gateway key",
+          present: true,
+          cited_by: [],
+          bindings: [],
+          mentioned_by_skills: [],
+          uri: null,
+        },
+      ],
+    } as never);
+    api.create.mockResolvedValue(makeProvider({ name: "gw", protocol: "openai" }));
+    listModels.mockResolvedValue({ models: [], message: "", reachable: true });
+    renderAt();
+    const dialog = await openAdd();
+
+    fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
+    fireEvent.click(dialog.getByRole("radio", { name: /^OpenAI-compatible/ }));
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "gw" } });
+    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    // The key field's menu lists what Secrets holds; picking one cites it, nothing is pasted.
+    fireEvent.click(dialog.getByRole("button", { name: "Choose a secret for API key" }));
+    fireEvent.click(await screen.findByRole("option", { name: /Team gateway key/ }));
+    fireEvent.click(dialog.getByRole("button", { name: "Test" }));
+
+    await waitFor(() => expect(listModels).toHaveBeenCalledTimes(1));
+    expect(listModels.mock.calls[0][0]).toMatchObject({ secret_ref: `secret/${"c3".repeat(16)}` });
+    expect(listModels.mock.calls[0][0]).not.toHaveProperty("secret_value");
   });
 
   test("Add validates inline and shows a rejected key", async () => {
