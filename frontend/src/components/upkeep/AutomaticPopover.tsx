@@ -1,16 +1,15 @@
 // frontend/src/components/upkeep/AutomaticPopover.tsx
 //
-// The "Automatic · hourly" ghost button (with a status dot) in the Memory page
-// header and the popover it opens, anchored under it and right-aligned (board
-// 5.2.04). Automatic upkeep lives on the page it upkeeps, not in Settings: a
+// The popover behind the ▾ half of Memory's Update memory split button,
+// anchored under it and right-aligned (board 5.2.04). The caller passes the ▾
+// button as `trigger`. Automatic upkeep lives on the page it upkeeps, not in Settings: a
 // switch with its one-line explanation, an interval, and a footer with when the
 // pass last ran and runs next. Each change saves as it is made; there is no
 // Save button.
-import { ChevronDown } from "lucide-react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatRelativeTime } from "@/components/agents/list/relativeTime";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -21,7 +20,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { UpkeepSetting } from "@/lib/api/internalEngine";
-import { cn } from "@/lib/utils";
 
 /** The intervals offered, in seconds. */
 const INTERVAL_CHOICES = [15 * 60, 30 * 60, 60 * 60, 3 * 60 * 60, 6 * 60 * 60, 12 * 60 * 60, 86400];
@@ -38,13 +36,12 @@ function intervalName(t: Translate, seconds: number): string {
   return t("upkeep.interval.minutes", { count: Math.round(seconds / 60) });
 }
 
-/** "hourly", "every 6 h", "off" — the pill's short form. */
-function pillState(t: Translate, setting: UpkeepSetting): string {
-  if (!setting.enabled) return t("upkeep.pill.off");
+/** "every hour", "every 6 hours" — how often a pass runs, for a status line. */
+export function cadenceName(t: Translate, setting: UpkeepSetting): string {
   const seconds = setting.interval_s ?? setting.default_interval_s;
-  if (seconds === 3600) return t("upkeep.pill.hourly");
-  if (seconds === 86400) return t("upkeep.pill.daily");
-  return t("upkeep.pill.every", { interval: intervalName(t, seconds) });
+  if (seconds === 3600) return t("upkeep.cadence.hourly");
+  if (seconds === 86400) return t("upkeep.cadence.daily");
+  return t("upkeep.cadence.every", { interval: intervalName(t, seconds) });
 }
 
 /** "Last pass 2 h ago · next in 58 min" — each half left out when unknown. */
@@ -67,7 +64,7 @@ interface Props {
   title: string;
   /** One line under the heading saying what the pass does. */
   description: string;
-  /** The setting that drives the switch, the interval and the pill. */
+  /** The setting that drives the switch and the interval. */
   setting: UpkeepSetting;
   busy: boolean;
   onToggle: (enabled: boolean) => void;
@@ -75,7 +72,8 @@ interface Props {
   onInterval: (seconds: number | null) => void;
   /** The footer's left half: when the pass last ran and runs next. */
   clock: string;
-  testId?: string;
+  /** The button that opens the popover (the ▾ half of a split button). */
+  trigger: ReactElement;
 }
 
 export function AutomaticPopover({
@@ -86,30 +84,17 @@ export function AutomaticPopover({
   onToggle,
   onInterval,
   clock,
-  testId,
+  trigger,
 }: Props) {
   const { t } = useTranslation();
   const seconds = setting.interval_s ?? setting.default_interval_s;
   const choices = INTERVAL_CHOICES.includes(seconds)
     ? INTERVAL_CHOICES
     : [...INTERVAL_CHOICES, seconds].sort((a, b) => a - b);
-  const tone = setting.enabled ? "ok" : "off";
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" data-testid={testId}>
-          <span
-            aria-hidden
-            className={cn(
-              "size-1.5 shrink-0 rounded-full",
-              tone === "ok" ? "bg-status-ok" : "bg-text-subtle",
-            )}
-          />
-          {t("upkeep.pill.label", { state: pillState(t, setting) })}
-          <ChevronDown aria-hidden />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         align="end"
         aria-label={title}

@@ -3189,6 +3189,7 @@
     },
     "status": {
       "read": "{{when}}读取",
+      "readAuto": "{{cadence}}自动读取 · {{when}}",
       "failed_one": "{{count}} 个智能体读取失败",
       "failed_other": "{{count}} 个智能体读取失败",
       "reading": "正在读取智能体的记忆…",
@@ -5998,12 +5999,10 @@
       "days_other": "{{count}} 天",
       "default": "默认（{{interval}}）"
     },
-    "pill": {
-      "label": "自动 · {{state}}",
+    "cadence": {
       "hourly": "每小时",
       "daily": "每天",
-      "every": "每 {{interval}}",
-      "off": "已关闭"
+      "every": "每 {{interval}}"
     }
   },
   "drawer": {

@@ -103,11 +103,39 @@ describe("MemoryPage", () => {
     expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
   });
 
-  test("the header says when memory was last read, beside Automatic and Update memory", async () => {
+  test("the header says how and when memory was last read, with the schedule behind Update memory's arrow", async () => {
     stub([COFFER]);
     renderPage();
+    expect(await screen.findByTestId("memory-status")).toHaveTextContent(
+      /^Reads automatically every hour · 14m ago$/,
+    );
+    const arrow = await screen.findByTestId("memory-automatic");
+    expect(arrow).toHaveAccessibleName("Read memory automatically");
+    expect(screen.queryByText(/^Automatic · /)).toBeNull();
+  });
+
+  test("with automatic reading off the status is just when memory was last read", async () => {
+    stub([COFFER]);
+    vi.mocked(internalEngineApi.get).mockResolvedValue({
+      upkeep: {
+        aggregate: {
+          enabled: false,
+          interval_s: null,
+          default_interval_s: 3600,
+          last_pass_at: ago(14),
+          next_pass_at: null,
+        },
+        distil: {
+          enabled: false,
+          interval_s: null,
+          default_interval_s: 21600,
+          last_pass_at: null,
+          next_pass_at: null,
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof internalEngineApi.get>>);
+    renderPage();
     expect(await screen.findByTestId("memory-status")).toHaveTextContent(/^Read 14m ago$/);
-    expect(await screen.findByTestId("memory-automatic")).toHaveTextContent("Automatic · hourly");
   });
 
   test("a read that left an agent unread says so in the header and in a banner", async () => {

@@ -1,8 +1,8 @@
 // frontend/src/components/memory/MemoryAutomaticPopover.tsx
 //
-// Memory's "Automatic · hourly" control (design 5.2.11): whether Coffer reads
-// the agents' memory on its own, and how often. It sits in the Memory header
-// and the partition header, beside Update memory.
+// Memory's automatic-read schedule (design 5.2.11): whether Coffer reads the
+// agents' memory on its own, and how often. It opens from the ▾ half of the
+// Memory header's Update memory split button.
 //
 // One switch, two passes. Reading the agents' memory is two passes on the
 // daemon — `aggregate` reads their files into the derived tree, `distil` turns
@@ -10,12 +10,13 @@
 // Coffer keep my memory current on its own? So the switch sets both, and the
 // interval is the read's (`aggregate`): distilling follows whatever was read,
 // on its own timer. "Last read · next in" is the read's too.
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AutomaticPopover, clockLine } from "@/components/upkeep/AutomaticPopover";
 import { useInternalEngineConfig, useSetUpkeep } from "@/lib/hooks/useInternalEngine";
 
-export function MemoryAutomaticPopover() {
+export function MemoryAutomaticPopover({ trigger }: { trigger: ReactElement }) {
   const { t, i18n } = useTranslation();
   const { data: config } = useInternalEngineConfig();
   const setUpkeep = useSetUpkeep();
@@ -28,7 +29,7 @@ export function MemoryAutomaticPopover() {
 
   return (
     <AutomaticPopover
-      testId="memory-automatic"
+      trigger={trigger}
       title={t("memory.automatic.title")}
       description={t("memory.automatic.description")}
       setting={setting}
@@ -38,7 +39,13 @@ export function MemoryAutomaticPopover() {
         if (distil) setUpkeep.mutate({ pass: "distil", enabled });
       }}
       onInterval={(interval_s) => setUpkeep.mutate({ pass: "aggregate", interval_s })}
-      clock={clockLine(t, i18n.language, setting, "memory.automatic.last", "memory.automatic.never")}
+      clock={clockLine(
+        t,
+        i18n.language,
+        setting,
+        "memory.automatic.last",
+        "memory.automatic.never",
+      )}
     />
   );
 }

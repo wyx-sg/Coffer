@@ -9,10 +9,16 @@
 // asks for it. On the list page and the first run it is the page's one primary
 // button (refresh icon); on a partition's page it is a secondary button with
 // the wand (boards 5.2.01, 5.2.06). No tooltip: the label says what it does.
+//
+// With `schedule` (the list page) it is a split button: the ▾ half opens the
+// automatic-read schedule (the same read the main half runs on request), so
+// everything about reading sits in one control.
 import { useTranslation } from "react-i18next";
-import { LoaderCircle, RefreshCw, WandSparkles } from "lucide-react";
+import { ChevronDown, LoaderCircle, RefreshCw, WandSparkles } from "lucide-react";
 
+import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
 import { Button } from "@/components/ui/button";
+import { useInternalEngineConfig } from "@/lib/hooks/useInternalEngine";
 import { useSyncMemory } from "@/lib/hooks/useMemory";
 
 interface Props {
@@ -23,24 +29,55 @@ interface Props {
   running?: boolean;
   variant?: "default" | "outline";
   size?: "default" | "sm";
+  /** Add the ▾ half that opens the automatic-read schedule. */
+  schedule?: boolean;
 }
 
-export function MemoryUpdateButton({ running = false, variant = "default", size }: Props) {
+export function MemoryUpdateButton({
+  running = false,
+  variant = "default",
+  size,
+  schedule = false,
+}: Props) {
   const { t } = useTranslation();
+  const { data: config } = useInternalEngineConfig();
+  const hasSchedule = schedule && Boolean(config?.upkeep?.aggregate);
   const update = useSyncMemory();
   const busy = update.isPending || running;
   const Icon = busy ? LoaderCircle : variant === "outline" ? WandSparkles : RefreshCw;
 
-  return (
+  const main = (
     <Button
       type="button"
       variant={variant}
       size={size}
       onClick={() => update.mutate()}
       disabled={busy}
+      className={hasSchedule ? "rounded-r-none" : undefined}
     >
       <Icon className={busy ? "animate-spin" : undefined} aria-hidden />
       {busy ? t("memory.updating") : t("memory.update")}
     </Button>
+  );
+  if (!hasSchedule) return main;
+  return (
+    <div className="inline-flex">
+      {main}
+      <MemoryAutomaticPopover
+        trigger={
+          <Button
+            type="button"
+            variant={variant}
+            size={size}
+            aria-label={t("memory.automatic.title")}
+            aria-haspopup="dialog"
+            data-testid="memory-automatic"
+            className="rounded-l-none border-l-accent-foreground/30 px-0 w-7"
+          >
+            <ChevronDown aria-hidden className="!size-3" />
+          </Button>
+        }
+      />
+    </div>
   );
 }

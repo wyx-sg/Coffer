@@ -285,7 +285,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的机械性工作：记忆的 `aggregate` 和 `distil`，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、提交磁盘上的编辑）。它们都不调用模型。每项都能在知识和记忆页面的**自动**控件里关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的机械性工作：记忆的 `aggregate` 和 `distil`，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、提交磁盘上的编辑）。它们都不调用模型。每项都能在记忆页面的自动读取计划（**更新记忆**的 **▾**）里关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
 
 ## V {#v}
 

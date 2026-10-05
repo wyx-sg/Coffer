@@ -457,7 +457,7 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 Mechanical work Coffer does on a timer, without being asked: `aggregate` and `distil` for
 memory, and the sweep for knowledge (re-render the guide, adopt files left in the
 [inbox](#inbox), commit edits made on disk). None of them calls a model. Each can be switched
-off or retimed from the **Automatic** control on the Knowledge and Memory pages.
+off or retimed from the automatic-read schedule on the Memory page (the **▾** on **Update memory**).
 See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/architecture/knowledge#the-sweep).
 
 ## V
