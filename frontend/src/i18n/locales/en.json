@@ -3498,7 +3498,7 @@
         "remove": "Remove",
         "ownerLine": "Owner · direct chat · paired {{date}}",
         "nobody": "Nobody yet. Until you pair, the bot ignores every message.",
-        "onlyOwner": "Answers only these people and groups; anyone else gets no reply.",
+        "onlyOwner": "Answers only these people; anyone else gets no reply.",
         "search": "Search owners",
         "noMatch": "No owner matches."
       },
