@@ -170,8 +170,10 @@ pub fn render(app: &AppHandle) {
             let _ = tray.set_icon_as_template(true);
             *drawn = Some(icon);
         }
-        // The count beside the icon; `None` clears it.
-        let _ = tray.set_title(view::title(&state));
+        // The count beside the icon. Always `Some`: an empty title is what
+        // clears it, `None` would leave the last count drawn
+        // (`tray_state::title`).
+        let _ = tray.set_title(Some(view::title(&state)));
         let _ = tray.set_tooltip(Some(&view::tooltip(&state, lang)));
     }
 }

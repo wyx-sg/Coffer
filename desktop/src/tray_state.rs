@@ -130,13 +130,18 @@ pub fn attention_label(state: &TrayState, lang: Lang) -> Option<String> {
     }
 }
 
-/// The count drawn beside the icon: the number, "9+" past nine, nothing when
-/// nothing needs the user or no daemon is serving.
-pub fn title(state: &TrayState) -> Option<String> {
+/// The count drawn beside the icon: the number, "9+" past nine, and the empty
+/// string when nothing needs the user or no daemon is serving.
+///
+/// Always a title to write, never "no title": on macOS
+/// `TrayIcon::set_title(None)` leaves the button's last title in place
+/// (tray-icon only writes a title it is given), so a count that fell to
+/// nothing would stay drawn at its last number. Writing `""` clears it.
+pub fn title(state: &TrayState) -> String {
     match needs_you(state) {
-        0 => None,
-        n if n > 9 => Some("9+".to_owned()),
-        n => Some(n.to_string()),
+        0 => String::new(),
+        n if n > 9 => "9+".to_owned(),
+        n => n.to_string(),
     }
 }
 
