@@ -2,7 +2,8 @@
 //
 // The 48px bar over every Knowledge pane view (boards 5.1.01, 5.1.09, 5.1.10,
 // 5.1.13): where you are — the collection, its folders and the open file in
-// the mono face — then its actions pushed right. One component so a document, an
+// the mono face — then the view's tabs, if it has any, and its actions pushed
+// right. One component so a document, an
 // item, a collection and a pass all say where they are the same way. The
 // leading segments give way first (ellipsis) when the path is long, and the
 // tooltip names the whole path only then.
@@ -24,10 +25,12 @@ interface Crumb {
 
 interface Props {
   crumbs: Crumb[];
+  /** Beside the crumbs: a view's tabs. */
+  tabs?: ReactNode;
   actions?: ReactNode;
 }
 
-export function KnowledgePaneBar({ crumbs, actions }: Props) {
+export function KnowledgePaneBar({ crumbs, tabs, actions }: Props) {
   const { t } = useTranslation();
   const navRef = useRef<HTMLElement>(null);
   const [tipOpen, setTipOpen] = useState(false);
@@ -85,9 +88,37 @@ export function KnowledgePaneBar({ crumbs, actions }: Props) {
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      {tabs}
       {actions ? (
         <span className="ml-auto flex shrink-0 items-center gap-1.5">{actions}</span>
       ) : null}
     </div>
+  );
+}
+
+/** A tab link in the bar: 48px tall, the current one underlined in ink. */
+export function PaneBarTab({
+  to,
+  current,
+  children,
+}: {
+  to: string;
+  current: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      replace
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        "inline-flex h-12 items-center gap-1.5 px-0.5 text-sm transition-colors",
+        current
+          ? "font-label text-text shadow-[inset_0_-2px_0_rgb(var(--text))]"
+          : "font-book text-text-muted hover:text-text",
+      )}
+    >
+      {children}
+    </Link>
   );
 }

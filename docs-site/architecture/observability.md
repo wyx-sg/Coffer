@@ -184,7 +184,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 
 No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.
 
-Four events are no longer recorded, because the web UI no longer edits an agent's config file, a memory note or a vault file, and no longer restores a vault version: `agent_config_file_written`, `agent_config_file_deleted`, `memory_note_edited` and `vault_file_restored`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. A restore an agent commits is a vault commit naming `Coffer-Writer: agent`; the vault's git history answers who changed the file.
+Three events are no longer recorded, because the web UI no longer edits an agent's config file or a memory note: `agent_config_file_written`, `agent_config_file_deleted` and `memory_note_edited`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.

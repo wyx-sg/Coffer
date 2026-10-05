@@ -177,7 +177,6 @@ test("the skill menu carries the page note's actions, not the reach button's or 
     "Open in editor",
     "Reveal in Finder",
     "Copy master path",
-    "History…",
     "Delete…",
   ]);
 });

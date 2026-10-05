@@ -5,8 +5,8 @@
 // document or a collection is one change in the vault's history, and the changes
 // feed can restore it — so the toast carries Undo. Undo finds the change the
 // delete just recorded (the newest `delete` of the document, or `remove` of the
-// collection) and restores it. After the toast is gone a document comes back
-// through the History… hand-off.
+// collection) and restores it. After the toast is gone the document's versions
+// stay in the vault's history.
 import { listChanges, restoreDeleted } from "@/lib/api/knowledge";
 import type { ChangeOut } from "@/lib/api/knowledgeTypes";
 

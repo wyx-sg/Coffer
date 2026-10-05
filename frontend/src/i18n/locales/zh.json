@@ -17,6 +17,48 @@
     "openFailed": "无法在编辑器中打开该文件。",
     "revealFailed": "无法显示该文件。"
   },
+  "history": {
+    "listLabel": "版本",
+    "current": "当前",
+    "versionLabel": "所选版本",
+    "failedTitle": "读取历史失败",
+    "emptyTitle": "还没有版本",
+    "empty": "这个文件的每次改动——你的、智能体的、在磁盘上改的——都会作为一个版本列在这里，可以对比和恢复。",
+    "noChanges": "与当前版本没有差别。",
+    "noTextChange": "没有文本改动（二进制文件，或只改了权限）。",
+    "against": {
+      "label": "对比",
+      "previous": "本版本的改动",
+      "current": "与当前版本对比"
+    },
+    "restore": "恢复此版本…",
+    "restoreTitle": "恢复此版本？",
+    "restoreFileBody": "文件会恢复成 {{when}} 的样子，作为一个新版本保存。历史里的内容都不会丢。",
+    "restoreFolderBody": "文件夹里的每个文件都会恢复成 {{when}} 的样子，之后新增的文件会被删除，作为一个新版本保存。历史里的内容都不会丢。",
+    "restoreConfirm": "恢复",
+    "restoring": "正在恢复…",
+    "restoreFailed": "无法恢复此版本",
+    "restored": "已恢复 {{when}} 的版本",
+    "what": {
+      "restored": "恢复了 {{date}} 的版本",
+      "restoredHash": "恢复了版本 {{version}}",
+      "created": "创建",
+      "deleted": "删除",
+      "edited": "编辑",
+      "added": "新增 {{file}}",
+      "removed": "删除 {{file}}",
+      "changed": "改动了 {{file}}",
+      "files_one": "改动了 {{count}} 个文件",
+      "files_other": "改动了 {{count}} 个文件"
+    },
+    "writer": {
+      "user": "你",
+      "disk": "在磁盘上编辑",
+      "agent": "一个智能体",
+      "daemon": "Coffer",
+      "sync": "同步"
+    }
+  },
   "agentBadge": {
     "label": "{{name}}，{{state}}",
     "tooltip": "{{name}} · {{state}}",
@@ -1742,6 +1784,7 @@
     "VAULT_FILE_STALE": "文件在你加载后已被修改。请重新加载后再试。",
     "VAULT_GIT_FAILED": "读写 vault 时 git 出错。",
     "VAULT_PATH_INVALID": "这不是 vault 内的路径。",
+    "VAULT_VERSION_NOT_FOUND": "该文件的这个版本不存在。",
     "SKILL_COPY_NOT_OURS": "这个技能在某个智能体中的副本已经不是 Coffer 的链接，所以 Coffer 不会删除它。请先从主文件夹恢复，或自行删除那个文件夹。",
     "SKILL_COPY_NOT_DIFFERING": "那个智能体的副本现在就是 Coffer 的链接，没有可比较的内容。",
     "SKILL_ORPHAN_NOT_FOUND": "那个文件夹已经不在技能库之外了。",
@@ -1754,7 +1797,7 @@
     "MASTER_KEY_PASSPHRASE_WRONG": "这个口令打不开这个密钥文件。",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "口令至少需要 8 个字符。",
     "KNOWLEDGE_RESTORE_CONFLICT": "没有恢复：这个路径上又有了文档。请先重命名或删除它。",
-    "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以在最近改动中恢复。",
+    "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以撤销。",
     "SYNC_SECRET_NOT_EDITABLE": "加密的 secret 不能手动编辑。请保留本机的版本，或采用另一台的版本。",
     "SYNC_NOTHING_TO_RESTORE": "没有可以恢复的已停止远端。",
     "SYNC_REMOTE_EXISTS": "已经设置了远端，请先停止与它同步。",
@@ -2578,7 +2621,8 @@
         "overview": "概览",
         "files": "文件",
         "delivery": "投递",
-        "requires": "依赖"
+        "requires": "依赖",
+        "history": "历史"
       },
       "source": {
         "builtin": "由 Coffer 生成"
@@ -2791,7 +2835,6 @@
       "label": "{{name}} 的更多操作",
       "copyPath": "复制主文件夹路径",
       "copyFailed": "无法复制到剪贴板",
-      "history": "历史…",
       "delete": "删除…"
     },
     "banner": {
@@ -2920,17 +2963,11 @@
       "note": "选定之前不会写入任何内容。"
     },
     "checkingCopies": "正在检查…",
-    "checkCopiesHint": "把每个智能体的副本与主文件夹比较"
-  },
-  "vaultHistory": {
-    "title": "历史",
-    "description": "文件的历史由 git 保管。复制命令自己查看，或把还原交给你的智能体。",
-    "path": "保险库中的路径",
-    "at": "还原到此时的样子",
-    "atHint": "可不填。不填时，智能体会列出各个版本并问你选哪一个。",
-    "copyCommand": "复制 git 命令",
-    "copyFailed": "无法复制该命令。",
-    "restoreWith": "交给 {{agent}} 还原"
+    "checkCopiesHint": "把每个智能体的副本与主文件夹比较",
+    "history": {
+      "builtinTitle": "Coffer 自带的技能没有历史",
+      "builtinBody": "它的文件每次启动都按当前版本重建，没有更早的版本可以回退。"
+    }
   },
   "knowledge": {
     "subtitle": "你和智能体共同编写的文档，每个智能体都能读取。",
@@ -3020,7 +3057,11 @@
       "preview": "预览",
       "source": "源码",
       "created": "{{date}}创建",
-      "history": "历史…"
+      "views": "文档视图",
+      "tabs": {
+        "document": "文档",
+        "history": "历史"
+      }
     },
     "deleteDocument": {
       "menu": "删除文档",

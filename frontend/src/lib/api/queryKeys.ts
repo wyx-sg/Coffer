@@ -85,9 +85,12 @@ export const agentProviderModelsKey = (agentKey: string) =>
 export * from "./queryKeys.capabilities";
 import { customToolsKey, mcpStatusesKey, skillsKey } from "./queryKeys.capabilities";
 
-// vault history hand-off: any vault file or folder, e.g. a skill's `skills/<name>/`
-export const vaultHistoryHandoffKey = (path: string, at: string | null) =>
-  ["vault", "history-handoff", path, at] as const;
+// vault history: any vault file or folder, e.g. a skill's `skills/<name>/` or a
+// knowledge document's `knowledge/<collection>/<file>`
+export const vaultKey = ["vault"] as const;
+export const vaultHistoryKey = (path: string) => [...vaultKey, "history", path] as const;
+export const vaultDiffKey = (path: string, version: string, against: string) =>
+  [...vaultKey, "diff", path, version, against] as const;
 
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 

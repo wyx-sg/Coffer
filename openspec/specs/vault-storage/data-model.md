@@ -234,19 +234,34 @@ The knowledge history adds `Coffer-Collection`, `Coffer-Item`, `Coffer-Status`
 and `Coffer-Undoes` (spec knowledge). A history row shows the writer as
 `agent:<type>` for an agent.
 
-### History and the restore hand-off
+### History and restore
 
-The vault's history is git's: Coffer lists, diffs and restores no version.
+Nothing is stored for history: a version is a commit, read back with
+`git log` / `git show` / `git diff` (`application/vault/history_service.py`
+over `VaultRepository`). A path is vault-relative: a file, or a folder ending
+in `/` (`skills/<name>/`, `knowledge/<collection>/<file>`).
+
+- `GET /api/v1/vault/history?path&limit&cursor` → `{path, versions, next_cursor}`,
+  newest first; each version is `{version, time, writer, display_writer,
+  actor, machine, summary, operation, restored_from, removed, paths}` with
+  `paths` the files it touched inside the path (`{path, status, added,
+  removed}`). The read first settles pending hand edits under the path as a
+  `disk` commit.
+- `GET /api/v1/vault/diff?path&version&against` → `{path, version, against,
+  files: [{path, status, diff, added, removed}]}`; `previous` is the version's
+  own change, `current` the difference from that version to `HEAD`.
+- `POST /api/v1/vault/restore {path, version, expected_current}` →
+  `{path, version, restored_from, paths}`: one commit with
+  `Coffer-Operation: restore` and `Coffer-Restored-From`, the writer from the
+  request's actor; a folder restore removes the files the version did not have.
+  `expected_current` other than the newest commit touching the path is
+  `VAULT_FILE_STALE`. Audited `vault_file_restored` with the path, the new
+  version, the version restored from and every file written.
+
+`secret/` and paths outside the vault are refused (`VAULT_PATH_INVALID`); a
+version not in the path's history is `VAULT_VERSION_NOT_FOUND` (404).
 `GET /api/v1/vault/problems` lists refused hand edits (the CLI keeps only
-`coffer vault problems`). `POST /api/v1/vault/history/handoff` takes a
-vault-relative `path` (a file, or a folder ending in `/`) and an optional `at`
-time and answers the absolute path, the vault path, the command
-`git -C <vault> log -p -- <path>` and a hand-off `prompt` built in
-`domain/vault/handoffs.py`: the path and time, that the vault is a git repository
-whose history is never rewritten, and one new commit carrying `Coffer-Writer: agent`,
-`Coffer-Operation: restore` and `Coffer-Restored-From: <commit>`. `secret/` and
-paths outside the vault are refused (`VAULT_PATH_INVALID`). The route writes
-nothing and audits nothing; `vault_file_restored` is no longer recorded.
+`coffer vault problems`).
 
 ## Local state files
 

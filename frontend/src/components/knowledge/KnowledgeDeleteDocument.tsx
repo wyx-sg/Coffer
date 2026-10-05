@@ -4,7 +4,7 @@
 // collection after asking, and offer Undo"). Any document, whoever wrote it.
 // There is no confirmation: the delete is one change in the vault's history, so it runs at once and the
 // toast carries Undo (layout principle 14 "confirm or undo"); once the toast is
-// gone, git brings the file back (the History… hand-off). Afterwards the pane
+// gone, the file's versions stay in the vault's history. Afterwards the pane
 // goes to the collection's page — the document is gone, so there is nothing
 // left to show.
 // A refusal is an error toast and the pane stays on the document.

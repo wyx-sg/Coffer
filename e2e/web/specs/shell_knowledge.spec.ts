@@ -2,9 +2,8 @@
 //
 // The one /knowledge page end-to-end, against a live daemon: create a
 // collection and upload an item over the REST API, then walk the page in the
-// real DOM — the collection in the tree, its document opened, an edit saved
-// through the body-only editor, the save in the document's History tab and in
-// Recent changes.
+// real DOM — the collection in the tree, its document opened read-only, and
+// the upload listed as a version on the document's History tab.
 //
 // Nothing auto-provisions a collection (spec knowledge "Create collections
 // only deliberately"), so a walk starts by making one. A submitted item is
@@ -14,8 +13,8 @@
 //
 // No acceptance marker: the spec's viewer and editor scenarios are pinned by
 // the component tests, which assert the same actions far more precisely. What
-// this adds is that the tree, the editor's save and the vault's history agree
-// with each other against a live daemon.
+// this adds is that the tree, the document and the vault's history agree with
+// each other against a live daemon.
 
 import { expect, test, type Page } from "@playwright/test";
 import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
@@ -64,7 +63,7 @@ async function submitItem(page: Page, collection: string, body: string) {
   return (await res.json()) as { path: string };
 }
 
-test("a collection is one tree; a document is read, opened in the editor and has a History… hand-off", async ({
+test("a collection is one tree; a document is read, opened in the editor and has a History tab", async ({
   page,
 }) => {
   const name = `e2e-tree-${Date.now()}`;
@@ -107,16 +106,19 @@ test("a collection is one tree; a document is read, opened in the editor and has
     page.getByRole("button", { name: "Edit", exact: true }),
   ).toHaveCount(0);
 
-  // History… hands the restore to git or an agent: the path and the git command.
+  // History lists the upload as the document's one version, read from the
+  // vault's history, with no restore offered on the current version.
   await page
-    .getByRole("button", { name: `More actions for ${submitted.path}` })
+    .getByRole("navigation", { name: "Document views" })
+    .getByRole("link", { name: "History" })
     .click();
-  await page.getByRole("menuitem", { name: "History…" }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByTestId("vault-history-path")).toHaveText(
-    `knowledge/${submitted.path}`,
+  await expect(page).toHaveURL(
+    new RegExp(`/knowledge/${collection.uid}/history\\?file=`),
   );
+  const versions = page.getByRole("list", { name: "Versions" });
+  await expect(versions.getByRole("button")).toHaveCount(1);
+  await expect(versions.getByRole("button").first()).toContainText("Current");
   await expect(
-    dialog.getByRole("button", { name: "Copy git command" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Restore this version…" }),
+  ).toHaveCount(0);
 });

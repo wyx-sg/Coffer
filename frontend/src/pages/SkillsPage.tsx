@@ -1,4 +1,4 @@
-// frontend/src/pages/SkillsPage.tsx — spec skill-manager "Cover skill management on REST and on the Skills page".
+// frontend/src/pages/SkillsPage.tsx — spec skill-manager "Manage skills on REST and on the Skills page".
 // The Skills page is the library beside a reading pane (design add-skill-sources
 // decision 8): `/skills`, `/skills/<name>` and `/skills/<name>/<tab>` all render
 // it, the list on the left (SkillLibrary) and, on the right, what

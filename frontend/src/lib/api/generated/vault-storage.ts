@@ -4,22 +4,41 @@
  */
 
 export interface paths {
-    "/api/v1/vault/history/handoff": {
+    "/api/v1/vault/diff": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Vault History Handoff
-         * @description The prompt, the ``git log`` command and the locations for restoring a
-         *     vault file or folder, optionally to a time; a path under ``secret/`` or
-         *     outside the vault is refused.
+         * Vault Diff
+         * @description What one version changed (``previous``), or how the path differs now
+         *     from how that version left it (``current``), as one unified diff per file.
          */
-        post: operations["vault_history_handoff_api_v1_vault_history_handoff_post"];
+        get: operations["vault_diff_api_v1_vault_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault History
+         * @description The versions of a file or folder, newest first, each naming its writer.
+         */
+        get: operations["vault_history_api_v1_vault_history_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -41,6 +60,28 @@ export interface paths {
         get: operations["vault_problems_api_v1_vault_problems_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vault Restore
+         * @description Write a version back as a new commit naming the writer and the version
+         *     it restored; a path changed since ``expected_current`` is 409 and changes
+         *     nothing.
+         */
+        post: operations["vault_restore_api_v1_vault_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -72,33 +113,58 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        /** VaultDiffOut */
+        VaultDiffOut: {
+            /**
+             * Against
+             * @enum {string}
+             */
+            against: "previous" | "current";
+            /** Files */
+            files: components["schemas"]["VaultFileDiffOut"][];
+            /** Path */
+            path: string;
+            /** Version */
+            version: string;
+        };
         /**
-         * HandoffOut
-         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
-         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         * VaultFileDiffOut
+         * @description One file's unified diff (empty for binary).
          */
-        HandoffOut: {
-            /** Prompt */
-            prompt: string;
-        };
-        /** VaultHistoryHandoffIn */
-        VaultHistoryHandoffIn: {
-            /** At */
-            at?: string | null;
+        VaultFileDiffOut: {
+            /** Added */
+            added: number;
+            /** Diff */
+            diff: string;
             /** Path */
             path: string;
+            /** Removed */
+            removed: number;
+            /** Status */
+            status: string;
         };
-        /** VaultHistoryHandoffOut */
-        VaultHistoryHandoffOut: {
-            /** Absolute Path */
-            absolute_path: string;
-            handoff: components["schemas"]["HandoffOut"];
-            /** Log Command */
-            log_command: string;
+        /** VaultHistoryOut */
+        VaultHistoryOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
             /** Path */
             path: string;
-            /** Vault Path */
-            vault_path: string;
+            /** Versions */
+            versions: components["schemas"]["VaultVersionOut"][];
+        };
+        /**
+         * VaultPathChangeOut
+         * @description One file a version touched, with its line counts (0/0 for binary).
+         */
+        VaultPathChangeOut: {
+            /** Added */
+            added: number;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /** Status */
+            status: string;
         };
         /**
          * VaultProblemOut
@@ -121,6 +187,60 @@ export interface components {
             /** Problems */
             problems: components["schemas"]["VaultProblemOut"][];
         };
+        /** VaultRestoreIn */
+        VaultRestoreIn: {
+            /** Expected Current */
+            expected_current?: string | null;
+            /** Path */
+            path: string;
+            /** Version */
+            version: string;
+        };
+        /** VaultRestoreOut */
+        VaultRestoreOut: {
+            /** Path */
+            path: string;
+            /** Paths */
+            paths: string[];
+            /** Restored From */
+            restored_from: string;
+            /** Version */
+            version: string | null;
+        };
+        /**
+         * VaultVersionOut
+         * @description One version of a file or folder: the commit that produced it.
+         */
+        VaultVersionOut: {
+            /** Actor */
+            actor: string | null;
+            /** Display Writer */
+            display_writer: string;
+            /** Machine */
+            machine: string | null;
+            /** Operation */
+            operation: string;
+            /** Paths */
+            paths: components["schemas"]["VaultPathChangeOut"][];
+            /**
+             * Removed
+             * @default false
+             */
+            removed: boolean;
+            /** Restored From */
+            restored_from: string | null;
+            /** Summary */
+            summary: string;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Version */
+            version: string;
+            /** Writer */
+            writer: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -130,20 +250,21 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    vault_history_handoff_api_v1_vault_history_handoff_post: {
+    vault_diff_api_v1_vault_diff_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description A file, or a folder ending in / */
+                path: string;
+                version: string;
+                against?: "previous" | "current";
+            };
             header?: {
                 "x-coffer-token"?: string | null;
             };
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VaultHistoryHandoffIn"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -151,7 +272,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VaultHistoryHandoffOut"];
+                    "application/json": components["schemas"]["VaultDiffOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_history_api_v1_vault_history_get: {
+        parameters: {
+            query: {
+                /** @description A file, or a folder ending in / */
+                path: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultHistoryOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -192,6 +358,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VaultProblemsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_restore_api_v1_vault_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VaultRestoreIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultRestoreOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

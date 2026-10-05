@@ -76,7 +76,9 @@ Coffer 还会每分钟以及启动时扫描一次保险库，所以守护进程�
 
 保险库的每一次被接受的改动都是一个版本，记录时间、写入者（你、在磁盘上编辑、智能体、Coffer 或同步）以及哪台机器。任何文件或文件夹都有历史。密钥没有可读的历史，不能恢复。
 
-在 Web 界面里，知识文档的 **⋯** 菜单和技能的 **⋯** 菜单（内置技能没有）里有**历史…**。它显示文件在保险库里的位置，复制 `git -C ~/.coffer/vault log -p -- <path>`，在访达中显示该文件，并把恢复交给你的智能体：**交给 &lt;Agent&gt; 恢复**，可附一个时间。提示词由 Coffer 构造——哪个文件、什么时间、保险库是一个绝不改写历史的 git 仓库、智能体把较早的内容写回去并作为一次新提交——Coffer 自己不显示版本列表、差异或恢复按钮。
+在 Web 界面里，知识文档和技能各有一个**历史**标签。它按最新在前列出各个版本，每个都写明做了什么、谁写的（**你**、**在磁盘上编辑**、按名字显示的智能体、**Coffer** 或**同步**）和什么时候，显示选中版本的差异，并提供**恢复此版本…**。Coffer 会先询问，然后把该文件（技能则是文件夹里的每个文件）写回那个版本，作为一个由你写入的新版本，并在审计日志里记为 `vault_file_restored`。如果文件在你打开标签之后又变了，恢复会被拒绝并返回 `VAULT_FILE_STALE`；重新打开标签再试即可。打开标签时，你在磁盘上做的编辑会先记成它自己的一个版本。Coffer 的内置技能也有这个标签，但没有历史，因为它在每次启动时重建。见[找回较早的版本](/zh/guides/knowledge#bring-back-an-earlier-version)。
+
+你也可以用 git 读历史：`git -C ~/.coffer/vault log -p -- <path>`。
 
 对其他文件，可以直接用 git 读历史，并把旧版本的内容存回文件来放回去，或者让你的智能体去做：
 
@@ -87,7 +89,7 @@ git diff <version> -- resources/mcp_server/jira.json
 git show <version>:resources/mcp_server/jira.json > resources/mcp_server/jira.json
 ```
 
-Coffer 会校验存回的文件，并把它记为一个**新**版本：不会原地改写任何东西，所以你还可以恢复这次恢复。但做改动时请编辑文件、让 Coffer 来提交：它的提交带有标明写入者的 trailer，而且它会校验所提交的内容。智能体自己提交一次恢复时，会写上 `Coffer-Writer: agent`、`Coffer-Operation: restore` 和 `Coffer-Restored-From: <commit>`，这正是交接提示词要求的。
+Coffer 会校验存回的文件，并把它记为一个**新**版本：不会原地改写任何东西，所以你还可以恢复这次恢复。但做改动时请编辑文件、让 Coffer 来提交：它的提交带有标明写入者的 trailer，而且它会校验所提交的内容。智能体自己提交一次恢复时，会写上 `Coffer-Writer: agent`、`Coffer-Operation: restore` 和 `Coffer-Restored-From: <commit>`。
 
 ## 相关内容 {#related}
 

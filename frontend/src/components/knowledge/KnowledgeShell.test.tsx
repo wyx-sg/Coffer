@@ -91,13 +91,13 @@ describe("with no collection open", () => {
     expect(
       await within(screen.getByRole("banner")).findByRole("button", { name: "Tidy all" }),
     ).toBeInTheDocument();
-    // There is no Recent changes view: history is git's.
+    // There is no Recent changes view: a document's history is its History tab.
     expect(screen.queryByText("Recent changes")).toBeNull();
     expect(screen.queryByRole("link", { name: /Recent changes/ })).toBeNull();
   });
 
-  test("an old History address opens the document", async () => {
-    renderKnowledge(`/knowledge/${UID}/history?file=${encodeURIComponent("shopee/gateway.md")}`);
+  test("an address naming an unknown tab opens the document", async () => {
+    renderKnowledge(`/knowledge/${UID}/changes?file=${encodeURIComponent("shopee/gateway.md")}`);
     await waitFor(() =>
       expect(screen.getByTestId("where")).toHaveTextContent(
         `/knowledge/${UID}?file=shopee%2Fgateway.md`,
