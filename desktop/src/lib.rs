@@ -27,6 +27,7 @@
 //   * `presence`  — the LocalAuthentication check before every grant
 //   * `secrets`   — the reveal / approve / master-key-backup IPC commands
 //   * `approval_watch` — one notification per approval waiting on a person
+//   * `traffic_lights` — keeps the macOS lights on the title strip's centre line
 
 mod approval_watch;
 mod coffer_home;
@@ -49,6 +50,7 @@ mod spawn;
 mod sync_alert;
 mod sync_presentation;
 mod sync_watch;
+mod traffic_lights;
 mod tray;
 mod tray_locale;
 mod tray_nav;
@@ -154,14 +156,30 @@ pub fn run() {
             // (spec desktop-app "Release plaintext and approvals only after a
             // presence check in the shell").
             approval_watch::start(app.handle().clone());
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                traffic_lights::watch(&window);
+            }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } => {
                 // Intercept close — hide to tray instead of exiting.
                 api.prevent_close();
                 let _ = window.hide();
             }
+            // AppKit lays the title bar out again after each of these, and
+            // that drops the lights back to the system's spot.
+            #[cfg(target_os = "macos")]
+            WindowEvent::Focused(_)
+            | WindowEvent::Resized(_)
+            | WindowEvent::ScaleFactorChanged { .. }
+            | WindowEvent::ThemeChanged(_) => {
+                if let Some(window) = window.app_handle().get_webview_window(window.label()) {
+                    traffic_lights::pin(&window);
+                }
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
