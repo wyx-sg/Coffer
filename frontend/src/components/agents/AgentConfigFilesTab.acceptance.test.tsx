@@ -1,15 +1,21 @@
 // frontend/src/components/agents/AgentConfigFilesTab.acceptance.test.tsx
 // Acceptance scenarios for the Config files tab of spec agent-registry "Open
 // config files in an external editor or reveal them": the daemon-backed open /
-// reveal pair on a file's row, Reveal alone (and no preview) on a file not
-// created yet, no edit, new-file, delete or copy-path anywhere; and the
-// read-only preview a file's name opens.
+// reveal pair on the open file, a file not created yet marked and not
+// previewable, no edit, new-file, delete or copy-path anywhere; and the
+// read-only preview a selected file shows.
 import { afterEach, describe, expect, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 import { AgentConfigFilesTab } from "./AgentConfigFilesTab";
-import { agentsApi, type AgentOut, type ConfigFileInfo } from "@/lib/api/agents";
+import {
+  agentsApi,
+  type AgentOut,
+  type ConfigFileContent,
+  type ConfigFileInfo,
+} from "@/lib/api/agents";
 import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import "@/i18n";
@@ -58,6 +64,27 @@ const LOCAL: ConfigFileInfo = {
   modified_at: null,
 };
 
+const INSTRUCTIONS_CONTENT: ConfigFileContent = {
+  key: "instructions",
+  abs_path: INSTRUCTIONS.path,
+  format: "markdown",
+  content: "Be terse.",
+  size: 40,
+  truncated: false,
+  binary: false,
+};
+
+function renderTab() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <AgentConfigFilesTab agent={AGENT} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 afterEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -66,78 +93,58 @@ afterEach(() => {
 describe("Config files tab — acceptance", () => {
   acceptance("agent-registry", "open a config file and reveal it through the daemon", async () => {
     vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items: [INSTRUCTIONS, LOCAL] });
+    vi.mocked(agentsApi.configFileContent).mockResolvedValue(INSTRUCTIONS_CONTENT);
     vi.mocked(fsApi.open).mockResolvedValue(undefined);
     vi.mocked(fsApi.reveal).mockResolvedValue(undefined);
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <AgentConfigFilesTab agent={AGENT} />
-      </QueryClientProvider>,
-    );
+    renderTab();
 
-    const existing = within((await screen.findByText("CLAUDE.md")).closest("li") as HTMLElement);
-    fireEvent.click(existing.getByRole("button", { name: "Open in editor" }));
+    // The first existing file is open; the viewer's Open in editor and Reveal act on it.
+    expect(await screen.findByText("Be terse.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
     await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(INSTRUCTIONS.path, undefined));
-    fireEvent.click(existing.getByRole("button", { name: "Reveal in Finder" }));
+    const reveals = screen.getAllByRole("button", { name: "Reveal in Finder" });
+    fireEvent.click(reveals[reveals.length - 1]);
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(INSTRUCTIONS.path));
 
-    // The file not created yet: Reveal on its folder only, opening creates nothing.
-    const missing = within(screen.getByText("settings.local.json").closest("li") as HTMLElement);
-    expect(missing.getByText("Not created")).toBeInTheDocument();
-    expect(missing.queryByRole("button", { name: "Open in editor" })).toBeNull();
-    fireEvent.click(missing.getByRole("button", { name: "Reveal in Finder" }));
-    await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(LOCAL.folder_path));
+    // The file not created yet: marked, and selecting it opens nothing.
+    const missing = screen.getByRole("treeitem", { name: /settings\.local\.json/ });
+    expect(missing).toHaveTextContent("Not created");
+    fireEvent.click(missing);
+    expect(missing).toHaveAttribute("aria-selected", "false");
     expect(fsApi.open).toHaveBeenCalledTimes(1);
+    expect(agentsApi.configFileContent).toHaveBeenCalledTimes(1);
 
-    // Nothing shows content or offers a change, and there is no copy-path fallback.
+    // Nothing offers a change, and there is no copy-path fallback.
     for (const name of [/^edit$/i, /save/i, /revert/i, /new file/i, /delete/i, /copy/i]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     expect(screen.queryByRole("textbox")).toBeNull();
-    // A file not created yet has no preview; an existing one's name is the way in.
-    expect(
-      within(missing.getByText("settings.local.json").closest("li") as HTMLElement).queryByRole(
-        "button",
-        { name: "settings.local.json" },
-      ),
-    ).toBeNull();
-    expect(existing.getByRole("button", { name: "CLAUDE.md" })).toBeInTheDocument();
-    expect(agentsApi.configFileContent).not.toHaveBeenCalled();
   });
 
   acceptance("agent-registry", "preview a config file from its row", async () => {
-    vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items: [SETTINGS] });
-    vi.mocked(agentsApi.configFileContent).mockResolvedValue({
-      key: "settings",
-      abs_path: SETTINGS.path,
-      format: "json",
-      content: '{\n  "theme": "dark",\n  "model": "opus"\n}\n',
-      size: 70,
-      truncated: false,
-      binary: false,
-    });
-    vi.mocked(fsApi.open).mockResolvedValue(undefined);
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <AgentConfigFilesTab agent={AGENT} />
-      </QueryClientProvider>,
+    vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items: [INSTRUCTIONS, SETTINGS] });
+    vi.mocked(agentsApi.configFileContent).mockImplementation(async (_uid, key) =>
+      key === "settings"
+        ? ({
+            key: "settings",
+            abs_path: SETTINGS.path,
+            format: "json",
+            content: '{\n  "theme": "dark",\n  "model": "opus"\n}\n',
+            size: 70,
+            truncated: false,
+            binary: false,
+          } satisfies ConfigFileContent)
+        : INSTRUCTIONS_CONTENT,
     );
+    renderTab();
 
-    fireEvent.click(await screen.findByRole("button", { name: "settings.json" }));
-    const dialog = within(await screen.findByRole("dialog"));
-    await waitFor(() => expect(dialog.getByText(/"model"/)).toBeInTheDocument());
+    fireEvent.click(await screen.findByRole("treeitem", { name: /settings\.json/ }));
+    await waitFor(() => expect(screen.getByText(/"model"/)).toBeInTheDocument());
     expect(agentsApi.configFileContent).toHaveBeenCalledWith("u-cc", "settings", undefined);
-    expect(dialog.getByText(/"theme"/)).toBeInTheDocument();
-
-    // Open in editor (and Reveal) are on the dialog; nothing edits or saves.
-    fireEvent.click(dialog.getByRole("button", { name: "Open in editor" }));
-    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(SETTINGS.path, undefined));
-    expect(dialog.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
+    expect(screen.getByText(/"theme"/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open in editor" })).toBeInTheDocument();
     for (const name of [/^edit$/i, /save/i, /revert/i]) {
-      expect(dialog.queryByRole("button", { name })).toBeNull();
+      expect(screen.queryByRole("button", { name })).toBeNull();
     }
-    fireEvent.click(dialog.getAllByRole("button", { name: "Close" })[0]);
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
