@@ -2177,7 +2177,7 @@ start and which skills fail — and its detail page and the skill's Requires tab
 MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
 command to an agent with a prompt") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
 — **Hand off to <Agent>** starts the hand-off agent in the preferred terminal with the prompt sent, and **Copy prompt** copies it;
-with no managed agent available only Copy prompt is offered. The page's **Check** probes every command afresh, and the banner that
+with no managed agent available only Copy prompt is offered. **Check**, beside the list pane's filter, probes every command afresh (the header holds Add CLI), and the banner that
 states a problem re-checks that one tool. Under the header's meta line every CLI —
 added by hand or required — carries its description, edited in place (leaving the
 field or Enter saves, an empty field clears it; spec skill-manager "Declare a

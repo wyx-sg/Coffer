@@ -5027,6 +5027,7 @@
     "title": "CLIs",
     "addTool": "Add CLI",
     "check": "Check",
+    "checkHint": "Probe every tool again: found, version, logged in",
     "checking": "Checking…",
     "status": {
       "missing": "Not found",
