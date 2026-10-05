@@ -51,7 +51,10 @@ function UsedByLine({ citer, row }: { citer: Citer; row: SecretRef }) {
   const body = (
     <>
       <Icon className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
-      <span className="min-w-0 truncate text-xs text-text">{citer.name}</span>
+      <span className="min-w-0 truncate text-xs text-text">
+        {/* The sync remote is one setting, not a named resource: it reads as the page it lives on. */}
+        {citer.kind === "sync_remote" ? kindLabel(citer.kind) : citer.name}
+      </span>
       <span className="min-w-0 flex-1 truncate text-xs text-text-subtle">
         {binding?.slot ?? kindLabel(citer.kind)}
       </span>

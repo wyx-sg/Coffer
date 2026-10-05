@@ -38,6 +38,7 @@ const KINDS: Record<string, KindMeta> = {
   knowledge: { labelKey: "overview.kinds.knowledge", icon: Book, identifier: false },
   memory: { labelKey: "overview.kinds.memory", icon: Brain, identifier: false },
   sync: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },
+  sync_remote: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },
   reconcile: { labelKey: "overview.kinds.reconcile", icon: Workflow, identifier: false },
   cli: { labelKey: "overview.kinds.cli", icon: Terminal, identifier: true },
   secret: { labelKey: "overview.kinds.secret", icon: IdCard, identifier: false },

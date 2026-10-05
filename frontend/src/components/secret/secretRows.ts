@@ -78,6 +78,8 @@ function citerHref(kind: string, name: string, uid: string): string | null {
       return `/knowledge/${enc(uid)}`;
     case "memory":
       return `/memory/${enc(uid)}`;
+    case "sync_remote":
+      return "/sync";
     case "agent":
       // The citer carries the agent's name, not its type, which is what the
       // agent's page is keyed by: open the list it is on.
