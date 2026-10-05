@@ -101,6 +101,7 @@ _STATUS: dict[str, int] = {
     "AGENT_TYPE_UNSUPPORTED": 400,
     "NATIVE_SESSION_NOT_FOUND": 404,
     "NATIVE_SESSION_INVALID": 400,
+    "NATIVE_SESSION_BUSY": 409,
     # A paging cursor that does not decode, or names another list or other
     # filters (spec resource-framework "Page growing lists by an opaque cursor").
     "CURSOR_INVALID": 400,

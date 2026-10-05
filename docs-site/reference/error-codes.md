@@ -145,6 +145,7 @@ give the status each code is actually sent with.
 | `AGENT_TYPE_UNSUPPORTED` | 400 | This agent type has no native sessions Coffer can list, rename or delete. | None for this agent; open its sessions in the agent itself. |
 | `NATIVE_SESSION_NOT_FOUND` | 404 | The agent lists no session with that id. Nothing changed. | Refresh the Sessions tab; the session may already be deleted. |
 | `NATIVE_SESSION_INVALID` | 400 | The session id is not shaped like one, the new title is empty, or the agent refused the operation as malformed. Nothing changed. | Read `message`; pick a session from the list and give a non-empty title. |
+| `NATIVE_SESSION_BUSY` | 409 | Another process has the session open for writing (a Codex App window, a terminal), so the agent refuses to rename or delete it. Nothing changed. | Close the session where it is open, then try again. |
 
 ## Skills
 

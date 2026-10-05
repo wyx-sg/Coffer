@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from coffer.domain.agent.native_sessions import NativeSessionNotFound
+from coffer.domain.agent.native_sessions import NativeSessionBusy, NativeSessionNotFound
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.infrastructure.agent.codex_native_sessions import CodexNativeSessions
 from tests.unit.infrastructure.agent.test_codex_rpc_models import _FakeSession, _Pipe
@@ -173,6 +173,18 @@ async def test_an_unknown_thread_is_not_found(home: pathlib.Path) -> None:
 
     with pytest.raises(NativeSessionNotFound):
         await _source(peer).delete(home / ".codex", "t9")
+
+
+async def test_a_thread_open_in_another_process_is_busy(home: pathlib.Path) -> None:
+    def refuse(p: dict[str, Any]) -> dict[str, Any]:
+        raise _RefusedError("thread t1 already has an active writer")
+
+    peer = _ScriptedPeer({"thread/delete": refuse, "thread/name/set": refuse})
+
+    with pytest.raises(NativeSessionBusy):
+        await _source(peer).delete(home / ".codex", "t1")
+    with pytest.raises(NativeSessionBusy):
+        await _source(peer).rename(home / ".codex", "t1", "New name")
 
 
 @pytest.mark.acceptance(
