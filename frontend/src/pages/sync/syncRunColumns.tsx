@@ -11,6 +11,10 @@
 // A folded row states its outcome once with its count ("Nothing to do ×6")
 // and its span in the When column; it moved nothing by construction, so its
 // number cells stay empty.
+//
+// The Round column is capped and an empty last column takes the slack, so on a
+// wide window the two counts stay beside the outcome they belong to instead of
+// drifting to the far edge of the table.
 import type { TFunction } from "i18next";
 
 import type { Column } from "@/components/DataTable";
@@ -26,6 +30,9 @@ interface Context {
 }
 
 const NUM = "w-20 whitespace-nowrap text-right text-xs text-text-muted";
+// Wide enough for the longest outcome and its clause ("Stopped on 1 conflict ·
+// you chose at 07:31") on one line.
+const ROUND = "w-[28rem] min-w-0";
 
 export function syncRunColumns(t: TFunction, ctx: Context): Column<SyncRunRow>[] {
   const newestId = (() => {
@@ -48,7 +55,7 @@ export function syncRunColumns(t: TFunction, ctx: Context): Column<SyncRunRow>[]
     {
       key: "round",
       header: t("sync.rounds.columns.round"),
-      className: "min-w-0",
+      className: ROUND,
       cell: (row) => {
         if (row.kind === "group") {
           return (
@@ -82,5 +89,7 @@ export function syncRunColumns(t: TFunction, ctx: Context): Column<SyncRunRow>[]
       className: NUM,
       cell: (row) => (row.kind === "run" ? movedCells(row.run).pushed : null),
     },
+    // Takes whatever width is left, so the counts sit right after the round.
+    { key: "rest", header: null, className: "p-0", cell: () => null },
   ];
 }
