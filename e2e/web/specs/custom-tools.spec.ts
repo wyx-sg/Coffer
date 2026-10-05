@@ -98,8 +98,7 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await page.goto("/custom-tools");
     await page.getByRole("button", { name: "Add custom tool" }).first().click();
     const choose = page.getByRole("dialog");
-    // The group comes first; a new group offers the two ways to start it.
-    await choose.getByRole("radio", { name: /^New group/ }).click();
+    // The group comes first; its select starts on New group, which offers the two ways to start it.
     await choose.getByRole("radio", { name: /Import an OpenAPI spec/ }).click();
     await choose.getByRole("button", { name: "Continue" }).click();
 
