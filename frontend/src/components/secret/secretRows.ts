@@ -64,7 +64,7 @@ export interface Citer {
 const enc = encodeURIComponent;
 
 /** The page a citer opens: kinds keyed by fixed name use it, the rest their uid. */
-export function citerHref(kind: string, name: string, uid: string): string | null {
+function citerHref(kind: string, name: string, uid: string): string | null {
   switch (kind) {
     case "mcp_server":
       return `/mcp-servers/${enc(name)}`;
