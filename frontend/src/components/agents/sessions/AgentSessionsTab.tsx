@@ -105,6 +105,8 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
                 stop.isPending ? rows.find((r) => r.conversationId === stop.variables)?.id : null
               }
               onPrimaryAction={opener.open}
+              terminalLabel={opener.terminalLabel}
+              otherTerminals={opener.otherTerminals}
               onCopyCommand={opener.copyCommand}
               canOpen={opener.canOpen}
               onRename={onRename}

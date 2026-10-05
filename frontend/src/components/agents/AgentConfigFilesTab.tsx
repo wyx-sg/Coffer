@@ -1,16 +1,23 @@
 // frontend/src/components/agents/AgentConfigFilesTab.tsx — spec agent-registry
-// "Open config files in an external editor or reveal them".
+// "Open config files in an external editor or reveal them" and
+// "Preview an agent's config file read-only".
 // The agent detail page's Config files tab: the curated config-file allowlist as
 // a read-only list. Each file is a row — its name, its folder, its size and when
 // it changed — with Open in editor and Reveal in Finder; a directory entry
 // (Claude Code's agents/) lists its files under it, each with the same two. A
-// file not created yet reads "Not created" and offers Reveal on its folder only,
-// because opening creates nothing. Coffer shows no content here and edits
-// nothing: a config file is changed in the person's own editor, or by their
-// agent. Secret and machine-state files are not on the allowlist, so never here.
+// file's name opens its read-only preview in a dialog. A file not created yet
+// reads "Not created", has no preview and offers Reveal on its folder only,
+// because opening creates nothing. Coffer edits nothing: a config file is
+// changed in the person's own editor, or by their agent. Secret and
+// machine-state files are not on the allowlist, so never here.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 
+import {
+  AgentConfigFilePreviewDialog,
+  type ConfigFileTarget,
+} from "@/components/agents/AgentConfigFilePreviewDialog";
 import { LoadError } from "@/components/LoadError";
 import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
@@ -51,6 +58,8 @@ interface RowProps {
   /** Directories offer Reveal only. */
   openable?: boolean;
   child?: boolean;
+  /** Set on a file that exists: its name opens this preview. */
+  onPreview?: () => void;
 }
 
 function ConfigFileRow({
@@ -62,6 +71,7 @@ function ConfigFileRow({
   folderPath,
   openable = true,
   child = false,
+  onPreview,
 }: RowProps) {
   const { t } = useTranslation();
   const [open, revealFile] = useFileActionItems(path);
@@ -75,7 +85,17 @@ function ConfigFileRow({
       )}
     >
       <div className="min-w-0 flex-1 basis-60">
-        <div className="truncate font-mono text-sm text-text">{name}</div>
+        {onPreview ? (
+          <button
+            type="button"
+            className="block max-w-full truncate text-left font-mono text-sm text-text hover:text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            onClick={onPreview}
+          >
+            {name}
+          </button>
+        ) : (
+          <div className="truncate font-mono text-sm text-text">{name}</div>
+        )}
         {description ? <div className="text-xs text-text-muted">{description}</div> : null}
         <div className="truncate font-mono text-xs text-text-subtle" title={folderPath}>
           {folder}
@@ -105,7 +125,15 @@ function ConfigFileRow({
   );
 }
 
-function EntryRows({ entry, agentName }: { entry: ConfigFileInfo; agentName: string }) {
+function EntryRows({
+  entry,
+  agentName,
+  onPreview,
+}: {
+  entry: ConfigFileInfo;
+  agentName: string;
+  onPreview: (target: ConfigFileTarget) => void;
+}) {
   const { t } = useTranslation();
   const isDir = entry.kind === "directory";
   const children: Child[] = entry.files ?? [];
@@ -123,6 +151,11 @@ function EntryRows({ entry, agentName }: { entry: ConfigFileInfo; agentName: str
         path={entry.path}
         folderPath={entry.folder_path}
         openable={!isDir}
+        onPreview={
+          entry.exists && !isDir
+            ? () => onPreview({ key: entry.key, name: baseName(entry.path), path: entry.path })
+            : undefined
+        }
       />
       {isDir && entry.exists && children.length === 0 ? (
         <li className="border-b border-border-subtle py-2 pl-9 text-xs text-text-muted">
@@ -138,6 +171,9 @@ function EntryRows({ entry, agentName }: { entry: ConfigFileInfo; agentName: str
           facts={{ size: c.size, modifiedAt: c.modified_at }}
           path={c.path}
           folderPath={entry.path}
+          onPreview={() =>
+            onPreview({ key: entry.key, child: c.relpath, name: c.relpath, path: c.path })
+          }
         />
       ))}
     </>
@@ -148,6 +184,7 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const agentName = agentTypeLabel(agent.type);
   const files = useAgentConfigFiles(agent.uid);
+  const [previewing, setPreviewing] = useState<ConfigFileTarget | null>(null);
   const [, revealDir] = useFileActionItems(agent.config_dir);
 
   let body;
@@ -161,7 +198,12 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
     body = (
       <ul className="overflow-hidden rounded-lg border border-border-subtle">
         {files.data.map((entry) => (
-          <EntryRows key={entry.key} entry={entry} agentName={agentName} />
+          <EntryRows
+            key={entry.key}
+            entry={entry}
+            agentName={agentName}
+            onPreview={setPreviewing}
+          />
         ))}
       </ul>
     );
@@ -184,6 +226,11 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
       }
     >
       {body}
+      <AgentConfigFilePreviewDialog
+        agentUid={agent.uid}
+        target={previewing}
+        onClose={() => setPreviewing(null)}
+      />
     </Section>
   );
 }

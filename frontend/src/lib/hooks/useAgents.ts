@@ -3,12 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import { agentsApi, type AgentCreate, type AgentPatch } from "@/lib/api/agents";
+import {
+  agentsApi,
+  type AgentCreate,
+  type AgentPatch,
+  type ConfigFileContent,
+} from "@/lib/api/agents";
 import type { AdoptMcpEntryBody, AdoptSkillVars } from "@/lib/api/agents-workspace";
 import { translateApiError } from "@/lib/api/errors";
 import {
   agentTypesKey,
   agentConfigFilesKey,
+  agentConfigFileContentKey,
   agentHooksKey,
   agentPluginKey,
   agentPluginsKey,
@@ -95,6 +101,16 @@ export function useAgentConfigFiles(uid: string) {
     queryKey: agentConfigFilesKey(uid),
     queryFn: async () => (await agentsApi.listConfigFiles(uid)).items,
     enabled: !!uid,
+  });
+}
+
+/** One config file's preview; `key` "" keeps it idle (no dialog open). */
+export function useAgentConfigFileContent(uid: string, key: string, child = "") {
+  return useQuery({
+    queryKey: agentConfigFileContentKey(uid, key, child),
+    queryFn: (): Promise<ConfigFileContent> =>
+      agentsApi.configFileContent(uid, key, child || undefined),
+    enabled: !!uid && !!key,
   });
 }
 

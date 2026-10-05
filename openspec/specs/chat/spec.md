@@ -591,8 +591,8 @@ topic rather than the chat's main timeline, a parallel thread as `DM · Thread 2
 name, its working directory, and its last activity (the clock time for today and yesterday, a date such
 as `Sep 22` for earlier). A running row carries an inline **Stop**, which calls
 `POST .../interrupt` for that conversation with the semantics of "Pause the pending queue on
-interrupt". Every row carries the split button of "Open a conversation in the terminal", and hovering a
-row shows a trailing **⋯** menu (Rename, Delete…). Rename edits the title in place in the row — Enter saves,
+interrupt". Every row carries the split button of "Open a conversation in the terminal" and a trailing
+**⋯** menu (Rename, Delete…), both always shown rather than revealed on hover. Rename edits the title in place in the row — Enter saves,
 Esc cancels — through "Rename and delete a conversation through its agent"; Delete… asks first, as
 that requirement says. The row shows no message text, because Coffer stores none.
 
@@ -675,13 +675,15 @@ page, which it does not have, and its header has no primary action.
 ### Requirement: Open a conversation in the terminal
 A row of the Conversations page MUST hand its conversation to the agent's own
 interface: pressing the row, or the main part of its split button **Open in
-terminal**, MUST ask the daemon to resume the conversation's native session in the
-person's preferred terminal ([web-ui](../web-ui/spec.md) "Let the user choose a
+<terminal>** (named for the preferred terminal, e.g. **Open in iTerm**), MUST ask the
+daemon to resume the conversation's native session in the person's preferred terminal ([web-ui](../web-ui/spec.md) "Let the user choose a
 terminal"; [daemon](../daemon/spec.md) "Open an agent session in a terminal") —
 `claude --resume <session id>` for Claude Code and `codex resume <session id>` for
 Codex, in the session's working directory. The split button's **▾** menu holds
-**Copy command**, which copies the same command line for the person to run
-anywhere. A conversation that has no native session yet — no turn has run on it —
+**Open in <terminal>** for every other terminal on this machine — the system
+terminal and each detected one — which opens the session there once and leaves the
+preference as it is, then **Copy command**, which copies the same command line for
+the person to run anywhere: the same shape as the hand-off button. A conversation that has no native session yet — no turn has run on it —
 cannot be opened: its split button is disabled and says why, and it offers no
 Copy command. An open the daemon refuses shows its reason in a toast beside Copy
 command as the way out. Agent › Sessions rows use the same row and the same
@@ -692,6 +694,12 @@ behaviour ([agent-registry](../agent-registry/spec.md) "Open an agent's sessions
 - **WHEN** the user presses its row
 - **THEN** the daemon is asked to open `claude --resume abc-123` in `/work/api` in that terminal, for the conversation's agent
 - **AND** a Codex conversation is opened as `codex resume <id>` the same way
+
+#### Scenario: the ▾ menu opens the session in another terminal once
+- **GIVEN** a conversation with a native session and iTerm as the preferred terminal
+- **WHEN** its row renders and the user opens the ▾ menu and chooses Open in System terminal
+- **THEN** the main part reads Open in iTerm, the menu does not repeat iTerm, and the daemon is asked to open the session in the system terminal
+- **AND** the preferred terminal is still iTerm
 
 #### Scenario: copy command copies the resume command
 - **GIVEN** a conversation with a native session

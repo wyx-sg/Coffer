@@ -87,9 +87,12 @@ def folder_picker_command(start: str | None) -> list[str] | None:
     return None
 
 
+_MAC_APPLICATIONS = Path("/Applications")
+
+
 def mac_app_dirs() -> tuple[Path, ...]:
     """The standard macOS applications directories."""
-    return (Path("/Applications"), Path.home() / "Applications")
+    return (_MAC_APPLICATIONS, Path.home() / "Applications")
 
 
 def mac_app_installed(app_name: str) -> bool:

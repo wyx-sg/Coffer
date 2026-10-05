@@ -28,7 +28,7 @@ You do **not** need a [model provider](/guides/providers). A provider is an opti
 
 ## Open a conversation in your terminal {#open-in-terminal}
 
-Click a row, or choose **Open in terminal** on its split button. Coffer opens your preferred terminal in the conversation's directory and runs the agent's own resume command:
+Click a row, or press its split button, which names your preferred terminal (**Open in iTerm**). Its **▾** opens the conversation in another terminal on this Mac just this once, without changing the preference. Coffer opens your preferred terminal in the conversation's directory and runs the agent's own resume command:
 
 - Claude Code: `claude --resume <session id>`
 - Codex: `codex resume <session id>`
@@ -47,7 +47,7 @@ The daemon builds the command itself from the session id, directory and agent, s
 
 ### One session, one place {#running-or-waiting}
 
-A session should run in one place at a time. When a row's turn is running, or the agent is waiting for your answer, **Open in terminal** asks first:
+A session should run in one place at a time. When a row's turn is running, or the agent is waiting for your answer, **Open in &lt;terminal&gt;** asks first:
 
 - **Answer in *platform*** (or wait): leave the turn where it is and use the channel.
 - **Stop this turn and continue in the terminal**: stops the turn exactly like **Stop**, tells the agent you stopped it, then opens the terminal.
@@ -98,7 +98,7 @@ The files are pruned after the **Attachments** retention window (30 days after t
 
 - the title, with a status word — **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer;
 - the **agent**, the working **directory**, the **time of the last activity** (the clock for today and yesterday, a date such as `Sep 22` for earlier) and the **channel**: the platform's logo and the place in its chat, such as `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread` or `Telegram · Group › topic`;
-- an inline **Stop** while a turn runs, the split button (**Open in terminal ▾ Copy command**), and a **⋯** menu.
+- an inline **Stop** while a turn runs, the split button (**Open in &lt;terminal&gt; ▾** other terminals · Copy command), and a **⋯** menu — always shown, not only on hover.
 
 Above the list: a search box over titles and directories (press `/` to jump to it), a **Channel** pill and an **Agent** pill, each taking several at once, and **Clear filters** once anything narrows the list. The server applies the filters, so scrolling pages through matches only. They are part of the URL, so a filtered list is a link:
 
@@ -157,7 +157,7 @@ A channel message starts or queues a turn in the daemon. The turn's output is a 
 
 **Nothing streams, and the reply appears all at once.** Claude Code turns need a CLI that supports partial messages. The SDK uses its own bundled CLI; if that is missing and the `claude` on `PATH` is old, the turn fails at connect. Update Claude Code.
 
-**Open in terminal does nothing.** Check **Settings › General › Preferred terminal**: a terminal that is not installed, or a custom template with a typo, cannot start. Use **Copy command** and paste it into a terminal.
+**Open in &lt;terminal&gt; does nothing.** Check **Settings › General › Preferred terminal**: a terminal that is not installed, or a custom template with a typo, cannot start. Use **Copy command** and paste it into a terminal.
 
 **The terminal says there is no conversation to resume.** The agent has cleaned the session up (see [above](#chat-and-the-agent-s-own-sessions)). The channel continues as a fresh session on its next message.
 

@@ -1,9 +1,14 @@
-"""AgentConfigFileService — list an agent's curated config files.
+"""AgentConfigFileService — list and preview an agent's curated config files.
 
 Lists the per-type config-file allowlist with each file's location, size and
 modified time (spec agent-registry "List an agent's config files with their
-locations"). Coffer serves no file's content and writes none on the person's
-behalf; the person opens a file in their own editor.
+locations"), and reads one of them as written for a read-only preview (spec
+agent-registry "Preview an agent's config file read-only"). Coffer writes none
+on the person's behalf; the person edits a file in their own editor.
+
+A preview is addressed by the allowlist key, plus — under a directory entry —
+a child's relpath that must be one the listing itself returns, so a caller can
+never name a path the listing would not show.
 
 Resolves an agent to its `AgentType`, then lists that type's allowlist
 (`domain/agent/config_files.py`). Filesystem access goes through a
@@ -28,8 +33,11 @@ from coffer.domain.agent.config_files import (
     ConfigFileSpec,
     DirEntryInfo,
     FileStat,
+    FileText,
     config_files_for,
+    spec_for,
 )
+from coffer.domain.errors import ConfigFileNotAllowed
 from coffer.domain.resource import Resource
 
 
@@ -38,6 +46,10 @@ class ConfigFileStorePort(Protocol):
 
     def read_text(self, path: pathlib.Path) -> str | None:
         """Return file text, or ``None`` if the file does not exist."""
+        ...
+
+    def read_preview(self, path: pathlib.Path) -> FileText | None:
+        """Capped text of the file for a preview, or ``None`` if it does not exist."""
         ...
 
     def stat(self, path: pathlib.Path) -> FileStat | None:
@@ -97,6 +109,19 @@ class ConfigFileInfo:
     files: list[DirEntryInfo] | None = field(default=None)
 
 
+@dataclass(frozen=True)
+class ConfigFilePreview:
+    """One config file as its read-only preview shows it."""
+
+    key: str
+    path: str
+    format: ConfigFileFormat
+    content: str
+    size: int
+    truncated: bool
+    binary: bool
+
+
 # Structural type for the agent-lookup dependency — avoids a hard import of
 # AgentService (and keeps this service unit-testable with a fake). Keyed on the
 # agent's uid: every method here is reached from a surface that has already
@@ -145,3 +170,34 @@ class AgentConfigFileService:
     async def list_files(self, uid: str) -> list[ConfigFileInfo]:
         cfg = await self._config_for(uid)
         return [self._info(spec) for spec in config_files_for(cfg.type, cfg.resolved_config_dir())]
+
+    async def read_preview(self, uid: str, key: str, child: str | None = None) -> ConfigFilePreview:
+        """Read one allowlisted file — or one listed file under a directory entry.
+
+        Raises ``ConfigFileNotAllowed`` (→ 404) for a key off the allowlist, a
+        directory key without a listed ``child`` or a file key with one, before
+        any read; ``FileNotFoundError`` when the file is not there.
+        """
+        cfg = await self._config_for(uid)
+        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())
+        if spec.kind is ConfigFileKind.DIRECTORY:
+            listed = {e.relpath: e.path for e in self._store.list_dir(spec.path) or []}
+            if child is None or child not in listed:
+                raise ConfigFileNotAllowed(cfg.type.value, f"{key}/{child or ''}")
+            path = pathlib.Path(listed[child])
+        else:
+            if child is not None:
+                raise ConfigFileNotAllowed(cfg.type.value, f"{key}/{child}")
+            path = spec.path
+        text = self._store.read_preview(path)
+        if text is None:
+            raise FileNotFoundError(str(path))
+        return ConfigFilePreview(
+            key=spec.key,
+            path=str(path),
+            format=spec.format,
+            content=text.content,
+            size=text.size,
+            truncated=text.truncated,
+            binary=text.binary,
+        )
