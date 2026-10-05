@@ -55,6 +55,20 @@ describe("the reader", () => {
     expect(await screen.findByText("Created Sep 12 by you")).toBeInTheDocument();
   });
 
+  test("a body whose own heading differs from the title shows one title, the heading", async () => {
+    api.getFile.mockResolvedValue({
+      ...GATEWAY,
+      title: "Gateway",
+      body: "# Gateway — one door, no database\n\nThe text.\n",
+    });
+    renderKnowledge(OPEN);
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Gateway — one door, no database" }),
+    ).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: /^Gateway/ })).toHaveLength(1);
+    expect(screen.getByText("The text.")).toBeVisible();
+  });
+
   test("names an agent that wrote it", async () => {
     api.getFile.mockResolvedValue({ ...GATEWAY, actor: "claude-code" });
     renderKnowledge(OPEN);
