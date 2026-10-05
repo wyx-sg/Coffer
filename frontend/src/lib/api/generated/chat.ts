@@ -24,28 +24,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/chat/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Conversations
-         * @description Channel conversations, newest activity first (id breaks ties), paged by
-         *     cursor; ``q`` filters by title or directory, ``source`` and ``agent`` by
-         *     channel and by which agent it runs (all three also narrow ``total``).
-         */
-        get: operations["list_conversations_api_v1_chat_conversations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/chat/conversations/{id}": {
         parameters: {
             query?: never;
@@ -159,18 +137,6 @@ export interface components {
             thread: boolean;
         };
         /**
-         * ConversationListOut
-         * @description One page of conversations, newest activity first.
-         */
-        ConversationListOut: {
-            /** Conversations */
-            conversations: components["schemas"]["ConversationOut"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-            /** Total */
-            total: number;
-        };
-        /**
          * ConversationOut
          * @description Single conversation response.
          */
@@ -263,56 +229,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentProviderListOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_conversations_api_v1_chat_conversations_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                /** @description The previous page's next_cursor. Bound to the filters it was issued for; any other value is 400 CURSOR_INVALID. */
-                cursor?: string | null;
-                /** @description Title or working directory contains this text (case-insensitive); a cursor is bound to it. */
-                q?: string | null;
-                /** @description Comma-separated channel uids. Absent or empty is every channel; a cursor is bound to it. */
-                source?: string | null;
-                /** @description Comma-separated agent keys (e.g. `claude_code,codex`). Absent or empty is every agent; a cursor is bound to it. */
-                agent?: string | null;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

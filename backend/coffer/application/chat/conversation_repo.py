@@ -1,6 +1,6 @@
 """The conversation persistence port, and cursor pages of its listings (spec
-chat "List conversations by latest activity", spec resource-framework "Page
-growing lists by an opaque cursor").
+agent-registry "List every agent's sessions in one list", spec
+resource-framework "Page growing lists by an opaque cursor").
 
 The order is newest activity first with the conversation id as the tie-break,
 and a page is the rows strictly after the previous page's last
@@ -70,10 +70,6 @@ class ConversationRepo(Protocol):
         them, the whole listing. ``contains`` keeps the rows whose title or
         working directory holds it (case-insensitive); ``narrow`` keeps those of
         its sources and agents."""
-        ...
-
-    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
-        """How many conversations ``list`` would return without ``after``/``limit``."""
         ...
 
     async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:

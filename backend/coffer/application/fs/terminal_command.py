@@ -49,6 +49,11 @@ def resume_command(agent: str, session_id: str, cwd: str) -> str:
     return f"cd {quote(cwd)} && {program} {args}"
 
 
+def blank_command(agent: str, cwd: str) -> str:
+    """Start a new session with no first message."""
+    return f"cd {quote(cwd)} && {program_for(agent)}"
+
+
 def prompt_command(agent: str, prompt_file: Path, cwd: str) -> str:
     """Start a new session whose first message the command reads from, and
     removes, ``prompt_file`` — the text never appears on a command line."""

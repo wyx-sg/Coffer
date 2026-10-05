@@ -154,7 +154,6 @@ def test_a_failed_spawn_removes_the_prompt_file(
         {"agent": "gemini", "resume": "abc"},
         {"cwd": "relative/dir", "resume": "abc"},
         {"resume": "abc", "prompt": "hi"},
-        {},
         {"prompt": "   "},
     ],
 )
@@ -165,6 +164,25 @@ def test_invalid_requests_are_refused_before_anything_starts(
         _open(svc, **body)
 
     assert platform.terminal_launches == [] and spawns.argvs == []
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a body with neither resume nor prompt starts a blank session"
+)
+def test_neither_resume_nor_prompt_starts_a_blank_session(
+    svc: TerminalService, platform: FakePlatform, spawns: _Spawns, tmp_path: pathlib.Path
+) -> None:
+    work = tmp_path / "api"
+    work.mkdir()
+
+    _open(svc, cwd=str(work))
+    _open(svc, agent="codex", cwd=str(work))
+
+    assert platform.terminal_launches == [
+        (None, f"cd '{work}' && claude", str(work)),
+        (None, f"cd '{work}' && codex", str(work)),
+    ]
+    assert len(spawns.argvs) == 2
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="a custom template runs as an argument vector")

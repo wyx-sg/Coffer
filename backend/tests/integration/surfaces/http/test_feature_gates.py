@@ -131,7 +131,7 @@ def test_each_experimental_feature_closes_only_its_own_routes(home: pathlib.Path
         # internal engine read.
         for always_on in (
             "/api/v1/agents",
-            "/api/v1/chat/conversations",
+            "/api/v1/agent-sessions",
             "/api/v1/agent-providers",
             "/api/v1/internal-engine-config",
             "/api/v1/skills",

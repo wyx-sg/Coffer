@@ -1,21 +1,21 @@
 // frontend/src/components/channel/ChannelOverviewTab.tsx
 // A channel's Overview, one column: who can use it (the paired owners: add,
 // remove), which agents it drives — the default agent a new conversation
-// starts on and the shared reach control for the agents it may drive — and the
-// latest conversations it started. It lists no messages: every message becomes
-// an ordinary conversation, and Conversations is where those are read.
+// starts on and the shared reach control for the agents it may drive — and one
+// link to the conversations it started. It lists no messages and no
+// conversations: Conversations, filtered by this channel, is where those are read.
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { AgentSelect } from "@/components/agents/AgentSelect";
 import { ScopeControl } from "@/components/ScopeControl";
 import { SettingsSection } from "@/components/settings/SettingsLayout";
+import { channelConversationsHref } from "@/lib/channels/tabs";
 import type { ChannelPerson, ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
-import { displayName } from "@/lib/resourceTitle";
 import { ChannelPeopleList } from "./ChannelPeopleList";
-import { ChannelRecentConversations } from "./ChannelRecentConversations";
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -84,7 +84,13 @@ export function ChannelOverviewTab({
         </Row>
       </SettingsSection>
 
-      <ChannelRecentConversations channelUid={channel.uid} channelName={displayName(channel)} />
+      <Link
+        to={channelConversationsHref(channel.uid)}
+        data-testid="channel-conversations-link"
+        className="w-fit text-sm font-label text-accent-text hover:underline"
+      >
+        {t("channels.overview.conversationsLink")}
+      </Link>
     </div>
   );
 }

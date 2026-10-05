@@ -121,12 +121,6 @@ class ChatService:
             self._conversations, limit=limit, cursor=cursor, q=q, narrow=narrow
         )
 
-    async def count_conversations(self, *, q: str | None = None, narrow: Narrowing = EVERY) -> int:
-        """How many conversations match the listing (``q``, ``narrow``), whatever
-        the paging; ``q`` is trimmed like :meth:`page_conversations` does."""
-        q = (q or "").strip() or None
-        return await self._conversations.count(contains=q, narrow=narrow)
-
     async def get_conversation(self, conversation_id: str) -> Conversation:
         """Return a conversation by id; raises ``ConversationNotFound`` if absent."""
         row = await self._conversations.get(conversation_id)

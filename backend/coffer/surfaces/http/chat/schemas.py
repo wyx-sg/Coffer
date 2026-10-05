@@ -79,14 +79,3 @@ class ConversationOut(BaseModel):
     #: A question the agent asked is waiting for the owner's answer (spec chat
     #: "Show which conversations wait on you").
     needs_you: bool = False
-
-
-class ConversationListOut(BaseModel):
-    """One page of conversations, newest activity first."""
-
-    conversations: list[ConversationOut]
-    #: Continues the listing after ``conversations``; null on the last page.
-    next_cursor: str | None
-    #: How many conversations match the listing (``q``, ``source``, ``agent``),
-    #: whatever the paging.
-    total: int

@@ -1,12 +1,13 @@
-"""Integration tests for the chat HTTP surface — the channel conversations list.
+"""Integration tests for the chat HTTP surface — the single-conversation routes.
 
 Tests the routes through a real FastAPI app wired with:
 - Real ChatService over in-memory fake repos.
 - Real TurnOrchestrator with FakeAgentAdapter from the unit conftest.
 
 Coverage:
-- Conversation get / list / rename / delete round-trip.
-- The list is channel conversations only, searched by title and directory,
+- Conversation get / rename / delete round-trip; the list route is gone.
+- The conversation index (what the cross-agent listing pages for a channel-only
+  source) holds channel conversations only, searched by title and directory,
   paged by cursor and narrowed by source and agent.
 - ConversationNotFound on GET / PATCH / DELETE / interrupt → 404.
 """
@@ -21,9 +22,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from coffer.application.chat.conversation_repo import Narrowing
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.agent_config import AgentConfig
+from coffer.domain.pagination import CursorInvalid
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
@@ -110,7 +113,7 @@ def _touch(chat_svc: ChatService, conv_id: str, at: datetime) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_conversation_get_list_rename_delete_roundtrip() -> None:
+def test_conversation_get_rename_delete_roundtrip() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
@@ -127,11 +130,6 @@ def test_conversation_get_list_rename_delete_roundtrip() -> None:
         assert data["channel_binding"]["channel_uid"] == "chan-1"
         assert (data["running"], data["needs_you"]) == (False, False)
         assert "preview" not in data and "archived_at" not in data
-
-        # List
-        resp = client.get("/api/v1/chat/conversations")
-        assert resp.status_code == 200
-        assert len(resp.json()["conversations"]) == 1
 
         # Patch — rename
         resp = client.patch(f"/api/v1/chat/conversations/{conv_id}", json={"title": "Renamed"})
@@ -158,7 +156,9 @@ def test_the_web_has_no_route_to_create_archive_or_read_messages() -> None:
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
         base = "/api/v1/chat/conversations"
-        assert client.post(base, json={"agent_key": "builtin"}).status_code == 405
+        assert client.post(base, json={"agent_key": "builtin"}).status_code == 404
+        # The list is the cross-agent one (GET /api/v1/agent-sessions).
+        assert client.get(base).status_code == 404
         assert client.post(f"{base}/{conv_id}/archive").status_code == 404
         assert client.get(f"{base}/{conv_id}/messages").status_code == 404
         assert client.post(f"{base}/{conv_id}/messages", json={"text": "hi"}).status_code == 404
@@ -166,116 +166,64 @@ def test_the_web_has_no_route_to_create_archive_or_read_messages() -> None:
     set_active_token(None)
 
 
-@pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
-@pytest.mark.acceptance(
-    spec="chat", scenario="the conversation list narrows by source and agent on the server"
-)
-def test_the_conversation_list_pages_by_cursor() -> None:
-    chat_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, orchestrator)
-    set_active_token(_TOKEN)
+def _page(chat_svc: ChatService, **kw: Any) -> Any:
+    return asyncio.run(chat_svc.page_conversations(**kw))
+
+
+def test_the_conversation_index_pages_by_cursor() -> None:
+    chat_svc, _ = _make_services()
     made = [_conversation(chat_svc) for _ in range(3)]
-    # Pin distinct activity times so "latest activity" is unambiguous.
     base = datetime(2026, 9, 1, tzinfo=UTC)
     for minutes, conv_id in enumerate(made):
         _touch(chat_svc, conv_id, base + timedelta(minutes=minutes))
 
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        first = client.get("/api/v1/chat/conversations", params={"limit": 2}).json()
-        assert [c["id"] for c in first["conversations"]] == [made[2], made[1]]
-        assert first["next_cursor"]
-        rest = client.get(
-            "/api/v1/chat/conversations", params={"limit": 2, "cursor": first["next_cursor"]}
-        ).json()
-        assert first["total"] == rest["total"] == 3
-        assert [c["id"] for c in rest["conversations"]] == [made[0]]
-        assert rest["next_cursor"] is None
-
-    set_active_token(None)
+    first = _page(chat_svc, limit=2)
+    assert [c.id for c in first.items] == [made[2], made[1]]
+    assert first.next_cursor
+    rest = _page(chat_svc, limit=2, cursor=first.next_cursor)
+    assert [c.id for c in rest.items] == [made[0]]
+    assert rest.next_cursor is None
 
 
-@pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
-def test_the_conversation_list_searches_titles_and_directories_and_pages_the_matches() -> None:
-    chat_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, orchestrator)
-    set_active_token(_TOKEN)
+def test_the_conversation_index_searches_narrows_and_binds_its_cursor() -> None:
+    chat_svc, _ = _make_services()
     titles = ["Deploy plan", "lunch", "deploy notes", "DEPLOY 100%", "other"]
     made = [_conversation(chat_svc, title=title) for title in titles]
     base = datetime(2026, 9, 1, tzinfo=UTC)
     for minutes, conv_id in enumerate(made):
         _touch(chat_svc, conv_id, base + timedelta(minutes=minutes))
 
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+    first = _page(chat_svc, q="deploy", limit=2)
+    assert [c.title for c in first.items] == ["DEPLOY 100%", "deploy notes"]
+    rest = _page(chat_svc, q="deploy", limit=2, cursor=first.next_cursor)
+    assert [c.title for c in rest.items] == ["Deploy plan"]
+    assert rest.next_cursor is None
+    # A wildcard is text, not a pattern; blank q is no filter.
+    assert [c.title for c in _page(chat_svc, q="100%").items] == ["DEPLOY 100%"]
+    assert len(_page(chat_svc, q="  ").items) == 5
 
-        def get(**params: object) -> dict:
-            return client.get("/api/v1/chat/conversations", params=params).json()
+    by_dir = _conversation(chat_svc, title="untitled", cwd="/Work/Billing-Service")
+    assert [c.id for c in _page(chat_svc, q="billing-service").items] == [by_dir]
 
-        first = get(q="deploy", limit=2)
-        assert [c["title"] for c in first["conversations"]] == ["DEPLOY 100%", "deploy notes"]
-        assert first["next_cursor"]
-        assert first["total"] == 3  # the matches, not the page
-        assert get(q="lunch")["total"] == 1
-        rest = get(q="deploy", limit=2, cursor=first["next_cursor"])
-        assert [c["title"] for c in rest["conversations"]] == ["Deploy plan"]
-        assert rest["next_cursor"] is None
-
-        # A wildcard is text, not a pattern; blank q is no filter.
-        assert [c["title"] for c in get(q="100%")["conversations"]] == ["DEPLOY 100%"]
-        assert len(get(q="%")["conversations"]) == 1
-        assert len(get(q="  ")["conversations"]) == 5
-
-        # A directory is searched too, case-insensitively.
-        by_dir = _conversation(chat_svc, title="untitled", cwd="/Work/Billing-Service")
-        assert [c["id"] for c in get(q="billing-service")["conversations"]] == [by_dir]
-
-        # Source (a channel uid) and agent filters: server-side, on page and total,
-        # bound into the cursor.
-        stranger = _conversation(chat_svc, channel_uid="chan-2")
-        assert get()["total"] == 7
-        assert [c["id"] for c in get(source="chan-2")["conversations"]] == [stranger]
-        assert get(source="nope")["total"] == 0
-        assert get(source=" , ")["total"] == 7
-        assert get(agent="builtin")["total"] == 7
-        assert get(agent="codex,claude_code")["total"] == 0
-        by_agent = get(agent="builtin", limit=2)
-        assert by_agent["next_cursor"] and by_agent["total"] == 7
-        mismatched = client.get(
-            "/api/v1/chat/conversations",
-            params={"agent": "codex", "cursor": by_agent["next_cursor"]},
-        )
-        assert mismatched.status_code == 400
-        assert mismatched.json()["error"]["code"] == "CURSOR_INVALID"
-        assert (
-            client.get(
-                "/api/v1/chat/conversations",
-                params={"source": "chan-1", "cursor": by_agent["next_cursor"]},
-            ).status_code
-            == 400
-        )
-
-        # A cursor issued for one q does not page another.
-        refused = client.get(
-            "/api/v1/chat/conversations", params={"q": "lunch", "cursor": first["next_cursor"]}
-        )
-        assert refused.status_code == 400
-        assert refused.json()["error"]["code"] == "CURSOR_INVALID"
-
-    set_active_token(None)
+    stranger = _conversation(chat_svc, channel_uid="chan-2")
+    assert [c.id for c in _page(chat_svc, narrow=Narrowing.of(sources=["chan-2"])).items] == [
+        stranger
+    ]
+    assert _page(chat_svc, narrow=Narrowing.of(agents=["codex"])).items == []
+    by_agent = _page(chat_svc, limit=2, narrow=Narrowing.of(agents=["builtin"]))
+    assert by_agent.next_cursor
+    with pytest.raises(CursorInvalid):
+        _page(chat_svc, cursor=by_agent.next_cursor, narrow=Narrowing.of(agents=["codex"]))
+    with pytest.raises(CursorInvalid):
+        _page(chat_svc, cursor=first.next_cursor, q="lunch")
 
 
-def test_a_conversation_no_channel_owns_is_not_listed() -> None:
-    chat_svc, orchestrator = _make_services()
-    app = _build_app(chat_svc, orchestrator)
-    set_active_token(_TOKEN)
+def test_a_conversation_no_channel_owns_is_not_indexed() -> None:
+    chat_svc, _ = _make_services()
     _conversation(chat_svc, channel_uid=None)
     owned = _conversation(chat_svc)
 
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        listing = client.get("/api/v1/chat/conversations").json()
-
-    assert [c["id"] for c in listing["conversations"]] == [owned]
-    assert listing["total"] == 1
-    set_active_token(None)
+    assert [c.id for c in _page(chat_svc).items] == [owned]
 
 
 def test_get_conversation_not_found_returns_404() -> None:
@@ -320,7 +268,7 @@ def test_unauthenticated_request_returns_401() -> None:
     set_active_token(_TOKEN)
 
     with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get("/api/v1/chat/conversations")
+        resp = client.get("/api/v1/chat/conversations/some-id")
         assert resp.status_code == 401
 
     set_active_token(None)

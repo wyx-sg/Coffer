@@ -1,8 +1,10 @@
 // pages/ConversationsPage.test.tsx — the Conversations page as the Run canvas
-// draws it: a list of the conversations IM channels opened and nothing else —
-// day groups without counts, a row's channel, status word, Stop and ⋯ menu, the
-// filter row and its URL, rename and delete, opening a row in the preferred
-// terminal (and asking first while its turn is busy), and the list's states.
+// draws it: every agent's sessions as a list and nothing else — a header row,
+// day groups without counts, a row's source, status word, Stop and ⋯ menu, the
+// filter row and its URL, rename and delete (through the agent, or through the
+// conversation for a channel row with no session yet), opening a row in the
+// preferred terminal (and asking first while its turn is busy), and the list's
+// states, including the agents whose sessions could not be read.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -12,16 +14,29 @@ import { ConversationsPage } from "./ConversationsPage";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api/errors";
-import { makeBinding, makeConversation } from "@/test/conversationFixtures";
+import { makeBinding, makeSessionRow } from "@/test/conversationFixtures";
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
-    listConversations: vi.fn(),
     renameConversation: vi.fn(),
     deleteConversation: vi.fn(),
     interruptTurn: vi.fn(),
   },
+}));
+vi.mock("@/lib/api/agentSessions", () => ({
+  agentSessionsApi: { listAll: vi.fn(), rename: vi.fn(), remove: vi.fn() },
+}));
+vi.mock("@/components/conversations/NewConversationButton", () => ({
+  NewConversationButton: () => <button type="button">New conversation</button>,
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: () => ({
+    data: [
+      { uid: "ag-cc", type: "claude_code" },
+      { uid: "ag-cx", type: "codex" },
+    ],
+  }),
 }));
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
@@ -35,7 +50,9 @@ vi.mock("@/lib/hooks/useChannels", () => ({
 }));
 
 const { chatApi } = await import("@/lib/api/chat");
-const api = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const { agentSessionsApi } = await import("@/lib/api/agentSessions");
+const chat = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const sessions = agentSessionsApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
 const { fsApi } = await import("@/lib/api/fs");
 const openTerminal = vi.mocked(fsApi.openTerminal);
@@ -55,16 +72,18 @@ const place = (p: Partial<NonNullable<ReturnType<typeof makeBinding>["place"]>>)
   ...p,
 });
 
-const today = makeConversation({
-  id: "t",
+const today = makeSessionRow({
+  session_id: "t",
+  conversation_id: "t",
   title: "Today one",
-  updated_at: at(0, 0),
+  last_activity_at: at(0, 0),
   running: true,
 });
-const yesterday = makeConversation({
-  id: "y",
+const yesterday = makeSessionRow({
+  session_id: "y",
+  conversation_id: "y",
   title: "Yesterday one",
-  updated_at: at(1, 14),
+  last_activity_at: at(1, 14),
   cwd: "/work/web",
   channel_binding: makeBinding({
     channel_uid: "ch-2",
@@ -73,10 +92,11 @@ const yesterday = makeConversation({
     channel: "Personal",
   }),
 });
-const earlier = makeConversation({
-  id: "e",
+const earlier = makeSessionRow({
+  session_id: "e",
+  conversation_id: "e",
   title: "Earlier one",
-  updated_at: at(20, 9),
+  last_activity_at: at(20, 9),
   agent_key: "codex",
 });
 
@@ -115,12 +135,8 @@ const row = (title: string) => screen.getByText(title).closest("li") as HTMLElem
 /** A row by its id: it stays findable while its title is an input. */
 const rowOf = (id: string) => document.querySelector(`li[data-session="${id}"]`) as HTMLElement;
 const loc = () => decodeURIComponent(screen.getByTestId("loc").textContent ?? "");
-const listed = (...rows: ReturnType<typeof makeConversation>[]) =>
-  api.listConversations.mockResolvedValue({
-    conversations: rows,
-    next_cursor: null,
-    total: rows.length,
-  });
+const listed = (...rows: ReturnType<typeof makeSessionRow>[]) =>
+  sessions.listAll.mockResolvedValue({ sessions: rows, next_cursor: null, unavailable: [] });
 const openMenu = async (title: string) => {
   fireEvent.click(within(row(title)).getByRole("button", { name: `More actions for ${title}` }));
   return screen.findByRole("menu");
@@ -139,7 +155,8 @@ describe("Conversations list", () => {
     renderPage();
     await screen.findByText("Today one");
     expect(screen.getByRole("heading", { name: "Conversations" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /New conversation/ })).toBeNull();
+    // New conversation is the header's one primary action.
+    expect(screen.getByRole("button", { name: "New conversation" })).toBeInTheDocument();
     // The only text box is the search: there is no reply box.
     expect(screen.getAllByRole("textbox").map((e) => e.getAttribute("aria-label"))).toEqual([
       "Search titles and directories",
@@ -154,35 +171,38 @@ describe("Conversations list", () => {
     expect(row("Today one")).toHaveTextContent("SeaTalk · DM");
     expect(row("Yesterday one")).toHaveTextContent("Telegram · Personal");
     expect(row("Earlier one")).toHaveTextContent("SeaTalk · DM");
-    expect(api.listConversations.mock.calls[0][0].source).toEqual([]);
+    expect(sessions.listAll.mock.calls[0][0].source).toEqual([]);
     // Filtering by one channel asks the server for that channel's.
-    fireEvent.click(screen.getByRole("button", { name: /^Channel/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Source/ }));
     fireEvent.click(await screen.findByRole("option", { name: "Telegram · Personal" }));
     await waitFor(() => expect(loc()).toContain("?source=ch-2"));
     await waitFor(() =>
-      expect(api.listConversations.mock.calls.at(-1)?.[0]).toMatchObject({ source: ["ch-2"] }),
+      expect(sessions.listAll.mock.calls.at(-1)?.[0]).toMatchObject({ source: ["ch-2"] }),
     );
   });
 
   acceptance("chat", "a row names the chat and thread it came from", async () => {
-    const dm = makeConversation({
-      id: "dm",
+    const dm = makeSessionRow({
+      session_id: "dm",
+      conversation_id: "dm",
       title: "From a DM",
-      updated_at: at(0, 3),
+      last_activity_at: at(0, 3),
       channel_binding: makeBinding({ place: place({}) }),
     });
-    const group = makeConversation({
-      id: "grp",
+    const group = makeSessionRow({
+      session_id: "grp",
+      conversation_id: "grp",
       title: "From a group",
-      updated_at: at(0, 2),
+      last_activity_at: at(0, 2),
       channel_binding: makeBinding({
         place: place({ chat_kind: "group", chat_name: "coffer-dev", thread: true }),
       }),
     });
-    const parallel = makeConversation({
-      id: "par",
+    const parallel = makeSessionRow({
+      session_id: "par",
+      conversation_id: "par",
       title: "Parallel one",
-      updated_at: at(0, 1),
+      last_activity_at: at(0, 1),
       running: true,
       cwd: "/work/api",
       channel_binding: makeBinding({
@@ -210,7 +230,12 @@ describe("Conversations list", () => {
       .filter((li) => li.hasAttribute("data-band"))
       .map((li) => li.textContent);
     expect(groups).toEqual(["Today", "Yesterday", "Earlier"]);
-    expect(screen.queryByRole("columnheader")).toBeNull();
+    // A header row names the columns above the groups.
+    const header = within(list)
+      .getAllByRole("listitem", { hidden: true })
+      .find((li) => li.hasAttribute("data-header")) as HTMLElement;
+    expect(header.textContent).toBe("TitleSourceAgentDirectoryLast active");
+    expect(header.compareDocumentPosition(row("Today one"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     // Today and yesterday show the clock, an earlier day its date.
     expect(row("Today one")).toHaveTextContent("00:05");
     expect(row("Yesterday one")).toHaveTextContent("14:05");
@@ -262,26 +287,31 @@ describe("Conversations list", () => {
   );
 
   acceptance("chat", "the page stops a turn another surface started", async () => {
-    api.interruptTurn.mockResolvedValue(undefined);
+    chat.interruptTurn.mockResolvedValue(undefined);
     renderPage();
     await screen.findByText("Today one");
     fireEvent.click(within(row("Today one")).getByRole("button", { name: "Stop Today one" }));
-    await waitFor(() => expect(api.interruptTurn.mock.calls[0][0]).toBe("t"));
+    await waitFor(() => expect(chat.interruptTurn.mock.calls[0][0]).toBe("t"));
   });
 
-  acceptance("chat", "the conversation list pages by cursor", async () => {
-    const more = makeConversation({ id: "m", title: "Second page", updated_at: at(2, 9) });
-    api.listConversations.mockImplementation(async (opts: { cursor?: string | null }) =>
+  test("the list pages by cursor", async () => {
+    const more = makeSessionRow({
+      session_id: "m",
+      conversation_id: "m",
+      title: "Second page",
+      last_activity_at: at(2, 9),
+    });
+    sessions.listAll.mockImplementation(async (opts: { cursor?: string | null }) =>
       opts.cursor
-        ? { conversations: [more], next_cursor: null, total: 2 }
-        : { conversations: [today], next_cursor: "c1", total: null },
+        ? { sessions: [more], next_cursor: null, unavailable: [] }
+        : { sessions: [today], next_cursor: "c1", unavailable: [] },
     );
     renderPage();
     await screen.findByText("Today one");
-    expect(api.listConversations.mock.calls[0][0]).toMatchObject({ limit: 30 });
+    expect(sessions.listAll.mock.calls[0][0]).toMatchObject({ limit: 30 });
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(await screen.findByText("Second page")).toBeInTheDocument();
-    expect(api.listConversations.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(sessions.listAll.mock.calls.at(-1)?.[0]).toMatchObject({
       limit: 50,
       cursor: "c1",
     });
@@ -308,7 +338,7 @@ describe("Conversation rows", () => {
   });
 
   acceptance("chat", "rename a conversation in place", async () => {
-    api.renameConversation.mockResolvedValue(makeConversation({ id: "t", title: "Better name" }));
+    sessions.rename.mockResolvedValue(undefined);
     renderPage();
     await screen.findByText("Today one");
     fireEvent.click(within(await openMenu("Today one")).getByRole("menuitem", { name: "Rename" }));
@@ -317,27 +347,29 @@ describe("Conversation rows", () => {
     fireEvent.change(input, { target: { value: "Dropped" } });
     fireEvent.keyDown(input, { key: "Escape" });
     expect(screen.getByText("Today one")).toBeInTheDocument();
-    expect(api.renameConversation).not.toHaveBeenCalled();
+    expect(sessions.rename).not.toHaveBeenCalled();
     // Enter saves it.
     fireEvent.click(within(await openMenu("Today one")).getByRole("menuitem", { name: "Rename" }));
     const again = await within(rowOf("t")).findByRole("textbox", { name: "Title" });
     fireEvent.change(again, { target: { value: "  Better name " } });
     listed({ ...today, title: "Better name" }, yesterday, earlier);
     fireEvent.keyDown(again, { key: "Enter" });
-    await waitFor(() => expect(api.renameConversation).toHaveBeenCalledWith("t", "Better name"));
+    // A row with a session is renamed through its agent.
+    await waitFor(() => expect(sessions.rename).toHaveBeenCalledWith("ag-cc", "t", "Better name"));
+    expect(chat.renameConversation).not.toHaveBeenCalled();
     expect(await screen.findByText("Better name")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Title" })).toBeNull();
   });
 
   acceptance("chat", "a refused rename leaves the index alone", async () => {
-    api.renameConversation.mockRejectedValue(new ApiError("INTERNAL_ERROR", "agent said no"));
+    sessions.rename.mockRejectedValue(new ApiError("INTERNAL_ERROR", "agent said no"));
     renderPage();
     await screen.findByText("Today one");
     fireEvent.click(within(await openMenu("Today one")).getByRole("menuitem", { name: "Rename" }));
     const input = await within(rowOf("t")).findByRole("textbox", { name: "Title" });
     fireEvent.change(input, { target: { value: "Refused" } });
     fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.renameConversation).toHaveBeenCalled());
+    await waitFor(() => expect(sessions.rename).toHaveBeenCalled());
     // The error is shown and the row keeps its title.
     expect(await screen.findByRole("status")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("textbox", { name: "Title" })).toBeNull());
@@ -346,7 +378,7 @@ describe("Conversation rows", () => {
   });
 
   acceptance("chat", "delete asks first, naming the conversation", async () => {
-    api.deleteConversation.mockResolvedValue(undefined);
+    sessions.remove.mockResolvedValue(undefined);
     renderPage();
     await screen.findByText("Today one");
     fireEvent.click(within(await openMenu("Today one")).getByRole("menuitem", { name: "Delete…" }));
@@ -355,19 +387,75 @@ describe("Conversation rows", () => {
     expect(dialog).toHaveTextContent("deleted from the agent as well and cannot be recovered");
     expect(dialog).toHaveTextContent("Files the agent changed stay");
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    expect(api.deleteConversation).not.toHaveBeenCalled();
+    expect(sessions.remove).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete conversation" }));
-    await waitFor(() => expect(api.deleteConversation.mock.calls[0][0]).toBe("t"));
+    await waitFor(() => expect(sessions.remove).toHaveBeenCalledWith("ag-cc", "t"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
 
+describe("Row actions route by row", () => {
+  const fresh = makeSessionRow({
+    session_id: null,
+    conversation_id: "cf",
+    title: "Fresh chat",
+    last_activity_at: at(0, 5),
+  });
+
+  test("a channel row with no session renames and deletes through the conversation", async () => {
+    chat.renameConversation.mockResolvedValue(undefined);
+    chat.deleteConversation.mockResolvedValue(undefined);
+    listed(fresh);
+    renderPage();
+    await screen.findByText("Fresh chat");
+    fireEvent.click(within(await openMenu("Fresh chat")).getByRole("menuitem", { name: "Rename" }));
+    const input = await within(rowOf("cf")).findByRole("textbox", { name: "Title" });
+    fireEvent.change(input, { target: { value: "Renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(chat.renameConversation).toHaveBeenCalledWith("cf", "Renamed"));
+    expect(sessions.rename).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      within(await openMenu("Fresh chat")).getByRole("menuitem", { name: "Delete…" }),
+    );
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Delete conversation",
+      }),
+    );
+    await waitFor(() => expect(chat.deleteConversation).toHaveBeenCalledWith("cf"));
+    expect(sessions.remove).not.toHaveBeenCalled();
+  });
+
+  test("a terminal session of another agent goes to that agent's own route", async () => {
+    sessions.rename.mockResolvedValue(undefined);
+    listed(
+      makeSessionRow({
+        agent_key: "codex",
+        session_id: "cx-1",
+        conversation_id: null,
+        channel_binding: null,
+        title: "Terminal one",
+      }),
+    );
+    renderPage();
+    await screen.findByText("Terminal one");
+    fireEvent.click(
+      within(await openMenu("Terminal one")).getByRole("menuitem", { name: "Rename" }),
+    );
+    const input = await within(rowOf("cx-1")).findByRole("textbox", { name: "Title" });
+    fireEvent.change(input, { target: { value: "Renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(sessions.rename).toHaveBeenCalledWith("ag-cx", "cx-1", "Renamed"));
+  });
+});
+
 describe("Conversations filter row", () => {
-  test("the search comes first, then the Channel and Agent pills, with no view switch", async () => {
+  test("the search comes first, then the Source and Agent pills, with no view switch", async () => {
     renderPage();
     await screen.findByText("Today one");
     const search = screen.getByRole("textbox", { name: "Search titles and directories" });
-    const channel = screen.getByRole("button", { name: /^Channel/ });
+    const channel = screen.getByRole("button", { name: /^Source/ });
     const agent = screen.getByRole("button", { name: /^Agent/ });
     const before = (a: Node, b: Node) =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -387,27 +475,45 @@ describe("Conversations filter row", () => {
     fireEvent.change(search, { target: { value: "sentry" } });
     await waitFor(() => expect(loc()).toContain("?q=sentry"));
     await waitFor(() =>
-      expect(api.listConversations.mock.calls.at(-1)?.[0]).toMatchObject({ q: "sentry" }),
+      expect(sessions.listAll.mock.calls.at(-1)?.[0]).toMatchObject({ q: "sentry" }),
     );
   });
 
   acceptance("chat", "the Channel pill filters by several channels", async () => {
-    const first = renderPage();
+    renderPage();
     await screen.findByText("Today one");
-    fireEvent.click(screen.getByRole("button", { name: /^Channel/ }));
-    fireEvent.click(await screen.findByRole("option", { name: "SeaTalk · Team bot" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Source/ }));
+    // This Mac comes first, then each channel.
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
+      "This Mac",
+      "SeaTalk · Team bot",
+      "Telegram · Personal",
+    ]);
+    fireEvent.click(screen.getByRole("option", { name: "SeaTalk · Team bot" }));
     fireEvent.click(screen.getByRole("option", { name: "Telegram · Personal" }));
     await waitFor(() => expect(loc()).toContain("?source=ch-1,ch-2"));
     await waitFor(() =>
-      expect(api.listConversations.mock.calls.at(-1)?.[0]).toMatchObject({
+      expect(sessions.listAll.mock.calls.at(-1)?.[0]).toMatchObject({
         source: ["ch-1", "ch-2"],
       }),
     );
     expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
-    first.unmount();
-    // A link carrying the earlier ?channel= is read once as that source and rewritten.
-    renderPage("/conversations?channel=ch-1");
-    await waitFor(() => expect(loc()).toBe("/conversations?source=ch-1"));
+    // Then This Mac alone.
+    fireEvent.click(screen.getByRole("option", { name: "SeaTalk · Team bot" }));
+    fireEvent.click(screen.getByRole("option", { name: "Telegram · Personal" }));
+    fireEvent.click(screen.getByRole("option", { name: "This Mac" }));
+    await waitFor(() => expect(loc()).toContain("?source=local"));
+    await waitFor(() =>
+      expect(sessions.listAll.mock.calls.at(-1)?.[0]).toMatchObject({ source: ["local"] }),
+    );
+  });
+
+  test("a link carrying ?source=<uid> opens filtered by that channel", async () => {
+    renderPage("/conversations?source=ch-1");
+    await waitFor(() =>
+      expect(sessions.listAll.mock.calls[0]?.[0]).toMatchObject({ source: ["ch-1"] }),
+    );
+    expect(loc()).toBe("/conversations?source=ch-1");
   });
 
   test("the Agent pill narrows by agent and Clear filters resets everything", async () => {
@@ -417,7 +523,7 @@ describe("Conversations filter row", () => {
     fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
     await waitFor(() => expect(loc()).toContain("agent=codex"));
     await waitFor(() =>
-      expect(api.listConversations.mock.calls.at(-1)?.[0]).toMatchObject({ agent: ["codex"] }),
+      expect(sessions.listAll.mock.calls.at(-1)?.[0]).toMatchObject({ agent: ["codex"] }),
     );
     fireEvent.keyDown(document.body, { key: "Escape" });
     fireEvent.click(await screen.findByRole("button", { name: "Clear filters" }));
@@ -427,18 +533,19 @@ describe("Conversations filter row", () => {
 
 describe("Conversations list states", () => {
   acceptance("chat", "an empty conversation list offers no search", async () => {
-    api.listConversations.mockResolvedValue({ conversations: [], next_cursor: null, total: 0 });
+    sessions.listAll.mockResolvedValue({ sessions: [], next_cursor: null, unavailable: [] });
     renderPage();
     expect(await screen.findByText("No conversations yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New conversation" })).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Channel/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Source/ })).toBeNull();
   });
 
   acceptance("chat", "a search that matches nothing is not an empty list", async () => {
-    api.listConversations.mockImplementation(async (opts: { q?: string }) => ({
-      conversations: opts.q ? [] : [today],
+    sessions.listAll.mockImplementation(async (opts: { q?: string }) => ({
+      sessions: opts.q ? [] : [today],
       next_cursor: null,
-      total: opts.q ? 0 : 1,
+      unavailable: [],
     }));
     renderPage();
     await screen.findByText("Today one");
@@ -453,12 +560,48 @@ describe("Conversations list states", () => {
   });
 
   acceptance("chat", "a list that fails to load says so", async () => {
-    api.listConversations.mockRejectedValueOnce(new ApiError("INTERNAL_ERROR", "boom"));
+    sessions.listAll.mockRejectedValueOnce(new ApiError("INTERNAL_ERROR", "boom"));
     renderPage();
     expect(await screen.findByText("Couldn’t load conversations")).toBeInTheDocument();
     listed(today);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Today one")).toBeInTheDocument();
+  });
+
+  acceptance(
+    "chat",
+    "one agent's sessions that cannot be read are named above the list",
+    async () => {
+      sessions.listAll.mockResolvedValue({
+        sessions: [today],
+        next_cursor: null,
+        unavailable: [{ agent: "codex", reason: "unreadable" }],
+      });
+      renderPage();
+      await screen.findByText("Today one");
+      // Claude Code's sessions are listed under one line naming Codex, with Retry.
+      const line = screen.getByText(/Couldn’t read Codex/).closest("p") as HTMLElement;
+      expect(line).toHaveTextContent("Couldn’t read Codex’s sessions");
+      expect(screen.queryByText("Couldn’t load conversations")).toBeNull();
+      sessions.listAll.mockResolvedValue({ sessions: [today], next_cursor: null, unavailable: [] });
+      fireEvent.click(within(line).getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(screen.queryByText(/Couldn’t read Codex/)).toBeNull());
+      expect(screen.getByText("Today one")).toBeInTheDocument();
+    },
+  );
+
+  test("a list that no agent could read is an error, not an empty list", async () => {
+    sessions.listAll.mockResolvedValue({
+      sessions: [],
+      next_cursor: null,
+      unavailable: [
+        { agent: "claude_code", reason: "x" },
+        { agent: "codex", reason: "y" },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByText("Couldn’t load conversations")).toBeInTheDocument();
+    expect(screen.queryByText("No conversations yet")).toBeNull();
   });
 });
 
@@ -469,8 +612,8 @@ describe("Opening a conversation in the terminal", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   });
 
-  const alpha = makeConversation({
-    id: "c1",
+  const alpha = makeSessionRow({
+    conversation_id: "c1",
     title: "Alpha rollout",
     cwd: "/work/api",
     session_id: "abc-123",
@@ -480,8 +623,8 @@ describe("Opening a conversation in the terminal", () => {
 
   acceptance("chat", "a row opens its session in the preferred terminal", async () => {
     localStorage.setItem("coffer.preferredTerminal", "iterm");
-    const codex = makeConversation({
-      id: "c2",
+    const codex = makeSessionRow({
+      conversation_id: "c2",
       title: "Beta",
       agent_key: "codex",
       cwd: "/work/web",
@@ -551,7 +694,7 @@ describe("Opening a conversation in the terminal", () => {
     // The list, the filters and the detection are read with the terminal never on them.
     expect(openTerminal).not.toHaveBeenCalled();
     expect(vi.mocked(fsApi.listTerminals)).toHaveBeenCalledWith();
-    expect(api.listConversations.mock.calls.flat().join()).not.toContain("kitty");
+    expect(sessions.listAll.mock.calls.flat().join()).not.toContain("kitty");
 
     fireEvent.click(row("Alpha rollout"));
     await waitFor(() => expect(openTerminal).toHaveBeenCalledTimes(1));
@@ -559,8 +702,8 @@ describe("Opening a conversation in the terminal", () => {
   });
 
   acceptance("chat", "copy command copies the resume command", async () => {
-    const codex = makeConversation({
-      id: "c2",
+    const codex = makeSessionRow({
+      conversation_id: "c2",
       title: "Beta",
       agent_key: "codex",
       cwd: "/work/it's",
@@ -583,7 +726,7 @@ describe("Opening a conversation in the terminal", () => {
   });
 
   acceptance("chat", "a conversation with no native session cannot be opened", async () => {
-    listed(makeConversation({ id: "n", title: "Fresh", session_id: null }));
+    listed(makeSessionRow({ conversation_id: "n", title: "Fresh", session_id: null }));
     renderPage();
     await screen.findByText("Fresh");
     const open = openButton("Fresh");
@@ -612,15 +755,15 @@ describe("Opening a conversation in the terminal", () => {
   });
 
   describe("a session that is running", () => {
-    const running = makeConversation({
-      id: "r",
+    const running = makeSessionRow({
+      conversation_id: "r",
       title: "Busy one",
       cwd: "/work/api",
       session_id: "abc-123",
       running: true,
     });
-    const waiting = makeConversation({
-      id: "w",
+    const waiting = makeSessionRow({
+      conversation_id: "w",
       title: "Waiting one",
       cwd: "/work/api",
       session_id: "def-456",
@@ -642,11 +785,11 @@ describe("Opening a conversation in the terminal", () => {
         within(dialog).getByRole("button", { name: "Stop the turn and continue in the terminal" }),
       ).toBeVisible();
       expect(openTerminal).not.toHaveBeenCalled();
-      expect(api.interruptTurn).not.toHaveBeenCalled();
+      expect(chat.interruptTurn).not.toHaveBeenCalled();
     });
 
     acceptance("chat", "stopping the turn then opens the terminal", async () => {
-      api.interruptTurn.mockResolvedValue(undefined);
+      chat.interruptTurn.mockResolvedValue(undefined);
       listed(waiting);
       renderPage();
       await screen.findByText("Waiting one");
@@ -658,8 +801,8 @@ describe("Opening a conversation in the terminal", () => {
       );
       // The turn is interrupted exactly as the row's Stop does, then the terminal opens.
       await waitFor(() => expect(openTerminal).toHaveBeenCalledTimes(1));
-      expect(api.interruptTurn.mock.calls[0][0]).toBe("w");
-      expect(api.interruptTurn.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(chat.interruptTurn.mock.calls[0][0]).toBe("w");
+      expect(chat.interruptTurn.mock.invocationCallOrder[0]).toBeLessThan(
         openTerminal.mock.invocationCallOrder[0],
       );
       expect(openTerminal).toHaveBeenCalledWith({
@@ -678,12 +821,12 @@ describe("Opening a conversation in the terminal", () => {
       fireEvent.click(row("Waiting one"));
       fireEvent.click(await screen.findByRole("button", { name: "Answer in SeaTalk" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(api.interruptTurn).not.toHaveBeenCalled();
+      expect(chat.interruptTurn).not.toHaveBeenCalled();
       expect(openTerminal).not.toHaveBeenCalled();
     });
 
     test("a stop the daemon refuses keeps the dialog open and opens nothing", async () => {
-      api.interruptTurn.mockRejectedValue(new ApiError("CONVERSATION_NOT_FOUND", "gone"));
+      chat.interruptTurn.mockRejectedValue(new ApiError("CONVERSATION_NOT_FOUND", "gone"));
       listed(running);
       renderPage();
       await screen.findByText("Busy one");

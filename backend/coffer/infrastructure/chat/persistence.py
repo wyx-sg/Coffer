@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import (
-    func,
     or_,
     select,
     update,
@@ -115,12 +114,6 @@ class ConversationRepo:
                 stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
-
-    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
-        async with self._sm() as session:
-            stmt = select(func.count()).select_from(ConversationModel)
-            stmt = listing_filter(stmt, contains=contains, narrow=narrow)
-            return int((await session.execute(stmt)).scalar_one())
 
     async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:
         wanted = set(session_ids)

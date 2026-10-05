@@ -1,7 +1,8 @@
 """The Conversations list's source badge, directory and Running mark (spec chat
-"Show channel conversations on the Conversations page").
+"Show every agent's sessions on the Conversations page").
 
-Driven through the real conversation routes on the channel fixture's real chat
+Driven through ``GET /api/v1/agent-sessions?source=<channel uids>`` (the
+channel-only listing, read from the conversation index) on the channel fixture's real chat
 platform and channel core, with ``ChannelPlaces`` wired as the composition root
 wires it: each row says which channel, chat and thread it came from, its
 directory and native session id, and whether a turn is running — and the
@@ -20,23 +21,32 @@ import pytest_asyncio
 from fastapi import FastAPI
 from sqlalchemy import event
 
+from coffer.application.agent.agent_sessions_listing import AgentSessionsListing
 from coffer.application.channel.places import ChannelPlaces
 from coffer.application.chat import turn_state
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http import errors as err_handlers
+from coffer.surfaces.http.agent_session_routes import all_router as agent_sessions_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
 from coffer.surfaces.http.chat.dependencies import (
-    get_channel_places,
     get_chat_service,
     get_turn_orchestrator,
+    set_channel_places,
 )
 from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.session_conversation_wiring import ChatChannelIndex
+from coffer.surfaces.http.workspace_dependencies import get_agent_sessions_listing
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 
 _TOKEN = "badge-token"
+
+
+class _NoAgents:
+    async def list(self) -> list[Resource]:
+        return []
 
 
 @pytest_asyncio.fixture
@@ -45,10 +55,17 @@ async def client(env: ChannelEnv) -> AsyncIterator[httpx.AsyncClient]:
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(conversation_router)
+    app.include_router(agent_sessions_router)
+    listing = AgentSessionsListing(
+        agents=_NoAgents(),
+        sessions=None,  # type: ignore[arg-type]  # the channel-only branch asks no agent
+        index=ChatChannelIndex(chat=env.chat, resources=env.resources),
+    )
+    app.dependency_overrides[get_agent_sessions_listing] = lambda: listing
     app.dependency_overrides[get_chat_service] = lambda: env.chat
     app.dependency_overrides[get_turn_orchestrator] = lambda: env.orchestrator
     app.dependency_overrides[get_resource_service] = lambda: env.resources
-    app.dependency_overrides[get_channel_places] = lambda: places
+    set_channel_places(places)
     set_active_token(_TOKEN)
     c = httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -59,13 +76,15 @@ async def client(env: ChannelEnv) -> AsyncIterator[httpx.AsyncClient]:
         yield c
     finally:
         await c.aclose()
+        set_channel_places(None)
         set_active_token(None)
 
 
-async def _listed(client: httpx.AsyncClient) -> dict[str, dict[str, Any]]:
-    resp = await client.get("/api/v1/chat/conversations")
+async def _listed(env: ChannelEnv, client: httpx.AsyncClient) -> dict[str, dict[str, Any]]:
+    uids = {c.channel_uid for c in (await env.chat.page_conversations(limit=500)).items}
+    resp = await client.get("/api/v1/agent-sessions", params={"source": ",".join(sorted(uids))})
     assert resp.status_code == 200, resp.text
-    return {c["id"]: c for c in resp.json()["conversations"]}
+    return {c["conversation_id"]: c for c in resp.json()["sessions"]}
 
 
 async def _seatalk(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
@@ -153,7 +172,7 @@ async def test_each_row_names_its_source_chat_and_directory(
     # A conversation no channel owns is not on the list.
     orphan = await env.chat.create_conversation(agent_key="builtin")
 
-    rows = await _listed(client)
+    rows = await _listed(env, client)
 
     assert orphan.id not in rows
     assert set(rows) == {dm, group_thread}
@@ -188,7 +207,7 @@ async def test_a_parallel_thread_carries_its_mark(
     parallel = await env.active_conversation(resource, "owner", "t1")
     assert parallel is not None
 
-    place = (await _listed(client))[parallel]["channel_binding"]["place"]
+    place = (await _listed(env, client))[parallel]["channel_binding"]["place"]
 
     assert place["parallel_mark"] == "🧵#1 deploy check"
     assert place["chat_kind"] == "direct"
@@ -200,12 +219,12 @@ async def test_a_running_turn_is_marked(env: ChannelEnv, client: httpx.AsyncClie
     dm = await _opened_by(env, resource, adapter)
 
     with _running(dm):
-        row = (await _listed(client))[dm]
+        row = (await _listed(env, client))[dm]
         single = (await client.get(f"/api/v1/chat/conversations/{dm}")).json()
 
     assert row["running"] is True
     assert single["running"] is True
-    assert (await _listed(client))[dm]["running"] is False
+    assert (await _listed(env, client))[dm]["running"] is False
 
 
 async def test_a_deleted_channel_leaves_no_platform(
@@ -215,7 +234,7 @@ async def test_a_deleted_channel_leaves_no_platform(
     dm = await _opened_by(env, resource, adapter)
     await env.resources.delete(resource.uid, actor="test")
 
-    binding = (await _listed(client))[dm]["channel_binding"]
+    binding = (await _listed(env, client))[dm]["channel_binding"]
 
     assert binding["channel_uid"] == resource.uid
     assert binding["channel"] is None
@@ -228,12 +247,12 @@ async def test_the_listing_reads_a_constant_number_of_queries(
     resource, adapter = await _seatalk(env)
     await _opened_by(env, resource, adapter)
     with _counting_queries(env) as one_row:
-        assert len(await _listed(client)) == 1
+        assert len(await _listed(env, client)) == 1
 
     await _opened_by(env, resource, adapter, chat_id="grp-1", thread_id="th-1", chat_kind="group")
     await _opened_by(env, resource, adapter, chat_id="grp-1", thread_id="th-2", chat_kind="group")
     with _counting_queries(env) as three_rows:
-        assert len(await _listed(client)) == 3
+        assert len(await _listed(env, client)) == 3
 
     assert one_row, "the listener saw the listing's queries"
     assert len(three_rows) == len(one_row)

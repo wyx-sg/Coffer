@@ -1,8 +1,8 @@
-// pages/ConversationsPage.tsx — spec chat "Show channel conversations on the
-// Conversations page". `/conversations` is a list and nothing else: the
-// conversations IM channels (SeaTalk, Telegram) opened, filtered by search,
-// channel and agent in the URL. There is no conversation view, no reply box and
-// no New conversation. Pressing a row opens its session in the preferred terminal.
+// pages/ConversationsPage.tsx — spec chat "Show every agent's sessions on the
+// Conversations page". `/conversations` lists every session of every agent,
+// wherever it was started, filtered by search, source and agent in the URL; its
+// header starts a New conversation. There is no conversation view and no reply
+// box. Pressing a row opens its session in the preferred terminal.
 import { ConversationsIndex } from "@/components/conversations/ConversationsIndex";
 
 export function ConversationsPage() {

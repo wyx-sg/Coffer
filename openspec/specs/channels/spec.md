@@ -470,8 +470,9 @@ latter confirming first) instead of a banner. Changing the machine, replacing
 the secret and deleting live in the Settings tab. The detail pane MUST split into two tabs, in this order: **Overview**, the
 default, at the bare `/channels/<uid>` — a single column of sections — who can use it (the paired owners as a bordered
 list, each with Remove, and Add owner below it), the default agent, the agents the
-channel may drive (its reach) and the latest conversations it started, with an
-Open Conversations link filtered by `?source=<uid>`; it lists no commands — and **Settings**, at `/channels/<uid>/settings` — the
+channel may drive (its reach) and one link, **Conversations from this channel →**, to the
+Conversations page filtered by `?source=<uid>` — the conversations themselves are listed there
+only ([chat](../chat/spec.md) "Show every agent's sessions on the Conversations page"); it lists no commands — and **Settings**, at `/channels/<uid>/settings` — the
 settings below, the machine that runs it (see "Bind each channel to the one
 machine that runs it") and its secrets, and the channel's deletion. Choosing a tab
 changes the address and nothing else.
@@ -550,6 +551,11 @@ and `PATCH /api/v1/resources/{uid}`.
 - **GIVEN** a registered channel
 - **WHEN** `/channels/<uid>/settings` is opened, and then the Overview tab is chosen
 - **THEN** the first shows the channel's settings, and choosing Overview moves the address to the bare `/channels/<uid>`
+
+#### Scenario: a channel's Overview links to its conversations instead of listing them
+- **GIVEN** a channel that has started two conversations
+- **WHEN** its Overview renders
+- **THEN** it shows no list of conversations and one link, Conversations from this channel, to `/conversations?source=<uid>`
 
 ### Requirement: Audit the events that grant the right to drive turns
 Channel events MUST be audited where an event grants or moves the right to
@@ -1106,7 +1112,7 @@ Coffer-hosted channels MUST have a unified management surface. A management
 view lists every Coffer-hosted channel with its status, paired owner, agent, and
 health, mirroring the MCP-server / memory / skill management surfaces; each
 channel's secrets (bot tokens, app secrets) are held in the Coffer vault.
-The Channels page holds each channel's setup, connection status and settings only: it shows no conversation history, and each channel links to the Conversations page filtered to that channel (spec [chat](../chat/spec.md) "Show channel conversations on the Conversations page"). Externally-hosted channels are out of scope (a non-goal).
+The Channels page holds each channel's setup, connection status and settings only: it shows no conversation history, and each channel links to the Conversations page filtered to that channel (spec [chat](../chat/spec.md) "Show every agent's sessions on the Conversations page"). Externally-hosted channels are out of scope (a non-goal).
 
 #### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
 - **GIVEN** a registered and running Coffer-hosted channel with a paired owner

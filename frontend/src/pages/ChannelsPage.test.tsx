@@ -55,19 +55,6 @@ vi.mock("@/lib/hooks/useMachines", () => ({
   useThisMachineId: () => ({ machineId: HERE, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [AGENT] }) }));
-vi.mock("@/lib/hooks/useChannelConversations", () => ({
-  useChannelConversations: () => ({
-    isPending: false,
-    data: [
-      {
-        id: "conv-1",
-        title: "Standup thread",
-        preview: "what changed yesterday",
-        updated_at: "2026-10-02T08:00:00Z",
-      },
-    ],
-  }),
-}));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
@@ -360,21 +347,35 @@ acceptance("channels", "a channel links to its conversations instead of showing 
     "href",
     `/conversations?source=${TEAM.uid}`,
   );
-  // Setup and connection status on Overview, settings on Settings — and no
-  // tab, table or list of the channel's conversations.
   expect(screen.getByTestId("channel-state-word")).toBeInTheDocument();
-  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-    "Overview",
-    "Settings",
-  ]);
-  expect(screen.queryByRole("tab", { name: /conversation|message|history/i })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
-  // What it does show is a short "recent" list of titles, not a list to read in place: a
-  // conversation has no page of its own to link to.
-  const recent = await screen.findByTestId("channel-recent-conversations");
-  expect(within(recent).getByText("Standup thread")).toBeInTheDocument();
-  expect(within(recent).queryByRole("link")).toBeNull();
 });
+
+acceptance(
+  "channels",
+  "a channel's Overview links to its conversations instead of listing them",
+  async () => {
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    expect(await screen.findByTestId("channel-conversations-link")).toHaveAttribute(
+      "href",
+      `/conversations?source=${TEAM.uid}`,
+    );
+    // Setup and connection status on Overview, settings on Settings — and no
+    // tab, table or list of the channel's conversations.
+    expect(screen.getByTestId("channel-state-word")).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Overview",
+      "Settings",
+    ]);
+    expect(screen.queryByRole("tab", { name: /conversation|message|history/i })).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    // One link, and nothing listed in place.
+    expect(screen.getByTestId("channel-conversations-link")).toHaveTextContent(
+      "Conversations from this channel",
+    );
+    expect(screen.queryByTestId("channel-recent-conversations")).toBeNull();
+  },
+);
 
 test("the Overview has no Commands section: the list lives in the reference docs", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);

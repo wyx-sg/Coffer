@@ -91,11 +91,12 @@ class TerminalService:
         prompt: str | None,
     ) -> None:
         """Start ``agent``'s session in ``terminal``: ``resume`` an existing one,
-        or begin a new one with ``prompt``. Raises ``FsTerminalInvalid`` before
-        anything is started and ``FsTerminalFailed`` when the launcher cannot be."""
+        begin a new one with ``prompt``, or (neither) a blank new one. Raises
+        ``FsTerminalInvalid`` before anything is started and ``FsTerminalFailed``
+        when the launcher cannot be."""
         cmd.program_for(agent)
-        if (resume is None) == (prompt is None):
-            raise FsTerminalInvalid("give exactly one of resume and prompt")
+        if resume is not None and prompt is not None:
+            raise FsTerminalInvalid("give at most one of resume and prompt")
         if resume is not None:
             cmd.check_session_id(resume)
         if prompt is not None and not prompt.strip():
@@ -106,8 +107,9 @@ class TerminalService:
         prompt_file: Path | None = None
         if resume is not None:
             command = cmd.resume_command(agent, resume, directory)
+        elif prompt is None:
+            command = cmd.blank_command(agent, directory)
         else:
-            assert prompt is not None
             prompt_file = self._handoff_dir() / f"{uuid.uuid4().hex}.txt"
             command = cmd.prompt_command(agent, prompt_file, directory)
         launch = (

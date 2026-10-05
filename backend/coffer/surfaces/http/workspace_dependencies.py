@@ -7,6 +7,7 @@ singleton shape, typed concretely.
 
 from __future__ import annotations
 
+from coffer.application.agent.agent_sessions_listing import AgentSessionsListing
 from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
@@ -75,6 +76,22 @@ def get_native_session_service() -> NativeSessionService:
     if _native_session_service is None:
         raise RuntimeError("native session service not initialised")
     return _native_session_service
+
+
+_agent_sessions_listing: AgentSessionsListing | None = None
+
+
+def set_agent_sessions_listing(svc: AgentSessionsListing) -> None:
+    """Called by the composition root once on startup."""
+    global _agent_sessions_listing
+    _agent_sessions_listing = svc
+
+
+def get_agent_sessions_listing() -> AgentSessionsListing:
+    """FastAPI Depends() target."""
+    if _agent_sessions_listing is None:
+        raise RuntimeError("agent sessions listing not initialised")
+    return _agent_sessions_listing
 
 
 _agent_hooks_service: AgentHooksService | None = None

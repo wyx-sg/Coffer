@@ -1,6 +1,6 @@
 // src/components/sessions/SessionList.tsx — the bordered list of SessionRows
-// under both the Conversations page and an agent's Sessions tab: no header row,
-// newest activity first, optionally under Today / Yesterday / Earlier bands that
+// under both the Conversations page and an agent's Sessions tab: a header row
+// naming the columns the list shows, newest activity first, optionally under Today / Yesterday / Earlier bands that
 // carry no counts, with skeleton rows while a page loads.
 import { Fragment, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { groupByTime } from "@/lib/conversations/time";
 import type { SessionRowData } from "@/lib/sessions/rows";
 import { cn } from "@/lib/utils";
-import { columnsOf, ROW_MIN_WIDTH } from "./columns";
+import { columnsOf, GRID, ROW_MIN_WIDTH, type SessionColumns } from "./columns";
 import { SessionRow } from "./SessionRow";
 
 type RowHandlers = Pick<
@@ -50,6 +50,29 @@ const skeletons = (n: number, prefix: string) =>
     </li>
   ));
 
+/** The header row: one heading per column the list shows, over the row cells (the actions column has none). */
+function HeaderRow({ columns }: { columns: SessionColumns }) {
+  const { t } = useTranslation();
+  const source = columns === "channel" || columns === "channel_agent";
+  const agent = columns === "agent" || columns === "channel_agent";
+  return (
+    <li
+      data-header
+      className={cn(
+        "grid h-8 items-center gap-x-3 pl-3.5 pr-2.5 text-2xs font-semibold text-text-muted",
+        GRID[columns],
+      )}
+    >
+      <span>{t("sessions.columns.title")}</span>
+      {source ? <span>{t("sessions.columns.source")}</span> : null}
+      {agent ? <span>{t("sessions.columns.agent")}</span> : null}
+      <span>{t("sessions.columns.directory")}</span>
+      <span className="text-right">{t("sessions.columns.lastActive")}</span>
+      <span aria-hidden />
+    </li>
+  );
+}
+
 export function SessionList({
   rows,
   ariaLabel,
@@ -89,6 +112,7 @@ export function SessionList({
         ROW_MIN_WIDTH[columns],
       )}
     >
+      <HeaderRow columns={columns} />
       {isLoading ? skeletons(4, "skeleton") : null}
       {isLoading
         ? null

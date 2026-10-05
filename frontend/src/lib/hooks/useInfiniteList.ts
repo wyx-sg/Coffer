@@ -13,8 +13,10 @@ import { keepPreviousData, useInfiniteQuery, type QueryKey } from "@tanstack/rea
 import { useMemo } from "react";
 
 /** @ui-only One page of a list: its rows, where the next page begins, and the count if the server knows it. */
-export interface ListPage<T> {
+export interface ListPage<T, X = undefined> {
   items: T[];
+  /** Anything else the page carries that the surface shows (the agents a cross-agent list could not read). */
+  extra?: X;
   /** The cursor of the next page; null when this was the last one. */
   next: string | null;
   total?: number;
@@ -27,10 +29,10 @@ export const FIRST_PAGE = 30;
 /** Rows in every page after it. */
 export const MORE_PAGE = 50;
 
-interface Args<T> {
+interface Args<T, X> {
   queryKey: QueryKey;
   /** Reads the page at `cursor` (null for the first); `signal` aborts it. */
-  fetchPage: (cursor: string | null, signal: AbortSignal) => Promise<ListPage<T>>;
+  fetchPage: (cursor: string | null, signal: AbortSignal) => Promise<ListPage<T, X>>;
   enabled?: boolean;
   /** Re-read every page this often (ms); leave out for a list that is read once. */
   refetchInterval?: number;
@@ -43,9 +45,11 @@ interface Args<T> {
 }
 
 /** @ui-only What a list surface renders from. */
-export interface InfiniteList<T> {
+export interface InfiniteList<T, X = undefined> {
   /** Every row loaded so far, in the order the server gave them. */
   items: T[];
+  /** What each page read so far carried besides its rows, in page order. */
+  extras: X[];
   /** The server's count of every matching row, when it gave one. */
   total: number | undefined;
   totalIsFloor: boolean;
@@ -64,7 +68,7 @@ export interface InfiniteList<T> {
   refetch: () => void;
 }
 
-export function useInfiniteList<T>({
+export function useInfiniteList<T, X = undefined>({
   queryKey,
   fetchPage,
   enabled = true,
@@ -72,7 +76,7 @@ export function useInfiniteList<T>({
   keepPrevious = true,
   staleTime,
   refetchOnFocus = false,
-}: Args<T>): InfiniteList<T> {
+}: Args<T, X>): InfiniteList<T, X> {
   const query = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam, signal }) => fetchPage(pageParam, signal),
@@ -88,11 +92,16 @@ export function useInfiniteList<T>({
     refetchOnWindowFocus: refetchOnFocus,
   });
   const items = useMemo(() => query.data?.pages.flatMap((p) => p.items) ?? [], [query.data]);
+  const extras = useMemo(
+    () => (query.data?.pages ?? []).flatMap((p) => (p.extra === undefined ? [] : [p.extra])),
+    [query.data],
+  );
   // The first page's total is the freshest the server gave for this query.
   const total = query.data?.pages[0]?.total;
   const { fetchNextPage, refetch } = query;
   return {
     items,
+    extras,
     total,
     totalIsFloor: query.data?.pages[0]?.totalIsFloor ?? false,
     hasMore: query.hasNextPage,

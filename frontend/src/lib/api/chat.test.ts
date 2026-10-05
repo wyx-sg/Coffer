@@ -1,15 +1,12 @@
 // The chat request functions over the typed client: what goes on the wire (URL,
-// method, body) and the cursor walk of the conversation listing.
+// method, body) of a conversation's rename, delete and interrupt.
 import { afterEach, beforeEach, describe, expect, test, vi, type MockInstance } from "vitest";
 
 import { chatApi } from "./chat";
 import { resetApiClient } from "./client";
-import { ApiError } from "./errors";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-
-const row = (id: string) => ({ id });
 
 let fetchSpy: MockInstance<typeof fetch>;
 
@@ -27,68 +24,6 @@ afterEach(() => {
 });
 
 const requestAt = (n: number) => fetchSpy.mock.calls[n][0] as Request;
-
-describe("chatApi.listConversations", () => {
-  test("reads one page by limit, cursor, search, channels and agents", async () => {
-    fetchSpy.mockResolvedValueOnce(json({ conversations: [row("a")], next_cursor: "c1" }));
-
-    const out = await chatApi.listConversations({
-      limit: 50,
-      cursor: "c0",
-      q: "deploy",
-      source: ["ch1", "ch2"],
-      agent: ["codex"],
-    });
-
-    expect(out.conversations.map((c) => c.id)).toEqual(["a"]);
-    expect(out.next_cursor).toBe("c1");
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const url = new URL(requestAt(0).url);
-    expect(url.pathname).toBe("/api/v1/chat/conversations");
-    expect(url.searchParams.has("archived")).toBe(false);
-    expect(url.searchParams.get("limit")).toBe("50");
-    expect(url.searchParams.get("source")).toBe("ch1,ch2");
-    expect(url.searchParams.get("agent")).toBe("codex");
-    expect(url.searchParams.get("cursor")).toBe("c0");
-    expect(url.searchParams.get("q")).toBe("deploy");
-  });
-
-  test("leaves out a cursor and a search it was not given", async () => {
-    fetchSpy.mockResolvedValueOnce(json({ conversations: [], next_cursor: null }));
-
-    await chatApi.listConversations({ limit: 30 });
-
-    const url = new URL(requestAt(0).url);
-    expect(url.searchParams.has("cursor")).toBe(false);
-    expect(url.searchParams.has("q")).toBe(false);
-  });
-
-  test("aborts the request with the signal it was given", async () => {
-    fetchSpy.mockImplementation(
-      (input) =>
-        new Promise((_, reject) => {
-          const signal = (input as Request).signal;
-          const abort = () => reject(new DOMException("aborted", "AbortError"));
-          if (signal.aborted) abort();
-          else signal.addEventListener("abort", abort);
-        }),
-    );
-    const controller = new AbortController();
-    const pending = chatApi.listConversations({ limit: 30 }, controller.signal);
-    controller.abort();
-    await expect(pending).rejects.toBeDefined();
-  });
-
-  test("surfaces a failure as an ApiError", async () => {
-    fetchSpy.mockImplementation(async () =>
-      json({ error: { code: "CURSOR_INVALID", message: "x" } }, 400),
-    );
-    await expect(chatApi.listConversations({ limit: 30 })).rejects.toMatchObject({
-      code: "CURSOR_INVALID",
-    });
-    await expect(chatApi.listConversations({ limit: 30 })).rejects.toBeInstanceOf(ApiError);
-  });
-});
 
 describe("chatApi requests", () => {
   test("renameConversation PATCHes the title", async () => {
