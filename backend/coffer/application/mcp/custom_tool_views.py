@@ -29,7 +29,7 @@ from coffer.domain.secrets import standalone_name
 GroupHealth = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretState = Literal["none", "present", "missing", "pending_approval"]
 #: The list's order: failing groups first (spec web-ui "Manage custom tool groups on
-#: one page"), switched-off ones last.
+#: their own page"), switched-off ones last.
 HEALTH_ORDER: dict[str, int] = {"failing": 0, "attention": 1, "healthy": 2, "idle": 3, "off": 4}
 WINDOW = timedelta(hours=24)
 
