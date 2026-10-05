@@ -336,6 +336,54 @@ Coffer MUST record **an audit event for every delivery fire**, so that whether d
 - **WHEN** the audit log is read
 - **THEN** one `memory_delivery_fired` event names moment `session_start`, and another names moment `prompt` and the note, and neither carries the note's text
 
+### Requirement: Present a partition as its memories
+The web UI MUST present partitions **as a table** once any exists; with none, it shows the first-run welcome every other empty surface shows — *Nothing distilled yet*, with **Update memory** and the connected agents whose memory Coffer found on this machine, or, with no agent connected, saying there is nothing to read and offering **Open Agents** to connect one. Each row MUST carry the partition's path ("Every project" for `global`), how many memories it holds, its sources (the agents it came from, "All agents" when every agent that contributed anywhere contributed here) and its state, in a column headed **Distilled**: when it was last distilled, "Not distilled yet", "Distilling…" while a pass over it runs, or "Repository missing". Healthy rows are grey: only **Repository missing** is coloured, and only that row offers a Delete, which asks first because it cannot be undone (a confirmation naming the partition, with Cancel and Delete partition). The partitions table has no section title and no count of partitions or memories, and a search box above it filters the rows by partition name and path. A partition's page MUST have no back link, and no Automatic control: its title is the partition's name alone, and its description line carries the path, the memory count and when it was last distilled (*~/code/coffer · 38 memories · distilled 2 h ago*). Its ⋯ menu holds **Reveal partition folder**, **Copy path**, **Distil history in Activity** and, only when its repository is gone, **Delete partition**. A partition not yet distilled shows no memory list: its Memories tab shows only the empty state, which offers no Update memory of its own because the header has one. Each memory in its list MUST name the agents it was learned from ("All agents" when that is every agent the partition came from). The partition listing MUST carry when its newest memory was last updated (`updated_at`, absent for a partition holding no memory), which the Overview's Memory tile words as "Last update 14 min ago". One partition's page MUST carry two tabs. **Memories** (the default) lists its memories — the web UI's label for what this spec and the disk call notes (中文 记忆条目) — beside the selected memory, with the partition's retired memories in a collapsed **Retired** group, each with the reason it was retired; choosing one opens it read-only beside the list (see below). The selected memory MUST be rendered with a meta line naming the agents it was learned from and when it was last updated, taken from its provenance ("Store each note as one Markdown file with frontmatter"), and its frontmatter MUST be shown as that metadata, not rendered as body text. The page MUST NOT show the agents' own memory: no native paths, no original agent text, no `.raw/` entry, no `MEMORY.md` index or `RETIRED.md` file, and no file tree — those stay in the data and on disk, and only this page leaves them out. The partition's own folder is reached through the partition's ⋯ menu (**Reveal partition folder**, **Copy path**); a memory's own file is reached from the memory (see below). The list and the memory MUST extend to the bottom of the window and scroll inside. The partition's page MUST offer **Tidy** in its header (see "Hand a partition's tidying to the agent"). The selected memory MUST offer **Edit** (see "Edit a memory in the web UI or in an editor") and **Open in editor** as visible buttons, and a ⋯ menu holding **Reveal in Finder** and **Delete…**; its body is rendered with find (⌘F). **Delete…** MUST ask first, and on confirming MUST retire the memory by hand (see "Delete a memory by hand"). A retired memory chosen from the Retired group MUST open read-only — its full title, a *Retired* tag, the date it was retired, its full reason and, when it was replaced by a memory still in the list, a **Replaced by <memory> →** link to it — and offers no Edit or Delete; the selection is addressed in the URL (`?retired=<index>`), and a Retired group so addressed opens expanded. The Memory page's title carries the **Experimental** tag ([experimental-features](../experimental-features/spec.md)); a partition's page does not. **Delivered** (`/memory/<uid>/delivered`) shows, read-only, the exact session-start text each agent receives in the partition's project, with a switch between agents ([web-ui](../web-ui/spec.md) "Show memory delivery on the Memory page"); it shows no hook state.
+
+#### Scenario: browse a partition's memories with a read-only preview
+- **GIVEN** the memory pages, with no partitions and then with one distilled partition that holds raw entries, a memory learned from Claude Code and Codex, and one retired memory
+- **WHEN** the partitions page and the partition's page render and the memory is chosen
+- **THEN** the partitions page shows the first-run welcome with none and the table with one, and the partition's page lists its memories beside the chosen one, whose meta line names Claude Code and Codex and when it was updated and whose frontmatter is not in the rendered body
+- **AND** the retired memory is in a collapsed Retired group with its reason, the page shows no file tree, no `MEMORY.md`, `RETIRED.md` or `.raw/`, no native path and no agent's original text, and the chosen memory offers Edit, Open in editor and a ⋯ menu with Reveal in Finder and Delete…
+- **AND** choosing the retired memory opens it read-only (`?retired=<index>`, group expanded) with its full title, a Retired tag, the retired date, its full reason and a **Replaced by <memory> →** link when a memory in the list replaced it, and no Edit or Delete…
+
+#### Scenario: the selected memory is edited in place
+- **GIVEN** a partition's page with a memory selected
+- **WHEN** the user chooses Edit, changes the body and saves
+- **THEN** the memory renders the saved body with a refreshed update time, and a save refused as changed offers the current text so nothing is lost (see "Edit a memory in the web UI or in an editor")
+- **AND** a retired memory in the Retired group offers no Edit
+
+#### Scenario: a partition lists when its newest memory was updated
+- **GIVEN** a partition holding a memory
+- **WHEN** the partitions are listed over REST
+- **THEN** the partition carries the time its newest memory was last updated as `updated_at`
+
+#### Scenario: provenance paths stay in the data, not on the page
+- **GIVEN** a memory whose provenance names a Claude Code fact file by its native path
+- **WHEN** the memory is read over the REST note route and shown on the partition's page
+- **THEN** the route's provenance still carries the agent, the native path and the read time, while the page shows only the agent's name and the update time
+
+#### Scenario: a partition's page names the partition and offers no way back
+- **GIVEN** a distilled partition for a repository, with 38 memories
+- **WHEN** its page renders
+- **THEN** the title is the partition's name with no Experimental tag and no back link, the description line carries the path, *38 memories* and when it was distilled, and there is no Automatic control
+- **AND** its header offers Tidy beside Update memory
+
+#### Scenario: deleting a partition still asks
+- **GIVEN** a partition whose repository is gone
+- **WHEN** the user chooses Delete on its row
+- **THEN** a confirmation names the partition and nothing is deleted until the user chooses Delete partition
+
+#### Scenario: a partition has a memories tab and a delivered tab
+- **GIVEN** a partition with memories and two connected agents
+- **WHEN** the user opens the partition and then its Delivered tab
+- **THEN** the page opens on Memories, and Delivered shows each agent's session-start text read-only with an agent switch and no hook state
+
+#### Scenario: the partitions table names each partition's sources and distil state
+- **GIVEN** a distilled partition learned from every agent, a partition holding entries read from Codex that no pass has distilled, and a partition whose repository is gone
+- **WHEN** the partitions page renders
+- **THEN** the Distilled column's first row shows when it was distilled, the second reads "Not distilled yet", and the third reads "Repository missing", the only coloured one and the only one with Delete
+- **AND** the first row shows "All agents", and the table has no sample memory column and no section title, and a search box filters the rows by partition name and path
+
 ### Requirement: Audit every lifecycle act
 Every lifecycle act — aggregation, distil, retirement, a memory edited, delivery installed, removed or fired — MUST record an audit event with its actor.
 
@@ -671,6 +719,29 @@ Reading one partition (`GET /api/v1/memory/partitions/{uid}`) MUST carry `tidy_h
 - **GIVEN** a partition holding near-duplicate notes, with the aggregate and distil switches on
 - **WHEN** the workers run through several intervals and no person chooses Tidy
 - **THEN** every note is as the distil pass wrote it, and no terminal or agent session was started
+
+### Requirement: Edit a memory in the web UI or in an editor
+A person MUST be able to edit a memory in the web UI or in their own editor. `PUT /api/v1/memory/partitions/{uid}/notes/{slug}` MUST replace the note's **body** with the text it is given, keep the note's frontmatter, stamp `updated_at`, and take the fingerprint the note's read returned. A note that changed since — an agent merged or rewrote it, or it was edited on disk — MUST be refused with `MEMORY_NOTE_CONFLICT` (409) and left untouched, and the refusal MUST carry what an editor needs to recover without a second save over the note: `saved: false`, and the note as it is now, its body and its fingerprint. An accepted save MUST record a `memory_note_edited` audit event naming the partition, the note and the user. Editing the file under `notes/` with any other tool needs no Coffer surface: the note is the file.
+
+An edited note is the note, not a suggestion: a distil pass never rewrites an existing note's body, so the edit persists until the note is retired or the derived tree is deleted. The derived tree stays disposable: deleting it and rebuilding reproduces the notes from the agents' own memory and loses every edit, and the guide says so.
+
+#### Scenario: a save replaces the body and keeps the frontmatter
+- **GIVEN** a note read with its fingerprint
+- **WHEN** a new body is saved with that fingerprint
+- **THEN** the note's body is the saved text, its `title`, `description`, `type` and provenance are unchanged, its `updated_at` is stamped, and the answer carries the new fingerprint
+- **AND** a `memory_note_edited` event names the partition, the note and the user
+
+#### Scenario: a save over a note that changed is refused with the current text
+- **GIVEN** a note read with its fingerprint, and an agent that then rewrote it
+- **WHEN** the save arrives with the fingerprint the editor loaded
+- **THEN** it is refused with 409 `MEMORY_NOTE_CONFLICT` with `saved` false and the body and fingerprint the note has now
+- **AND** the file still holds the agent's text, and saving the user's text again needs the new fingerprint
+
+#### Scenario: an edit made on disk needs no Coffer surface
+- **GIVEN** a note's file under `notes/`
+- **WHEN** a person changes its body in their own editor
+- **THEN** the next read of the note, the index line rendered from it and the next session's delivery carry the changed text
+- **AND** deleting the derived tree and rebuilding it gives back a note without that edit
 
 ### Requirement: Leave the raw directory to aggregation
 Distil MUST NOT write, modify or delete anything under `.raw/`. The two passes own two directories, which is what lets a distil pass be re-run without re-reading the agents.

@@ -1,8 +1,8 @@
-// frontend/src/components/skills/SkillMissingMaster.test.tsx
-// A skill whose master folder is gone: the Files tab is an empty state that
-// points at History, and the banner offers Restore from the vault's history —
-// the newest version that still had files, put back as a folder restore (a new
-// version); with no such version, Restore is disabled.
+// A skill whose master folder is gone: the Files tab is an empty state that says
+// there are no files to show, and the banner offers the hand-off that has an
+// agent look for a copy to put back (Copy prompt, the prompt the drift report
+// carries for this skill) and Delete skill…. Coffer restores nothing itself and
+// the banner has no Restore from History.
 import { expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,11 +14,13 @@ import { ToastProvider } from "@/components/ui/toast";
 import "@/i18n";
 import { makeSkill } from "@/test/skillsPageKit";
 
-vi.mock("@/lib/api/vault", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api/vault")>()),
-  vaultApi: { history: vi.fn(), diff: vi.fn(), restore: vi.fn(async () => ({})) },
+vi.mock("@/lib/api/skills", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/skills")>()),
+  skillsApi: { verify: vi.fn(), remove: vi.fn() },
 }));
-const { vaultApi } = await import("@/lib/api/vault");
+vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+const { skillsApi } = await import("@/lib/api/skills");
+const { agentProvidersApi } = await import("@/lib/api/agentProviders");
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -33,62 +35,33 @@ function mount() {
   );
 }
 
-const base = {
-  time: "2026-09-30T08:00:00Z",
-  writer: "disk",
-  display_writer: "disk",
-  actor: null,
-  machine: null,
-  summary: "Edited on disk",
-  operation: "edit",
-  restored_from: null,
-  removed: false,
-};
+const finding = (skill: string, kind: string, prompt: string | null) => ({
+  skill_name: skill,
+  agent_name: "",
+  kind,
+  target_path: `/vault/skills/${skill}`,
+  handoff: prompt === null ? null : { prompt },
+});
 
-test("restore puts back the newest version that still had files", async () => {
-  vi.mocked(vaultApi.history).mockResolvedValue({
-    path: "skills/hello/",
-    next_cursor: null,
-    versions: [
-      {
-        ...base,
-        version: "d".repeat(40),
-        paths: [{ path: "skills/hello/SKILL.md", status: "removed", added: 0, removed: 3 }],
-      },
-      {
-        ...base,
-        version: "c".repeat(40),
-        paths: [{ path: "skills/hello/SKILL.md", status: "modified", added: 1, removed: 1 }],
-      },
+test("the banner copies the prompt that looks for a copy and offers Delete skill…", async () => {
+  vi.mocked(agentProvidersApi.list).mockResolvedValue({ agents: [] } as never);
+  vi.mocked(skillsApi.verify).mockResolvedValue({
+    entries: [
+      finding("other", "missing_master", "Look for other."),
+      finding("hello", "missing_master", "Look for a copy of hello."),
     ],
-  });
+  } as never);
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   mount();
-  const restore = await screen.findByRole("button", { name: /Restore from History/ });
-  await waitFor(() => expect(restore).not.toBeDisabled());
-  fireEvent.click(restore);
-  await waitFor(() =>
-    expect(vaultApi.restore).toHaveBeenCalledWith({
-      path: "skills/hello/",
-      version: "c".repeat(40),
-      expected_fingerprint: null,
-    }),
-  );
+  expect(screen.getByRole("button", { name: "Delete skill…" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Restore from History/ })).toBeNull();
+  fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith("Look for a copy of hello."));
 });
 
-test("with no earlier version Restore is disabled", async () => {
-  vi.mocked(vaultApi.history).mockResolvedValue({
-    path: "skills/hello/",
-    next_cursor: null,
-    versions: [],
-  });
-  mount();
-  expect(await screen.findByRole("button", { name: /Restore from History/ })).toBeDisabled();
-});
-
-test("the Files tab explains the empty folder and opens History", () => {
-  const onOpenHistory = vi.fn();
-  render(<SkillMissingMaster onOpenHistory={onOpenHistory} />);
+test("the Files tab explains the empty folder and offers no History", () => {
+  render(<SkillMissingMaster />);
   expect(screen.getByText("No files to show")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Open History" }));
-  expect(onOpenHistory).toHaveBeenCalled();
+  expect(screen.queryByRole("button")).toBeNull();
 });

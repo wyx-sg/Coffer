@@ -255,6 +255,62 @@ Every collection MUST be named, catalogued and served to **every** agent, and a 
 - **THEN** the master `SKILL.md` names both collections and lists both catalogues
 - **AND** a request to disable either collection through the generic resource route is refused and changes nothing
 
+### Requirement: Save a document edited in the web UI
+`PUT /api/v1/knowledge/file` MUST replace a document's **body** with the text it is given and keep the document's frontmatter, and MUST take the fingerprint of the file the editor loaded: a file that changed on disk since is refused with `KNOWLEDGE_FILE_CONFLICT` (409) and left untouched. The refusal MUST carry what an editor needs to recover without a second save over the file — `saved: false`, and the document as it is on disk now, its body and its fingerprint — so the page can offer Reload, Compare and Copy my text. The read route MUST carry that fingerprint. An accepted save is a commit naming the user (see "Keep every document's history"). A path outside a document, a hidden path included, MUST be refused.
+
+#### Scenario: save an edited body and refuse a stale one
+- **GIVEN** a document `shopee/infra/cache.md` read with its fingerprint
+- **WHEN** a new body is saved with that fingerprint, and then another body is saved with the same, now stale, fingerprint
+- **THEN** the first save rewrites the body, keeps the frontmatter's title and description, and answers with the new fingerprint
+- **AND** the second is refused with 409 `KNOWLEDGE_FILE_CONFLICT` and the file still holds the first save's body
+
+#### Scenario: a stale save answers with what is on disk now
+- **GIVEN** a document open in the editor that an agent rewrites on disk before the user saves
+- **WHEN** the user's save arrives with the fingerprint the editor loaded
+- **THEN** it is refused 409 `KNOWLEDGE_FILE_CONFLICT` with `saved` false and the body and fingerprint the document has on disk now
+- **AND** the file holds the agent's text, and saving the user's text again needs the new fingerprint
+
+### Requirement: Delete a document or a collection at once and offer Undo
+The web UI MUST delete a document or a collection **at once**: its ⋯ menu's **Delete document** and **Delete collection** open no confirmation and ask for no typed name, because a delete is reversible (see "Restore a deleted collection or document from Recent changes"). The page MUST report the delete in a toast — *Deleted <name>* — carrying **Undo**, which restores what the delete removed from the vault history exactly as **Restore** in Recent changes does, and MUST then show the collection page after a document's delete and Recent changes after a collection's. The delete is audited as a `knowledge_deleted` event, and an Undo refused because the path or name is taken again MUST say so rather than overwrite it. Deleting a **memory partition** is not covered: it is irreversible and keeps its confirmation ([memory](../memory/spec.md) "Present a partition as its memories").
+
+#### Scenario: delete a document at once and undo it
+- **GIVEN** a document open in the Knowledge page
+- **WHEN** the user chooses ⋯ → Delete document
+- **THEN** no dialog asks, the document is gone, the collection page shows, and a toast reads *Deleted <name>* with Undo
+- **AND** choosing Undo puts the document back at its path with its text, as one new change by the user
+
+#### Scenario: delete a collection at once and find it in Recent changes
+- **GIVEN** a collection with a document
+- **WHEN** the user chooses ⋯ → Delete collection
+- **THEN** no dialog asks and no name is typed, the collection is gone, Recent changes shows, and the toast offers Undo
+- **AND** the delete is listed there with Restore even after the toast has closed
+
+### Requirement: Restore a deleted collection or document from Recent changes
+Deleting a document or a whole collection MUST keep what it removed in the knowledge history, and Recent changes MUST list the delete — a document's under its collection, a collection's with every file it removed — with **Restore**. Restoring MUST put back exactly what the delete removed, as it was just before it: a document into its collection; a collection as a new collection of the same name with its documents and its `README.md`. A collection restore MUST write every file first and register the collection's row last, so a failure part-way leaves no row and no partial directory: what was written is removed again and the same restore can be tried afresh. The restore MUST be one new change naming the user, carrying the version of the delete it restored, and recorded as a `knowledge_edited` audit event; the delete itself stays in the history. A restore MUST be refused with nothing written when it would overwrite — a document at the same path, `409 KNOWLEDGE_RESTORE_CONFLICT` naming it, or a collection of the same name, `409 KNOWLEDGE_COLLECTION_EXISTS` — and a change that is not a delete MUST be refused with `400 KNOWLEDGE_NOT_A_DELETE`. The route is `POST /api/v1/knowledge/changes/{version}/restore`, the web UI's own. Recent changes MUST say a refused restore on the delete's row, and show **Restored** instead of Restore once a later change restored it.
+
+#### Scenario: restore a deleted collection from Recent changes
+- **GIVEN** a collection holding a document and a `README.md`, which the user deletes
+- **WHEN** Recent changes is read and the user restores the delete it lists
+- **THEN** the collection is back under its name with its document and its README's description, as one new change by the user naming the delete it restored
+- **AND** a second restore of the same delete is refused because a collection of that name exists, and writes nothing
+
+#### Scenario: a collection restore that fails part-way leaves nothing behind
+- **GIVEN** a deleted collection whose restore fails while one of its files is being written
+- **WHEN** the user restores the delete
+- **THEN** the restore fails, no collection of that name is registered, and no directory of that name is left on disk
+- **AND** a second restore, once the cause is gone, succeeds
+
+#### Scenario: restore a deleted document
+- **GIVEN** a document the user deletes
+- **WHEN** the user restores the delete from Recent changes
+- **THEN** the document is back at its path with the text it had, and its history lists the restore, the delete and the versions before them
+
+#### Scenario: a restore that would overwrite is refused
+- **GIVEN** a deleted document whose path holds a new document again
+- **WHEN** the user restores the delete
+- **THEN** the restore is refused naming that document, and the new document is unchanged
+- **AND** restoring a change that is not a delete is refused as not a delete
+
 ### Requirement: Name a collection by its folder and edit its description in place
 A collection MUST carry no title: every surface — the web UI's tree, its pickers and its collection view, and the command palette — MUST show a collection by its folder name, and the collection routes MUST carry no `title` field. A title sent for a collection through the kind-agnostic update MUST be refused as a validation error, with nothing changed. What a collection is about MUST be its description, the opening paragraph of its `README.md` (see "Read a collection's description from its README"), and the web UI's collection view MUST show it as text that is edited **in place**: choosing it opens it for editing, leaving the field or pressing ⌘Enter saves it, Esc cancels, and a saved edit reports a toast with **Undo**. A save rewrites exactly that paragraph and leaves the rest of the README as it was, as one change naming the user, audited as an edit of the collection, and re-renders the guide skill; Undo puts the previous paragraph back as a change of its own. The route is `PUT /api/v1/knowledge/collections/{uid}/description`, the web UI's own. An empty description MUST be refused. Creating a collection in the web UI MUST ask for its name and for what belongs in it, both required. The collection's ⋯ menu in the web UI MUST offer **Rename…**, a dialog with the name field that sends the kind-agnostic update (`PATCH /api/v1/resources/{uid}` with the new `name`); the collection's directory MUST move with the name, and the page MUST stay on the same collection, whose address carries its uid. A refused name — taken by another collection or a folder already there, or not a valid folder name — MUST be shown under the field with the dialog still open and nothing changed.
 
@@ -437,6 +493,66 @@ The system MUST accept a document upload into a named collection, convert it to 
 - **GIVEN** a collection, and a file whose type no converter handles — `archive.bin` at the service, `payload.exe` at the route
 - **WHEN** it is uploaded
 - **THEN** the service raises `UnsupportedDocument` and the route answers 400 `INGEST_REJECTED` whose details name `reason` `unsupported_type` and `doc_type` `exe`, and the collection is left with no new file at all
+
+### Requirement: Show a collection as one tree of documents in the web UI
+The web UI MUST present a collection as **one tree** of its documents — no lanes, no tabs, no filter or retrieval box — with the chosen document in the pane beside it, the same two panes a skill's Files tab is. The tree MUST name every collection, folder and document by its name on disk: a collection has no title (see "Name a collection by its folder and edit its description in place"). Its **Collections** header strip MUST carry **New collection** (a name and what belongs in it; the collection reaches every agent through the coffer-guide skill). The tree MUST show no hidden entry, and no collection or folder carries a document count. Knowledge calls its files **documents** everywhere (memory keeps *notes*).
+
+A document's pane MUST carry **Document** and **History** tabs (see [web-ui](../web-ui/spec.md) "Show a knowledge document's history on its History tab"), a **Preview / Source** switch, **Edit**, and a ⋯ menu holding **Open in editor**, **Reveal in Finder** and **Delete document**. Its properties — who wrote it and when it was created — MUST be one line under its title; there is no side column. The **editor** MUST hold only the body: the frontmatter is shown read-only above it. The editor is the one place with an explicit save: it offers **Discard** and **Save**, and leaving it with unsaved changes — by choosing another page or closing the window — MUST ask first whether to leave without saving; the tree marks the open document with an unsaved dot meanwhile. It saves through "Save a document edited in the web UI". A save refused as stale MUST say the document changed on disk and that the text was not saved, and offer **Compare**, **Copy my text** and **Reload**, never a second save over it: **Compare** opens a conflict view with two choices, **Keep my edit** and **Take the version on disk**, each showing its diff, and the version left out stays in History; **Reload** asks first, because it discards the text being edited.
+
+A collection's page MUST show its folder name, its description edited in place (see "Name a collection by its folder and edit its description in place") and its properties: **Documents** and **Folder**, and it MUST carry **Tidy** (see "Hand a tidy to the agent"). A collection with no documents shows the same page with one line saying so and how to fill it — upload one, or drop Markdown files into the folder — and **Reveal in Finder**. The collection's ⋯ menu MUST hold **Reveal in Finder**, **Copy path** and **Delete collection** (see "Delete a document or a collection at once and offer Undo").
+
+The page MUST offer **Upload** into a collection as its one primary action — secondary while a document is being edited — and no other form that adds a document: people write through **Edit**, agents by writing files. The tree and the pane MUST extend to the bottom of the window and scroll inside.
+
+The Knowledge page's title MUST carry the **Experimental** tag ([experimental-features](../experimental-features/spec.md)).
+
+#### Scenario: the viewer shows one tree of documents
+- **GIVEN** a collection page whose tree holds a document at the root and one inside a folder
+- **WHEN** the page renders and a document's row is clicked
+- **THEN** there is one tree — no lane headings, no tabs, no filter input — listing both documents and no hidden entry
+- **AND** the document offers Edit, and Open in editor, Reveal in Finder and Delete document in its ⋯ menu
+
+#### Scenario: the page's one primary action is Upload
+- **GIVEN** the Knowledge page with a document open
+- **WHEN** the user reads the header, then chooses Edit
+- **THEN** Upload is the primary button, and while the document is being edited it is secondary
+- **AND** no control on the page adds a document from a typed title and body
+
+#### Scenario: edit a document in place
+- **GIVEN** a document open in a collection's pane
+- **WHEN** the user chooses Edit, changes the text and chooses Save
+- **THEN** the save is sent with the fingerprint the pane loaded, and the pane renders the saved body
+- **AND** choosing Discard, or leaving the page, with unsaved changes asks before the text is dropped
+
+#### Scenario: a collection page shows its properties
+- **GIVEN** a collection holding two documents
+- **WHEN** its page renders
+- **THEN** it shows the folder name, the description, the Documents and Folder properties and a Tidy button
+- **AND** its ⋯ menu offers Reveal in Finder, Copy path and Delete collection
+
+#### Scenario: a stale save offers compare, copy and reload
+- **GIVEN** a document open in the editor that an agent changes on disk before the user saves
+- **WHEN** the user saves
+- **THEN** the pane says the document changed on disk and the text was not saved, and offers Compare, Copy my text and Reload, with no way to save over it
+- **AND** Compare offers Keep my edit and Take the version on disk with their diffs, and Reload asks before dropping the text
+
+### Requirement: Keep every document's history
+Every accepted write to a collection MUST be a git commit naming its writer ([Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](../../../docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md)). The commits are the vault repository's, under `knowledge/` ([vault-storage](../vault-storage/spec.md) "Show, compare and restore any version of a vault file"): the knowledge root keeps no repository of its own. A person's save, restore or delete names the user; material promoted on arrival names whoever submitted it — the user, or, for a file an agent dropped into the inbox, the actor the file reports; a change that arrives through vault sync names sync; and a change any other writer made in the tree — a person's own editor, an agent's file tools — MUST be committed as an edit on disk before Coffer's next commit, so it is never counted as Coffer's. A commit an earlier version of Coffer made as a curation pass stays in the history and is listed under its writer. A document's history MUST list its versions newest first with their writer and time, show the diff of each, and restore any version as a new commit. The vault is a git repository on every machine that runs Coffer ([vault-storage](../vault-storage/spec.md) "Keep the vault a git repository whether or not it syncs"); a history read git cannot answer MUST answer 503 `KNOWLEDGE_HISTORY_UNAVAILABLE` while every write keeps working. git is looked for on every read, so one removed while the daemon runs is answered the same way. When the cause is that git is not installed, the refusal's details MUST carry `reason: "git_missing"` and `handoff`, a prompt asking the person's agent to install git on this machine — naming its OS and architecture and what needed git — the way that fits the machine, confirming it with `git --version`; neither the prompt nor the error's message may name an install command.
+
+#### Scenario: a document's history lists its versions with their writers
+- **GIVEN** a document that an upload created for the user, that an agent then edited on disk, and that the user then saved from the web UI
+- **WHEN** its history is read
+- **THEN** it lists three versions newest first, written by the user, by an edit on disk and by the user, each with its diff
+- **AND** restoring the oldest version writes a new commit and leaves the history intact
+
+#### Scenario: an edit on disk becomes a version of its own
+- **GIVEN** a document a person edits in their own editor, outside Coffer
+- **WHEN** the user then saves another document from the web UI
+- **THEN** the edited document's history shows the edit as its own version, written on disk, and the save's commit holds only the saved document
+
+#### Scenario: no git hands installing it to an agent
+- **GIVEN** a machine with no git
+- **WHEN** a document is written and its history is then read
+- **THEN** the write works and the read is refused `KNOWLEDGE_HISTORY_UNAVAILABLE` with reason `git_missing` and a prompt to install git naming this machine and `git --version`, and neither the prompt nor the message names an install command
 
 ### Requirement: Follow edits across collections in one feed
 The system MUST serve one feed of the recent changes to knowledge across every collection, newest first, paged by an opaque cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor") and filterable to one collection: every document a person or an agent wrote, restored or deleted, and every change from sync or from disk — each with its writer, its time, its collection and, for each document it touched, whether that document was added, changed or removed and how many lines were added and removed. A change an earlier version of Coffer made as a curation pass is listed with its writer. One change MUST be readable in full — every document it touched with its diff. The feed is `GET /api/v1/knowledge/changes`, the route of the web UI's Recent changes.

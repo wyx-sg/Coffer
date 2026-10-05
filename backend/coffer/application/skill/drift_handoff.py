@@ -97,14 +97,13 @@ def missing_master_handoff(*, skill: str, master: str, backup: pathlib.Path) -> 
                 "The skill's page in Coffer shows where it came from (its source: a Git "
                 "repository, a folder or an archive); ask me if you need it.",
                 "An agent's skills folder may still hold a copied (not linked) copy of it.",
-                "The master folder is in Coffer's vault, whose history keeps its earlier "
-                "versions: Restore on the skill's Files tab in Coffer puts back the newest "
-                "version that still had files.",
+                "The master folder is in Coffer's vault, a git repository whose history keeps "
+                "the master folder's earlier versions (`git log` and `git show` on that path).",
             ),
             steps=(
                 "Look for a copy: in those backups, in the agents' skills folders and at the "
                 "skill's source; only read.",
-                "Tell me what you found, which copy is the newest — Coffer's own restore "
+                "Tell me what you found, which copy is the newest — the vault's own history "
                 "included — and whether it is complete "
                 f"(a SKILL.md whose `name` is {skill}).",
                 f"Once I agree, copy (don't move) that copy to {master}; Coffer links it to the "

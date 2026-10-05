@@ -1,9 +1,8 @@
 // frontend/src/components/skills/SkillFileCard.test.tsx
 // The Files card (canvas 4.3.01, 4.3.12; Foundations 0.6.04) in its two forms: a
-// managed skill's (SkillFileTree — editable, an unsaved file wears an accent
-// dot) and the read-only one every folder Coffer doesn't own renders
-// (SkillReadOnlyFiles — a lock on every file, Reveal in the tree's header, the
-// reader without Edit). SKILL.md is first, then folders, then files; the open
+// managed skill's (SkillFileTree) and the one every folder Coffer doesn't own
+// renders (SkillReadOnlyFiles — a lock on every file). Both are read-only: Reveal
+// in the tree's header, Open in editor over the file, no Edit. SKILL.md is first, then folders, then files; the open
 // file is kept in `?file=`.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -24,7 +23,6 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     filesTree: vi.fn(),
     fileContent: vi.fn(),
     list: vi.fn(async () => ({ items: [] })),
-    writeFileContent: vi.fn(),
   },
 }));
 const { skillsApi } = await import("@/lib/api/skills");
@@ -57,7 +55,6 @@ function content(over: Partial<SkillFileContentOut> = {}): SkillFileContentOut {
     truncated: false,
     binary: false,
     size: 21,
-    fingerprint: "fp-1",
     ...over,
   };
 }
@@ -171,7 +168,7 @@ describe("a managed skill's Files card", () => {
     vi.mocked(skillsApi.fileContent).mockResolvedValue(content());
   });
 
-  test("an editable folder has no lock; the built-in one is locked file by file", async () => {
+  test("an imported skill's folder has no lock; the built-in one is locked file by file", async () => {
     const { unmount } = wrap(<SkillFileTree uid="sk-1" owner="deep-research" />);
     await screen.findByText("deep-research/SKILL.md");
     expect(screen.queryByRole("img", { name: /read-only/ })).not.toBeInTheDocument();
@@ -181,11 +178,13 @@ describe("a managed skill's Files card", () => {
     expect(screen.getByRole("img", { name: "Written by Coffer — read-only" })).toBeInTheDocument();
   });
 
-  test("a file with unsaved edits wears an accent dot in the tree", async () => {
+  test("an open file has no Edit and no unsaved state, only Open in editor and Reveal", async () => {
     wrap(<SkillFileTree uid="sk-1" owner="deep-research" />);
-    fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "changed" } });
+    expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Reveal in Finder" })).toHaveLength(2);
     const row = screen.getByRole("treeitem", { name: /SKILL\.md/ });
-    expect(within(row).getByRole("img", { name: "Unsaved changes" })).toHaveClass("bg-accent");
+    expect(within(row).queryByRole("img", { name: "Unsaved changes" })).not.toBeInTheDocument();
   });
 });

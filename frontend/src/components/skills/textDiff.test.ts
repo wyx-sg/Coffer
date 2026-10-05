@@ -1,7 +1,6 @@
-// frontend/src/components/skills/textDiff.test.ts — two texts as a change preview's diff, and a diff read backwards.
+// frontend/src/components/skills/textDiff.test.ts — two texts as a change preview's diff.
 import { describe, expect, test } from "vitest";
 
-import { reverseDiffLines } from "./reverseDiff";
 import { textChangeItem, textDiff } from "./textDiff";
 
 const lines = (n: number, edit?: [number, string]) =>
@@ -40,22 +39,5 @@ describe("textDiff", () => {
   test("a text change becomes a Coffer item with its counts", () => {
     const item = textChangeItem("f", "demo/SKILL.md", "a", "b");
     expect(item).toMatchObject({ agentType: "coffer", op: "modify", added: 1, removed: 1 });
-  });
-});
-
-describe("reverseDiffLines", () => {
-  test("swaps added and removed lines, their numbers and the hunk's ranges", () => {
-    const back = reverseDiffLines([
-      { kind: "hunk", text: "@@ -12,4 +12,5 @@ Workflow" },
-      { kind: "context", text: "keep", oldNo: 12, newNo: 12 },
-      { kind: "remove", text: "gone", oldNo: 13 },
-      { kind: "add", text: "new", newNo: 13 },
-    ]);
-    expect(back).toEqual([
-      { kind: "hunk", text: "@@ −12,5 +12,4 @@ Workflow" },
-      { kind: "context", text: "keep", oldNo: 12, newNo: 12 },
-      { kind: "add", text: "gone", oldNo: undefined, newNo: 13 },
-      { kind: "remove", text: "new", oldNo: 13, newNo: undefined },
-    ]);
   });
 });

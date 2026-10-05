@@ -140,6 +140,49 @@ Users MUST be able to list an agent's config files with, for each, its key, disp
 - **THEN** each entry carries its key, display name, absolute `path`, `folder_path` equal to the path's parent, format and `exists` flag
 - **AND** the existing file also carries its size and modified time while the missing one carries neither
 
+### Requirement: Read allowlisted config files without creating them
+Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
+
+#### Scenario: read an existing config file
+- **GIVEN** a registered agent whose `settings.json` exists
+- **WHEN** the user reads that config-file key
+- **THEN** Coffer returns the file's current text content, its format (`json`), and `exists=true`
+
+#### Scenario: read a not-yet-created config file
+- **GIVEN** a registered agent whose instructions file does not exist on disk
+- **WHEN** the user reads that config-file key
+- **THEN** Coffer returns empty content with `exists=false` and does not create the file
+
+### Requirement: Validate config-file content before saving it
+The system MUST expose a write (save) for the content of any allowlisted config file through the in-app editor and the REST API — one endpoint serving both. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown` files accept any content.
+
+#### Scenario: reject malformed config-file content
+- **GIVEN** a registered agent whose `settings.json` (a `json` file) exists
+- **WHEN** the user writes malformed content (e.g. invalid JSON) to that key through the in-app editor or the REST API
+- **THEN** Coffer responds `unprocessable_entity` (422), leaves the on-disk file unchanged, writes no backup, and records no write audit entry
+
+### Requirement: Write config files atomically with a backup and an audit entry
+Writes MUST be atomic (temp file + rename) and MUST copy the prior content, before the replace, to a timestamped backup under `~/.coffer/config-backups/` (Coffer's own folder: machine-local, outside the vault, and never beside the agent's file) so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (see "Back up and audit Coffer MCP install and uninstall") reuse the same atomic-write + backup machinery. Backups are named by their UTC time and cleaned by the `config_backups` retention policy ([resource-framework](../resource-framework/spec.md) "Retain config backups on an adjustable policy"), which always keeps the newest backup of each file.
+
+#### Scenario: save a config file with valid content
+- **GIVEN** a registered agent whose `settings.json` exists
+- **WHEN** the user writes new, well-formed content to that config-file key through the in-app editor or the REST API
+- **THEN** Coffer validates the content against the file's format, writes it atomically while copying the prior version to a backup under `~/.coffer/config-backups/` (nothing is written next to the file), records an `agent_config_file_written` audit entry, and the new content reads back on the next read
+
+#### Scenario: a config write leaves its backup in Coffer's folder and nothing beside the file
+- **GIVEN** `~/.claude/settings.json` holds content, and an older write already left a backup of it
+- **WHEN** Coffer writes new content to that file twice
+- **THEN** each write copied the prior content to its own timestamped file under `~/.coffer/config-backups/`, in a folder named for that one config file, and the newest backup holds the content the last write replaced
+- **AND** no `.bak` file, backup or temporary file is left in the agent's own directory, and nothing under `~/.coffer/vault` was written
+
+### Requirement: Address config files only by allowlisted key
+Config-file read and write MUST be addressable only by allowlisted `key` (never by caller-supplied path); an unknown key returns `not_found` (404) and performs no filesystem access.
+
+#### Scenario: reject config-file key outside the allowlist
+- **GIVEN** a registered agent
+- **WHEN** the user references a config-file key not in that agent type's curated allowlist
+- **THEN** Coffer responds `not_found` (404) and performs no filesystem read
+
 ### Requirement: Install Coffer's MCP server into an agent in one action
 Connecting an agent to Coffer ("Connect an agent to Coffer in one action") MUST install Coffer's own MCP server into it as the connection's `mcp` part. The install writes a `coffer` stdio MCP-server entry into the agent's MCP config, using the shape declared by that agent's manifest `McpInjectionSpec` and named by that type's child spec.
 
@@ -341,6 +384,38 @@ A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): i
 - **GIVEN** a registered agent whose directory config entry contains Markdown files (possibly nested)
 - **WHEN** the user lists that config entry
 - **THEN** Coffer returns the entry with `kind=directory` and its files (entry-relative path, size, modified time); a missing directory lists as `exists=false` with no files and is not created by the read
+
+### Requirement: Read, write and delete files inside a directory entry
+Users MUST be able to read individual files inside a directory entry; this read backs the UI's editor, . Write (create-on-write) and delete of individual files are available through the in-app editor and the REST API (`PUT` and `DELETE /api/v1/agents/{uid}/config-files/{key}/files/{relpath}`). Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension — a containment violation is `not_found` (404) and a disallowed extension `unprocessable_entity` (422). Writes reuse the machinery of "Write config files atomically with a backup and an audit entry"; deletion preserves the prior content as a backup under `~/.coffer/config-backups/`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
+
+#### Scenario: create a file inside a directory entry
+- **GIVEN** a registered agent with a directory config entry
+- **WHEN** the user writes content to a new `.md` file path inside the entry through the in-app editor or the REST API
+- **THEN** the file is created via the atomic-write machinery, an `agent_config_file_written` audit entry is recorded, and the next listing includes it
+
+#### Scenario: delete a file inside a directory entry
+- **GIVEN** a directory entry containing a file
+- **WHEN** the user deletes that file through the REST API
+- **THEN** the file is removed with its prior content preserved as a backup under `~/.coffer/config-backups/`, an `agent_config_file_deleted` audit entry is recorded, and the next listing no longer shows it
+
+#### Scenario: reject directory file paths outside the entry
+- **GIVEN** a registered agent with a directory config entry
+- **WHEN** the user addresses a child path containing `..`, an absolute path, or a non-`.md` extension
+- **THEN** the request is rejected before any filesystem access with `not_found` (404) for containment violations or `unprocessable_entity` (422) for a disallowed extension
+
+### Requirement: Reject stale config-file writes by fingerprint
+Config-file reads (single files and directory children) MUST return a content fingerprint. A write MAY carry that fingerprint back; a write that carries one MUST be rejected with `conflict` (409, `CONFIG_FILE_STALE`) when the on-disk content changed since the read, leaving the file untouched. A write that carries none is applied as sent, for scripted REST use. The in-app editor MUST always send the fingerprint of the read it started from, because it holds the file open for as long as the user edits — exactly the window another writer lands in. The agent's own process may rewrite a file between Coffer's read and write; the user then re-reads and retries, and the backup of every Coffer write keeps the prior content recoverable in the reverse race.
+
+#### Scenario: reject stale config-file writes
+- **GIVEN** a config file (or directory child) read by the user, then modified on disk by another process
+- **WHEN** the user writes back content carrying the fingerprint from the earlier read
+- **THEN** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write
+
+#### Scenario: write a config file over REST
+- **GIVEN** a registered agent with an existing `json` config file under the allowlisted key `<key>`, and well-formed JSON content to write
+- **WHEN** the user writes that content with `PUT /api/v1/agents/{uid}/config-files/<key>`
+- **THEN** the config file holds the written content, the newest backup under `~/.coffer/config-backups/` holds the prior content, and an `agent_config_file_written` audit entry is recorded
+- **AND** the same request with malformed JSON is refused with `unprocessable_entity` (422) and leaves the config file unchanged
 
 ### Requirement: Carry the model binding on the agent record
 The agent record MUST carry the model binding the rest of Coffer reads — `model` and `tier_models` (Claude Code only: the model for each of `opus`, `sonnet`, `haiku` and `fable`) — because the model is chosen at the point of USE and an agent is where it is used, not on the connection that serves it. That binding MUST be settable over REST as well as in the web UI: `PATCH /api/v1/agents/{uid}` carries `model` / `tier_models`, with an explicit null to unbind `tier_models`. A field the request omits is unchanged; `tier_models`, when sent, replaces the whole mapping. Only `tier_models` clears on an explicit null; `model` has no null that unbinds it, so an explicit null for it is treated as omitted. A tier other than the four is refused. The binding carries no `fast_model`: Claude Code's background model is its Haiku tier, and no reasoning effort: the agent runs at the effort its own configuration names. Projecting a binding into the agent's native config is provider-switching's.
