@@ -12,7 +12,8 @@ daemon write, a merge — is judged here before it may be committed:
   today): a file this build cannot read is ``NEWER_FORMAT``, a readable newer
   one is committed with a ``NEWER_FORMAT_READ_ONLY`` warning, an edit to an
   older one waiting for its layout upgrade is ``OLDER_FORMAT_EDIT``;
-- its config is validated by the kind's ``config_schema``, and a config key
+- its config is validated by the kind's ``config_schema`` as the kind reads
+  it — a ``${HOME}/...`` path the store wrote is expanded first — and a config key
   the schema does not declare is ``CONFIG_INVALID``, as the kinds' own models
   refuse it (``extra="forbid"``): a file written by hand or arriving in a
   merge is held to exactly what an API write is. A top-level document field
@@ -56,6 +57,7 @@ from coffer.domain.vault.document import DocumentInvalid, ResourceDocument, pars
 from coffer.domain.vault.findings import Finding, FindingCode
 from coffer.domain.vault.formats import FormatSpec, FormatStatus, read
 from coffer.domain.vault.layout import kind_of_resource_path
+from coffer.domain.vault.portability import expand_home
 from coffer.domain.vault.writes import Change, Fix, TreeReader, Validator, Verdict
 
 #: Every kind's resource document is at format 1 today.
@@ -69,6 +71,15 @@ _RETIRED_CONFIG_KEYS: Mapping[str, frozenset[str]] = {
     "provider": frozenset({"internal_default"}),
 }
 
+#: The home a file's ``${HOME}`` token is expanded against before its config is
+#: validated. The store writes a path under the writing machine's home as
+#: ``${HOME}/...`` and every reader expands it against its own home, so a kind
+#: only ever sees an absolute path there; validating the raw token would refuse
+#: every such path (a channel's ``directories``, its default ``cwd``). Any
+#: absolute home gives the same verdict, and a fixed one keeps the verdict the
+#: same on every machine that judges the file (a merge, a hand edit).
+_STAND_IN_HOME = "/home/coffer"
+
 #: ``{uid: (path, kind, name)}`` of every resource at ``HEAD``.
 HeadOwners = Callable[[], Mapping[str, tuple[str, str, str]]]
 
@@ -77,15 +88,17 @@ def _config_findings(
     path: str, doc: ResourceDocument, kind_def: Kind, uid: str | None
 ) -> list[Finding]:
     out: list[Finding] = []
-    known = known_keys(kind_def.config_schema, doc.config)
-    subset = doc.config
+    # The config as the kind reads it: ``${HOME}`` expanded, as the store does.
+    config = expand_home(doc.config, _STAND_IN_HOME)
+    known = known_keys(kind_def.config_schema, config)
+    subset = config
     if known is not None:
         retired = _RETIRED_CONFIG_KEYS.get(doc.kind, frozenset())
-        for key in doc.config:
+        for key in config:
             if key not in known and key not in retired:
                 message = f"config: {key!r} is not a {doc.kind} setting"
                 out.append(Finding(path, FindingCode.CONFIG_INVALID, message, uid))
-        subset = {k: v for k, v in doc.config.items() if k in known}
+        subset = {k: v for k, v in config.items() if k in known}
     try:
         kind_def.config_schema.model_validate(subset)
     except ValidationError as exc:
