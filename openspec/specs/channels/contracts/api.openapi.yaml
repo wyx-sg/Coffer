@@ -237,6 +237,57 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Remove Person
+  /api/v1/channels/{uid}/people/{sender_id}/avatar:
+    get:
+      description: |-
+        spec channels "Show each paired person's platform picture": the picture,
+        or 204 when there is none to show (not paired, none on the platform, the
+        platform refused, or the channel does not run here).
+      operationId: person_avatar_api_v1_channels__uid__people__sender_id__avatar_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: sender_id
+        required: true
+        schema:
+          title: Sender Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            image/*:
+              schema:
+                format: binary
+                type: string
+          description: The person's picture on the platform.
+        '204':
+          description: 'No picture: show the person''s initials.'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Person Avatar
   /api/v1/channels/{uid}/restart:
     post:
       description: Stop and rebuild the channel's adapter, reading its secret afresh.

@@ -27,7 +27,7 @@ Coffer 通过**每个消息渠道一条出站 WebSocket 连接**接收 SeaTalk �
 
 1. 在 SeaTalk 开放平台上创建一个应用。
 2. 启用 **Bot** 能力，并把机器人设为 **Online**。
-3. 申请机器人需要的权限范围。最少需要 *Send Message to Bot User*；可能需要你们组织的管理员审批。
+3. 申请机器人需要的权限范围。最少需要 *Send Message to Bot User*；可能需要你们组织的管理员审批。如果希望消息渠道的主人列表显示每位主人的 SeaTalk 头像，再加上 *Get Employee Profile*；没有它时列表显示姓名首字母。
 4. 记下应用的 **App ID** 和 **App Secret**。
 
 事件投递设置留到第 4 步：只有在 Coffer 持有连接时，SeaTalk 才能校验 WebSocket 投递。

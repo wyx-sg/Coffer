@@ -28,6 +28,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
+from coffer.infrastructure.channel.telegram_avatar import fetch_avatar
 from coffer.infrastructure.channel.telegram_caps import telegram_capabilities
 from coffer.infrastructure.channel.telegram_cards import edit_card
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
@@ -384,6 +385,9 @@ class TelegramAdapter:
 
     async def fetch_quoted(self, message_id: str) -> FetchedContext:
         return [], ()  # a quote already rides inline, as ``reply_to_message``
+
+    async def fetch_avatar(self, sender_id: str) -> bytes | None:  # AvatarFetchPort
+        return await fetch_avatar(self._client, self._call, self._file_base, self._name, sender_id)
 
     # -- transport -------------------------------------------------------------
 

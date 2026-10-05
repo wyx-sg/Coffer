@@ -78,6 +78,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/channels/{uid}/people/{sender_id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Person Avatar
+         * @description spec channels "Show each paired person's platform picture": the picture,
+         *     or 204 when there is none to show (not paired, none on the platform, the
+         *     platform refused, or the channel does not run here).
+         */
+        get: operations["person_avatar_api_v1_channels__uid__people__sender_id__avatar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/channels/{uid}/restart": {
         parameters: {
             query?: never;
@@ -663,6 +685,56 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    person_avatar_api_v1_channels__uid__people__sender_id__avatar_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                sender_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The person's picture on the platform. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            /** @description No picture: show the person's initials. */
             204: {
                 headers: {
                     [name: string]: unknown;

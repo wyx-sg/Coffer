@@ -28,12 +28,14 @@ from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 if TYPE_CHECKING:
+    from coffer.application.channel.avatars import PersonAvatars
     from coffer.application.channel.service import ChannelService
 
 router = APIRouter(prefix="/api/v1/channels", dependencies=[Depends(require_token)])
 
 _SERVICE: Any = None
 _CREDENTIAL_CHECK: CredentialCheck | None = None
+_AVATARS: PersonAvatars | None = None
 
 
 def set_channel_service(service: Any) -> None:
@@ -44,6 +46,11 @@ def set_channel_service(service: Any) -> None:
 def set_credential_check(check: CredentialCheck) -> None:
     global _CREDENTIAL_CHECK
     _CREDENTIAL_CHECK = check
+
+
+def set_channel_avatars(avatars: PersonAvatars | None) -> None:
+    global _AVATARS
+    _AVATARS = avatars
 
 
 def get_credential_check() -> CredentialCheck:
@@ -276,6 +283,34 @@ async def cancel_pairing_code(uid: str) -> None:
 @router.delete("/{uid}/people/{sender_id}", status_code=204, response_class=Response)
 async def remove_person(uid: str, sender_id: str, actor: str = Depends(get_actor)) -> None:
     await get_channel_service().remove_person(uid, sender_id, actor=actor)
+    if _AVATARS is not None:
+        _AVATARS.forget(uid, sender_id)
+
+
+@router.get(
+    "/{uid}/people/{sender_id}/avatar",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"image/*": {"schema": {"type": "string", "format": "binary"}}},
+            "description": "The person's picture on the platform.",
+        },
+        204: {"description": "No picture: show the person's initials."},
+    },
+)
+async def person_avatar(uid: str, sender_id: str) -> Response:
+    """spec channels "Show each paired person's platform picture": the picture,
+    or 204 when there is none to show (not paired, none on the platform, the
+    platform refused, or the channel does not run here)."""
+    avatar = await _AVATARS.get(uid, sender_id) if _AVATARS is not None else None
+    if avatar is None:
+        return Response(status_code=204)
+    return Response(
+        content=avatar.data,
+        media_type=avatar.content_type,
+        # Private to this user; the page re-reads it when the list does.
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @router.get("/{uid}/status", response_model=ChannelStatusOut)

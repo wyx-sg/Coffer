@@ -3520,7 +3520,7 @@
         "title": "Who can use it",
         "addOwner": "Add owner",
         "remove": "Remove",
-        "ownerLine": "Owner · direct chat · paired {{date}}",
+        "ownerLine": "Owner · paired {{date}}",
         "nobody": "Nobody yet. Until you pair, the bot ignores every message.",
         "onlyOwner": "Answers only these people; anyone else gets no reply.",
         "search": "Search owners",

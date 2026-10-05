@@ -148,6 +148,17 @@ owner re-pair from their phone. What a chat's live conversation is — and the
 agent a thread has stuck to — is not in it: those are `runs.db`'s thread tables
 below, because conversations are machine-local.
 
+## Pictures — `derived/channel-avatars/<channel>/<person>`
+
+Each paired person's picture on the platform, as the adapter fetched it (spec
+channels "Show each paired person's platform picture"). One file per channel
+and person, both named by a SHA-256 prefix (of the channel uid and of the
+`sender_id`), holding the image bytes alone: the type is read back from the
+bytes and the age from the file's modification time. It is the `derived`
+class: a copy of what the platform holds, never synced, and deleting it only
+costs a fetch. Removing a person deletes their file and deleting the channel its
+directory (`FileAvatarStore`, `infrastructure/channel/avatar_store.py`).
+
 ## `runs.db` — the thread tables
 
 The three tables below are history and machine-local: they name

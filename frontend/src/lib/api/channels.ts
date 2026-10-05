@@ -71,6 +71,23 @@ export async function removeChannelPerson(uid: string, senderId: string): Promis
   );
 }
 
+/** A paired person's picture on the platform as a `data:` URL, or `null` when
+ *  there is none to show — the list shows their initials then. The picture is
+ *  cosmetic, so a failed request is `null` too rather than an error. */
+export async function getChannelPersonAvatar(uid: string, senderId: string): Promise<string | null> {
+  const { data, response } = await getApiClient().GET("/channels/{uid}/people/{sender_id}/avatar", {
+    params: { path: { uid, sender_id: senderId } },
+    parseAs: "blob",
+  });
+  if (response.status !== 200 || !(data instanceof Blob) || data.size === 0) return null;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(data);
+  });
+}
+
 /** Runtime, pairing, and inbound status of a channel. */
 export function getChannelStatus(uid: string): Promise<ChannelStatus> {
   return unwrap(getApiClient().GET("/channels/{uid}/status", { params: { path: { uid } } }));

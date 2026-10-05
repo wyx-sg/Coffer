@@ -259,7 +259,7 @@ The header names the channel, its status and where it runs (`SeaTalk app 8231 ·
 
 **Overview** is one column, with these sections stacked:
 
-- **Who can use it** — a bordered list of the paired owners, each with when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
+- **Who can use it** — a bordered list of the paired owners, each with their picture on Telegram or SeaTalk (their initials when there is none), when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
 - **Agents** — **Default agent** and **Default model** (each saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel →** — one link to the Conversations page filtered to this channel. The commands the bot answers are not listed here; see [Channel commands](/reference/channel-commands).
 

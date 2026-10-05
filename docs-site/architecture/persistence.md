@@ -54,7 +54,7 @@ flowchart LR
 | **local** | `local/` | Machine-local resources (agents), reach, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` (and `skill-data/`, `config-backups/`) | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage; in `skill-data/`, the logs, journals and temp files skill scripts write; in `config-backups/`, the copies of agent config files made before each rewrite. | Never | It *is* history | You lose history |
-| **derived** | `derived/` | `derived.db`, the memory tree, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
+| **derived** | `derived/` | `derived.db`, the memory tree, Coffer's own guide skill, editor copies of sync conflicts, channel owners' pictures. | Never | No | Yes: it is rebuilt |
 
 Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
 
@@ -156,6 +156,7 @@ Every connection runs this pragma suite:
 
 ```text
 ~/.coffer/derived/
+├── channel-avatars/            paired people's pictures, as each channel's adapter fetched them
 ├── derived.db                   MCP server health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)

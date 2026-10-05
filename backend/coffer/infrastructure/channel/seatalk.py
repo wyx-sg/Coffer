@@ -27,6 +27,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
+from coffer.infrastructure.channel.seatalk_avatar import fetch_avatar
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
 from coffer.infrastructure.channel.seatalk_history import THREAD_PAGE_MAX, SeaTalkContextReader
@@ -385,6 +386,9 @@ class SeaTalkAdapter:
     async def fetch_quoted(self, message_id: str) -> FetchedContext:
         """The quoted message — resolvable only with this bot's own token."""
         return await self._context.quoted(message_id)
+
+    async def fetch_avatar(self, sender_id: str) -> bytes | None:  # AvatarFetchPort
+        return await fetch_avatar(self._get, self._client, self._name, sender_id)
 
     # -- transport -------------------------------------------------------------
 
