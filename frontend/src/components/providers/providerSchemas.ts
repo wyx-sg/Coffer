@@ -4,6 +4,7 @@
 // renders `issue.message` under the field verbatim. The endpoint must be a
 // full URL before anything is sent; a keyed provider needs its key on create;
 // a local runtime must be on this machine.
+import type { SecretFieldValue } from "@/lib/secretValue";
 import type { TFunction } from "i18next";
 import { z } from "zod";
 
@@ -30,7 +31,8 @@ export function endpointSchema(t: TFunction) {
       protocol: z.enum(PROTOCOLS),
       // Local: blank means "look on each runtime's default port".
       baseUrl: z.string().trim(),
-      secret: z.string(),
+      /** The key: a stored secret, or a new value stored when the provider is added. */
+      secret: z.custom<SecretFieldValue>(),
     })
     .superRefine((v, ctx) => {
       const url = v.baseUrl;
@@ -47,7 +49,7 @@ export function endpointSchema(t: TFunction) {
       if (!z.string().url().safeParse(url).success) {
         ctx.addIssue({ code: "custom", path: ["baseUrl"], message: t("providers.errors.baseUrl") });
       }
-      if (v.secret.length === 0) {
+      if (v.secret === null || (v.secret.kind === "new" && v.secret.value === "")) {
         ctx.addIssue({
           code: "custom",
           path: ["secret"],

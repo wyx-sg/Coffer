@@ -68,7 +68,7 @@ libc = "0.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 block2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSError"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSError", "NSGeometry"] }
 # `OSX_10_15` for `kSecUseDataProtectionKeychain`: access groups are only
 # enforced in the data-protection keychain.
 security-framework = { version = "3", features = ["OSX_10_15"] }

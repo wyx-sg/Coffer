@@ -8,15 +8,17 @@ import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
+import { SecretField } from "@/components/secret/SecretField";
 import type { ChannelType } from "@/lib/api/channels";
+import type { SecretFieldValue } from "@/lib/secretValue";
 import { FieldError } from "./FieldError";
 
 /** Every secret input the add form can show, across both channel types. */
 export interface ChannelSecretDraft {
-  botToken: string;
+  /** The one secret field's value: a stored secret, or a pasted one written when the channel is added. */
+  botToken: SecretFieldValue;
   appId: string;
-  appSecret: string;
+  appSecret: SecretFieldValue;
 }
 
 /** Translated validation messages, keyed by the input they belong under. */
@@ -24,11 +26,14 @@ export type ChannelFieldErrors = Partial<Record<keyof ChannelSecretDraft | "name
 
 export function AddChannelSecretFields({
   channelType,
+  channelName,
   draft,
   errors,
   onChange,
 }: {
   channelType: ChannelType;
+  /** What the person named the channel: a pasted secret is named after it. */
+  channelName: string;
   draft: ChannelSecretDraft;
   errors: ChannelFieldErrors;
   onChange: (patch: Partial<ChannelSecretDraft>) => void;
@@ -41,15 +46,14 @@ export function AddChannelSecretFields({
         <Label required htmlFor="channel-bot-token">
           {t("channels.dialog.botToken")}
         </Label>
-        <PasswordInput
+        <SecretField
           id="channel-bot-token"
           value={draft.botToken}
-          onChange={(e) => onChange({ botToken: e.target.value })}
-          autoComplete="off"
-          placeholder={t("channels.dialog.botTokenPlaceholder")}
-          aria-required
-          aria-invalid={errors.botToken ? true : undefined}
-          aria-describedby="channel-bot-token-error"
+          onChange={(botToken) => onChange({ botToken })}
+          defaultName={t("channels.dialog.botTokenName", { name: channelName || "Telegram" })}
+          aria-label={t("channels.dialog.botToken")}
+          invalid={errors.botToken ? true : undefined}
+          help={false}
         />
         <FieldError id="channel-bot-token-error" message={errors.botToken} />
         <p className="text-xs text-text-muted">{t("channels.dialog.telegramHint")}</p>
@@ -78,15 +82,14 @@ export function AddChannelSecretFields({
         <Label required htmlFor="channel-app-secret">
           {t("channels.dialog.appSecret")}
         </Label>
-        <PasswordInput
+        <SecretField
           id="channel-app-secret"
           value={draft.appSecret}
-          onChange={(e) => onChange({ appSecret: e.target.value })}
-          autoComplete="off"
-          placeholder={t("channels.dialog.appSecretPlaceholder")}
-          aria-required
-          aria-invalid={errors.appSecret ? true : undefined}
-          aria-describedby="channel-app-secret-error"
+          onChange={(appSecret) => onChange({ appSecret })}
+          defaultName={t("channels.dialog.appSecretName", { name: channelName || "SeaTalk" })}
+          aria-label={t("channels.dialog.appSecret")}
+          invalid={errors.appSecret ? true : undefined}
+          help={false}
         />
         <FieldError id="channel-app-secret-error" message={errors.appSecret} />
       </div>
