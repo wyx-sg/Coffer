@@ -806,8 +806,9 @@ export interface components {
         };
         /**
          * CliEditIn
-         * @description Change a hand-added tool; a field left out stays, ``null`` clears it.
-         *     A tool a skill or MCP server requires takes only ``description``.
+         * @description Change a tool; a field left out stays, ``null`` clears it. On a tool a
+         *     skill or MCP server requires, the fields are kept as the person's edits
+         *     and ``null`` brings back what the skills say.
          */
         CliEditIn: {
             /** Description */

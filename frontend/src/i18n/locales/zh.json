@@ -5175,7 +5175,7 @@
       "body": "填写命令名，或可执行文件的路径。",
       "editTitle": "编辑 {{command}}",
       "editBody": "更改 Coffer 对这个工具的检查内容。",
-      "describeBody": "写下这个工具用来做什么。最低版本和登录检查由需要它的技能和 MCP 服务器决定。",
+      "requiredBody": "有技能或 MCP 服务器需要这个工具。你在这里改的值会代替它们写的；清空某一项就恢复成它们的。最低版本取所有要求里最高的那个。",
       "command": "命令",
       "commandPlaceholder": "jq，或 /opt/tools/bin/jq",
       "fixed": "不可更改——Coffer 靠它找到这个工具。",

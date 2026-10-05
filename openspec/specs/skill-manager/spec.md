@@ -616,13 +616,18 @@ added by hand and missing raises no attention item, because nobody asked for it
 to work. `PATCH /api/v1/clis/{command}` changes the fields it carries (`null`
 clears one; the command itself is fixed) and `DELETE /api/v1/clis/{command}`
 drops the declaration only — a skill or server that requires the command keeps
-it listed — and both refuse a command nobody added by hand with 404
-`CLI_TOOL_NOT_DECLARED`, except that `PATCH` carrying only `description` MUST
-keep that description for any listed command: a command a skill or server
-requires is not the person's to declare, but what it is for is theirs to write.
-Such a description is kept in the same `cli-tools` document, under `notes`, and
-a hand-added tool's own description wins over it; a command nobody lists is
-refused with 404 `CLI_NOT_KNOWN`. A name added twice is refused with 409
+it listed — and refuses a command nobody added by hand with 404
+`CLI_TOOL_NOT_DECLARED`. `PATCH` on a command a skill, server or Coffer
+requires and nobody added by hand MUST keep the fields it carries as the
+person's edits: the command is not the person's to declare, so it stays not
+added by hand, but what they change wins over what the skills say, as a
+hand-added declaration's would — the title and login check replace the
+skills', the minimum still being the highest anyone asks for — and `null`
+drops an edit so the skills' value applies again. The description is kept in
+the same `cli-tools` document under `notes`, and the other fields under
+`edits`; a hand-added tool's own fields win over both, and adding the tool by
+hand drops its edits. A command nobody lists is refused with 404
+`CLI_NOT_KNOWN`. A name added twice is refused with 409
 `CLI_TOOL_EXISTS`, and a bad name, path, minimum version or login check with 400
 `CLI_TOOL_INVALID`. Each add, edit and removal MUST be audited. Coffer MUST NOT
 read a command's `--help`, build a tree of its subcommands or keep one: what it
@@ -646,11 +651,11 @@ knows of a tool is its path, its version and its login state.
 - **THEN** the tool is listed as added by hand after the first, its title is cleared by the second, and it is gone after the third
 - **AND** repeating the delete is refused with 404 `CLI_TOOL_NOT_DECLARED`
 
-#### Scenario: a required tool takes a description and nothing else
-- **GIVEN** a skill requiring `jq` and no declaration
-- **WHEN** the user sends `PATCH /api/v1/clis/jq` with only a description, then one with a title, then one describing a command nobody lists
-- **THEN** `jq` reads that description, still not added by hand, and the vault's `cli-tools` document keeps it under `notes`
-- **AND** the title is refused with 404 `CLI_TOOL_NOT_DECLARED` and the unknown command with 404 `CLI_NOT_KNOWN`
+#### Scenario: a required tool takes the person's edits
+- **GIVEN** a skill requiring `jq` titled `From skill` with minimum `1.5`, and no declaration
+- **WHEN** the user sends `PATCH /api/v1/clis/jq` with a description, then one with the title `JSON`, the minimum `1.7` and a login check, then one with the title and minimum `null`, then one describing a command nobody lists
+- **THEN** `jq` reads that description, title `JSON`, minimum `1.7` and that login check, still not added by hand and needed by the skill, and the vault's `cli-tools` document keeps the description under `notes` and the rest under `edits`
+- **AND** after the third it reads `From skill` and minimum `1.5` again, and the unknown command is refused with 404 `CLI_NOT_KNOWN`
 
 ### Requirement: Hand a required command to an agent with a prompt
 The system MUST NOT install, update or log in to a required command itself.

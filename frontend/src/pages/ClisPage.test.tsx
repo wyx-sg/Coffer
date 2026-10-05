@@ -325,20 +325,22 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("button", { name: "More actions for uv" })).toBeNull();
   });
 
-  acceptance("web-ui", "a required CLI's description is edited in a dialog", async () => {
+  acceptance("web-ui", "a required CLI is edited in the same dialog", async () => {
     api.list.mockResolvedValue(listOf([UV_READY]));
-    api.edit.mockResolvedValue({ ...UV_READY, description: "Runs Python tools." });
+    api.edit.mockResolvedValue({ ...UV_READY, title: "Astral uv" });
     renderPage("/clis/uv");
     await screen.findByRole("heading", { level: 2, name: "uv" });
     // The header has no field to type into: the description is text, edited through Edit.
     expect(screen.queryByRole("textbox", { name: "Description" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const field = await screen.findByRole("textbox", { name: "Description" });
-    fireEvent.change(field, { target: { value: "  Runs Python tools.  " } });
+    for (const name of ["Display name", "Minimum version", "Description", "Login check"]) {
+      expect(await screen.findByRole("textbox", { name })).toBeInTheDocument();
+    }
+    fireEvent.change(screen.getByRole("textbox", { name: "Display name" }), {
+      target: { value: "Astral uv" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(api.edit).toHaveBeenCalledWith("uv", { description: "Runs Python tools." }),
-    );
+    await waitFor(() => expect(api.edit).toHaveBeenCalledWith("uv", { title: "Astral uv" }));
   });
 
   test("the description reads as text under the header, and nothing shows without one", async () => {

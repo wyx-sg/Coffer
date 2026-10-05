@@ -107,11 +107,13 @@ class ToolStatesPort(Protocol):
 
 class DeclaredToolsPort(Protocol):
     """The tools the person added by hand (a vault state document), and the
-    descriptions they wrote for tools they did not add."""
+    descriptions and other changes they made to tools they did not add."""
 
     def all(self) -> list[DeclaredTool]: ...
 
     def notes(self) -> dict[str, str]: ...
+
+    def edits(self) -> dict[str, DeclaredTool]: ...
 
 
 class CliPathsPort(Protocol):
@@ -243,7 +245,8 @@ class CliRequirementService:
         servers = await self._servers.stdio_launchers() if self._servers else ()
         added = self._declared.all() if self._declared else ()
         notes = self._declared.notes() if self._declared else {}
-        return aggregate(parsed, servers, added, self._coffer, notes), warnings
+        edits = self._declared.edits() if self._declared else {}
+        return aggregate(parsed, servers, added, self._coffer, notes, edits), warnings
 
     async def _listing(self, *, force: bool) -> CliListing:
         required, warnings = await self._required()

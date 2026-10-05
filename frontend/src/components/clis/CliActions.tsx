@@ -1,7 +1,7 @@
 // src/components/clis/CliActions.tsx — Edit for every command-line tool, and ⋯ › Remove for one added by hand, in its detail header (board CliHeader).
 //
 // Edit opens the same dialog as Add CLI; for a tool only a skill or MCP server
-// requires it edits the description alone, and there is no ⋯ menu: the tool is
+// requires its changes are kept as the person's edits, and there is no ⋯ menu: the tool is
 // listed for as long as something needs it. Remove is the only item in the ⋯
 // menu, in danger text, and
 // asks in a 420 confirm: removing a hand-added tool that a skill also requires
