@@ -149,8 +149,12 @@ describe("UnmanagedSkillDetailPage", () => {
     expect(screen.getByText("Description")).toBeInTheDocument();
     expect(screen.getByText("~/.claude/skills/loose")).toBeInTheDocument();
     expect(screen.getByText("Claude Code’s skills directory")).toBeInTheDocument();
-    expect(await screen.findByText("SKILL.md")).toBeInTheDocument();
     expect(screen.getByText(/coffer reads this folder but doesn’t manage it/i)).toBeInTheDocument();
+    // The files are a count with a link to the Files tab, not their paths in a paragraph.
+    expect(await screen.findByText(/^\d+ files?$/)).toBeInTheDocument();
+    expect(screen.queryByText(/SKILL\.md/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View files" }));
+    expect(await screen.findByRole("treeitem", { name: "SKILL.md" })).toBeInTheDocument();
   });
 
   acceptance(

@@ -2118,7 +2118,8 @@
         "foundIn": "位于",
         "foundInSkills": "{{agent}} 的技能目录",
         "foundInAgentsDir": "共享的 ~/.agents/skills 目录",
-        "filesLabel": "文件"
+        "filesLabel": "文件",
+        "viewFiles": "查看文件"
       },
       "bulk": {
         "label": "已选技能",
