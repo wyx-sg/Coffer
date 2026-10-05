@@ -1,6 +1,6 @@
 // src/components/secret/AddSecretDialog.tsx — Add secret: a standalone secret under a minted id.
 //
-// The person gives a label and a value; Coffer mints the id the secret is cited by
+// The person gives a label, an optional description and a value; Coffer mints the id the secret is cited by
 // (`coffer://secret/<id>`), which the dialog then shows with Copy and a Done button. The label can
 // be changed later; the id never (spec secret "Mint every secret's id; a person names it").
 // The value is never shown back.
@@ -22,7 +22,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { translateApiError } from "@/lib/api/errors";
 import { useCopyText } from "@/lib/hooks/useCopyText";
 import { useAddSecret } from "@/lib/hooks/useSecrets";
-import { LABEL_MAX } from "./secretRows";
+import { DESCRIPTION_MAX, LABEL_MAX } from "./secretRows";
 
 interface Props {
   open: boolean;
@@ -36,14 +36,17 @@ export function AddSecretDialog({ open, onOpenChange }: Props) {
   const add = useAddSecret();
   const { copied, copy } = useCopyText();
   const labelId = useId();
+  const descriptionId = useId();
   const valueId = useId();
   const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
   const [value, setValue] = useState("");
 
   const { reset } = add;
   useEffect(() => {
     if (!open) return;
     setLabel("");
+    setDescription("");
     setValue("");
     reset();
   }, [open, reset]);
@@ -52,7 +55,7 @@ export function AddSecretDialog({ open, onOpenChange }: Props) {
 
   const submit = () => {
     if (!canSubmit) return;
-    add.mutate({ label: label.trim(), value });
+    add.mutate({ label: label.trim(), value, description: description.trim() || undefined });
   };
 
   const added = add.data;
@@ -110,6 +113,19 @@ export function AddSecretDialog({ open, onOpenChange }: Props) {
                 onChange={(e) => setLabel(e.target.value)}
               />
               <p className="text-xs text-text-muted">{t("secrets.add.labelHint")}</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={descriptionId} className={FIELD}>
+                {t("secrets.detail.description")}
+              </label>
+              <Input
+                id={descriptionId}
+                value={description}
+                maxLength={DESCRIPTION_MAX}
+                autoComplete="off"
+                placeholder={t("secrets.detail.descriptionPlaceholder")}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor={valueId} className={FIELD}>

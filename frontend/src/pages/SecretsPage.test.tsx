@@ -214,14 +214,15 @@ describe("SecretsPage", () => {
     // Importing the master key replaces this Mac's own; it is not offered here.
     expect(within(banner).queryByRole("link")).toBeNull();
     expect(within(banner).getByRole("button", { name: "Add values" })).toBeInTheDocument();
-    // The row says so, and the pane's own action is Add value, with reveal off.
+    // The row says so, reveal is off, and Edit takes the value.
     const list = screen.getByRole("group", { name: "Secrets" });
     expect(within(list).getAllByText("No value on this Mac")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Reveal in the Coffer app" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Add value" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add a value for sentry-token" });
-    fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "sntr" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add value" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit sentry-token" });
+    expect(dialog).toHaveTextContent("This Mac has no value for it yet.");
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "sntr" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Added a value for sentry-token")).toBeInTheDocument();
     expect(api.set).toHaveBeenCalledWith("secret/sentry-token", "sntr");
   });
@@ -244,36 +245,59 @@ describe("SecretsPage", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add secret" });
     // No name to type: a label and a value.
     fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "GitHub token" } });
+    fireEvent.change(within(dialog).getByLabelText("Description"), {
+      target: { value: "release bot's token" },
+    });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "ghp_x" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add secret" }));
     // Then the dialog offers the minted URI to copy, and waits for Done.
     expect(await within(dialog).findByText(`coffer://secret/${HEX}`)).toBeInTheDocument();
-    expect(api.add).toHaveBeenCalledWith("GitHub token", "ghp_x");
+    expect(api.add).toHaveBeenCalledWith("GitHub token", "ghp_x", "release bot's token");
     expect(api.set).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  test("the label and description save in place and leave the reference alone", async () => {
-    api.setNotes.mockResolvedValue({ ref: SEATALK.ref, label: "SeaTalk bot", description: null });
-    renderPage(at(SEATALK.ref));
-    const label = await screen.findByRole("textbox", { name: "Name" });
-    fireEvent.change(label, { target: { value: "SeaTalk bot" } });
-    fireEvent.blur(label);
-    await waitFor(() =>
-      expect(api.setNotes).toHaveBeenCalledWith(SEATALK.ref, { label: "SeaTalk bot" }),
-    );
-    const description = screen.getByRole("textbox", { name: "Description" });
-    description.focus();
-    fireEvent.change(description, { target: { value: "bot app secret" } });
-    fireEvent.keyDown(description, { key: "Enter" });
-    await waitFor(() =>
-      expect(api.setNotes).toHaveBeenCalledWith(SEATALK.ref, { description: "bot app secret" }),
-    );
-    // The list is read again, and the address did not move.
-    await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(1));
-    expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at(SEATALK.ref));
-  });
+  acceptance(
+    "web-ui",
+    "Edit changes a secret's name, description and value in one dialog",
+    async () => {
+      api.setNotes.mockResolvedValue({
+        ref: SEATALK.ref,
+        label: "SeaTalk bot",
+        description: "bot app secret",
+      });
+      renderPage(at(SEATALK.ref));
+      await screen.findByRole("region", { name: "Used by" });
+      // The header shows the name and description as text, with nothing to type into.
+      expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      const dialog = await screen.findByRole("dialog", { name: "Edit seatalk-app-secret" });
+      fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "SeaTalk bot" } });
+      fireEvent.change(within(dialog).getByLabelText("Description"), {
+        target: { value: "bot app secret" },
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      expect(await screen.findByText("Saved SeaTalk bot")).toBeInTheDocument();
+      // Only the notes changed: no value was written.
+      expect(api.setNotes).toHaveBeenCalledWith(SEATALK.ref, {
+        label: "SeaTalk bot",
+        description: "bot app secret",
+      });
+      expect(api.set).not.toHaveBeenCalled();
+      // The list is read again, and the address did not move.
+      await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(1));
+      expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at(SEATALK.ref));
+      // Then a new value alone, through the same dialog.
+      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      const again = await screen.findByRole("dialog", { name: /^Edit / });
+      expect(within(again).getByLabelText("New value")).toHaveValue("");
+      fireEvent.change(within(again).getByLabelText("New value"), { target: { value: "new" } });
+      fireEvent.click(within(again).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new"));
+      expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at(SEATALK.ref));
+    },
+  );
 
   test("a secret with a label is listed by it alone and searched by its description too", async () => {
     api.list.mockResolvedValue({
@@ -349,7 +373,7 @@ describe("SecretsPage", () => {
   test("the menu holds Copy reference and Delete, not the visible buttons", async () => {
     renderPage(at(SEATALK.ref));
     await screen.findByRole("region", { name: "Used by" });
-    expect(screen.getByRole("button", { name: "Replace value…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
     openMenu(SEATALK.ref);
     expect(
       screen.getByRole("menuitem", {
@@ -383,15 +407,16 @@ describe("SecretsPage", () => {
     expect(await screen.findByRole("button", { name: "Reveal in the Coffer app" })).toBeDisabled();
   });
 
-  test("replacing a value stores it at once and says so", async () => {
+  test("replacing the value in Edit stores it at once and says so", async () => {
     renderPage(at(SEATALK.ref));
-    fireEvent.click(await screen.findByRole("button", { name: "Replace value…" }));
-    const dialog = await screen.findByRole("dialog", {
-      name: "Replace the value of seatalk-app-secret",
-    });
+    await screen.findByRole("region", { name: "Used by" });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit seatalk-app-secret" });
     expect(dialog).toHaveTextContent("Channel SeaTalk");
+    // Nothing changed yet: Save waits.
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
     fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "new" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Replace value" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Replaced the value of seatalk-app-secret")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new");

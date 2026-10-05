@@ -55,6 +55,11 @@ def set_secret(
         "--name",
         help="Create a new secret with this label; Coffer mints its id",
     ),
+    description: str | None = typer.Option(
+        None,
+        "--description",
+        help="With --name: what the new secret is for",
+    ),
     value: str | None = typer.Option(
         None,
         "--value",
@@ -64,7 +69,7 @@ def set_secret(
         ),
     ),
 ) -> None:
-    """Create a secret with `--name "<label>"`, or replace an existing one by ref.
+    """Create a secret with `--name "<label>"` (and `--description`), or replace one by ref.
 
     A new secret is given a label by you and an id by Coffer: the command
     prints its ref and `coffer://secret/<id>`, which is how files cite it.
@@ -80,6 +85,9 @@ def set_secret(
     verbose = (ctx.obj or {}).get("verbose", False)
     if (ref is None) == (name is None):
         typer.echo('give --name "<label>" to create a secret, or a ref to replace one', err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
+    if description is not None and name is None:
+        typer.echo("--description goes with --name, for a new secret", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     if value is not None:
         typer.echo(
@@ -106,7 +114,10 @@ def set_secret(
             _cli_client.check(r, verbose=verbose)
             typer.echo(f"stored: {ref}")
             return
-        r = c.post("/secrets", json={"label": name, "value": secret})
+        body = {"label": name, "value": secret}
+        if description:
+            body["description"] = description
+        r = c.post("/secrets", json=body)
         _cli_client.check(r, verbose=verbose)
         minted = r.json()
     typer.echo(f"stored: {minted['ref']}")

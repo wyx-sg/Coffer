@@ -1,13 +1,14 @@
 // src/components/secret/SecretPane.tsx — the open secret in the Secrets page's detail pane.
 //
-// The header carries the name (the label, edited in place — empty falls back to a readable default)
-// and the description, also in place; the visible actions are Replace value… and Reveal value…, and
-// the ⋯ menu holds Copy reference and Delete…. Under the header, the overview: the reference, where
-// it lives, when it was last used and who uses it. The reference never changes, so
-// editing a note moves nothing that cites it. Its dialogs are the Secrets page's own. No value is
+// The header carries the name (the label — without one, a readable default) and, under it, the
+// description as text (nothing when there is none); the visible actions are Edit, which opens one
+// dialog for the name, description and value, and Reveal value…, and the ⋯ menu holds Copy
+// reference and Delete…. Under the header, the overview: the reference, where it lives, when it
+// was last used and who uses it. The reference never changes, so editing a note moves nothing
+// that cites it. Its dialogs are the Secrets page's own. No value is
 // shown until Reveal is confirmed (spec web-ui "Manage stored secrets on the Secrets page").
 import { useState } from "react";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -16,9 +17,8 @@ import { useToast } from "@/components/ui/toast";
 import type { SecretRef } from "@/lib/api/secret";
 import { presenceAvailable } from "@/lib/tauri";
 import { DeleteSecretDialog } from "./DeleteSecretDialog";
-import { ReplaceSecretDialog } from "./ReplaceSecretDialog";
+import { EditSecretDialog } from "./EditSecretDialog";
 import { RevealSecretDialog } from "./RevealSecretDialog";
-import { SecretNoteField } from "./SecretNoteField";
 import { SecretOverview } from "./SecretOverview";
 import { displayName, isMissingHere, referenceOf } from "./secretRows";
 
@@ -27,7 +27,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Dialog = "replace" | "reveal" | "delete" | null;
+type Dialog = "edit" | "reveal" | "delete" | null;
 
 export function SecretPane({ row, onDeleted }: Props) {
   const { t } = useTranslation();
@@ -65,24 +65,18 @@ export function SecretPane({ row, onDeleted }: Props) {
         <span className="mt-1 inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
           <KeyRound className="size-4" strokeWidth={1.75} aria-hidden />
         </span>
-        {/* The name keeps room to be read and edited; on a narrow pane the actions wrap below it. */}
-        <div className="flex min-w-[12rem] flex-1 flex-col gap-0.5">
-          <SecretNoteField
-            row={row}
-            field="label"
-            placeholder={name}
-            className="text-lg font-semibold"
-          />
-          <SecretNoteField
-            row={row}
-            field="description"
-            placeholder={t("secrets.detail.descriptionPlaceholder")}
-            className="text-xs text-text-muted"
-          />
+        <div className="flex min-w-[12rem] flex-1 flex-col gap-0.5 pt-0.5">
+          <h2 className="min-w-0 break-words text-lg font-semibold text-text">{name}</h2>
+          {row.description ? (
+            <p className="min-w-0 break-words text-xs text-text-muted" data-testid="secret-description">
+              {row.description}
+            </p>
+          ) : null}
         </div>
         <span className="inline-flex shrink-0 items-center gap-2 pt-1">
-          <Button size="sm" variant="outline" onClick={() => setDialog("replace")}>
-            {missing ? t("secrets.row.addValue") : t("secrets.menu.replace")}
+          <Button size="sm" variant="outline" onClick={() => setDialog("edit")}>
+            <Pencil aria-hidden />
+            {t("common.edit")}
           </Button>
           <Button
             size="sm"
@@ -101,7 +95,7 @@ export function SecretPane({ row, onDeleted }: Props) {
         <SecretOverview row={row} />
       </div>
 
-      <ReplaceSecretDialog row={dialog === "replace" ? row : null} onOpenChange={close} />
+      <EditSecretDialog row={dialog === "edit" ? row : null} onOpenChange={close} />
       <RevealSecretDialog row={dialog === "reveal" ? row : null} onOpenChange={close} />
       <DeleteSecretDialog
         row={dialog === "delete" ? row : null}

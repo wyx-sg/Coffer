@@ -5331,8 +5331,7 @@
       "select": "选择 {{name}}",
       "missing": "这台 Mac 上没有值",
       "pending": "等待批准",
-      "localReadable": "本机进程可读",
-      "addValue": "添加值"
+      "localReadable": "本机进程可读"
     },
     "kind": {
       "local_process": "coffer run（本机程序）",
@@ -5361,7 +5360,6 @@
     },
     "menu": {
       "label": "{{name}} 的操作",
-      "replace": "替换值…",
       "reveal": "显示值…",
       "revealInApp": "在 Coffer 应用中显示",
       "copyRef": "复制引用（{{reference}}）",
@@ -5382,6 +5380,15 @@
       "labelPlaceholder": "GitHub token",
       "addedTitle": "已添加 {{name}}",
       "addedHint": "在文件中这样引用它："
+    },
+    "edit": {
+      "title": "编辑 {{name}}",
+      "body": "修改密钥的名称、描述或值。",
+      "labelHint": "引用它的地址不会变。",
+      "valuePlaceholder": "留空则保留当前值",
+      "storeHint": "这台 Mac 上还没有它的值。",
+      "usedBy": "使用方：{{citers}}。",
+      "saved": "已保存 {{name}}"
     },
     "replace": {
       "title": "替换 {{name}} 的值",
@@ -5596,10 +5603,7 @@
       "value": "值",
       "present": "在这台 Mac 上",
       "access": "访问",
-      "approvals": "审批",
       "approved": "已批准",
-      "label": "名称",
-      "labelPlaceholder": "你怎么称呼这个密钥",
       "uri": "URI",
       "copyUri": "复制 URI"
     },

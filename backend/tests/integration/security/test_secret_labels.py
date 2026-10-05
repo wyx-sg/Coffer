@@ -114,12 +114,19 @@ def test_notes_go_with_the_secret(d: BoundaryDaemon) -> None:
     spec="secret", scenario="a secret added on the page gets a minted id and its label"
 )
 def test_a_secret_added_on_the_page_gets_a_minted_id_and_its_label(d: BoundaryDaemon) -> None:
-    minted = _add(d, "GitHub token")
+    r = d.client.post(
+        "/api/v1/secrets",
+        json={"label": "GitHub token", "description": "release bot's token", "value": VALUE},
+    )
+    assert r.status_code == 201, r.text
+    minted = r.json()
 
     assert MINTED.match(minted["ref"])
     assert minted["uri"] == "coffer://" + minted["ref"]
     assert d.value(minted["ref"]) == VALUE
-    assert _row(d, minted["ref"])["label"] == "GitHub token"
+    row = _row(d, minted["ref"])
+    assert row["label"] == "GitHub token"
+    assert row["description"] == "release bot's token"
     assert VALUE not in str(d.audit_all())
 
 
@@ -129,13 +136,18 @@ def test_a_person_cannot_choose_an_id(d: BoundaryDaemon, monkeypatch: pytest.Mon
     assert refused.status_code == 422 and d.value("secret/orders-db") is None
     point_cli_at(d, monkeypatch)
 
-    out = CliRunner().invoke(cli_app, ["secret", "set", "--name", "Orders DB"], input=VALUE + "\n")
+    out = CliRunner().invoke(
+        cli_app,
+        ["secret", "set", "--name", "Orders DB", "--description", "orders replica"],
+        input=VALUE + "\n",
+    )
 
     assert out.exit_code == 0, out.output
     uri = re.search(r"coffer://secret/([0-9a-f]{32})", out.output)
     assert uri is not None
     assert d.value("secret/" + uri.group(1)) == VALUE
     assert _row(d, "secret/" + uri.group(1))["label"] == "Orders DB"
+    assert _row(d, "secret/" + uri.group(1))["description"] == "orders replica"
     again = CliRunner().invoke(cli_app, ["secret", "set", "secret/orders-db"], input=VALUE + "\n")
     assert again.exit_code != 0 and d.value("secret/orders-db") is None
 

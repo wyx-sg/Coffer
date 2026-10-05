@@ -5331,8 +5331,7 @@
       "select": "Select {{name}}",
       "missing": "No value on this Mac",
       "pending": "Waiting for approval",
-      "localReadable": "Readable by local processes",
-      "addValue": "Add value"
+      "localReadable": "Readable by local processes"
     },
     "kind": {
       "local_process": "coffer run (local programs)",
@@ -5361,7 +5360,6 @@
     },
     "menu": {
       "label": "Actions for {{name}}",
-      "replace": "Replace value…",
       "reveal": "Reveal value…",
       "revealInApp": "Reveal in the Coffer app",
       "copyRef": "Copy reference ({{reference}})",
@@ -5382,6 +5380,15 @@
       "labelPlaceholder": "GitHub token",
       "addedTitle": "Added {{name}}",
       "addedHint": "Cite it from a file as:"
+    },
+    "edit": {
+      "title": "Edit {{name}}",
+      "body": "Change the secret's name, description or value.",
+      "labelHint": "The reference it is cited by stays the same.",
+      "valuePlaceholder": "Leave empty to keep the current value",
+      "storeHint": "This Mac has no value for it yet.",
+      "usedBy": "Used by {{citers}}.",
+      "saved": "Saved {{name}}"
     },
     "replace": {
       "title": "Replace the value of {{name}}",
@@ -5596,10 +5603,7 @@
       "value": "Value",
       "present": "On this Mac",
       "access": "Access",
-      "approvals": "Approvals",
       "approved": "Approved",
-      "label": "Name",
-      "labelPlaceholder": "What you call this secret",
       "uri": "URI",
       "copyUri": "Copy URI"
     },

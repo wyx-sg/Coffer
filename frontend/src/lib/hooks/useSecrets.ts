@@ -63,8 +63,16 @@ export function useDeleteSecret() {
 export function useAddSecret() {
   const refresh = useRefreshSecrets();
   return useMutation({
-    mutationFn: ({ label, value }: { label: string; value: string }) =>
-      secretsApi.add(label, value),
+    mutationFn: ({
+      label,
+      value,
+      description,
+    }: {
+      label: string;
+      value: string;
+      description?: string;
+    }) =>
+      description ? secretsApi.add(label, value, description) : secretsApi.add(label, value),
     onSuccess: refresh,
   });
 }

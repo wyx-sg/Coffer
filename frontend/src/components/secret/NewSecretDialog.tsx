@@ -1,5 +1,5 @@
 // src/components/secret/NewSecretDialog.tsx — New secret…: the small dialog a secret field's menu opens.
-// Label + value → stored under an id Coffer mints → the caller selects it (by that id). A person
+// Label (+ optional description) + value → stored under an id Coffer mints → the caller selects it (by that id). A person
 // never types the id.
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import { useAddSecret } from "@/lib/hooks/useSecrets";
-import { LABEL_MAX, standaloneName } from "./secretRows";
+import { DESCRIPTION_MAX, LABEL_MAX, standaloneName } from "./secretRows";
 
 interface Props {
   open: boolean;
@@ -35,14 +35,17 @@ export function NewSecretDialog({ open, onOpenChange, defaultLabel = "", onCreat
   const { toast } = useToast();
   const add = useAddSecret();
   const labelId = useId();
+  const descriptionId = useId();
   const valueId = useId();
   const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
   const [value, setValue] = useState("");
 
   const { reset } = add;
   useEffect(() => {
     if (!open) return;
     setLabel(defaultLabel);
+    setDescription("");
     setValue("");
     reset();
   }, [open, defaultLabel, reset]);
@@ -53,7 +56,11 @@ export function NewSecretDialog({ open, onOpenChange, defaultLabel = "", onCreat
   const submit = async () => {
     if (!canSubmit) return;
     try {
-      const added = await add.mutateAsync({ label: trimmed, value });
+      const added = await add.mutateAsync({
+        label: trimmed,
+        value,
+        description: description.trim() || undefined,
+      });
       toast.success(t("secrets.add.added", { name: trimmed }));
       onCreated(standaloneName(added.ref) ?? added.ref);
       onOpenChange(false);
@@ -89,6 +96,19 @@ export function NewSecretDialog({ open, onOpenChange, defaultLabel = "", onCreat
               onChange={(e) => setLabel(e.target.value)}
             />
             <p className="text-xs text-text-muted">{t("secrets.add.labelHint")}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={descriptionId} className={LABEL}>
+              {t("secrets.detail.description")}
+            </label>
+            <Input
+              id={descriptionId}
+              value={description}
+              maxLength={DESCRIPTION_MAX}
+              autoComplete="off"
+              placeholder={t("secrets.detail.descriptionPlaceholder")}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor={valueId} className={LABEL}>
