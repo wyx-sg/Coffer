@@ -9,11 +9,13 @@ import { Check, Copy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { HelpTip } from "@/components/HelpTip";
 import { RelativeTime } from "@/components/RelativeTime";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { SecretRef } from "@/lib/api/secret";
 import { useCopyText } from "@/lib/hooks/useCopyText";
+import { useRequestLocalAccess, useRevokeLocalAccess } from "@/lib/hooks/useSecrets";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { kindMeta } from "@/lib/overview/kinds";
 import { cn } from "@/lib/utils";
@@ -84,6 +86,48 @@ function UsedByLine({ citer: cited, row }: { citer: Citer; row: SecretRef }) {
   );
 }
 
+/** The Access row of a standalone secret: whether `coffer run` may hand it to local programs. */
+function LocalAccessValue({ row, name }: { row: SecretRef; name: string }) {
+  const { t } = useTranslation();
+  const request = useRequestLocalAccess();
+  const revoke = useRevokeLocalAccess();
+  const state = row.local_access;
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="min-w-0 truncate" data-testid="local-access-state">
+        {state === "on" ? (
+          t("secrets.localAccess.on")
+        ) : state === "pending" ? (
+          <StatusWord tone="warn">{t("secrets.localAccess.pending")}</StatusWord>
+        ) : (
+          t("secrets.localAccess.off")
+        )}
+      </span>
+      <HelpTip>{t("secrets.localAccess.help")}</HelpTip>
+      {state === "off" ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={request.isPending}
+          onClick={() => request.mutate(name)}
+        >
+          {t("secrets.localAccess.allow")}
+        </Button>
+      ) : null}
+      {state === "on" ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={revoke.isPending}
+          onClick={() => revoke.mutate(name)}
+        >
+          {t("secrets.localAccess.revoke")}
+        </Button>
+      ) : null}
+    </span>
+  );
+}
+
 export function SecretOverview({ row }: { row: SecretRef }) {
   const { t, i18n } = useTranslation();
   const missing = isMissingHere(row);
@@ -92,6 +136,7 @@ export function SecretOverview({ row }: { row: SecretRef }) {
   const waiting = row.bindings.filter(
     (b) =>
       b.status === "pending" &&
+      b.destination_kind !== "local_process" &&
       !row.cited_by.some((c) => c.kind === b.destination_kind && c.uid === b.destination_uid),
   );
   return (
@@ -117,7 +162,14 @@ export function SecretOverview({ row }: { row: SecretRef }) {
             <StatusWord tone="ok">{t("secrets.detail.present")}</StatusWord>
           )}
         </dd>
-        {row.readable_by_local_processes ? (
+        {row.local_access != null && standaloneName(row.ref) !== null ? (
+          <>
+            <dt className={TERM}>{t("secrets.detail.access")}</dt>
+            <dd className={DEF}>
+              <LocalAccessValue row={row} name={standaloneName(row.ref) as string} />
+            </dd>
+          </>
+        ) : row.readable_by_local_processes ? (
           <>
             <dt className={TERM}>{t("secrets.detail.access")}</dt>
             <dd className={DEF}>{t("secrets.row.localReadable")}</dd>

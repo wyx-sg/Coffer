@@ -21,7 +21,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.secret.boundary import SecretBoundary
 from coffer.domain.audit import AuditEventType
 from coffer.domain.secret_errors import ApprovalNotFound, ApprovalNotPending
-from coffer.domain.secrets import SecretApproval, batch_target
+from coffer.domain.secrets import LOCAL_PROCESS_KIND, SecretApproval, batch_target
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.secret_boundary_wiring import (
     approval_applied,
@@ -159,8 +159,9 @@ async def _approve_one(
         return skipped("not_found")
     if current.status != "pending":
         return skipped("not_pending", current)
-    if current.op == "disable_protection":
-        # Weakening the protection is never one of several: it takes its own prompt.
+    if current.op == "disable_protection" or current.destination_kind == LOCAL_PROCESS_KIND:
+        # Weakening the protection, or handing a value to local programs an agent
+        # can start, is never one of several: each takes its own prompt.
         return skipped("not_batchable", current)
     if (current.target_fingerprint or "") != shown:
         return skipped("changed", current)

@@ -166,7 +166,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### A command exits 9: "waiting for approval in the Coffer app"
 
-**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — or replaces a value something already uses, or switches `secrets.require_approval` off. The change is saved; the secret is held until you approve it. An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`.
+**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — replaces a value something already uses, switches `secrets.require_approval` off, or asks `coffer run` to use a standalone secret you have not allowed it to (the secret's page shows **Allow `coffer run`…**; see [Secrets](/guides/secrets#allow-coffer-run-to-use-it)). The change is saved; the secret is held until you approve it. An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`.
 
 **Fix.** Open the desktop app and answer the approval it shows (on the **Secrets** page, **Review** opens the approvals dialog). Approve only a target you recognise; refuse the rest there. Rerun the command once you have answered. See [Secrets → Approvals](/guides/secrets#approvals).
 
@@ -174,7 +174,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Cause.** By design: no command, route or MCP tool returns a stored value, because an agent can run any command you can. `coffer secret list` only shows which values are stored.
 
-**Fix.** Reveal or copy it in the desktop app, which asks for Touch ID or your password. To give a value to a command, store it as a standalone secret and run the command with `coffer run --secret <name> -- <command>`. See [Secrets](/guides/secrets).
+**Fix.** Reveal or copy it in the desktop app, which asks for Touch ID or your password. To give a value to a command, store it as a standalone secret, allow `coffer run` to use it on the secret's page (Touch ID or your password in the desktop app), then run the command with `coffer run --secret ENV=coffer://secret/<id> -- <command>`. See [Secrets](/guides/secrets#allow-coffer-run-to-use-it).
 
 See [Secret store](/guides/secret-store).
 

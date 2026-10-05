@@ -32,6 +32,7 @@ from fastapi.responses import JSONResponse
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_delete_ops import SecretHooks
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.local_access import local_access_of
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.model_proxy.state import PROXY_TOKEN_REF_PREFIX
@@ -192,6 +193,7 @@ async def list_refs(
     for ref in sorted(stored | set(cited) | ({sync_ref} if sync_ref else set())):
         name = standalone_name(ref)
         skills = skill_citers(ref) if name else []
+        local = local_access_of(bindings, pending, ref) if name else None
         rows = [
             SecretBindingOut(
                 destination_kind=b.destination_kind,
@@ -238,9 +240,11 @@ async def list_refs(
                 mentioned_by_skills=skills,
                 unreferenced=not cited.get(ref) and not skills and ref != sync_ref,
                 bindings=rows,
-                # A standalone secret reaches a `coffer run` child's
-                # environment; a stdio server's secret its initial environment.
-                readable_by_local_processes=bool(name) or ref in exposed,
+                # A standalone secret reaches a `coffer run` child's environment
+                # only once a person granted it; a stdio server's secret its
+                # initial environment.
+                readable_by_local_processes=local == "on" or ref in exposed,
+                local_access=local,
             )
         )
     return SecretListOut(refs=out)

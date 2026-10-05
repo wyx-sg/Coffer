@@ -14,7 +14,7 @@ coffer run [OPTIONS]
 
 本页与 `coffer run --help` 打印的内容一致。在下面任何命令后加 `--help`，即可在终端里查看它的选项。
 
-Each resolution is audited. Output is masked: exact secret values print as \*\*\*. This guards against accidents — a value landing in a transcript, a file or git — and does not hide a secret from an agent that runs the command: the agent is the command's parent and can read its environment.
+Only a secret granted to local programs in the Coffer app resolves; any other is refused and the request waits there. Each resolution is audited. Output is masked: exact secret values print as \*\*\*. Masking guards against accidents — a value landing in a transcript, a file or git — and does not hide a granted secret from an agent that runs the command.
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |

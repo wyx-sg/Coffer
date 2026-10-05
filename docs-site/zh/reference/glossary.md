@@ -67,7 +67,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### `coffer run` {#coffer-run}
 
-把[独立密钥](#standalone-secret)交给一个子进程的命令：`coffer run --secret ENV=<id> -- cmd`。这些值只设置在该子进程的环境中，在其输出里被遮盖为 `***`，每次解析都以 `secret_resolved` 记入审计。它能防止密钥不小心进入文件和对话记录；但它不会对运行该命令的智能体隐藏密钥，因为智能体是子进程的父进程。见[密钥](/zh/guides/secrets#run-a-command-with-a-secret)。
+把[独立密钥](#standalone-secret)交给一个子进程的命令：`coffer run --secret ENV=<id> -- cmd`。这些值只设置在该子进程的环境中，在其输出里被遮盖为 `***`，每次解析都以 `secret_resolved` 记入审计。它只解析人在桌面应用里允许本机程序使用的密钥。它能防止密钥不小心进入文件和对话记录；但它不会对运行该命令的人或智能体隐藏密钥，因为运行者是子进程的父进程，所以靠的是这一步“允许”。见[密钥](/zh/guides/secrets#run-a-command-with-a-secret)。
 
 ### 连接（Connection） {#connection}
 

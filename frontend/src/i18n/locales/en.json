@@ -818,6 +818,7 @@
       "secret_imported": "Imported secrets",
       "secret_notes_updated": "Changed a secret's name or description",
       "secret_protection_enabled": "Turned secret approval back on",
+      "secret_local_access_revoked": "Stopped coffer run from handing a secret to programs",
       "storage_cache_cleared": "Cleared the rebuildable cache",
       "vault_file_edited": "Edited a vault file on disk",
       "vault_file_restored": "Restored an earlier version of a vault file",
@@ -5262,6 +5263,7 @@
       "addValue": "Add value"
     },
     "kind": {
+      "local_process": "coffer run (local programs)",
       "mcp_server": "MCP server",
       "custom_tool": "Custom tool",
       "skill": "Skill",
@@ -5275,6 +5277,15 @@
     "usedBy": {
       "nothing": "Nothing",
       "title": "Used by"
+    },
+    "localAccess": {
+      "on": "coffer run can hand it to programs on this Mac, including ones an agent starts",
+      "off": "Only Coffer uses it — coffer run can't hand it to a program",
+      "pending": "Waiting for your approval in the Coffer app",
+      "allow": "Allow coffer run…",
+      "revoke": "Revoke",
+      "revoked": "coffer run can no longer hand this secret to programs",
+      "help": "Until you allow it, coffer run refuses this secret. Allowing it records a request that you approve in the Coffer app; once approved, any program coffer run starts can read the value, including programs an agent starts. Revoking takes effect at once."
     },
     "menu": {
       "label": "Actions for {{name}}",

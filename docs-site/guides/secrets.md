@@ -40,7 +40,7 @@ To delete several at once, tick rows (or the header checkbox for the whole list)
 
 A row reads **No value on this Mac** when this Mac has no value to hand out for it: a resource or skill cites it but it was never stored here, or its encrypted value came with the vault from another Mac whose master key this one does not have (encrypted secrets don't sync by default). Whatever uses it cannot start until it has a value. The detail's **Add value** (or a field in **Add values**) stores one; like any write it may [wait for your approval](#approvals). While any secret is missing, a banner at the top counts them ("3 secrets have no value on this Mac"), names them, and offers **Add values**: one dialog with a field per missing secret, where a field left empty stays missing and **Save N values** stores the rest. The same count appears on [Overview](/guides/web-ui#overview), whose button opens this page. The other way to open every secret at once is the other Mac's master key, which is imported in the [vault sync](/guides/vault-sync) join flow or in Settings › Security, not on this page. Coffer finds a secret it cannot open by checking the encrypted value's signature against this Mac's key, without decrypting anything.
 
-Choosing a row opens that secret in the right-hand pane. Its header holds the **name** and **description**, each edited in place (a name of up to 64 characters, a description of up to 200; both sync with your vault), with **Replace value…** and **Reveal value…** beside them and a **⋯** menu. Under the header the detail shows the secret's id and its `coffer://secret/<id>` URI, each with **Copy**; whether this Mac holds the value and whether other local processes can read it; when it was created and last used; and **Used by** — everything that uses it, by kind (MCP server, model provider, channel, skill, …), current name and slot, with the approvals it holds or waits for. Choosing a name opens that thing's page. The other way round, wherever a page shows the secret a thing uses — a provider's **API Key**, a sync remote's push secret — it shows the secret's name, and the name opens that secret here; the id and URI appear only here, to copy. Individual uses are not listed here; they are in [Activity](/guides/activity).
+Choosing a row opens that secret in the right-hand pane. Its header holds the **name** and **description**, each edited in place (a name of up to 64 characters, a description of up to 200; both sync with your vault), with **Replace value…** and **Reveal value…** beside them and a **⋯** menu. Under the header the detail shows the secret's id and its `coffer://secret/<id>` URI, each with **Copy**; whether this Mac holds the value and whether other local processes can read it; for a standalone secret, an **Access** line that says whether `coffer run` may use it (see [Allow `coffer run` to use it](#allow-coffer-run-to-use-it)); when it was created and last used; and **Used by** — everything that uses it, by kind (MCP server, model provider, channel, skill, …), current name and slot, with the approvals it holds or waits for. Choosing a name opens that thing's page. The other way round, wherever a page shows the secret a thing uses — a provider's **API Key**, a sync remote's push secret — it shows the secret's name, and the name opens that secret here; the id and URI appear only here, to copy. Individual uses are not listed here; they are in [Activity](/guides/activity).
 
 | Control | What it does |
 | --- | --- |
@@ -56,7 +56,7 @@ Choosing a row opens that secret in the right-hand pane. Its header holds the **
 
 Each move is recorded in [Activity](/guides/activity) as **Imported secrets**, without the value. A scan that finds nothing says how many files and servers it read.
 
-**Add secret** adds a new standalone secret: a name and a value, which is never shown back. Coffer mints its id, `secret/<id>`, and the dialog then shows `coffer://secret/<id>` with **Copy** — that is what a script or a skill cites. The secret is stored as soon as you add it, with nothing to approve. A secret added here, or with `coffer secret set --name`, needs your approval the first time a resource cites it; see [Approvals](#approvals).
+**Add secret** adds a new standalone secret: a name and a value, which is never shown back. Coffer mints its id, `secret/<id>`, and the dialog then shows `coffer://secret/<id>` with **Copy** — that is what a script or a skill cites. The secret is stored as soon as you add it, with nothing to approve — but `coffer run` cannot use it until you [allow that](#allow-coffer-run-to-use-it). A secret added here, or with `coffer secret set --name`, needs your approval the first time a resource cites it; see [Approvals](#approvals).
 
 To use a stored secret in a command, see [Run a command with a secret](#run-a-command-with-a-secret).
 
@@ -85,7 +85,7 @@ coffer secret set --name "Orders DB"
 
 The command prints the new id and its `coffer://secret/<id>` URI; that is what you cite. `coffer secret set <existing ref>` only replaces the value of a secret that exists. It never creates one, and a ref that is not `secret/<id>` is refused.
 
-On the [Secrets page](#the-secrets-page), **Add secret** does the same: a name and a value, then the URI to copy. The new secret is stored at once, so `coffer run` resolves it right away.
+On the [Secrets page](#the-secrets-page), **Add secret** does the same: a name and a value, then the URI to copy. The new secret is stored at once. `coffer run` resolves it only after you [allow it](#allow-coffer-run-to-use-it) on the secret's page.
 
 ### Cite it
 
@@ -98,13 +98,13 @@ DB_USER=orders_ro
 DB_PASSWORD=coffer://secret/<id>
 ```
 
-A skill's `connection.md` names it the same way. A file holding only references is safe to commit and safe to sync. Nothing reads it by itself: [`coffer run`](#run-a-command-with-a-secret) resolves the references when a command starts.
+A skill's `connection.md` names it the same way. A file holding only references is safe to commit and safe to sync. Nothing reads it by itself: [`coffer run`](#run-a-command-with-a-secret) resolves the references when a command starts, for each secret you have [allowed it to use](#allow-coffer-run-to-use-it) (a skill that cites a secret needs that allowance once).
 
 A resource can cite a standalone secret too, as `secret/<id>` in its secret refs, like any other ref.
 
 ## Run a command with a secret
 
-`coffer run` resolves standalone secrets through the daemon and starts one command with the values set **only in that command's environment**. A secret's id is not a variable name, so name the variable yourself:
+`coffer run` resolves standalone secrets, once you have allowed it (next section), through the daemon and starts one command with the values set **only in that command's environment**. A secret's id is not a variable name, so name the variable yourself:
 
 ```sh
 coffer run --secret PGPASSWORD=coffer://secret/<id> -- psql -h db.internal orders
@@ -122,15 +122,31 @@ A `coffer://secret/<id>` value already in `coffer run`'s own environment is reso
 
 What happens:
 
-- **Only standalone secrets resolve.** The id must be stored under `secret/`; a resource's secret can never be fetched this way. An unknown id fails with `SECRET_NOT_FOUND` and the command does not start.
+- **Only standalone secrets you allowed resolve.** The id must be stored under `secret/`; a resource's secret can never be fetched this way. An unknown id fails with `SECRET_NOT_FOUND`, a secret not yet allowed fails as described [below](#allow-coffer-run-to-use-it), and in both cases the command does not start.
 - **The values go to the child only.** The shell that ran `coffer run` does not get them, and neither do its other children.
 - **Output is masked.** Every exact occurrence of a value in the command's standard output and error prints as `***`, even when it is split across two writes. Values shorter than 8 characters are not masked — masking a short value would shred ordinary output — and `coffer run` says so when it skips one.
 - **The exit status passes through**, so `coffer run` fits into scripts. A command killed by a signal exits `128 + signal`; a command that cannot start exits `127`. `Ctrl-C` and `SIGTERM` are forwarded to the command.
 - **Every resolve is audited** as `secret_resolved`, naming the secret, the program and the working directory — never the value, and never the rest of the command line, which might carry a secret of its own. Read them with `coffer log audit --event-type secret_resolved`.
 
-::: warning `coffer run` guards against accidents, not against an agent
-`coffer run` keeps a secret out of files, git, the agent's own environment and transcripts **by accident**. It does **not** hide the secret from an agent that runs the command: the agent is the command's parent, so it can read the child's environment (`ps eww`), run `coffer run --secret TOKEN=<id> -- env`, or print the value base64-encoded, which masking does not recognise. Masking also never sees what the command writes to files. Every standalone secret is listed as readable by local processes for this reason.
+::: warning `coffer run` guards against accidents; the allowance is what guards against an agent
+`coffer run` keeps a secret out of files, git, the agent's own environment and transcripts **by accident**. Whoever runs the command owns the child process and can read its environment (`ps eww`), run `coffer run --secret TOKEN=<id> -- env`, or print the value base64-encoded, which masking does not recognise. That is why an agent's `coffer run` works only for a secret **you** allowed. A secret an agent should merely *use* should stay not allowed and reach its service through Coffer instead: an MCP server (the daemon puts the secret into the server's environment or an HTTP header) or a custom HTTP tool, where the daemon makes the request. See [Security model → What stays exposed](/architecture/security#what-stays-exposed) for the limit of this protection.
 :::
+
+### Allow `coffer run` to use it {#allow-coffer-run-to-use-it}
+
+A standalone secret is handed to `coffer run` only if you have allowed local programs to use it. The allowance is an approval like the others on this page, one per secret, answered in the desktop app with Touch ID or your login password. It is never given by default, by switching approval protection off, or by having just supplied the value.
+
+On the Secrets page, a standalone secret's detail has an **Access** line:
+
+| Access | What you see | What it means |
+| --- | --- | --- |
+| **Off** | **Allow `coffer run`…** | `coffer run` cannot use the secret. The button records the request and opens it in the approvals dialog. |
+| **Pending** | Waiting for approval in the Coffer app | Approve it there, or **Reject** it. |
+| **On** | **Revoke** | `coffer run` can use the secret. **Revoke** takes effect at once and needs no presence check, since it only narrows access. It is recorded as `secret_local_access_revoked`. |
+
+Without the allowance, `coffer run` starts nothing, prints no value and exits non-zero. The request waits in the desktop app's approvals (`SECRET_BINDING_PENDING`); if you refused it, the command answers `SECRET_BINDING_REJECTED` until it asks again. An agent that sees either should tell you which secret it needs rather than retry.
+
+If you already have skills that cite `coffer://secret/<id>`, allow each such secret once on its page; nothing in the skill changes.
 
 ## See or copy a value
 
@@ -150,6 +166,7 @@ A secret added on the Secrets page or with `coffer secret set --name` belongs to
 | Change where a resource sends a secret: a stdio server's command, arguments, working directory or other environment; an HTTP server's URL; a SeaTalk channel's app. | The resource gets no secret until you approve the new target. |
 | Point a resource at another stored secret (**Replace key… › Use another secret**). | The resource keeps nothing it can use until you approve the secret for it. |
 | Point the sync remote's push token at a different URL. | The remote is not saved until you approve. |
+| Ask for a standalone secret to be usable by `coffer run` (**Allow `coffer run`…**, or an agent running `coffer run` with it). | `coffer run` starts nothing until you approve. See [Allow `coffer run` to use it](#allow-coffer-run-to-use-it). |
 | Turn off secret approval in **Settings › Security**. | The protection stays on until you approve. |
 
 What counts is the **target** — the thing that actually receives the value, written so you can judge it: a stdio server's whole command line with its working directory and other environment variables (a variable such as `NODE_OPTIONS=--require …` changes what the process does), an HTTP server's URL, a git remote's URL, a channel's bot or app. An approval reads, for example:
@@ -167,7 +184,7 @@ Coffer cannot tell your click from an agent calling the same API, so a change yo
 ### What needs no approval
 
 - **A secret created for that resource.** A secret you paste into a resource's own dialog — an MCP server's token, a provider's key — is minted for that resource and belongs to it, so registering the resource needs no extra approval for it. A second place citing the same secret is a second place, and waits.
-- **Anything, while the protection is off.**
+- **Anything, while the protection is off** — except the `coffer run` allowance, which always waits for you.
 
 A binding is also checked when you register or change the place that uses it, so an approval it needs appears right when you save, with the approvals dialog opening on the page you are on. A binding is checked at the moment of use — when a server starts, a channel connects, a sync round pushes — so a change that arrives behind Coffer's back, such as a vault file edited by hand or a server another machine synced in, is caught too.
 
@@ -191,7 +208,7 @@ An agent that hits exit `9` should tell you what it registered and that it waits
 
 ### Switching the protection off
 
-`secrets.require_approval` defaults by the build: **on** in a signed release, **off** in a development build, whose master key any program running as you can read, so approvals there would stop only accidents (Settings and this page say so in one line). A setting you store wins in either. Turning it on takes effect at once. Turning it off waits for an approval in the desktop app, and while it is off every new destination is approved without asking. Nothing else — no environment variable, file or flag — switches it off. The switch is the **Approvals** section of **Settings › Security**; a browser shows it as **Turn off in the Coffer desktop app**.
+`secrets.require_approval` defaults by the build: **on** in a signed release, **off** in a development build, whose master key any program running as you can read, so approvals there would stop only accidents (Settings and this page say so in one line). A setting you store wins in either. Turning it on takes effect at once. Turning it off waits for an approval in the desktop app, and while it is off every new destination is approved without asking, except the `coffer run` allowance, which is never approved that way. Nothing else — no environment variable, file or flag — switches it off. The switch is the **Approvals** section of **Settings › Security**; a browser shows it as **Turn off in the Coffer desktop app**.
 
 ## List your secrets
 
@@ -199,7 +216,7 @@ An agent that hits exit `9` should tell you what it registered and that it waits
 coffer secret list
 ```
 
-The [Secrets page](#the-secrets-page) shows the same list. The table has a **Name** column with each secret's label, and `--json` carries, per secret, `ref`, `uri`, `label`, `description`, `created_for` (the uid of the resource it was minted for, if any), `locked` (stored, but this Mac's master key cannot open it), `created_at` and `last_used_at`, and `cited_by` — each citer with its kind, name and the **slot** it cites the secret under. The list has every ref the store holds and every ref a resource cites, with what uses each one — resources, skills whose files cite `coffer://secret/<id>`, destinations waiting for approval — and `(unreferenced)` for a secret nothing uses. Each managed agent's model-proxy token (`proxy-token/<agent name>`) is not listed: Coffer mints it and the agent fetches it on its own, so there is nothing to enter, replace or cite. **Readable by local processes** is `yes` where another program running as you can read the value where Coffer puts it: every standalone secret (it goes into a `coffer run` child) and every secret in a stdio MCP server's environment. See [Secret store → List and inspect](/guides/secret-store#list-and-inspect) for the columns.
+The [Secrets page](#the-secrets-page) shows the same list. The table has a **Name** column with each secret's label, and `--json` carries, per secret, `ref`, `uri`, `label`, `description`, `created_for` (the uid of the resource it was minted for, if any), `locked` (stored, but this Mac's master key cannot open it), `created_at` and `last_used_at`, and `cited_by` — each citer with its kind, name and the **slot** it cites the secret under. The list has every ref the store holds and every ref a resource cites, with what uses each one — resources, skills whose files cite `coffer://secret/<id>`, destinations waiting for approval — and `(unreferenced)` for a secret nothing uses. Each managed agent's model-proxy token (`proxy-token/<agent name>`) is not listed: Coffer mints it and the agent fetches it on its own, so there is nothing to enter, replace or cite. **Readable by local processes** is `yes` where another program running as you can read the value where Coffer puts it: a standalone secret you have allowed `coffer run` to use (it goes into a child's environment) and every secret in a stdio MCP server's environment. See [Secret store → List and inspect](/guides/secret-store#list-and-inspect) for the columns.
 
 Deleting a secret is refused while a resource cites it or a skill's files cite its URI; the message names them.
 

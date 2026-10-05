@@ -187,9 +187,16 @@ option that shows a value, and nothing to work around. Only the developer sees
 a value, in the Coffer desktop app.
 
 When a command needs a secret, run it through `coffer run`, which sets the value
-only in that command's environment and prints it as `***` in its output. The
-masking guards against a value leaking into a transcript by accident; it is not
-a wall between you and the value, since you are the command's parent:
+only in that command's environment and prints it as `***` in its output. It
+works only for a secret the developer granted to local programs in the Coffer
+app (once per secret). Without the grant it starts nothing, prints no value,
+exits non-zero, and the request waits in the app's approvals
+(`SECRET_BINDING_PENDING`; `SECRET_BINDING_REJECTED` if refused): tell the
+developer which secret you need rather than retrying. The masking guards against
+a value leaking into a transcript by accident; it is not a wall between you and
+the value, since you are the command's parent. A secret you should only use
+stays ungranted and reaches its service through Coffer (an MCP server or a
+custom HTTP tool). For example:
 
 ```sh
 coffer run --secret PGPASSWORD=coffer://secret/orders-db -- psql -h db.internal orders

@@ -65,8 +65,9 @@ and the initial environment of any same-user process is readable with `ps eww`
 | A secret echoed into a transcript by a command that prints its config or an error | **Mostly** — the value never enters the agent's environment, and `coffer run` masks exact matches in the child's output |
 | A plaintext secrets file read by any tool that walks `~/.coffer/` | **Yes**, after migration — the file holds references |
 | A secret in the agent's own environment inherited by its shell or MCP children | **Yes** for secrets resolved through `coffer run` — they never enter it |
-| An agent that asks Coffer for a secret's value, through REST, the CLI, MCP or the master key | **Yes** — no route returns a value, and no binary but Coffer's signed ones can read the key |
-| An agent that runs `coffer run --secret X -- env`, or reads the environment of the child it started | **No** — the agent is the child's parent; the secret is labelled "Readable by local processes" and this ADR does not claim otherwise |
+| An agent that asks Coffer for a secret's value, through REST, the CLI or MCP | **Yes** for a secret without the local-process grant — no route returns its value and `coffer run` refuses it; in a build without the Keychain access group the agent can still read the master key file and decrypt the store itself |
+| An agent that runs `coffer run --secret X -- env` for a secret a person has not granted to local programs | **Yes** — the resolve is refused, nothing starts, and the request waits in the desktop app |
+| An agent that runs `coffer run --secret X -- env`, or reads the environment of the child it started, for a granted secret | **No** — the agent is the child's parent; the grant says so in the approval and on the Secrets page |
 
 ## Options Considered
 
@@ -279,8 +280,14 @@ up to 64 characters) and a description (up to 200), kept in a synced vault
 notes document, so changing them touches nothing that cites the secret.
 `coffer run` resolves the secrets a command names or whose references it
 inherits, through the daemon, and sets them only in that one child's
-environment, masking exact matches of the values in the child's output. Every
-`coffer run` resolve is audited without the value. Every stored secret is listed
+environment, masking exact matches of the values in the child's output. It
+resolves only a secret a person granted to local programs: a `local_process`
+destination approved in the desktop app with a presence grant, never by the
+build's default, the approval switch or a just-supplied value, and withdrawn
+at once by a revoke that needs nobody (amended 2026-10-05: before, every
+standalone secret resolved for any caller holding the daemon token, which let
+an agent run its own script with any of them). Every `coffer run` resolve is
+audited without the value. Every stored secret is listed
 with what uses it, cited or not. Plaintext secret files are migrated into the
 store and rewritten as references.
 
@@ -288,8 +295,10 @@ The threat model is part of the decision: this protects against secrets
 landing in transcripts, git and plaintext files by accident, and — with no
 route that returns a value — against an agent asking Coffer for one. It does
 not protect a secret from the agent that runs the command it is resolved into:
-that agent is the child's parent. Every secret usable through `coffer run` is
-labelled "Readable by local processes", and nothing in Coffer claims otherwise.
+that agent is the child's parent. That is why the grant is a person's decision
+per secret: a secret an agent should only use stays without it and reaches its
+service through Coffer (an MCP server or custom tool), and every granted secret
+is labelled "Readable by local processes", and nothing in Coffer claims otherwise.
 
 Rules a future change must respect:
 
@@ -297,6 +306,8 @@ Rules a future change must respect:
   secret reaches a process only as the direct child of `coffer run` or of a
   Coffer spawn that builds the child's environment from an allow-list.
 - A `coffer run` resolve that is not audited is a defect.
+- A `coffer run` resolve of a secret without a person's local-process grant is
+  a defect, whatever the build, the approval switch or the caller says it is.
 - The masking filter is described everywhere as an accident guard, never as
   protection.
 - A secret's id never changes and a person never chooses one; what a person

@@ -56,6 +56,8 @@ class AuditEventType(StrEnum):
     SECRET_APPROVAL_APPROVED = "secret_approval_approved"
     SECRET_APPROVAL_REJECTED = "secret_approval_rejected"
     SECRET_PROTECTION_ENABLED = "secret_protection_enabled"
+    # A standalone secret's local-process grant (`coffer run`) withdrawn.
+    SECRET_LOCAL_ACCESS_REVOKED = "secret_local_access_revoked"
     # spec agent-registry
     # no longer emitted; kept so recorded events still read
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
