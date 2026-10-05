@@ -5,10 +5,11 @@
 // `api.openapi.yaml`, itself generated from
 // `backend/coffer/surfaces/http/memory/*.py`). Memory is Coffer's own
 // distillation of the agents' native memories — it reads them, never writes
-// them. The one write shape is a person's edit of a memory's body (NoteSave).
+// them. There is no write shape for a note: a person edits it in their own
+// editor.
 //
-// The web UI calls a note a "memory" (中文 记忆条目, spec memory "Present a
-// partition as its memories"); the wire and the disk keep the word note.
+// The web UI calls a note a "memory" (中文 记忆条目, spec memory
+// "Show a partition's memories read-only"); the wire and the disk keep the word note.
 import type { components as MemoryWire } from "@/lib/api/generated/memory";
 
 type Schemas = MemoryWire["schemas"];
@@ -29,8 +30,6 @@ export type NoteListOut = Schemas["NoteListOut"];
 /** One memory in full: its body (never its frontmatter) and its provenance. */
 export type NoteOut = Schemas["NoteOut"];
 
-/** A memory's new body from the editor, with the fingerprint it was read at. */
-export type NoteSave = Schemas["NoteSave"];
 export type OriginOut = Schemas["OriginOut"];
 
 /** A retired memory and the reason it left. */

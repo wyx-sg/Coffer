@@ -201,7 +201,7 @@ def write_retired(partition: str, retired: Sequence[RetiredNote]) -> str:
     from the same list on every write, so the two cannot disagree.
 
     An empty ``retired`` **removes** the file rather than writing an empty one:
-    "Present a partition as its memories" shows a Retired group when
+    "Show a partition's memories read-only" shows a Retired group when
     something has been retired, and a "nothing yet" file in every partition is
     noise in the data meant to make a retirement visible.
     """

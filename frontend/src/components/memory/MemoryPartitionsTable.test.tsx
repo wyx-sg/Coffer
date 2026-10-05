@@ -1,6 +1,6 @@
 // frontend/src/components/memory/MemoryPartitionsTable.test.tsx
 //
-// The partitions list (spec memory "Present a partition as its memories"): a
+// The partitions list (spec memory "Show a partition's memories read-only"): a
 // row per partition with its path ("Every project" for global) and its memory
 // count, and a search box over name and path. No status control, no selection:
 // every partition is served to every agent. Only a partition whose repository is gone offers Delete, and
