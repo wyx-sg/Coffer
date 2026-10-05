@@ -1,4 +1,5 @@
-"""The secret-notes document, published for the routes (spec secret "Label and describe")."""
+"""The secret-notes document, published for the routes (spec secret "Label and
+describe a secret without changing its reference")."""
 
 from __future__ import annotations
 
