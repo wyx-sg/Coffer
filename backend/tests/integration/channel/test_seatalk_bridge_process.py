@@ -120,7 +120,7 @@ async def test_without_the_sdk_the_bridge_reports_sdk_missing(tmp_path: Path) ->
 async def test_a_refusal_is_rejected_and_its_secret_scrubbed(tmp_path: Path) -> None:
     vendor = tmp_path / "vendor"
     write_fake_sdk_package(vendor)
-    connector = _connector(vendor, _Recorder(), secret="bad-secret-1234")
+    connector = _connector(vendor, _Recorder(), secret="badbadbadbad")
     await connector.start()
     try:
         await wait_until(
@@ -129,7 +129,7 @@ async def test_a_refusal_is_rejected_and_its_secret_scrubbed(tmp_path: Path) -> 
         detail = connector.state()[1] or ""
         assert detail.startswith("RegisterError: ")
         assert "invalid app secret" in detail
-        assert "bad-secret-1234" not in detail
+        assert "badbadbadbad" not in detail
     finally:
         await connector.stop()
 
