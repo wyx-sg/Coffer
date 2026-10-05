@@ -362,7 +362,11 @@ return useMutation({
     `FILE_PANE_BODY` with one `FILE_PANE_SCROLL` / `CodeView fill` region, and
     keep headers and footers `shrink-0`. It measures against the page's real
     scroller (the overflow wrapper inside `<main>`), floor 320px; never a
-    `max-h-*` cap on such a pane.
+    `max-h-*` cap on such a pane. Inside a page pinned to the window
+    (`PAGE_BLEED`, e.g. Knowledge) don't measure: the column is already a
+    fixed-height flex column, so the pane takes `flex-1` (a History tab there
+    passes `fill="parent"` to `VaultHistoryView`). Measuring there reads the
+    column's own empty space as something below and shrinks the pane to 320.
   - `Button` icon sizes are `icon-sm` / `icon-md` (plus the default `icon`);
     pick from those, do not size an icon button by hand.
 - **A resource shows its `title` when set, its `name` otherwise** — in tables,

@@ -51,7 +51,12 @@ export function KnowledgeDocumentPane({ collection, path, tab }: Props) {
       <div className="flex min-h-0 flex-1 flex-col">
         <KnowledgePaneBar crumbs={crumbsOf(collection, path)} tabs={tabs} />
         <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
-          <VaultHistoryView path={vaultPathOf(path)} storageKey="knowledge-history" />
+          {/* The page is pinned to the window, so the history fills this column. */}
+          <VaultHistoryView
+            path={vaultPathOf(path)}
+            storageKey="knowledge-history"
+            fill="parent"
+          />
         </div>
       </div>
     );

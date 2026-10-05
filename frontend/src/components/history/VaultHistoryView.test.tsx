@@ -42,14 +42,14 @@ function version(sha: string, display_writer: string, status: string, added = 1,
   };
 }
 
-function renderView() {
+function renderView(fill?: "window" | "parent") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <VaultHistoryView path={PATH} storageKey="test-history" />
+        <VaultHistoryView path={PATH} storageKey="test-history" fill={fill} />
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -142,6 +142,24 @@ describe("VaultHistoryView", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
     expect(await within(dialog).findByText("Couldn’t restore this version")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  test("on a page pinned to the window the card grows to fill its column", async () => {
+    renderView("parent");
+    const list = await screen.findByRole("list", { name: "Versions" });
+    const card = list.closest(".rounded-xl") as HTMLElement;
+    expect(card).toHaveClass("flex-1");
+    // Not a measured height: that read the column's own empty space as
+    // something below the card and shrank it to its floor.
+    expect(card.style.height).toBe("");
+  });
+
+  test("on a scrolling page the card measures the room left under it", async () => {
+    renderView();
+    const list = await screen.findByRole("list", { name: "Versions" });
+    const card = list.closest(".rounded-xl") as HTMLElement;
+    expect(card).not.toHaveClass("flex-1");
+    expect(card.style.height).not.toBe("");
   });
 
   test("a file with no recorded version says so", async () => {

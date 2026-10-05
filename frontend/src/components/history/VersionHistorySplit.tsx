@@ -5,7 +5,12 @@
 // versions, newest first, under a "Versions" header with their count, each row
 // an icon, a title (the newest wearing a Current chip), a muted line and,
 // optionally, the lines it moved; on the right whatever the chosen version
-// opens into (`detail`). The card fills the pane down to the bottom edge.
+// opens into (`detail`). The card fills the pane down to the bottom edge:
+// on a page that scrolls it measures the room left under it (useFillToBottom);
+// inside a page pinned to the window (knowledge's PAGE_BLEED shell, whose
+// panes are flex columns of a fixed height) it simply takes the column's
+// remaining height (`fill="parent"`) — measuring there counted the column's
+// own empty space as "something below" and shrank the card to its floor.
 // The divider may be dragged down to a 160px list and up to leave the detail
 // 320px — narrower bounds than a page-level split, so it moves both ways from
 // its default (a list that opens at 250px has 90px to give, not 10).
@@ -45,6 +50,9 @@ interface Props<T> {
   detail: ReactNode;
   /** Mounted inside the card, beside the split (e.g. a restore dialog). */
   children?: ReactNode;
+  /** How the card reaches the bottom: `window` measures the room left on a
+   *  scrolling page; `parent` grows to fill a flex column of fixed height. */
+  fill?: "window" | "parent";
 }
 
 export function VersionHistorySplit<T>({
@@ -59,8 +67,9 @@ export function VersionHistorySplit<T>({
   storageKey,
   detail,
   children,
+  fill = "window",
 }: Props<T>) {
-  const fill = useFillToBottom();
+  const measured = useFillToBottom();
 
   const list = (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -117,9 +126,12 @@ export function VersionHistorySplit<T>({
 
   return (
     <div
-      ref={fill.ref}
-      style={fill.style}
-      className="flex min-h-0 overflow-hidden rounded-xl border border-border-subtle"
+      ref={fill === "window" ? measured.ref : undefined}
+      style={fill === "window" ? measured.style : undefined}
+      className={cn(
+        "flex min-h-0 overflow-hidden rounded-xl border border-border-subtle",
+        fill === "parent" && "flex-1",
+      )}
     >
       <SplitView
         storageKey={storageKey}

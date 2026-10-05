@@ -121,4 +121,12 @@ test("a collection is one tree; a document is read, opened in the editor and has
   await expect(
     page.getByRole("button", { name: "Restore this version…" }),
   ).toHaveCount(0);
+
+  // The history card reaches the bottom of the window (the page is pinned to
+  // it), not a 320px box with the rest of the pane left empty under it.
+  const card = versions.locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+  const box = await card.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport).toBeTruthy();
+  expect(viewport!.height - (box!.y + box!.height)).toBeLessThan(40);
 });
