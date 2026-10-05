@@ -316,6 +316,22 @@ Each entry is the name the MCP server or the custom tool group has in Coffer, ei
 
 The skill's **Requires** tab lists each tool under **Tools** as on, off or failing, linking to its page. A required tool that is off puts the skill under **Needs attention** with the banner **Tool off**, whose action turns it on. As with commands and secrets, the skill is delivered whether or not its tools are on.
 
+## Requirements a profile declares {#profile-declared-requirements}
+
+A skill library may keep per-skill profiles at `<skill folder>/profiles/<name>.md`: a `default.md` plus one file per environment, each with YAML frontmatter ([Writing skill libraries](/guides/writing-skill-libraries) explains why). A profile's frontmatter may carry the same `requires:` as `SKILL.md`, with commands, secrets and tools:
+
+```yaml
+---
+carrier: Skill(example-log-search)
+requires:
+  commands:
+    - command: gh
+      login_check: gh auth status
+  secrets: [EXAMPLE_TOKEN]
+---
+```
+
+An agent picks one profile when it runs, and Coffer cannot know which. So Coffer reads the union of `SKILL.md`'s `requires:` and that of every `profiles/*.md`, each time, and says which profile declared each entry: the **Requires** tab shows "in profile example-org" on the row, and [CLIs](/guides/clis) shows `skill-name · example-org` under **Needed by**. An entry `SKILL.md` itself declares carries no profile. A command, secret or tool declared in several places is one requirement; for a command Coffer keeps the highest minimum version and the first title, `why` and login check. A warning from a profile names its file, `profiles/<name>.md`. Coffer reads only what the files declare and never scans them to guess.
 
 ## Where a skill's scripts keep their files
 

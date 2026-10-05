@@ -325,8 +325,8 @@ acceptance("skill-manager", "a skill's requires tab links each command", async (
   h.skills = [
     makeSkill({
       requires: [
-        { command: "jq", min_version: null },
-        { command: "gh", min_version: "2.40" },
+        { command: "jq", min_version: null, profiles: [] },
+        { command: "gh", min_version: "2.40", profiles: [] },
       ],
     }),
   ];

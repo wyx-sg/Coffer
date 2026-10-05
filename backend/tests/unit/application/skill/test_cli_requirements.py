@@ -278,3 +278,34 @@ def test_coffer_needs_join_the_skills_that_need_the_same_command() -> None:
     (joined,) = aggregate([skill], declared=[mine], coffer=COFFER_NEEDS)
     assert joined.title == "Mine" and joined.min_version == "2.30" and joined.added
     assert joined.needed_by_coffer and joined.needed_by[0].skill_name == "history"
+
+
+async def test_a_profile_declared_command_is_needed_by_the_skill_with_its_profile() -> None:
+    from coffer.application.skill.cli_requirements import ProfileDocument
+
+    class Docs:
+        async def skill_documents(self) -> Sequence[SkillDocument]:
+            return [
+                SkillDocument(
+                    "u1",
+                    "investigating",
+                    "---\nname: investigating\nrequires: [gh]\n---\n",
+                    (ProfileDocument("acme", "---\nrequires: [smc]\n---\n"),),
+                )
+            ]
+
+    class Probe:
+        def locate(self, command: str) -> str | None:
+            return None
+
+        def version(self, path: str) -> str | None:
+            return None
+
+        def login_ok(self, argv: Sequence[str]) -> bool | None:
+            return None
+
+    service = CliRequirementService(skills=Docs(), probe=Probe(), machine=lambda: "m")
+    listing = await service.listing()
+    by = {v.required.command: v.required.needed_by[0] for v in listing.items}
+    assert by["gh"].profiles == ()
+    assert by["smc"].profiles == ("acme",)

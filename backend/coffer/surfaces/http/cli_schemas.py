@@ -27,6 +27,8 @@ class CliNeededByOut(BaseModel):
     skill_name: str
     min_version: str | None
     why: str | None
+    #: The skill's profiles that declare it; empty when SKILL.md itself does.
+    profiles: list[str]
 
 
 class CliServerOut(BaseModel):
@@ -163,6 +165,7 @@ def cli_out(view: CliView) -> CliOut:
                 skill_name=n.skill_name,
                 min_version=n.min_version,
                 why=n.why,
+                profiles=list(n.profiles),
             )
             for n in row.needed_by
         ],

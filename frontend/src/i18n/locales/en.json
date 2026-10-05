@@ -2773,6 +2773,7 @@
       "toolsIntro": "MCP servers and custom tools the skill calls, declared in SKILL.md under <code>tools:</code>.",
       "skillsIntro": "Other skills this one loads, declared in SKILL.md under <code>metadata.requires</code>.",
       "checkedAgo": "Checked on this Mac {{when}}.",
+      "inProfiles": "in profile {{profiles}}",
       "needsAtLeast": "Needs ≥ {{min}}",
       "viewInClis": "View in CLIs",
       "viewInSecrets": "View in Secrets",

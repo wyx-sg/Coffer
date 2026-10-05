@@ -2773,6 +2773,7 @@
       "toolsIntro": "技能会调用的 MCP 服务器和自定义工具，在 SKILL.md 的 <code>tools:</code> 下声明。",
       "skillsIntro": "这个技能会加载的其他技能，在 SKILL.md 的 <code>metadata.requires</code> 下声明。",
       "checkedAgo": "在这台 Mac 上{{when}}检查过。",
+      "inProfiles": "在 profile {{profiles}} 中声明",
       "needsAtLeast": "需要 ≥ {{min}}",
       "viewInClis": "在命令行工具中查看",
       "viewInSecrets": "在密钥中查看",

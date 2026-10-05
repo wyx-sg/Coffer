@@ -72,10 +72,14 @@ class SkillRequirementOut(BaseModel):
 
     command: str
     min_version: str | None
+    #: The profiles that declare it; empty when SKILL.md itself does.
+    profiles: list[str]
 
 
 def requirement_out(r: CommandRequirement) -> SkillRequirementOut:
-    return SkillRequirementOut(command=r.command, min_version=r.min_version)
+    return SkillRequirementOut(
+        command=r.command, min_version=r.min_version, profiles=list(r.profiles)
+    )
 
 
 class SkillSecretRequirementOut(BaseModel):
@@ -84,6 +88,7 @@ class SkillSecretRequirementOut(BaseModel):
 
     name: str
     is_set: bool
+    profiles: list[str]
 
 
 class SkillToolRequirementOut(BaseModel):
@@ -99,6 +104,7 @@ class SkillToolRequirementOut(BaseModel):
     #: test failed, ``healthy`` otherwise.
     status: Literal["healthy", "off", "failing"]
     why: str | None
+    profiles: list[str]
 
 
 class SkillSkillRequirementOut(BaseModel):

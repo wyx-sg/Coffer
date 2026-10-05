@@ -316,6 +316,22 @@ requires:
 
 技能的**依赖** tab 在**工具**下列出每个工具，标明开、关或出错，并链接到它的页面。被依赖的工具关闭时，技能会进入**需要处理**，横幅是**工具已关闭**，它的操作就是把工具打开。和命令、密钥一样，不管工具开没开，技能都会被投递。
 
+## profile 声明的依赖 {#profile-declared-requirements}
+
+技能库可以为每个技能在 `<技能文件夹>/profiles/<name>.md` 保存 profile：一个 `default.md`，外加每个环境一个文件，每个都带 YAML frontmatter（原因见[编写技能库](/zh/guides/writing-skill-libraries)）。profile 的 frontmatter 可以带和 `SKILL.md` 一样的 `requires:`，包括命令、密钥和工具：
+
+```yaml
+---
+carrier: Skill(example-log-search)
+requires:
+  commands:
+    - command: gh
+      login_check: gh auth status
+  secrets: [EXAMPLE_TOKEN]
+---
+```
+
+智能体运行时选定一个 profile，而 Coffer 无从得知选的是哪个。所以 Coffer 每次都读取 `SKILL.md` 的 `requires:` 与每个 `profiles/*.md` 的 `requires:` 的并集，并说明每一项由哪个 profile 声明：**依赖** 标签页在该行显示“in profile example-org”（界面文字），[命令行工具](/zh/guides/clis)的**被谁需要**显示 `skill-name · example-org`。`SKILL.md` 自己声明的项不带 profile。在多处声明的命令、密钥或工具合并为一条依赖；对命令，Coffer 保留最高的最低版本，以及第一个非空的 title、`why` 和登录检查。profile 里的警告会写明它的文件 `profiles/<name>.md`。Coffer 只读取这些文件声明的内容，从不扫描它们去猜测。
 
 ## skill 的脚本把文件放在哪里 {#where-a-skill-s-scripts-keep-their-files}
 

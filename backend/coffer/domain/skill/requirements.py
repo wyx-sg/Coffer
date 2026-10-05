@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import re
 import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from coffer.domain.secrets import is_valid_secret_name
 from coffer.domain.skill.validator import parse_frontmatter
@@ -84,6 +84,9 @@ class CommandRequirement:
     #: Shown to the user to copy; Coffer never runs it.
     login: str | None = None
     why: str | None = None
+    #: The profile files (``profiles/<name>.md``) that declared it, by name;
+    #: empty when SKILL.md itself did.
+    profiles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,7 @@ class ToolRequirement:
 
     name: str
     why: str | None = None
+    profiles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -103,6 +107,8 @@ class RequirementsParse:
     tools: tuple[ToolRequirement, ...] = ()
     #: One sentence per entry that was skipped (or field that was dropped).
     warnings: tuple[str, ...] = ()
+    #: For each secret, the profiles that declared it (absent: SKILL.md itself).
+    secret_profiles: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 class _SkipEntryError(ValueError):

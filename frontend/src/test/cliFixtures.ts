@@ -4,7 +4,7 @@ import type { Cli } from "@/lib/api/clis";
 const CHECKED = new Date(Date.now() - 2 * 60_000).toISOString();
 
 function need(skill: string, min: string | null = null, why: string | null = null) {
-  return { skill_uid: `sk-${skill}`, skill_name: skill, min_version: min, why };
+  return { skill_uid: `sk-${skill}`, skill_name: skill, min_version: min, why, profiles: [] };
 }
 
 export function cli(overrides: Partial<Cli> & Pick<Cli, "command">): Cli {

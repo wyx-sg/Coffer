@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import type { Cli } from "@/lib/api/clis";
+import { withProfiles } from "@/lib/clis/format";
 import { CliSection } from "./CliField";
 
 const GRID = "grid grid-cols-[minmax(0,1fr)_110px_150px_16px] items-center gap-2";
@@ -45,7 +46,7 @@ export function CliNeededBySection({ cli }: { cli: Cli }) {
     })),
     ...cli.needed_by.map((n) => ({
       key: `skill-${n.skill_uid}`,
-      name: n.skill_name,
+      name: withProfiles(n.skill_name, n.profiles),
       to: `/skills/${encodeURIComponent(n.skill_name)}/requires`,
       kind: t("clis.detail.kind.skill"),
       needs: n.min_version ? `≥ ${n.min_version}` : "—",

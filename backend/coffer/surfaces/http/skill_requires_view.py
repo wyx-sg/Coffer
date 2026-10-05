@@ -9,13 +9,12 @@ from __future__ import annotations
 import pathlib
 from dataclasses import dataclass, field
 
+from coffer.application.skill.cli_documents import read_profiles
 from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.skill.requirements import (
-    required_skills_from_skill_md,
-    requirements_from_skill_md,
-)
+from coffer.domain.skill.requirements import required_skills_from_skill_md
+from coffer.domain.skill.requirements_union import requirements_of_skill
 from coffer.domain.skill.tool_state import resolve_tools
 from coffer.surfaces.http.skill_dependencies import get_skill_secret_presence, get_skill_tool_states
 from coffer.surfaces.http.skill_source_schemas import (
@@ -82,6 +81,11 @@ async def _skills_group(
     return out
 
 
+def _profile_texts(svc: SkillService, name: str) -> list[tuple[str, str]]:
+    folder = pathlib.Path(svc.master_path(name))
+    return [(p.name, p.text) for p in read_profiles(folder)]
+
+
 async def requires_view(
     svc: SkillService,
     skill: Resource,
@@ -93,12 +97,16 @@ async def requires_view(
         text = (pathlib.Path(svc.master_path(skill.name)) / "SKILL.md").read_text("utf-8")
     except (OSError, UnicodeDecodeError, ValueError):
         return RequiresView()
-    parsed = requirements_from_skill_md(text)
+    parsed = requirements_of_skill(text, _profile_texts(svc, skill.name))
     is_set = get_skill_secret_presence()
     view = RequiresView(
         commands=[requirement_out(q) for q in parsed.requirements],
         secrets=[
-            SkillSecretRequirementOut(name=n, is_set=bool(is_set and is_set(n)))
+            SkillSecretRequirementOut(
+                name=n,
+                is_set=bool(is_set and is_set(n)),
+                profiles=list(parsed.secret_profiles.get(n, ())),
+            )
             for n in parsed.secrets
         ],
     )
@@ -112,6 +120,7 @@ async def requires_view(
                 kind=t.state.kind.value,
                 status=t.state.status.value,
                 why=t.requirement.why,
+                profiles=list(t.requirement.profiles),
             )
             for t in found
         ]

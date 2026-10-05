@@ -2175,7 +2175,7 @@ missing, older than the minimum, or not logged in, grouped under Needs attention
 Ready — as a split view with the selected CLI's detail beside the list
 (`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
 with the command, each opening that server's page and naming its launcher, and
-the skills that declare it, each opening that skill's Requires tab; each row
+the skills that declare it, each opening that skill's Requires tab and followed by " · <profile>" for each profile that declares the command (spec skill-manager "Read the requirements profile files declare"); each row
 carries its kind when both need it. The app MUST NOT show an install, update or
 login command, a "run it in a terminal" instruction, or run any of them: a CLI
 that needs the user says what it costs in a plain sentence — which servers can't

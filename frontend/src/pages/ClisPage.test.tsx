@@ -12,6 +12,7 @@ import { acceptance } from "@/test/acceptance";
 import {
   GCLOUD_LOGGED_OUT,
   DEMO_ADDED,
+  cli,
   GH_OUTDATED,
   GIT_MISSING_FOR_COFFER,
   JQ_MISSING,
@@ -232,6 +233,29 @@ describe("ClisPage", () => {
     const row = filter.closest("div.flex") as HTMLElement;
     fireEvent.click(within(row).getByRole("button", { name: "Check" }));
     await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
+  });
+
+  test("a skill that a profile declares the command in names that profile", async () => {
+    api.list.mockResolvedValue(
+      listOf([
+        cli({
+          command: "smc",
+          needed_by: [
+            {
+              skill_uid: "sk-logs",
+              skill_name: "logs",
+              min_version: null,
+              why: null,
+              profiles: ["shopee-account"],
+            },
+          ],
+        }),
+      ]),
+    );
+    renderPage("/clis/smc");
+    const link = await screen.findByRole("link", { name: /logs/ });
+    expect(link).toHaveTextContent("logs · shopee-account");
+    expect(link).toHaveAttribute("href", "/skills/logs/requires");
   });
 
   test("each skill that needs it opens that skill's Requires tab", async () => {

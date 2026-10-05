@@ -60,6 +60,8 @@ class NeededBy:
     skill_name: str
     min_version: str | None
     why: str | None
+    #: Profiles that declared it; empty when SKILL.md itself did.
+    profiles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -196,7 +198,13 @@ def _row(
         login_check=own.login_check or next((r.login_check for r in reqs if r.login_check), None),
         login=next((r.login for r in reqs if r.login), None),
         needed_by=tuple(
-            NeededBy(skill_uid=uid, skill_name=name, min_version=r.min_version, why=r.why)
+            NeededBy(
+                skill_uid=uid,
+                skill_name=name,
+                min_version=r.min_version,
+                why=r.why,
+                profiles=r.profiles,
+            )
             for uid, name, r in entries
         ),
         needed_by_servers=tuple(servers),
