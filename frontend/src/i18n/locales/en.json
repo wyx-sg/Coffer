@@ -169,7 +169,10 @@
         "allOk": "{{count}} succeeded",
         "partial": "{{ok}} succeeded, {{failed}} failed",
         "allFailed": "{{count}} failed"
-      }
+      },
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "exposure": "Exposure"
     },
     "copy": "Copy",
     "copied": "Copied",
@@ -502,10 +505,6 @@
         "top_by_use": "Listed because it is among the most-used tools.",
         "low_use": "Behind search: used less than the tools that are listed."
       },
-      "bulk": "Set exposure",
-      "bulkAuto": "Set {{count}} to Auto",
-      "bulkListed": "Set {{count}} to Always listed",
-      "bulkSearch": "Set {{count}} to Search only",
       "bulkDone_one": "Updated {{count}} tool",
       "bulkDone_other": "Updated {{count}} tools"
     },
@@ -569,8 +568,6 @@
         "never": "Never"
       },
       "agents": "Agents",
-      "allOff": "All off",
-      "allOn": "All on",
       "behindSearch": "Behind search",
       "bulkLabel": "Selected MCP servers",
       "calledBy": "Called by",
@@ -710,7 +707,6 @@
       "offNoCalls": "No calls while off.",
       "mostCalledSub": "What agents call most on {{name}}, busiest first.",
       "lastCallBy": "Last call {{at}} by {{agent}}",
-      "nOfMOn": "{{on}} of {{total}} on",
       "searchResources": "Search resources",
       "searchPrompts": "Search prompts",
       "requires": {
@@ -729,7 +725,10 @@
           "waiting_approval": "Waiting for approval"
         }
       },
-      "viewInActivity": "View in Activity"
+      "viewInActivity": "View in Activity",
+      "bulkTools": "Selected tools",
+      "bulkResources": "Selected resources",
+      "bulkPrompts": "Selected prompts"
     },
     "builtin": {
       "group": "Built-in",
@@ -1955,6 +1954,13 @@
         "uninstalled_other": "Uninstalled {{count}} plugins",
         "uninstallPartial": "Uninstalled {{ok}} of {{total}}",
         "retry": "Retry {{count}} that failed"
+      },
+      "cols": {
+        "name": "Name",
+        "description": "Description",
+        "version": "Version",
+        "marketplace": "Marketplace",
+        "enabled": "Enabled"
       }
     },
     "pluginDetail": {
@@ -2025,6 +2031,11 @@
         "title": "{{agent}}’s own memory",
         "descriptionClaude": "One store per project, written by {{agent}}. Read-only: Coffer reads them and never writes them.",
         "descriptionCodex": "Written by {{agent}}. Read-only: Coffer reads it and never writes it."
+      },
+      "cols": {
+        "project": "Project",
+        "folder": "Memory folder",
+        "files": "Files"
       }
     },
     "config": {
@@ -2137,6 +2148,12 @@
         "skipped_one": "{{count}} selected skill is skipped: only unmanaged folders can be adopted.",
         "skipped_other": "{{count}} selected skills are skipped: only unmanaged folders can be adopted.",
         "reachHint": "Who gets them. Change it later on the Skills page."
+      },
+      "cols": {
+        "name": "Name",
+        "note": "Note",
+        "location": "Location",
+        "state": "Status"
       }
     },
     "mcpTab": {
@@ -2234,6 +2251,12 @@
         "retry": "Retry {{count}} that failed",
         "skipped_one": "{{count}} selected entry is skipped: only entries that bypass Coffer can be adopted.",
         "skipped_other": "{{count}} selected entries are skipped: only entries that bypass Coffer can be adopted."
+      },
+      "cols": {
+        "name": "Name",
+        "command": "Command",
+        "file": "File",
+        "state": "Status"
       }
     },
     "memoryStore": {
@@ -2257,7 +2280,8 @@
       "loadFailed": "Couldn’t read this list",
       "moreFor": "More for {{name}}",
       "selectRow": "Select {{name}}",
-      "selectAll": "Select all"
+      "selectAll": "Select all",
+      "actions": "Actions"
     },
     "state": {
       "not_installed": "Not installed",
@@ -4835,9 +4859,6 @@
       "fetched": "fetched {{date}}"
     },
     "tools": {
-      "allOn": "All on",
-      "allOff": "All off",
-      "countOn": "{{on}} of {{total}} on",
       "switch": "On",
       "switchTool": "Turn {{name}} on or off",
       "colTool": "Tool · request",
@@ -4851,7 +4872,8 @@
       "description": "Each tool is one request; agents see {{prefix}}.",
       "filter": "Filter tools",
       "noMatch": "No tool matches “{{query}}”",
-      "edit": "Edit {{name}}"
+      "edit": "Edit {{name}}",
+      "bulkLabel": "Selected tools"
     },
     "editor": {
       "subtitle": "Tool in {{group}} · agents see {{name}}",
@@ -5738,7 +5760,13 @@
       "priceLocal": "Local models cost nothing.",
       "listingFailed": "Listing failed",
       "lastListed": "last listed {{date}}",
-      "showing": "Showing {{shown}} of {{total}}"
+      "showing": "Showing {{shown}} of {{total}}",
+      "bulkLabel": "Selected models",
+      "cols": {
+        "model": "Model",
+        "price": "Price",
+        "type": "Type"
+      }
     },
     "test": {
       "running": "Testing the endpoint…",

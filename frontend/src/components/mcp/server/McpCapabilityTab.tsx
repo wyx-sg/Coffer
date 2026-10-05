@@ -1,15 +1,20 @@
 // src/components/mcp/server/McpCapabilityTab.tsx — the open server's Resources or Prompts tab (design 4.1.11, 4.1.12).
 //
-// Search, "N of M on", All on · All off; each row its switch, URI or name,
+// Search; each row its select box, its switch, URI or name,
 // one-line description (a prompt's arguments after it) and its last-24-hours
 // reads or uses; every item is loaded and rendered whole (100 at a time as
-// the end scrolls into view, past 100). The gateway lists every resource and prompt as the server
+// the end scrolls into view, past 100). The header box ticks every item the
+// search matches; ticked items swap the toolbar for the selection bar (Turn
+// on, Turn off). The gateway lists every resource and prompt as the server
 // offers it, so there is no exposure setting here; the Prompts tab says above
 // its toolbar where they show up.
 import { useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
+import { ListSelectionBar } from "@/components/ListSelectionBar";
+import { useTableSelection } from "@/components/DataTableSelection";
+import { BulkOnOffActions } from "@/components/BulkOnOffActions";
 import { LoadMoreSentinel } from "@/components/ui/load-more";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,7 +25,7 @@ import { useGrowingList } from "@/lib/hooks/useGrowingList";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
 import { ToggleSwitch } from "../CapabilityRowCells";
-import { CapabilityToolbar } from "./CapabilityToolbar";
+import { CapabilityToolbar, RowSelectBox, SelectAllBox } from "./CapabilityToolbar";
 import { usageByTool } from "@/lib/mcp/serverState";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
@@ -40,6 +45,8 @@ interface Props {
   error: unknown;
   summary: InvocationSummary | undefined;
 }
+
+const rowKey = (row: Row) => row.key;
 
 function rowsOf(t: TFunction, kind: Props["kind"], caps: CapabilityListOut | undefined): Row[] {
   if (kind === "resource")
@@ -76,19 +83,30 @@ export function McpCapabilityTab({
   const [query, setQuery] = useState("");
   const bulk = useBulkMutate({ invalidate: [mcpCapabilitiesKey(serverUid)] });
   const rows = rowsOf(t, kind, capabilities);
-  const on = rows.filter((r) => r.enabled).length;
   const usage = usageByTool(summary);
   const q = query.trim().toLowerCase();
   const shown = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
   const page = useGrowingList(shown, q);
   const ns = kind === "resource" ? "resources" : "prompts";
 
-  const setAll = (op: "enable" | "disable") =>
-    void bulk.run(
-      rows.filter((r) => r.enabled !== (op === "enable")),
+  const sel = useTableSelection(shown, rowKey);
+  const selected = sel.selectedRows;
+  const selection = {
+    keys: sel.keys,
+    toggle: sel.toggle,
+    allKeys: shown.map(rowKey),
+    setMany: sel.setMany,
+    count: selected.length,
+  };
+
+  const setSelected = async (op: "enable" | "disable") => {
+    await bulk.run(
+      selected.filter((r) => r.enabled !== (op === "enable")),
       (r) =>
         capabilitiesApi.setEnabled(op, { serverUid, capabilityType: kind, capabilityKey: r.key }),
     );
+    sel.clear();
+  };
 
   let body: JSX.Element;
   if (pending) body = <Skeleton className="h-32 w-full" />;
@@ -111,6 +129,9 @@ export function McpCapabilityTab({
       <table className="w-full table-fixed text-sm" aria-label={t(`mcp.server.tabs.${ns}`)}>
         <thead>
           <tr className="border-b border-border-subtle text-left text-2xs font-semibold text-text-muted">
+            <th className="w-10 py-1.5 pl-2">
+              <SelectAllBox selection={selection} />
+            </th>
             <th className="w-12 py-1.5" aria-hidden />
             <th className="py-1.5 font-semibold">{t(`mcp.page.${ns}.col`)}</th>
             <th className="py-1.5 font-semibold">{t("mcp.page.colDescription")}</th>
@@ -120,6 +141,9 @@ export function McpCapabilityTab({
         <tbody>
           {page.shown.map((row) => (
             <tr key={row.key} className="h-12 border-b border-border-subtle">
+              <td className="py-2 pl-2">
+                <RowSelectBox selection={selection} rowKey={row.key} name={row.key} />
+              </td>
               <td className="py-2 text-center">
                 <ToggleSwitch serverUid={serverUid} kind={kind} row={row} />
               </td>
@@ -145,16 +169,30 @@ export function McpCapabilityTab({
       {kind === "prompt" && rows.length > 0 ? (
         <p className="text-xs text-text-muted">{t("mcp.page.prompts.note")}</p>
       ) : null}
-      <CapabilityToolbar
-        placeholder={t(kind === "resource" ? "mcp.page.searchResources" : "mcp.page.searchPrompts")}
-        query={query}
-        onQueryChange={setQuery}
-        on={on}
-        total={rows.length}
-        busy={bulk.isPending}
-        onAllOn={() => setAll("enable")}
-        onAllOff={() => setAll("disable")}
-      />
+      {selected.length > 0 ? (
+        <ListSelectionBar
+          label={t(kind === "resource" ? "mcp.page.bulkResources" : "mcp.page.bulkPrompts")}
+          count={selected.length}
+          total={shown.length}
+          onClear={sel.clear}
+        >
+          <BulkOnOffActions
+            busy={bulk.isPending}
+            offCount={selected.filter((r) => !r.enabled).length}
+            onCount={selected.filter((r) => r.enabled).length}
+            onTurnOn={() => void setSelected("enable")}
+            onTurnOff={() => void setSelected("disable")}
+          />
+        </ListSelectionBar>
+      ) : (
+        <CapabilityToolbar
+          placeholder={t(
+            kind === "resource" ? "mcp.page.searchResources" : "mcp.page.searchPrompts",
+          )}
+          query={query}
+          onQueryChange={setQuery}
+        />
+      )}
       {body}
       <LoadMoreSentinel active={page.hasMore} onVisible={page.more} version={page.shown.length} />
     </div>

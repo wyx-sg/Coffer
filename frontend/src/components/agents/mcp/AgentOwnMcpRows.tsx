@@ -1,8 +1,9 @@
-// src/components/agents/mcp/AgentOwnMcpRows.tsx — the agent's own MCP entries as hairline rows (board 2.1.25).
+// src/components/agents/mcp/AgentOwnMcpRows.tsx — the agent's own MCP entries as table rows (board 2.1.25).
 //
-// The name (mono) opens the entry's read-only JSON. Under it: the command or
-// URL, the file it sits in, and how many secrets its env holds; a duplicate
-// says which Coffer server it duplicates. Right: a state word and one button —
+// Columns (ownMcpColumns): Name (mono, opens the entry's read-only JSON),
+// Command (the command or URL and how many secrets its env holds; a duplicate
+// says which Coffer server it duplicates), File (where it sits), Status (a state
+// word), then one button —
 // Adopt, or Remove duplicate. The ⋯ menu holds Remove… only (not on a
 // duplicate, whose button does that). A row of a file that failed to parse
 // reads Read-only and its actions are disabled.
@@ -10,10 +11,11 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import type { RowSelect } from "@/components/agents/tabs/AgentKindTab";
-import { Dot, KindRow } from "@/components/agents/tabs/KindRow";
+import { KindActions, KindName, KindRow } from "@/components/agents/tabs/KindRow";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { entryCommand, type OwnMcpRow, type OwnMcpState } from "./mcpRows";
 
 const STATE_LABEL: Record<OwnMcpState, string> = {
@@ -54,48 +56,42 @@ export function AgentOwnMcpRows({
           <KindRow
             key={row.key}
             leading={select.leading(row, row.name)}
-            name={
-              <button
-                type="button"
-                onClick={() => onOpenEntry(row)}
-                className="max-w-full truncate text-left hover:underline"
-              >
-                {row.name}
-              </button>
-            }
-            sub={
-              <>
-                {duplicate !== null ? (
-                  <span>
-                    {t("agents.mcpTab.duplicateOfLead")}{" "}
-                    <Link
-                      to={`/mcp-servers/${encodeURIComponent(duplicate)}`}
-                      className="font-mono text-accent-text hover:underline"
-                    >
-                      {duplicate}
-                    </Link>{" "}
-                    {t("agents.mcpTab.duplicateOfTail")}
-                  </span>
-                ) : (
-                  <span className="truncate font-mono">{entryCommand(entry)}</span>
-                )}
-                <Dot />
-                <span className="font-mono">{whereLabel(entry.source)}</span>
-                {duplicate === null && entry.secret_keys.length > 0 ? (
-                  <>
-                    <Dot />
-                    <span>
+            cells={[
+              <KindName key="name">
+                <button
+                  type="button"
+                  onClick={() => onOpenEntry(row)}
+                  className="max-w-full truncate text-left hover:underline"
+                >
+                  {row.name}
+                </button>
+              </KindName>,
+              duplicate !== null ? (
+                <span key="command" className="block truncate">
+                  {t("agents.mcpTab.duplicateOfLead")}{" "}
+                  <Link
+                    to={`/mcp-servers/${encodeURIComponent(duplicate)}`}
+                    className="font-mono text-accent-text hover:underline"
+                  >
+                    {duplicate}
+                  </Link>{" "}
+                  {t("agents.mcpTab.duplicateOfTail")}
+                </span>
+              ) : (
+                <span key="command" className="flex min-w-0 items-center gap-1.5">
+                  <TruncatedText mono text={entryCommand(entry)} className="min-w-0" />
+                  {entry.secret_keys.length > 0 ? (
+                    <span className="shrink-0 text-text-subtle">
                       {t("agents.mcpTab.secretsInEnv", { count: entry.secret_keys.length })}
                     </span>
-                  </>
-                ) : null}
-              </>
-            }
-            trailing={
-              <>
-                <StatusWord tone={readOnly ? "off" : "warn"}>
-                  {t(STATE_LABEL[row.state])}
-                </StatusWord>
+                  ) : null}
+                </span>
+              ),
+              <TruncatedText key="file" mono text={whereLabel(entry.source)} />,
+              <StatusWord key="state" tone={readOnly ? "off" : "warn"}>
+                {t(STATE_LABEL[row.state])}
+              </StatusWord>,
+              <KindActions key="actions">
                 {duplicate !== null ? (
                   <Button
                     variant="outline"
@@ -131,8 +127,8 @@ export function AgentOwnMcpRows({
                     />
                   </>
                 )}
-              </>
-            }
+              </KindActions>,
+            ]}
           />
         );
       })}

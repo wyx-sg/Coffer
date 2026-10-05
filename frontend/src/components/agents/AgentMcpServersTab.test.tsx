@@ -148,7 +148,7 @@ function renderTab() {
   );
 }
 
-const rowOf = (name: string) => screen.getByRole("button", { name }).closest("li") as HTMLElement;
+const rowOf = (name: string) => screen.getByRole("button", { name }).closest("tr") as HTMLElement;
 
 afterEach(() => vi.clearAllMocks());
 

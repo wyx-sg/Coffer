@@ -102,7 +102,7 @@ function renderAt(uid: string) {
 }
 
 const rowOf = (id: string) =>
-  screen.getByRole("switch", { name: `Offered: ${id}` }).parentElement as HTMLElement;
+  screen.getByRole("switch", { name: `Offered: ${id}` }).closest("tr") as HTMLElement;
 
 describe("prices", () => {
   beforeEach(() => {

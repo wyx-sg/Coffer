@@ -8,6 +8,7 @@
 // correcting an offered row's type PATCHes the whole set as `models`. A type
 // picked on a row not offered yet is held here until its switch carries it in
 // (spec provider-switching "Introspect the endpoint when the Models tab opens").
+// Bulk on/off (`setMany`) computes the new set from the same base and saves once.
 // A failed or empty probe leaves the stored selection exactly as it was.
 import { useState } from "react";
 
@@ -46,6 +47,22 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
     );
   };
 
+  /** Switch every given row on or off in ONE write, from the same base a toggle uses. */
+  const setMany = (picked: readonly ProviderModel[], on: boolean) => {
+    const base = materialised();
+    const ids = new Set(picked.map((m) => m.id));
+    write(
+      on
+        ? [
+            ...base,
+            ...picked
+              .filter((m) => !base.some((b) => b.id === m.id))
+              .map((m) => ({ id: m.id, modality: modalityOf(m) })),
+          ]
+        : base.filter((m) => !ids.has(m.id)),
+    );
+  };
+
   const setModality = (row: ProviderModel, modality: Modality) => {
     if (unrestricted) {
       write(materialised().map((m) => (m.id === row.id ? { ...m, modality } : m)));
@@ -74,6 +91,7 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
     isOn,
     modalityOf,
     toggle,
+    setMany,
     setModality,
     setPrice,
     pending: update.isPending,

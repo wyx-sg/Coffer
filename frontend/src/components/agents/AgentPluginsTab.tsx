@@ -3,9 +3,9 @@
 // Boards 2.1.31–2.1.33, 2.1.60. Spec agent-registry "List an agent's installed
 // plugins without writing anything", "Toggle a plugin through the documented
 // location only" and "Uninstall a plugin by the type's own strategy". Coffer
-// installs no plugins, so every row is the agent's own: a name (opens the info
-// dialog), a description · version · marketplace line, a state word only when
-// something is wrong (Cache missing), the enabled switch and a ⋯ menu holding
+// installs no plugins, so every row is the agent's own, one table row: Name
+// (opens the info dialog), Description, Version, Marketplace, Enabled (a state
+// word only when something is wrong — Cache missing — and the switch), then a ⋯ menu holding
 // Uninstall… — disabled, with the reason, while Uninstall cannot run because
 // the agent's program is not found (the list then says so, with the hand-off
 // to have an agent reinstall it).
@@ -17,18 +17,30 @@ import { HelpTip } from "@/components/HelpTip";
 import { PluginInfoDialog } from "@/components/agents/PluginInfoDialog";
 import { useAgentPluginsBulk } from "@/components/agents/useAgentPluginsBulk";
 import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
-import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
-import { Dot, KindRow } from "@/components/agents/tabs/KindRow";
+import { AgentKindTab, type KindColumn } from "@/components/agents/tabs/AgentKindTab";
+import { KindActions, KindName, KindRow } from "@/components/agents/tabs/KindRow";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Switch } from "@/components/ui/switch";
 import { ActionMenu } from "@/components/ui/menu";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import type { PluginOut } from "@/lib/api/agents-workspace";
 import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
 
 const searchText = (p: PluginOut) => p.name;
+
+function pluginColumns(t: (key: string) => string): KindColumn[] {
+  return [
+    { key: "name", header: t("agents.pluginsTab.cols.name"), className: "w-[20%]" },
+    { key: "description", header: t("agents.pluginsTab.cols.description") },
+    { key: "version", header: t("agents.pluginsTab.cols.version"), className: "w-[14%]" },
+    { key: "marketplace", header: t("agents.pluginsTab.cols.marketplace"), className: "w-[17%]" },
+    { key: "enabled", header: t("agents.pluginsTab.cols.enabled"), className: "w-36 text-right" },
+    { key: "actions", className: "w-12" },
+  ];
+}
 
 export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -85,6 +97,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
         rows={rows}
         searchPlaceholder={t("agents.pluginsTab.search")}
         searchText={searchText}
+        columns={pluginColumns(t)}
         isLoading={plugins.isPending}
         error={plugins.error}
         onRetry={() => void plugins.refetch()}
@@ -112,26 +125,26 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
             <KindRow
               key={p.id}
               leading={select.leading(p, p.name)}
-              name={
-                <button
-                  type="button"
-                  onClick={() => setInfoId(p.id)}
-                  className="max-w-full truncate text-left hover:underline"
-                >
-                  {p.name}
-                </button>
-              }
-              sub={
-                <>
-                  {p.description ? <span>{p.description}</span> : null}
-                  {p.description ? <Dot /> : null}
-                  <span className="font-mono">{p.version ?? t("common.emptyValue")}</span>
-                  <Dot />
-                  <span>{p.marketplace}</span>
-                </>
-              }
-              trailing={
-                <>
+              cells={[
+                <KindName key="name">
+                  <button
+                    type="button"
+                    onClick={() => setInfoId(p.id)}
+                    className="max-w-full truncate text-left hover:underline"
+                  >
+                    {p.name}
+                  </button>
+                </KindName>,
+                p.description ? (
+                  <TruncatedText key="description" text={p.description} />
+                ) : (
+                  <span key="description" className="text-text-subtle">
+                    {t("common.emptyValue")}
+                  </span>
+                ),
+                <TruncatedText key="version" mono text={p.version ?? t("common.emptyValue")} />,
+                <TruncatedText key="marketplace" text={p.marketplace} />,
+                <KindActions key="enabled">
                   {p.cache_present === false ? (
                     <StatusWord tone="warn">{t("agents.pluginsTab.cacheMissing")}</StatusWord>
                   ) : null}
@@ -141,6 +154,8 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
                     onCheckedChange={(checked) => toggle.mutate({ id: p.id, enabled: checked })}
                     aria-label={t("agents.pluginsTab.enabledAria", { name: p.name })}
                   />
+                </KindActions>,
+                <KindActions key="actions">
                   <ActionMenu
                     label={t("agents.kindTab.moreFor", { name: p.name })}
                     actions={[
@@ -156,8 +171,8 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
                       },
                     ]}
                   />
-                </>
-              }
+                </KindActions>,
+              ]}
             />
           ))
         }

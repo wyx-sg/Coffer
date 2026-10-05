@@ -169,7 +169,10 @@
         "allOk": "成功 {{count}} 项",
         "partial": "成功 {{ok}} 项，失败 {{failed}} 项",
         "allFailed": "失败 {{count}} 项"
-      }
+      },
+      "turnOn": "开启",
+      "turnOff": "关闭",
+      "exposure": "暴露方式"
     },
     "emptyValue": "—",
     "copy": "复制",
@@ -502,10 +505,6 @@
         "top_by_use": "因为它是调用最多的工具之一而被直接列出。",
         "low_use": "通过搜索：调用次数少于已直接列出的工具。"
       },
-      "bulk": "批量设置",
-      "bulkAuto": "将 {{count}} 个设为自动",
-      "bulkListed": "将 {{count}} 个设为始终列出",
-      "bulkSearch": "将 {{count}} 个设为仅搜索",
       "bulkDone_one": "已更新 {{count}} 个工具",
       "bulkDone_other": "已更新 {{count}} 个工具"
     },
@@ -569,8 +568,6 @@
         "never": "从未"
       },
       "agents": "智能体",
-      "allOff": "全部关闭",
-      "allOn": "全部开启",
       "behindSearch": "通过搜索",
       "bulkLabel": "已选的 MCP 服务器",
       "calledBy": "调用方",
@@ -710,7 +707,6 @@
       "offNoCalls": "关闭期间没有调用。",
       "mostCalledSub": "智能体在 {{name}} 上调用最多的工具，最常用的在前。",
       "lastCallBy": "上次调用 {{at}}，来自 {{agent}}",
-      "nOfMOn": "{{on}} / {{total}} 已开启",
       "searchResources": "搜索资源",
       "searchPrompts": "搜索提示词",
       "requires": {
@@ -729,7 +725,10 @@
           "waiting_approval": "等待批准"
         }
       },
-      "viewInActivity": "在活动中查看"
+      "viewInActivity": "在活动中查看",
+      "bulkTools": "已选工具",
+      "bulkResources": "已选资源",
+      "bulkPrompts": "已选提示词"
     },
     "builtin": {
       "group": "内置",
@@ -1955,6 +1954,13 @@
         "uninstalled_other": "已卸载 {{count}} 个插件",
         "uninstallPartial": "已卸载 {{ok}} / {{total}}",
         "retry": "重试失败的 {{count}} 个"
+      },
+      "cols": {
+        "name": "名称",
+        "description": "描述",
+        "version": "版本",
+        "marketplace": "市场",
+        "enabled": "启用"
       }
     },
     "pluginDetail": {
@@ -2025,6 +2031,11 @@
         "title": "{{agent}} 自己的记忆",
         "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入。只读：Coffer 只读取，从不写入。",
         "descriptionCodex": "由 {{agent}} 写入。只读：Coffer 只读取，从不写入。"
+      },
+      "cols": {
+        "project": "项目",
+        "folder": "记忆目录",
+        "files": "文件数"
       }
     },
     "config": {
@@ -2137,6 +2148,12 @@
         "skipped_one": "已跳过所选的 {{count}} 个技能：只有未托管的文件夹才能纳入托管。",
         "skipped_other": "已跳过所选的 {{count}} 个技能：只有未托管的文件夹才能纳入托管。",
         "reachHint": "决定谁能用到。之后可在「技能」页修改。"
+      },
+      "cols": {
+        "name": "名称",
+        "note": "说明",
+        "location": "位置",
+        "state": "状态"
       }
     },
     "mcpTab": {
@@ -2234,6 +2251,12 @@
         "retry": "重试失败的 {{count}} 个",
         "skipped_one": "已跳过所选的 {{count}} 个条目：只有绕过 Coffer 的条目才能纳入托管。",
         "skipped_other": "已跳过所选的 {{count}} 个条目：只有绕过 Coffer 的条目才能纳入托管。"
+      },
+      "cols": {
+        "name": "名称",
+        "command": "命令",
+        "file": "文件",
+        "state": "状态"
       }
     },
     "memoryStore": {
@@ -2257,7 +2280,8 @@
       "loadFailed": "无法读取此列表",
       "moreFor": "{{name}} 的更多操作",
       "selectRow": "选择 {{name}}",
-      "selectAll": "全选"
+      "selectAll": "全选",
+      "actions": "操作"
     },
     "state": {
       "not_installed": "未安装",
@@ -4835,9 +4859,6 @@
       "fetched": "获取于 {{date}}"
     },
     "tools": {
-      "allOn": "全部开启",
-      "allOff": "全部关闭",
-      "countOn": "{{total}} 个中已开启 {{on}} 个",
       "switch": "开关",
       "switchTool": "开启或关闭 {{name}}",
       "colTool": "工具 · 请求",
@@ -4851,7 +4872,8 @@
       "description": "每个工具就是一个请求；智能体看到的是 {{prefix}}。",
       "filter": "筛选工具",
       "noMatch": "没有工具匹配“{{query}}”",
-      "edit": "编辑 {{name}}"
+      "edit": "编辑 {{name}}",
+      "bulkLabel": "已选工具"
     },
     "editor": {
       "subtitle": "{{group}} 中的工具 · 智能体看到 {{name}}",
@@ -5738,7 +5760,13 @@
       "priceLocal": "本地模型不计费。",
       "listingFailed": "列出失败",
       "lastListed": "上次列出 {{date}}",
-      "showing": "显示 {{shown}} / {{total}}"
+      "showing": "显示 {{shown}} / {{total}}",
+      "bulkLabel": "已选模型",
+      "cols": {
+        "model": "模型",
+        "price": "价格",
+        "type": "类型"
+      }
     },
     "test": {
       "running": "正在测试接入地址…",

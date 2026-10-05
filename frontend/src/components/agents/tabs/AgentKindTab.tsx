@@ -2,13 +2,14 @@
 //
 // Skills, MCP servers and Plugins share it (boards 2.1.20, 2.1.25, 2.1.31,
 // shared empty 2.1.55): a search box (with an optional "?" beside it), an
-// optional notice between the search and the list, then one bordered list of
-// hairline rows the tab renders. A kind with nothing in it shows the same
+// optional notice between the search and the list, then one bordered table:
+// a header naming each column the tab declares (`columns`), and the rows the
+// tab renders (KindRow, one cell per column). A kind with nothing in it shows the same
 // bordered box with a 13/600 title and one line, no icon, and keeps the search;
 // a list that failed to load is the shared load-error row.
 //
 // A list whose rows can be acted on together passes `bulk`: a select-all box
-// heads the list, each row takes a checkbox (`leading` of KindRow, handed to
+// sits in the header's first cell, each row takes a checkbox (`leading` of KindRow, handed to
 // the children as `select`), and while any row is ticked the selection bar
 // replaces the search row. Only what the search shows can be selected, so a
 // bulk action never reaches a row the person cannot see.
@@ -21,6 +22,7 @@ import { SearchInput } from "@/components/SearchInput";
 import { useTableSelection } from "@/components/DataTableSelection";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { TabEmpty } from "./TabEmpty";
 
 /** What a row's checkbox needs: the box for a row, or a spacer when it cannot be ticked. */
@@ -38,12 +40,23 @@ interface BulkConfig<R> {
   actions: (selected: R[], clear: () => void) => ReactNode;
 }
 
+/** One column of the table: its header (none for a trailing controls column) and width. */
+export interface KindColumn {
+  key: string;
+  /** The header text; omitted for a column of controls (its header reads only to screen readers). */
+  header?: string;
+  /** Width classes for the header cell (`w-[24%]`, `w-32`); a column without one shares what is left. */
+  className?: string;
+}
+
 interface Props<R> {
   rows: readonly R[];
   searchPlaceholder: string;
   /** The text a query is matched against, case-insensitively. */
   searchText: (row: R) => string;
-  /** One `<li>` per visible row; the bordered `<ul>` around them is drawn here. */
+  /** The table's columns, left to right (after the checkbox column when `bulk` is set). */
+  columns: KindColumn[];
+  /** One `<tr>` (KindRow) per visible row; the bordered table and its header are drawn here. */
   children: (visible: R[], select: RowSelect<R>) => ReactNode;
   bulk?: BulkConfig<R>;
   isLoading?: boolean;
@@ -65,6 +78,7 @@ export function AgentKindTab<R>({
   rows,
   searchPlaceholder,
   searchText,
+  columns,
   children,
   bulk,
   isLoading = false,
@@ -120,23 +134,41 @@ export function AgentKindTab<R>({
   } else if (visible.length === 0) {
     body = <p className="py-4 text-sm text-text-muted">{noMatch}</p>;
   } else {
-    body = bulk ? (
+    body = (
       <div className={LIST_FRAME}>
-        {selectableRows.length > 0 ? (
-          <div className="flex items-center gap-3 border-b border-border-subtle bg-surface px-4 py-2">
-            <Checkbox
-              checked={allOn}
-              indeterminate={selectedCount > 0 && !allOn}
-              aria-label={t("agents.kindTab.selectAll")}
-              onChange={() => selection.setMany(selectableRows.map(rowKey), !allOn)}
-            />
-            <span className="text-xs text-text-muted">{t("agents.kindTab.selectAll")}</span>
-          </div>
-        ) : null}
-        <ul>{children(visible, select)}</ul>
+        <table className="w-full table-fixed border-collapse text-left">
+          <thead>
+            <tr className="border-b border-border-subtle text-xs font-medium text-text-muted">
+              {bulk ? (
+                <th className="w-10 py-2.5 pl-4 pr-1 font-medium">
+                  {selectableRows.length > 0 ? (
+                    <Checkbox
+                      checked={allOn}
+                      indeterminate={selectedCount > 0 && !allOn}
+                      aria-label={t("agents.kindTab.selectAll")}
+                      onChange={() => selection.setMany(selectableRows.map(rowKey), !allOn)}
+                    />
+                  ) : null}
+                </th>
+              ) : null}
+              {columns.map((col, i) => (
+                <th
+                  key={col.key}
+                  className={cn(
+                    "py-2.5 font-medium",
+                    i === 0 && !bulk ? "pl-4 pr-2" : "px-2",
+                    i === columns.length - 1 && "pr-4",
+                    col.className,
+                  )}
+                >
+                  {col.header ?? <span className="sr-only">{t("agents.kindTab.actions")}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>{children(visible, select)}</tbody>
+        </table>
       </div>
-    ) : (
-      <ul className={LIST_FRAME}>{children(visible, select)}</ul>
     );
   }
 

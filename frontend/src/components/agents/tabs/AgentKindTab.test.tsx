@@ -1,15 +1,21 @@
-// src/components/agents/tabs/AgentKindTab.test.tsx — the shared search-and-list region: search, bordered list, empty box, load error.
+// src/components/agents/tabs/AgentKindTab.test.tsx — the shared search-and-list region: search, bordered table with a header, empty box, load error.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import "@/i18n";
-import { AgentKindTab } from "./AgentKindTab";
+import { AgentKindTab, type KindColumn } from "./AgentKindTab";
+import { KindRow } from "./KindRow";
 
 interface Row {
   name: string;
 }
 
 const ROWS: Row[] = [{ name: "coffer-guide" }, { name: "release-notes" }, { name: "lint-fix" }];
+const COLUMNS: KindColumn[] = [
+  { key: "name", header: "Name" },
+  { key: "state", header: "Status" },
+  { key: "actions" },
+];
 
 function renderTab(rows: Row[] = ROWS, extra = {}) {
   return render(
@@ -17,32 +23,33 @@ function renderTab(rows: Row[] = ROWS, extra = {}) {
       rows={rows}
       searchPlaceholder="Search skills"
       searchText={(r) => r.name}
+      columns={COLUMNS}
       empty={{ title: "Codex has no skills", description: "Skills Codex installs show up here." }}
       noMatch="No skills match."
       {...extra}
     >
-      {(visible) =>
-        visible.map((r) => (
-          <li key={r.name} data-testid="row">
-            {r.name}
-          </li>
-        ))
-      }
+      {(visible) => visible.map((r) => <KindRow key={r.name} cells={[r.name, "ok", null]} />)}
     </AgentKindTab>,
   );
 }
 
 describe("AgentKindTab", () => {
-  test("lists the rows in one bordered list under the search", () => {
+  const bodyRows = () => screen.getAllByRole("row").slice(1);
+
+  test("lists the rows in one table under a header naming each column", () => {
     renderTab();
-    expect(screen.getAllByTestId("row")).toHaveLength(3);
-    expect(screen.getAllByTestId("row")[0].parentElement?.tagName).toBe("UL");
+    expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Name",
+      "Status",
+      "Actions",
+    ]);
+    expect(bodyRows()).toHaveLength(3);
   });
 
   test("search narrows the rows; a query that matches none says so", () => {
     renderTab();
     fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "lint" } });
-    expect(screen.getAllByTestId("row").map((r) => r.textContent)).toEqual(["lint-fix"]);
+    expect(bodyRows().map((r) => r.querySelector("td")?.textContent)).toEqual(["lint-fix"]);
     fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "zzz" } });
     expect(screen.getByText("No skills match.")).toBeInTheDocument();
   });
@@ -75,6 +82,7 @@ describe("AgentKindTab", () => {
           rows={ROWS}
           searchPlaceholder="Search skills"
           searchText={(r) => r.name}
+          columns={COLUMNS}
           empty={{ title: "none", description: "none" }}
           noMatch="No skills match."
           bulk={{
@@ -86,15 +94,22 @@ describe("AgentKindTab", () => {
         >
           {(visible, select) =>
             visible.map((r) => (
-              <li key={r.name} data-testid="row">
-                {select.leading(r, r.name)}
-                {r.name}
-              </li>
+              <KindRow
+                key={r.name}
+                leading={select.leading(r, r.name)}
+                cells={[r.name, "ok", null]}
+              />
             ))
           }
         </AgentKindTab>,
       );
     }
+
+    test("the select-all box sits in the header's first cell", () => {
+      renderBulk();
+      const header = screen.getAllByRole("columnheader")[0];
+      expect(header).toContainElement(screen.getByRole("checkbox", { name: "Select all" }));
+    });
 
     test("select-all ticks every row; the bar replaces the search and Esc clears", () => {
       renderBulk();

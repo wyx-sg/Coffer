@@ -734,7 +734,9 @@ recorded as successful.
 ### Requirement: Store home paths against a sentinel
 Absolute paths under `$HOME` MUST be stored against a `${HOME}` sentinel and
 expanded against each machine's home — in resource documents and in state
-documents alike.
+documents alike. The vault validator MUST judge a resource's config with the
+sentinel expanded, as the kind reads it, so a setting that must be an absolute
+path accepts a sentinel path.
 
 #### Scenario: a path under the home directory applies on a machine with a different home
 - **GIVEN** a resource whose config names a path under this machine's home,
@@ -742,6 +744,12 @@ documents alike.
   name,
 - **THEN** the stored document carries the `${HOME}` sentinel rather than either
   literal path, and the applied resource names the second machine's own home.
+
+#### Scenario: an absolute path under the home directory passes validation
+- **GIVEN** a channel whose working directories are under this machine's home
+- **WHEN** a directory is added, removed or made the default
+- **THEN** the file stores each path against the `${HOME}` sentinel and the
+  write is committed, not refused as a relative path
 
 ### Requirement: Store paths outside home verbatim
 Paths outside `$HOME` MUST be stored verbatim. Such a path may not exist on
