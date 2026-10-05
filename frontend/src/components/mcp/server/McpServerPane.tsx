@@ -45,6 +45,7 @@ import { McpStatusCallout } from "./McpStatusCallout";
 import { McpToolsTab } from "./McpToolsTab";
 import { McpTopTools } from "./McpTopTools";
 import { reachedAgents } from "./reachWords";
+import { serverSecretRows } from "./secretRows";
 import { joinNames, serverState, transportOf } from "@/lib/mcp/serverState";
 import { failedTest, type TestResult } from "./testResult";
 
@@ -151,15 +152,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const activityHref = `/activity?tab=mcp&q=${encodeURIComponent(resource.name)}`;
   // "View errors" (a server Coffer does not start has no log): Activity on its failed calls.
   const viewErrors = () => navigate(`${activityHref}&status=failed`);
-  const rowOf = (ref: string | null | undefined) =>
-    secrets.data?.refs.find((r) => r.ref === ref) ?? null;
-  const missingRow = rowOf(detail?.missing_secret_ref);
-  // A rejected key is the secret its env or headers cite; a key typed into the config
-  // itself (no secret to replace) is changed in the edit dialog.
-  const keySecret = detail?.requires?.find((r) => r.kind === "secret" && r.secret)?.secret;
-  const keyRow = keySecret
-    ? rowOf(keySecret.startsWith("secret/") ? keySecret : `secret/${keySecret}`)
-    : null;
+  const { missing: missingRow, key: keyRow } = serverSecretRows(secrets.data?.refs, detail);
   const capsProps = {
     serverUid: uid,
     capabilities: caps.data,
