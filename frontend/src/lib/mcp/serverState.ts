@@ -112,17 +112,6 @@ export function shortDate(iso: string): string {
     : at.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** A call's tone: OK quiet, a problem in its status colour. */
-export function callTone(status: "ok" | "error" | "timeout" | "denied"): StatusTone {
-  return status === "ok"
-    ? "ok"
-    : status === "denied"
-      ? "off"
-      : status === "timeout"
-        ? "warn"
-        : "err";
-}
-
 /** A ref as the person knows it: a Secrets-page name, or the key a server's own ref ends in. */
 export function secretLabel(ref: string): string {
   if (ref.startsWith("secret/")) return ref.slice("secret/".length);

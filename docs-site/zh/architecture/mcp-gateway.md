@@ -292,7 +292,7 @@ stateDiagram-v2
 
 ### 内置的 `coffer` 服务器 {#the-built-in-coffer-server}
 
-MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」下。它不是资源：`GET /api/v1/mcp/builtin` 根据守护进程已知的信息来描述它：绑定的端口（`http://127.0.0.1:<port>/mcp`）、上面的内置工具列表、MCP 配置里有 Coffer 条目的智能体（由组合根提供，因为 MCP 类型不能读取智能体类型），以及以保留 uid `coffer` 记录的最近 24 小时调用。它的「调用记录」标签页读取 `GET /api/v1/mcp/invocations?uid=coffer`。
+MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」下。它不是资源：`GET /api/v1/mcp/builtin` 根据守护进程已知的信息来描述它：绑定的端口（`http://127.0.0.1:<port>/mcp`）、上面的内置工具列表、MCP 配置里有 Coffer 条目的智能体（由组合根提供，因为 MCP 类型不能读取智能体类型），以及以保留 uid `coffer` 记录的最近 24 小时调用。活动页的「工具调用」标签页读取 `GET /api/v1/mcp/invocations?uid=coffer`。
 
 ## 通知与服务器发起的请求 {#notifications-and-server-initiated-requests}
 

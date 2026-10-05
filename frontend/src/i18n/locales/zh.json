@@ -238,8 +238,7 @@
         "overview": "概览",
         "tools": "工具",
         "resources": "资源",
-        "prompts": "提示词",
-        "invocations": "调用记录"
+        "prompts": "提示词"
       },
       "overview": {
         "config": "配置"
@@ -601,42 +600,15 @@
       "listed": "直接列出",
       "listedDirectly": "直接列出",
       "log": {
-        "gaveUp": "{{took}}，然后放弃",
-        "agent": "调用方",
-        "all": "全部",
-        "calls": "调用",
-        "callsFootnote": "Coffer 只记录谁调用了什么、结果如何 — 从不记录参数或返回内容。",
-        "callsTab": "调用",
         "errorLines": "错误",
-        "errors": "错误",
         "everything": "全部",
         "logFootnote": "服务器在 stderr 上的输出，以及 Coffer 启动和停止它的记录。最新的在前。",
-        "logTab": "服务器日志",
-        "noLogHttp": "Streamable HTTP 服务器运行在别处，Coffer 没有它自己的日志。它的调用在“调用”标签页中。",
         "notStarted": "Coffer 还没有在这台 Mac 上启动过这个服务器。",
         "nothing": "没有可显示的内容。",
         "openFile": "打开日志文件",
-        "result": "结果",
-        "session": "会话",
         "show": "显示",
-        "status": {
-          "ok": "成功",
-          "error": "错误",
-          "timeout": "超时",
-          "denied": "已拒绝"
-        },
-        "subtitle": "最近 24 小时 {{calls}} 次调用 · {{errors}} 个错误",
-        "subtitleHttp": "Streamable HTTP · 通过网络连接",
         "subtitleStdio": "stdio · 它在 stderr 上输出的内容，以及 Coffer 启动和停止它的记录，最新的在前",
-        "time": "时间",
-        "title": "{{name}} · 服务器日志",
-        "took": "耗时",
-        "tool": "工具",
-        "error": "错误",
-        "group": "分组",
-        "server": "服务器",
-        "started": "开始于",
-        "viewServerLog": "查看服务器日志"
+        "title": "{{name}} · 服务器日志"
       },
       "menu": {
         "copyConfig": "复制配置为 JSON",
@@ -649,7 +621,6 @@
       "noCalls": "最近 24 小时没有调用。",
       "offBody": "开启后，它会重新提供给你上次选择的智能体。",
       "offTitle": "已关闭 — 没有智能体能使用它",
-      "viewInvocations": "查看调用记录",
       "reason": {
         "failing": "失败",
         "failingSince": "{{error}} · 自 {{since}} 起",
@@ -733,7 +704,8 @@
           "missing": "缺失",
           "waiting_approval": "等待批准"
         }
-      }
+      },
+      "viewInActivity": "在活动中查看"
     },
     "builtin": {
       "group": "内置",
@@ -4922,11 +4894,6 @@
   "customTools": {
     "subtitle": "Coffer 替你的智能体发出的 HTTP API 请求，按共用的基础 URL 和密钥分组。",
     "title": "自定义工具",
-    "tabs": {
-      "overview": "概览",
-      "tools": "工具",
-      "invocations": "调用记录"
-    },
     "pendingApprovalSaved": "已保存。密钥需要先在 Coffer 应用里批准，调用才能使用它。",
     "list": {
       "toolCount_other": "{{count}} 个工具",

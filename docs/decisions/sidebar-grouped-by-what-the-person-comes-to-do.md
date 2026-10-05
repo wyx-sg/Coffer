@@ -15,7 +15,7 @@
 [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md),
 spec web-ui "Group the sidebar by what the user comes to do",
 spec web-ui "Keep the sidebar to its fourteen entries",
-spec web-ui "Manage custom tool groups on their own page",
+spec web-ui "Manage custom tool groups on one page",
 spec web-ui "Show every CLI a skill requires on the CLIs page",
 spec web-ui "Give each listed resource kind one sidebar entry",
 spec web-ui "List only shipped surfaces in the sidebar",
@@ -337,8 +337,8 @@ Rules a future change must respect:
   that adds the second of them has to revisit Capabilities rather than append to it.
 - Not built yet: the Workflows, Rules and Sources entries. Each is placed (Run, Capabilities,
   Capabilities) but ships with its feature.
-- Custom tools and CLIs each have a page of their own (spec web-ui "Manage custom tool groups on their
-  own page", "Show every CLI a skill requires on the CLIs page"); the MCP servers Add dialog adds
+- Custom tools and CLIs each have a page of their own (spec web-ui "Manage custom tool groups on one
+  page", "Show every CLI a skill requires on the CLIs page"); the MCP servers Add dialog adds
   servers only.
 - In Chinese, "agent" is 智能体 everywhere in the UI, and the en/zh glossary in the frontend
   conventions records every group and entry label.

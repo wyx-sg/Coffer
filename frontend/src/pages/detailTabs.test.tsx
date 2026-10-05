@@ -94,7 +94,6 @@ function ServerTabs({ name }: { name: string }) {
       tools={<div>server tools</div>}
       resources={null}
       prompts={null}
-      invocations={null}
     />
   );
 }
@@ -151,7 +150,6 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
       tools={<div>server tools</div>}
       resources={null}
       prompts={null}
-      invocations={null}
     />,
   );
   const mcpStrip = strip();
@@ -202,7 +200,6 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
       tools={<div>server tools</div>}
       resources={null}
       prompts={null}
-      invocations={null}
     />,
   );
 
@@ -212,7 +209,7 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
     within(list)
       .getAllByRole("tab")
       .map((t) => t.textContent),
-  ).toEqual(["Overview", "Tools", "Resources", "Prompts", "Invocations"]);
+  ).toEqual(["Overview", "Tools", "Resources", "Prompts"]);
   // The Overview pane is what is showing, not the tools list.
   expect(screen.getByText("npx -y srv")).toBeVisible();
   expect(screen.queryByText("server tools")).not.toBeInTheDocument();

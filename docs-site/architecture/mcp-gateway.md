@@ -292,7 +292,7 @@ One probe serves both tests: `POST /api/v1/resources/mcp_server/{uid}/test` for 
 
 ### The built-in `coffer` server
 
-The MCP servers page lists Coffer's own endpoint last, under Built-in. It is not a resource: `GET /api/v1/mcp/builtin` describes it from what the daemon knows — the bound port (`http://127.0.0.1:<port>/mcp`), the built-in tool list above, the agents whose MCP config holds Coffer's entry (supplied by the composition root, since the MCP kind may not read the agent kind), and the last 24 hours of calls logged under the reserved uid `coffer`. Its Invocations tab reads `GET /api/v1/mcp/invocations?uid=coffer`.
+The MCP servers page lists Coffer's own endpoint last, under Built-in. It is not a resource: `GET /api/v1/mcp/builtin` describes it from what the daemon knows — the bound port (`http://127.0.0.1:<port>/mcp`), the built-in tool list above, the agents whose MCP config holds Coffer's entry (supplied by the composition root, since the MCP kind may not read the agent kind), and the last 24 hours of calls logged under the reserved uid `coffer`. Activity's Tool calls tab reads `GET /api/v1/mcp/invocations?uid=coffer`.
 
 ## Notifications and server-initiated requests
 

@@ -1,7 +1,7 @@
 // e2e/web/specs/custom-tools.spec.ts
 //
 // The Custom tools page in a real browser against the isolated daemon (change
-// revise-web-ui-ia, spec web-ui "Manage custom tool groups on their own page"): an
+// revise-web-ui-ia, spec web-ui "Manage custom tool groups on one page"): an
 // OpenAPI file imported into a new group, the group page with its tools, the
 // tool drawer's Test calling a real upstream (a tiny HTTP server this spec
 // starts on 127.0.0.1), and a group created over REST staying off the MCP
@@ -125,9 +125,7 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await expect(page.getByText("Imported from OpenAPI")).toBeVisible();
-    // Overview, the bare address, holds the definition; the table is on Tools.
-    await page.getByRole("tab", { name: "Tools" }).click();
-    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}/tools$`));
+    // One page: the definition, then the tools table under it.
     const tools = page.getByRole("region", { name: "Tools", exact: true });
     await expect(tools.getByText("1 of 1 on")).toBeVisible();
     await expect(tools.getByText("GET /items/{id}")).toBeVisible();
@@ -142,7 +140,7 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await expect(drawer.getByTestId("custom-tool-response")).toContainText(
       /"id":\s*"7"/,
     );
-    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}/tools$`));
+    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
   } finally {
     await deleteGroup(name);
   }
@@ -183,8 +181,7 @@ test("a group made over REST is listed on Custom tools and left off MCP servers"
     await page.goto(`/mcp-servers/${name}`);
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
 
-    // A tool's switch, on the Tools tab, saves at once.
-    await page.getByRole("tab", { name: "Tools" }).click();
+    // A tool's switch, in the tools table, saves at once.
     await page
       .getByRole("switch", { name: "Turn get_item on or off" })
       .click();

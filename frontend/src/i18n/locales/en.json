@@ -238,8 +238,7 @@
         "overview": "Overview",
         "tools": "Tools",
         "resources": "Resources",
-        "prompts": "Prompts",
-        "invocations": "Invocations"
+        "prompts": "Prompts"
       },
       "overview": {
         "config": "Configuration"
@@ -601,42 +600,15 @@
       "listed": "Listed",
       "listedDirectly": "Listed directly",
       "log": {
-        "gaveUp": "{{took}}, then gave up",
-        "agent": "Called by",
-        "all": "All",
-        "calls": "Calls",
-        "callsFootnote": "Coffer records who called what and how it went — never the arguments or the result.",
-        "callsTab": "Calls",
         "errorLines": "Errors",
-        "errors": "Errors",
         "everything": "Everything",
         "logFootnote": "What the server printed on stderr and how Coffer started and stopped it. Newest first.",
-        "logTab": "Server log",
-        "noLogHttp": "A Streamable HTTP server runs somewhere else, so Coffer has no log of its own for it. Its calls are on the Calls tab.",
         "notStarted": "Coffer hasn't started this server on this Mac yet.",
         "nothing": "Nothing to show.",
         "openFile": "Open log file",
-        "result": "Result",
-        "session": "Session",
         "show": "Show",
-        "status": {
-          "ok": "OK",
-          "error": "Error",
-          "timeout": "Timed out",
-          "denied": "Denied"
-        },
-        "subtitle": "{{calls}} calls · {{errors}} errors in the last 24 hours",
-        "subtitleHttp": "Streamable HTTP · reached over the network",
         "subtitleStdio": "stdio · what it printed on stderr and how Coffer started and stopped it, newest first",
-        "time": "Time",
-        "title": "{{name}} · Server log",
-        "took": "Took",
-        "tool": "Tool",
-        "error": "Error",
-        "group": "Group",
-        "server": "Server",
-        "started": "Started",
-        "viewServerLog": "View server log"
+        "title": "{{name}} · Server log"
       },
       "menu": {
         "copyConfig": "Copy config as JSON",
@@ -649,7 +621,6 @@
       "noCalls": "No calls in the last 24 hours.",
       "offBody": "Turning it on gives it back to the agents you chose last time.",
       "offTitle": "Off — no agent can use it",
-      "viewInvocations": "View invocations",
       "reason": {
         "failing": "Failing",
         "failingSince": "{{error}} · since {{since}}",
@@ -733,7 +704,8 @@
           "missing": "Missing",
           "waiting_approval": "Waiting for approval"
         }
-      }
+      },
+      "viewInActivity": "View in Activity"
     },
     "builtin": {
       "group": "Built-in",
@@ -4922,11 +4894,6 @@
   "customTools": {
     "subtitle": "HTTP API requests Coffer makes for your agents, in groups that share a base URL and a secret.",
     "title": "Custom tools",
-    "tabs": {
-      "overview": "Overview",
-      "tools": "Tools",
-      "invocations": "Invocations"
-    },
     "pendingApprovalSaved": "Saved. The secret waits for approval in the Coffer app before calls can use it.",
     "list": {
       "toolCount_one": "{{count}} tool",

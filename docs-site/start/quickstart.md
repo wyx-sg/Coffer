@@ -98,7 +98,7 @@ Claude Code adds its own prefix to every MCP tool, so in its tool list the names
 > Use the filesystem tools to list what is in ~/projects.
 ```
 
-Claude Code calls `filesystem__list_directory`. Coffer routes the call to the filesystem server under its original name, `list_directory`, and records the call. You can see the record on the server's **Invocations** tab, or with `coffer log mcp --server filesystem`. The record holds the tool, the time, the duration and the outcome. It never holds the arguments or the result.
+Claude Code calls `filesystem__list_directory`. Coffer routes the call to the filesystem server under its original name, `list_directory`, and records the call. You can see the record on the **Activity** page (search the server's name), or with `coffer log mcp --server filesystem`. The record holds the tool, the time, the duration and the outcome. It never holds the arguments or the result.
 
 Every agent you connect in step 3 now gets this server. You did not edit Claude Code's MCP config again, and you will not need to for the next server either.
 

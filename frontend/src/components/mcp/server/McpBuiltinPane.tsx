@@ -14,7 +14,6 @@ import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
 import { McpServerDetailTabs } from "../McpServerDetailTabs";
 import { McpBuiltinTools } from "./McpBuiltinTools";
-import { McpCallsLog } from "./McpCallsLog";
 import { McpOverviewTab } from "./McpOverviewTab";
 import type { ServerState } from "@/lib/mcp/serverState";
 
@@ -66,7 +65,7 @@ export function McpBuiltinPane({ basePath }: { basePath: string }) {
         basePath={basePath}
         overview={
           <McpOverviewTab
-            invocationsHref={`${basePath}/invocations`}
+            activityHref={`/activity?tab=mcp&q=${encodeURIComponent(server.name)}`}
             name={server.name}
             enabled
             builtin
@@ -80,15 +79,6 @@ export function McpBuiltinPane({ basePath }: { basePath: string }) {
         tools={<McpBuiltinTools tools={server.tools} summary={server.summary} />}
         resources={<NothingHere text={t("mcp.builtin.noResources")} />}
         prompts={<NothingHere text={t("mcp.builtin.noPrompts")} />}
-        invocations={
-          <McpCallsLog
-            serverUid={server.invocation_uid}
-            serverName={server.name}
-            transport="http"
-            agents={agents}
-            builtin
-          />
-        }
       />
     </div>
   );
