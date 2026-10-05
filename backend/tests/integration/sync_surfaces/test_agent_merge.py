@@ -77,8 +77,6 @@ def test_an_agents_merge_is_checked_and_marked_resolved(pair: tuple[Box, Box]) -
         assert file["agent_handed_at"] == handed_at and file["agent_state"] == "handed_off"
 
         # Nothing merged yet, and marking the markers resolved is refused.
-        versions = c.get("/sync/stop/files/versions", params={"path": DOC}).json()
-        assert versions["merged"] is None
         refused = c.post("/sync/stop/files/answer", json={"path": DOC, "answer": "edited"})
         assert refused.json()["error"]["code"] == "SYNC_CONFLICT_MARKERS_LEFT"
 
@@ -89,9 +87,7 @@ def test_an_agents_merge_is_checked_and_marked_resolved(pair: tuple[Box, Box]) -
         stopped = c.get("/sync/stop").json()["round"]
         assert stopped["unanswered"] == 1
         versions = c.get("/sync/stop/files/versions", params={"path": DOC}).json()
-        assert versions["merged"] == MERGED
-        assert "-Mini rotates on Fridays." in versions["merged_diff"]
-        assert "+Both rotate" in versions["merged_diff"]
+        assert not {"base", "edited", "merged", "merged_diff"} & versions.keys()
 
         resolved = c.post("/sync/stop/files/answer", json={"path": DOC, "answer": "edited"})
         assert resolved.json()["round"]["unanswered"] == 0
@@ -180,9 +176,6 @@ def test_a_joins_differing_files_share_the_conflict_shape(tmp_path: Path) -> Non
         assert refused.json()["error"]["code"] == "SYNC_CONFLICT_MARKERS_LEFT"
         copy.write_text("Escalate after 15 min; page the owner at 30.\n")
         assert _file(c, join=True)["agent_state"] == "merged_by_agent"
-        versions = c.get("/sync/stop/files/versions", params={"path": DOC}).json()
-        assert versions["merged"] == "Escalate after 15 min; page the owner at 30.\n"
-        assert "+Escalate after 15 min; page the owner at 30." in versions["merged_diff"]
 
         done = c.post("/sync/join-choices", json={"choices": [{"path": DOC, "answer": "edited"}]})
         assert done.json() == {"files": []}

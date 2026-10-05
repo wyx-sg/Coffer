@@ -1,5 +1,4 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Present a
-// partition as its memories").
+// frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Show a partition's memories read-only").
 //
 // Coffer reads each agent's own memory and distils it into
 // one memory per subject, in partitions — `global` plus one per repository

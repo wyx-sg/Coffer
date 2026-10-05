@@ -138,7 +138,7 @@ default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 (`lib/detailTabs.ts`), which sends an unknown `:tab` to the bare address; skills and MCP
 servers are keyed by their fixed name, agents by their type, renamable kinds
 by uid. Skills, MCP servers, agents, knowledge
-(`/knowledge/<uid>/history`, `/knowledge/<uid>/inbox`) and memory partitions
+(`/knowledge/<uid>/inbox`) and memory partitions
 (`/memory/<uid>/delivered`) follow it; the tabs of a list page that has no
 detail to nest under (Sync, Activity) are `?tab=`, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
@@ -410,7 +410,8 @@ return useMutation({
   Disconnect, moving a connected agent's config directory, and Change model. The
   preview shows the daemon's own lines; Apply sends the fingerprints the preview
   read and a file edited since is refused (`CONFIG_FILE_STALE`) with Reload
-  preview. Deleting a provider something runs on is the same shape.
+  preview. Every diff of changed lines (these previews, skill copy and folder
+  reviews, a custom-tool re-import) is drawn by the one `FileDiff` renderer. Deleting a provider something runs on is the same shape.
 - **Detail pages with many tabs: six, then More ⌄.** `components/DetailTabsMore`
   keeps the six most used in the strip and puts the rest in a More menu; while a
   tab inside More is open the trigger wears its name and the underline, and a
@@ -427,9 +428,10 @@ return useMutation({
 - **Save on change everywhere** — settings, reach, providers, channel options,
   feature switches: the control writes as it changes (text on Enter/blur, once
   valid) and a failed write is said under the control ("Couldn't save the
-  change: …"). No Save buttons. Only **document editors** — `SKILL.md`,
-  knowledge documents, raw agent config files — keep an explicit **Save** and
-  the unsaved-changes guard.
+  change: …"). No Save buttons and no unsaved-changes guard: the web UI has no
+  document editor. `SKILL.md`, knowledge documents, memories and agent config
+  files are read-only, with **Open in editor** and **Reveal in Finder**
+  (`fileActions`); the person's editor does the editing.
 - **Count badges** — tab and list counts that mean "needs you" are all
   `danger-strong`, capped at `9+`.
 - **Dialogs** — Cancel is a `ghost` button beside the primary action.
@@ -539,7 +541,6 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | Hand a machine-bound chore to an agent | Hand off to <Agent> ▾ (menu: Hand off to <other agent>, Copy prompt, toast "Prompt copied") | 交给 <Agent> ▾（菜单：交给 <另一个智能体>，复制提示词，提示“已复制提示词”） | Two separate buttons, Ask an agent, 询问智能体 |
 | Pick another source/machine/directory | Change | 更改 | 更换 |
 | A change (noun) | change | 改动 | 变更, 更改 |
-| Drop unsaved edits | Discard | 放弃 | 丢弃 |
 | Look over before applying | Review | 查看 | 审阅, 检查 (that is Check) |
 | The preview of what a write to an agent's config will change, then **Apply** (Connect, Repair, Disconnect, moving the config directory, Change model) | Review changes | 审阅改动 (the one place Review reads 审阅) | |
 | Pick another provider/model for an agent (Overview › Model › Change…) | Change model (dialog title "Change <Agent>’s model") | 更改模型 | Switch provider, Model tab |

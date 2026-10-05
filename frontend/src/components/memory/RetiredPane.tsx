@@ -3,7 +3,7 @@
 // What the Retired group's record opens on the right of the Memories tab: the
 // full title with a "Retired" tag, the date it was retired, the whole reason,
 // and, when the memory that absorbed it is still in the list, a link to it.
-// No Edit: a retired memory is a record, not a note.
+// No Open in editor or Delete…: a retired memory is a record, not a note.
 import { useTranslation } from "react-i18next";
 
 import { FILE_PANE_SCROLL } from "@/components/filePane";

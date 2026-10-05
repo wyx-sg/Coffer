@@ -123,7 +123,7 @@ The system MUST reject registration that would create a duplicate agent name (40
 - **THEN** the request is rejected with a clear error and nothing is persisted — only one agent may exist per config directory
 
 ### Requirement: Define a curated config-file allowlist per type
-Each supported agent type MUST define a curated allowlist of config files in its capability-manifest record, enumerated by that type's child spec, each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml` or `markdown`). Each type's human-authored instructions file carries the key `instructions` — those files are instructions a person wrote, distinct from agent-written memory (memory's domain). Config files are not persisted in SQLite — the file on disk is the source of truth.
+Each supported agent type MUST define a curated allowlist of config files in its capability-manifest record, enumerated by that type's child spec, each entry carrying a stable `key`, a display name, a resolved absolute path, and a `format` (`json`, `toml` or `markdown`). Each type's human-authored instructions file carries the key `instructions` — those files are instructions a person wrote, distinct from agent-written memory (memory's domain). The allowlist is what Coffer lists and the only files Coffer's own writers may touch; config files are not persisted in SQLite — the file on disk is the source of truth.
 
 #### Scenario: key each type's instructions file as instructions
 - **GIVEN** the capability manifest for every supported agent type
@@ -132,56 +132,13 @@ Each supported agent type MUST define a curated allowlist of config files in its
 - **AND** exactly one entry per type is keyed `instructions` and has format `markdown`
 
 ### Requirement: List an agent's config files with their locations
-Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the UI's open-in-external-editor / reveal-in-file-manager affordances (see "Open config files in an external editor or reveal them").
+Users MUST be able to list an agent's config files with, for each, its key, display name, path, the containing-folder absolute path (`folder_path`), format, and existence (plus size and modified time when the file exists). The `path`/`folder_path` pair feeds the UI's open-in-external-editor / reveal-in-file-manager affordances (see "Open config files in an external editor or reveal them"). The listing is the only config-file route: Coffer serves no config file's content and writes none on the person's behalf.
 
 #### Scenario: report each config file's path, folder and existence
 - **GIVEN** a registered agent where one allowlisted file exists and another does not
 - **WHEN** the user lists the agent's config files
 - **THEN** each entry carries its key, display name, absolute `path`, `folder_path` equal to the path's parent, format and `exists` flag
 - **AND** the existing file also carries its size and modified time while the missing one carries neither
-
-### Requirement: Read allowlisted config files without creating them
-Users MUST be able to read the content of any allowlisted config file. A file that does not exist reads as empty content with `exists=false` and is not created by the read.
-
-#### Scenario: read an existing config file
-- **GIVEN** a registered agent whose `settings.json` exists
-- **WHEN** the user reads that config-file key
-- **THEN** Coffer returns the file's current text content, its format (`json`), and `exists=true`
-
-#### Scenario: read a not-yet-created config file
-- **GIVEN** a registered agent whose instructions file does not exist on disk
-- **WHEN** the user reads that config-file key
-- **THEN** Coffer returns empty content with `exists=false` and does not create the file
-
-### Requirement: Validate config-file content before saving it
-The system MUST expose a write (save) for the content of any allowlisted config file through the in-app editor and the REST API — one endpoint serving both. The content MUST be validated against the file's `format` before any write; malformed `json`/`toml` MUST be rejected (`unprocessable_entity`, 422) and the on-disk file left unchanged. `markdown` files accept any content.
-
-#### Scenario: reject malformed config-file content
-- **GIVEN** a registered agent whose `settings.json` (a `json` file) exists
-- **WHEN** the user writes malformed content (e.g. invalid JSON) to that key through the in-app editor or the REST API
-- **THEN** Coffer responds `unprocessable_entity` (422), leaves the on-disk file unchanged, writes no backup, and records no write audit entry
-
-### Requirement: Write config files atomically with a backup and an audit entry
-Writes MUST be atomic (temp file + rename) and MUST copy the prior content, before the replace, to a timestamped backup under `~/.coffer/config-backups/` (Coffer's own folder: machine-local, outside the vault, and never beside the agent's file) so a bad edit is recoverable; each successful write MUST record an `agent_config_file_written` audit entry. The Coffer-MCP install/uninstall operations (see "Back up and audit Coffer MCP install and uninstall") reuse the same atomic-write + backup machinery. Backups are named by their UTC time and cleaned by the `config_backups` retention policy ([resource-framework](../resource-framework/spec.md) "Retain config backups on an adjustable policy"), which always keeps the newest backup of each file.
-
-#### Scenario: save a config file with valid content
-- **GIVEN** a registered agent whose `settings.json` exists
-- **WHEN** the user writes new, well-formed content to that config-file key through the in-app editor or the REST API
-- **THEN** Coffer validates the content against the file's format, writes it atomically while copying the prior version to a backup under `~/.coffer/config-backups/` (nothing is written next to the file), records an `agent_config_file_written` audit entry, and the new content reads back on the next read
-
-#### Scenario: a config write leaves its backup in Coffer's folder and nothing beside the file
-- **GIVEN** `~/.claude/settings.json` holds content, and an older write already left a backup of it
-- **WHEN** Coffer writes new content to that file twice
-- **THEN** each write copied the prior content to its own timestamped file under `~/.coffer/config-backups/`, in a folder named for that one config file, and the newest backup holds the content the last write replaced
-- **AND** no `.bak` file, backup or temporary file is left in the agent's own directory, and nothing under `~/.coffer/vault` was written
-
-### Requirement: Address config files only by allowlisted key
-Config-file read and write MUST be addressable only by allowlisted `key` (never by caller-supplied path); an unknown key returns `not_found` (404) and performs no filesystem access.
-
-#### Scenario: reject config-file key outside the allowlist
-- **GIVEN** a registered agent
-- **WHEN** the user references a config-file key not in that agent type's curated allowlist
-- **THEN** Coffer responds `not_found` (404) and performs no filesystem read
 
 ### Requirement: Install Coffer's MCP server into an agent in one action
 Connecting an agent to Coffer ("Connect an agent to Coffer in one action") MUST install Coffer's own MCP server into it as the connection's `mcp` part. The install writes a `coffer` stdio MCP-server entry into the agent's MCP config, using the shape declared by that agent's manifest `McpInjectionSpec` and named by that type's child spec.
@@ -250,7 +207,7 @@ Disconnecting an agent from Coffer ("Disconnect an agent from Coffer") MUST unin
 - **AND** `GET /api/v1/agents/{uid}/coffer-connection` reports the state as `disconnected`
 
 ### Requirement: Back up and audit Coffer MCP install and uninstall
-Install and uninstall MUST reuse the atomic-write + backup machinery of "Write config files atomically with a backup and an audit entry" and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
+Install and uninstall MUST reuse the atomic-write + backup machinery of "Back up and compare-and-swap every write Coffer makes to an agent's config" and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
 
 #### Scenario: uninstall Coffer's MCP from an agent
 - **GIVEN** an agent that has Coffer's MCP installed
@@ -295,7 +252,7 @@ The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry
 - **AND** its footer offers Remove and Adopt around Close, and closing it leaves the user on the MCP servers tab
 
 ### Requirement: Remove a direct MCP entry from its source file
-Users MUST be able to remove a direct MCP entry — from the agent's page or the REST route (`DELETE /api/v1/agents/{uid}/mcp-entries/{entry}`). Removal edits only the entry's source file, reuses the atomic-write + backup machinery of "Write config files atomically with a backup and an audit entry", and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by "Install Coffer's MCP server into an agent in one action" and "Uninstall Coffer's MCP server from an agent".
+Users MUST be able to remove a direct MCP entry — from the agent's page or the REST route (`DELETE /api/v1/agents/{uid}/mcp-entries/{entry}`). Removal edits only the entry's source file, reuses the atomic-write + backup machinery of "Back up and compare-and-swap every write Coffer makes to an agent's config", and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by "Install Coffer's MCP server into an agent in one action" and "Uninstall Coffer's MCP server from an agent".
 
 #### Scenario: remove a direct MCP entry
 - **GIVEN** a registered agent with a direct (non-Coffer) MCP entry
@@ -378,44 +335,12 @@ Users MUST be able to uninstall a plugin, by the per-agent strategy its child sp
 - **THEN** the first listing reports `can_uninstall=false` and the second `can_uninstall=true`
 
 ### Requirement: List directory config entries
-A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): it resolves to a directory and lists its files (entry-relative path, size, modified time) instead of carrying content. A missing directory MUST list as `exists=false` with no files, and the read MUST NOT create it. Which allowlist entries are directory entries is per type, and each child spec names its own. The directory on disk is the source of truth.
+A config-file allowlist entry MAY be a **directory entry** (`kind=directory`): it resolves to a directory and lists its files (entry-relative path, absolute path, size, modified time) instead of carrying content. A missing directory MUST list as `exists=false` with no files, and the read MUST NOT create it. Which allowlist entries are directory entries is per type, and each child spec names its own. The directory on disk is the source of truth; its files are opened and revealed like any other config file.
 
 #### Scenario: list a directory config entry's files
 - **GIVEN** a registered agent whose directory config entry contains Markdown files (possibly nested)
 - **WHEN** the user lists that config entry
 - **THEN** Coffer returns the entry with `kind=directory` and its files (entry-relative path, size, modified time); a missing directory lists as `exists=false` with no files and is not created by the read
-
-### Requirement: Read, write and delete files inside a directory entry
-Users MUST be able to read individual files inside a directory entry; this read backs the UI's editor, . Write (create-on-write) and delete of individual files are available through the in-app editor and the REST API (`PUT` and `DELETE /api/v1/agents/{uid}/config-files/{key}/files/{relpath}`). Child paths are validated server-side before any filesystem access: they MUST resolve inside the entry's directory (no `..`, no absolute paths, no symlink escape) and carry the `.md` extension — a containment violation is `not_found` (404) and a disallowed extension `unprocessable_entity` (422). Writes reuse the machinery of "Write config files atomically with a backup and an audit entry"; deletion preserves the prior content as a backup under `~/.coffer/config-backups/`. Audited as `agent_config_file_written` / `agent_config_file_deleted`.
-
-#### Scenario: create a file inside a directory entry
-- **GIVEN** a registered agent with a directory config entry
-- **WHEN** the user writes content to a new `.md` file path inside the entry through the in-app editor or the REST API
-- **THEN** the file is created via the atomic-write machinery, an `agent_config_file_written` audit entry is recorded, and the next listing includes it
-
-#### Scenario: delete a file inside a directory entry
-- **GIVEN** a directory entry containing a file
-- **WHEN** the user deletes that file through the REST API
-- **THEN** the file is removed with its prior content preserved as a backup under `~/.coffer/config-backups/`, an `agent_config_file_deleted` audit entry is recorded, and the next listing no longer shows it
-
-#### Scenario: reject directory file paths outside the entry
-- **GIVEN** a registered agent with a directory config entry
-- **WHEN** the user addresses a child path containing `..`, an absolute path, or a non-`.md` extension
-- **THEN** the request is rejected before any filesystem access with `not_found` (404) for containment violations or `unprocessable_entity` (422) for a disallowed extension
-
-### Requirement: Reject stale config-file writes by fingerprint
-Config-file reads (single files and directory children) MUST return a content fingerprint. A write MAY carry that fingerprint back; a write that carries one MUST be rejected with `conflict` (409, `CONFIG_FILE_STALE`) when the on-disk content changed since the read, leaving the file untouched. A write that carries none is applied as sent, for scripted REST use. The in-app editor MUST always send the fingerprint of the read it started from, because it holds the file open for as long as the user edits — exactly the window another writer lands in. The agent's own process may rewrite a file between Coffer's read and write; the user then re-reads and retries, and the backup of every Coffer write keeps the prior content recoverable in the reverse race.
-
-#### Scenario: reject stale config-file writes
-- **GIVEN** a config file (or directory child) read by the user, then modified on disk by another process
-- **WHEN** the user writes back content carrying the fingerprint from the earlier read
-- **THEN** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write
-
-#### Scenario: write a config file over REST
-- **GIVEN** a registered agent with an existing `json` config file under the allowlisted key `<key>`, and well-formed JSON content to write
-- **WHEN** the user writes that content with `PUT /api/v1/agents/{uid}/config-files/<key>`
-- **THEN** the config file holds the written content, the newest backup under `~/.coffer/config-backups/` holds the prior content, and an `agent_config_file_written` audit entry is recorded
-- **AND** the same request with malformed JSON is refused with `unprocessable_entity` (422) and leaves the config file unchanged
 
 ### Requirement: Carry the model binding on the agent record
 The agent record MUST carry the model binding the rest of Coffer reads — `model` and `tier_models` (Claude Code only: the model for each of `opus`, `sonnet`, `haiku` and `fable`) — because the model is chosen at the point of USE and an agent is where it is used, not on the connection that serves it. That binding MUST be settable over REST as well as in the web UI: `PATCH /api/v1/agents/{uid}` carries `model` / `tier_models`, with an explicit null to unbind `tier_models`. A field the request omits is unchanged; `tier_models`, when sent, replaces the whole mapping. Only `tier_models` clears on an explicit null; `model` has no null that unbinds it, so an explicit null for it is treated as omitted. A tier other than the four is refused. The binding carries no `fast_model`: Claude Code's background model is its Haiku tier, and no reasoning effort: the agent runs at the effort its own configuration names. Projecting a binding into the agent's native config is provider-switching's.
@@ -485,16 +410,16 @@ The system MUST expose a read-only **native-memory store read** that returns one
 - **THEN** Coffer returns the store directory as a tree (directories before files, paths relative to the store) and the file's contents with the absolute path that backs open / reveal, while a directory that is not one of this agent's stores — its sibling project directory included — and a path escaping the store are both rejected as `not_found` (404); read-only, emitting no audit event and writing nothing
 
 ### Requirement: Open config files in an external editor or reveal them
-For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from "List an agent's config files with their locations" and "Read allowlisted config files without creating them". Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).
+The agent's **Config files** tab MUST list every allowlisted config file — and, under a directory entry, each of its files — as a read-only row naming the file, its folder, its size and when it changed, with **Open in editor** and **Reveal in Finder** on each, using the `path` and `folder_path` from "List an agent's config files with their locations". A file that does not exist yet reads *Not created* and offers only Reveal in Finder on its folder, because opening creates nothing. Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). The tab shows no file's content and offers no edit, new file or delete: a config file is changed in the person's own editor or by their agent. There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).
 
 #### Scenario: open a config file and reveal it through the daemon
-- **GIVEN** an agent's Config files tab with an existing config file selected
-- **WHEN** the user chooses open-in-external-editor and then reveal-in-file-manager on it
+- **GIVEN** an agent's Config files tab listing an existing config file and one not created yet
+- **WHEN** the user chooses Open in editor and then Reveal in Finder on the existing file's row
 - **THEN** the UI asks the daemon to open that file's absolute path and then to reveal it
-- **AND** no copy-path affordance is offered
+- **AND** the row of the file not created yet offers Reveal in Finder only, no row shows the file's content or offers Edit, New file or Delete, and no copy-path affordance is offered
 
 ### Requirement: Audit every agent lifecycle event
-The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, native sessions, the model catalogue, the Coffer connection status — are read-only and emit no audit event. Reading ONE of the listed items — a single store's files — is the same act at a smaller scale and audits nothing either, and renaming or deleting a native session is the agent's own act on its own record ("Rename and delete a native session through the agent") and is not audited here. A connect or disconnect records the events of the parts it installs or removes and none of its own; the memory delivery hook's events are memory's, not this spec's.
+The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, native sessions, the model catalogue, the Coffer connection status — are read-only and emit no audit event. Reading ONE of the listed items — a single store's files — is the same act at a smaller scale and audits nothing either, and renaming or deleting a native session is the agent's own act on its own record ("Rename and delete a native session through the agent") and is not audited here. A connect or disconnect records the events of the parts it installs or removes and none of its own; the memory delivery hook's events are memory's, not this spec's. The `agent_config_file_written` and `agent_config_file_deleted` events are no longer recorded; rows an earlier version recorded keep their wording in Activity.
 
 #### Scenario: audit lifecycle events
 - **GIVEN** the user has registered, edited, or removed agents
@@ -611,7 +536,7 @@ The listing MUST be served by `GET /api/v1/agents/{uid}/hooks`, and MUST write n
 
 Each listed hook MUST also carry where it sits in its file — `group_index` and `hook_index`, the positions in `hooks.<event>[group_index].hooks[hook_index]` — so a person can find the entry, and the REST listing reports them.
 
-On the agent's Hooks tab the listing is two parts, Coffer's first. **Coffer's memory hook** is one block of properties, never one row per entry: its state (and how long ago it fired), its command, the events it sits on and the file that declares it, with its one fix at the block's title — **Repair** when it is stale or missing, **Check again** while the agent has not approved it — and, when it has never fired, the likely cause and a link to Activity. The reason a state is a problem is written in the block's own line. **The agent's own hooks** — Coffer's excluded — are one table of Event, Command, Matcher and File, with a search over the command and an **Event** filter that lists each event with its count; the table says how many of how many are shown once either narrows it. A row opens a read-only details dialog with the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in Config files**; nothing in the dialog writes, because a hook is changed in its own file. A file name opens that file in Config files, except a plugin's hooks file, which has no Config files entry.
+On the agent's Hooks tab the listing is two parts, Coffer's first. **Coffer's memory hook** is one block of properties, never one row per entry: its state (and how long ago it fired), its command, the events it sits on and the file that declares it, with its one fix at the block's title — **Repair** when it is stale or missing, **Check again** while the agent has not approved it — and, when it has never fired, the likely cause and a link to Activity. The reason a state is a problem is written in the block's own line. **The agent's own hooks** — Coffer's excluded — are one table of Event, Command, Matcher and File, with a search over the command and an **Event** filter that lists each event with its count; the table says how many of how many are shown once either narrows it. A row opens a read-only details dialog with the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**; nothing in the dialog writes, because a hook is changed in its own file, in the person's own editor. A file name opens that file in the preferred editor (see "Open config files in an external editor or reveal them").
 
 #### Scenario: list an agent's hooks with Coffer's own marked
 - **GIVEN** a registered Claude Code agent whose `settings.json` carries a foreign `PreToolUse` hook and Coffer's memory hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
@@ -945,10 +870,10 @@ path that writes back into it.
 - **THEN** its row carries the `conversation_id`, `running` true, `needs_you` and the channel binding, while a session no conversation points at carries none of them
 
 ### Requirement: Offer every agent operation over REST and on the Agents page
-Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, native session listing, rename and delete, and the model catalogue — MUST be available through (a) the REST API and (b) the Agents page in the web UI. The command line carries none of them: it has no `agent` command group.
+Every management operation — register/list/view/update/remove, the config-file listing, Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, native session listing, rename and delete, and the model catalogue — MUST be available through (a) the REST API and (b) the Agents page in the web UI. The command line carries none of them: it has no `agent` command group.
 
 - the lifecycle of "Manage the agent lifecycle" under `/api/v1/agents`;
-- config-file reads, writes and deletes of directory children under `/api/v1/agents/{uid}/config-files`;
+- the config-file listing at `GET /api/v1/agents/{uid}/config-files`;
 - the agent's Coffer connection under `/api/v1/agents/{uid}/coffer-connection` ("Connect an agent to Coffer in one action");
 - direct MCP entries under `/api/v1/agents/{uid}/mcp-entries`;
 - plugins under `/api/v1/agents/{uid}/plugins`, where `DELETE` is the uninstall of "Uninstall a plugin by the type's own strategy";
@@ -956,17 +881,17 @@ Every management operation — register/list/view/update/remove, config-file wri
 - native sessions at `GET /api/v1/agents/{uid}/sessions` ("List an agent's native sessions through the agent"), renamed with `PATCH` and deleted with `DELETE` at `/api/v1/agents/{uid}/sessions/{session_id}` ("Rename and delete a native session through the agent");
 - the model catalogue at `GET /api/v1/agent-providers/{agent_key}/models`.
 
-The reads of plain files on disk — an agent's config files and their content and the files of its native memory stores — are served over REST for the web UI, and the Overview's Details names the config directory for anyone who wants the files themselves. The model catalogue's route takes the agent type it is keyed by (`claude_code`, `codex`), not an agent's name, and an unknown type is its not-found.
+The listing of an agent's config files and the reads of its native memory stores' files are served over REST for the web UI, and the Overview's Details names the config directory for anyone who wants the files themselves. The model catalogue's route takes the agent type it is keyed by (`claude_code`, `codex`), not an agent's name, and an unknown type is its not-found.
 
-The Agents page in the web UI MUST expose all of these, config-file content writes included. It renders within the web-ui shell at `/agents` as the first entry of the sidebar's Agents group ([web-ui](../web-ui/spec.md) "Group the sidebar by what the user comes to do"), never among the Capabilities or Context entries, because agents are consumers of vault assets, not assets themselves; agent resources do not appear in the kind-agnostic resources browser.
+The Agents page in the web UI MUST expose all of these. It renders within the web-ui shell at `/agents` as the first entry of the sidebar's Agents group ([web-ui](../web-ui/spec.md) "Group the sidebar by what the user comes to do"), never among the Capabilities or Context entries, because agents are consumers of vault assets, not assets themselves; agent resources do not appear in the kind-agnostic resources browser.
 
-- A config file (and a directory-entry child) opens in a viewer that becomes **editable behind an explicit Edit**, saves through the same path as REST ("Validate config-file content before saving it", "Write config files atomically with a backup and an audit entry"), and guards an unsaved draft three ways — picking another file asks first, leaving the tab asks first, and leaving the page asks first. Open-in-external-editor / reveal-in-file-manager sit beside the content for the edits that want a real editor. Every place the page shows a file the agent holds — Config files, a native memory store, an unmanaged skill's folder — uses the same file tree and the same viewer toolbar, so a file reads the same wherever it is opened.
+- A config file is never shown or edited in the page: its row opens it in the person's editor or reveals it ("Open config files in an external editor or reveal them"). Every place the page shows a file the agent holds read-only — a native memory store, an unmanaged skill's folder — uses the same file tree and the same viewer toolbar, so a file reads the same wherever it is opened.
 - The agent detail page's **header** carries the agent's mark, its name, one status pill and a **⋯** menu, and nothing under the name: the version and the config directory are on the Overview. The pill reads Connected, Not connected, Needs repair, Hook not approved or Config left behind. The header never turns into a fix button — Connect, Repair and Check again sit on the Overview's Connection section. **Rotate proxy token** is in ⋯ only while the agent routes through Coffer's proxy ([provider-switching](../provider-switching/spec.md) "Authenticate each agent to the proxy with its own local token").
 - The detail page has eight tabs, none carrying a count: six in the strip — **Overview**, **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** — and, behind a **More** menu, **Plugins** and **Memory**, the least used. Each is addressable by its own path (`/agents/<type>` for Overview, then `/agents/<type>/skills`, `/mcp-servers`, `/hooks`, `/config`, `/sessions`, `/plugins` and `/memory`), so a page opened from a tab returns to it. While the open tab is one of the two in More, the More trigger reads that tab's name and carries the underline; a tab in More that needs attention puts a warning dot on More. There is **no Model tab**: an agent's model is a section of the Overview, and `/agents/<type>/model` is not a page.
   - **Overview** stacks, top to bottom, **Connection**, **What this agent can use**, **Model** and **Details**. Connection says what the connection is in one line, lists the `coffer` MCP entry and the memory delivery hook with where each lives and its health, and carries the one fix the state calls for at its title's right — **Connect** or **Repair** as a solid button, **Check again** as an outline one — and none while the agent is healthy. What this agent can use is six tiles, three by two — MCP servers, Skills, Config files, Plugins, Hooks and Memory — each with its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; a tile opens its tab. Model reads **Provider**, **Model** and **Route** (through Coffer's proxy, with **Test**, or direct) and carries **Change…**, which opens the Change model dialog of [provider-switching](../provider-switching/spec.md) "Review a model change before writing it"; opening the page with `?change-model=1` opens that dialog on arrival. With the `models` feature off the section is read-only and shows no Provider row and no Change. Details reads **Version**, **Config directory**, **UID** and **Registered**, with no Title, Name or Type, because an agent's name is fixed to its type.
   - **Skills** and **MCP servers** open with Coffer's part and then the agent's own, per "Show what Coffer manages for an agent in one row". **Plugins** lists the agent's installed plugins — all its own, since Coffer installs none — with a search, an enabled switch and a ⋯ menu whose only item is Uninstall…, and a plugin's name opens an information dialog.
   - **Hooks** opens with **Coffer's memory hook**, then **the agent's own hooks**, per "List every hook in the agent's native config". The tab is read only apart from Repair and Check again on Coffer's hook.
-  - **Config files** lists every allowlisted config file of "Define a curated config-file allowlist per type" in one file tree — the settings files and the human-authored instructions files (`CLAUDE.md`, `AGENTS.md`) alike, because an instructions file is configuration the person wrote, not something installed.
+  - **Config files** lists every allowlisted config file of "Define a curated config-file allowlist per type" as read-only rows — the settings files and the human-authored instructions files (`CLAUDE.md`, `AGENTS.md`) alike, because an instructions file is configuration the person wrote, not something installed — each opened in the editor or revealed ("Open config files in an external editor or reveal them").
   - **Memory** leads with **Coffer's memory** — Coffer's memory hook for this agent, when it last fired and what it delivers, with a link to the Memory page and a Repair when the hook is out of date or missing — only while the `memory` feature is on, and then lists **the agent's own memory stores**, read-only ([web-ui](../web-ui/spec.md) "Show memory delivery on the Memory page"). **Sessions** — the agent's own session history, asked of the agent itself — is one list whose rows open in the terminal ("Open an agent's sessions from its Sessions tab").
 - A direct server's name on the MCP servers tab opens that entry's read-only JSON in a dialog ("Show one direct MCP entry's full configuration without its secrets"), whose footer carries the row's two writes — remove it from its file (Remove, or Remove duplicate when Coffer already serves it) and adopt it into Coffer — around Close.
 - The Memory list carries no per-row actions: a row OPENS its subject, and the open / reveal affordances live on the page it opens, beside the thing they act on. A Memory row opens that store's directory as a file tree with a read-only preview, because a store is a directory.
@@ -1091,3 +1016,17 @@ failure to load the list shows in the list's area with a Retry. The tab shows no
 - **GIVEN** a listed session
 - **WHEN** the user chooses Delete… from its ⋯ menu
 - **THEN** a confirmation says it is deleted from the agent and cannot be recovered, and nothing is deleted until the user confirms
+
+### Requirement: Back up and compare-and-swap every write Coffer makes to an agent's config
+Every write Coffer makes into an agent's own config files — connecting, repairing or disconnecting it, installing or removing Coffer's MCP entry, removing or adopting a direct MCP entry, toggling or uninstalling a plugin, projecting a provider, and the reconciler's repairs — MUST be atomic (temp file + rename) and MUST first copy the prior content to a timestamped backup under `~/.coffer/config-backups/` (Coffer's own folder: machine-local, outside the vault, and never beside the agent's file). A writer that read the file before deciding what to write MUST pass the fingerprint of what it read, and the write MUST be refused with `conflict` (409, `CONFIG_FILE_STALE`) when the file changed since, leaving it untouched, so the agent's own rewrite between Coffer's read and write is never lost. Backups are named by their UTC time and cleaned by the `config_backups` retention policy ([resource-framework](../resource-framework/spec.md) "Retain config backups on an adjustable policy"), which always keeps the newest backup of each file. Each writer records its own audit event; there is no write of a config file on the person's behalf, which edits the file in their own editor (see "Open config files in an external editor or reveal them").
+
+#### Scenario: Coffer's own config write leaves its backup in Coffer's folder
+- **GIVEN** `~/.claude/settings.json` holds content, and an older write already left a backup of it
+- **WHEN** Coffer writes new content to that file twice
+- **THEN** each write copied the prior content to its own timestamped file under `~/.coffer/config-backups/`, in a folder named for that one config file, and the newest backup holds the content the last write replaced
+- **AND** no `.bak` file, backup or temporary file is left in the agent's own directory, and nothing under `~/.coffer/vault` was written
+
+#### Scenario: Coffer's own config write is refused when the file changed since it was read
+- **GIVEN** a config file Coffer read to plan a write, which the agent then rewrites on disk
+- **WHEN** Coffer writes with the fingerprint of what it read
+- **THEN** the write is refused `409 CONFIG_FILE_STALE` and the file holds the agent's content

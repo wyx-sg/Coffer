@@ -111,19 +111,6 @@
     "saved": "已保存",
     "showPassword": "显示",
     "hidePassword": "隐藏",
-    "discardChanges": {
-      "title": "放弃未保存的修改？",
-      "body": "你对这个文件的修改将丢失。",
-      "confirm": "放弃"
-    },
-    "leaveGuard": {
-      "title": "不保存就离开？",
-      "body": "你在 {{owner}} 中修改了 {{file}}。现在离开，这些修改将丢失。",
-      "discard": "放弃修改",
-      "keep": "继续编辑",
-      "saveAndLeave": "保存并离开",
-      "saveFailed": "无法保存 {{file}}"
-    },
     "couldntDelete": "无法删除 {{name}}",
     "couldntDeleteSelected": "无法删除所选项",
     "bulk": {
@@ -167,9 +154,6 @@
   },
   "files": {
     "readOnly": "只读",
-    "unsaved": "有未保存的修改",
-    "unsavedChanges": "有未保存的修改",
-    "notSaved": "未保存",
     "viewLabel": "显示为",
     "preview": "预览",
     "source": "源码",
@@ -1127,6 +1111,12 @@
       "preferredTerminalNeedsCommand": "模板需要包含 {command}。",
       "handoffAgent": "交接智能体",
       "handoffAgentHelp": "交接按钮启动的智能体。",
+      "skillUpdateCheck": "检查技能更新",
+      "skillUpdateCheckHelp": "这台 Mac 多久查看一次从 Git 添加的技能是否有新版本。在技能页面上点“检查更新”随时可用。",
+      "skillUpdateCheck6h": "每 6 小时",
+      "skillUpdateCheck1d": "每天",
+      "skillUpdateCheck7d": "每周",
+      "skillUpdateCheckManual": "仅在我要求时",
       "handoffAgentNone": "没有可用的智能体。安装 Claude Code 或 Codex 后才能交接。"
     },
     "daemon": {
@@ -1697,10 +1687,8 @@
     "KNOWLEDGE_COLLECTION_EXISTS": "同名知识集合已存在",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "未找到该知识集合",
     "KNOWLEDGE_ERROR": "知识层拒绝了该操作",
-    "KNOWLEDGE_FILE_CONFLICT": "打开后该文档已在磁盘上被修改——你的文字没有保存。请重新加载、对比，或先复制你的文字。",
     "KNOWLEDGE_FILE_NOT_FOUND": "未找到该知识文件",
     "KNOWLEDGE_HISTORY_UNAVAILABLE": "无法查看文档历史：本机没有安装 git",
-    "KNOWLEDGE_VERSION_NOT_FOUND": "该文档的历史中没有这个版本",
     "KNOWLEDGE_PATH_UNSAFE": "该路径不在知识集合范围内",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "文件过大，无法上传。上限为 20 MB。",
     "MASTER_KEY_FILE_INVALID": "这不是一个有效的主密钥",
@@ -1711,7 +1699,6 @@
     "MCP_INSTALL_UNSUPPORTED": "该智能体不支持安装 Coffer 的 MCP 条目",
     "MEMORY_DELIVERY_CONFIG_INVALID": "该智能体的设置文件不是 Coffer 可以编辑的格式",
     "MEMORY_DELIVERY_UNSUPPORTED": "该智能体类型没有记忆投递钩子",
-    "MEMORY_NOTE_CONFLICT": "该记忆在你打开后已在磁盘上发生变化——你的文本未保存。请先重新加载、比较或复制你的文本。",
     "MEMORY_NOTE_NOT_FOUND": "没有找到这条记忆笔记",
     "MEMORY_RAW_ENTRY_NOT_FOUND": "没有找到这条原始记忆条目",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
@@ -1734,7 +1721,6 @@
     "SCOPE_INVALID": "该资源类型不支持此生效范围设置",
     "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim——智能体靠它连接 Coffer 的程序。可以交给智能体找到或重新安装它，然后重试。",
     "SKILL_DIR_NOT_WRITABLE": "技能目录不可写——请检查目录权限",
-    "SKILL_FILE_STALE": "技能文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
     "SKILL_INVALID": "该技能无效",
     "SYNC_CANNOT_RETIRE_SELF": "机器不能把自己下线",
     "SYNC_NOTHING_TO_ROLL_BACK": "没有可以回滚到的轮次",
@@ -1767,7 +1753,6 @@
     "OPENAPI_FILE_NEEDED": "这个分组是从文件导入的：请再次选择该文件以重新导入",
     "SKILL_STAGING_NOT_FOUND": "暂存的来源已不存在——已添加、已取消或已过期。请重新开始。",
     "SKILL_SOURCE_UNREACHABLE": "Git 无法访问该技能的仓库。",
-    "SKILL_UPDATE_CONFLICT": "该技能在固定的提交之后被修改过。请保留你的修改，或接受更新并放弃修改。",
     "SKILL_UPDATE_NOT_PENDING": "这个提交不是该技能正在等待的更新。请重新打开更新。",
     "SKILL_NOT_FROM_GIT": "该技能不是从 Git 仓库添加的，没有可更新的来源。",
     "PORT_OUT_OF_RANGE": "请选择 1024 到 65535 之间的端口。",
@@ -1789,7 +1774,6 @@
     "VAULT_FILE_STALE": "文件在你加载后已被修改。请重新加载后再试。",
     "VAULT_GIT_FAILED": "读写 vault 时 git 出错。",
     "VAULT_PATH_INVALID": "这不是 vault 内的路径。",
-    "VAULT_VERSION_NOT_FOUND": "该文件的这个版本不存在。",
     "SKILL_COPY_NOT_OURS": "这个技能在某个智能体中的副本已经不是 Coffer 的链接，所以 Coffer 不会删除它。请先从主文件夹恢复，或自行删除那个文件夹。",
     "SKILL_COPY_NOT_DIFFERING": "那个智能体的副本现在就是 Coffer 的链接，没有可比较的内容。",
     "SKILL_ORPHAN_NOT_FOUND": "那个文件夹已经不在技能库之外了。",
@@ -1826,7 +1810,6 @@
   "agents": {
     "hooks": {
       "parseError": "无法读取 {{file}}：{{error}}",
-      "openInConfig": "在配置文件中打开",
       "state": {
         "current": "最新",
         "stale": "已过期",
@@ -2037,8 +2020,6 @@
     "config": {
       "none": "未找到配置文件。",
       "notCreated": "未创建",
-      "editorLabel": "{{key}} 的内容",
-      "selectFile": "选择一个文件查看。",
       "emptyDir": "暂无文件。",
       "desc": {
         "settings": "{{agent}} 设置：权限、模型和钩子。",
@@ -2183,7 +2164,6 @@
       "removeBody": "{{agent}} 在下一个会话中将不再有这个服务器。会在 Coffer 的文件夹里保留一份备份，Coffer 中的内容不会改变。",
       "removeDuplicateBody": "{{agent}} 仍会通过 Coffer 获得 {{name}}。会在 Coffer 的文件夹里保留一份备份，Coffer 中的内容不会改变。",
       "parseError": "无法读取 {{file}}：{{error}}。在文件恢复有效之前，其中的条目只读。",
-      "openConfigFiles": "在配置文件中打开",
       "emptyTitle": "{{agent}} 没有自己的 MCP 服务器",
       "emptyDescription": "{{agent}} 自己配置里绕过 Coffer 的服务器会显示在这里。",
       "entry": {
@@ -2439,35 +2419,7 @@
       }
     },
     "configTab": {
-      "revert": "还原",
-      "validJson": "JSON 有效",
-      "invalidJson": "JSON 无效 · 修好之前无法保存",
-      "staleTitle": "打开之后 {{name}} 在磁盘上被改过",
-      "staleBody": "你的修改尚未保存。先把它们复制到安全的地方，再重新加载当前文件。",
-      "copyEdits": "复制我的修改",
-      "copyFailed": "复制失败——请选中文本手动复制。",
-      "missingTitle": "{{name}} 还不存在",
-      "missingBody": "文件存在时 {{agent}} 会读取它。想往里面写配置时再创建它。",
-      "create": "创建 {{name}}",
-      "directoryHint": "选择一个文件以打开。",
-      "deleteTitle": "删除 {{name}}？",
-      "deleteBody": "这会从磁盘删除 {{path}}，{{agent}} 将失去它。没有副本可以恢复。",
-      "deleteFile": "删除…",
-      "newFile": "新建文件",
-      "newFileTitle": "在 {{dir}} 中新建文件",
-      "newFileBody": "每个子智能体一个 Markdown 文件。Coffer 会用一个简短的模板创建它，你可以再编辑。",
-      "newFileName": "文件名",
-      "newFileSavedAs": "保存为 {{path}}",
-      "newFileInvalid": "请使用以 .md 结尾、不含斜杠的文件名。",
-      "newFileExists": "已经有同名文件。",
-      "newFileCreate": "创建",
-      "title": "配置文件 · {{agent}}",
-      "treeLabel": "配置文件",
-      "invalidAt": "第 {{line}} 行第 {{column}} 列：JSON 无效",
-      "discardAndReload": "放弃并重新加载",
-      "folder": "文件夹",
-      "openFile": "打开文件",
-      "moreFor": "{{name}} 的更多操作"
+      "title": "配置文件 · {{agent}}"
     },
     "sessionsTab": {
       "ariaLabel": "会话",
@@ -2659,8 +2611,7 @@
         "overview": "概览",
         "files": "文件",
         "delivery": "投递",
-        "requires": "依赖",
-        "history": "历史"
+        "requires": "依赖"
       },
       "source": {
         "builtin": "由 Coffer 生成"
@@ -2688,19 +2639,8 @@
     },
     "files": {
       "tree": "文件",
-      "editorLabel": "{{path}} 的内容",
-      "unsaved": "有未保存的修改",
-      "notSaved": "未保存",
-      "conflictTitle": "{{file}} 在你打开之后被改动了",
-      "conflictBody": "Coffer 之外的程序改写了它。你的修改还在，但没有保存。对比两者，选择保留哪一个。",
       "lockBuiltin": "由 Coffer 写入 — 只读",
-      "lockNotMine": "不在你的库中 — 只读",
-      "compare": "对比…",
-      "copyMine": "复制我的文本",
-      "discardTitle": "放弃对 {{file}} 的修改？",
-      "discardBody": "你修改了 {{owner}} 中的 {{file}}，但还没保存。现在离开会丢掉这次修改；智能体仍使用已保存的版本。",
-      "discardConfirm": "放弃修改",
-      "keepEditing": "继续编辑"
+      "lockNotMine": "不在你的库中 — 只读"
     },
     "checkCopies": "检查副本",
     "bulk": {
@@ -2819,41 +2759,6 @@
       "skillDelivered": "已投递到相同的智能体",
       "skillNotDelivered": "未投递到 {{agents}}"
     },
-    "history": {
-      "title": "还没有版本",
-      "none": "这个技能文件的每次改动——你的、智能体的、在磁盘上改的——都会作为一个版本列在这里，可以对比和恢复。",
-      "builtinTitle": "Coffer 自带的技能没有历史",
-      "builtinBody": "它的文件每次启动都按当前版本重建，没有更早的版本可以回退。",
-      "failedTitle": "读取这个技能的历史失败",
-      "listLabel": "版本",
-      "current": "当前",
-      "versionLabel": "所选版本",
-      "noFiles": "这个版本没有改动技能的任何文件。",
-      "noTextChange": "没有文本改动（二进制文件，或只改了权限）。",
-      "restore": "恢复此版本…",
-      "from": "起点",
-      "to": "终点",
-      "start": "起始",
-      "what": {
-        "restored": "恢复了 {{date}} 的版本",
-        "restoredHash": "恢复了版本 {{version}}",
-        "added": "新增 {{file}}",
-        "removed": "删除 {{file}}",
-        "edited": "编辑了 {{file}}",
-        "changed": "改动了 {{file}}",
-        "files_one": "改动了 {{count}} 个文件",
-        "files_other": "改动了 {{count}} 个文件"
-      },
-      "note": {
-        "restored": "Coffer 恢复了 {{date}} 的版本。",
-        "agent": "{{agent}} 通过 Coffer 改动了这个技能的文件。",
-        "disk_one": "你在自己的编辑器里改了 {{file}}；Coffer 把它记成了一个版本。",
-        "disk_other": "你在自己的编辑器里改了 {{count}} 个文件；Coffer 把它们记成了一个版本。",
-        "user_one": "你在 Coffer 的编辑器里改了 {{file}}。",
-        "user_other": "你在 Coffer 里改了 {{count}} 个文件。",
-        "current": "这是当前版本。"
-      }
-    },
     "copies": {
       "title": "检查副本",
       "checking": "正在检查每个智能体的副本…",
@@ -2908,7 +2813,7 @@
       "body_one": "删除主文件夹，并从拥有它的智能体中移除链接：{{agents}}。",
       "body_other": "删除主文件夹，并从拥有它的 {{count}} 个智能体中移除链接：{{agents}}。",
       "bodyNone": "删除主文件夹。目前没有智能体拥有它。",
-      "noUndo": "这里无法撤销。历史保留了这些文件，你可以从某个版本把它加回来。",
+      "noUndo": "这里无法撤销。保险库的 git 历史保留了这些文件，可以请智能体帮你恢复。",
       "confirm": "删除技能",
       "refusedTitle": "什么都没有删除",
       "refusedBody": "现在是一个普通文件夹，不是 Coffer 的链接——{{agent}} 改过它。Coffer 只删除自己创建的东西。删除技能并把那个文件夹留给 {{agent}}，或者先取消、看一下改动。",
@@ -2919,6 +2824,7 @@
       "label": "{{name}} 的更多操作",
       "copyPath": "复制主文件夹路径",
       "copyFailed": "无法复制到剪贴板",
+      "history": "历史…",
       "delete": "删除…"
     },
     "banner": {
@@ -2936,13 +2842,11 @@
       "unreachableTitle": "无法访问 {{repo}}",
       "unreachableBody": "上次检查于 {{time}}：{{error}} 技能仍按固定的副本工作，只是暂停更新。",
       "updateTitle": "{{repo}} 有可用更新",
-      "updateBody_one": "{{ref}} 比固定的 {{commit}} 多了 {{count}} 个提交；{{folder}} 中 {{files}} 个文件有变化。在你查看之前不会有任何改动。",
-      "updateBody_other": "{{ref}} 比固定的 {{commit}} 多了 {{count}} 个提交；{{folder}} 中 {{files}} 个文件有变化。在你查看之前不会有任何改动。",
-      "reviewUpdate": "查看更新…",
+      "updateBody_one": "{{ref}} 比固定的 {{commit}} 多了 {{count}} 个提交；{{folder}} 中 {{files}} 个文件有变化。在你的智能体把它合并进来之前不会有任何改动。",
+      "updateBody_other": "{{ref}} 比固定的 {{commit}} 多了 {{count}} 个提交；{{folder}} 中 {{files}} 个文件有变化。在你的智能体把它合并进来之前不会有任何改动。",
       "defaultBranch": "默认分支",
       "repoTop": "仓库",
-      "masterBody": "{{path}} 在 Coffer 之外被删除了。它的范围和历史还在，最后一个版本来自 {{when}}。",
-      "masterBodyNoHistory": "{{path}} 在 Coffer 之外被删除了。它的范围还在，但没有可以放回去的早期版本。",
+      "masterBody": "{{path}} 在 Coffer 之外被删除了。它的范围还在，可以让智能体找一份副本放回去。",
       "requiresBody": "{{name}} 仍会投递，但它的步骤会在第一个未就绪的命令处停下。把安装和登录交给智能体，然后再检查。",
       "tool": {
         "off": "{{tool}} 已关闭，所以 {{name}} 无法调用它",
@@ -2977,7 +2881,7 @@
       "agentHelp_other": "把它的文件设为主文件夹，{{agents}} 也会用上。",
       "happenMasterAgent": "它的文件夹会移到 ~/.coffer/content/backup/{{name}}，由 Coffer 的链接取代。",
       "happenMasterOthers": "没有变化；它本来就用主版本。",
-      "happenAgentCoffer": "{{name}} 采用 {{agent}} 的文件。今天的主版本留在历史中。",
+      "happenAgentCoffer": "{{name}} 采用 {{agent}} 的文件。今天的主版本保留在保险库的历史中。",
       "happenAgentOthers": "通过它的链接立即得到这些文件。",
       "happenAgentAgent": "它的文件夹重新变成 Coffer 的链接。",
       "captionMaster": "差异显示的是不保留的那一边的变化：{{agent}} 的文件夹 → 主版本。",
@@ -2985,13 +2889,9 @@
       "failed": "无法处理这个文件夹"
     },
     "missing": {
-      "restore": "从历史中恢复",
-      "restoreButton": "从历史中恢复",
       "deleteButton": "删除技能…",
-      "restored": "已从历史中恢复 {{name}}",
       "emptyTitle": "没有可显示的文件",
-      "emptyBody": "它们所在的文件夹不见了。恢复它就能再次查看和编辑，也可以在历史里看任意一个版本。",
-      "openHistory": "打开历史"
+      "emptyBody": "它们所在的文件夹不见了。放回一份副本后，文件会重新显示在这里。"
     },
     "orphan": {
       "section": "不在技能库中",
@@ -3020,22 +2920,30 @@
       "checking": "正在检查…",
       "take": "更改为 {{commit}}",
       "noteForm": "目前还没有替换任何内容。",
-      "note": "当前版本会留在历史中。",
+      "note": "当前版本会保留在保险库的历史中。",
       "refHelp": "留空则使用默认分支。",
       "pathHelp": "SKILL.md 所在的位置。在仓库顶层时留空。",
-      "cofferTakes": "把 {{name}} 的文件替换为来源 {{to}} 的内容。",
+      "noFiles": "新来源的文件与现在相同。",
+      "filesChange_one": "将有 {{count}} 个文件变化：",
+      "filesChange_other": "将有 {{count}} 个文件变化：",
+      "status": {
+        "added": "新增",
+        "removed": "删除",
+        "modified": "修改"
+      },
       "done": "{{name}} 现在跟随 {{repo}}",
       "failed": "无法更换来源"
     },
     "update": {
-      "coffer": "Coffer。",
-      "agentSees": "通过链接立即看到新文件。",
-      "note": "只有 {{name}} 会改变。可以在历史中恢复固定的旧版本。",
-      "bothSides": " 两边都改过了",
-      "cofferMoves_one": "把 {{name}} 从 {{from}} 移到 {{to}}（{{count}} 个提交）。固定的旧版本留在历史中。",
-      "cofferMoves_other": "把 {{name}} 从 {{from}} 移到 {{to}}（{{count}} 个提交）。固定的旧版本留在历史中。",
-      "done": "已把 {{name}} 更新到 {{commit}}",
-      "failed": "无法应用此次更新"
+      "handoff": "交给 {{agent}} 更新",
+      "merged": "我已合并",
+      "mergedTitle": "把 {{name}} 记录为已合并？",
+      "mergedBody": "Coffer 会把该技能固定到 {{commit}}，文件保持智能体改完后的样子。请在更新已进入主文件夹后再这样做。",
+      "mergedDone": "{{name}} 已固定到 {{commit}}",
+      "mergedFailed": "无法记录合并",
+      "viewUpstream": "查看上游改动",
+      "range": "提交",
+      "copyRange": "复制提交范围"
     },
     "addReach": {
       "availableTo": "可用于",
@@ -3045,48 +2953,17 @@
       "note": "选定之前不会写入任何内容。"
     },
     "checkingCopies": "正在检查…",
-    "checkCopiesHint": "把每个智能体的副本与主文件夹比较",
-    "fileConflict": {
-      "title": "{{file}} 两边都有改动",
-      "subtitle": "你在 Coffer 里改了它；Coffer 之外的程序也改写了它。",
-      "choose": "保留哪一边",
-      "keepMine": "保留我的修改",
-      "keepMineHelp": "把你的文本保存到文件里。磁盘上的版本会留在历史中。",
-      "takeDisk": "采用磁盘上的版本",
-      "takeDiskHelp": "重新载入文件并丢弃你的修改。如果还需要，请先复制你的文本。",
-      "saveMine": "保存我的修改",
-      "useDisk": "使用磁盘上的版本",
-      "captionMine": "差异显示的是不保留的那一边的变化：磁盘上的版本 → 你的修改。",
-      "captionDisk": "差异显示的是不保留的那一边的变化：你的修改 → 磁盘上的版本。",
-      "failed": "无法保存 {{file}}"
-    },
-    "restore": {
-      "title": "恢复 {{date}} 的版本",
-      "coffer": "把 {{date}} 的文件写成今天版本之上的新版本。历史中不会删除任何内容。",
-      "agent": "通过它的链接立即看到恢复后的文件。",
-      "confirm_one": "恢复 {{count}} 个文件",
-      "confirm_other": "恢复 {{count}} 个文件",
-      "failed": "无法恢复此版本",
-      "loading": "正在与当前文件对比…",
-      "note": "之后可以用同样的方式回到今天的版本。",
-      "same": "这个技能已经与此版本一致。",
-      "toast": "已恢复 {{date}} 的版本"
-    },
-    "conflict": {
-      "cofferTake": "把 {{name}} 移到 {{to}}。你的修改会被替换，并保留在历史中。",
-      "cofferKeep": "{{name}} 保持固定在 {{pinned}}，带着你的修改。",
-      "agentTake": "通过它的链接立即看到新文件。",
-      "agentKeep": "没有变化；它继续使用你的版本。",
-      "captionTake": "差异显示的是不保留的那一边的变化：你的版本 → 此次更新。",
-      "captionKeep": "差异显示的是不保留的那一边的变化：此次更新 → 你的版本。"
-    }
+    "checkCopiesHint": "把每个智能体的副本与主文件夹比较"
   },
-  "vault": {
-    "writer": {
-      "user": "你",
-      "daemon": "Coffer",
-      "sync": "Git"
-    }
+  "vaultHistory": {
+    "title": "历史",
+    "description": "文件的历史由 git 保管。复制命令自己查看，或把还原交给你的智能体。",
+    "path": "保险库中的路径",
+    "at": "还原到此时的样子",
+    "atHint": "可不填。不填时，智能体会列出各个版本并问你选哪一个。",
+    "copyCommand": "复制 git 命令",
+    "copyFailed": "无法复制该命令。",
+    "restoreWith": "交给 {{agent}} 还原"
   },
   "knowledge": {
     "subtitle": "你和智能体共同编写的文档，每个智能体都能读取。",
@@ -3099,8 +2976,7 @@
     },
     "tree": {
       "empty": "还没有文档",
-      "emptyFolder": "这里还没有内容",
-      "unsaved": "有未保存的更改"
+      "emptyFolder": "这里还没有内容"
     },
     "stats": {
       "documents": "文档",
@@ -3114,7 +2990,8 @@
       "copyPath": "复制路径",
       "descriptionSaved": "描述已更新",
       "descriptionUndoFailed": "无法恢复原描述",
-      "clickToEdit": "点击编辑"
+      "clickToEdit": "点击编辑",
+      "copyFailed": "无法复制该路径"
     },
     "create": {
       "title": "新建知识集",
@@ -3136,6 +3013,12 @@
     },
     "deleteCollection": {
       "menu": "删除知识集…",
+      "title": "删除 {{name}}？",
+      "body_one": "其中的 {{count}} 篇文档会一并删除。提示消失前可以撤销，之后只有 git 里还留着这些文件。",
+      "body_other": "其中的 {{count}} 篇文档会一并删除。提示消失前可以撤销，之后只有 git 里还留着这些文件。",
+      "confirm": "删除知识集",
+      "pending": "正在删除…",
+      "failed": "无法删除 {{name}}",
       "deleted": "已删除 {{name}}",
       "undoFailed": "无法恢复 {{name}}"
     },
@@ -3162,59 +3045,20 @@
       "failedTitle": "无法上传这个文件"
     },
     "document": {
-      "tab": "文档",
       "where": "这篇文档的位置",
       "more": "{{path}} 的更多操作",
-      "views": "文档视图",
       "createdBy": "{{date}}由{{who}}创建",
       "you": "你",
       "view": "视图",
       "preview": "预览",
       "source": "源码",
-      "created": "{{date}}创建"
-    },
-    "editor": {
-      "label": "编辑 {{path}}",
-      "conflictTitle": "你编辑期间，这篇文档在磁盘上被修改了",
-      "compare": "比较",
-      "reload": "重新加载",
-      "copyMine": "复制我的文字",
-      "copyFailed": "无法复制你的文字",
-      "unsaved": "有未保存的修改",
-      "notSaved": "未保存",
-      "copied": "你的文字已复制到剪贴板",
-      "reloaded": "已重新加载磁盘上的版本",
-      "discard": "放弃",
-      "reloadAsk": "重新加载…",
-      "reloadTitle": "重新加载磁盘上的版本？",
-      "reloadBody": "你未保存的文字会被磁盘上的内容替换。想保留的话请先复制。",
-      "reloadConfirm": "重新加载",
-      "conflictOther": "{{who}}在 {{time}} 修改了 {{file}}。你的文字还没有保存。",
-      "conflictUnknown": "{{file}} 在磁盘上发生了变化。你的文字还没有保存。"
+      "created": "{{date}}创建",
+      "history": "历史…"
     },
     "deleteDocument": {
-      "menu": "删除文档…",
+      "menu": "删除文档",
       "deletedToast": "已删除 {{name}}",
       "undoFailed": "无法恢复 {{name}}"
-    },
-    "history": {
-      "tab": "历史",
-      "current": "当前",
-      "none": "还没有记录任何版本。",
-      "versionLabel": "选中的版本",
-      "restore": "恢复这个版本",
-      "restored": "已作为新版本恢复",
-      "failedTitle": "无法读取这篇文档的历史",
-      "openActivity": "打开活动",
-      "versions": "版本",
-      "restoredToast": "已把 {{when}} 的版本恢复为新版本",
-      "diffMode": "显示哪种差异",
-      "changesInVersion": "这个版本的改动",
-      "compareCurrent": "与当前版本比较",
-      "removedVersion": "这个版本删除了文档，没有可比较的内容。",
-      "needsGitTitle": "历史需要 git",
-      "needsGitBody": "请在这台 Mac 上安装 git 才能查看各版本。文档本身没有问题。",
-      "checkAgain": "重新检查"
     },
     "writer": {
       "user": "你",
@@ -3222,74 +3066,6 @@
       "curation": "整理",
       "sync": "同步",
       "disk": "在磁盘上编辑"
-    },
-    "changes": {
-      "op": {
-        "save": "编辑了 {{document}}",
-        "delete": "删除了 {{document}}",
-        "promote": "按原样添加了 {{document}}",
-        "restore": "恢复了 {{document}} 的一个早期版本",
-        "edit": "在 Coffer 之外编辑了 {{document}}",
-        "sync": "同步了另一台机器的改动",
-        "create": "创建了这个知识集",
-        "rename": "移动了 {{document}}",
-        "remove": "移除了 {{document}}",
-        "baseline": "记录了知识集的现状"
-      },
-      "version": {
-        "save": "在 Coffer 中编辑",
-        "delete": "已删除",
-        "promote": "按原样添加",
-        "restore": "恢复了一个早期版本",
-        "edit": "在磁盘上编辑",
-        "sync": "从另一台 Mac 拉取",
-        "create": "创建",
-        "rename": "移动",
-        "remove": "随知识集一起删除",
-        "baseline": "记录现状"
-      },
-      "verb": {
-        "save": "编辑了",
-        "delete": "删除了",
-        "promote": "按原样添加了",
-        "restore": "恢复了",
-        "edit": "在磁盘上编辑了",
-        "sync": "从另一台 Mac 拉取了",
-        "create": "创建了这个知识集",
-        "rename": "移动了",
-        "remove": "删除了知识集",
-        "baseline": "记录了知识集的现状",
-        "restoreCollection": "恢复了知识集"
-      }
-    },
-    "recent": {
-      "title": "最近改动",
-      "window": "最近 7 天",
-      "collectionFilter": "知识集",
-      "today": "今天",
-      "yesterday": "昨天",
-      "empty": "最近 7 天没有改动。",
-      "failed": "无法读取最近改动",
-      "more_one": "等 {{count}} 篇",
-      "more_other": "等 {{count}} 篇",
-      "restore": "恢复",
-      "restoring": "正在恢复…",
-      "restored": "已恢复",
-      "restoredToast": "已恢复 {{name}}",
-      "detail": {
-        "delete": "已从知识集移除；它的各个版本仍保留在知识库的历史中。",
-        "remove_one": "知识集及其 {{count}} 个文件已删除；它们仍保留在知识库的历史中。",
-        "remove_other": "知识集及其 {{count}} 个文件已删除；它们仍保留在知识库的历史中。",
-        "restore": "作为新版本放回；之前的历史保持不变。",
-        "sync_one": "另一台 Mac 上改动了 {{count}} 行。",
-        "sync_other": "另一台 Mac 上改动了 {{count}} 行。"
-      },
-      "authorFilter": "作者",
-      "clearFilters": "清除筛选",
-      "needsGitTitle": "最近更改需要 git",
-      "needsGitBody": "在这台 Mac 上安装 git 才能查看改了什么。你的文档完好无损。",
-      "checkAgain": "重新检查",
-      "openActivity": "打开活动"
     },
     "when": {
       "today": "今天 {{time}}",
@@ -3299,24 +3075,13 @@
       "title": "还没有知识集",
       "body": "知识集是围绕一个主题的 Markdown 文档文件夹。智能体会读取每个知识集，并把学到的内容写进去。"
     },
-    "compare": {
-      "title": "保留哪个版本？",
-      "note": "没有保留的那个版本仍留在这篇文档的历史里。",
-      "keepMine": "保留我的修改",
-      "keepDisk": "采用磁盘上的版本",
-      "mineMeta": "未保存 · 开始于 {{when}}",
-      "diskMeta": "{{who}} · {{when}}",
-      "diskUnknown": "磁盘上的当前版本",
-      "modify": "修改",
-      "captionMine": "差异显示：保留你的修改后，文件会有哪些变化。",
-      "captionDisk": "差异显示：采用磁盘上的版本后，文件会有哪些变化。",
-      "back": "回到编辑",
-      "saveMine": "保存我的修改",
-      "useDisk": "使用磁盘上的版本"
-    },
     "tidy": {
       "one": "整理",
       "all": "整理全部"
+    },
+    "landing": {
+      "title": "选择一个知识集",
+      "body": "在左侧选择一个知识集来阅读其中的文档，或新建一个。"
     }
   },
   "memory": {
@@ -3374,10 +3139,6 @@
         "delete": "删除分区…",
         "history": "在活动中查看提炼记录"
       }
-    },
-    "editor": {
-      "conflictTitle": "该记忆在你编辑时已在磁盘上发生变化",
-      "label": "编辑 {{title}}"
     },
     "memories": {
       "listLabel": "记忆条目",
@@ -4187,23 +3948,19 @@
       "flipNote": "切换选择时，差异会随之翻转。继续这一轮之前不会写入任何内容。",
       "flipNoteJoin": "切换选择时，差异会随之翻转。应用选择之前不会改动任何内容。",
       "resolvedByAgent": "已采用智能体的合并结果 · 本机保留并推送保存后的文件。",
-      "handedOff": "已在 {{time}} 交给 {{agent}}。它合并完成后会显示在这里。",
+      "handedOff": "已在 {{time}} 交给 {{agent}}。它合并完成后会保存在副本里。",
       "binary": "这是二进制文件，没有逐行差异可以显示。",
       "noDiff": "两个版本相同。",
       "secret": "这是加密的 secret：不显示其内容。请选择保留哪台 Mac 的值。",
       "resolvedInEditor": "已在编辑器中解决 · 本机保留并推送保存后的文件。",
-      "editing": {
-        "title": "正在编辑器中编辑",
-        "body": "把文件改成你想要的版本并保存。标记为已解决时 Coffer 会检查它。",
-        "markResolved": "标记为已解决",
-        "back": "回到两个选项",
-        "saved": "保存后的文件",
-        "notSaved": "带冲突标记的副本还没有写出。"
-      },
-      "merged": {
+      "copy": {
         "anAgent": "智能体",
-        "title": "{{agent}} 已在 {{time}} 合并两个版本",
-        "body": "先看看本机会发生什么变化，再标记为已解决。下次推送时 {{machine}} 会拿到合并结果。"
+        "editingTitle": "正在编辑器中编辑",
+        "editingBody": "在编辑器中保存文件，然后标记为已解决。到时 Coffer 会检查它。",
+        "mergedTitle": "{{agent}} 已在 {{time}} 合并两个版本 · 请检查",
+        "mergedBody": "先在编辑器中打开副本检查合并结果，再标记为已解决。",
+        "markResolved": "标记为已解决",
+        "back": "回到两个选项"
       },
       "progress": "已解决 {{resolved}} / {{total}} 个文件",
       "progressJoin": "已选定 {{resolved}} / {{total}} 个文件",
@@ -4240,46 +3997,13 @@
       "folders_other": "{{count}} 个文件夹",
       "thisMac": "本机",
       "anotherMachine": "另一台 Mac",
-      "delete": {
-        "title": {
-          "incoming": "本机也删除",
-          "outgoing": "其他 Mac 也删除"
-        },
-        "body": {
-          "incoming": "本机与 {{machine}} 保持一致。删除前会先做安全快照，这一轮可以回滚。",
-          "outgoing": "远端和其他每台 Mac 会在下一轮删除它们。删除前会先做安全快照，这一轮可以回滚。"
-        },
-        "button_one": "删除 {{count}} 个文件…",
-        "button_other": "删除 {{count}} 个文件…"
+      "hint": {
+        "incoming": "删除会在本机也删掉它们，删除前先做安全快照，这一轮可以回滚。保留文件会在本机保留并推送回去，{{machine}} 下一轮会重新拿到它们。",
+        "outgoing": "删除会在下一轮于远端和其他每台 Mac 上删掉它们，删除前先做安全快照。保留文件会在本机恢复这些文件，哪里都不会删除。"
       },
-      "restore": {
-        "title": "恢复它们",
-        "body": {
-          "incoming": "在本机保留这些文件并推送回去，{{machine}} 下一轮会重新拿到它们。",
-          "outgoing": "在本机恢复这些文件，哪里都不会删除。"
-        },
-        "button_one": "恢复 {{count}} 个文件",
-        "button_other": "恢复 {{count}} 个文件",
-        "pending": "正在恢复…"
-      },
-      "confirm": {
-        "titleIncoming_one": "本机也删除 {{count}} 个文件？",
-        "titleIncoming_other": "本机也删除 {{count}} 个文件？",
-        "titleOutgoing_one": "在每台 Mac 上删除 {{count}} 个文件？",
-        "titleOutgoing_other": "在每台 Mac 上删除 {{count}} 个文件？",
-        "body": {
-          "incoming": "本机与 {{machine}} 保持一致。删除前会先做安全快照，之后可以回滚这一轮。",
-          "outgoing": "远端和其他每台 Mac 会在下一轮删除它们。删除前会先做安全快照，之后可以回滚这一轮。"
-        },
-        "files": "文件",
-        "filesValue": "{{count}} 个，位于 {{folders}}",
-        "deletedBy": "删除方",
-        "snapshot": "快照",
-        "snapshotValue": "删除前拍摄",
-        "button_one": "删除 {{count}} 个文件",
-        "button_other": "删除 {{count}} 个文件",
-        "pending": "正在删除…"
-      },
+      "keep": "保留文件",
+      "delete_one": "删除 {{count}} 个文件",
+      "delete_other": "删除 {{count}} 个文件",
       "empty": {
         "title": "没有暂扣的删除",
         "body": "目前没有等待确认删除的一轮。"
@@ -5835,9 +5559,6 @@
       "findProvider": "查找提供商"
     }
   },
-  "diff": {
-    "none": "文字没有变化。"
-  },
   "splitView": {
     "resizeList": "调整列表宽度"
   },
@@ -6254,24 +5975,6 @@
       "checkedAt": "检查于 {{time}}",
       "on": "在",
       "checkAgain": "再次检查"
-    },
-    "update": {
-      "title": "更新 {{name}}",
-      "loading": "正在准备更新…",
-      "upToDate": "已是最新",
-      "upToDateBody": "{{name}} 已在其来源的最新提交上。",
-      "apply": "更新到 {{commit}}"
-    },
-    "conflict": {
-      "title": "{{name}} 两边都改了",
-      "body": "自固定的 {{pinned}} 以来你在本地改过它，而更新 {{to}} 也改了它。",
-      "keep": "保留我的改动",
-      "keepHelp": "保持固定在 {{pinned}} 并保留你的改动。有更新的提交时 Coffer 会再次提醒你。",
-      "take": "采用更新",
-      "takeHelp": "移到 {{to}}。你的修改会被替换，并保留在历史中。"
-    },
-    "compare": {
-      "binary": "二进制文件"
     }
   },
   "handoff": {

@@ -9,8 +9,9 @@
 //
 // Open in editor asks the daemon for the marked-up copy and has the OS open
 // it; the pane then waits for Mark resolved, which answers `edited` from the
-// copy as saved. Whether the editor state shows is the page's own, because the
-// copy exists as soon as an agent was handed the file.
+// copy as saved (SyncConflictCopyCard, which then carries Open in editor too).
+// Whether the editing state shows is the page's own, because the copy exists as
+// soon as an agent was handed the file.
 import { ExternalLink, MessageSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -18,8 +19,7 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import type { ConflictFile } from "@/lib/api/sync";
 import { SyncConflictChoices } from "./SyncConflictChoices";
-import { SyncConflictEditing } from "./SyncConflictEditing";
-import { SyncConflictMerged } from "./SyncConflictMerged";
+import { SyncConflictCopyCard } from "./SyncConflictCopyCard";
 import { areaLabel, canAskAgent, clock, otherMachine } from "./syncConflictFormat";
 import type { ResolveSource } from "./useResolveSource";
 
@@ -34,6 +34,8 @@ export function SyncConflictPane({ file, source, editing, onEditing }: Props) {
   const { t, i18n } = useTranslation();
   const area = areaLabel(t, file.area);
   const merged = file.agent_state === "merged_by_agent" && file.answer === null;
+  const card = editing ? "editing" : merged ? "merged" : null;
+  const openEditor = () => source.openEditor(file.path, () => onEditing(true));
   const leave = () => source.discard(file.path, () => onEditing(false));
 
   return (
@@ -57,16 +59,18 @@ export function SyncConflictPane({ file, source, editing, onEditing }: Props) {
         </div>
         {file.secret ? null : (
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              loading={source.editorBusy}
-              onClick={() => source.openEditor(file.path, () => onEditing(true))}
-            >
-              <ExternalLink aria-hidden />
-              {t("sync.resolve.openEditor")}
-            </Button>
+            {card ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={source.editorBusy}
+                onClick={openEditor}
+              >
+                <ExternalLink aria-hidden />
+                {t("sync.resolve.openEditor")}
+              </Button>
+            )}
             {canAskAgent(file) ? (
               <AgentHandoff
                 size="sm"
@@ -76,21 +80,14 @@ export function SyncConflictPane({ file, source, editing, onEditing }: Props) {
           </div>
         )}
       </div>
-      {editing ? (
-        <SyncConflictEditing
+      {card ? (
+        <SyncConflictCopyCard
           file={file}
+          state={card}
           pending={source.busy}
-          leaving={source.editorBusy}
+          busy={source.editorBusy}
           error={source.error}
-          onResolve={() => source.markResolved(file.path)}
-          onBack={leave}
-        />
-      ) : merged ? (
-        <SyncConflictMerged
-          file={file}
-          pending={source.busy}
-          leaving={source.editorBusy}
-          error={source.error}
+          onOpen={openEditor}
           onResolve={() => source.markResolved(file.path)}
           onBack={leave}
         />
@@ -103,7 +100,7 @@ export function SyncConflictPane({ file, source, editing, onEditing }: Props) {
             >
               <MessageSquare className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
               {t("sync.resolve.handedOff", {
-                agent: file.agent_name ?? t("sync.resolve.merged.anAgent"),
+                agent: file.agent_name ?? t("sync.resolve.copy.anAgent"),
                 time: clock(file.agent_handed_at, i18n.language),
               })}
             </p>

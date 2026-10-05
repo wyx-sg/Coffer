@@ -1,9 +1,7 @@
 // src/components/change-preview/FileDiff.tsx
 // The one diff renderer. One changed file: a header (agent badge — none for Coffer's own files, mono path, op
-// chip, line counts) over its unified diff; `DiffLines` is the same block without the header, for callers that
-// name the file elsewhere. A long line wraps at a word boundary and each continuation row carries a ↳ in the
+// chip, line counts) over its unified diff. A long line wraps at a word boundary and each continuation row carries a ↳ in the
 // sign column over blank gutters (Foundations 0.6.05) — nothing is cut off and the view never widens its pane.
-// With no lines at all the block reads "No changes to the text."
 import { forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -69,17 +67,13 @@ function DiffRow({ line, first }: { line: DiffLine; first: boolean }) {
 }
 
 /** The bordered block of diff rows, without a file header. */
-export function DiffLines({
+function DiffLines({
   lines,
   className,
 }: {
   lines: readonly DiffLine[];
   className?: string;
 }) {
-  const { t } = useTranslation();
-  if (lines.length === 0) {
-    return <p className="px-3 py-2 text-xs text-text-subtle">{t("diff.none")}</p>;
-  }
   return (
     <div
       className={cn(
@@ -97,12 +91,10 @@ export function DiffLines({
 interface Props {
   item: ChangeItem;
   className?: string;
-  /** Say "No changes to the text." when the file has no lines, instead of showing the header alone. */
-  showEmpty?: boolean;
 }
 
 export const FileDiff = forwardRef<HTMLElement, Props>(function FileDiff(
-  { item, className, showEmpty = false },
+  { item, className },
   ref,
 ) {
   const { t } = useTranslation();
@@ -125,8 +117,6 @@ export const FileDiff = forwardRef<HTMLElement, Props>(function FileDiff(
       </div>
       {item.diff && item.diff.length > 0 ? (
         <DiffLines lines={item.diff} />
-      ) : showEmpty ? (
-        <DiffLines lines={[]} />
       ) : null}
     </section>
   );

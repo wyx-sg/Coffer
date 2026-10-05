@@ -1,6 +1,6 @@
 """What this machine last learned about each Git-imported skill's source, in
-``local/skill-source-status.json`` (spec skill-manager "Update a Git-imported
-skill from its source").
+``local/skill-source-status.json`` (spec skill-manager "Hand a Git-imported
+skill's update to an agent").
 
 The record is an observation made here — when this machine last checked, what
 it found — so it is local state keyed by the skill's uid: never in the vault,
@@ -45,6 +45,16 @@ def _str(raw: Any) -> str | None:
     return raw if isinstance(raw, str) else None
 
 
+def _commits(raw: Any) -> tuple[tuple[str, str], ...]:
+    if not isinstance(raw, list):
+        return ()
+    return tuple(
+        (c[0], c[1])
+        for c in raw
+        if isinstance(c, list) and len(c) == 2 and all(isinstance(x, str) for x in c)
+    )
+
+
 def _to_domain(uid: str, raw: dict[str, Any]) -> SourceStatus:
     return SourceStatus(
         skill_uid=uid,
@@ -54,7 +64,7 @@ def _to_domain(uid: str, raw: dict[str, Any]) -> SourceStatus:
         latest_commit=_str(raw.get("latest_commit")),
         commits_ahead=_int(raw.get("commits_ahead")),
         files_changed=_int(raw.get("files_changed")),
-        dismissed_commit=_str(raw.get("dismissed_commit")),
+        commits=_commits(raw.get("commits")),
     )
 
 
@@ -66,7 +76,7 @@ def _to_json(status: SourceStatus) -> dict[str, Any]:
         "latest_commit": status.latest_commit,
         "commits_ahead": status.commits_ahead,
         "files_changed": status.files_changed,
-        "dismissed_commit": status.dismissed_commit,
+        "commits": [list(c) for c in status.commits],
     }
 
 

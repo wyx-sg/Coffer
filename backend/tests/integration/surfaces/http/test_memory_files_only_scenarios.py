@@ -1,7 +1,7 @@
 """Memory scenarios that follow from notes being plain files and the web UI being
 the people's surface (spec memory "Confine reads to registered agents' memory
-paths", "Keep notes readable as plain files", "Edit a memory in the web UI or in an
-editor", "Manage memory in the web UI").
+paths", "Keep notes readable as plain files", "Edit a memory in the person's own editor",
+"Manage memory in the web UI").
 
 Reuses the booted app and the seeding helpers of ``test_memory_routes``: HOME, the
 database and both roots sit under ``tmp_path``.
@@ -41,11 +41,9 @@ def test_a_path_segment_that_escapes_the_memory_root_is_refused(client, tmp_path
         read = client.get(f"{base}/{slug}")
         assert read.status_code == 400, (slug, read.text)
         assert read.json()["error"]["code"] == "MEMORY_UNSAFE_PATH"
-        write = client.put(
-            f"{base}/{slug}", json={"body": "overwritten", "expected_fingerprint": "x"}
-        )
-        assert write.status_code == 400, (slug, write.text)
-        assert write.json()["error"]["code"] == "MEMORY_UNSAFE_PATH"
+        delete = client.delete(f"{base}/{slug}")
+        assert delete.status_code == 400, (slug, delete.text)
+        assert delete.json()["error"]["code"] == "MEMORY_UNSAFE_PATH"
 
     # Nothing outside the partition was read or written.
     assert outside.read_text(encoding="utf-8") == "secret"

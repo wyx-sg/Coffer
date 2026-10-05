@@ -5,7 +5,7 @@ description: Keep one library of AgentSkills-standard skills in Coffer — added
 
 # Skills
 
-Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers adding skills from a folder, an archive or a Git repository, updating a skill from its repository, adopting skills an agent already has, choosing which agents a skill reaches, editing skill files, the commands a skill needs, skill names, checking agents' copies, and Coffer's own built-in `coffer-guide` skill. How it works underneath is on the [Skills architecture](/architecture/skills) page.
+Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers adding skills from a folder, an archive or a Git repository, updating a skill from its repository, adopting skills an agent already has, choosing which agents a skill reaches, viewing and editing skill files, the commands a skill needs, skill names, checking agents' copies, and Coffer's own built-in `coffer-guide` skill. How it works underneath is on the [Skills architecture](/architecture/skills) page.
 
 ## What skills are for
 
@@ -65,16 +65,15 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 **Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box and **Check copies**, and groups skills by what needs you: **Needs attention**, **In use**, **Unused**, **Off** and **Built-in**. A row shows the skill's name and its reach as a badge, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Tool off**, **Secret missing**, **Source unreachable** or **Update available**. The **Reach** filter under the search box narrows the list to the skills that reach one agent (an agent's Skills tab links here with that agent chosen, `/skills?agent=<uid>`). Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the search box and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
-The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
+The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path**, **History…** (not on the built-in skill), **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
 
-Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with four tabs:
+Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with three tabs:
 
 | Tab | What it shows |
 | --- | --- |
-| **Files** | The skill's files beside the open file, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Edit** edits a file in place. A binary file offers **Open in default app** and **Reveal in Finder**; a very large file shows its start, read-only. A Git skill shows its source above the files. |
+| **Files** | The skill's files beside the open file, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Open in editor** opens it in your editor. A binary file offers **Open in default app** and **Reveal in Finder**; a very large file shows its start, read-only. A Git skill shows its source above the files. |
 | **Delivery** | Every agent and the state of its copy: **Linked**, **Copied, not linked** (where links are not allowed), a folder in the way (with **Review…**), or not delivered and why. **Check again** looks at every copy afresh. |
 | **Requires** | What the skill says it needs, in four lists: **Commands** (each with its state and a link to the CLIs page), **Secrets** (set or not, with **Open Secrets**), **Tools** (the MCP servers and custom tool groups it calls, each on or off and linking to its page) and **Skills** (the other skills it loads). Installing and logging in happen on the CLIs page. |
-| **History** | Every version of the skill's folder on the left, newest first, with who wrote each (you, edited on disk, an agent, Coffer, sync); on the right the chosen version's changes file by file, and **Restore** to put a version back as a new one. Drag the divider between them either way. |
 
 The Skills page lists only the skills Coffer manages. Skills an agent has that Coffer does not manage are on that agent's **Skills** tab, where you can adopt them (see [below](#adopt-skills-an-agent-already-has)).
 
@@ -122,30 +121,23 @@ A freshly added skill is enabled and reaches every registered agent, so it is li
 
 ## Update a skill from its repository
 
-A skill added from a Git repository shows its source on its page: the repository, the folder, the pinned commit and whether an update is waiting. Coffer checks the repository every six hours, and you can check at any time.
+A skill added from a Git repository shows its source on its page: the repository, the folder, the pinned commit and whether an update is waiting. Coffer checks the repository in the background on a schedule you choose in **Settings › General › Check skills for updates** — **Every 6 hours** (the default), **Every day**, **Every week** or **Only when I ask** — and you can check at any time with **Check for updates**, in every setting. The choice is kept on this machine only (in `~/.coffer/daemon-config.json`), is not synced, and takes effect at once.
 
 ```text
-Skills → the skill → Check now, then Review update… on the banner when an update is available
+Skills → the skill → Check for updates, then Hand off to <Agent> to update when an update is available
 ```
 
-When the branch or tag has new commits that change the skill's folder, the skill shows **Update available** with the commits since the pin. Reviewing it lists the files the update adds, removes and changes, with a diff, and applies nothing until you confirm. Applying replaces the folder with the new commit's content, moves the pin, and keeps the skill's reach and links; every agent sees the new files at once.
+When the branch or tag has new commits that change the skill's folder, the skill shows **Update available** with the commit range from the pinned commit to the new one, on the Skills page and on the skill's page. **Coffer does not apply an update itself.** There is no update preview, no **Keep mine**, **Take theirs** or **Compare**, and no merge of its own: bringing new upstream content into a folder that may carry your edits is a job for your agent.
 
-If you edited the skill since its pinned commit, the update is a **conflict**:
+While an update is waiting, the skill also offers **Open in editor** (the master folder) and **View upstream changes**: for a GitHub or GitLab repository a link to the host's compare page from the pinned commit to the new one, and for any other host the copyable commit range and the commit subjects instead. Coffer draws no diff of its own. The skill offers one main button, **Hand off to &lt;Agent&gt; to update** (its menu holds the other installed agent and **Copy prompt**), whether or not you edited the skill. Coffer builds the prompt when you press it, so it is never stale. It names the skill's master folder as the only place to edit, the pinned and new commits with their subjects, the repository, branch and folder to read the update from (read-only, with no credential in the URL), and the files you edited since the pin, or says there are none. The agent brings the new commit's content into the master folder, keeps what your edits were for, asks you where the two really disagree, and shows you the diff; it does not record the merge itself.
 
-| Choice | Web UI | What happens |
-| --- | --- | --- |
-| Keep mine | **Keep my edits** | Nothing changes. Coffer stops offering this update and tells you again when a newer commit arrives. |
-| Take theirs | **Take the update** | The new commit is applied and your edits are replaced. |
-| Compare | **Compare** | Each changed file side by side: your folder, the pinned commit and the new commit. |
-| Merge with an agent | **Merge with an agent**, then **I merged it** | Your agent merges the update into your edits; recording it moves the pin and keeps the files. |
+When the files look right, choose **I merged it** beside the button and confirm. That moves the pin to the new commit and leaves the master folder exactly as the agent left it. Your edits still count as local edits against the new pin, so the next update's prompt lists exactly the edits you carried over. Only the update that is waiting can be recorded: the pinned commit, or a commit that is not on the branch, is refused with `SKILL_UPDATE_NOT_PENDING`.
 
-Coffer does not merge two versions of a skill itself. **Merge with an agent** gives you a prompt to copy, or **Hand off to &lt;Agent&gt;** starts your hand-off agent in your preferred terminal with it as the first message. The prompt names the skill's master folder as the only place to edit, the files you edited since the pin, the pinned and new commits with their messages, and the repository to read the update from. The agent keeps what your edits were for, takes the update's fixes, and shows you the diff; it does not record the merge itself. When the files look right, choose **I merged it** and confirm.
-
-This moves the pin to that commit and leaves the master folder exactly as the merge left it. Your merged edits still count as local edits against the new pin, so the next update is a conflict again, listing only the edits you carried over — never one that silently replaces them. Only the update that is waiting can be recorded: the pinned commit, or a commit that is not on the branch, is refused with `SKILL_UPDATE_NOT_PENDING`. To do the merge by hand instead, edit the files in the master folder (`~/.coffer/vault/skills/<name>/`), then record it the same way.
+**API:** `POST /skills/{uid}/source/check` checks, `POST /skills/{uid}/source/handoff` answers the newest commit and the prompt (refused with `SKILL_UPDATE_NOT_PENDING` when nothing newer changes the folder), and `POST /skills/{uid}/source/merged` records the merge.
 
 If the repository can no longer be reached, the skill keeps working from its pinned copy. Its page shows git's message and when the last check succeeded, and nothing changes until a check succeeds again.
 
-To move a Git skill to another repository, branch or folder, use **Change source…** in its Source block. Coffer clones the new source and shows how it differs from your current version; nothing is replaced until you take it, and the skill keeps its name.
+To move a Git skill to another repository, branch or folder, use **Change source…** in its Source block. Coffer clones the new source and lists the names of the files that would be added, removed or changed against your current folder (names only, no diff); nothing is replaced until you confirm, and then the folder is swapped in at once, keeping the skill's name, reach and links. Cancelling leaves everything as it was. (`POST /skills/{uid}/source/change`, then `…/source/change/apply`.)
 
 A skill added from a folder or an archive has no source to update from: add it again with **Replace**.
 
@@ -253,12 +245,14 @@ If something that is not a Coffer link already sits at `<config_dir>/skills/<nam
 The master folder is a normal directory, so the way to edit a skill is to open `~/.coffer/vault/skills/<name>/` in your editor or shell. Changes take effect on the agent's next read, with no import step. The skill's **⋯** menu has **Copy master path**.
 
 ```text
-Skills → choose the skill → Files tab → pick a file → Edit → Save
+Skills → choose the skill → Files tab → pick a file → Open in editor
 ```
 
-The Files tab also offers **Open in editor** on a text file, and **Open in default app** and **Reveal in Finder** (your system's file manager) on a binary one; the skill's **⋯** menu opens or reveals the whole folder.
+The Files tab is read-only. It offers **Open in editor** and **Reveal in Finder** on a text file, and **Open in default app** and **Reveal in Finder** (your system's file manager) on a binary one; the skill's **⋯** menu opens or reveals the whole folder. Open in editor uses the editor chosen in **Settings › General**.
 
-Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Your text stays in the editor, marked **Not saved**, with three ways out: **Reload** (take what is on disk), **Compare** (the disk against your text) and **Copy my text**. `⌘S` saves while you edit. Every save, and every edit you make in your editor, becomes a version on the **History** tab. See [Editing the vault by hand](/guides/vault-files). The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
+Coffer writes no file inside a skill's folder on your behalf, so there is no save to conflict with your editor or an agent: what they save is what the tab shows next, and every such edit becomes a version in the vault's history. See [Editing the vault by hand](/guides/vault-files). To add a file to a skill, create it in the master folder with your editor or shell.
+
+To look back at an earlier version of a skill, choose **History…** in its **⋯** menu. The dialog shows the folder's path in the vault, an optional time to restore to, **Copy git command** (`git -C <vault> log -p -- <path>`), **Reveal in Finder** and **Hand off to &lt;Agent&gt; to restore**, which gives your agent the folder, the time and the rules for a vault commit; the restore is one new commit written by the agent. Coffer lists no versions and restores nothing itself. See [Bring back an earlier version](/guides/knowledge#bring-back-an-earlier-version).
 
 ## Commands a skill needs
 
@@ -326,7 +320,7 @@ A skill's scripts write the logs, operation journals and temporary files they ge
 
 A skill's name comes from the `name` line of its `SKILL.md` and is fixed once the skill is registered. It is the name of the directory an agent loads the skill from and the identifier an agent invokes it by, so instructions, other skills and permission rules that quote it would break on a rename. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, remove the skill and add it again under the new name, which resets its reach and delivered links (its bindings). The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
 
-A skill has no separate display title: Coffer's pages show its name. Its **description** is the `description` line of its `SKILL.md`, the text agents read to decide when to use the skill, so Coffer shows that and keeps no description of its own. Nothing on the skill's record is editable. To change the description, or anything else about the skill, edit `SKILL.md` in the master folder (`~/.coffer/vault/skills/<name>/`), or in the skill's **Files** tab.
+A skill has no separate display title: Coffer's pages show its name. Its **description** is the `description` line of its `SKILL.md`, the text agents read to decide when to use the skill, so Coffer shows that and keeps no description of its own. Nothing on the skill's record is editable. To change the description, or anything else about the skill, edit `SKILL.md` in the master folder (`~/.coffer/vault/skills/<name>/`); the skill's **Files** tab opens it in your editor.
 
 ## Check for drift and repair it
 
@@ -348,7 +342,7 @@ Every time the daemon starts, Coffer re-creates missing links and re-points tamp
 
 **Check copies** on the Skills page runs the report and lists each finding with the skill, the agent (or Library), what differs and whether it needs you. A missing or repointed link has **Repair**, which puts it back (a tampered link is first moved aside to `~/.coffer/content/backup/skills/<agent>/<name>.coffer-backup-<timestamp>`, outside the agent's skills directory, so the agent never loads it); a folder in the way, a missing master and a folder not in your library have **Review…**, which opens the place to answer it. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
 
-Those three kinds need a judgement Coffer does not make for you — which of two folders to keep, what a stray folder is, where a lost master can be found — so each also offers a prompt for your agent, with **Hand off to &lt;Agent&gt;** (and **Copy prompt** in its menu) beside the finding, in the compare dialog, on the folder's pane and on the Files tab. The agent looks and tells you which button to press; it moves, deletes and edits nothing itself. The same prompts appear on the Overview's "needs you" list.
+Those three kinds need a judgement Coffer does not make for you — which of two folders to keep, what a stray folder is, where a lost master can be found — so each also offers a prompt for your agent, with **Hand off to &lt;Agent&gt;** (and **Copy prompt** in its menu) beside the finding, in the compare dialog, on the folder's pane and in the banner of a skill whose master is gone. The agent looks and tells you which button to press; it moves, deletes and edits nothing itself. The same prompts appear on the Overview's "needs you" list.
 
 ### Resolve a folder in the way
 
@@ -367,7 +361,7 @@ A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand
 
 ### When the master folder is gone
 
-If a skill's master folder was removed outside Coffer, the skill says **Master missing**. Its Files tab offers two ways forward. **Restore it from History** puts back the newest version of `skills/<name>/` that still had files, as a new version of the vault; it cannot be chosen when the vault has no such version. **Remove the skill** removes its record and settings. The tab's prompt asks your agent to look for a copy — in `~/.coffer/content/backup/skills/`, in an agent's skills folder, or at the skill's source (shown on its Files tab) — and, once you agree, to copy it back to `~/.coffer/vault/skills/<name>/`; Coffer links it to your agents again on its next pass.
+If a skill's master folder was removed outside Coffer, the skill says **Master missing**. The banner on its page offers two ways forward. **Hand off to &lt;Agent&gt;** (and **Copy prompt**) gives your agent a prompt that asks it to look for a copy — in `~/.coffer/content/backup/skills/`, in an agent's skills folder, in the vault's git history, or at the skill's source — and, once you agree, to copy it back to `~/.coffer/vault/skills/<name>/`; Coffer links it to your agents again on its next pass. **Delete skill…** removes the skill's record and settings instead.
 
 ## The built-in `coffer-guide` skill
 

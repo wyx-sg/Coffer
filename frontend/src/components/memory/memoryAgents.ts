@@ -3,7 +3,7 @@
 // A memory's provenance (`origins[]`) names each source by the agent's
 // RESOURCE name (`claude-code`), the file it came from and when it was read.
 // The partition page shows only the agents' product names (spec memory
-// "Present a partition as its memories": no native paths, no original text),
+// "Show a partition's memories read-only": no native paths, no original text),
 // so this reduces the provenance to distinct agent types in Agents-page
 // order. A resource name the registry does not know is shown as written.
 import { sortAgents } from "@/components/agent/agentOrder";

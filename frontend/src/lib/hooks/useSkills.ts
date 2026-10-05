@@ -4,13 +4,13 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import {
-  skillCompareKey,
   skillCopiesKey,
   skillFileKey,
   skillFilesKey,
   skillsKey,
+  skillUpdateCheckKey,
 } from "@/lib/api/queryKeys";
-import { skillsApi } from "@/lib/api/skills";
+import { skillsApi, type SkillUpdateCheckInterval } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
 
 /** Shared onError → toast handler for the single-use skill mutations. */
@@ -61,16 +61,6 @@ export function useBulkDeleteSkills() {
   });
 }
 
-/** Write a skill file's content, conditional on the fingerprint the read
- *  returned. No toast and no invalidation: the editor owns the conflict UI and
- *  re-seeds from the fingerprint the write returns. */
-export function useWriteSkillFile(uid: string) {
-  return useMutation({
-    mutationFn: (body: { path: string; content: string; expected_fingerprint: string }) =>
-      skillsApi.writeFileContent(uid, body),
-  });
-}
-
 export function useSkillFiles(uid: string) {
   return useQuery({
     queryKey: skillFilesKey(uid),
@@ -84,15 +74,6 @@ export function useSkillFileContent(uid: string, path: string | null) {
     queryKey: skillFileKey(uid, path ?? ""),
     queryFn: () => skillsApi.fileContent(uid, path as string),
     enabled: !!uid && !!path,
-  });
-}
-
-/** Read a file as it is on disk right now, without touching the cached read
- *  an open draft was seeded from — Compare after a refused save. No toast: the
- *  editor keeps the draft either way. */
-export function useReadSkillFileNow() {
-  return useMutation({
-    mutationFn: (vars: { uid: string; path: string }) => skillsApi.fileContent(vars.uid, vars.path),
   });
 }
 
@@ -141,8 +122,8 @@ export function useCancelSkillStage() {
   });
 }
 
-// ----- a Git-imported skill's updates (spec skill-manager "Update a
-// Git-imported skill from its source") -----
+// ----- a Git-imported skill's updates (spec skill-manager "Hand a
+// Git-imported skill's update to an agent") -----
 
 export function useCheckSkillSource() {
   const qc = useQueryClient();
@@ -155,23 +136,29 @@ export function useCheckSkillSource() {
   });
 }
 
-/** Stage an update preview. No toast: the dialog shows why it cannot preview. */
-export function usePreviewSkillUpdate() {
+/** The update's hand-off prompt, asked for when the person picks a verb of
+ *  `AgentHandoff`. Writes nothing; a refusal reaches `AgentHandoff`'s toast. */
+export function useSkillUpdateHandoff(uid: string) {
+  return async (): Promise<string> => (await skillsApi.updateHandoff(uid)).handoff.prompt;
+}
+
+/** "I merged it": pin the skill to the commit its agent merged. No toast on
+ *  success: the update stops being offered, which is the answer. */
+export function useRecordSkillMerged() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (uid: string) => skillsApi.previewUpdate(uid),
+    mutationFn: (vars: { uid: string; commit: string }) =>
+      skillsApi.recordMerged(vars.uid, vars.commit),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: skillsKey }),
   });
 }
 
-/** Apply a previewed update. No toast: a conflict (409) is rendered by the
- *  dialog, which then offers Take theirs. */
-export function useApplySkillUpdate() {
+/** Take a staged change of source. No toast: the dialog renders a refusal. */
+export function useApplySkillSourceChange() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { uid: string; stagingId: string; discardLocalEdits: boolean }) =>
-      skillsApi.applyUpdate(vars.uid, {
-        staging_id: vars.stagingId,
-        discard_local_edits: vars.discardLocalEdits,
-      }),
+    mutationFn: (vars: { uid: string; stagingId: string }) =>
+      skillsApi.applySourceChange(vars.uid, vars.stagingId),
     onSuccess: (_d, vars) => {
       void qc.invalidateQueries({ queryKey: skillsKey });
       void qc.invalidateQueries({ queryKey: skillFilesKey(vars.uid) });
@@ -179,23 +166,23 @@ export function useApplySkillUpdate() {
   });
 }
 
-export function useKeepSkillEdits() {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: (vars: { uid: string; commit: string | null }) =>
-      skillsApi.keepMine(vars.uid, vars.commit),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: skillsKey }),
-    onError,
+/** How often this machine checks skills for updates in the background
+ *  (Settings › General); kept by the daemon, in effect at once. */
+export function useSkillUpdateCheck() {
+  return useQuery({
+    queryKey: skillUpdateCheckKey,
+    queryFn: () => skillsApi.updateCheck(),
+    staleTime: 60_000,
   });
 }
 
-/** One file's local / pinned / incoming text in a staged update. */
-export function useSkillUpdateCompare(uid: string, stagingId: string | null, path: string | null) {
-  return useQuery({
-    queryKey: skillCompareKey(uid, stagingId ?? "", path ?? ""),
-    queryFn: () => skillsApi.compareUpdate(uid, stagingId as string, path as string),
-    enabled: !!uid && !!stagingId && !!path,
+export function useSetSkillUpdateCheck() {
+  const qc = useQueryClient();
+  const onError = useSkillToastError();
+  return useMutation({
+    mutationFn: (interval: SkillUpdateCheckInterval) => skillsApi.setUpdateCheck(interval),
+    onSuccess: (out) => qc.setQueryData(skillUpdateCheckKey, out),
+    onError,
   });
 }
 

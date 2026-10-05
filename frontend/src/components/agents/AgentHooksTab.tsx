@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { ownHooks } from "@/lib/agents/hookRows";
 import type { AgentOut } from "@/lib/api/agents";
-import { useAgentConfigFiles, useAgentHooks } from "@/lib/hooks/useAgents";
+import { useAgentHooks } from "@/lib/hooks/useAgents";
 
 interface Props {
   agent: AgentOut;
@@ -27,12 +27,9 @@ interface Props {
 export function AgentHooksTab({ agent, onRepair }: Props) {
   const { t } = useTranslation();
   const hooks = useAgentHooks(agent.uid);
-  const files = useAgentConfigFiles(agent.uid);
   const own = ownHooks(hooks.data);
   const parseErrors = hooks.data?.parse_errors ?? [];
   const coffer = hooks.data?.coffer_hook ?? null;
-  // The Config files entry that holds a hook file, so a path can link to it.
-  const fileKeyOf = (path: string) => files.data?.find((f) => f.path === path)?.key ?? null;
 
   if (hooks.error) {
     return <LoadError error={hooks.error} onRetry={() => void hooks.refetch()} />;
@@ -69,13 +66,12 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
         <CofferHookSection
           hook={coffer}
           agentType={agent.type}
-          fileKey={fileKeyOf(coffer.path)}
           onRepair={onRepair}
           onCheckAgain={() => void hooks.refetch()}
           checking={hooks.isFetching}
         />
       ) : null}
-      <OwnHooksSection hooks={own} agentType={agent.type} fileKeyOf={fileKeyOf} />
+      <OwnHooksSection hooks={own} agentType={agent.type} />
     </div>
   );
 }

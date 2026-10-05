@@ -21,11 +21,14 @@
 // the terminals the daemon detected, and "Custom…", a command template that
 // must hold `{command}` (and may hold `{cwd}`) or it is not saved. Beside it the
 // hand-off agent (spec web-ui "Let the user choose the hand-off agent"): Claude
-// Code or Codex, among the managed ones.
+// Code or Codex, among the managed ones. Check skills for updates (spec
+// skill-manager "Hand a Git-imported skill's update to an agent") sits there
+// too: how often this Mac fetches the sources of skills added from Git.
 import { useTranslation } from "react-i18next";
 
 import { EditorPicker } from "@/components/settings/general/EditorPicker";
 import { HandoffAgentPicker } from "@/components/settings/general/HandoffAgentPicker";
+import { SkillUpdateCheckPicker } from "@/components/settings/general/SkillUpdateCheckPicker";
 import { TerminalPicker } from "@/components/settings/general/TerminalPicker";
 import {
   SETTINGS_STACK,
@@ -135,6 +138,12 @@ export function GeneralSettings() {
             description={t("settings.general.handoffAgentHelp")}
           >
             <HandoffAgentPicker />
+          </SettingRow>
+          <SettingRow
+            label={t("settings.general.skillUpdateCheck")}
+            description={t("settings.general.skillUpdateCheckHelp")}
+          >
+            <SkillUpdateCheckPicker />
           </SettingRow>
         </SettingsSection>
       </div>

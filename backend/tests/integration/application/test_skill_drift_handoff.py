@@ -80,6 +80,8 @@ async def test_a_missing_master_hands_the_search_to_an_agent(tmp_path):
     assert str(graph.store.backup_root) in prompt
     assert "coffer skill" not in prompt
     assert "copy (don't move)" in prompt
+    assert "git repository whose history keeps the master folder's earlier versions" in prompt
+    assert "Restore" not in prompt and "Files tab" not in prompt
     item = (await _attention(graph))[DriftKind.MISSING_MASTER.value]
     assert item.handoff == prompt
     assert not _COMMAND.search(item.reason), item.reason

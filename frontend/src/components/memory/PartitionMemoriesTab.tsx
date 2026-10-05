@@ -1,6 +1,6 @@
 // frontend/src/components/memory/PartitionMemoriesTab.tsx — a partition's Memories tab.
 //
-// A resizable split (spec memory "Present a partition as its memories"): the
+// A resizable split (spec memory "Show a partition's memories read-only"): the
 // partition's memories with their collapsed Retired group on the left, the
 // selected memory on the right; both reach the bottom of the window and
 // scroll inside. The selected memory is the `?memory=<slug>` search param —
@@ -145,7 +145,7 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
                 onSelectMemory={select}
               />
             ) : selected ? (
-              <MemoryPane uid={uid} slug={selected} partitionName={name} />
+              <MemoryPane uid={uid} slug={selected} />
             ) : (
               <p className="text-sm text-text-muted">{t("memory.memories.select")}</p>
             )

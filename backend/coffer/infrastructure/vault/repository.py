@@ -203,26 +203,6 @@ class VaultRepository:
         found = self.log(start=version, limit=1)
         return found[0] if found and found[0].version.startswith(version) else None
 
-    def diff(self, version: str, path: str) -> str:
-        """The unified diff ``version`` made to ``path`` (empty if none)."""
-        if not looks_like_a_version(version):
-            return ""
-        done = git.run(
-            self.root,
-            "show",
-            "--format=",
-            "--patch",
-            "--no-color",
-            "--no-ext-diff",
-            "--no-renames",
-            version,
-            "--",
-            path,
-            check=False,
-            literal=True,
-        )
-        return git.text(done) if done.returncode == 0 else ""
-
     def diff_trees(self, a: str, b: str, *pathspecs: str) -> str:
         """The unified diff between two commits or trees."""
         args = ["diff", "--no-color", "--no-ext-diff", "--no-renames", a, b]
@@ -230,22 +210,6 @@ class VaultRepository:
             args += ["--", *pathspecs]
         done = git.run(self.root, *args, check=False, literal=True)
         return git.text(done) if done.returncode in (0, 1) else ""
-
-    def later(self, version: str, path: str) -> str | None:
-        """The newest commit after ``version`` that touched ``path``."""
-        done = git.run(
-            self.root,
-            "log",
-            "--format=%H",
-            "-n1",
-            f"{version}..HEAD",
-            "--",
-            path,
-            check=False,
-            literal=True,
-        )
-        found = git.text(done).strip()
-        return found or None
 
     # --- staging (the writer's primitives) ------------------------------------
 

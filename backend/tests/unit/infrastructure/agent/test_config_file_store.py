@@ -56,6 +56,7 @@ def test_list_dir_recursive_md_only(tmp_path: pathlib.Path) -> None:
     (root / "notes.txt").write_text("ignored")
     listed = store.list_dir(root)
     assert [(e.relpath, e.size) for e in listed] == [("a.md", 1), ("team/b.md", 1)]
+    assert [e.path for e in listed] == [str(root / "a.md"), str(root / "team" / "b.md")]
     assert all(e.modified_at is not None for e in listed)
 
 
@@ -106,6 +107,10 @@ def test_write_with_matching_fingerprint_succeeds(tmp_path: pathlib.Path) -> Non
     assert p.read_text(encoding="utf-8") == '{"a": 1}'
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="Coffer's own config write is refused when the file changed since it was read",
+)
 def test_write_refuses_when_the_file_changed_since_it_was_read(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -146,7 +151,7 @@ def test_write_without_fingerprint_is_unconditional(tmp_path: pathlib.Path) -> N
 
 @pytest.mark.acceptance(
     spec="agent-registry",
-    scenario="a config write leaves its backup in Coffer's folder and nothing beside the file",
+    scenario="Coffer's own config write leaves its backup in Coffer's folder",
 )
 def test_backups_land_in_coffers_folder_one_timestamped_file_per_write(
     tmp_path: pathlib.Path,

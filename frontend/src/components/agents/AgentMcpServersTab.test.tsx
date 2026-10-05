@@ -11,13 +11,14 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { AgentMcpServersTab } from "./AgentMcpServersTab";
 import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut } from "@/lib/api/agents";
 import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import { getApiClient } from "@/lib/api/client";
+import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import { mockApiClient } from "@/test/mockApiClient";
 
@@ -25,6 +26,7 @@ vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
 }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     mcpEntries: vi.fn(),
@@ -128,11 +130,6 @@ function stub({
   api.adoptMcpEntry.mockResolvedValue({ uid: "r-pg", kind: "mcp_server", name: "postgres-local" });
 }
 
-function Where() {
-  const loc = useLocation();
-  return <p data-testid="where">{`${loc.pathname}${loc.search}`}</p>;
-}
-
 function renderTab() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -144,7 +141,6 @@ function renderTab() {
               path="/agents/:type/mcp-servers"
               element={<AgentMcpServersTab agent={AGENT} />}
             />
-            <Route path="*" element={<Where />} />
           </Routes>
         </MemoryRouter>
       </ToastProvider>
@@ -308,8 +304,11 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getAllByText("Read-only")).toHaveLength(3);
     expect(screen.getByRole("button", { name: "Adopt: postgres-local" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Remove duplicate: github" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Open in Config files" }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/config?file=global");
+    vi.mocked(fsApi.open).mockResolvedValue(undefined);
+    fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
+    await waitFor(() =>
+      expect(fsApi.open).toHaveBeenCalledWith("/Users/me/.claude.json", undefined),
+    );
   });
 
   test("an agent with no MCP servers of its own shows the shared empty box", async () => {

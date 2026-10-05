@@ -1,11 +1,10 @@
 // frontend/src/components/memory/MemoryViewActions.tsx — a memory's actions
-// while it is read, not edited (spec memory "Present a partition as its
-// memories"): Edit and Open in editor visible, and a ⋯ menu with Reveal in
-// Finder and Delete…. Delete asks first; the dialog closes only on success, and
+// (spec memory "Show a partition's memories read-only"): Open in editor visible,
+// and a ⋯ menu with Reveal in Finder and Delete…. Delete asks first; the dialog closes only on success, and
 // the memory then sits in the Retired group as "Deleted by hand".
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Pencil } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -19,10 +18,9 @@ interface Props {
   slug: string;
   title: string;
   filePath: string;
-  onEdit: () => void;
 }
 
-export function MemoryViewActions({ uid, slug, title, filePath, onEdit }: Props) {
+export function MemoryViewActions({ uid, slug, title, filePath }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const deleteNote = useDeleteMemoryNote(uid);
@@ -31,9 +29,6 @@ export function MemoryViewActions({ uid, slug, title, filePath, onEdit }: Props)
 
   return (
     <>
-      <Button variant="outline" onClick={onEdit}>
-        <Pencil aria-hidden /> {t("common.edit")}
-      </Button>
       <Button variant="outline" onClick={openItem.onClick}>
         <ExternalLink aria-hidden /> {openItem.label}
       </Button>

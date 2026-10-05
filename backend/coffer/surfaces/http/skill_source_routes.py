@@ -1,6 +1,6 @@
 """/api/v1/skills/stage/* and /api/v1/skills/{uid}/source/* — where a skill
 comes from (spec skill-manager "Add skills from an archive", "Add skills from
-a Git repository", "Update a Git-imported skill from its source").
+a Git repository", "Hand a Git-imported skill's update to an agent").
 
 A stage is read-only until its confirm: the three ``stage`` routes answer what
 they found, ``confirm`` registers the chosen skills, and ``DELETE`` removes the
@@ -10,7 +10,7 @@ no. An update preview is a stage too, so the same ``DELETE`` closes it.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
 from pydantic import BaseModel
 
 from coffer.application.skill.service import SkillService
@@ -18,21 +18,21 @@ from coffer.application.skill.source_service import SkillSourceService
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import GitImportSource
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.skill_dependencies import get_skill_service, get_skill_source_service
 from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_uid, _to_skill_out
 from coffer.surfaces.http.skill_source_schemas import (
+    SkillSourceChangeApplyRequest,
+    SkillSourceChangeOut,
     SkillSourceStatusOut,
     SkillStageFolderRequest,
     SkillStageGitRequest,
     SkillStagingConfirmRequest,
     SkillStagingOut,
-    SkillUpdateApplyRequest,
-    SkillUpdateCompareOut,
-    SkillUpdateKeepRequest,
+    SkillUpdateCheckSettingBody,
+    SkillUpdateHandoffOut,
     SkillUpdateMergedRequest,
-    SkillUpdatePreviewOut,
-    compare_out,
-    preview_out,
+    change_preview_out,
     staging_out,
     status_out,
 )
@@ -115,6 +115,23 @@ async def cancel_stage(
 # ---------- a Git-imported skill's updates ----------
 
 
+@router.get("/update-check", response_model=SkillUpdateCheckSettingBody)
+async def get_update_check(
+    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
+) -> SkillUpdateCheckSettingBody:
+    """How often this machine checks skills for updates in the background."""
+    return SkillUpdateCheckSettingBody(interval=sources.update_check_choice())
+
+
+@router.put("/update-check", response_model=SkillUpdateCheckSettingBody)
+async def put_update_check(
+    body: SkillUpdateCheckSettingBody,
+    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
+) -> SkillUpdateCheckSettingBody:
+    """Choose it; kept in ``~/.coffer/daemon-config.json`` and in effect at once."""
+    return SkillUpdateCheckSettingBody(interval=sources.set_update_check_choice(body.interval))
+
+
 @router.post("/{uid}/source/check", response_model=SkillSourceStatusOut)
 async def check_source(
     uid: str,
@@ -124,63 +141,42 @@ async def check_source(
     result = await sources.check(uid)
     source = SkillConfig.model_validate((await svc.get_skill(uid)).config).source
     assert isinstance(source, GitImportSource)  # check() refused any other source
-    return status_out(result, source.commit)
+    return status_out(result, source)
 
 
-@router.post("/{uid}/source/preview", response_model=SkillUpdatePreviewOut)
-async def preview_update(
+@router.post("/{uid}/source/handoff", response_model=SkillUpdateHandoffOut)
+async def hand_off_update(
     uid: str,
     sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
-) -> SkillUpdatePreviewOut:
-    return preview_out(await sources.preview(uid))
+) -> SkillUpdateHandoffOut:
+    """The prompt that hands the skill's update to the person's agent (spec
+    skill-manager "Hand a Git-imported skill's update to an agent"); refused
+    ``SKILL_UPDATE_NOT_PENDING`` when no update is available. Writes nothing."""
+    result = await sources.handoff(uid)
+    return SkillUpdateHandoffOut(commit=result.commit, handoff=HandoffOut(prompt=result.prompt))
 
 
-@router.post("/{uid}/source/change", response_model=SkillUpdatePreviewOut)
+@router.post("/{uid}/source/change", response_model=SkillSourceChangeOut)
 async def preview_source_change(
     uid: str,
     body: SkillStageGitRequest,
     sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
-) -> SkillUpdatePreviewOut:
-    """Stage a new repository / ref / folder for this skill and show the change
-    against its current folder; ``/source/apply`` with the stage takes it."""
-    return preview_out(await sources.change_source(uid, body.url, body.ref, body.path))
+) -> SkillSourceChangeOut:
+    """Stage a new repository / ref / folder for this skill and name the files
+    that would change; ``/source/change/apply`` with the stage takes it."""
+    return change_preview_out(await sources.change_source(uid, body.url, body.ref, body.path))
 
 
-@router.get("/{uid}/source/compare", response_model=SkillUpdateCompareOut)
-async def compare_update(
+@router.post("/{uid}/source/change/apply", response_model=SkillOut)
+async def apply_source_change(
     uid: str,
-    staging_id: str = Query(..., min_length=1),
-    path: str = Query(..., min_length=1),
-    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
-) -> SkillUpdateCompareOut:
-    return compare_out(await sources.compare(uid, staging_id, path))
-
-
-@router.post("/{uid}/source/apply", response_model=SkillOut)
-async def apply_update(
-    uid: str,
-    body: SkillUpdateApplyRequest,
+    body: SkillSourceChangeApplyRequest,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
     sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> SkillOut:
-    updated = await sources.apply(
-        uid, body.staging_id, discard_local_edits=body.discard_local_edits, actor=actor
-    )
+    updated = await sources.apply_change(uid, body.staging_id, actor=actor)
     return await _to_skill_out(svc, updated, await _agents_by_uid(svc), sources=sources)
-
-
-@router.post("/{uid}/source/keep", response_model=SkillSourceStatusOut)
-async def keep_mine(
-    uid: str,
-    body: SkillUpdateKeepRequest,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
-) -> SkillSourceStatusOut:
-    result = await sources.keep_mine(uid, body.commit)
-    source = SkillConfig.model_validate((await svc.get_skill(uid)).config).source
-    assert isinstance(source, GitImportSource)
-    return status_out(result, source.commit)
 
 
 @router.post("/{uid}/source/merged", response_model=SkillOut)

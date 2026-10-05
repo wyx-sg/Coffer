@@ -26,13 +26,13 @@ The curated allowlist ([agent-registry](../spec.md) "Define a curated config-fil
 - **AND** none of them is a directory entry
 
 ### Requirement: Never expose Codex's credential file
-`<config_dir>/auth.json` MUST never enter the allowlist, any config-file listing, or any facet's parse. It is a credential file: it is not readable through [agent-registry](../spec.md) "Read allowlisted config files without creating them" because it is not an allowlisted key, and neither the MCP-entry nor the plugin parser opens it.
+`<config_dir>/auth.json` MUST never enter the allowlist, any config-file listing, or any facet's parse. It is a credential file: no config-file route lists or reads it — Coffer serves no config file's content at all ([agent-registry](../spec.md) "List an agent's config files with their locations") — and neither the MCP-entry nor the plugin parser opens it.
 
 #### Scenario: refuse to read auth.json
 - **GIVEN** a registered `codex` agent whose config directory holds an `auth.json`
-- **WHEN** the user lists the agent's config files and then requests `auth.json` by key
+- **WHEN** the user lists the agent's config files and then requests `auth.json` under the config-file routes
 - **THEN** the listing does not include it
-- **AND** the request is refused `404 CONFIG_FILE_NOT_ALLOWED` with no filesystem read
+- **AND** the request is answered `404` with no filesystem read
 
 ### Requirement: Install Coffer's MCP entry into config.toml preserving its layout
 The `McpInjectionSpec` [agent-registry](../spec.md) "Install Coffer's MCP server into an agent in one action" installs through MUST write `[mcp_servers.coffer]` in `config.toml`, whose `command` is the resolved absolute shim path and whose `args` are `["--agent-uid", "<uid>"]` — the same command-map shape Claude Code's entry uses. Edits to this file MUST preserve the user's comments and key ordering, which is why it is edited as TOML rather than reserialized.
@@ -71,7 +71,7 @@ The toggle of [agent-registry](../spec.md) "Toggle a plugin through the document
 - **AND** every other table in `config.toml` is unchanged
 
 ### Requirement: Uninstall a Codex plugin by editing config.toml
-The uninstall strategy of [agent-registry](../spec.md) "Uninstall a plugin by the type's own strategy" for this type MUST be a config edit: remove the `[plugins."…"]` entry from `config.toml` (atomic, with the backup of [agent-registry](../spec.md) "Write config files atomically with a backup and an audit entry") and delete that plugin's cache directory. There is no CLI to delegate to and none is required, so `can_uninstall` is true whenever the entry exists.
+The uninstall strategy of [agent-registry](../spec.md) "Uninstall a plugin by the type's own strategy" for this type MUST be a config edit: remove the `[plugins."…"]` entry from `config.toml` (atomic, with the backup of [agent-registry](../spec.md) "Back up and compare-and-swap every write Coffer makes to an agent's config") and delete that plugin's cache directory. There is no CLI to delegate to and none is required, so `can_uninstall` is true whenever the entry exists.
 
 #### Scenario: uninstall a Codex plugin
 - **GIVEN** a registered `codex` agent with an installed plugin

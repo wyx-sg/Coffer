@@ -352,62 +352,6 @@ paths:
       summary: Get Note
       tags:
       - memory
-    put:
-      description: |-
-        A person's edit from the page's editor ("Edit a memory in the web UI or in an editor"): the
-        body is replaced, the frontmatter kept, ``updated_at``
-        stamped, and a stale fingerprint is a 409 ``MEMORY_NOTE_CONFLICT`` that
-        carries the note as it is now and leaves the file alone.
-      operationId: save_note_api_v1_memory_partitions__uid__notes__slug__put
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: path
-        name: slug
-        required: true
-        schema:
-          title: Slug
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NoteSave'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NoteOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Save Note
-      tags:
-      - memory
   /api/v1/memory/partitions/{uid}/retired:
     get:
       description: |-
@@ -701,8 +645,7 @@ components:
       type: object
     FileNodeOut:
       description: |-
-        One entry in a partition's own directory ("Present a partition as its
-        memories").
+        One entry in a partition's own directory ("Show a partition's memories read-only").
 
         Same shape as the skill kind's file tree so the two surfaces render through
         one component on the frontend. ``path`` is POSIX and relative to the
@@ -855,10 +798,6 @@ components:
           default: ''
           title: File Path
           type: string
-        fingerprint:
-          default: ''
-          title: Fingerprint
-          type: string
         key:
           title: Key
           type: string
@@ -901,24 +840,7 @@ components:
       - file_path
       - body
       - origins
-      - fingerprint
       title: NoteOut
-      type: object
-    NoteSave:
-      description: A note's new body, from the web UI's editor. The frontmatter is kept.
-      properties:
-        body:
-          minLength: 1
-          title: Body
-          type: string
-        expected_fingerprint:
-          minLength: 1
-          title: Expected Fingerprint
-          type: string
-      required:
-      - body
-      - expected_fingerprint
-      title: NoteSave
       type: object
     NoteSummaryOut:
       description: |-

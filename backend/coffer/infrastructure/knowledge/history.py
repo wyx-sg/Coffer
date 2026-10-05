@@ -1,6 +1,5 @@
 """Every accepted write to a collection, kept as one vault commit naming its
-writer (spec knowledge "Keep every
-document's history").
+writer (spec knowledge "Commit every knowledge write naming its writer").
 
 **Where the history lives.** Knowledge is inside the vault repository, at
 ``vault/knowledge/`` (ADR storage-is-five-classes-by-nature), so its history is
@@ -9,7 +8,7 @@ every-vault-write-is-a-validated-commit-naming-its-writer). This module is a
 view over the process's one vault writer
 (``coffer.infrastructure.vault.instance.vault_writer``): an operation's
 :class:`Transaction` is a vault transaction whose touched paths are
-``knowledge/<relpath>``, and log, show, diff and later are the vault
+``knowledge/<relpath>``, and log, show, diff and change are the vault
 repository's, pathspec-limited to ``knowledge/`` with every path handed back
 knowledge-root-relative — which is what every caller and API response speaks.
 
@@ -38,13 +37,10 @@ import pathlib
 from collections.abc import Callable
 
 from coffer.domain.knowledge.history import Change, DocumentChange
-from coffer.domain.vault.content_ids import fingerprint
-from coffer.domain.vault.errors import VaultFileStale
 from coffer.domain.vault.history import Commit, looks_like_a_version
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.vault import git
-from coffer.infrastructure.vault.atomic import atomic_write
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import Transaction as VaultTransaction
 from coffer.infrastructure.vault.writer import VaultWriter
@@ -88,23 +84,6 @@ class Transaction:
             self._dirs.append(relpath)
         for path in self._history.files_of(relpath):
             self._vault.touch(path)
-
-    def write(self, relpath: str, data: bytes, expected: str) -> None:
-        """Replace ``relpath``'s bytes if it still holds what the caller read
-        (``expected`` is that read's fingerprint); raise ``VaultFileStale``
-        otherwise. Compared under the vault's write lock when history is on."""
-        if self._vault is not None:
-            # Not ``touch`` first: the vault compares only a path this
-            # transaction has not claimed yet, and claims it as it writes.
-            if relpath not in self.paths:
-                self.paths.append(relpath)
-            self._vault.write(paths.vault_path(relpath), data, expected)
-            return
-        target = paths.resolve(relpath)
-        current = target.read_bytes() if target.is_file() else None
-        if current is None or fingerprint(current) != expected:
-            raise VaultFileStale(paths.vault_path(relpath))
-        atomic_write(target, data)
 
     def commit(self, meta: CommitMeta | None = None) -> str | None:
         """Commit what this operation touched; answer the commit, or ``None``
@@ -242,7 +221,8 @@ class KnowledgeHistory:
 
     def diff(self, version: str, relpath: str) -> str:
         """The unified diff ``version`` made to ``relpath``, its headers
-        knowledge-root-relative (empty if none)."""
+        knowledge-root-relative (empty if none) — what reading one change in
+        full adds to its document list."""
         if not self.available() or not looks_like_a_version(version):
             return ""
         done = git.run(
@@ -261,12 +241,6 @@ class KnowledgeHistory:
             literal=True,
         )
         return git.text(done) if done.returncode == 0 else ""
-
-    def later(self, version: str, relpath: str) -> str | None:
-        """The newest commit after ``version`` that touched ``relpath``."""
-        if not self.available() or not looks_like_a_version(version):
-            return None
-        return self._writer().repo.later(version, paths.vault_path(relpath))
 
 
 def _change(commit: Commit) -> Change:

@@ -260,7 +260,7 @@ async def _to_skill_out(
             status = statuses.get(r.uid)
         else:
             status = await sources.status(r) if sources is not None else None
-        source_status = status_out(status, cfg.source.commit)
+        source_status = status_out(status, cfg.source)
     # Single-skill handlers (get / import) take the per-skill round-trip —
     # list handlers prebuild the map once via
     # ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.

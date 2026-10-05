@@ -1,6 +1,6 @@
 ---
 title: Memory
-description: Let Coffer read what each of your agents has learned, turn it into one set of notes per repository, hand the right notes back at session start and at each prompt, and ask your agent to tidy them. You can read and edit the notes too.
+description: Let Coffer read what each of your agents has learned, turn it into one set of notes per repository, hand the right notes back at session start and at each prompt, and ask your agent to tidy them. You can read the notes in the web UI and edit them in your own editor.
 ---
 
 # Memory
@@ -229,7 +229,7 @@ In the web UI a note is called a **memory** (中文 记忆条目): one memory pe
 
 The Memory page's header carries **Tidy all** beside **Update memory**. A partition's page has no back link and no Experimental tag: its title is the partition's name, the line under it carries the path, the number of memories and when it was last distilled, and its header offers **Tidy** beside **Update memory**. It has two tabs:
 
-- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body (searchable with ⌘F), with **Edit** and **Open in editor** as buttons and a **⋯** menu holding **Reveal in Finder** and **Delete…**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists the memories that were retired. Choose one to read it: the pane shows its full title, a *Retired* tag, the date, the full reason and, when another memory replaced it, a **Replaced by …** link to that memory. A retired memory is read-only, and the group opens by itself when the address names one. A partition not yet distilled shows no list, only an empty state.
+- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body (searchable with ⌘F), with **Open in editor** as a button and a **⋯** menu holding **Reveal in Finder** and **Delete…**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists the memories that were retired. Choose one to read it: the pane shows its full title, a *Retired* tag, the date, the full reason and, when another memory replaced it, a **Replaced by …** link to that memory. A retired memory is read-only, and the group opens by itself when the address names one. A partition not yet distilled shows no list, only an empty state.
 - **Delivered** shows the session-start text each agent receives in this partition's project (see [See it working](#see-it-working)).
 
 The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk. The header's **⋯** menu offers **Reveal partition folder**, **Copy path**, **Distil history in Activity** (the Changes tab, where every distil pass is recorded) and, only while the repository is missing, **Delete partition…**.
@@ -238,9 +238,9 @@ A note's `origins` frontmatter names every agent file it was built from, and `.r
 
 ### Edit a memory
 
-A memory that is wrong or incomplete can be fixed by you:
+A memory that is wrong or incomplete can be fixed by you, in your own editor:
 
-- **In the web UI.** Choose the memory in its partition and select **Edit**, change the body, and save. If the note changed in the meantime — an agent merged or rewrote it, or you edited the file elsewhere — Coffer does not overwrite it: it shows a conflict prompt with the note as it is now, so nothing you typed or the agent wrote is lost.
+- **From the web UI.** The page shows a memory read-only. Choose the memory in its partition and select **Open in editor**, which opens the note's file in the editor chosen in **Settings › General**; **Reveal in Finder** in its **⋯** menu shows the file. Coffer holds none of your text, so there is no save and no conflict to resolve: what your editor saves is what the page shows next.
 - **On disk.** Open the note under `~/.coffer/derived/memory/<partition>/notes/` in your own editor. The next index line and the next session's delivery carry the change.
 
 An edited note stays as you left it: the distil pass never rewrites an existing note's body. It changes only when a tidy merges or retires it, under the rule in [When two statements disagree](#when-two-statements-disagree).

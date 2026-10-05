@@ -4,7 +4,7 @@
 // can show it as metadata above the text rather than render it AS text.
 // Rendered raw, the `---` fences become rules and `title: … origins: - …`
 // becomes a paragraph and a bullet list, which reads as if it were part of the
-// note (spec memory "Present a partition as its memories").
+// note (spec memory "Show a partition's memories read-only").
 //
 // A tiny hand-written reader for the subset Coffer's own files and agents'
 // files actually use — `key: value`, a block list under a key (`- item`, where

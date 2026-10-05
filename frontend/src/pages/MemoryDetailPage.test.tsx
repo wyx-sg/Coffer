@@ -1,6 +1,6 @@
 // frontend/src/pages/MemoryDetailPage.test.tsx
 //
-// One partition's page (spec memory "Present a partition as its memories"):
+// One partition's page (spec memory "Show a partition's memories read-only"):
 // it opens on Memories — its memories beside the selected one, a collapsed
 // read-only Retired group with reasons, a meta line naming the agents and
 // the update time — and shows none of the agents' own memory: no file tree,
@@ -44,7 +44,6 @@ vi.mock("@/lib/api/memory", () => ({
   listPartitions: vi.fn(),
   listNotes: vi.fn(),
   getNote: vi.fn(),
-  saveNote: vi.fn(),
   listRetired: vi.fn(),
   listPartitionFiles: vi.fn(),
   getDelivered: vi.fn(),
@@ -223,7 +222,7 @@ describe("MemoryDetailPage", () => {
     ).toHaveAttribute("aria-expanded", "true");
   });
 
-  test("a memory has Edit and Open in editor, a ⋯ menu, and no status or reach control", async () => {
+  test("a memory has Open in editor, a ⋯ menu, and no Edit, status or reach control", async () => {
     renderAt(`/memory/${COFFER.uid}`);
     const pane = await screen.findByTestId("memory-pane");
     const list = screen.getByRole("list", { name: "Memories" });
@@ -231,7 +230,7 @@ describe("MemoryDetailPage", () => {
       within(pane)
         .getAllByRole("button")
         .map((b) => b.textContent?.trim()),
-    ).toEqual(["Edit", "Open in editor", ""]);
+    ).toEqual(["Open in editor", ""]);
     for (const region of [list, screen.getByTestId("memory-retired")]) {
       expect(
         within(region).queryByRole("button", { name: /^(delete|restore|hide|pin)\b/i }),
@@ -242,10 +241,8 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
     // No action sits both on the bar and in the menu.
     expect(screen.queryByRole("menuitem", { name: /open in editor|edit$/i })).toBeNull();
-    // A retired memory offers no Edit.
-    expect(
-      within(screen.getByTestId("memory-retired")).queryByRole("button", { name: /^edit/i }),
-    ).toBeNull();
+    expect(within(pane).queryByRole("button", { name: /^edit/i })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /^edit/i })).toBeNull();
     expect(screen.queryByTestId("scope-control")).toBeNull();
     expect(screen.queryByRole("searchbox")).toBeNull();
   });
@@ -480,14 +477,24 @@ describe("a memory's file actions and deletion", () => {
     stub();
   });
 
-  test("Open in editor and Reveal act on the memory's own file", async () => {
+  acceptance("memory", "the selected memory opens in the person's editor", async () => {
     renderAt(`/memory/${COFFER.uid}`);
     const pane = await screen.findByTestId("memory-pane");
+    // The page offers no Edit: the memory is changed in the person's own editor.
+    expect(within(pane).queryByRole("button", { name: /^edit/i })).toBeNull();
     fireEvent.click(within(pane).getByRole("button", { name: "Open in editor" }));
     expect(fs.open).toHaveBeenCalledWith(NODE_NOTE.file_path, expect.anything());
     fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /reveal/i }));
     expect(fs.reveal).toHaveBeenCalledWith(NODE_NOTE.file_path);
+  });
+
+  test("a retired memory offers neither Open in editor nor Reveal", async () => {
+    renderAt(`/memory/${COFFER.uid}?retired=0`);
+    const pane = await screen.findByTestId("retired-pane");
+    expect(within(pane).queryByRole("button", { name: /open in editor|edit|delete/i })).toBeNull();
+    expect(within(pane).queryByRole("button", { name: /more actions/i })).toBeNull();
+    expect(screen.queryByTestId("memory-pane")).toBeNull();
   });
 
   acceptance("memory", "a memory deleted by hand is retired and not recreated", async () => {
@@ -515,117 +522,6 @@ describe("a memory's file actions and deletion", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete memory" }));
     expect(await within(dialog).findByText(/disk is full|went wrong|error/i)).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-});
-
-describe("editing a memory", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    stub();
-  });
-
-  const body = () => screen.getByRole("textbox", { name: `Edit ${NODE_NOTE.title}` });
-
-  acceptance("memory", "the selected memory is edited in place", async () => {
-    const saved = {
-      ...NODE_NOTE,
-      body: "Run the tests on Node 20.",
-      fingerprint: "fp-node-2",
-      updated_at: "2026-10-04T10:00:00Z",
-    };
-    vi.mocked(api.saveNote).mockImplementation(async () => {
-      // From here the daemon reads the saved note.
-      vi.mocked(api.getNote).mockResolvedValue(saved);
-      return saved;
-    });
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    // The body alone is edited: no frontmatter in the text.
-    expect(body()).toHaveValue(NODE_NOTE.body);
-    expect(body()).not.toHaveValue(expect.stringContaining("origins:"));
-    const save = screen.getByRole("button", { name: "Save" });
-    expect(save).toBeDisabled();
-    fireEvent.change(body(), { target: { value: "Run the tests on Node 20." } });
-    fireEvent.click(save);
-    await waitFor(() =>
-      expect(api.saveNote).toHaveBeenCalledWith(COFFER.uid, NODE_NOTE.slug, {
-        body: "Run the tests on Node 20.",
-        expected_fingerprint: "fp-node-1",
-      }),
-    );
-    // Back to the rendered memory, with the saved body and a refreshed time.
-    expect(await screen.findByText("Run the tests on Node 20.")).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.getByTestId("memory-meta")).toHaveTextContent(/updated 2026-10-04/);
-  });
-
-  acceptance(
-    "memory",
-    "a save over a note that changed is refused with the current text",
-    async () => {
-      vi.mocked(api.saveNote).mockRejectedValue(
-        new ApiError("MEMORY_NOTE_CONFLICT", "changed", {
-          saved: false,
-          current_body: "Distil rewrote this.",
-          current_fingerprint: "fp-node-9",
-        }),
-      );
-      renderAt(`/memory/${COFFER.uid}`);
-      fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-      fireEvent.change(body(), { target: { value: "My version." } });
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-      const alert = await screen.findByRole("alert");
-      expect(alert).toHaveTextContent("This memory changed on disk while you were editing");
-      // The draft is intact and Save stays off until the person chooses.
-      expect(body()).toHaveValue("My version.");
-      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-
-      // Compare shows the disk's text against mine; saving over names the new fingerprint.
-      fireEvent.click(within(alert).getByRole("button", { name: "Compare" }));
-      expect(await screen.findByText("Distil rewrote this.")).toBeInTheDocument();
-      vi.mocked(api.saveNote).mockResolvedValueOnce({ ...NODE_NOTE, body: "My version." });
-      fireEvent.click(screen.getByRole("button", { name: "Save my edit" }));
-      await waitFor(() =>
-        expect(api.saveNote).toHaveBeenLastCalledWith(COFFER.uid, NODE_NOTE.slug, {
-          body: "My version.",
-          expected_fingerprint: "fp-node-9",
-        }),
-      );
-      await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
-    },
-  );
-
-  test("Reload takes the disk's version after asking", async () => {
-    vi.mocked(api.saveNote).mockRejectedValue(
-      new ApiError("MEMORY_NOTE_CONFLICT", "changed", {
-        saved: false,
-        current_body: "Distil rewrote this.",
-        current_fingerprint: "fp-node-9",
-      }),
-    );
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    fireEvent.change(body(), { target: { value: "My version." } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    const alert = await screen.findByRole("alert");
-    fireEvent.click(within(alert).getByRole("button", { name: "Reload…" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(api.getNote).toHaveBeenCalledTimes(1);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Reload" }));
-    await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
-    expect(api.getNote).toHaveBeenCalledTimes(2);
-  });
-
-  test("Discard with changes asks first", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    fireEvent.change(body(), { target: { value: "x" } });
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /discard/i }));
-    await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
-    expect(api.saveNote).not.toHaveBeenCalled();
   });
 });
 
@@ -665,7 +561,8 @@ acceptance("memory", "browse a partition's memories with a read-only preview", a
   // None of the agents' own memory; a memory's file actions are its own.
   assertNoAgentOwnMemory();
   const pane = screen.getByTestId("memory-pane");
-  expect(within(pane).getByRole("button", { name: "Edit" })).toBeInTheDocument();
-  expect(within(pane).queryByRole("button", { name: /^delete\b/i })).toBeNull();
+  expect(within(pane).getByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+  expect(within(pane).getByRole("button", { name: /more actions for/i })).toBeInTheDocument();
+  expect(within(pane).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();
   expect(within(list).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();
 });

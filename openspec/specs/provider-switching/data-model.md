@@ -222,8 +222,8 @@ All implementation MUST reuse these existing components; do not re-implement.
 
 | Component | Path | Used for |
 |---|---|---|
-| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write after copying the prior content to a timestamped backup under `~/.coffer/config-backups/` — spec agent-registry "Write config files atomically with a backup and an audit entry" |
-| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection (spec agent-registry "Reject stale config-file writes by fingerprint"); retiring the Codex catalogue |
+| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write after copying the prior content to a timestamped backup under `~/.coffer/config-backups/` — spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config" |
+| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection (spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config"); retiring the Codex catalogue |
 | `spec_for` / `config_files_for` | `backend/coffer/domain/agent/config_files.py` | resolve the canonical path for an `AgentType` + key |
 | `AgentType` descriptors | `backend/coffer/domain/agent/descriptor.py` | `claude_code` `settings` → `~/.claude/settings.json`; `codex` `config` → `~/.codex/config.toml` |
 

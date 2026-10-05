@@ -8,8 +8,8 @@ plus what was found there, held in memory under a random id:
 
 - an **import** stage (a folder, an archive or a Git checkout), confirmed into
   one or more skills or cancelled;
-- an **update** stage (a Git-imported skill's pinned and new folders side by
-  side), applied or cancelled.
+- a **source change** stage (the new source of a Git-imported skill, checked
+  out beside its current folder), applied or cancelled.
 
 A stage nobody confirms is removed an hour after it was made, on the next call
 that touches the registry. A daemon restart forgets them all, which is right:
@@ -25,9 +25,9 @@ import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Literal
 
-from coffer.domain.skill.source import ImportedSource
+from coffer.domain.skill.source import GitImportSource, ImportedSource
 from coffer.domain.skill_source_errors import SkillStagingNotFound
 
 #: How long an unconfirmed stage is kept.
@@ -72,24 +72,22 @@ class ImportStage:
 
 
 @dataclass
-class UpdateStage:
+class SourceChangeStage:
+    """A new source for a Git-imported skill (``source_change_ops``), shown
+    against the current folder and taken or cancelled."""
+
     id: str
     skill_uid: str
     dir: pathlib.Path
     from_commit: str
     to_commit: str
-    #: The pinned commit's folder (``None`` when that commit is gone upstream).
-    pinned: pathlib.Path | None
     incoming: pathlib.Path
-    content_hash: str
-    preview: Any = None
-    #: Set when the stage is a change of source (``source_change_ops``): the
-    #: ``GitImportSource`` the skill takes on when the stage is applied.
-    new_source: Any = None
+    #: The ``GitImportSource`` the skill takes on when the stage is applied.
+    new_source: GitImportSource
     created: float = field(default_factory=time.monotonic)
 
 
-Stage = ImportStage | UpdateStage
+Stage = ImportStage | SourceChangeStage
 
 
 class StagingRegistry:
@@ -169,9 +167,9 @@ def remove_dir(path: pathlib.Path | None) -> None:
 __all__ = [
     "STAGE_TTL_S",
     "ImportStage",
+    "SourceChangeStage",
     "Stage",
     "StagedSkill",
     "StagingRegistry",
-    "UpdateStage",
     "remove_dir",
 ]

@@ -1,8 +1,8 @@
 """SkillSourceService — where a skill comes from, and what is newer there.
 
 The front door for spec skill-manager "Add skills from an archive", "Add
-skills from a Git repository" and "Update a Git-imported skill from its
-source". It owns the staging registry and the three adapters those need (the
+skills from a Git repository" and "Hand a Git-imported skill's update to an
+agent". It owns the staging registry and the three adapters those need (the
 machine's ``git``, the archive reader, the machine-local check results) and
 hands every registration to the ``SkillService`` it was built over, so a
 source never becomes a second way to write the master store. The operations
@@ -23,11 +23,18 @@ from coffer.application.skill import (
     update_merge,
     update_ops,
 )
-from coffer.application.skill.ports import ArchiveReaderPort, GitSourcePort, SourceStatusRepoPort
+from coffer.application.skill.ports import (
+    ArchiveReaderPort,
+    GitSourcePort,
+    SourceStatusRepoPort,
+    UpdateCheckSettingPort,
+)
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.staging import ImportStage, StagingRegistry
+from coffer.application.upkeep_schedule import SLICE_S
 from coffer.domain.resource import Resource
 from coffer.domain.skill.source_status import SourceStatus
+from coffer.domain.skill.update_check import DEFAULT_CHOICE, UpdateCheckChoice, interval_of
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +47,7 @@ class SkillSourceService:
         git: GitSourcePort,
         archives: ArchiveReaderPort,
         status_repo: SourceStatusRepoPort,
+        update_check: UpdateCheckSettingPort | None = None,
         staging: StagingRegistry | None = None,
         size_limit_bytes: int = 50 * 1024 * 1024,
     ) -> None:
@@ -47,6 +55,7 @@ class SkillSourceService:
         self.git = git
         self.archives = archives
         self.status_repo = status_repo
+        self.update_check = update_check
         self.staging = staging or StagingRegistry()
         self.size_limit = size_limit_bytes
 
@@ -83,34 +92,33 @@ class SkillSourceService:
         return await update_ops.check(self, await self.skills.get_skill(uid))
 
     async def check_due(self) -> int:
-        return await update_ops.check_due(self)
+        """Check the skills due under this machine's setting; none for **Only when I ask**."""
+        interval = interval_of(self.update_check_choice())
+        return 0 if interval is None else await update_ops.check_due(self, interval)
 
-    async def preview(self, uid: str) -> update_ops.UpdatePreview:
-        return await update_ops.preview(self, await self.skills.get_skill(uid))
+    def update_check_choice(self) -> UpdateCheckChoice:
+        return self.update_check.read() if self.update_check else DEFAULT_CHOICE
+
+    def set_update_check_choice(self, choice: UpdateCheckChoice) -> UpdateCheckChoice:
+        """Keep the choice on this machine; the worker reads it again on its next slice."""
+        if self.update_check is not None:
+            self.update_check.write(choice)
+        return self.update_check_choice()
+
+    async def handoff(self, uid: str) -> update_ops.UpdateHandoff:
+        return await update_ops.handoff(self, await self.skills.get_skill(uid))
 
     async def change_source(
         self, uid: str, url: str, ref: str | None, path: str | None
-    ) -> update_ops.UpdatePreview:
+    ) -> source_change_ops.SourceChangePreview:
         return await source_change_ops.preview_change(
             self, await self.skills.get_skill(uid), url, ref, path
         )
 
-    async def compare(self, uid: str, stage_id: str, path: str) -> update_ops.CompareView:
-        return update_ops.compare(self, await self.skills.get_skill(uid), stage_id, path)
-
-    async def apply(
-        self, uid: str, stage_id: str, *, discard_local_edits: bool, actor: str
-    ) -> Resource:
-        return await update_ops.apply(
-            self,
-            await self.skills.get_skill(uid),
-            stage_id,
-            discard_local_edits=discard_local_edits,
-            actor=actor,
+    async def apply_change(self, uid: str, stage_id: str, *, actor: str) -> Resource:
+        return await source_change_ops.apply_change(
+            self, await self.skills.get_skill(uid), stage_id, actor=actor
         )
-
-    async def keep_mine(self, uid: str, commit: str | None) -> SourceStatus:
-        return await update_ops.keep_mine(self, await self.skills.get_skill(uid), commit)
 
     async def mark_merged(self, uid: str, commit: str, *, actor: str) -> Resource:
         return await update_merge.mark_merged(
@@ -122,24 +130,27 @@ class SkillSourceService:
 
 
 class SkillUpdateWorker:
-    """Checks every Git-imported skill every six hours (spec skill-manager
-    "Update a Git-imported skill from its source").
+    """Checks Git-imported skills in the background on this machine's schedule
+    (spec skill-manager "Hand a Git-imported skill's update to an agent").
 
-    Each round checks only the skills not checked within the interval, so a
-    daemon restarted often does not fetch every repository on every start. The
-    first round waits ``first_delay_s`` so startup never waits on the network.
-    A failure is logged and the loop goes on.
+    The setting is read again every slice (``upkeep_schedule.SLICE_S``), so a
+    change of **Check skills for updates** takes effect within one slice and
+    **Only when I ask** stops the background checks. Each round checks only the
+    skills not checked within the chosen interval, so a daemon restarted often
+    does not fetch every repository on every start. The first round waits
+    ``first_delay_s`` so startup never waits on the network. A failure is
+    logged and the loop goes on.
     """
 
     def __init__(
         self,
         service: SkillSourceService,
         *,
-        interval_s: float = update_ops.CHECK_INTERVAL.total_seconds(),
+        slice_s: float = SLICE_S,
         first_delay_s: float = 60.0,
     ) -> None:
         self._svc = service
-        self._interval = interval_s
+        self._slice = slice_s
         self._first_delay = first_delay_s
         self._task: asyncio.Task[None] | None = None
 
@@ -150,7 +161,7 @@ class SkillUpdateWorker:
                 await self._svc.check_due()
             except Exception:
                 logger.warning("skill.update_check.failed", exc_info=True)
-            await asyncio.sleep(self._interval)
+            await asyncio.sleep(self._slice)
 
     def start(self) -> asyncio.Task[None]:
         self._task = spawn(self.run(), name="skill-source-updates")

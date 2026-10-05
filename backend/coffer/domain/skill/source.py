@@ -57,8 +57,8 @@ class GitImportSource(BaseModel):
     after discovery, so a check looks at exactly the files this skill holds.
     ``content_hash`` is the folder's content at ``commit``
     (``domain.skill.content_hash``): the master folder differing from it is
-    what "edited locally since the pin" means (spec skill-manager "Update a
-    Git-imported skill from its source").
+    what "edited locally since the pin" means (spec skill-manager "Hand a
+    Git-imported skill's update to an agent").
     """
 
     type: Literal["git_import"] = "git_import"

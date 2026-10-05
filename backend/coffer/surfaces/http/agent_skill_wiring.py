@@ -220,9 +220,7 @@ def wire_agent_and_skill_kinds(
         machine=cache(machine_label),
         lookup_path=UserPath(),
     )
-    agent_config_file_svc = AgentConfigFileService(
-        agent_service=agent_svc, audit=audit, store=config_file_store
-    )
+    agent_config_file_svc = AgentConfigFileService(agent_service=agent_svc, store=config_file_store)
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
     # Coffer's own MCP entry, judged by its shim path and --agent-uid on every
     # pass (ADR one-level-triggered-reconciler-compares-parameters).

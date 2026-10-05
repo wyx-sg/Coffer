@@ -1,11 +1,12 @@
 // frontend/src/lib/knowledge/deleteUndo.ts
 //
 // Undo for a delete (boards 5.1.02, 5.1.14; layout principle 14 "confirm or
-// undo"). Deleting a document or a collection is one change in the vault's
-// history, and Recent changes can restore it — so the delete runs at once and
-// its toast carries Undo instead of a confirmation first. Undo is that same
-// Restore: it finds the change the delete just recorded (the newest `delete`
-// of the document, or `remove` of the collection) and restores it.
+// undo"; spec knowledge "Undo a knowledge delete from its toast"). Deleting a
+// document or a collection is one change in the vault's history, and the changes
+// feed can restore it — so the toast carries Undo. Undo finds the change the
+// delete just recorded (the newest `delete` of the document, or `remove` of the
+// collection) and restores it. After the toast is gone a document comes back
+// through the History… hand-off.
 import { listChanges, restoreDeleted } from "@/lib/api/knowledge";
 import type { ChangeOut } from "@/lib/api/knowledgeTypes";
 
@@ -26,6 +27,6 @@ function isDeletionOf(change: ChangeOut, target: DeletedTarget): boolean {
 export async function undoDelete(target: DeletedTarget): Promise<ChangeOut> {
   const { changes } = await listChanges({ limit: 20 });
   const change = changes.find((c) => isDeletionOf(c, target));
-  if (!change) throw new Error("The delete is no longer in Recent changes.");
+  if (!change) throw new Error("The delete is no longer among the newest changes.");
   return restoreDeleted(change.version);
 }

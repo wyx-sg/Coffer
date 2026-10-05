@@ -5,8 +5,7 @@
 // chevron, folder / open-folder or file icon, a folder's name in the sans face
 // and a file's in the mono face — `port-and-handshake.md`, as it is on disk and
 // as an agent reads it — a 16px indent a level, and the open document filled
-// `surface-selected`. The document with unsaved edits carries a small accent
-// dot at the row's right (board 5.1.03).
+// `surface-selected`.
 //
 // What is NOT copied is the fetch. A collection descends a level per request,
 // so each expanded directory mounts another level and fetches its own listing
@@ -29,7 +28,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
-import { useDirtyDocument } from "@/lib/knowledge/dirtyDocument";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -55,7 +53,6 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const { data, isPending, error } = useKnowledgeTree(path);
-  const dirty = useDirtyDocument();
 
   if (error) {
     return (
@@ -157,13 +154,6 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
               <span className={cn(NAV_NAME, active && "font-label")}>
                 {file.path.split("/").pop()}
               </span>
-              {dirty === file.path ? (
-                <span
-                  role="img"
-                  aria-label={t("knowledge.tree.unsaved")}
-                  className="size-[7px] shrink-0 rounded-full bg-accent"
-                />
-              ) : null}
             </button>
           </li>
         );

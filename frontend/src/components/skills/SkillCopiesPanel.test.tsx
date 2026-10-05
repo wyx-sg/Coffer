@@ -208,7 +208,9 @@ describe("SkillCopiesPanel", () => {
     expect(
       within(dialog).getByText("Makes its files the master, so Claude Code gets them too."),
     ).toBeInTheDocument();
-    expect(within(dialog).getByText(/Today’s master is kept in History/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Today’s master is kept in the vault’s history/),
+    ).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Adopt this folder" }));
     await waitFor(() => expect(api.resolveCopy).toHaveBeenCalledWith("sk-fd", CODEX.uid, "agent"));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

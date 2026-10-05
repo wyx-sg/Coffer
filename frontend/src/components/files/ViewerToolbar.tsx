@@ -134,25 +134,3 @@ export function ViewerToolbar({
     </div>
   );
 }
-
-/** "● Unsaved changes" / "● Not saved": the toolbar's word for a draft. */
-export function DraftStatus({ notSaved }: { notSaved?: boolean }) {
-  const { t } = useTranslation();
-  return (
-    <span
-      className={
-        notSaved
-          ? "mr-1 inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-danger"
-          : "mr-1 inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-warning"
-      }
-    >
-      <span
-        aria-hidden
-        className={
-          notSaved ? "size-1.5 rounded-full bg-danger" : "size-1.5 rounded-full bg-warning"
-        }
-      />
-      {notSaved ? t("files.notSaved") : t("files.unsavedChanges")}
-    </span>
-  );
-}

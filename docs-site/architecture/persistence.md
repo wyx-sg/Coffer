@@ -179,14 +179,14 @@ flowchart LR
   D -- yes --> E["One commit naming<br/>the writer"]
 ```
 
-1. **Compare.** A write states what it expects the file to hold: the fingerprint of the bytes it read, "absent", or "what `HEAD` holds". Under the lock the file is re-read and compared. A mismatch is `VAULT_FILE_STALE` (409). There is no unconditional mode, and a modification time never decides anything. The content APIs (saving a skill file, a knowledge document, a restore) require the fingerprint.
+1. **Compare.** A write states what it expects the file to hold: the fingerprint of the bytes it read, "absent", or "what `HEAD` holds". Under the lock the file is re-read and compared. A mismatch is `VAULT_FILE_STALE` (409). There is no unconditional mode, and a modification time never decides anything. Every writer Coffer has (a resource save, an upload, a knowledge delete's Undo, a sync apply) passes what it read; there is no route that saves a person's text into a vault file.
 2. **Write** a sibling temp file and rename it into place.
 3. **Validate** every touched path with the same rules a hand edit and a sync merge meet. A blocking finding puts every file back.
 4. **Commit** exactly the touched paths as one commit. Its trailers name the writer (`Coffer-Writer: user`, `disk`, `agent`, `daemon` or `sync`), the operation, and where relevant the actor, the agent, the machine, or the version a restore came from.
 
 A hand edit is found, not intercepted. File events are a hint (debounced until the path has been quiet for a second), a scan every 60 seconds and at boot is the truth. A valid edit is committed as a `disk` write and audited as `vault_file_edited` by a human. An invalid one stays in the working tree, uncommitted, and is flagged on the attention list and in `coffer vault problems`, while `HEAD` stays in effect. The effective state is always `HEAD`: the stores read documents from a cache loaded from `HEAD` and refreshed after each commit.
 
-Every file and folder in the vault has a history you can read, diff and restore: the REST routes under `/api/v1/vault/` and the **History** tab of a skill. A restore is a new commit through the same checks. See [Edit the vault by hand](/guides/vault-files).
+Every file and folder in the vault has a history you read with `git log -p` and bring back through your agent: a **History…** dialog on a knowledge document and on a skill shows where the file sits, copies the git command and hands the restore to an agent with a prompt the daemon builds (`POST /api/v1/vault/history/handoff`). Coffer lists, diffs and restores nothing itself. The agent's restore is a new commit naming `Coffer-Writer: agent`, checked like any other. See [Edit the vault by hand](/guides/vault-files).
 
 The vault needs `git` 2.40 or later. Without one the daemon starts but [waits for git](/architecture/daemon#waiting-for-git), saying why on every surface. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff`, and the Sync status reports the problem `git_missing` with the same prompt.
 
@@ -234,7 +234,7 @@ One short-lived directory sits outside the classes too: `~/.coffer/tmp/handoff/`
 | Place | Contents |
 | --- | --- |
 | The `vault` package in the domain layer | Layout, documents, format versions, writers and trailers. |
-| The `vault` package in the application layer | Validation rules, history and restore, problems. |
+| The `vault` package in the application layer | Validation rules, problems. |
 | The `vault` package in the infrastructure layer | The class roots under `~/.coffer`, the repository, the writer, the scanner, the resource and state stores, reach, local JSON. |
 | The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`; the migration runner (startup migration, backup, too-new guard), called from the daemon's startup. |
 | The `secret` package in the infrastructure layer | Secret ciphertext as files. |

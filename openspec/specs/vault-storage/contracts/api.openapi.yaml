@@ -8,37 +8,14 @@ info:
 servers:
 - url: http://127.0.0.1:38470
 paths:
-  /api/v1/vault/changes:
-    get:
-      description: Recent commits across the vault, or under one prefix, newest first.
-      operationId: vault_changes_api_v1_vault_changes_get
+  /api/v1/vault/history/handoff:
+    post:
+      description: |-
+        The prompt, the ``git log`` command and the locations for restoring a
+        vault file or folder, optionally to a time; a path under ``secret/`` or
+        outside the vault is refused.
+      operationId: vault_history_handoff_api_v1_vault_history_handoff_post
       parameters:
-      - description: 'Only commits under this path (default: the whole vault)'
-        in: query
-        name: prefix
-        required: false
-        schema:
-          default: ''
-          description: 'Only commits under this path (default: the whole vault)'
-          title: Prefix
-          type: string
-      - in: query
-        name: limit
-        required: false
-        schema:
-          default: 50
-          maximum: 200
-          minimum: 1
-          title: Limit
-          type: integer
-      - in: query
-        name: cursor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Cursor
       - in: header
         name: x-coffer-token
         required: false
@@ -47,12 +24,18 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultHistoryHandoffIn'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VaultChangesOut'
+                $ref: '#/components/schemas/VaultHistoryHandoffOut'
           description: Successful Response
         '422':
           content:
@@ -66,169 +49,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Vault Changes
-      tags:
-      - vault
-  /api/v1/vault/content:
-    get:
-      description: A file's content as a version left it, or as it is now, with its fingerprint.
-      operationId: vault_content_api_v1_vault_content_get
-      parameters:
-      - in: query
-        name: path
-        required: true
-        schema:
-          minLength: 1
-          title: Path
-          type: string
-      - description: Omit for the file as it is on disk now
-        in: query
-        name: version
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Omit for the file as it is on disk now
-          title: Version
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Vault Content
-      tags:
-      - vault
-  /api/v1/vault/diff:
-    get:
-      description: What one version did to one file, as a unified diff.
-      operationId: vault_diff_api_v1_vault_diff_get
-      parameters:
-      - in: query
-        name: path
-        required: true
-        schema:
-          minLength: 1
-          title: Path
-          type: string
-      - in: query
-        name: version
-        required: true
-        schema:
-          minLength: 4
-          title: Version
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultDiffOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Vault Diff
-      tags:
-      - vault
-  /api/v1/vault/history:
-    get:
-      description: The versions of a file or folder, newest first, each naming its writer.
-      operationId: vault_history_api_v1_vault_history_get
-      parameters:
-      - description: A file, or a folder ending in /
-        in: query
-        name: path
-        required: true
-        schema:
-          description: A file, or a folder ending in /
-          minLength: 1
-          title: Path
-          type: string
-      - in: query
-        name: limit
-        required: false
-        schema:
-          default: 50
-          maximum: 200
-          minimum: 1
-          title: Limit
-          type: integer
-      - in: query
-        name: cursor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Cursor
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultHistoryOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Vault History
+      summary: Vault History Handoff
       tags:
       - vault
   /api/v1/vault/problems:
@@ -268,57 +89,6 @@ paths:
       summary: Vault Problems
       tags:
       - vault
-  /api/v1/vault/restore:
-    post:
-      description: |-
-        Write a version back as a new commit naming the writer and the version
-        it restored; a stale ``expected_fingerprint`` is 409 and changes nothing.
-      operationId: vault_restore_api_v1_vault_restore_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VaultRestoreIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VaultRestoreOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Vault Restore
-      tags:
-      - vault
 components:
   schemas:
     ErrorDetail:
@@ -351,125 +121,57 @@ components:
       - error
       title: ErrorResponse
       type: object
-    VaultChangesOut:
+    HandoffOut:
+      description: |-
+        A chore for the person's agent. ``prompt`` is the whole text to copy or
+        to pre-fill a new conversation with; Coffer never sends it itself.
       properties:
-        changes:
-          items:
-            $ref: '#/components/schemas/VaultVersionOut'
-          title: Changes
-          type: array
-        next_cursor:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: HandoffOut
+      type: object
+    VaultHistoryHandoffIn:
+      properties:
+        at:
           anyOf:
-          - type: string
+          - format: date-time
+            type: string
           - type: 'null'
-          title: Next Cursor
-      required:
-      - changes
-      - next_cursor
-      title: VaultChangesOut
-      type: object
-    VaultContentOut:
-      properties:
-        binary:
-          title: Binary
-          type: boolean
-        content:
-          title: Content
+          title: At
+        path:
+          minLength: 1
+          title: Path
           type: string
-        fingerprint:
-          title: Fingerprint
+      required:
+      - path
+      title: VaultHistoryHandoffIn
+      type: object
+    VaultHistoryHandoffOut:
+      properties:
+        absolute_path:
+          title: Absolute Path
+          type: string
+        handoff:
+          $ref: '#/components/schemas/HandoffOut'
+        log_command:
+          title: Log Command
           type: string
         path:
           title: Path
           type: string
-        size:
-          title: Size
-          type: integer
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-      required:
-      - path
-      - version
-      - content
-      - binary
-      - size
-      - fingerprint
-      title: VaultContentOut
-      type: object
-    VaultDiffOut:
-      properties:
-        added:
-          title: Added
-          type: integer
-        diff:
-          title: Diff
-          type: string
-        path:
-          title: Path
-          type: string
-        removed:
-          title: Removed
-          type: integer
-        status:
-          title: Status
-          type: string
-        version:
-          title: Version
+        vault_path:
+          title: Vault Path
           type: string
       required:
       - path
-      - version
-      - status
-      - diff
-      - added
-      - removed
-      title: VaultDiffOut
-      type: object
-    VaultHistoryOut:
-      properties:
-        next_cursor:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Next Cursor
-        path:
-          title: Path
-          type: string
-        versions:
-          items:
-            $ref: '#/components/schemas/VaultVersionOut'
-          title: Versions
-          type: array
-      required:
-      - path
-      - versions
-      - next_cursor
-      title: VaultHistoryOut
-      type: object
-    VaultPathChangeOut:
-      description: One file a version touched, with its line counts (0/0 for binary).
-      properties:
-        added:
-          title: Added
-          type: integer
-        path:
-          title: Path
-          type: string
-        removed:
-          title: Removed
-          type: integer
-        status:
-          title: Status
-          type: string
-      required:
-      - path
-      - status
-      - added
-      - removed
-      title: VaultPathChangeOut
+      - absolute_path
+      - vault_path
+      - log_command
+      - handoff
+      title: VaultHistoryHandoffOut
       type: object
     VaultProblemOut:
       description: 'A hand edit validation refused: on disk, uncommitted, not in effect.'
@@ -509,110 +211,4 @@ components:
       required:
       - problems
       title: VaultProblemsOut
-      type: object
-    VaultRestoreIn:
-      properties:
-        expected_fingerprint:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Expected Fingerprint
-        path:
-          minLength: 1
-          title: Path
-          type: string
-        version:
-          minLength: 4
-          title: Version
-          type: string
-      required:
-      - path
-      - version
-      - expected_fingerprint
-      title: VaultRestoreIn
-      type: object
-    VaultRestoreOut:
-      properties:
-        path:
-          title: Path
-          type: string
-        paths:
-          items:
-            type: string
-          title: Paths
-          type: array
-        restored_from:
-          title: Restored From
-          type: string
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-      required:
-      - path
-      - version
-      - restored_from
-      - paths
-      title: VaultRestoreOut
-      type: object
-    VaultVersionOut:
-      description: 'One version of a file or folder: the commit that produced it.'
-      properties:
-        actor:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Actor
-        display_writer:
-          title: Display Writer
-          type: string
-        machine:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Machine
-        operation:
-          title: Operation
-          type: string
-        paths:
-          items:
-            $ref: '#/components/schemas/VaultPathChangeOut'
-          title: Paths
-          type: array
-        removed:
-          default: false
-          title: Removed
-          type: boolean
-        restored_from:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Restored From
-        summary:
-          title: Summary
-          type: string
-        time:
-          format: date-time
-          title: Time
-          type: string
-        version:
-          title: Version
-          type: string
-        writer:
-          title: Writer
-          type: string
-      required:
-      - version
-      - time
-      - writer
-      - display_writer
-      - actor
-      - machine
-      - summary
-      - operation
-      - restored_from
-      - removed
-      - paths
-      title: VaultVersionOut
       type: object

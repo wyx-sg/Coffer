@@ -96,17 +96,12 @@ export function useHandoffRequest({ join = false } = {}) {
   };
 }
 
-/**
- * Both sides of one file, what taking theirs changes, and the edited copy as
- * saved — fetched on demand. `live` refetches whenever the window regains
- * focus: the person saves the copy in their editor, then comes back here.
- */
-export function useFileVersions(path: string, enabled: boolean, { live = false } = {}) {
+/** Both sides of one file and what taking theirs changes — fetched on demand. */
+export function useFileVersions(path: string, enabled: boolean) {
   return useQuery({
     queryKey: [...syncStopKey, "versions", path],
     queryFn: () => syncApi.fileVersions(path),
     enabled,
-    refetchOnWindowFocus: live ? "always" : false,
   });
 }
 
@@ -115,14 +110,14 @@ export function useContinueRound() {
   return useRoundMutation<void>(() => syncApi.continueRound());
 }
 
-/** Apply the held deletions, and continue. From a dialog. */
+/** Apply the held deletions, and continue. The view shows a refusal in place. */
 export function useConfirmHold() {
   return useRoundMutation<void>(() => syncApi.confirmHold(), { toastErrors: false });
 }
 
 /** Keep the files the round would have deleted, and continue. */
 export function useRestoreHold() {
-  return useRoundMutation<void>(() => syncApi.restoreHold());
+  return useRoundMutation<void>(() => syncApi.restoreHold(), { toastErrors: false });
 }
 
 /** What joining would do, applying nothing — asked while this machine has not joined. */

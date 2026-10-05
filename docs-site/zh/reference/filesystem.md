@@ -181,7 +181,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 ## 智能体配置目录里的内容 {#inside-an-agent-s-config-directory}
 
-Coffer 只会为你要求的事写入已注册智能体自己的配置目录：把它连接到 Coffer、投递技能、切换模型提供商，或在智能体页面上编辑配置文件。每次写入都是原子的，被编辑文件的上一版会先复制到 `~/.coffer/config-backups`，从不放在文件旁边（见[配置备份](#config-backups)）。
+Coffer 只会为你要求的事写入已注册智能体自己的配置目录：把它连接到 Coffer、投递技能、切换模型提供商、安装或移除 MCP 条目，或切换插件。每次写入都是原子的，如果文件在 Coffer 读取之后变了就会被拒绝，文件的上一版会先复制到 `~/.coffer/config-backups`，从不放在文件旁边（见[配置备份](#config-backups)）。
 
 配置目录默认是 Claude Code 的 `~/.claude` 和 Codex 的 `~/.codex`。如果智能体注册在别的目录，Coffer 为它启动的每个进程都会设置 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME`。
 

@@ -1,6 +1,6 @@
 // frontend/src/pages/MemoryPage.test.tsx
 //
-// The Memory overview (spec memory "Present a partition as its memories"): the
+// The Memory overview (spec memory "Show a partition's memories read-only"): the
 // partitions table, untitled and searchable, or the first-run state while there
 // are none. Only the api module is mocked;
 // the real hooks run over a real QueryClient.

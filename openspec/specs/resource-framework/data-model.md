@@ -137,7 +137,7 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 | `"resource_scope_updated"` | After `update_scope` persisted a new per-agent scope       |
 | `"retention_updated"`      | When a retention policy is changed                         |
 | `"vault_file_edited"`      | After a hand edit found on disk was committed as a `disk` write (actor `human`; `details` = `{path, version}`, one row per file) |
-| `"vault_file_restored"`    | After a vault file or folder was restored to an earlier version (a new commit carrying `Coffer-Restored-From`) |
+| `"vault_file_restored"`    | No longer recorded (a restore is an agent's own commit); the value stays so earlier rows still read |
 | `"attention_ignored"`      | When the user ignores an informational attention item on this machine |
 | `"attention_unignored"`    | When the user stops ignoring one                           |
 

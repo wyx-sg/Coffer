@@ -56,7 +56,7 @@ from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.reader import MemoryReader
 from coffer.domain.memory.retired import RetiredNote
-from coffer.infrastructure.memory import note_edit, store
+from coffer.infrastructure.memory import store
 
 KIND_MEMORY = "memory"
 
@@ -225,26 +225,6 @@ class MemoryService:
         self._say_changed(uid)
         return result
 
-    async def edit_note(
-        self, uid: str, slug: str, body: str, *, expected_fingerprint: str, actor: str
-    ) -> str:
-        """Replace one note's body, keeping its frontmatter (spec memory "Edit a memory in the web
-        UI or in an editor"). Returns the new fingerprint; a
-        note that changed since ``expected_fingerprint`` raises ``NoteConflict``
-        and is left as it is."""
-        row = await self._resources.get(uid)
-        fingerprint = note_edit.save_body(
-            row.name, slug, body, expected_fingerprint=expected_fingerprint, stamp=now()
-        )
-        await self._audit.record(
-            AuditEventType.MEMORY_NOTE_EDITED.value,
-            resource=row,
-            actor=actor,
-            details={"partition": row.name, "note": slug},
-        )
-        self._say_changed(uid)
-        return fingerprint
-
     async def delete_note(self, uid: str, slug: str, *, actor: str) -> None:
         """Delete one memory by hand: the file leaves ``notes/``, a record goes
         into ``RETIRED.md`` carrying the note's raw entry ids (so the next distil
@@ -287,7 +267,7 @@ class MemoryService:
 
     async def list_partitions(self) -> list[PartitionSummary]:
         """Every partition, counted from ``notes/`` — the management view (see
-        "Present a partition as its memories")."""
+        "Show a partition's memories read-only")."""
         rows = await self._resources.list(kind=KIND_MEMORY)
         return [summary_of(row, placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
 

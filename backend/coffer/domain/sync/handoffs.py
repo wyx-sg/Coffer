@@ -8,7 +8,7 @@ Coffer can decide:
   machine's, take the other's) and a marked-up copy to edit. Merging the two
   edits is a chore for an agent. The agent writes only the marked-up copies
   Coffer prepared outside the vault, never the vault's files and never git.
-  Coffer then shows the merge for the person to check and mark resolved; an
+  The person checks the merge in that copy and marks it resolved; an
   agent's merge is never an answer by itself.
 * **a remote that refuses the round.** A rejected push, a sign-in the remote
   refused, or a remote that cannot be reached are fixed on the remote's side

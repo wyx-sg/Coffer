@@ -1,12 +1,14 @@
 """SkillSourceService over real git, a real SQLite file and a real master store.
 
-Spec skill-manager "Add skills from a Git repository" and "Update a
-Git-imported skill from its source". Every repository is a bare one under
+Spec skill-manager "Add skills from a Git repository" and "Hand a
+Git-imported skill's update to an agent". Every repository is a bare one under
 ``tmp_path`` reached over ``file://`` (``tests/support/skill_sources``).
 """
 
 from __future__ import annotations
 
+import json
+import os
 import pathlib
 import shutil
 from collections.abc import AsyncIterator
@@ -25,11 +27,10 @@ from coffer.domain.skill.content_hash import folder_content_hash
 from coffer.domain.skill.source import GitImportSource
 from coffer.domain.skill_source_errors import (
     SkillNotFromGit,
-    SkillSourceRejected,
     SkillSourceUnreachable,
-    SkillUpdateConflict,
     SkillUpdateNotPending,
 )
+from coffer.infrastructure.daemon.skill_update_setting import DaemonConfigUpdateCheck
 from coffer.infrastructure.skill.archive_reader import ZipArchiveReader
 from coffer.infrastructure.skill.git_source import GitSource
 from coffer.infrastructure.skill.source_status_repo import SkillSourceStatusRepo
@@ -73,6 +74,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[Env]:
         git=GitSource(timeout_s=60),
         archives=ZipArchiveReader(),
         status_repo=SkillSourceStatusRepo(),
+        update_check=DaemonConfigUpdateCheck(),
         staging=StagingRegistry(root=staging_root),
     )
     yield Env(graph, svc, staging_root, tmp_path)
@@ -182,107 +184,53 @@ async def test_check_counts_only_commits_that_change_the_folder(env: Env) -> Non
     assert env.stages_left() == []
 
 
-async def test_check_due_waits_six_hours_between_checks(env: Env) -> None:
+async def test_check_due_waits_the_chosen_interval_between_checks(env: Env) -> None:
     up = _upstream(env.tmp)
     skill = await env.add(up)
     await env.graph.import_skill(env.tmp, "local-one")  # not from git: never checked
     now = datetime.now(tz=UTC)
-    assert await update_ops.check_due(env.svc, now=now) == 1
-    assert await update_ops.check_due(env.svc, now=now + timedelta(hours=1)) == 0
+    day = timedelta(days=1)
+    assert await update_ops.check_due(env.svc, day, now=now) == 1
+    assert await update_ops.check_due(env.svc, day, now=now + timedelta(hours=7)) == 0
     new = _upstream_moves(up)
-    assert await update_ops.check_due(env.svc, now=now + timedelta(hours=7)) == 1
+    assert await update_ops.check_due(env.svc, day, now=now + timedelta(hours=25)) == 1
     status = await env.svc.status(skill)
     assert status is not None and status.latest_commit == new
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="an update is applied after its preview")
-async def test_preview_then_apply_moves_the_pin_and_keeps_delivery(env: Env) -> None:
-    agent, skills_dir = await env.graph.register_agent(env.tmp, name="cc")
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="the update check follows this machine's setting"
+)
+async def test_the_update_check_follows_this_machines_setting(env: Env) -> None:
+    config = pathlib.Path(os.environ["HOME"]) / ".coffer" / "daemon-config.json"
     up = _upstream(env.tmp)
     skill = await env.add(up)
-    first = (await env.source(skill.uid)).commit
-    link = skills_dir / "review"
-    assert link.is_symlink()
+    vault_before = _tree(env.master("review"))
+
+    assert env.svc.update_check_choice() == "6h"
+    assert env.svc.set_update_check_choice("1d") == "1d"
+    assert json.loads(config.read_text())["skill_update_check"] == "1d"
+    day_checks = await env.svc.check_due()
+    assert day_checks == 1  # never checked: due now, then not again within a day
+    assert await env.svc.check_due() == 0
+    status = await env.svc.status(skill)
+    assert status is not None and status.checked_at is not None
+    later = status.checked_at + timedelta(hours=25)
+    assert await update_ops.check_due(env.svc, timedelta(days=1), now=later) == 1
+
+    assert env.svc.set_update_check_choice("manual") == "manual"
+    assert json.loads(config.read_text())["skill_update_check"] == "manual"
     new = _upstream_moves(up)
-
-    # Closing a preview leaves the folder and the pin.
-    closed = await env.svc.preview(skill.uid)
-    assert env.svc.cancel(closed.stage_id) is True
-    assert env.stages_left() == []
-    assert (await env.source(skill.uid)).commit == first
-    assert (env.master("review") / "old.txt").exists()
-
-    view = await env.svc.preview(skill.uid)
-    assert (view.from_commit, view.to_commit, view.conflict) == (first, new, False)
-    assert [c.subject for c in view.commits] == ["rework review"]
-    by_path = {c.path: c for c in view.changes}
-    assert {p: c.status for p, c in by_path.items()} == {
-        "new.txt": "added",
-        "old.txt": "removed",
-        "notes.txt": "modified",
-    }
-    assert "-one\n" in by_path["notes.txt"].diff and "+two\n" in by_path["notes.txt"].diff
-    assert (by_path["notes.txt"].additions, by_path["notes.txt"].deletions) == (1, 1)
-
-    updated = await env.svc.apply(skill.uid, view.stage_id, discard_local_edits=False, actor="cli")
-    assert updated.uid == skill.uid
-    source = await env.source(skill.uid)
-    assert source.commit == new
-    assert (env.master("review") / "notes.txt").read_text() == "two\n"
-    assert not (env.master("review") / "old.txt").exists()
-    assert link.is_symlink() and link.resolve() == env.master("review").resolve()
-    assert await env.graph.delivered(agent) == {"review"}
-    [event] = await env.graph.audit.query(event_type=AuditEventType.SKILL_UPDATED.value)
-    assert event.details is not None
-    assert (event.details["from_commit"], event.details["to_commit"]) == (first, new)
-    status = await env.svc.status(updated)
-    assert status is not None and not status.update_available(new)
-    assert env.stages_left() == []
+    assert await env.svc.check_due() == 0  # no background check runs
+    assert (await env.svc.status(skill)).latest_commit != new  # type: ignore[union-attr]
+    # Check for updates on the skill still checks it.
+    checked = await env.svc.check(skill.uid)
+    assert checked.latest_commit == new
+    assert _tree(env.master("review")) == vault_before
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="a local edit makes the update a conflict")
-async def test_a_local_edit_is_a_conflict_until_a_side_is_chosen(env: Env) -> None:
-    up = _upstream(env.tmp)
-    skill = await env.add(up)
-    first = (await env.source(skill.uid)).commit
-    (env.master("review") / "notes.txt").write_text("mine\n")
-    new = _upstream_moves(up)
-    await env.svc.check(skill.uid)
-
-    view = await env.svc.preview(skill.uid)
-    assert view.conflict is True
-    assert [(c.path, c.status) for c in view.local_changes] == [("notes.txt", "modified")]
-    compared = await env.svc.compare(skill.uid, view.stage_id, "notes.txt")
-    assert (compared.local.text, compared.pinned.text, compared.incoming.text) == (
-        "mine\n",
-        "one\n",
-        "two\n",
-    )
-    gone = await env.svc.compare(skill.uid, view.stage_id, "new.txt")
-    assert (gone.local.text, gone.pinned.text, gone.incoming.text) == (None, None, "new\n")
-    with pytest.raises(SkillUpdateConflict):
-        await env.svc.apply(skill.uid, view.stage_id, discard_local_edits=False, actor="cli")
-    assert (env.master("review") / "notes.txt").read_text() == "mine\n"
-
-    # Keep mine: the edit and the pin stay, and this commit is not offered again.
-    kept = await env.svc.keep_mine(skill.uid, None)
-    assert kept.dismissed_commit == new and kept.update_available(first) is False
-    assert (await env.source(skill.uid)).commit == first
-    assert (env.master("review") / "notes.txt").read_text() == "mine\n"
-    rechecked = await env.svc.check(skill.uid)
-    assert rechecked.update_available(first) is False
-
-    up.write("skills/review/notes.txt", "three\n")
-    newest = up.commit("again")
-    assert (await env.svc.check(skill.uid)).update_available(first) is True
-
-    # Take theirs: the edit is discarded for the newest commit.
-    view = await env.svc.preview(skill.uid)
-    await env.svc.apply(skill.uid, view.stage_id, discard_local_edits=True, actor="cli")
-    assert (env.master("review") / "notes.txt").read_text() == "three\n"
-    assert (await env.source(skill.uid)).commit == newest
-    [event] = await env.graph.audit.query(event_type=AuditEventType.SKILL_UPDATED.value)
-    assert event.details is not None and event.details["discarded_local_edits"] is True
+def _tree(root: pathlib.Path) -> dict[str, str]:
+    return {str(p.relative_to(root)): p.read_text() for p in sorted(root.rglob("*")) if p.is_file()}
 
 
 @pytest.mark.acceptance(
@@ -305,21 +253,7 @@ async def test_an_unreachable_source_keeps_the_last_success(env: Env) -> None:
     stored = await env.svc.status(skill)
     assert stored is not None and stored.error == status.error
     with pytest.raises(SkillSourceUnreachable):
-        await env.svc.preview(skill.uid)
-    assert env.stages_left() == []
-
-
-async def test_an_update_that_renames_the_skill_is_refused(env: Env) -> None:
-    up = _upstream(env.tmp)
-    skill = await env.add(up)
-    pinned = (await env.source(skill.uid)).commit
-    up.write("skills/review/SKILL.md", skill_md("reviewer", "v2"))
-    up.commit("rename")
-    with pytest.raises(SkillSourceRejected) as info:
-        await env.svc.preview(skill.uid)
-    assert info.value.reason == "update_renames_skill"
-    assert (await env.source(skill.uid)).commit == pinned
-    assert "v1" in (env.master("review") / "SKILL.md").read_text()
+        await env.svc.handoff(skill.uid)
     assert env.stages_left() == []
 
 
@@ -328,42 +262,60 @@ async def test_update_operations_refuse_a_skill_not_from_git(env: Env) -> None:
     with pytest.raises(SkillNotFromGit):
         await env.svc.check(local.uid)
     with pytest.raises(SkillNotFromGit):
-        await env.svc.preview(local.uid)
+        await env.svc.handoff(local.uid)
 
 
 @pytest.mark.acceptance(
-    spec="skill-manager", scenario="a conflict hands merging the update to an agent"
+    spec="skill-manager",
+    scenario="the update hand-off names the commits, the local edits and the read-only source",
 )
-async def test_a_conflict_carries_the_merge_hand_off(env: Env) -> None:
+async def test_the_update_hand_off_names_the_commits_the_edits_and_the_source(env: Env) -> None:
     up = _upstream(env.tmp)
     skill = await env.add(up)
     first = (await env.source(skill.uid)).commit
-    (env.master("review") / "notes.txt").write_text("mine\n")
     new = _upstream_moves(up)
 
-    view = await env.svc.preview(skill.uid)
-    prompt = view.handoff
-    assert prompt is not None
+    # No local edit: the prompt says there are none.
+    plain = await env.svc.handoff(skill.uid)
+    assert plain.commit == new
+    assert "I have not edited the skill since the pin." in plain.prompt
+    assert "Files I edited" not in plain.prompt
+
+    (env.master("review") / "notes.txt").write_text("mine\n")
+    before = _tree(env.master("review"))
+    result = await env.svc.handoff(skill.uid)
+    prompt = result.prompt
+    assert result.commit == new
     assert str(env.master("review")) in prompt
     assert first in prompt and new in prompt
-    assert "notes.txt (modified)" in prompt  # the local edit
+    assert "Files I edited since the pin: notes.txt" in prompt
     assert "rework review" in prompt  # the upstream commit's subject
-    assert up.url in prompt
+    assert up.url in prompt and "(read-only)" in prompt
     assert "only read it — never push" in prompt
-    assert "do not record it yourself" in prompt
+    assert "keeping my local edits" in prompt
+    assert "Show me the diff" in prompt
+    assert "do not call Coffer to record it" in prompt
     # Nothing was written by building it.
-    assert (env.master("review") / "notes.txt").read_text() == "mine\n"
+    assert _tree(env.master("review")) == before
     assert (await env.source(skill.uid)).commit == first
-    env.svc.cancel(view.stage_id)
+    assert env.stages_left() == []
 
 
-async def test_a_preview_without_local_edits_hands_nothing_off(env: Env) -> None:
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="the update is offered only as a hand-off while an update is available",
+)
+async def test_the_update_hand_off_is_refused_while_up_to_date(env: Env) -> None:
     up = _upstream(env.tmp)
     skill = await env.add(up)
-    _upstream_moves(up)
-    view = await env.svc.preview(skill.uid)
-    assert (view.conflict, view.handoff) == (False, None)
-    env.svc.cancel(view.stage_id)
+    with pytest.raises(SkillUpdateNotPending):
+        await env.svc.handoff(skill.uid)
+    # A commit that does not touch the skill's folder is no update either.
+    up.write("README.md", "unrelated\n")
+    up.commit("docs only")
+    with pytest.raises(SkillUpdateNotPending):
+        await env.svc.handoff(skill.uid)
+    assert env.stages_left() == []
 
 
 @pytest.mark.acceptance(
@@ -375,8 +327,6 @@ async def test_recording_a_merge_moves_the_pin_and_keeps_the_files(env: Env) -> 
     first = (await env.source(skill.uid)).commit
     (env.master("review") / "notes.txt").write_text("mine\n")
     new = _upstream_moves(up)
-    view = await env.svc.preview(skill.uid)
-    env.svc.cancel(view.stage_id)
     # The agent's merge: upstream's new file taken, the local edit kept.
     (env.master("review") / "new.txt").write_text("new\n")
     (env.master("review") / "old.txt").unlink()
@@ -398,13 +348,12 @@ async def test_recording_a_merge_moves_the_pin_and_keeps_the_files(env: Env) -> 
     assert event.actor == "cli"
     assert event.details == {"from_commit": first, "to_commit": new}
 
-    # A later upstream change is a conflict again, listing only the carried edit.
+    # A later upstream change hands off listing only the carried edit.
     up.write("skills/review/SKILL.md", skill_md("review", "v3"))
     up.commit("v3")
-    later = await env.svc.preview(skill.uid)
-    assert later.conflict is True
-    assert [(c.path, c.status) for c in later.local_changes] == [("notes.txt", "modified")]
-    env.svc.cancel(later.stage_id)
+    later = await env.svc.handoff(skill.uid)
+    assert "Files I edited since the pin: notes.txt\n" in later.prompt + "\n"
+    assert "new.txt" not in later.prompt.split("Files I edited since the pin:")[1].split("\n")[0]
     assert env.stages_left() == []
 
 

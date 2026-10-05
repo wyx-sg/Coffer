@@ -152,7 +152,6 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `SKILL_INVALID` | 422 | The skill folder is not a valid skill (for example a missing or malformed `SKILL.md`). | Fix the folder and import again. |
-| `SKILL_FILE_STALE` | 409 | A skill file changed on disk after you read it. | Reload and reapply your edit. |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | No skill by that name was found in the agent's own skills folders. | Refresh the agent's skills list. |
 | `UNMANAGED_SKILL_INVALID` | 422 | An agent's own skill cannot be adopted because its folder is invalid. | Fix its `SKILL.md`, then adopt. |
 | `SKILL_STAGING_NOT_FOUND` | 404 | Nothing is staged under that id: the import or update preview was confirmed, cancelled or expired (stages last an hour and do not survive a restart). | Stage the source again. |
@@ -161,8 +160,7 @@ give the status each code is actually sent with.
 | `SKILL_COPY_NOT_DIFFERING` | 409 | Compare or resolve was asked for an agent's copy that is not a folder in the way of Coffer's link. | Nothing to compare; the agent already has the link, or nothing. |
 | `SKILL_NOT_FROM_GIT` | 409 | The skill was not added from a Git repository, so it has no source to update from. | Re-add it from its repository with `--force` to replace it. |
 | `SKILL_SOURCE_UNREACHABLE` | 502 | git could not fetch the skill's repository, resolve its ref or find its folder. The message is git's own, with any credential removed; with git missing, `details.handoff` is a prompt for your agent. | Check the repository URL, the ref and your access to it. |
-| `SKILL_UPDATE_CONFLICT` | 409 | The skill's folder was edited since its pinned commit, so taking the update would discard the edit. | Keep your edits, or take the update and discard them. |
-| `SKILL_UPDATE_NOT_PENDING` | 409 | "I merged it" named a commit that is not an update waiting for the skill. | Open the update again and merge against the commit it offers. |
+| `SKILL_UPDATE_NOT_PENDING` | 409 | No update is waiting for the skill: "I merged it" named a commit that is not the update, or the update hand-off was asked for while the skill is up to date. | Check for updates; hand off or record only the update the skill offers. |
 
 ## Knowledge
 
@@ -171,12 +169,10 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | Pick a collection from the Knowledge page. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection's folder on the Knowledge page. |
-| `KNOWLEDGE_FILE_CONFLICT` | 409 | The document changed on disk after you read it, so your save was refused and the file left as it is. `details` carry `saved: false` and the document as it is now (`current_body`, `current_fingerprint`). | Compare with the current text, then save again with the new fingerprint. |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
 | `INGEST_REJECTED` | 400 | The upload cannot be converted. `details.reason` is `unsupported_type`, `scanned_pdf` (a PDF with no text layer) or `empty_conversion`; `details.doc_type` names the type. | Convert to a supported format; run OCR on a scanned PDF. |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | Knowledge history is not recorded on this machine, usually because git is not installed. Writes still work. | Install git; history starts with the next write. |
-| `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | No version by that id in the knowledge history, or none for that document. | List versions in the document's history on the Knowledge page. |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | The change you asked to restore deleted no document or collection. | Restore the document's earlier version instead. |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | Putting the deleted document back would overwrite the file now at its path. `details` name the version and the document; nothing was written. | Move or rename the file at that path, then restore again. |
 | `KNOWLEDGE_ERROR` | 400 | Any other knowledge-layer refusal. | Read `message`. |
@@ -187,7 +183,6 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `MEMORY_NOTE_NOT_FOUND` | 404 | No note with that slug in the partition. | List notes on the partition's page. |
-| `MEMORY_NOTE_CONFLICT` | 409 | The note changed after you read it (an upkeep pass wrote it, or it was edited on disk), so your save was refused and the note left as it is. `details` carry `saved: false` and the note as it is now (its body and fingerprint). | Compare with the current text, then save again with the new fingerprint. |
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have become a note and been removed. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
@@ -226,7 +221,6 @@ give the status each code is actually sent with.
 | `VAULT_FILE_STALE` | 409 | The file changed on disk since you read it (an edit in your editor, another save), so the write was refused rather than overwrite it. | Reload, then save again with the new fingerprint. |
 | `VAULT_FILE_INVALID` | 422 | The write would leave a vault file that fails validation. Nothing was written. | Fix what the message names. |
 | `VAULT_PATH_INVALID` | 400 | The path is not a vault file or folder history can be read for, or it is under `secret/`. | Use a vault-relative path such as `skills/pdf/`. |
-| `VAULT_VERSION_NOT_FOUND` | 404 | The version is not in this file's history. | Pick one from the file's **History** tab. |
 | `VAULT_GIT_FAILED` | 500 | A git operation on the vault repository failed. | Read the message and the daemon log. |
 
 ## Vault sync

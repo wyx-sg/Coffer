@@ -5,7 +5,6 @@
 // hierarchical under one `["knowledge"]` root, so a write can invalidate the
 // whole subtree with a prefix — the tree is fetched one directory per key and a
 // write may change any level of it.
-import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -14,21 +13,17 @@ import { translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
   deleteFile,
+  describeCollection,
   getFile,
   getTree,
   listCollections,
-  saveFile,
   uploadFile,
-  type FileSave,
 } from "@/lib/api/knowledge";
 import {
-  knowledgeChangesRootKey,
   knowledgeCollectionsKey,
   knowledgeFileKey,
-  knowledgeHistoryKey,
   knowledgeKey,
   knowledgeTreeKey,
-  knowledgeTreeRootKey,
 } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
 
@@ -83,38 +78,6 @@ export function useKnowledgeFile(path: string | null) {
 }
 
 /**
- * The save the viewer's editor issues (see "Save a document edited in the web
- * UI"). It is a plain async function rather than a mutation because
- * `useFileDraft` owns the mutation — its pending state, its error and the 409
- * it turns into a conflict — and only needs something to call.
- *
- * On success the saved file goes straight into its cache entry, so the pane
- * renders the new body without waiting on a refetch, and every tree level is
- * invalidated: a document's title comes from its frontmatter. Resolves with
- * the new fingerprint, so a second save in the same session does not 409
- * against the first.
- *
- * No toast either way: `FileEditor` says "saved" itself and renders a refusal
- * in place, where the draft still is.
- */
-export function useSaveKnowledgeFile() {
-  const qc = useQueryClient();
-  return useCallback(
-    async (input: FileSave): Promise<string> => {
-      const saved = await saveFile(input);
-      qc.setQueryData(knowledgeFileKey(saved.path), saved);
-      void qc.invalidateQueries({ queryKey: knowledgeTreeRootKey });
-      // An accepted save is a commit naming the user: the document's History
-      // and the timeline both gain it.
-      void qc.invalidateQueries({ queryKey: knowledgeHistoryKey(saved.path) });
-      void qc.invalidateQueries({ queryKey: knowledgeChangesRootKey });
-      return saved.fingerprint;
-    },
-    [qc],
-  );
-}
-
-/**
  * Delete ONE document from a collection — any document, whoever wrote it
  * (see "Let only a person delete a document").
  *
@@ -124,9 +87,8 @@ export function useSaveKnowledgeFile() {
  * it, so the rest of the `["knowledge"]` subtree is invalidated — the same
  * breadth as an upload, and for the same reason.
  *
- * No `onError` toast, against the default (agents/frontend.md §5): the only
- * caller is a ConfirmDialog, which renders the failure in place and stays open
- * so it can be read. A toast would say the same thing twice.
+ * No `onError` toast, against the default (agents/frontend.md §5): the caller
+ * (`useDeleteDocument`) toasts the refusal itself, with its details.
  */
 export function useDeleteKnowledgeFile() {
   const qc = useQueryClient();
@@ -153,6 +115,17 @@ export function useUploadKnowledgeFile() {
     // in a directory, and the directory is named after the collection.
     mutationFn: (vars: { collection: string; file: File; signal?: AbortSignal }) =>
       uploadFile(vars),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
+  });
+}
+
+/** Rewrite a collection's description — its README's opening paragraph. A
+ *  collection has no title; this is the one thing about it a person edits
+ *  here besides uploading documents. */
+export function useDescribeCollection(uid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (description: string) => describeCollection(uid, description),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }

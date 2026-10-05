@@ -1,11 +1,12 @@
 // frontend/src/components/knowledge/KnowledgeDeleteDocument.tsx
 //
-// Delete document… (board 5.1.02; spec knowledge "Let only a person delete a
-// document"). Any document, whoever wrote it. There is no confirmation: the
-// delete is one change in the vault's history, so it runs at once and the
-// toast carries Undo (layout principle 14 "confirm or undo"); the same change
-// stays restorable from Recent changes. Afterwards the pane goes to the
-// collection's page — the document is gone, so there is nothing left to show.
+// Delete document (board 5.1.02; spec knowledge "Delete a document at once, a
+// collection after asking, and offer Undo"). Any document, whoever wrote it.
+// There is no confirmation: the delete is one change in the vault's history, so it runs at once and the
+// toast carries Undo (layout principle 14 "confirm or undo"); once the toast is
+// gone, git brings the file back (the History… hand-off). Afterwards the pane
+// goes to the collection's page — the document is gone, so there is nothing
+// left to show.
 // A refusal is an error toast and the pane stays on the document.
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";

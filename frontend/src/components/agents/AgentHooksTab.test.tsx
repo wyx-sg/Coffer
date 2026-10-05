@@ -12,10 +12,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentHooksTab } from "./AgentHooksTab";
+import { fsApi } from "@/lib/api/fs";
 import type { AgentHooksOut, AgentOut, CofferHook, NativeHook } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
 
-vi.mock("@/lib/api/agents", () => ({ agentsApi: { hooks: vi.fn(), listConfigFiles: vi.fn() } }));
+vi.mock("@/lib/api/agents", () => ({ agentsApi: { hooks: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
@@ -100,12 +102,7 @@ function renderTab(
   opts: { type?: AgentOut["type"]; onRepair?: () => void } = {},
 ) {
   api.hooks.mockResolvedValue(data);
-  api.listConfigFiles.mockResolvedValue({
-    items: [
-      { key: "settings", path: SETTINGS },
-      { key: "settings_local", path: LOCAL },
-    ],
-  } as never);
+  vi.mocked(fsApi.open).mockResolvedValue(undefined);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>
@@ -156,11 +153,10 @@ describe("AgentHooksTab", () => {
     for (const e of ["SessionStart", "UserPromptSubmit"]) {
       expect(coffer.getByText(e)).toBeInTheDocument();
     }
-    expect(coffer.getByRole("link", { name: "~/.claude/settings.json" })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/config?file=settings",
-    );
-    expect(coffer.queryByRole("button")).not.toBeInTheDocument();
+    // The file opens in the person's editor; there is no fix while it is current.
+    fireEvent.click(coffer.getByRole("button", { name: "~/.claude/settings.json" }));
+    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(SETTINGS, undefined));
+    expect(coffer.getAllByRole("button")).toHaveLength(1);
 
     // The agent's own hooks: one table, Coffer's hook is not repeated in it.
     const own = await ownBlock();
@@ -310,11 +306,11 @@ describe("AgentHooksTab", () => {
     expect(dialog.getByText("Shell command")).toBeInTheDocument();
     expect(dialog.getByText("60 s")).toBeInTheDocument();
     expect(dialog.getByText("hooks.PreToolUse[0].hooks[1]")).toBeInTheDocument();
-    fireEvent.click(dialog.getByRole("button", { name: "Open in Config files" }));
-    expect(await screen.findByText("/agents/claude_code/config?file=settings")).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("button", { name: "Open in editor" }));
+    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(SETTINGS, undefined));
   });
 
-  test("a hook with no matcher reads Any tool, and a plugin's file has no Config files link", async () => {
+  test("a hook with no matcher reads Any tool, and a plugin's hook file opens in the editor too", async () => {
     renderTab(full());
     const own = await ownBlock();
     fireEvent.click(await own.findByText("afplay Glass.aiff"));
@@ -325,7 +321,8 @@ describe("AgentHooksTab", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(own.getByText("${CLAUDE_PLUGIN_ROOT}/hooks/check-secrets.sh"));
     const dialog = within(await screen.findByRole("dialog"));
-    expect(dialog.queryByRole("button", { name: "Open in Config files" })).not.toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("button", { name: "Open in editor" }));
+    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(PLUGIN_HOOKS, undefined));
   });
 
   test("a file that does not parse is a warning naming it, beside the other hooks", async () => {

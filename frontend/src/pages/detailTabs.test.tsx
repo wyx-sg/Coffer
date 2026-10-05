@@ -161,10 +161,10 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
   const mcpClass = mcpStrip.list.className;
   mcp.unmount();
 
-  // A skill's detail pane, opened on History by the path.
-  renderRoute("/skills/hello/history", "/skills/:name/:tab?", <SkillTabs />);
+  // A skill's detail pane, opened on Requires by the path.
+  renderRoute("/skills/hello/requires", "/skills/:name/:tab?", <SkillTabs />);
   const skillStrip = strip();
-  expect(skillStrip.selected).toHaveTextContent("History");
+  expect(skillStrip.selected).toHaveTextContent("Requires");
   fireEvent.mouseDown(within(skillStrip.list).getByRole("tab", { name: "Files" }));
   // The default tab is the bare address on both pages.
   expect(where.url).toBe("/skills/hello");

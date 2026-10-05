@@ -4,9 +4,8 @@
 // draggable divider) — the folder as the shared file tree under its 36px header
 // strip (the skill's name, a lock when the folder is read-only, Reveal in
 // Finder) and the open file on the right. No root row: SKILL.md first, then
-// folders, then the other files; folders in the sans face, files in mono. A
-// file with unsaved edits wears an accent dot, and in a read-only folder every
-// file wears a lock. The managed skill (SkillFileTree) and the read-only
+// folders, then the other files; folders in the sans face, files in mono. In
+// a locked folder every file wears a lock. The managed skill (SkillFileTree) and the read-only
 // folders (SkillReadOnlyFiles — an unmanaged skill, a folder not in the
 // library) are this same card; only the file pane differs.
 import { useState, type ReactNode } from "react";
@@ -40,10 +39,9 @@ interface Props {
   tree: SkillFileTreeQuery;
   selected: string;
   onSelect: (path: string) => void;
-  dirtyPath?: string | null;
   /** The folder's absolute path, for Reveal in Finder; falls back to the tree's own. */
   folderPath?: string | null;
-  /** Why the folder is read-only ("Written by Coffer — read-only"); absent when it can be edited. */
+  /** Why the folder is locked ("Written by Coffer — read-only"); absent for a folder Coffer does not rewrite. */
   lockTitle?: string;
   detail: ReactNode;
 }
@@ -53,7 +51,7 @@ function flatten(
   nodes: SkillFileNode[],
   depth: number,
   out: FileTreeRow[],
-  ctx: { selected: string; dirtyPath: string | null; locked: boolean; toggled: Set<string> },
+  ctx: { selected: string; locked: boolean; toggled: Set<string> },
 ): FileTreeRow[] {
   for (const node of sortSkillNodes(nodes)) {
     if (node.type === "dir") {
@@ -69,8 +67,7 @@ function flatten(
         depth,
         title: node.path,
         selected: ctx.selected === node.path,
-        dirty: ctx.dirtyPath === node.path,
-        locked: ctx.locked && ctx.dirtyPath !== node.path,
+        locked: ctx.locked,
       });
     }
   }
@@ -82,7 +79,6 @@ export function SkillFileSplit({
   tree,
   selected,
   onSelect,
-  dirtyPath = null,
   folderPath,
   lockTitle,
   detail,
@@ -96,7 +92,6 @@ export function SkillFileSplit({
   const rows = tree.data
     ? flatten(tree.data.children ?? [], 0, [], {
         selected,
-        dirtyPath,
         locked: Boolean(lockTitle),
         toggled,
       })

@@ -395,10 +395,10 @@ def test_codex_auth_json_is_never_listed_or_readable(tmp_path, monkeypatch):
         assert "auth.json" not in listing.text
         assert "sk-secret" not in listing.text
 
-        for key in ("auth", "auth.json"):
+        for key in ("auth", "auth.json", "config"):
             r = c.get(f"/api/v1/agents/{uid}/config-files/{key}")
+            # No route serves a config file's content, so there is nothing to ask.
             assert r.status_code == 404, r.text
-            assert r.json()["error"]["code"] == "CONFIG_FILE_NOT_ALLOWED", r.text
             assert "sk-secret" not in r.text
 
         assert touched == [], f"auth.json was touched on disk: {touched}"

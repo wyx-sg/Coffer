@@ -2,8 +2,7 @@
 //
 // Test-only data (imported by `*.test.tsx` files, never by the app): one
 // collection holding a document at its root and one inside a folder, plus a
-// change an earlier curation pass made and a person's edit, in the generated
-// wire shapes. The collection's uid and name are deliberately unlike each
+// person's change in the other collection, in the generated wire shapes. The collection's uid and name are deliberately unlike each
 // other: the URL carries the uid, every path is built from the name.
 import type { ChangeOut, CollectionOut, FileOut, TreeOut } from "@/lib/api/knowledge";
 
@@ -41,7 +40,6 @@ function file(path: string, over: Partial<FileOut> = {}): FileOut {
     body: `Body of ${path}.`,
     file_path: `/Users/dev/.coffer/knowledge/${path}`,
     folder_path: `/Users/dev/.coffer/knowledge/${path.split("/").slice(0, -1).join("/")}`,
-    fingerprint: `fp-${path}`,
     ...over,
   };
 }
@@ -111,28 +109,9 @@ function change(over: Partial<ChangeOut>): ChangeOut {
   };
 }
 
-/** A change an earlier curation pass made: it keeps its curation label in the history. */
-export const PASS = change({
-  version: "a1b2c3d4",
-  time: new Date(Date.now() - 2 * 3_600_000).toISOString(),
-  writer: "curation",
-  operation: "pass",
-  summary: "Curate 20260928-login-retry.md",
-  agent: "codex",
-  item: "20260928-login-retry.md",
-  status: "ok",
-  documents: [
-    { path: GATEWAY.path, status: "modified", added: 3, removed: 1 },
-    { path: SESSION.path, status: "added", added: 5, removed: 0 },
-  ],
-});
-
 /** A person's edit, in the other collection. */
 export const EDIT = change({
   version: "e5f6a7b8",
   collections: [OTHER.name],
   documents: [{ path: `${OTHER.name}/on-call.md`, status: "modified", added: 1, removed: 1 }],
 });
-
-export const DIFF =
-  "diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n # Account Gateway\n-The old layer.\n+The orchestration layer.\n";

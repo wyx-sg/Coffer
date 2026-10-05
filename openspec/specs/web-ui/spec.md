@@ -990,7 +990,7 @@ MUST carry six tabs, in this order, in every build, grouped by what they manage
 rather than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences (the interface language
-  and the theme, the default page size, the preferred external editor, the preferred terminal and the hand-off agent), and a
+  and the theme, the default page size, the preferred external editor, the preferred terminal and the hand-off agent), **Check skills for updates** (spec [skill-manager](../skill-manager/spec.md) "Hand a Git-imported skill's update to an agent"), and a
   **Speech-to-text** section: the connection and model that transcribe voice
   messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
   It carries no experimental-features card; the switches are on the Features
@@ -1057,7 +1057,10 @@ every list table seeds from — persisted in `localStorage`.
 ### Requirement: Let the user choose an external editor
 The General tab MUST also expose a **preferred external editor**: the
 application Coffer uses when the user opens a managed file, or its containing
-folder, from a read-only file viewer. The default is the operating system's
+folder, from a read-only file viewer or file list — a knowledge document, a
+memory, a skill file, an agent's config file, a conflicting sync file's copy.
+These open in that editor because Coffer edits none of them itself. The default
+is the operating system's
 default application; the user MAY override it by picking an editor the daemon
 detected as installed (enumerated via `GET /api/v1/fs/editors`,
 [daemon](../daemon/spec.md) "Open and reveal existing absolute paths"; a browser cannot list installed applications) or by entering
@@ -1436,141 +1439,6 @@ them by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
 - **GIVEN** the MCP servers page with one registered server
 - **WHEN** it renders and the user opens the Built-in `coffer` row
 - **THEN** the row sits under Built-in after the registered servers and its detail shows its tools with no Test, Edit or ⋯ menu
-
-### Requirement: Show the Skills page as the final canvas draws it
-The Skills page MUST follow canvas 4.3: a compact header (title, help) over the
-library beside a reading pane. The library MUST group skills under **Needs
-attention**, **In use**, **Off** and **Built-in**, without counts in the group
-titles; a row MUST show, in place of its description, the one thing that needs the
-reader, and an Off row carries no reach word. The library offers a search, which
-applies to the built-in skills too, and a reach filter — all skills, or the skills
-that reach one chosen agent — but no filter by kind. Rows ticked
-for bulk actions MUST show the selection as a bar above the list ("N of M
-selected", Reach, Delete, ×) and in the reading pane, which names the selected
-skills, says the built-in skill can't be selected and offers only what the bar does
-not — **Check copies of N skills**.
-
-The open skill's header MUST name it with a state pill, its source, its master
-path and when it changed, and carry **Reach** and a **⋯** menu (Open in editor,
-Reveal in Finder, Copy master path, Delete…) whatever the state; each problem is
-answered in a banner under the tabs, never in the header. Its tabs — Files,
-Delivery, Requires, History — carry no counts. The Files tab MUST be one card: the
-folder's files with SKILL.md first beside the open file's header bar and body,
-whose edit mode refuses a stale save while keeping the text. A folder the skills
-store holds that no skill claims, listed under Not in your library, MUST show its
-files in the same locked tree and viewer, with its meta line saying how many files
-it holds and when it was found.
-
-The Requires tab MUST list what the skill declares in four groups: **Commands**,
-each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
-"Declare the secrets a skill requires"), **Tools** — the MCP servers and
-custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
-the tools a skill requires"), each with its state and a link to its page — and
-**Skills** it needs. A row's name is shown in full, never cut short: a group's
-name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
-install, copy-command or login step and no hand-off of their own: one banner
-carries a single hand-off to an agent for every command that needs the person. A
-secret that is not set MUST read "secret <name> is not set" and open the Secrets
-page, with no hand-off to an agent, because setting a secret is the person's task.
-A library row whose most urgent item is such a secret MUST read "Needs secret
-<name> · not set", and the open skill MUST carry a banner naming each secret that
-is not set with Open Secrets. A required tool that is off or failing puts the skill
-under Needs attention with "Needs <tool> · off", a **Tool off** pill, and a banner
-("<tool> is off, so <skill> can't call it", or why a failing group fails) with Open
-<tool>, which opens the tool's own page; turning a tool on is the person's choice,
-so the banner offers no hand-off.
-
-A folder in the way of an agent's link, a delete Coffer refuses, a master folder
-that is gone and a Git source to change MUST each be answered where they are
-shown, with the choice confirmed before anything is written. When a delete is
-refused because an agent's copy is a real folder Coffer did not make, the
-confirmation MUST stay open, say "Nothing was deleted", name the folder and say
-Coffer removes only what it made; its primary button then becomes **Delete, keep
-<agent>'s folder**, which deletes the skill and leaves that folder where it is
-(there is no Retry). A bulk delete MUST report each skill: the clean ones are
-deleted, a refused one stays listed with the folder in the way, and the same
-choice to keep that agent's folder is offered. The Add skill dialog is 640 wide,
-validates its source inline and MUST carry the Available to reach control.
-
-#### Scenario: a library row says what needs attention in place of its description
-- **GIVEN** a skill whose declared command is missing and a Git skill with an update waiting
-- **WHEN** the user opens the Skills page
-- **THEN** the first row reads "Needs <command> · not installed" and the second "Update available" where their descriptions would be
-
-#### Scenario: selected skills are set or deleted together from the bar above the list
-- **GIVEN** the built-in skill and two of the user's skills
-- **WHEN** the user ticks the two skills
-- **THEN** the bar above the list reads "2 skills selected", the reading pane names both, says the built-in skill can't be selected and offers Check copies of 2 skills, and the one Delete button deletes both after one confirmation
-
-#### Scenario: the library filters by reach and groups skills by what they need
-- **GIVEN** a skill that is on for every agent, one that is off and one limited to Claude Code
-- **WHEN** the user opens the Skills page and chooses Codex in the Reach filter
-- **THEN** the skills first sit under In use and Off, the list offers a search and a Reach filter but no kind filter, and with Codex chosen only the skill on for every agent is listed and the address carries `?agent=<Codex's uid>`
-
-#### Scenario: a skill file changed on disk refuses the save and keeps the text
-- **GIVEN** a skill file open for editing
-- **WHEN** the save is refused because the file changed on disk
-- **THEN** the header says Not saved, the edited text is still there, Reload, Compare and Copy my text are offered, and Save stays off
-
-#### Scenario: the requires tab checks the commands again and keeps the hand-off out of its rows
-- **GIVEN** a skill whose declared commands are missing or not logged in
-- **WHEN** the user opens its Requires tab and chooses Check again
-- **THEN** each command shows its state with a link to its CLI page, no install, Copy prompt or login step appears in a row, and every command is probed again
-
-#### Scenario: a folder in the way of a skill's link is resolved by a confirmed choice
-- **GIVEN** a skill whose link in one agent is a real folder Coffer did not make
-- **WHEN** the user opens Review… from the skill's banner and chooses Adopt this folder
-- **THEN** the dialog shows the difference first, and only the confirm button resolves that agent's copy by keeping its version
-
-#### Scenario: a delete refused because a copy is not Coffer's stays open and offers to keep that folder
-- **GIVEN** a skill whose delete the daemon refuses because an agent's copy is not Coffer's link
-- **WHEN** the user confirms the delete
-- **THEN** the dialog stays open, says "Nothing was deleted", names the folder and says Coffer only removes what it made
-- **AND** its primary button becomes "Delete, keep Codex's folder", which deletes the skill and leaves that folder
-
-#### Scenario: a bulk delete offers to keep the folder that stopped one skill
-- **GIVEN** two selected skills of which one has a real folder in an agent where its link should be
-- **WHEN** the user confirms the bulk delete
-- **THEN** the dialog stays open listing the refused skill with the folder, and offers to delete it keeping that agent's folder
-
-#### Scenario: a skill whose master folder is gone offers the ways forward
-- **GIVEN** a skill whose master folder was removed outside Coffer
-- **WHEN** the user opens it
-- **THEN** its header pill says Master missing and a banner says the master folder is gone and offers Restore from History (not available while a skill's versions are not recorded) and Delete skill…, which opens the delete confirmation
-- **AND** the Files tab says there are no files to show
-
-#### Scenario: a folder no skill claims is added in place or moved out
-- **GIVEN** a folder in the skills store that no skill claims
-- **WHEN** the user opens it under Not in your library
-- **THEN** it shows its path, whether its SKILL.md is valid and its file count, Delete folder… asks first, and Add to library… adds it and opens the new skill
-
-#### Scenario: changing a skill's source shows the change before anything is replaced
-- **GIVEN** a skill added from Git
-- **WHEN** the user opens Change source…, enters another repository and chooses Check source
-- **THEN** the dialog shows the change against the current version with a button to take it, and cancelling applies nothing and drops the staged source
-
-#### Scenario: a skill is added with the reach chosen in the dialog
-- **GIVEN** the Add skill dialog with Available to set to Disabled or to chosen agents
-- **WHEN** the user adds the skill
-- **THEN** each added skill is turned off, or scoped to the chosen agents, and with every agent nothing more is written
-
-#### Scenario: the requires tab lists a skill's secrets and opens Secrets for a missing one
-- **GIVEN** a skill declaring the command `jq` and the secrets `GITHUB_TOKEN`, which is set, and `NPM_TOKEN`, which is not
-- **WHEN** the user opens its Requires tab
-- **THEN** below the commands `GITHUB_TOKEN` reads Set and `NPM_TOKEN` reads "secret NPM_TOKEN is not set" with Open Secrets, which opens `/secrets`
-- **AND** the secrets offer no Copy prompt and no command
-
-#### Scenario: a skill that needs a secret that is not set says so and links to Secrets
-- **GIVEN** a skill declaring `GITHUB_TOKEN`, which is not set, and `NPM_TOKEN`, which is
-- **WHEN** the user opens the Skills page and the skill
-- **THEN** its library row reads "Needs secret GITHUB_TOKEN · not set"
-- **AND** a banner above its tabs says "secret GITHUB_TOKEN is not set." with Open Secrets linking to `/secrets`, and does not name `NPM_TOKEN`
-
-#### Scenario: a skill whose tool is off says so in the list, the pill and a banner that opens the tool
-- **GIVEN** a skill declaring the tool `github`, an MCP server that is off
-- **WHEN** the user opens the Skills page and the skill
-- **THEN** the row reads "Needs github · off" under Needs attention, the header pill reads Tool off, and a banner says github is off so the skill can't call it, with Open github linking to `/mcp-servers/github`
-- **AND** the banner offers no Copy prompt or Ask an agent
 
 ### Requirement: Offer a found update in a card above the sidebar footer
 In the desktop shell, when the shell's update check has found a newer version,
@@ -2001,55 +1869,6 @@ Port controls MUST be disabled.
 - **WHEN** the user opens the Daemon tab
 - **THEN** the status card reads offline and names the host's recovery
 - **AND** the Start at login and Port controls are disabled
-
-### Requirement: Guard unsaved edits when leaving a document editor
-A document editor — a skill file, a knowledge document, an agent config file —
-that holds edits not yet saved MUST register them with one shell-level guard, and
-the guard MUST stop every way out of the page the edits live on: a route change
-(a sidebar entry, a command-palette jump, the title bar's back and forward
-arrows, a tab or file switch) and closing or reloading the window. Opening or
-closing the Settings modal is not leaving, since the page stays mounted beneath
-it. A clean editor MUST never be stopped.
-
-A stopped route change opens one dialog, **Leave without saving?**, 460 wide,
-naming the file and whose it is: "You edited SKILL.md in sentry-issue-triage. If
-you leave now, those edits are lost." It carries **Discard changes** (an outline
-danger button, left), **Keep editing** (ghost) and **Save and leave** (primary).
-Discard changes goes on without saving; Keep editing stays with the edits intact;
-Save and leave runs the editor's own save and then goes on, and a refused save
-keeps the dialog open under "Couldn’t save <file>" with the reason. Closing or
-reloading the window asks through the browser's own confirmation.
-
-#### Scenario: a dirty editor stops leaving and asks first
-- **GIVEN** a skill file with unsaved edits is open
-- **WHEN** the user follows a link to another page
-- **THEN** "Leave without saving?" names the file and the skill and the page does not change
-- **AND** Keep editing closes the dialog with the user still on the page
-
-#### Scenario: Discard changes leaves without saving
-- **GIVEN** the dialog is open over a dirty editor
-- **WHEN** the user chooses Discard changes
-- **THEN** the navigation goes on and nothing was saved
-
-#### Scenario: Save and leave saves, then goes on
-- **GIVEN** the dialog is open over a dirty editor
-- **WHEN** the user chooses Save and leave
-- **THEN** the editor's save runs once and the navigation goes on
-
-#### Scenario: a refused save keeps the guard open and says why
-- **GIVEN** the dialog is open over a dirty editor whose save the daemon refuses
-- **WHEN** the user chooses Save and leave
-- **THEN** the dialog stays, titled "Couldn’t save" with the file name, and the user is still on the page
-
-#### Scenario: a clean editor and the Settings modal are never stopped
-- **GIVEN** an editor with no unsaved edits
-- **WHEN** the user follows a link to another page
-- **THEN** the page changes and no dialog opens
-
-#### Scenario: closing or reloading the window with unsaved edits asks the browser
-- **GIVEN** an editor holds unsaved edits
-- **WHEN** the window is about to close or reload
-- **THEN** the browser's confirmation is requested, and it is not once the edits are gone
 
 ### Requirement: Confirm a destructive action in one dialog that names its cost
 A destructive or irreversible action MUST ask in the shell's one confirmation
@@ -2498,36 +2317,12 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 - **WHEN** a split view opens and the user drags its divider
 - **THEN** the split opens at its default width, the drag still resizes it, and no error is shown
 
-### Requirement: Show a knowledge document's history on its History tab
-A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**, neither
-with a count. History is the version-history split of "Show every version history as one split": the
-document's versions on the left, newest first — who wrote each (the user, an agent, an edit found on disk, or sync; a version an
-earlier curation pass wrote keeps its curation label), when, and its added and removed line counts — and the chosen
-version on the right, the newest chosen when the tab opens. The right side MUST carry a switch between
-**Changes in this version** (against the one before) and **Compare with current**, **Restore this
-version** on every version but the current one, which writes a new version rather than rewriting the
-past, and the diff. A history that cannot be read
-MUST say so in one **Load error** row inside the tab — *Couldn't load the history*, the reason,
-**Retry** and **Open Activity** — leaving the Document tab working; without git the row is *History
-needs git* (see "Offer a knowledge refusal's hand-off as one hand-off control").
-
-#### Scenario: the history tab lists versions with their writers
-- **GIVEN** a document the user created, that an agent then changed
-- **WHEN** the user opens its History tab and chooses the older version's row
-- **THEN** the tab lists both versions newest first with their writers, its diff shows on the right beside the list, and Restore this version is offered on it and not on the current version
-- **AND** restoring it writes it back as a new version
-
-#### Scenario: a history that fails to load leaves the document readable
-- **GIVEN** the history read failing
-- **WHEN** the user opens the History tab
-- **THEN** the tab shows one Load error row with Retry and Open Activity, and the Document tab still renders
-
 ### Requirement: Show memory delivery on the Memory page
 The Memory page MUST show what each partition delivers, and the agent detail page MUST show only
 the delivery hook's state:
 
-- The **Memory page** MUST show no per-agent delivery statistics: it lists the partitions in a table with no section title and a search box that filters the rows by partition name and path, each row carrying the partition's path, its memory count, its sources and its Distilled state (memory "Present a partition as its memories").
-- A **partition's page** has a **Delivered** tab (see memory "Present a partition as its memories")
+- The **Memory page** MUST show no per-agent delivery statistics: it lists the partitions in a table with no section title and a search box that filters the rows by partition name and path, each row carrying the partition's path, its memory count, its sources and its Distilled state (memory "Show a partition's memories read-only").
+- A **partition's page** has a **Delivered** tab (see memory "Show a partition's memories read-only")
   showing, read-only, the exact session-start text each agent receives in that partition's project
   (spec [memory](../memory/spec.md) "Deliver the index and the notes path at session start"), with a
   switch between agents. The text is shown as formatted Markdown by default, with a **Rendered** /
@@ -2769,23 +2564,6 @@ call is the server's page; it carries no step to read the daemon log.
 - **GIVEN** a call refused by its server, a denied call, and a daemon ERROR that is a refused connection beside one that is Coffer's own
 - **WHEN** each is opened
 - **THEN** the refused call's card and the environment error's button row lead with the hand-off, and the others have none
-
-### Requirement: Show every version history as one split
-Every page that lists the versions of a file or folder with what each changed — a skill's History tab
-and a knowledge document's History tab — MUST lay it out the same way: one bordered card split in two
-by a divider, the versions on the left (newest first, the newest marked **Current**, each with its
-writer and when) and, on the right, the chosen version's diff file by file, each file under its path,
-operation and line counts. The divider MUST move both ways: the list narrows to 160 px and widens to
-half the card, and the width is remembered per page. Every diff in the web UI that shows a file's
-changed lines — these histories, a knowledge change or pass, a stale-save compare, a skill restore,
-copy or update review, and a change preview — MUST be drawn by one renderer: old and new line
-numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped
-at a word boundary with a ↳ on its continuation rows, never cut off.
-
-#### Scenario: a history list narrows below its starting width
-- **GIVEN** a skill with two versions, its History tab open
-- **WHEN** the user moves the divider left
-- **THEN** the version list narrows below the width it opened at, down to 160 px, and the chosen version's diff stays on the right with long lines wrapped
 
 ### Requirement: Match a list's search on names only
 A search box over a list of named things — MCP servers and their tools, resources
@@ -3039,46 +2817,6 @@ restarted daemon answers, with no manual reload.
 - **THEN** the page asks the daemon to look again, and on `ready: true` restarts the daemon
 - **AND** when git is still missing the screen stays and says it checked again
 
-### Requirement: Offer a knowledge refusal's hand-off as one hand-off control
-When the daemon refuses a knowledge operation with a hand-off in the error's details
-(`details.handoff.prompt`), the Knowledge page MUST offer that prompt through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
-— its main part starts the hand-off agent in the preferred terminal with the prompt, and its menu holds Copy prompt,
-which is the only action when no managed agent is available — passing the prompt on as served and
-never assembling it. A History tab or Recent changes that cannot be read because git is not
-installed MUST say so in one neutral row — **History needs git** or **Recent changes needs git**,
-*Install git on this Mac to see versions. The document itself is fine.* — with **Check again** and
-the hand-off, and no Retry or Open Activity. The page MUST NOT
-show an install command.
-
-#### Scenario: a history that needs git offers the prompt for installing it
-- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
-- **WHEN** a document's History tab opens
-- **THEN** it shows the row *History needs git* with Check again and the hand-off split button, whose menu copies the served prompt, and names no install command
-- **AND** it offers no Retry and no Open Activity
-
-#### Scenario: recent changes that need git offer the same row
-- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
-- **WHEN** Recent changes opens
-- **THEN** it shows the row *Recent changes needs git* with Check again and the hand-off split button
-
-### Requirement: List recent knowledge changes across collections
-The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
-first, of documents people and agents wrote or deleted. A version an earlier curation pass wrote
-keeps its curation label. It MUST be filtered with **Collection** and **Author** filter pills and a
-**Clear filters** control, the choice kept in the URL. A delete carries **Restore**. The view has no
-waiting items and no pass to inspect or undo; a refusal because git is not installed is handled as in
-"Offer a knowledge refusal's hand-off as one hand-off control".
-
-#### Scenario: recent changes shows a cross-collection timeline
-- **GIVEN** an agent's write in one collection and a person's edit in another
-- **WHEN** the user opens Recent changes
-- **THEN** both changes are listed, newest first, each linking the document it wrote, and the view shows no waiting items and no Curate now
-
-#### Scenario: the filter pills narrow the timeline and live in the URL
-- **GIVEN** changes in two collections by the user and by an agent
-- **WHEN** the user picks one collection in the Collection pill and the agent in the Author pill, then chooses Clear filters
-- **THEN** the timeline lists only that collection's changes by that agent and the URL carries both choices, and Clear filters empties both and the URL
-
 ### Requirement: Let the user choose a terminal
 The General tab MUST also expose a **preferred terminal**: the terminal Coffer
 opens when the user resumes a conversation or session from a row, or presses a hand-off
@@ -3124,3 +2862,155 @@ why.
 - **GIVEN** Codex stored as the hand-off agent and only Claude Code managed
 - **WHEN** a hand-off button renders
 - **THEN** it reads Hand off to Claude Code
+
+### Requirement: Draw every diff in the web UI with one renderer
+Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
+
+#### Scenario: a long changed line wraps instead of being cut off
+- **GIVEN** a change preview whose file adds a line longer than the diff is wide
+- **WHEN** the diff renders
+- **THEN** the line shows its old and new line numbers and its sign, and wraps at a word boundary with a ↳ on the continuation row
+
+### Requirement: Show where a file's history is and hand its restore to an agent
+A knowledge document's ⋯ menu and a managed skill's ⋯ menu (not the builtin skill's) MUST offer **History…**, which opens one dialog over the page: the path of the document or the skill's folder in the vault, an optional date and time to restore to, **Copy git command** — the `git -C <vault> log -p -- <path>` the daemon serves — **Reveal in Finder**, and the hand-off split button of "Hand a machine-dependent problem to an agent with one split button", labelled **Hand off to <Agent> to restore**, whose prompt is the one [vault-storage](../vault-storage/spec.md) "Hand restoring an earlier version of a vault file to an agent" builds for that path and time. The dialog MUST NOT list versions, show a diff or restore anything itself, and the page assembles no prompt of its own.
+
+#### Scenario: a document's history dialog copies the git command and hands the restore off
+- **GIVEN** a knowledge document open in its collection
+- **WHEN** the user chooses History… from its ⋯ menu, picks a time and presses the hand-off
+- **THEN** the dialog shows the document's path in the vault, Copy git command copies the served `git log` command, and the hand-off starts the agent with the prompt the daemon built for that path and time
+- **AND** the dialog lists no versions and offers no Restore of its own
+
+### Requirement: Lay out the Skills page as the canvas draws it
+The Skills page MUST follow canvas 4.3: a compact header (title, help) over the
+library beside a reading pane. The library MUST group skills under **Needs
+attention**, **In use**, **Off** and **Built-in**, without counts in the group
+titles; a row MUST show, in place of its description, the one thing that needs the
+reader, and an Off row carries no reach word. The library offers a search, which
+applies to the built-in skills too, and a reach filter — all skills, or the skills
+that reach one chosen agent — but no filter by kind. Rows ticked
+for bulk actions MUST show the selection as a bar above the list ("N of M
+selected", Reach, Delete, ×) and in the reading pane, which names the selected
+skills, says the built-in skill can't be selected and offers only what the bar does
+not — **Check copies of N skills**.
+
+The open skill's header MUST name it with a state pill, its source, its master
+path and when it changed, and carry **Reach** and a **⋯** menu (Open in editor,
+Reveal in Finder, Copy master path, History…, Delete…) whatever the state; each problem is
+answered in a banner under the tabs, never in the header. Its tabs — Files,
+Delivery, Requires — carry no counts. The Files tab MUST be one card: the
+folder's files with SKILL.md first beside the open file's header bar and body,
+read-only, with Open in editor and Reveal in Finder on the header bar and no Edit. A folder the skills
+store holds that no skill claims, listed under Not in your library, MUST show its
+files in the same locked tree and viewer, with its meta line saying how many files
+it holds and when it was found.
+
+The Requires tab MUST list what the skill declares in four groups: **Commands**,
+each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
+"Declare the secrets a skill requires"), **Tools** — the MCP servers and
+custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
+the tools a skill requires"), each with its state and a link to its page — and
+**Skills** it needs. A row's name is shown in full, never cut short: a group's
+name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
+install, copy-command or login step and no hand-off of their own: one banner
+carries a single hand-off to an agent for every command that needs the person. A
+secret that is not set MUST read "secret <name> is not set" and open the Secrets
+page, with no hand-off to an agent, because setting a secret is the person's task.
+A library row whose most urgent item is such a secret MUST read "Needs secret
+<name> · not set", and the open skill MUST carry a banner naming each secret that
+is not set with Open Secrets. A required tool that is off or failing puts the skill
+under Needs attention with "Needs <tool> · off", a **Tool off** pill, and a banner
+("<tool> is off, so <skill> can't call it", or why a failing group fails) with Open
+<tool>, which opens the tool's own page; turning a tool on is the person's choice,
+so the banner offers no hand-off.
+
+A folder in the way of an agent's link, a delete Coffer refuses, a master folder
+that is gone and a Git source to change MUST each be answered where they are
+shown, with the choice confirmed before anything is written. When a delete is
+refused because an agent's copy is a real folder Coffer did not make, the
+confirmation MUST stay open, say "Nothing was deleted", name the folder and say
+Coffer removes only what it made; its primary button then becomes **Delete, keep
+<agent>'s folder**, which deletes the skill and leaves that folder where it is
+(there is no Retry). A bulk delete MUST report each skill: the clean ones are
+deleted, a refused one stays listed with the folder in the way, and the same
+choice to keep that agent's folder is offered. The Add skill dialog is 640 wide,
+validates its source inline and MUST carry the Available to reach control.
+
+#### Scenario: a library row says what needs attention in place of its description
+- **GIVEN** a skill whose declared command is missing and a Git skill with an update waiting
+- **WHEN** the user opens the Skills page
+- **THEN** the first row reads "Needs <command> · not installed" and the second "Update available" where their descriptions would be
+
+#### Scenario: selected skills are set or deleted together from the bar above the list
+- **GIVEN** the built-in skill and two of the user's skills
+- **WHEN** the user ticks the two skills
+- **THEN** the bar above the list reads "2 skills selected", the reading pane names both, says the built-in skill can't be selected and offers Check copies of 2 skills, and the one Delete button deletes both after one confirmation
+
+#### Scenario: the library filters by reach and groups skills by what they need
+- **GIVEN** a skill that is on for every agent, one that is off and one limited to Claude Code
+- **WHEN** the user opens the Skills page and chooses Codex in the Reach filter
+- **THEN** the skills first sit under In use and Off, the list offers a search and a Reach filter but no kind filter, and with Codex chosen only the skill on for every agent is listed and the address carries `?agent=<Codex's uid>`
+
+#### Scenario: a skill file is read-only in the Files tab
+- **GIVEN** a skill whose folder holds `SKILL.md` and a script
+- **WHEN** the user opens the script in the Files tab
+- **THEN** its header bar offers Open in editor and Reveal in Finder, its body is read-only, and there is no Edit, Save or Not saved state
+
+#### Scenario: the requires tab checks the commands again and keeps the hand-off out of its rows
+- **GIVEN** a skill whose declared commands are missing or not logged in
+- **WHEN** the user opens its Requires tab and chooses Check again
+- **THEN** each command shows its state with a link to its CLI page, no install, Copy prompt or login step appears in a row, and every command is probed again
+
+#### Scenario: a folder in the way of a skill's link is resolved by a confirmed choice
+- **GIVEN** a skill whose link in one agent is a real folder Coffer did not make
+- **WHEN** the user opens Review… from the skill's banner and chooses Adopt this folder
+- **THEN** the dialog shows the difference first, and only the confirm button resolves that agent's copy by keeping its version
+
+#### Scenario: a delete refused because a copy is not Coffer's stays open and offers to keep that folder
+- **GIVEN** a skill whose delete the daemon refuses because an agent's copy is not Coffer's link
+- **WHEN** the user confirms the delete
+- **THEN** the dialog stays open, says "Nothing was deleted", names the folder and says Coffer only removes what it made
+- **AND** its primary button becomes "Delete, keep Codex's folder", which deletes the skill and leaves that folder
+
+#### Scenario: a bulk delete offers to keep the folder that stopped one skill
+- **GIVEN** two selected skills of which one has a real folder in an agent where its link should be
+- **WHEN** the user confirms the bulk delete
+- **THEN** the dialog stays open listing the refused skill with the folder, and offers to delete it keeping that agent's folder
+
+#### Scenario: a skill whose master folder is gone offers the ways forward
+- **GIVEN** a skill whose master folder was removed outside Coffer
+- **WHEN** the user opens it
+- **THEN** its header pill says Master missing and a banner says the master folder is gone and offers the hand-off that looks for a copy to restore (spec skill-manager "Hand unsettled skill drift to an agent with a prompt") and Delete skill…, which opens the delete confirmation
+- **AND** the Files tab says there are no files to show
+
+#### Scenario: a folder no skill claims is added in place or moved out
+- **GIVEN** a folder in the skills store that no skill claims
+- **WHEN** the user opens it under Not in your library
+- **THEN** it shows its path, whether its SKILL.md is valid and its file count, Delete folder… asks first, and Add to library… adds it and opens the new skill
+
+#### Scenario: changing a skill's source shows the change before anything is replaced
+- **GIVEN** a skill added from Git
+- **WHEN** the user opens Change source…, enters another repository and chooses Check source
+- **THEN** the dialog lists the names of the files that would change, with no diff, and a button to take it, and cancelling applies nothing and drops the staged source
+
+#### Scenario: a skill is added with the reach chosen in the dialog
+- **GIVEN** the Add skill dialog with Available to set to Disabled or to chosen agents
+- **WHEN** the user adds the skill
+- **THEN** each added skill is turned off, or scoped to the chosen agents, and with every agent nothing more is written
+
+#### Scenario: the requires tab lists a skill's secrets and opens Secrets for a missing one
+- **GIVEN** a skill declaring the command `jq` and the secrets `GITHUB_TOKEN`, which is set, and `NPM_TOKEN`, which is not
+- **WHEN** the user opens its Requires tab
+- **THEN** below the commands `GITHUB_TOKEN` reads Set and `NPM_TOKEN` reads "secret NPM_TOKEN is not set" with Open Secrets, which opens `/secrets`
+- **AND** the secrets offer no Copy prompt and no command
+
+#### Scenario: a skill that needs a secret that is not set says so and links to Secrets
+- **GIVEN** a skill declaring `GITHUB_TOKEN`, which is not set, and `NPM_TOKEN`, which is
+- **WHEN** the user opens the Skills page and the skill
+- **THEN** its library row reads "Needs secret GITHUB_TOKEN · not set"
+- **AND** a banner above its tabs says "secret GITHUB_TOKEN is not set." with Open Secrets linking to `/secrets`, and does not name `NPM_TOKEN`
+
+#### Scenario: a skill whose tool is off says so in the list, the pill and a banner that opens the tool
+- **GIVEN** a skill declaring the tool `github`, an MCP server that is off
+- **WHEN** the user opens the Skills page and the skill
+- **THEN** the row reads "Needs github · off" under Needs attention, the header pill reads Tool off, and a banner says github is off so the skill can't call it, with Open github linking to `/mcp-servers/github`
+- **AND** the banner offers no Copy prompt or Ask an agent
