@@ -98,7 +98,7 @@ A daemon on a real vault can take several seconds to unpack, migrate and bring i
 
 ## The menu bar
 
-Coffer's item in the menu bar is the Coffer mark, drawn in the menu bar's own colour so it suits a light or a dark menu bar. When something on Overview needs you, it shows the count beside the icon (**9+** above nine); an item you ignored is not counted. It is **dimmed and struck through** when no daemon is running. Click it for the menu:
+Coffer's item in the menu bar is the Coffer mark, drawn in the menu bar's own colour so it suits a light or a dark menu bar. When something on Overview needs you, it shows the count beside the icon (**9+** above nine); an item you ignored is not counted. The count follows what you do: resolve or ignore something and it drops within seconds while the window is open (within about 20 seconds otherwise), and it disappears once nothing is left. It is **dimmed and struck through** when no daemon is running. Click it for the menu:
 
 | Item | What it does |
 | --- | --- |

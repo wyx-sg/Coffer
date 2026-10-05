@@ -16,12 +16,15 @@ export type { AttentionItem };
 interface Options {
   /** Re-read on a timer, for a reader with no event stream of its own. */
   refetchInterval?: number;
+  /** False leaves the list unread (e.g. a reader that only exists in the desktop shell). */
+  enabled?: boolean;
 }
 
-export function useAttention({ refetchInterval }: Options = {}) {
+export function useAttention({ refetchInterval, enabled = true }: Options = {}) {
   return useQuery({
     queryKey: attentionKey,
     refetchInterval,
+    enabled,
     refetchIntervalInBackground: false,
     queryFn: attentionApi.read,
   });
