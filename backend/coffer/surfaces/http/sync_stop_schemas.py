@@ -114,17 +114,9 @@ class FileVersionsOut(BaseModel):
     path: str
     ours: str | None
     theirs: str | None
-    base: str | None
     #: What taking the other machine's version changes on this machine.
     take_theirs: str
     binary: bool
-    #: The hand-merge copy as it is saved now, once it exists.
-    edited: str | None = None
-    #: An agent's merge (the saved copy, no marker left) and the unified diff
-    #: from this machine's version to it; set while ``agent_state`` is
-    #: ``merged_by_agent``.
-    merged: str | None = None
-    merged_diff: str | None = None
 
 
 class HandoffIn(BaseModel):

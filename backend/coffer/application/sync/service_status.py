@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coffer.application.sync import round_diff
-from coffer.application.sync.round_merge import MERGED_BY_AGENT, merge_diff, merge_info
+from coffer.application.sync.round_merge import merge_info
 from coffer.application.sync.views import (
     AreaCounts,
     FileVersions,
@@ -274,10 +274,10 @@ class StatusMixin:
         found = next((c for c in candidates if c.path == path), None)
         if found is None:
             return None
-        blobs = d.git.blobs([b for b in (found.ours, found.theirs, found.base) if b])
+        blobs = d.git.blobs([b for b in (found.ours, found.theirs) if b])
         texts: dict[str, str | None] = {}
         binary = False
-        for side, blob in (("ours", found.ours), ("theirs", found.theirs), ("base", found.base)):
+        for side, blob in (("ours", found.ours), ("theirs", found.theirs)):
             raw = blobs.get(blob) if blob else None
             try:
                 texts[side] = raw.decode("utf-8") if raw is not None else None
@@ -291,21 +291,13 @@ class StatusMixin:
                 tofile=f"{found.theirs_machine or 'the other machine'}/{path}",
             )
         )
-        saved = d.scratch.read(path) if d.scratch and not is_secret_file(path) else None
-        info = merge_info(d, found)
-        merged = saved if saved is not None and info and info.state == MERGED_BY_AGENT else None
         return FileVersions(
             path=path,
             ours=texts["ours"],
             theirs=texts["theirs"],
-            base=texts["base"],
             take_theirs=take,
             binary=binary,
-            edited=saved.decode("utf-8", "replace") if saved is not None else None,
-            merged=merged.decode("utf-8", "replace") if merged is not None else None,
-            merged_diff=merge_diff(d, found, merged) if merged is not None else None,
         )
-
 
 def _groups(paths: tuple[str, ...], before: dict[str, str]) -> tuple[HoldGroup, ...]:
     """The held paths by folder, with how many files each folder held."""

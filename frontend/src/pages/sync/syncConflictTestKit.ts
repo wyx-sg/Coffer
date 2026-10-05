@@ -78,12 +78,8 @@ export function makeVersions(path: string, over: Partial<FileVersions> = {}): Fi
     path,
     ours: "mine\n",
     theirs: "theirs\n",
-    base: null,
     take_theirs: TAKE_THEIRS_DIFF,
     binary: false,
-    edited: null,
-    merged: null,
-    merged_diff: null,
     ...over,
   };
 }
