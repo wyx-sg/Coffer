@@ -52,6 +52,17 @@ that stops a round that would delete too much.
   (with what it changes here), **Open in editor** on the marked-up copy, the
   hand-off to an agent, **Mark resolved** and **Back to two choices**. A held
   deletion keeps its stop and asks once: two buttons, no second dialog.
+- **Skill updates** (Principle IV lists merging an upstream update with local
+  edits as a hand-off): the update preview and apply, the conflict dialog
+  (Keep mine / Take theirs / Compare, skip until a newer commit) and Coffer's
+  own merge go (`/source/preview`, `/source/compare`, `/source/keep`, the update
+  use of `/source/apply`). While an update is available the skill offers
+  **Hand off to <Agent> to update** — local edits or not — with a prompt the
+  daemon builds (`POST /skills/{uid}/source/handoff`), and **I merged it**
+  beside it. Coffer keeps adding from Git, the pin, the six-hourly check and
+  Check for updates. **Change source** stages the new source, lists the files
+  that would change (names, no diff) and swaps the folder on confirm
+  (`/source/change`, `/source/change/apply`).
 - **Shared diff code** keeps only what Coffer's own write previews and
   update reviews draw. `components/history`, the knowledge version and compare
   views, `reverseDiff`, `useVersionDiffs`, `unifiedDiff`, `lib/vault/writers`,
@@ -74,7 +85,8 @@ None.
   first.
 - `memory`: no edit route; a memory is read-only on its page.
 - `skill-manager`: no file write; Files, Delivery and Requires tabs; History
-  as a hand-off.
+  as a hand-off; updates handed to an agent and recorded with I merged it;
+  change source confirmed from a file list.
 - `vault-storage`: version browsing and restore routes removed; the restore
   hand-off added; refused hand edits keep their list.
 - `vault-sync`: conflict views trimmed; held deletions confirmed once;

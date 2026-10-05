@@ -100,6 +100,34 @@ with the hand-off of "Hand unsettled skill drift to an agent with a prompt";
 the in-app Restore from History goes, and the prompt points the agent at the
 vault's git history.
 
+### Skill updates go to the agent
+
+Kept: `source_stage_ops` (staging from Git, GitHub folder addresses, the URL
+and transport rules, symlink and 50 MB checks, the git-missing hand-off), the
+pin and its content hash, `POST /source/check`, the six-hourly worker, the
+status with its range and fetch error, `POST /source/merged` with
+`SKILL_UPDATE_NOT_PENDING` and `skill_update_merged`.
+
+New: `POST /api/v1/skills/{uid}/source/handoff` → `{commit, handoff: {prompt}}`.
+It stages upstream as the old preview did (to list the commits and the local
+edits since the pin), builds the prompt from `update_handoff.py` (extended: it
+is no longer only for a conflict; it says when there are no local edits), and
+removes the stage. Refused `409 SKILL_UPDATE_NOT_PENDING` when nothing newer
+changes the folder. The web UI asks for it when the hand-off button is
+pressed, so the prompt is never stale.
+
+Removed: `POST /source/preview`, `GET /source/compare`, `POST /source/keep`
+and the skipped-commit state it stored, the update path of `apply`, the
+conflict flag, and the frontend's `SkillUpdateDialog` steps, `SkillUpdateStage`,
+`SkillUpdateConflict` and the preview-only parts of `updateItems`. What only
+the merge used in `update_merge.py` goes; the recording of a merge stays.
+
+Change source: `POST /source/change` stages the new source and answers
+`{staging_id, commit, files: [{path, status}]}` (names only); `POST
+/source/change/apply {staging_id}` swaps the folder atomically, records the
+new source and audits an update; `DELETE /skills/stage/{staging_id}` cancels.
+`/source/apply` had no other use, so it is replaced, not kept.
+
 ### Sync conflicts
 
 There never was a line-by-line merge editor; the in-app parts are the live

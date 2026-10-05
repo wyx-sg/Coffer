@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Draw every diff in the web UI with one renderer
-Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a skill's update, copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
+Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
 
 #### Scenario: a long changed line wraps instead of being cut off
 - **GIVEN** a change preview whose file adds a line longer than the diff is wide
@@ -127,7 +127,7 @@ validates its source inline and MUST carry the Available to reach control.
 #### Scenario: changing a skill's source shows the change before anything is replaced
 - **GIVEN** a skill added from Git
 - **WHEN** the user opens Change source…, enters another repository and chooses Check source
-- **THEN** the dialog shows the change against the current version with a button to take it, and cancelling applies nothing and drops the staged source
+- **THEN** the dialog lists the names of the files that would change, with no diff, and a button to take it, and cancelling applies nothing and drops the staged source
 
 #### Scenario: a skill is added with the reach chosen in the dialog
 - **GIVEN** the Add skill dialog with Available to set to Disabled or to chosen agents
