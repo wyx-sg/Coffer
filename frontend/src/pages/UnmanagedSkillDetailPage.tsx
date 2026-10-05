@@ -155,7 +155,12 @@ export function UnmanagedSkillDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="pt-4">
-          <UnmanagedSkillOverview skill={skill} agentName={agentName} paths={paths} />
+          <UnmanagedSkillOverview
+            skill={skill}
+            agentName={agentName}
+            fileCount={paths.length}
+            onShowFiles={() => setTab("files")}
+          />
         </TabsContent>
 
         <TabsContent value="files" className="pt-4">

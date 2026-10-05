@@ -187,4 +187,79 @@ describe("a managed skill's Files card", () => {
     const row = screen.getByRole("treeitem", { name: /SKILL\.md/ });
     expect(within(row).queryByRole("img", { name: "Unsaved changes" })).not.toBeInTheDocument();
   });
+
+  describe("a deep tree", () => {
+    // synced/<id>/{docx/scripts/office/x.xsd, pptx/SKILL.md}: no root SKILL.md.
+    const DEEP = node("", "dir", [
+      node(
+        "abc",
+        "dir",
+        [
+          node(
+            "docx",
+            "dir",
+            [
+              node(
+                "scripts",
+                "dir",
+                [
+                  node(
+                    "office",
+                    "dir",
+                    [node("a.xsd", "file", [], "abc/docx/scripts/office/a.xsd")],
+                    "abc/docx/scripts/office",
+                  ),
+                ],
+                "abc/docx/scripts",
+              ),
+            ],
+            "abc/docx",
+          ),
+          node("pptx", "dir", [node("SKILL.md", "file", [], "abc/pptx/SKILL.md")], "abc/pptx"),
+        ],
+        "abc",
+      ),
+    ]);
+    const deep = { isPending: false, error: null, data: DEEP };
+    const names = () => screen.getAllByRole("treeitem").map((r) => r.textContent);
+    const renderDeep = () =>
+      wrap(
+        <SkillReadOnlyFiles
+          name="synced"
+          tree={deep}
+          useContent={() => ({ isPending: false, error: null, data: content() })}
+        />,
+      );
+
+    test("a folder toggles in place, and a file opens without collapsing its folders", () => {
+      renderDeep();
+      expect(names()).toEqual(["abc", "docx", "pptx"]);
+      fireEvent.click(screen.getByRole("treeitem", { name: "pptx" }));
+      expect(names()).toEqual(["abc", "docx", "pptx", "SKILL.md"]);
+      fireEvent.click(screen.getByRole("treeitem", { name: "docx" }));
+      fireEvent.click(screen.getByRole("treeitem", { name: "scripts" }));
+      fireEvent.click(screen.getByRole("treeitem", { name: "office" }));
+      expect(names()).toEqual(["abc", "docx", "scripts", "office", "a.xsd", "pptx", "SKILL.md"]);
+
+      // Opening a file keeps every folder the user opened open.
+      fireEvent.click(screen.getByRole("treeitem", { name: "a.xsd" }));
+      expect(screen.getByTestId("where")).toHaveTextContent(
+        "abc%2Fdocx%2Fscripts%2Foffice%2Fa.xsd",
+      );
+      expect(names()).toEqual(["abc", "docx", "scripts", "office", "a.xsd", "pptx", "SKILL.md"]);
+      expect(screen.getByRole("treeitem", { name: "a.xsd" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+
+      // A folder on the way to the open file can still be closed.
+      fireEvent.click(screen.getByRole("treeitem", { name: "scripts" }));
+      expect(names()).toEqual(["abc", "docx", "scripts", "pptx", "SKILL.md"]);
+    });
+
+    test("a folder shows its path as a tooltip", () => {
+      renderDeep();
+      expect(screen.getByRole("treeitem", { name: "docx" })).toHaveAttribute("title", "abc/docx");
+    });
+  });
 });

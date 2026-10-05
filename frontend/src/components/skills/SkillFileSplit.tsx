@@ -46,18 +46,23 @@ interface Props {
   detail: ReactNode;
 }
 
-/** The tree's visible rows. A folder starts open at the top level or on the way to the open file; `toggled` flips that. */
+/**
+ * The tree's visible rows. A folder starts open at the top level or on the way
+ * to the open file; `overrides` holds what the user chose since, which wins
+ * over that default (a plain flip would invert when opening a file makes its
+ * folders "on the way" and collapse the folder just clicked in).
+ */
 function flatten(
   nodes: SkillFileNode[],
   depth: number,
   out: FileTreeRow[],
-  ctx: { selected: string; locked: boolean; toggled: Set<string> },
+  ctx: { selected: string; locked: boolean; overrides: Map<string, boolean> },
 ): FileTreeRow[] {
   for (const node of sortSkillNodes(nodes)) {
     if (node.type === "dir") {
       const byDefault = depth < 1 || ctx.selected.startsWith(`${node.path}/`);
-      const open = ctx.toggled.has(node.path) ? !byDefault : byDefault;
-      out.push({ key: node.path, name: node.name, kind: "folder", depth, open });
+      const open = ctx.overrides.get(node.path) ?? byDefault;
+      out.push({ key: node.path, name: node.name, kind: "folder", depth, open, title: node.path });
       if (open) flatten(node.children ?? [], depth + 1, out, ctx);
     } else {
       out.push({
@@ -86,14 +91,14 @@ export function SkillFileSplit({
   const { t } = useTranslation();
   const { toast } = useToast();
   const fs = useFsActions();
-  const [toggled, setToggled] = useState<Set<string>>(new Set());
+  const [overrides, setOverrides] = useState<Map<string, boolean>>(new Map());
   const reveal = folderPath ?? tree.data?.folder_abs_path ?? null;
 
   const rows = tree.data
     ? flatten(tree.data.children ?? [], 0, [], {
         selected,
         locked: Boolean(lockTitle),
-        toggled,
+        overrides,
       })
     : [];
 
@@ -131,13 +136,7 @@ export function SkillFileSplit({
           label={t("skills.files.tree")}
           onActivate={(row) => {
             if (row.kind === "file") onSelect(row.key);
-            else
-              setToggled((prev) => {
-                const next = new Set(prev);
-                if (next.has(row.key)) next.delete(row.key);
-                else next.add(row.key);
-                return next;
-              });
+            else setOverrides((prev) => new Map(prev).set(row.key, !row.open));
           }}
         />
       )}

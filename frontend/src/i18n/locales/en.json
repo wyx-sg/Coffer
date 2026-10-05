@@ -2118,7 +2118,8 @@
         "foundIn": "Found in",
         "foundInSkills": "{{agent}}’s skills directory",
         "foundInAgentsDir": "The shared ~/.agents/skills directory",
-        "filesLabel": "Files"
+        "filesLabel": "Files",
+        "viewFiles": "View files"
       },
       "bulk": {
         "label": "Selected skills",
