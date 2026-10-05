@@ -212,7 +212,9 @@ and paginated where its list needs that, and it behaves the same everywhere:
   **Clear filters** while anything is set, and shows no result counts;
 - only number and time columns sort, in three states (one direction, the other,
   then the page's own order);
-- a long list shows a few rows and "Showing 5 of N · Show all";
+- a list that is bounded in memory shows whole, and past 100 rows grows 100 at a time as its
+  end scrolls into view, with no button to press and no page-size setting; a list that can
+  outgrow that pages by cursor and loads on scroll;
 - a time reads relative while recent ("3 h ago") and as a date ("Aug 12") after;
 - rows are selected with the header checkbox, a bar over the table reads "N of M
   selected" with the actions that apply, it holds no select-all of its own, and
@@ -990,7 +992,7 @@ MUST carry six tabs, in this order, in every build, grouped by what they manage
 rather than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences (the interface language
-  and the theme, the default page size, the preferred external editor, the preferred terminal and the hand-off agent), **Check skills for updates** (spec [skill-manager](../skill-manager/spec.md) "Hand a Git-imported skill's update to an agent"), and a
+  and the theme, the preferred external editor, the preferred terminal and the hand-off agent), **Check skills for updates** (spec [skill-manager](../skill-manager/spec.md) "Hand a Git-imported skill's update to an agent"), and a
   **Speech-to-text** section: the connection and model that transcribe voice
   messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
   It carries no experimental-features card; the switches are on the Features
@@ -1043,16 +1045,6 @@ a Save button, and a text field applies on Enter or when it loses focus.
 - **WHEN** the user opens `/settings/security`
 - **THEN** the tab shows where the master key lives and, in a development build, its move control, and the access token's Show, Copy and Rotate controls
 - **AND** it lists no stored secret and offers no control that adds, reveals or deletes one
-
-### Requirement: Let the user set the default page size
-The General tab MUST expose the default page-size preference — the rows-per-page
-every list table seeds from — persisted in `localStorage`.
-
-#### Scenario: the default page size seeds every list table
-- **GIVEN** the General tab's default page-size control
-- **WHEN** the user picks a different page size
-- **THEN** the choice is stored in `localStorage`
-- **AND** a list table then shows that many rows per page
 
 ### Requirement: Let the user choose an external editor
 The General tab MUST also expose a **preferred external editor**: the

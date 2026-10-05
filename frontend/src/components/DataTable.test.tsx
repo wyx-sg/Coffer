@@ -1,9 +1,9 @@
 // frontend/src/components/DataTable.test.tsx
 import { acceptance } from "@/test/acceptance";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { DataTable, type Column } from "./DataTable";
-import { setDefaultPageSize } from "@/lib/preferences";
+import { RENDER_BATCH } from "@/lib/hooks/useGrowingList";
 
 interface Row {
   id: string;
@@ -17,9 +17,34 @@ const ROWS: Row[] = [
 const COLS: Column<Row>[] = [{ key: "name", header: "Name", cell: (r) => r.name }];
 
 describe("DataTable", () => {
-  // The page size is persisted in localStorage; reset it so one test's choice
-  // doesn't bleed into the others (which assume the default of 20).
-  afterEach(() => localStorage.clear());
+  // The sentinel at the end of a long list grows it when it scrolls into view.
+  let observed: { callback: IntersectionObserverCallback }[] = [];
+  beforeEach(() => {
+    observed = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          observed.push({ callback });
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+  const reachEnd = () =>
+    act(() =>
+      observed
+        .at(-1)
+        ?.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        ),
+    );
+  const named = (n: number): Row[] =>
+    Array.from({ length: n }, (_, i) => ({ id: String(i), name: `x-${i}` }));
+  const bodyRows = () => screen.getAllByRole("row").length - 1;
 
   test("renders a row per item", () => {
     render(<DataTable rows={ROWS} columns={COLS} rowKey={(r) => r.id} emptyMessage="none" />);
@@ -42,44 +67,46 @@ describe("DataTable", () => {
     expect(screen.queryByText("alpha")).not.toBeInTheDocument();
   });
 
-  test("shows the first N rows and Load N more adds the next ones, never numbered pages", () => {
+  test("a bounded list shows whole: every row, no footer, no button", () => {
     render(
       <DataTable
-        rows={ROWS}
+        rows={named(RENDER_BATCH)}
         columns={COLS}
         rowKey={(r) => r.id}
-        pageSize={2}
         emptyMessage="none"
       />,
     );
-    expect(screen.getByText("alpha")).toBeInTheDocument();
-    expect(screen.queryByText("gamma")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 2 of 3")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /next/i })).toBeNull();
-    // Only one row is left, so the button offers one.
-    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
-    expect(screen.getByText("alpha")).toBeInTheDocument();
-    expect(screen.getByText("gamma")).toBeInTheDocument();
+    expect(bodyRows()).toBe(RENDER_BATCH);
     expect(screen.queryByText(/^Showing/)).toBeNull();
     expect(screen.queryByRole("button", { name: /load/i })).toBeNull();
+    expect(document.querySelector("[data-load-more-sentinel]")).toBeNull();
   });
 
-  test("a new search shows the first N matches again", () => {
-    const many: Row[] = Array.from({ length: 5 }, (_, i) => ({ id: String(i), name: `x-${i}` }));
+  test("past 100 rows the first 100 render and the rest grow 100 at a time as the end scrolls into view", () => {
+    render(<DataTable rows={named(250)} columns={COLS} rowKey={(r) => r.id} emptyMessage="none" />);
+    expect(bodyRows()).toBe(100);
+    expect(screen.queryByRole("button", { name: /load/i })).toBeNull();
+    reachEnd();
+    expect(bodyRows()).toBe(200);
+    reachEnd();
+    expect(bodyRows()).toBe(250);
+    expect(document.querySelector("[data-load-more-sentinel]")).toBeNull();
+  });
+
+  test("a new search starts a long list over at its first 100 rows", () => {
     render(
       <DataTable
-        rows={many}
+        rows={named(250)}
         columns={COLS}
         rowKey={(r) => r.id}
-        pageSize={2}
         search={{ accessor: (r) => r.name, placeholder: "search" }}
         emptyMessage="none"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Load 2 more" }));
-    expect(screen.getByText("Showing 4 of 5")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "x" } });
-    expect(screen.getByText("Showing 2 of 5")).toBeInTheDocument();
+    reachEnd();
+    expect(bodyRows()).toBe(200);
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "x-" } });
+    expect(bodyRows()).toBe(100);
   });
 
   test("clicking a row fires onRowClick", () => {
@@ -159,13 +186,12 @@ describe("DataTable", () => {
     expect(screen.getByRole("button", { name: "create one" })).toBeInTheDocument();
   });
 
-  test("isLoading renders skeleton rows capped at 5, never the empty message", () => {
+  test("isLoading renders a few skeleton rows, never the empty message", () => {
     render(
       <DataTable
         rows={[]}
         columns={COLS}
         rowKey={(r) => r.id}
-        pageSize={50}
         isLoading
         emptyMessage="nothing here"
       />,
@@ -174,44 +200,12 @@ describe("DataTable", () => {
     expect(screen.queryByText("nothing here")).not.toBeInTheDocument();
   });
 
-  test("isLoading follows a smaller page size", () => {
-    render(
-      <DataTable
-        rows={[]}
-        columns={COLS}
-        rowKey={(r) => r.id}
-        pageSize={2}
-        isLoading
-        emptyMessage="nothing here"
-      />,
-    );
-    expect(screen.getAllByTestId("skeleton-row")).toHaveLength(2);
-  });
-
   test("isLoading with rows already present keeps showing the rows", () => {
     render(
       <DataTable rows={ROWS} columns={COLS} rowKey={(r) => r.id} isLoading emptyMessage="none" />,
     );
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.queryByTestId("skeleton-row")).not.toBeInTheDocument();
-  });
-
-  test("follows the global default page size and updates live when it changes", () => {
-    const many: Row[] = Array.from({ length: 12 }, (_, i) => ({
-      id: String(i),
-      name: `item-${i}`,
-    }));
-    render(<DataTable rows={many} columns={COLS} rowKey={(r) => r.id} emptyMessage="none" />);
-    // Default global size is 20, so all 12 rows show (incl. the last)…
-    expect(screen.getByText("item-11")).toBeInTheDocument();
-
-    // …and changing it in Settings to a smaller valid size re-renders the
-    // mounted table live: the first 10 show, and Load 2 more brings item-11.
-    act(() => setDefaultPageSize(10));
-    expect(screen.getByText("item-0")).toBeInTheDocument();
-    expect(screen.queryByText("item-11")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Load 2 more" }));
-    expect(screen.getByText("item-11")).toBeInTheDocument();
   });
 
   test("bulk actions only operate on the currently-filtered rows (selection ∩ filter)", () => {
@@ -331,61 +325,6 @@ describe("DataTable", () => {
     expect(head.closest("th")).toHaveAttribute("aria-sort", "none");
   });
 
-  test("server pagination: Load more asks for the next page and keeps the ones before", () => {
-    const onPageChange = vi.fn();
-    const onPageSizeChange = vi.fn();
-    const props = {
-      columns: COLS,
-      rowKey: (r: Row) => r.id,
-      emptyMessage: "none",
-    };
-    const pager = (page: number) => ({
-      page,
-      pageSize: 2,
-      total: 3,
-      onPageChange,
-      onPageSizeChange,
-    });
-    // Caller passes ONE page (2 of 3); the table must not slice or hide it.
-    const { rerender } = render(
-      <DataTable {...props} rows={ROWS.slice(0, 2)} serverPagination={pager(1)} />,
-    );
-    expect(screen.getByText("alpha")).toBeInTheDocument();
-    expect(screen.getByText("beta")).toBeInTheDocument();
-    expect(screen.getByText("Showing 2 of 3")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
-    expect(onPageChange).toHaveBeenCalledWith(2);
-    // The caller hands over page 2: it is shown under page 1.
-    rerender(<DataTable {...props} rows={ROWS.slice(2)} serverPagination={pager(2)} />);
-    expect(screen.getByText("alpha")).toBeInTheDocument();
-    expect(screen.getByText("gamma")).toBeInTheDocument();
-    expect(screen.queryByText(/^Showing/)).toBeNull();
-  });
-
-  test("controlled search: forwards typing and resets the server page to 1", () => {
-    const onChange = vi.fn();
-    const onPageChange = vi.fn();
-    render(
-      <DataTable
-        rows={ROWS}
-        columns={COLS}
-        rowKey={(r) => r.id}
-        search={{ placeholder: "search", value: "", onChange }}
-        serverPagination={{
-          page: 3,
-          pageSize: 10,
-          total: 100,
-          onPageChange,
-          onPageSizeChange: vi.fn(),
-        }}
-        emptyMessage="none"
-      />,
-    );
-    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "q" } });
-    expect(onChange).toHaveBeenCalledWith("q");
-    expect(onPageChange).toHaveBeenCalledWith(1);
-  });
-
   test("clicking an expandable row reveals + hides its detail", () => {
     render(
       <DataTable
@@ -417,23 +356,22 @@ describe("DataTable", () => {
       ariaSelectRow: (r: Row) => `row ${r.name}`,
       renderBulkActions: () => <span>bulk</span>,
     };
-    // pageSize 2 over 3 rows → page 1 holds alpha + beta; gamma is on page 2.
+    // 150 rows: the first 100 render, the other 50 are beyond them.
     render(
       <DataTable
-        rows={ROWS}
+        rows={named(150)}
         columns={COLS}
         rowKey={(r) => r.id}
-        pageSize={2}
         selection={sel}
         emptyMessage="none"
       />,
     );
-    // Header checkbox selects only the current page (2 of 3).
+    // Header checkbox selects only the rows rendered (100 of 150).
     fireEvent.click(screen.getByRole("checkbox", { name: "all" }));
-    expect(screen.getByText("2 of 3 selected")).toBeInTheDocument();
-    // The escalation banner offers selecting all 3; clicking it selects them all.
-    fireEvent.click(screen.getByRole("button", { name: /select all 3/i }));
-    expect(screen.getByText("3 of 3 selected")).toBeInTheDocument();
+    expect(screen.getByText("100 of 150 selected")).toBeInTheDocument();
+    // The escalation banner offers selecting all 150; clicking it selects them all.
+    fireEvent.click(screen.getByRole("button", { name: /select all 150/i }));
+    expect(screen.getByText("150 of 150 selected")).toBeInTheDocument();
   });
   test("rowFooter renders a full-width row under a row, and isRowClickable gates the click", () => {
     const onRowClick = vi.fn();

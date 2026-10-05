@@ -176,7 +176,6 @@ These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) an
 
 | Setting | Default | Effect | Stored in |
 | --- | --- | --- | --- |
-| **Rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | browser `localStorage` (`coffer.pageSize`) |
 | **Open files with** | System default | The app or command Coffer opens managed files with. | browser `localStorage` (`coffer.preferredEditor`) |
 | **Experimental features** (Settings → Features) | off | See [Experimental features](#experimental-features). | `daemon-config.json` |
 

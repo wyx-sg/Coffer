@@ -11,7 +11,7 @@ The daemon serves the web UI from its own loopback origin (spec daemon "Serve
 the built web UI from the daemon's own origin"), so its port is part of a URL a
 person uses: a bookmark, a typed address, a restored tab. The port is also the
 browser's storage key: `localStorage` is keyed by origin, so the UI language,
-sidebar state, page size and preferred editor all belong to
+sidebar state and preferred editor all belong to
 `http://127.0.0.1:<port>`.
 
 The daemon used to take the first free port in 8000–8009. When 8000 was busy —

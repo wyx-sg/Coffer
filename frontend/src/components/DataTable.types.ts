@@ -36,31 +36,24 @@ export interface TableSelection<T> {
   ariaSelectAll: string;
   ariaSelectRow: (row: T) => string;
   /** Action buttons rendered in the bulk bar (it reads "N of M selected" and ends in Clear
-   * itself) while ≥1 row is selected.
-   * `allMatching` is true when the user escalated to "select all" on a
-   * server-paginated table: `selectedRows` then holds only the loaded page, so
-   * the action should target the full matching set via its own API + filters. */
-  renderBulkActions: (args: {
-    selectedRows: T[];
-    clear: () => void;
-    allMatching: boolean;
-  }) => ReactNode;
+   * itself) while ≥1 row is selected. */
+  renderBulkActions: (args: { selectedRows: T[]; clear: () => void }) => ReactNode;
 }
 
 /** Loading-state contract for DataTable. */
 interface ListLoading {
-  /** While true, `pageSize`-capped skeleton rows/cards stand in for the data
+  /** While true, a few skeleton rows stand in for the data
    *  (never an empty surface). Omit to keep the plain "render what you have"
    *  behaviour. */
   isLoading?: boolean;
 }
 
-/** Skeleton placeholders never exceed this many, whatever the page size: a
- *  pulsing wall of 100 rows reads as a fault, not as loading. */
-const MAX_SKELETON_ROWS = 5;
+/** How many skeleton rows stand in for the data while it loads: a pulsing wall of
+ *  100 rows reads as a fault, not as loading. */
+const SKELETON_ROWS = 5;
 
-export function skeletonCount(pageSize: number): number {
-  return Math.max(1, Math.min(MAX_SKELETON_ROWS, pageSize));
+export function skeletonCount(): number {
+  return SKELETON_ROWS;
 }
 
 /** A list that grows by cursor (`useInfiniteList`): the caller passes every row
@@ -78,22 +71,12 @@ interface InfiniteRows {
   countLabel?: (loaded: number, total?: number) => string;
 }
 
-/** Server-driven pagination: the caller passes one page of `rows` and owns the
- * page/pageSize state. When set, client-side search/filter/slice are skipped. */
-export interface ServerPagination {
-  page: number;
-  pageSize: number;
-  total: number;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (size: number) => void;
-}
-
 export interface DataTableProps<T> extends ListLoading {
   rows: T[];
   columns: Column<T>[];
   rowKey: (row: T) => string;
-  // Search box: `accessor` drives the client-side filter (omit in server mode);
-  // `value`/`onChange` make it a controlled input that searches the server.
+  // Search box: `accessor` drives the client-side filter;
+  // `value`/`onChange` make it a controlled input.
   search?: {
     accessor?: (row: T) => string;
     placeholder: string;
@@ -112,10 +95,6 @@ export interface DataTableProps<T> extends ListLoading {
   selection?: TableSelection<T>;
   /** Rows returning false get no checkbox + are excluded from bulk (default: all). */
   isSelectable?: (row: T) => boolean;
-  /** How many rows show at first and each "Load N more" adds (default: Settings). */
-  pageSize?: number;
-  /** When set, page on demand against the server instead of slicing in memory. */
-  serverPagination?: ServerPagination;
   infinite?: InfiniteRows;
   /** Fixed table layout: columns take the widths their `className` sets (e.g.
    *  `w-[36%]`) and the rest share what is left, so no cell stretches the table.

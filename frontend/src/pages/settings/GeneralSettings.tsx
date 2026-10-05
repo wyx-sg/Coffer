@@ -5,8 +5,8 @@
 // each a segmented choice applied at once), Speech-to-text (the connection and
 // model that transcribe voice; spec internal-engine "Show the speech-to-text
 // pair in Settings › General", built by its own work item and mounted unchanged
-// here), and Tables and files (the default rows per page every list table seeds
-// from, and the editor Coffer opens managed files with). Everything saves as it
+// here), and Tables and files (the editor Coffer opens managed files with, and the
+// terminal and hand-off agent). Everything saves as it
 // changes; there is no Save button. (The experimental features are switched on
 // the dev-only Features tab, not here.)
 //
@@ -37,14 +37,6 @@ import {
   SettingsTabHeader,
 } from "@/components/settings/SettingsLayout";
 import { Segmented } from "@/components/ui/segmented";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { PAGE_SIZE_OPTIONS, useDefaultPageSize, useSetDefaultPageSize } from "@/lib/preferences";
 import { useSetThemePreference, useThemePreference, type ThemePreference } from "@/lib/theme";
 import { EngineSettings } from "./EngineSettings";
 
@@ -60,8 +52,6 @@ type Language = "en" | "zh";
 
 export function GeneralSettings() {
   const { t, i18n } = useTranslation();
-  const pageSize = useDefaultPageSize();
-  const setPageSize = useSetDefaultPageSize();
   const theme = useThemePreference();
   const setTheme = useSetThemePreference();
   const language: Language = i18n.language?.startsWith("zh") ? "zh" : "en";
@@ -101,23 +91,6 @@ export function GeneralSettings() {
         <EngineSettings />
 
         <SettingsSection title={t("settings.general.tablesAndFiles")}>
-          <SettingRow
-            label={t("settings.general.pageSize")}
-            description={t("settings.general.pageSizeHelp")}
-          >
-            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-              <SelectTrigger className="w-24" aria-label={t("settings.general.pageSize")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </SettingRow>
           <SettingRow
             label={t("settings.general.preferredEditor")}
             description={t("settings.general.preferredEditorHelp")}

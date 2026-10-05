@@ -135,7 +135,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **解决办法。** 安装或更新 git。界面上的**复制提示词**（或命令打印的提示词）把这件事交给你的智能体，由它选择适合这台机器的做法。然后点**重新检查**：git 就绪后，Coffer 会重启守护进程并正常打开。在终端里，`coffer daemon restart` 效果相同。
 
-### 界面丢了语言、每页条数或侧边栏状态 {#the-ui-lost-its-language-page-size-or-sidebar-state}
+### 界面丢了语言或侧边栏状态 {#the-ui-lost-its-language-or-sidebar-state}
 
 **原因。** 浏览器按 origin 保存这些偏好，而 origin 包含端口。守护进程现在的端口和以前不同，所以浏览器把它当成了另一个网站。
 

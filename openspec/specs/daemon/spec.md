@@ -246,7 +246,7 @@ somebody a running daemon while a missed one costs only a port the next start re
 The daemon's listening port MUST be **fixed by default and settable**, so a browser bookmark to
 Coffer's UI keeps working across restarts. With nothing configured the daemon MUST bind exactly
 `38470` and MUST NOT scan for an alternative; a drifting origin is not merely a broken bookmark,
-because browser `localStorage` is keyed by origin, so the UI language, sidebar state, page size and
+because browser `localStorage` is keyed by origin, so the UI language, sidebar state and
 preferred editor silently reset when the port moves and nothing connects the two events for the
 user.
 
