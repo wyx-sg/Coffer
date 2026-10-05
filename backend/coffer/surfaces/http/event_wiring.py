@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from coffer.application.attention import AttentionService
+from coffer.application.attention import AttentionReport, AttentionService
 from coffer.application.events.attention_watch import AttentionWatcher
 from coffer.application.events.broker import DEFAULT_BUFFER_SIZE, EventBroker
 from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
@@ -63,8 +63,15 @@ async def start_attention_watch(
     shutdown cancels."""
     # A key rejected in a real call changes the list: recompute at once.
     auth_monitor.on_change = events.watcher.nudge
-    await events.watcher.prime(attention.report)
-    return spawn_restarting(lambda: events.watcher.serve(attention.report), name="attention-watch")
+    # A nudge means the kept report may be out of date; the watcher's own
+    # recompute always asks the sources and leaves its answer for every reader.
+    events.watcher.on_nudge = attention.invalidate
+
+    async def fresh() -> AttentionReport:
+        return await attention.report(fresh=True)
+
+    await events.watcher.prime(fresh)
+    return spawn_restarting(lambda: events.watcher.serve(fresh), name="attention-watch")
 
 
 __all__ = ["BUFFER_SIZE", "EventStream", "build_event_stream", "start_attention_watch"]

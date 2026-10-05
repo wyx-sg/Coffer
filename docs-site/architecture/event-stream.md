@@ -21,6 +21,8 @@ Every write to a resource — whether it came from the web UI, an agent's MCP ca
 
 The one thing that is not a resource write is the "needs you" list on the Overview page. It is computed on demand from each kind's own signals — a server whose test failed, an agent that is not connected, a sync stopped on a conflict — and nothing records the moment it changes. So the daemon watches it: after resource writes, after each reconcile pass and on a slow timer it recomputes a fingerprint of the list, and announces an `attention` change only when the fingerprint moves. The fingerprint covers which items there are and how severe, not their wording, so rewording a message does not wake every page.
 
+The list is computed once for every reader. The daemon keeps the watcher's last answer and hands it to the Overview, the sidebar and the menu bar for up to the watcher's period. It drops that answer the moment something may have changed the list: a resource write or reconcile pass (the watcher's own nudge), an ignore, or any request other than a read, which covers actions that are not resource writes, such as approving a secret request. A read after an action therefore never sees the list from before it. The desktop window's menu-bar count follows the change feed rather than polling; only while the window is closed does the shell read the list itself.
+
 ## Numbering, replay and resync
 
 Every envelope gets the next number in a sequence that starts at 1 each time the daemon starts. The daemon keeps the most recent envelopes — about a thousand — in memory.

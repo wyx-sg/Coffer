@@ -62,11 +62,15 @@ class AttentionWatcher:
         self._period = period_seconds
         self._wake = asyncio.Event()
         self._last: Hashable | None = None
+        #: Called on every nudge, so whoever keeps the last report drops it at once.
+        self.on_nudge: Callable[[], None] | None = None
 
     # --- nudges (sync, never block) ---------------------------------------------
 
     def nudge(self) -> None:
         """Recompute soon."""
+        if self.on_nudge is not None:
+            self.on_nudge()
         self._wake.set()
 
     def on_changed(self, changed: Changed) -> None:

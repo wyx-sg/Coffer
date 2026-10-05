@@ -21,6 +21,7 @@ from collections.abc import Callable, Sequence
 
 from coffer.application.attention import AttentionService, AttentionSource, IgnoreStore
 from coffer.application.audit_service import AuditService
+from coffer.application.events.attention_watch import DEFAULT_PERIOD_SECONDS
 from coffer.application.reconcile.attention_source import DriftAttentionSource
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn_restarting
@@ -71,6 +72,9 @@ def wire_attention(
         feature_enabled=feature_enabled,
         ignores=ignores,
         audit=audit,
+        # The watcher recomputes on this period and after every write, so a kept
+        # report is never older than the list a poll would have read.
+        reuse_seconds=DEFAULT_PERIOD_SECONDS,
     )
     set_attention_service(service)
     return service
