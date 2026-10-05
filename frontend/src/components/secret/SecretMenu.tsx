@@ -4,7 +4,7 @@
 // and Replace value dialogs it opens.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, KeyRound } from "lucide-react";
+import { Check, KeyRound, Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -58,11 +58,11 @@ export function SecretMenu(props: Props) {
           {children}
         </PopoverTrigger>
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] min-w-[240px] p-1.5 text-text"
+          className="flex max-h-[min(420px,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-[240px] flex-col p-1.5 text-text"
           aria-label={t("secretField.menu")}
         >
           {pendingLabel ? (
-            <div className="mb-1 flex flex-col gap-1 border-b border-border-subtle px-1 pb-2">
+            <div className="mb-1 flex shrink-0 flex-col gap-1 border-b border-border-subtle px-1 pb-2">
               <label htmlFor="secret-menu-label" className="text-xs text-text-muted">
                 {t("secretField.pendingLabel")}
               </label>
@@ -75,22 +75,29 @@ export function SecretMenu(props: Props) {
               />
             </div>
           ) : null}
-          <input
-            autoFocus
-            value={filter}
-            placeholder={t("secretField.filter")}
-            aria-label={t("secretField.filter")}
-            onChange={(e) => setFilter(e.target.value)}
-            className="mb-0.5 h-7 w-full border-b border-border-subtle bg-transparent px-2 text-xs text-text caret-accent outline-none placeholder:text-text-subtle"
-          />
-          <div role="listbox" aria-label={t("secretField.list")} className="flex flex-col gap-0.5">
+          <div className="mb-0.5 flex shrink-0 items-center gap-2 border-b border-border-subtle px-2">
+            <Search className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
+            <input
+              autoFocus
+              value={filter}
+              placeholder={t("secretField.filter")}
+              aria-label={t("secretField.filter")}
+              onChange={(e) => setFilter(e.target.value)}
+              className="h-8 w-full bg-transparent text-xs text-text caret-accent outline-none placeholder:text-text-subtle"
+            />
+          </div>
+          <div
+            role="listbox"
+            aria-label={t("secretField.list")}
+            className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+          >
             {shown.map((o) => (
               <button
                 key={o.name}
                 type="button"
                 role="option"
                 aria-selected={o.name === selected}
-                className={cn(ITEM, o.name === selected && "bg-surface-selected")}
+                className={cn(ITEM, "shrink-0", o.name === selected && "bg-surface-selected")}
                 onClick={() => {
                   onSelectStored(o.name);
                   close();
@@ -115,7 +122,7 @@ export function SecretMenu(props: Props) {
               <p className="px-2 py-1.5 text-xs text-text-subtle">{t("secretField.noMatch")}</p>
             ) : null}
           </div>
-          <div className="mt-1 flex flex-col gap-0.5 border-t border-border-subtle pt-1">
+          <div className="mt-1 flex shrink-0 flex-col gap-0.5 border-t border-border-subtle pt-1">
             <button
               type="button"
               className={ITEM}
