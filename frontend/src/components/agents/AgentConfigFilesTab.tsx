@@ -100,7 +100,14 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
   } else if (files.data.length === 0) {
     list = <p className="px-2 text-sm text-text-muted">{t("agents.config.none")}</p>;
   } else {
-    list = <ConfigFileTree files={files.data} selected={selected} onSelect={select} />;
+    list = (
+      <ConfigFileTree
+        files={files.data}
+        agentName={agentName}
+        selected={selected}
+        onSelect={select}
+      />
+    );
   }
 
   return (

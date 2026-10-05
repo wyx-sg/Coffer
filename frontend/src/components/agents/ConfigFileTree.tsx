@@ -32,6 +32,18 @@ export function selectionFromParam(value: string | null): ConfigSelection | null
   return slash < 0 ? { key: value } : { key: value.slice(0, slash), child: value.slice(slash + 1) };
 }
 
+// Keys with a description under `agents.config.desc.<key>`, shown as the row's
+// tooltip. Listing them keeps a new key from rendering a raw i18n string.
+const DESCRIBED_KEYS = new Set([
+  "settings",
+  "settings_local",
+  "global",
+  "instructions",
+  "subagents",
+  "config",
+  "hooks",
+]);
+
 function groupByFolder(files: ConfigFileInfo[]): [string, ConfigFileInfo[]][] {
   const groups = new Map<string, ConfigFileInfo[]>();
   for (const f of files) groups.set(f.folder_path, [...(groups.get(f.folder_path) ?? []), f]);
@@ -53,16 +65,22 @@ export function openableSelections(files: ConfigFileInfo[]): ConfigSelection[] {
 
 export function ConfigFileTree({
   files,
+  agentName,
   selected,
   onSelect,
 }: {
   files: ConfigFileInfo[];
+  agentName: string;
   selected: ConfigSelection | null;
   onSelect: (selection: ConfigSelection) => void;
 }) {
   const { t } = useTranslation();
   // Folders the person folded: the config directory and directory entries.
   const [folded, setFolded] = useState<Set<string>>(new Set());
+  const describe = (f: ConfigFileInfo) =>
+    DESCRIBED_KEYS.has(f.key)
+      ? `${f.display_name} — ${t(`agents.config.desc.${f.key}`, { agent: agentName })}`
+      : f.display_name;
 
   const rows: FileTreeRow[] = [];
   for (const [folder, entries] of groupByFolder(files)) {
@@ -96,7 +114,7 @@ export function ConfigFileTree({
           leaf: children.length === 0,
           missing: !f.exists,
           note: t("agents.config.notCreated"),
-          title: f.display_name,
+          title: describe(f),
         });
         if (open) {
           for (const c of children) {
@@ -120,7 +138,7 @@ export function ConfigFileTree({
         selected: selected?.key === f.key && !selected.child,
         missing: !f.exists,
         note: t("agents.config.notCreated"),
-        title: f.display_name,
+        title: describe(f),
       });
     }
   }
