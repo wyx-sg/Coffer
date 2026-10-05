@@ -1040,7 +1040,8 @@ At daemon start every stored or cited ref that is not `secret/<32 hex>` MUST be
 moved to one, except a proxy token: a standalone `secret/<name>` keeps its old
 name as its label; any other ref a resource cites becomes `secret/<uuid4 hex>`
 with origin `dialog` and `created_for` set to its citer's uid when exactly one resource
-cites it (a standalone secret gets origin `page`).
+cites it (a standalone secret gets origin `page`). A stored ref nothing cites
+is moved too, labelled with its old ref, with origin `page`.
 A move writes the value at the new ref and reads it back, carries this
 machine's binding, creation time, last-used stamp and the notes, repoints every
 citing resource config through the resource service and the sync remote's push
