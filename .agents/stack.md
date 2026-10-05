@@ -136,6 +136,8 @@ Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md);
     `presence_macos`, `presence_grant`, `master_key`, `approval_watch`;
   - **updates:** `updater`, `update_state`, `update_relaunch`;
   - **sync alerts:** `sync_watch`, `sync_alert`, `sync_presentation`;
+  - `traffic_lights` (puts the macOS lights back on the title strip's centre
+    line whenever AppKit lays the title bar out again);
   - `logging` (the shell's own records, appended to `~/.coffer/logs/daemon.log`,
     so a failed tray restart does not fail in silence).
 - Pure decision functions — the resolution chain, the rate limit, `daemon.json`
