@@ -312,21 +312,58 @@ async def test_a_name_clash_with_an_unrelated_file_falls_back_to_the_uid() -> No
 @pytest.mark.acceptance(
     spec="resource-framework", scenario="reach is kept on this machine, not in the resource's file"
 )
-async def test_scope_is_reach_and_a_record_less_resource_gets_the_kind_default() -> None:
+async def test_scope_is_reach_and_a_record_less_resource_reads_as_on_for_every_agent() -> None:
     kinds = _kinds()
     kinds["widget"] = Kind(
         name="widget",
         display_name="Widget",
         config_schema=WidgetConfig,
         supports_scope=True,
-        default_scope=lambda _c: Scope(agents=["agent-1"]),
     )
     svc, _repo = _service(kinds)
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
-    assert r.scope == Scope(agents=["agent-1"])
+    assert r.scope is None
+    scoped = await svc.update_scope(r.uid, Scope(agents=["agent-1"]), actor="user")
+    assert scoped.scope == Scope(agents=["agent-1"])
     (local_root() / "reach.json").unlink()
     again = await svc.get(r.uid)
-    assert again.enabled is True and again.scope == Scope(agents=["agent-1"])
+    assert again.enabled is True and again.scope is None
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="a reach record left with no agent is switched off at startup",
+)
+async def test_a_record_left_with_no_agent_is_switched_off_by_the_startup_step() -> None:
+    from coffer.infrastructure.vault.reach_store import ReachStore
+
+    svc, _repo = _service(_kinds())
+    on = await svc.register("widget", "on", {"colour": "blue"}, actor="user")
+    empty_on = await svc.register("widget", "empty-on", {"colour": "blue"}, actor="user")
+    empty_off = await svc.register("widget", "empty-off", {"colour": "blue"}, actor="user")
+    chosen = await svc.register("widget", "chosen", {"colour": "blue"}, actor="user")
+    (local_root() / "reach.json").write_text(
+        json.dumps(
+            {
+                on.uid: {"enabled": True, "agents": None, "projects": None},
+                empty_on.uid: {"enabled": True, "agents": [], "projects": None},
+                empty_off.uid: {"enabled": False, "agents": [], "projects": None},
+                chosen.uid: {"enabled": True, "agents": ["agent-1"], "projects": None},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert ReachStore().switch_off_empty_scopes() == 2
+    # Idempotent: a second run finds nothing left to rewrite.
+    assert ReachStore().switch_off_empty_scopes() == 0
+
+    for uid in (empty_on.uid, empty_off.uid):
+        got = await svc.get(uid)
+        assert got.enabled is False and got.scope is None
+    assert (await svc.get(on.uid)).enabled is True
+    kept = await svc.get(chosen.uid)
+    assert kept.enabled is True and kept.scope == Scope(agents=["agent-1"])
 
 
 async def test_a_stale_off_record_for_a_kind_with_no_switch_reads_as_on() -> None:

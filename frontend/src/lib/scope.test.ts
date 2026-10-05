@@ -54,12 +54,8 @@ describe("isDormantHere", () => {
     expect(isDormantHere({ agents: [CLAUDE] }, here)).toBe(false);
   });
 
-  test("a scope naming nobody registered here is dormant", () => {
+  test("a scope naming nobody registered here is inactive here", () => {
     expect(isDormantHere({ agents: [GHOST] }, here)).toBe(true);
-  });
-
-  test("an empty list is dormant even before agents have loaded", () => {
-    expect(isDormantHere({ agents: [] }, [])).toBe(true);
   });
 
   test("an agent list still in flight yields no verdict", () => {

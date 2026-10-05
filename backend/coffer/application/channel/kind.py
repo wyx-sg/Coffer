@@ -87,11 +87,8 @@ def _validate_default_agent(
     always had. A NON-EMPTY one rejects a default outside it here rather than
     letting the channel start and then refuse every turn.
 
-    An empty scope is deliberately NOT a rejection: it is the vault-wide
-    meaning of dormant — this channel is off — and "off" must not also mean
-    "frozen". A channel the owner switched off still has to accept a corrected
-    bot token or app secret ref, so an edit to a dormant channel passes through
-    untouched and the row simply stays dormant.
+    A switched-off channel stays editable: it still has to accept a corrected
+    bot token or app secret ref, and nothing here looks at ``enabled``.
 
     A channel with NO default agent is likewise not a rejection: it is bound to
     nobody, which the runtime reads as "do not start", so there is nothing here
@@ -105,11 +102,10 @@ def _validate_default_agent(
             f"default_agent '{default_agent}' is not a registered agent "
             f"(known: {', '.join(sorted(agent_names.values()))})"
         )
-    routable = scope.agents if scope is not None else None
-    if routable and not is_active(scope, default_agent):
+    if scope is not None and scope.agents and not is_active(scope, default_agent):
         raise ValueError(
             f"default_agent '{_label(default_agent, agent_names)}' is outside this "
-            f"channel's scope (may drive: {_scope_reads_as(routable, agent_names)})"
+            f"channel's scope (may drive: {_scope_reads_as(scope.agents, agent_names)})"
         )
 
 
@@ -133,9 +129,9 @@ def _make_scope_validator(
     every runtime — including the ones a test builds. ``agent_names`` is
     consulted only after the refusal is already decided, to write it in labels.
 
-    An unrestricted scope (every agent) and an empty one (dormant — the channel
-    is off, the universal meaning of an empty allow-list) are always allowed.
-    Only a non-empty narrowing has to name the default agent. The message names
+    An unrestricted scope (every agent) is always allowed; an empty one never
+    reaches here (``validate_scope`` refuses it first). Only a narrowing has to
+    name the default agent. The message names
     both sides so the owner can see the two ways out: widen the scope, or
     change the default agent first.
     """
@@ -322,10 +318,7 @@ def make_channel_kind(
         # drive**. Two enforcement seams: `/new <agent>` lists and accepts
         # only agents inside the scope, and ``default_agent`` is held inside it
         # on every write path — config (``on_update_config``) and scope
-        # (``validate_scope_for``) alike. An empty allow-list is dormant: the
-        # channel routes to no agent, so the runtime does not start its adapter
-        # at all rather than letting it accept turns it would have to refuse one
-        # by one. Dormant is off, never frozen — its config stays editable, so
-        # neither validator judges an empty allow-list.
+        # (``validate_scope_for``) alike. A channel that should drive nothing is
+        # switched off, not scoped to nobody; an empty allow-list is refused.
         supports_scope=True,
     )

@@ -37,7 +37,6 @@ function Reach({ group }: { group: GroupDraft }) {
   if (mode === "disabled") return <>{t("scope.off")}</>;
   if (mode === "everywhere") return <>{t("scope.everywhere")}</>;
   const chosen = chosenAgents(scope, pickableAgents(agents));
-  if (chosen.length === 0) return <>{t("scope.noneSelected")}</>;
   return (
     <span className="inline-flex gap-[3px]">
       {chosen.map((a) => (
@@ -127,9 +126,7 @@ export function ReviewGroupPanel({ group, tools, skipped, selected, onSelect }: 
         </Row>
       </div>
       <section aria-label={t("customTools.list.toolCount", { count: tools.length })}>
-        <span className={LABEL}>
-          {t("customTools.list.toolCount", { count: tools.length })}
-        </span>
+        <span className={LABEL}>{t("customTools.list.toolCount", { count: tools.length })}</span>
         <div className="mt-1.5 flex flex-col gap-0.5">
           {tools.map((op) => (
             <ToolRow

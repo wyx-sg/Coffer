@@ -775,8 +775,8 @@ export interface components {
          * @description PUT .../scope request body: which agents this resource is active for.
          *
          *     ``scope: null`` clears back to unscoped — every agent. A list restricts to
-         *     exactly those agents, and an empty list matches nothing, so
-         *     ``{"agents": []}`` is dormant.
+         *     exactly those agents and must name at least one: ``{"agents": []}`` is
+         *     refused with 422 ``SCOPE_INVALID`` (switch the resource off to reach nobody).
          *
          *     Scope is set per machine and does not sync: every machine holding this
          *     vault decides for itself which of its agents a resource activates for.
@@ -861,7 +861,7 @@ export interface components {
          * ScopeIn
          * @description A resource's activation scope as a request writes it: one allow-list of
          *     agents (ADR per-agent-resource-scope). ``null`` or absent means
-         *     unrestricted; ``[]`` matches nothing, i.e. dormant.
+         *     unrestricted; an empty list is refused (switch the resource off instead).
          *
          *     Extra keys are REFUSED rather than ignored, which is the unusual choice and
          *     the deliberate one. This model used to carry a second axis, ``machines``,
@@ -884,7 +884,7 @@ export interface components {
         /**
          * ScopeOut
          * @description A resource's activation scope as a response carries it. ``agents`` is
-         *     always present: ``null`` means unrestricted, ``[]`` dormant.
+         *     always present: ``null`` means unrestricted; never an empty list.
          */
         ScopeOut: {
             /**

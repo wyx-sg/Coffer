@@ -386,18 +386,19 @@ by hand.
 
 ### Requirement: Scope names agents only
 `scope` MUST name agents, by uid, and nothing else — `{ agents: [...] }`.
-`null` means every agent, a list restricts to it, `[]` matches nothing and is
-dormant, and an unknown agent uid is legal and simply never matches. There MUST
+`null` means every agent, a non-empty list restricts to it, an empty list is
+refused (a resource reaches nobody only by being off), and an unknown agent uid
+is legal and simply never matches. There MUST
 be no machine axis: reach is machine-local (see "Keep reach machine-local"), so a
 machine already names the resources it activates by *holding* that scope, and
 machine ids inside the scope would record the same fact a second time with two
 ways to disagree.
 
 #### Scenario: a scope names agents and nothing else
-- **GIVEN** scopes of `null`, a list of agent uids, an empty list, and a list naming an agent that does not exist
+- **GIVEN** scopes of `null`, a list of agent uids, and a list naming an agent that does not exist
 - **WHEN** each is matched against the registered agents
-- **THEN** `null` matches every agent, the list matches exactly its agents, the empty list matches none, and the unknown uid matches nothing without being refused
-- **AND** a scope that carries a machine axis is refused
+- **THEN** `null` matches every agent, the list matches exactly its agents, and the unknown uid matches nothing without being refused
+- **AND** a scope that carries a machine axis is refused, and so is an empty list
 
 ### Requirement: Run a round as pull, merge, guard, check out, push
 A round MUST be these steps **in this order**:

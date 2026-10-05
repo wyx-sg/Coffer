@@ -265,8 +265,8 @@ class ChannelBinding:
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here
     # asks about a key. It names the agents this channel may drive; unrestricted
     # is the default and what every channel carried before scope existed. A
-    # channel whose scope is empty is never bound at all: the runtime treats it
-    # as dormant. So a binding that exists has already passed that gate.
+    # channel whose scope excludes its default agent is never bound at all. So a
+    # binding that exists has already passed that gate.
     agent_scope: Scope | None = None
     # The directories `/dir` may switch into (spec channels "Choose the working
     # directory from chat"), from the channel config; empty admits none.

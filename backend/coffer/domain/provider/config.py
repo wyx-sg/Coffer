@@ -18,10 +18,7 @@ is no longer offered and only read from a stored file); it drives model
 introspection and whether a key is needed. It does NOT fix which agent the
 connection projects into: that is the framework-level per-agent **scope** on the
 resource row (ADR per-agent-resource-scope), which the user may set to anything (e.g. an
-openai-compatible gateway routed to Claude Code). The wire only decides whether
-a newly created connection starts DORMANT (``starts_dormant``) — it cannot
-supply a starting agent LIST any more, because a scope holds agent uids and no
-pure function of this config knows one. Which connection an agent runs on is
+openai-compatible gateway routed to Claude Code). Which connection an agent runs on is
 NOT recorded here: it is ``AgentConfig.connection_uid`` on the agent.
 ``transcribe_default`` (global, ≤1) marks the connection Coffer transcribes
 speech with.
@@ -169,26 +166,6 @@ def is_loopback_url(url: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
-
-
-def starts_dormant(protocol: str) -> bool:
-    """Whether a connection on ``protocol`` is CREATED scoped to no agent.
-
-    The whole of what the wire still says about scope, and all it can say. A
-    scope names agents by uid (ADR identity-is-the-uid-inside-the-file), and
-    a uid is not derivable from this config — so the old table that handed each
-    wire a starting agent LIST is gone, along with the ``claude_code`` /
-    ``codex`` name strings this module had to spell out to build it. What
-    survives is the one case where the framework's default would be wrong
-    rather than merely wide: a retired ``ollama`` connection carries no key,
-    so a scope of "every agent" would advertise a reach it can never have. Every other wire starts
-    unscoped, which is what "the widest set" now means — and, unlike the
-    explicit list it replaces, it keeps covering an agent registered later.
-
-    An unrecognised wire is treated as credentialed, the same answer
-    ``unknown`` gets.
-    """
-    return protocol == Protocol.OLLAMA.value
 
 
 class ProviderConfig(BaseModel):

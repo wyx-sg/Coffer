@@ -179,6 +179,19 @@ describe("Apply writes; nothing is written before it", () => {
     expect(written["u-skill-c"]).toEqual({ agents: [CLAUDE, CODEX] });
   });
 
+  test("a row left with no agent is switched off, said in the preview, scope kept", async () => {
+    mount();
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    fireEvent.click(box("claude")); // → unticked for all
+    expect(screen.getByTestId("reach-summary")).toHaveTextContent("2 left with no agent turn off");
+    apply();
+    await waitFor(() => expect(disable).toHaveBeenCalledTimes(2));
+    expect(disable.mock.calls.map((c) => c[0]).sort()).toEqual(["u-skill-b", "u-skill-c"]);
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put).toHaveBeenCalledWith("u-skill-a", { agents: [CODEX] });
+  });
+
   test("Cancel drops every staged box and writes nothing", () => {
     mount();
     openPanel();

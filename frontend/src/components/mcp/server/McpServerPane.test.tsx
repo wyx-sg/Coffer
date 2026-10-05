@@ -633,7 +633,7 @@ describe("McpServerPane", () => {
 
   test("with no agent to name, a failing server's sentence still reads", async () => {
     api.status = { status: "failing" };
-    renderPane({ ...SENTRY, scope: { agents: [] } } as unknown as ResourceOut);
+    renderPane({ ...SENTRY, scope: { agents: ["not-registered-here"] } } as unknown as ResourceOut);
     const callout = await screen.findByTestId("mcp-callout-failing");
     expect(callout).toHaveTextContent(/Agents can't call its 5 tools until it answers again/);
   });

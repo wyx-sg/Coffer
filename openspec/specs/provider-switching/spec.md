@@ -286,11 +286,12 @@ connection behind it. The operation writes no other agent's file and no other ag
 Reach is the framework's per-agent `scope`
 ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); there is no
 `compatible_agents` field in the config, in `ProviderCreate` or in `ProviderPatch`. A new connection
-is pre-filled from its wire through the kind's `default_scope` hook — unscoped for a credentialed
-wire (including `unknown`, so an inconclusive probe hides nothing and the user decides), which reaches
-every agent including one registered later; a stored `ollama` connection with no reach record reads as nothing (`scope = []`). Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`, which the
-connection's scope control calls). `scope = []` is dormant: the connection reaches no
-agent, so no agent resolves its key. The projection writer MUST be chosen by AGENT type, not by
+starts unscoped on every wire (including `unknown`, so an inconclusive probe hides nothing and the
+user decides), which reaches every agent including one registered later; the kind has no
+start-up scope of its own. A stored `ollama` connection (a retired wire) already projects to no agent.
+Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`, which the
+connection's scope control calls); an empty list is refused, and a connection that should reach no
+agent is switched off, so no agent resolves its key. The projection writer MUST be chosen by AGENT type, not by
 protocol: a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape
 and one reaching `codex` writes Codex's `config.toml`, which is how an OpenAI-compatible gateway is
 routed to Claude Code. Coffer translates nothing between protocols.

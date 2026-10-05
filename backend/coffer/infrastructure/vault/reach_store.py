@@ -11,14 +11,14 @@ resource's file and never committed. It is one JSON object in
 
 ``agents: null`` is unrestricted. ``projects`` is reserved for the context's
 next axis and always written ``null``. A resource with **no record** reaches
-as registration would have made it: enabled, with its kind's starting scope
-(``Kind.default_scope``, unrestricted for every kind that supplies none) —
+as registration would have made it: enabled and unrestricted —
 which is what a resource that arrived from another machine, or a file a person
 wrote by hand, gets until someone narrows it here.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +27,8 @@ from typing import Any
 from coffer.domain.scope import Scope
 from coffer.infrastructure.vault.home import local_root
 from coffer.infrastructure.vault.json_store import JsonStore
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -88,5 +90,40 @@ class ReachStore:
 
         self._store.update(change)
 
+    def switch_off_empty_scopes(self) -> int:
+        """Rewrite every record left with no agent to ``enabled: false, agents: null``.
 
-__all__ = ["Reach", "ReachStore", "reach_path"]
+        ONE-TIME migration (change require-an-agent-while-on): an empty agent
+        list used to be a legal "dormant" reach and is now refused everywhere.
+        Such a record reached nobody, so it becomes off; the reach is unscoped
+        so turning it back on gives it to every agent. Idempotent: once rewritten
+        no record matches. Delete this method, and its call in the app
+        lifespan, in a later release once it has run.
+        """
+        changed = 0
+
+        def change(doc: dict[str, Any]) -> None:
+            nonlocal changed
+            for raw in doc.values():
+                if isinstance(raw, dict) and raw.get("agents") == []:
+                    raw["enabled"] = False
+                    raw["agents"] = None
+                    changed += 1
+
+        self._store.update(change)
+        return changed
+
+
+def switch_off_empty_scopes() -> None:
+    """Run :meth:`ReachStore.switch_off_empty_scopes` on this machine's record,
+    logging rather than raising (blocking; run it in a thread). ONE-TIME — delete
+    with the method."""
+    try:
+        changed = ReachStore().switch_off_empty_scopes()
+        if changed:
+            log.info("reach.empty_scope_switched_off count=%d", changed)
+    except Exception:
+        log.warning("reach.empty_scope_migration_failed", exc_info=True)
+
+
+__all__ = ["Reach", "ReachStore", "reach_path", "switch_off_empty_scopes"]

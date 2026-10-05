@@ -1063,7 +1063,7 @@ export interface components {
         /**
          * ScopeOut
          * @description A resource's activation scope as a response carries it. ``agents`` is
-         *     always present: ``null`` means unrestricted, ``[]`` dormant.
+         *     always present: ``null`` means unrestricted; never an empty list.
          */
         ScopeOut: {
             /**

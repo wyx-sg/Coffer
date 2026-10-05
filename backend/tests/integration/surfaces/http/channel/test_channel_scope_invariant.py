@@ -36,7 +36,6 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
-from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
@@ -182,22 +181,27 @@ async def test_a_scope_naming_the_agent_by_label_instead_is_refused(env: _Env) -
     assert r.json()["error"]["code"] == "SCOPE_INVALID"
 
 
-async def test_the_dormant_scope_is_accepted(env: _Env) -> None:
-    """``[]`` is the deliberate "off" switch, never a rejected narrowing."""
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="an empty agent list is refused for a channel",
+)
+async def test_an_empty_agent_list_is_refused(env: _Env) -> None:
+    """A channel that should drive nothing is switched off, not scoped to nobody."""
     r = await env.client.put(env.scope_url, json={"scope": {"agents": []}})
 
-    assert r.status_code == 200, r.text
-    assert r.json()["scope"] == {"agents": []}
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "SCOPE_INVALID"
+    assert (await env.svc.get(env.channel_uid)).scope is None
 
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="edit a dormant channel's configuration",
+    scenario="edit a switched-off channel's configuration",
 )
-async def test_a_dormant_channels_config_stays_editable(env: _Env) -> None:
+async def test_a_switched_off_channels_config_stays_editable(env: _Env) -> None:
     """The owner switched the channel off, then found its bot token was wrong.
     Off must not mean frozen."""
-    assert (await env.client.put(env.scope_url, json={"scope": {"agents": []}})).status_code == 200
+    await env.svc.set_enabled(env.channel_uid, False, actor="test")
 
     r = await env.client.patch(
         env.config_url,
@@ -212,37 +216,15 @@ async def test_a_dormant_channels_config_stays_editable(env: _Env) -> None:
 
     assert r.status_code == 200, r.text
     assert r.json()["config"]["bot_token_ref"] == "channel/tg/bot-v2"
-    # Still dormant — an edit is not a way to accidentally switch it back on.
-    assert (await env.svc.get(env.channel_uid)).scope == Scope(agents=[])
+    # Still off — an edit is not a way to accidentally switch it back on.
+    assert (await env.svc.get(env.channel_uid)).enabled is False
 
 
 async def test_widening_the_scope_back_works(env: _Env) -> None:
-    assert (await env.client.put(env.scope_url, json={"scope": {"agents": []}})).status_code == 200
+    chosen = {"agents": [env.uid_of("claude-code")]}
+    assert (await env.client.put(env.scope_url, json={"scope": chosen})).status_code == 200
 
     r = await env.client.put(env.scope_url, json={"scope": None})
 
     assert r.status_code == 200, r.text
     assert r.json()["scope"] is None
-
-
-async def test_the_config_path_still_rejects_a_default_agent_outside_the_scope(env: _Env) -> None:
-    """The other half of the invariant, unchanged: with a non-empty scope in
-    place, an edit cannot re-bind the channel to an agent outside it."""
-    assert (
-        await env.client.put(env.scope_url, json={"scope": {"agents": [env.uid_of("claude-code")]}})
-    ).status_code == 200
-
-    r = await env.client.patch(
-        env.config_url,
-        json={
-            "config": {
-                "channel_type": "telegram",
-                "bot_token_ref": "channel/tg/bot",
-                "default_agent": env.uid_of("codex"),
-            }
-        },
-    )
-
-    assert r.status_code == 422, r.text
-    assert r.json()["error"]["code"] == "CONFIG_INVALID"
-    assert "outside this channel's scope" in r.json()["error"]["message"]

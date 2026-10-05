@@ -91,8 +91,6 @@ function ReachMark({ resource, agents }: { resource: ResourceOut; agents: readon
   if (scoped === null)
     return <span className="text-xs text-text-muted">{t("agentBadge.allAgents")}</span>;
   const chosen = agents.filter((a) => scoped.includes(a.uid));
-  if (chosen.length === 0)
-    return <span className="text-xs text-text-muted">{t("scope.noneSelected")}</span>;
   return (
     <AgentBadgeGroup
       agents={chosen.map((a) => ({ type: a.type, name: a.display_name }))}

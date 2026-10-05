@@ -146,7 +146,7 @@ describe("each change writes at once", () => {
   });
 
   test("every tick is its own write, in order, with the whole list", async () => {
-    mount({ scope: only([]) });
+    mount({ scope: null });
     openPanel();
     tick("claude");
     tick("codex");
@@ -155,11 +155,25 @@ describe("each change writes at once", () => {
     expect(enable).not.toHaveBeenCalled();
   });
 
-  test("a switch to Chosen agents from All agents writes an empty (dormant) list", async () => {
+  test("a switch to Chosen agents with nothing ticked writes nothing until the first tick", async () => {
     mount({ scope: null });
     openPanel();
     fireEvent.click(choice(/chosen agents/i));
-    await waitFor(() => expect(put).toHaveBeenCalledWith(FS_UID, only([])));
+    expect(choice(/chosen agents/i)).toBeChecked();
+    expect(put).not.toHaveBeenCalled();
+    expect(disable).not.toHaveBeenCalled();
+    tick("claude");
+    await waitFor(() => expect(put).toHaveBeenCalledWith(FS_UID, only([CLAUDE])));
+  });
+
+  test("the last ticked agent cannot be unticked; the panel says to turn it off", async () => {
+    mount({ scope: only([CLAUDE]) });
+    openPanel();
+    expect(screen.getByRole("checkbox", { name: /claude/i })).toBeDisabled();
+    expect(screen.getByTestId("scope-keep-one")).toHaveTextContent(/turn it off/i);
+    tick("codex");
+    await waitFor(() => expect(put).toHaveBeenCalledWith(FS_UID, only([CLAUDE, CODEX])));
+    expect(screen.queryByTestId("scope-keep-one")).toBeNull();
   });
 
   test("the trigger shows what was just written before any refetch", async () => {
@@ -167,7 +181,7 @@ describe("each change writes at once", () => {
     openPanel();
     fireEvent.click(choice(/chosen agents/i));
     tick("codex");
-    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(trigger().querySelectorAll("[data-agent-mark]")).toHaveLength(1);
   });
 
@@ -183,7 +197,7 @@ describe("each change writes at once", () => {
 
 describe("the lists refresh once, when the panel closes", () => {
   test("no refetch while the popover is open", async () => {
-    mount({ scope: only([]) });
+    mount({ scope: null });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
     openPanel();
     tick("claude");

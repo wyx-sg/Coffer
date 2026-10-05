@@ -106,11 +106,18 @@ export function BulkReachActions({ rows, title, invalidate = [], onDone }: Props
     const agent = agents.find((a) => a.uid === detail);
     const delta = agent ? countAfter(rows, plan, uids, agent.uid) - countNow(rows, agent.uid) : 0;
     const head = t("scope.bulkChanges", { count: changed });
-    if (!agent || delta === 0) return head;
-    return `${head} · ${t(delta > 0 ? "scope.bulkGets" : "scope.bulkLoses", {
-      name: agent.name,
-      count: Math.abs(delta),
-    })}`;
+    const willOff = writes.filter((w) => !w.value.enabled).length;
+    const parts = [head];
+    if (agent && delta !== 0) {
+      parts.push(
+        t(delta > 0 ? "scope.bulkGets" : "scope.bulkLoses", {
+          name: agent.name,
+          count: Math.abs(delta),
+        }),
+      );
+    }
+    if (willOff > 0) parts.push(t("scope.bulkWillOff", { count: willOff }));
+    return parts.join(" · ");
   })();
 
   const subs: Record<ReachMode, string> = {

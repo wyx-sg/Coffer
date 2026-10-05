@@ -45,15 +45,11 @@ module, so the provider domain never imports the agent kind; the application
 layer hydrates them at the projection seam
 (`application/provider/targets.py`).
 
-The scope a new connection starts with comes from the kind's `default_scope`
-hook (`make_provider_kind().default_scope`, `application/provider/kind.py`),
-which reads the wire through `starts_dormant(protocol)`
-(`domain/provider/config.py`): a stored `ollama` connection with no reach record reads as `scope = []`,
-dormant, because the framework's unscoped default would advertise a reach a
-keyless connection can never have; every other wire, `unknown` included, starts
-unscoped, which reaches every agent and goes on covering one registered later.
-The hook cannot name agents itself — a scope holds agent uids, which no pure
-config function can derive (ADR resource-identity-is-an-immutable-uid).
+A new connection starts unscoped on every wire, `unknown` included, which
+reaches every agent and goes on covering one registered later. The kind has no
+start-up scope of its own and no dormant start: a stored `ollama` connection (a
+retired wire) already projects to no agent. A scope holds agent uids, which no
+pure config function can derive (ADR resource-identity-is-an-immutable-uid).
 
 `model_ids(modality=None)` is the narrowing seam: a chat picker asks for `TEXT`
 and can never be handed an embedding or image id, while an empty list keeps
@@ -240,7 +236,7 @@ All implementation MUST reuse these existing components; do not re-implement.
 |---|---|---|
 | `Kind` dataclass | `backend/coffer/domain/resource.py` | define the `provider` kind |
 | `Scope` | `backend/coffer/domain/scope.py` | the per-agent reach axis |
-| kind factory | `backend/coffer/application/provider/kind.py` | `make_provider_kind()` — config schema, secret-ref extractor, `supports_scope`, `default_scope` |
+| kind factory | `backend/coffer/application/provider/kind.py` | `make_provider_kind()` — config schema, secret-ref extractor, `supports_scope` |
 | composition root | `backend/coffer/surfaces/http/provider_wiring.py` | build the service, mount the routes, register the kind |
 
 ### One connection per agent

@@ -16,7 +16,7 @@ import { agentDisplayName } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import type { Scope } from "@/lib/hooks/useScope";
 
-/** The panel's amber line: a scope, or this resource, that reaches nobody. */
+/** The panel's amber line: a resource that reaches nobody on this machine. */
 export const WARNING_CLASS = "rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning";
 
 /** Which state the control reads as, and which one the panel will write. */
@@ -31,9 +31,7 @@ export interface ReachFields {
 /**
  * The state a resource is in. `enabled` beats scope — a switched-off resource
  * reaches nobody whatever its list says — and an enabled resource is either
- * unscoped (every agent) or restricted to a chosen set. An empty agent list is
- * still `restricted`: it names nobody, which is a different state from off,
- * with a different way back.
+ * unscoped (every agent) or restricted to a chosen set (never an empty one).
  */
 export function reachModeOf({ enabled, scope }: ReachFields): ReachMode {
   if (!enabled) return "disabled";
@@ -63,15 +61,11 @@ export function liveMode(mode: ReachMode | null, scope: Scope | null): ReachMode
  * count never appears on a button or a row ("1 of 2 agents" lives in the
  * popover footer only). `null` names no state — the bulk bar — so it names the
  * action instead: "Reach".
- *
- * An empty chosen list is reported as its own thing, never as "Off": the user
- * did not switch that resource off, its list currently names nobody, and those
- * are different states with different ways back.
  */
-export function reachLabel(t: TFunction, live: ReachMode | null, scope: Scope | null): string {
+export function reachLabel(t: TFunction, live: ReachMode | null): string {
   if (live === null) return t("scope.setReach");
   if (live !== "restricted") return reachModeName(t, live);
-  return (scope?.agents ?? []).length === 0 ? t("scope.noneSelected") : "";
+  return "";
 }
 
 /** One agent the pick-list can offer: what a tick WRITES (the uid), what it

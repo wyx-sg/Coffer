@@ -33,7 +33,7 @@ class ErrorResponse(BaseModel):
 class ScopeIn(BaseModel):
     """A resource's activation scope as a request writes it: one allow-list of
     agents (ADR per-agent-resource-scope). ``null`` or absent means
-    unrestricted; ``[]`` matches nothing, i.e. dormant.
+    unrestricted; an empty list is refused (switch the resource off instead).
 
     Extra keys are REFUSED rather than ignored, which is the unusual choice and
     the deliberate one. This model used to carry a second axis, ``machines``,
@@ -57,7 +57,7 @@ class ScopeIn(BaseModel):
 
 class ScopeOut(BaseModel):
     """A resource's activation scope as a response carries it. ``agents`` is
-    always present: ``null`` means unrestricted, ``[]`` dormant."""
+    always present: ``null`` means unrestricted; never an empty list."""
 
     agents: list[str] | None = Field(examples=[["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]])
 
@@ -142,8 +142,8 @@ class ResourceScopeUpdate(BaseModel):
     """PUT .../scope request body: which agents this resource is active for.
 
     ``scope: null`` clears back to unscoped — every agent. A list restricts to
-    exactly those agents, and an empty list matches nothing, so
-    ``{"agents": []}`` is dormant.
+    exactly those agents and must name at least one: ``{"agents": []}`` is
+    refused with 422 ``SCOPE_INVALID`` (switch the resource off to reach nobody).
 
     Scope is set per machine and does not sync: every machine holding this
     vault decides for itself which of its agents a resource activates for."""
