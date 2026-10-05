@@ -2,8 +2,8 @@
 //
 // Spec web-ui "Show every CLI a skill requires on the CLIs page". A tool is
 // listed because a skill or MCP server requires it, or because the person added
-// it by hand (Add CLI: no skill needed). The header holds Check (the
-// primary button, which re-probes every tool) and Add CLI; on the first run
+// it by hand (Add CLI: no skill needed). The header holds Add CLI; Check (which
+// re-probes every tool) sits beside the list's filter, as on Skills. On the first run
 // there are none and the empty state carries Add CLI. Skipped `requires:`
 // entries are one grey line under the subtitle. The list pane groups the tools
 // into Needs attention (problems first, the daemon's order) and Ready; the
@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
@@ -63,6 +63,8 @@ export function ClisPage() {
             onRetry={() => void refetch()}
             selected={selected}
             onOpen={(c) => navigate(`/clis/${encodeURIComponent(c)}`)}
+            onCheck={() => check.mutate()}
+            checking={check.isPending}
           />
         }
         detail={
@@ -89,16 +91,10 @@ export function ClisPage() {
           subtitle={t("clis.subtitle")}
           actions={
             firstRun ? undefined : (
-              <>
-                <Button disabled={check.isPending} onClick={() => check.mutate()}>
-                  <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
-                  {check.isPending ? t("clis.checking") : t("clis.check")}
-                </Button>
-                <Button variant="outline" onClick={() => setAdding(true)}>
-                  <Plus aria-hidden />
-                  {t("clis.addTool")}
-                </Button>
-              </>
+              <Button onClick={() => setAdding(true)}>
+                <Plus aria-hidden />
+                {t("clis.addTool")}
+              </Button>
             )
           }
         />

@@ -4997,6 +4997,7 @@
     "title": "命令行工具",
     "addTool": "添加命令行工具",
     "check": "检查",
+    "checkHint": "重新探测每个工具：是否找到、版本、是否登录",
     "checking": "正在检查…",
     "status": {
       "missing": "未找到",

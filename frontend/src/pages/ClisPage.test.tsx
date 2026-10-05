@@ -221,14 +221,17 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
 
-  test("the header's Check re-checks every command and is the primary button", async () => {
+  test("Check sits beside the list's filter and re-checks every command; the header holds Add CLI", async () => {
     api.checkAll.mockResolvedValue(listOf([UV_READY]));
     renderPage("/clis/uv");
     await screen.findByRole("region", { name: "Ready" });
     const header = screen.getAllByRole("banner")[0];
-    fireEvent.click(within(header).getByRole("button", { name: "Check" }));
-    await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
+    expect(within(header).queryByRole("button", { name: "Check" })).toBeNull();
     expect(within(header).getByRole("button", { name: "Add CLI" })).toBeInTheDocument();
+    const filter = screen.getByLabelText("Filter CLIs");
+    const row = filter.closest("div.flex") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Check" }));
+    await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
   });
 
   test("each skill that needs it opens that skill's Requires tab", async () => {
