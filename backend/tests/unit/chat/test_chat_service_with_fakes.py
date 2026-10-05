@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -168,6 +169,45 @@ async def test_delete_conversation_calls_cancel_fn() -> None:
     cancelled: list[str] = []
     await svc.delete_conversation(conv.id, cancel_turn_fn=lambda cid: cancelled.append(cid))
     assert conv.id in cancelled
+
+
+@pytest.mark.asyncio
+async def test_remove_conversation_waits_for_the_cancelled_turn_before_asking_the_agent() -> None:
+    """The turn's agent process holds the session until it exits (Codex refuses
+    to delete a thread another process writes to), so the delete waits for the
+    cancelled turn to end first."""
+    svc, conv_repo, _ = make_service()
+    conv = await svc.create_conversation(agent_key="builtin")
+    await conv_repo.set_agent_config(conv.id, AgentConfig(cwd="/tmp", session_id="s-1"))
+    torn_down = asyncio.Event()
+
+    async def turn() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.05)  # the process's teardown
+            torn_down.set()
+            raise
+
+    task = asyncio.create_task(turn())
+    await asyncio.sleep(0)
+    seen: list[bool] = []
+
+    class _Sessions:
+        async def rename(self, agent_key: str, session_id: str, title: str) -> None: ...
+
+        async def delete(self, agent_key: str, session_id: str) -> None:
+            seen.append(torn_down.is_set())
+
+    svc.link_sessions(_Sessions())
+
+    def cancel(_cid: str) -> asyncio.Task[None]:
+        task.cancel()
+        return task
+
+    await svc.remove_conversation(conv.id, cancel_turn_fn=cancel)
+    assert seen == [True]
+    assert await conv_repo.get(conv.id) is None
 
 
 # ---------------------------------------------------------------------------
