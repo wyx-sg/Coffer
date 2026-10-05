@@ -52,14 +52,16 @@ class RoundDeps:
     scratch: ScratchPort | None = None
     validate: Validator | None = None
     cloud_folder: Callable[[], str | None] = lambda: None
-    #: ``(line, key)`` for each plaintext secret in a file's text — the
-    #: detection the Secrets page's scan uses. ``None`` reads nothing before a
-    #: push (spec vault-sync "Refuse to push a plaintext secret").
-    find_plaintext: Callable[[str], Sequence[tuple[int, str]]] | None = None
-    #: A line with every plaintext value on it masked, and each value's place
+    #: ``(line, key, rule)`` for each plaintext secret in a file's text and
+    #: path — the detector the Secrets page's scan uses (spec secret "Detect
+    #: plaintext secrets with the bundled rules"). ``None`` reads nothing
+    #: before a push (spec vault-sync "Refuse to push a plaintext secret").
+    find_plaintext: Callable[[str, str], Sequence[tuple[int, str, str]]] | None = None
+    #: A whole file's text with every plaintext value masked: one
+    #: ``(masked line, values)`` per line of the text, each value's place, rule
     #: and shape (spec vault-sync "Show a plaintext finding in its file").
     #: ``None`` shows no line.
-    mask_plaintext: Callable[[str], tuple[str, tuple[MaskedValue, ...]]] | None = None
+    mask_plaintext: Callable[[str, str], list[tuple[str, tuple[MaskedValue, ...]]]] | None = None
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC)
     #: The layout this build writes. A remote above it is a newer Coffer's and
     #: is refused; one below it is replaced by this vault (never converted in

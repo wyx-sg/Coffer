@@ -15,7 +15,7 @@ from coffer.domain.sync.rounds import RoundRecord
 from coffer.domain.vault.document import ResourceDocument
 from coffer.domain.vault.writers import WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import Expect, Validator
-from coffer.infrastructure.secret.plaintext_scan import find_in_text, mask_line
+from coffer.infrastructure.secret.plaintext_mask import find_text, mask_text
 from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
 from coffer.infrastructure.sync.vault_git import VaultSyncGit
 from coffer.infrastructure.vault.repository import VaultRepository
@@ -87,8 +87,8 @@ class Machine:
             machine=FakeMachine(self.label, self.label),
             scratch=ConflictScratch(lambda: self.root / "derived" / "sync-conflicts"),
             validate=self.validate,
-            find_plaintext=find_in_text,
-            mask_plaintext=mask_line,
+            find_plaintext=find_text,
+            mask_plaintext=mask_text,
         )
         self.engine = RoundEngine(self.deps)
         self.remotes = JsonRemoteStore(lambda: self.root / "local" / "remote.json")

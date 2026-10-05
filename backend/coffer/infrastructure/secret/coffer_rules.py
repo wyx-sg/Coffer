@@ -105,9 +105,12 @@ def _is_code(line: str, start: int, value: str, key: str, quoted: bool) -> bool:
     return bool(_NAME.match(value)) and bool(_DECLARED.search(before) or _MEMBER.search(before))
 
 
-def allows(line: str, start: int, end: int) -> bool:
+def allows(line: str, start: int, end: int, *, code: bool = True) -> bool:
     """Whether the value at ``line[start:end]`` is something Coffer never
-    reports, whichever rule found it."""
+    reports. ``code`` says whether the "names a value" heuristics apply: they
+    do to a value found by its assignment (``generic-api-key``, a Coffer
+    rule), not to one a vendor rule found by its shape (a ``ghp_`` token is a
+    bare name too, and still holds a secret)."""
     value = line[start:end]
     if "coffer run" in line:
         return True
@@ -117,6 +120,8 @@ def allows(line: str, start: int, end: int) -> bool:
     stripped = value.strip()
     if not stripped or stripped.startswith(("$", "{{")) or PLACEHOLDER.match(stripped):
         return True
+    if not code:
+        return False
     key, quote = key_before(line, start)
     quoted = bool(quote) and line[end : end + 1] == quote
     return _is_code(line, start, value, key, quoted)

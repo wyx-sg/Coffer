@@ -4,7 +4,9 @@ throwaway HOME (spec secret "Move plaintext secrets in managed resources into th
 from __future__ import annotations
 
 import pathlib
+import random
 import re
+import string
 from collections.abc import Iterator
 from typing import Any
 
@@ -12,10 +14,17 @@ import pytest
 
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 
-# Joined at run time so a secret scanner reading this file sees no literal key.
-TOKEN_VALUE = "-".join(["fake", "token", "value"])
-PASSWORD = "hunter2hunter2"
-APIKEY = "-".join(["fake", "api", "key", "value"])
+
+def _fake(prefix: str, seed: int, length: int) -> str:
+    """A high-entropy fake token built at run time, so a secret scanner reading
+    this file sees no literal key."""
+    rng = random.Random(seed)
+    return prefix + "".join(rng.choice(string.ascii_letters + string.digits) for _ in range(length))
+
+
+TOKEN_VALUE = _fake("gh" + "p_", 1, 36)
+PASSWORD = "Summer" + "2024!"
+APIKEY = _fake("sk_" + "live_", 2, 32)
 
 
 @pytest.fixture
@@ -84,6 +93,10 @@ def test_a_scan_names_plaintext_secrets_without_their_values(d: BoundaryDaemon) 
     }
     skill = next(f for f in r.json()["findings"] if f["source"] == "skill")
     assert skill["proposed_name"] == "deploy.api_token" and skill["line"] == 2
+    assert skill["rule"] == "github-pat"
+    server_rules = {f["resource"]: f["rule"] for f in r.json()["findings"] if f["resource_uid"]}
+    assert server_rules["db-tool"] == "coffer-password-assignment"
+    assert server_rules["orders-api"] == "stripe-access-token"
     assert not any(v in r.text for v in (TOKEN_VALUE, PASSWORD, APIKEY))
 
 
@@ -205,3 +218,47 @@ def test_a_scan_that_finds_nothing_says_how_much_it_read(d: BoundaryDaemon) -> N
 
     assert body["findings"] == []
     assert body["files_checked"] >= 1 and body["servers_checked"] >= 1
+
+
+def _pem(seed: int) -> str:
+    rng = random.Random(seed)
+    body = "\n".join(
+        "".join(rng.choice(string.ascii_letters + string.digits + "+/") for _ in range(64))
+        for _ in range(4)
+    )
+    return f"-----BEGIN RSA PRIVATE {'KEY'}-----\n{body}\n-----END RSA PRIVATE {'KEY'}-----"
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a private key in a skill moves into the store whole"
+)
+def test_a_private_key_in_a_skill_moves_into_the_store_whole(d: BoundaryDaemon) -> None:
+    pem = _pem(3)
+    script = _skill(d.home, f"#!/bin/sh\ncat > key.pem <<'EOF'\n{pem}\nEOF\n")
+
+    findings = d.client.post("/api/v1/secrets/scan").json()["findings"]
+
+    assert [(f["rule"], f["line"]) for f in findings] == [("private-key", 3)]
+    moved = d.client.post("/api/v1/secrets/import", json={})
+    assert moved.status_code == 200, moved.text
+    row = moved.json()["moved"][0]
+    assert d.value(row["ref"]) == pem
+    assert script.read_text() == (
+        f"#!/bin/sh\ncat > key.pem <<'EOF'\ncoffer://secret/{row['name']}\nEOF\n"
+    )
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a weak password and a password in a URL are found")
+def test_a_weak_password_and_a_password_in_a_url_are_found(d: BoundaryDaemon) -> None:
+    _skill(
+        d.home,
+        f"#!/bin/sh\nDB_PASSWORD={PASSWORD}\nDATABASE_URL=postgres://app:{PASSWORD}@db:5432/app\n",
+    )
+
+    body = d.client.post("/api/v1/secrets/scan").json()
+
+    assert sorted(f["rule"] for f in body["findings"]) == [
+        "coffer-password-assignment",
+        "coffer-url-password",
+    ]
+    assert PASSWORD not in str(body)

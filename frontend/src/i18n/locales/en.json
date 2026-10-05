@@ -3827,6 +3827,7 @@
         "key": "the value of {{key}}",
         "token": "a value shaped like a token",
         "showPlace": "Show {{path}}, line {{line}} in its file",
+        "foundByRule": "Found by rule {{rule}}",
         "newFile": "New file",
         "changedFile": "Changed file",
         "onRemote": "This line is already on the remote",
@@ -5430,7 +5431,8 @@
       "unwrittenBodyMany": "The values are stored as secrets, but those files or servers still hold them in plain text.",
       "moved": "Moved",
       "savedNotChanged": "Saved · not changed",
-      "retry": "Try again"
+      "retry": "Try again",
+      "foundByRule": "Found by rule {{rule}}"
     },
     "time": {
       "never": "Never"

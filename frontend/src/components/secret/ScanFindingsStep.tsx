@@ -105,8 +105,19 @@ export function ScanFindingsStep({
                         <td className="truncate px-2 py-2 align-top text-text" title={f.resource}>
                           {f.resource}
                         </td>
-                        <td className="truncate px-2 py-2 align-top font-mono" title={place}>
-                          {place}
+                        <td className="px-2 py-2 align-top font-mono">
+                          <div className="truncate" title={place}>
+                            {place}
+                          </div>
+                          {f.rule ? (
+                            <div
+                              className="truncate text-2xs text-text-subtle"
+                              title={t("secrets.scan.foundByRule", { rule: f.rule })}
+                              data-testid="scan-finding-rule"
+                            >
+                              {f.rule}
+                            </div>
+                          ) : null}
                         </td>
                         <td
                           className="truncate px-3 py-2 align-top font-mono text-text"

@@ -78,7 +78,8 @@ or `release.yml` and never by `make verify`: `build_binaries.sh`
 (`make bundle-binaries`), `smoke_test_bundle.sh`, `bump_version.py`,
 `stamp_channel.py`, `stamp_build_identity.py`, `release_plan.py`,
 `release_signing.sh`, `make_update_manifest.py`, `refresh_model_prices.py`
-(`make refresh-prices`) and `render_tray_icons.sh` (redraws the desktop tray
+(`make refresh-prices`), `sync_gitleaks_rules.py`
+(`make refresh-secret-rules`) and `render_tray_icons.sh` (redraws the desktop tray
 icons from `desktop/icons/tray/tray.svg`).
 
 Where a gate has tests of its own they live in `backend/tests/integration/harness/`. `scripts/verify_lock.py` is run-time tooling, not a gate: `make verify-integration` runs the integration suite through it so a second run on one machine queues instead of competing.

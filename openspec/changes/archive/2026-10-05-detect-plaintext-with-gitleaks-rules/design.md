@@ -72,6 +72,11 @@ other than `generic-api-key`. A value that spans lines (a
 private key) reports its first line; the move rewrites by text offsets, so it
 replaces the whole block.
 
+gitleaks' one path-only rule (`pkcs12-file`, which flags a `.p12`/`.pfx` file
+by its name) has no pattern to apply to text and no value to move, so the
+detector, which reads text, leaves it out; the push check does not read binary
+files either.
+
 ### D3. Run each rule only around its keywords
 
 On a 1 MB single-line base64 blob (an image pasted into a note), a whole-text
@@ -105,7 +110,9 @@ line, or the value itself is one):
 - Code: today's `_is_code` rules (a dotted reference such as
   `process.env.SPACE_TOKEN`, call/index/list punctuation in an unquoted value, a
   bare name a declaration or member assignment gives). A JSON Web Token stays a
-  value.
+  value. This one applies only to `generic-api-key` and Coffer's own
+  rules, which find a value by the name it is assigned to; a vendor format
+  (`const token = ghp_…`) is a value wherever it sits.
 - A line holding `coffer run` (a `--secret ENV=NAME` names a secret).
 
 **Rules** (ids prefixed `coffer-`, shown like any other rule):

@@ -148,7 +148,7 @@ def detect(text: str, path: str = "", rule_set: RuleSet | None = None) -> list[D
                 continue
             col = start - lines.start(n)
             col_end = min(len(line), col + (end - start))
-            if coffer_rules.allows(line, col, col_end):
+            if coffer_rules.allows(line, col, col_end, code=_priority(rule.id) > 0):
                 continue
             key = (
                 coffer_rules.key_before(line, col)[0]

@@ -4,6 +4,8 @@ layouts (coffer.application.sync.round_*)."""
 from __future__ import annotations
 
 import base64
+import random
+import string
 import struct
 from pathlib import Path
 
@@ -234,7 +236,13 @@ def test_replacing_an_older_remote_still_refuses_a_plaintext_secret(
 ) -> None:
     mac, mini = pair
     old_tip = _old_layout_remote(mac)
-    mini.put("knowledge/notes/leak.md", "api_key = sk-live-abcdefghijklmnopqrstuvwxyz0123456789\n")
+    # Put together at run time, so no vendor-shaped literal sits in the source.
+    key = (
+        "sk_"
+        + "live_"
+        + "".join(random.Random(5).choices(string.ascii_letters + string.digits, k=28))
+    )
+    mini.put("knowledge/notes/leak.md", f"api_key = {key}\n")
     got = mini.round()
     assert got.status is RoundStatus.PLAINTEXT_FOUND
     assert remote_ref(mini.remote) == old_tip

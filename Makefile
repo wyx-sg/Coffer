@@ -29,7 +29,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 	eval eval-routing eval-curate \
 	bundle-binaries \
 	desktop desktop-stage-binaries desktop-lint desktop-test \
-	contracts frontend-codegen docs-reference docs-build refresh-prices \
+	contracts frontend-codegen docs-reference docs-build refresh-prices refresh-secret-rules \
 	lint format dev clean
 
 help:
@@ -75,6 +75,7 @@ help:
 	@echo "  make docs-reference        regenerate the docs site's CLI reference pages (en and zh)"
 	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; part of verify)"
 	@echo "  make refresh-prices        refresh the bundled model price list from pydantic/genai-prices (release time; network)"
+	@echo "  make refresh-secret-rules  refresh the bundled gitleaks detection rules (release time; network; --check shows drift)"
 	@echo "  make bundle-binaries       freeze the four binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
@@ -400,6 +401,12 @@ docs-reference:
 # Needs the network; not in verify.
 refresh-prices:
 	$(PY) scripts/refresh_model_prices.py
+
+# The bundled plaintext-secret detection rules (gitleaks, MIT, pinned to one
+# release) are refreshed by hand once per release; no scheduled job. Needs the
+# network; not in verify. `$(PY) scripts/sync_gitleaks_rules.py --check` shows drift.
+refresh-secret-rules:
+	$(PY) scripts/sync_gitleaks_rules.py
 
 # The published site, built the way .github/workflows/pages.yml builds it.
 # VitePress fails the build on a dead internal link or on Markdown Vue cannot

@@ -3827,6 +3827,7 @@
         "key": "{{key}} 的值",
         "token": "一个形似令牌的值",
         "showPlace": "在文件中查看 {{path}} 第 {{line}} 行",
+        "foundByRule": "由规则 {{rule}} 发现",
         "newFile": "新文件",
         "changedFile": "改动的文件",
         "onRemote": "这一行远端已经有了",
@@ -5430,7 +5431,8 @@
       "unwrittenBodyMany": "这些值已保存为密钥，但这些文件或服务器里仍以明文保留着它们。",
       "moved": "已移入",
       "savedNotChanged": "已保存 · 未修改",
-      "retry": "重试"
+      "retry": "重试",
+      "foundByRule": "由规则 {{rule}} 发现"
     },
     "time": {
       "never": "从未"
