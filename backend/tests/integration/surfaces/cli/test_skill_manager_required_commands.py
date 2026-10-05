@@ -51,3 +51,23 @@ def test_a_missing_command_carries_a_prompt_and_a_ready_one_none(daemon: CliDaem
     listed = {i["command"]: i for i in daemon.client.get("/clis").json()["items"]}
     assert listed["jq"]["handoff"]["prompt"] == prompt
     assert ready.json()["handoff"] is None
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a profile's requires joins the skill's")
+def test_a_profile_declared_command_names_its_profile_on_both_routes(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for d in boot_cli_daemon(tmp_path, monkeypatch, probe=FakeCommandProbe({})):
+        uid = d.add_skill(
+            "logs",
+            "  - gh\n",
+            profiles={"acme-team": "---\nrequires:\n  commands: [smc]\n---\n# acme\n"},
+        )
+        items = {i["command"]: i for i in d.client.get("/clis").json()["items"]}
+        assert items["gh"]["needed_by"][0]["profiles"] == []
+        assert items["smc"]["needed_by"][0]["profiles"] == ["acme-team"]
+        skill = d.client.get(f"/skills/{uid}").json()
+        assert {r["command"]: r["profiles"] for r in skill["requires"]} == {
+            "gh": [],
+            "smc": ["acme-team"],
+        }

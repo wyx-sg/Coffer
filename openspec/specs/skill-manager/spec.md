@@ -479,7 +479,7 @@ Users MUST be able to add skills from a Git repository given its URL, an optiona
 - **AND** the add dialog offers Copy prompt beside the refusal
 
 ### Requirement: Show the commands a skill declares it needs
-The system MUST read the commands a skill declares it needs from the `requires` field of its `SKILL.md` frontmatter — a list, or a mapping whose `commands` key holds one — where each entry is a command name, a command name with a minimum version (`gh>=2.40`), or a mapping with `command` and an optional `version`. The skill's read model carries them as `requires`, each with its command and its minimum version when one is given, in the order declared; an entry that names no command is ignored rather than failing the skill. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is present. The web UI's Requires tab lists them, each linking to the command's page on the CLIs page, and says so when the skill declares none.
+The system MUST read the commands a skill declares it needs from the `requires` field of its `SKILL.md` frontmatter — a list, or a mapping whose `commands` key holds one — where each entry is a command name, a command name with a minimum version (`gh>=2.40`), or a mapping with `command` and an optional `version`. The skill's read model carries them as `requires`, each with its command and its minimum version when one is given, in the order declared; an entry that names no command is ignored rather than failing the skill. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is present. The web UI's Requires tab lists them, each naming the profiles that declare it ("Read the requirements profile files declare"), each linking to the command's page on the CLIs page, and says so when the skill declares none.
 
 #### Scenario: a skill's requires tab links each command
 - **GIVEN** a skill whose `SKILL.md` declares `requires: [jq, "gh>=2.40"]`
@@ -840,6 +840,15 @@ The mapping form of a skill's `requires:` frontmatter MAY name the MCP servers a
 - **THEN** `requires_tools` is `github` as `mcp_server` `off` and `billing-api` as `custom_tools` `healthy`, and `ghost` is not listed
 - **AND** `requires_skills` is `coffer-evidence`, found, not delivered to the same agents, naming the agents it misses
 - **AND** `GET /api/v1/clis` carries a warning for the skill naming `ghost` as skipped
+
+### Requirement: Read the requirements profile files declare
+A skill library MAY keep per-skill profiles at `<skill folder>/profiles/<name>.md`, one per environment, each with YAML frontmatter. A profile's frontmatter MAY carry the same `requires:` as `SKILL.md` (commands, secrets and tools, one parser). An agent chooses one profile at run time, which Coffer cannot know, so Coffer MUST read the union of the `requires:` of `SKILL.md` and of every `profiles/*.md`, read from the master folder each time, and MUST name the profiles that declared each requirement: a command, secret or tool several sources declare is one requirement carrying the highest minimum version, the first non-empty title, why, login check and login command, and the profiles that declare it — none when `SKILL.md` declares it too, because then it is needed whichever profile the agent picks. A warning from a profile MUST name its file (`profiles/<name>.md: ...`); an unreadable profile is skipped. The CLIs list's `needed_by` entry for a skill and the skill's Requires-tab commands, secrets and tools carry these names as `profiles`; the missing-secret and tool-off attention items count the profile-declared ones too. Coffer reads only what a skill declares and never scans its files to guess.
+
+#### Scenario: a profile's requires joins the skill's
+- **GIVEN** a skill whose `SKILL.md` declares `gh>=2.40` and whose `profiles/acme-team.md` frontmatter declares `gh>=2.50`, `smc` with a login check and the secret `ACME_TOKEN`
+- **WHEN** its requirements are read
+- **THEN** `gh` is one requirement with minimum `2.50` that names no profile, because `SKILL.md` declares it too
+- **AND** `smc` and `ACME_TOKEN` are declared by `acme-team`
 
 ### Requirement: Report a secret a skill requires that is not set
 A managed skill that declares a secret the secret store does not hold MUST

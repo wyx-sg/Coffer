@@ -831,6 +831,8 @@ export interface components {
         CliNeededByOut: {
             /** Min Version */
             min_version: string | null;
+            /** Profiles */
+            profiles: string[];
             /** Skill Name */
             skill_name: string;
             /** Skill Uid */
@@ -1331,6 +1333,8 @@ export interface components {
             command: string;
             /** Min Version */
             min_version: string | null;
+            /** Profiles */
+            profiles: string[];
         };
         /**
          * SkillSecretRequirementOut
@@ -1342,6 +1346,8 @@ export interface components {
             is_set: boolean;
             /** Name */
             name: string;
+            /** Profiles */
+            profiles: string[];
         };
         /**
          * SkillSkillRequirementOut
@@ -1482,6 +1488,8 @@ export interface components {
             kind: "mcp_server" | "custom_tools";
             /** Name */
             name: string;
+            /** Profiles */
+            profiles: string[];
             /**
              * Status
              * @enum {string}

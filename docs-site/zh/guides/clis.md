@@ -38,6 +38,8 @@ requires:
 | `login` | 用来登录的命令。Coffer 从不运行它；[登录提示词](#logging-in)会把它告诉你的智能体。 |
 | `why` | 一行说明，技能用这个命令做什么。 |
 
+按环境保存 profile（`profiles/<name>.md`）的技能，也可以在 profile 的 frontmatter 里用同样的形状声明命令。智能体在运行时选定一个 profile，而 Coffer 无从得知选的是哪个，所以 Coffer 读取 `SKILL.md` 与每个 profile 的并集。**被谁需要**会在技能名后写出 profile，例如 `coffer-investigating-logs · shopee-account`；多个来源都声明的命令合并为一条，取最高的最低版本。见[profile 声明的依赖](/zh/guides/skills#profile-declared-requirements)。
+
 裸名称（`- uv`）表示一个没有附加条件的命令，`- "node>=20.1"` 表示带最低版本的命令；`requires: [jq, "gh>=2.40"]` 和 `requires: {commands: [...]}` 也按同样的方式读取。Coffer 用不了的条目——写的是路径而不是名称、登录检查运行的是另一个程序——会被跳过，并在命令行工具页面上显示警告，`tools:` 里不匹配任何 MCP 服务器或自定义工具分组的名字也一样（见[技能需要的工具](/zh/guides/skills#tools-a-skill-needs)）；它永远不会阻止技能被导入或投递。
 
 Coffer 每次检查时都从技能文件夹读取 `requires:`，所以你在编辑器里改完，下一次 **检查** 就能读到，无需重新导入技能。这个顶层的 `requires:` 列的是命令；它和 `metadata.requires` 无关，后者是技能库用来声明[一个领域依赖哪些技能](/zh/guides/writing-skill-libraries#declared-dependencies)的。

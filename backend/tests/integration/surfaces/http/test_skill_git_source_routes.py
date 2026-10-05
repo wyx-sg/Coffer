@@ -102,7 +102,10 @@ def test_a_git_stage_names_the_commit_and_confirm_records_the_source(
 @pytest.mark.acceptance(spec="skill-manager", scenario="a skill's requires tab links each command")
 def test_requires_reaches_the_skill_read_model(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
-    expected = [{"command": "jq", "min_version": None}, {"command": "gh", "min_version": "2.40"}]
+    expected = [
+        {"command": "jq", "min_version": None, "profiles": []},
+        {"command": "gh", "min_version": "2.40", "profiles": []},
+    ]
     assert item["requires"] == expected
     assert c.get(f"/api/v1/skills/{item['uid']}").json()["requires"] == expected
     listed = {i["name"]: i for i in c.get("/api/v1/skills").json()["items"]}
@@ -126,8 +129,11 @@ def test_requires_secrets_reach_the_read_model_with_their_state(
     )
     get_secret_store().set(secret_ref("NPM_TOKEN"), "npm-value-never-served")
     item = _add(c, up, path="skills/review")
-    expected = [{"name": "GH_TOKEN", "is_set": False}, {"name": "NPM_TOKEN", "is_set": True}]
-    assert item["requires"] == [{"command": "jq", "min_version": None}]
+    expected = [
+        {"name": "GH_TOKEN", "is_set": False, "profiles": []},
+        {"name": "NPM_TOKEN", "is_set": True, "profiles": []},
+    ]
+    assert item["requires"] == [{"command": "jq", "min_version": None, "profiles": []}]
     assert item["requires_secrets"] == expected
     r = c.get(f"/api/v1/skills/{item['uid']}")
     assert r.json()["requires_secrets"] == expected

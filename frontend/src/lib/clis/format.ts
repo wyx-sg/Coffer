@@ -57,6 +57,12 @@ export function relativeTime(iso: string, locale: string, now: number = Date.now
   return rtf.format(0, "second");
 }
 
+/** A skill's name followed by the profiles that declare the requirement:
+ *  "coffer-investigating-logs · shopee-account"; the bare name for SKILL.md. */
+export function withProfiles(name: string, profiles: readonly string[] | undefined): string {
+  return [name, ...(profiles ?? [])].join(" · ");
+}
+
 /** The MCP servers started with the command, by name, comma-joined. */
 export function serverNames(cli: Pick<Cli, "needed_by_servers">): string {
   return cli.needed_by_servers.map((s) => s.server_name).join(", ");

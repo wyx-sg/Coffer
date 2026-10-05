@@ -39,6 +39,22 @@ const TOOL_TONE: Record<SkillOut["requires_tools"][number]["status"], StatusTone
   failing: "err",
 };
 
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+/** A requirement's note, followed by the profiles that declare it ("profile
+ *  shopee-account"); nothing extra when SKILL.md itself declares it. */
+function profileNote(
+  t: Translate,
+  profiles: readonly string[] | undefined,
+  note: string | null = null,
+): string | null {
+  const declared =
+    profiles && profiles.length > 0
+      ? t("skills.requires.inProfiles", { profiles: profiles.join(" · ") })
+      : null;
+  return [note, declared].filter(Boolean).join(" · ") || null;
+}
+
 function StateWord({ cli }: { cli: Cli | undefined }) {
   const { t } = useTranslation();
   if (!cli) return <StatusWord tone="off">{t("skills.requires.unknown")}</StatusWord>;
@@ -135,9 +151,13 @@ export function SkillRequiresTab({ skill }: Props) {
             <SkillRequireRow
               key={req.command}
               name={req.command}
-              note={
-                req.min_version ? t("skills.requires.needsAtLeast", { min: req.min_version }) : null
-              }
+              note={profileNote(
+                t,
+                req.profiles,
+                req.min_version
+                  ? t("skills.requires.needsAtLeast", { min: req.min_version })
+                  : null,
+              )}
               state={<StateWord cli={cli} />}
               to={`/clis/${encodeURIComponent(req.command)}`}
               linkLabel={t("skills.requires.viewInClis")}
@@ -155,6 +175,7 @@ export function SkillRequiresTab({ skill }: Props) {
             <SkillRequireRow
               key={secret.name}
               name={secret.name}
+              note={profileNote(t, secret.profiles)}
               state={
                 <StatusWord tone={secret.is_set ? "ok" : "warn"}>
                   {secret.is_set
@@ -185,7 +206,7 @@ export function SkillRequiresTab({ skill }: Props) {
                   {t(`skills.requires.toolState.${tool.status}`)}
                 </StatusWord>
               }
-              note={tool.status === "healthy" ? null : tool.why}
+              note={profileNote(t, tool.profiles, tool.status === "healthy" ? null : tool.why)}
               to={toolHref(tool)}
               linkLabel={t(`skills.requires.viewInTools.${tool.kind}`)}
             />

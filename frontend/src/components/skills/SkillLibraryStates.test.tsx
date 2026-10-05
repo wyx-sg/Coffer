@@ -51,7 +51,7 @@ const api = vi.mocked(skillsApi);
 beforeEach(() => {
   h.agents = [makeAgent()];
   h.skills = [
-    makeSkill({ requires: [{ command: "jq", min_version: null }] }),
+    makeSkill({ requires: [{ command: "jq", min_version: null, profiles: [] }] }),
     {
       ...gitSkill({
         update_available: true,
@@ -90,8 +90,8 @@ acceptance(
     h.skills = [
       makeSkill({
         requires_secrets: [
-          { name: "GITHUB_TOKEN", is_set: false },
-          { name: "NPM_TOKEN", is_set: true },
+          { name: "GITHUB_TOKEN", is_set: false, profiles: [] },
+          { name: "NPM_TOKEN", is_set: true, profiles: [] },
         ],
       }),
     ];
@@ -116,7 +116,14 @@ acceptance(
     h.skills = [
       makeSkill({
         requires_tools: [
-          { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null },
+          {
+            name: "github",
+            uid: "t-1",
+            kind: "mcp_server",
+            status: "off",
+            why: null,
+            profiles: [],
+          },
         ],
       }),
     ];
@@ -151,6 +158,7 @@ test("a failing custom-tool group links to the group's page and says why", async
           kind: "custom_tools",
           status: "failing",
           why: "401 from the API",
+          profiles: [],
         },
       ],
     }),
@@ -169,7 +177,14 @@ test("a failing MCP server without a reason says failing, not off, in the body",
   h.skills = [
     makeSkill({
       requires_tools: [
-        { name: "smk-http", uid: "t-3", kind: "mcp_server", status: "failing", why: null },
+        {
+          name: "smk-http",
+          uid: "t-3",
+          kind: "mcp_server",
+          status: "failing",
+          why: null,
+          profiles: [],
+        },
       ],
     }),
   ];

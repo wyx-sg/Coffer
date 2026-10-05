@@ -103,11 +103,15 @@ it never fails a skill.
 | `login_check` | `tuple[str, ...] \| None` | argv (a string is split shell-style, never run in a shell); first word MUST equal `command` |
 | `login`       | `str \| None`            | the login command the login hand-off names; never run, never shown on the page |
 | `why`         | `str \| None`            | one line, ≤ 200 chars                                                      |
+| `profiles`    | `tuple[str, ...]`        | the `profiles/<name>.md` files that declared it; empty when SKILL.md did   |
 
 A bare string entry is a command with no conditions. An entry that breaks a
 rule is skipped and reported as a warning (`GET /clis` → `warnings`); a field
 not listed here (such as a `brew:` formula) is ignored with a warning and the
-entry kept; a command named twice in one skill keeps its first entry.
+entry kept; a command named twice in one skill keeps its first entry. The
+requirements of a skill are the union of its SKILL.md and every
+`profiles/*.md` frontmatter (`requirements_of_skill`): a command several
+sources declare is one entry with the highest minimum and the profiles joined.
 
 ### Required-command row and check result (`domain/skill/cli_status.py`)
 

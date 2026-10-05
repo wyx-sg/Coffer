@@ -38,7 +38,7 @@ function renderTab(
 ) {
   const skill = {
     uid: skillUid,
-    requires: requires.map((command) => ({ command, min_version: null })),
+    requires: requires.map((command) => ({ command, min_version: null, profiles: [] })),
     requires_secrets: requiresSecrets,
     requires_tools: [],
     requires_skills: [],
@@ -61,10 +61,23 @@ function renderTab(
 afterEach(() => vi.clearAllMocks());
 
 describe("SkillRequiresTab", () => {
+  test("a requirement a profile declares names that profile", async () => {
+    api.list.mockResolvedValue({ items: [JQ_MISSING], warnings: [] });
+    renderTab("sk-gh-triage", [], [], {
+      requires: [{ command: "jq", min_version: "1.6", profiles: ["shopee-account"] }],
+      requires_secrets: [{ name: "ACME_TOKEN", is_set: true, profiles: ["shopee-account"] }],
+    });
+    await screen.findByText("Not installed");
+    expect(screen.getByText("Needs ≥ 1.6 · in profile shopee-account")).toBeInTheDocument();
+    expect(screen.getByText("in profile shopee-account")).toBeInTheDocument();
+  });
+
   acceptance("web-ui", "a skill's requirement links to its CLI", async () => {
     const other = cli({
       command: "docker",
-      needed_by: [{ skill_uid: "sk-other", skill_name: "other", min_version: null, why: null }],
+      needed_by: [
+        { skill_uid: "sk-other", skill_name: "other", min_version: null, why: null, profiles: [] },
+      ],
     });
     api.list.mockResolvedValue({
       items: [JQ_MISSING, GCLOUD_LOGGED_OUT, UV_READY, other],
@@ -114,8 +127,8 @@ describe("SkillRequiresTab", () => {
         "sk-gh-triage",
         ["jq"],
         [
-          { name: "GITHUB_TOKEN", is_set: true },
-          { name: "NPM_TOKEN", is_set: false },
+          { name: "GITHUB_TOKEN", is_set: true, profiles: [] },
+          { name: "NPM_TOKEN", is_set: false, profiles: [] },
         ],
       );
       await screen.findByText("Not installed");
@@ -135,7 +148,7 @@ describe("SkillRequiresTab", () => {
 
   test("a skill that declares only secrets lists them without an empty state", async () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
-    renderTab("sk-secrets-only", [], [{ name: "API_KEY", is_set: false }]);
+    renderTab("sk-secrets-only", [], [{ name: "API_KEY", is_set: false, profiles: [] }]);
     expect(await screen.findByText("secret API_KEY is not set")).toBeInTheDocument();
     expect(screen.queryByText("Nothing required")).toBeNull();
   });
@@ -144,9 +157,23 @@ describe("SkillRequiresTab", () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
     renderTab("sk-tools", [], [], {
       requires_tools: [
-        { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null },
-        { name: "billing-api", uid: "t-2", kind: "custom_tools", status: "failing", why: "401" },
-        { name: "linear", uid: "t-3", kind: "mcp_server", status: "healthy", why: null },
+        { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null, profiles: [] },
+        {
+          name: "billing-api",
+          uid: "t-2",
+          kind: "custom_tools",
+          status: "failing",
+          why: "401",
+          profiles: [],
+        },
+        {
+          name: "linear",
+          uid: "t-3",
+          kind: "mcp_server",
+          status: "healthy",
+          why: null,
+          profiles: [],
+        },
       ],
     });
     const section = await screen.findByTestId("skill-requires-tools");

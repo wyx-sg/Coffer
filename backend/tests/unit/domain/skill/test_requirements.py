@@ -283,3 +283,28 @@ def test_skill_md_frontmatter_is_read() -> None:
 )
 def test_skill_md_without_a_readable_requires_declares_nothing(text: str) -> None:
     assert _md_commands(text) == []
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a profile's requires joins the skill's")
+def test_profile_requires_are_unioned_and_name_their_profile() -> None:
+    from coffer.domain.skill.requirements_union import requirements_of_skill
+
+    skill_md = "---\nname: s\nrequires: [jq, 'gh>=2.40']\n---\n"
+    profile = (
+        "---\nrequires:\n  commands:\n    - gh>=2.50\n"
+        "    - {command: smc, login_check: smc login status}\n"
+        "  secrets: [ACME_TOKEN]\n  tools: [github]\n---\n"
+    )
+    bad = "---\nrequires:\n  bogus: 1\n---\n"
+    parsed = requirements_of_skill(skill_md, [("acme-team", profile), ("x", bad)])
+    by = {r.command: r for r in parsed.requirements}
+    assert by["jq"].profiles == ()
+    assert by["gh"].min_version == "2.50"
+    # SKILL.md declares gh too, so it is unconditional: no profile is named.
+    assert by["gh"].profiles == ()
+    assert by["smc"].login_check == ("smc", "login", "status")
+    assert by["smc"].profiles == ("acme-team",)
+    assert parsed.secrets == ("ACME_TOKEN",)
+    assert parsed.secret_profiles == {"ACME_TOKEN": ("acme-team",)}
+    assert parsed.tools == (ToolRequirement("github", None, ("acme-team",)),)
+    assert parsed.warnings and parsed.warnings[0].startswith("profiles/x.md: ")

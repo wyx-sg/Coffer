@@ -26,7 +26,7 @@ class CliDaemon:
     probe: CommandProbePort
     root: pathlib.Path
 
-    def add_skill(self, name: str, requires: str) -> str:
+    def add_skill(self, name: str, requires: str, profiles: dict[str, str] | None = None) -> str:
         """Import a skill whose SKILL.md declares ``requires`` (YAML list
         lines, already indented); returns its uid."""
         folder = self.root / "src" / name
@@ -35,6 +35,9 @@ class CliDaemon:
             f"---\nname: {name}\ndescription: A test skill.\nrequires:\n{requires}---\n# {name}\n",
             encoding="utf-8",
         )
+        for profile, text in (profiles or {}).items():
+            (folder / "profiles").mkdir(exist_ok=True)
+            (folder / "profiles" / f"{profile}.md").write_text(text, encoding="utf-8")
         r = self.client.post("/skills/import", json={"path": str(folder)})
         assert r.status_code == 201, r.text
         return str(r.json()["uid"])

@@ -8,7 +8,7 @@ import asyncio
 import pathlib
 from collections.abc import Sequence
 
-from coffer.application.skill.cli_requirements import SkillDocument
+from coffer.application.skill.cli_requirements import ProfileDocument, SkillDocument
 from coffer.application.skill.service import SkillService
 
 
@@ -29,8 +29,27 @@ def _read_all(pairs: list[tuple[str, str, pathlib.Path]]) -> list[SkillDocument]
             text: str | None = (folder / "SKILL.md").read_text(encoding="utf-8", errors="replace")
         except OSError:
             text = None
-        out.append(SkillDocument(uid=uid, name=name, text=text))
+        out.append(SkillDocument(uid=uid, name=name, text=text, profiles=read_profiles(folder)))
     return out
 
 
-__all__ = ["MasterSkillDocuments"]
+def read_profiles(folder: pathlib.Path) -> tuple[ProfileDocument, ...]:
+    """``profiles/*.md`` by name, ``default`` first; an unreadable file is skipped."""
+    out: list[ProfileDocument] = []
+    try:
+        files = sorted(
+            (folder / "profiles").glob("*.md"), key=lambda f: (f.stem != "default", f.stem)
+        )
+    except OSError:
+        return ()
+    for file in files:
+        try:
+            out.append(
+                ProfileDocument(file.stem, file.read_text(encoding="utf-8", errors="replace"))
+            )
+        except OSError:
+            continue
+    return tuple(out)
+
+
+__all__ = ["MasterSkillDocuments", "read_profiles"]

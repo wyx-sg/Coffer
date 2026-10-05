@@ -2155,6 +2155,11 @@ components:
           - type: string
           - type: 'null'
           title: Min Version
+        profiles:
+          items:
+            type: string
+          title: Profiles
+          type: array
         skill_name:
           title: Skill Name
           type: string
@@ -2171,6 +2176,7 @@ components:
       - skill_name
       - min_version
       - why
+      - profiles
       title: CliNeededByOut
       type: object
     CliOut:
@@ -3065,9 +3071,15 @@ components:
           - type: string
           - type: 'null'
           title: Min Version
+        profiles:
+          items:
+            type: string
+          title: Profiles
+          type: array
       required:
       - command
       - min_version
+      - profiles
       title: SkillRequirementOut
       type: object
     SkillSecretRequirementOut:
@@ -3081,9 +3093,15 @@ components:
         name:
           title: Name
           type: string
+        profiles:
+          items:
+            type: string
+          title: Profiles
+          type: array
       required:
       - name
       - is_set
+      - profiles
       title: SkillSecretRequirementOut
       type: object
     SkillSkillRequirementOut:
@@ -3343,6 +3361,11 @@ components:
         name:
           title: Name
           type: string
+        profiles:
+          items:
+            type: string
+          title: Profiles
+          type: array
         status:
           enum:
           - healthy
@@ -3364,6 +3387,7 @@ components:
       - kind
       - status
       - why
+      - profiles
       title: SkillToolRequirementOut
       type: object
     SkillUpdateCheckSettingBody:

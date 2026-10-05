@@ -49,7 +49,7 @@ from coffer.domain.skill.cli_status import (
     login_state,
     status_of,
 )
-from coffer.domain.skill.requirements import requirements_from_skill_md
+from coffer.domain.skill.requirements_union import requirements_of_skill
 from coffer.domain.skill.tool_state import ToolState, resolve_tools
 
 
@@ -67,12 +67,26 @@ class CommandProbePort(Protocol):
 
 
 @dataclass(frozen=True)
+class ProfileDocument:
+    """One ``profiles/<name>.md`` of a skill: its name (file stem) and text."""
+
+    name: str
+    text: str
+
+
+@dataclass(frozen=True)
 class SkillDocument:
-    """A managed skill and its master SKILL.md text (``None`` when unreadable)."""
+    """A managed skill and its master SKILL.md text (``None`` when unreadable),
+    with the profile files it carries."""
 
     uid: str
     name: str
     text: str | None
+    profiles: tuple[ProfileDocument, ...] = ()
+
+
+def _profiles(doc: SkillDocument) -> list[tuple[str, str]]:
+    return [(p.name, p.text) for p in doc.profiles]
 
 
 class SkillDocumentsPort(Protocol):
@@ -204,7 +218,7 @@ class CliRequirementService:
         for doc in await self._skills.skill_documents():
             if doc.text is None:
                 continue
-            for name in requirements_from_skill_md(doc.text).secrets:
+            for name in requirements_of_skill(doc.text, _profiles(doc)).secrets:
                 if not await asyncio.to_thread(is_set, name):
                     out.append(MissingSecret(doc.uid, doc.name, name))
         return tuple(out)
@@ -218,7 +232,7 @@ class CliRequirementService:
         for doc in await self._skills.skill_documents():
             if doc.text is None:
                 continue
-            result = requirements_from_skill_md(doc.text)
+            result = requirements_of_skill(doc.text, _profiles(doc))
             parsed.append(SkillRequirements(doc.uid, doc.name, result.requirements))
             warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in result.warnings)
             if known is not None:
@@ -302,6 +316,7 @@ __all__ = [
     "DeclaredToolsPort",
     "McpLaunchersPort",
     "MissingSecret",
+    "ProfileDocument",
     "SkillDocument",
     "SkillDocumentsPort",
     "SkillWarning",
