@@ -11,7 +11,8 @@
 // preferred terminal, named on the button; the ▾ menu holds Open in <other terminal> for each
 // other terminal on this machine, then Copy command — the same shape as Hand
 // off to <Agent>. The row's actions always show. A row with no native session
-// yet shows the split button disabled, with the reason in a tooltip. The Source
+// yet shows a muted "Not started" in the split button's place, with the reason
+// in a tooltip. The Source
 // column names the channel a conversation came from, and "This Mac" for a
 // session no channel started.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";

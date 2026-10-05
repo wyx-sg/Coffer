@@ -753,14 +753,15 @@ describe("Opening a conversation in the terminal", () => {
     listed(makeSessionRow({ conversation_id: "n", title: "Fresh", session_id: null }));
     renderPage();
     await screen.findByText("Fresh");
-    const open = openButton("Fresh");
-    expect(open).toBeDisabled();
+    // No split button: a muted Not started stands in its place.
+    expect(within(row("Fresh")).queryByRole("button", { name: /^Open in / })).toBeNull();
     expect(
-      within(row("Fresh")).getByRole("button", { name: "Open options for Fresh" }),
-    ).toBeDisabled();
+      within(row("Fresh")).queryByRole("button", { name: "Open options for Fresh" }),
+    ).toBeNull();
+    const notStarted = within(row("Fresh")).getByText("Not started");
     // The tooltip says why.
-    act(() => (open.parentElement as HTMLElement).focus());
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(/no session yet/i);
+    act(() => notStarted.focus());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/no session to open/i);
     fireEvent.click(row("Fresh"));
     expect(openTerminal).not.toHaveBeenCalled();
     expect(screen.queryByRole("menuitem", { name: "Copy command" })).toBeNull();

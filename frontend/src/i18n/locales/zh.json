@@ -3300,7 +3300,8 @@
       "moreActions": "{{title}} 的更多操作",
       "open": "在终端中打开",
       "openIn": "在 {{terminal}} 中打开",
-      "noSession": "还没有会话：这个对话还没有运行过任何一轮。",
+      "notStarted": "尚未开始",
+      "noSession": "这个对话还没有运行过任何一轮，所以没有会话可以打开。第一条消息得到回复后就能打开。",
       "openOptions": "{{title}} 的打开选项",
       "copyCommand": "复制命令"
     },

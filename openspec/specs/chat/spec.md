@@ -657,8 +657,9 @@ Codex, in the session's working directory. The split button's **▾** menu holds
 terminal and each detected one — which opens the session there once and leaves the
 preference as it is, then **Copy command**, which copies the same command line for
 the person to run anywhere: the same shape as the hand-off button. A channel conversation
-that has no native session yet — no turn has run on it — cannot be opened: its split button
-is disabled and says why, and it offers no Copy command. An open the daemon refuses shows its
+that has no native session yet — no turn has run on it — has nothing to open: in place of the
+split button its row shows a muted **Not started**, whose tooltip says why, and it offers no
+Copy command. An open the daemon refuses shows its
 reason in a toast beside Copy command as the way out. Agent › Sessions rows use the same row and
 the same behaviour. Pressing the row itself MUST NOT open a terminal or do anything else: only the split button opens a session ([agent-registry](../agent-registry/spec.md) "Open an agent's sessions from its Sessions tab").
 
@@ -682,7 +683,7 @@ the same behaviour. Pressing the row itself MUST NOT open a terminal or do anyth
 #### Scenario: a conversation with no native session cannot be opened
 - **GIVEN** a channel conversation on which no turn has run
 - **WHEN** its row renders
-- **THEN** the split button is disabled with a tooltip saying there is no session yet, and Copy command is not offered
+- **THEN** it shows Not started instead of the split button, with a tooltip saying no turn has run so there is no session to open, and Copy command is not offered
 
 #### Scenario: a refused open is reported with a way out
 - **GIVEN** a daemon that refuses the terminal open
