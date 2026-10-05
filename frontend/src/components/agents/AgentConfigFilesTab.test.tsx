@@ -1,13 +1,13 @@
 // frontend/src/components/agents/AgentConfigFilesTab.test.tsx
-// The Config files tab: every allowlisted file as one read-only row — name,
-// folder, size and modified time, Open in editor and Reveal in Finder — with a
-// directory entry's files under it and a not-created file marked; an existing
-// file's name opens its read-only preview, a directory child's by its relpath.
-// Only the
-// network boundary (`agentsApi`, `fsApi`) is mocked.
+// The Config files tab: a tree of every allowlisted file on the left (a
+// directory entry's files under it, a not-created file marked and not
+// openable) and the selected file read-only on the right, the first existing
+// file by default, the selection in `?file=`. Only the network boundary
+// (`agentsApi`, `fsApi`) is mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 import { AgentConfigFilesTab } from "./AgentConfigFilesTab";
 import { agentsApi, type AgentOut, type ConfigFileInfo } from "@/lib/api/agents";
@@ -78,20 +78,45 @@ const FILES: ConfigFileInfo[] = [
   entry({ key: "global", path: "/home/u/.claude.json", folder_path: "/home/u", size: 90 }),
 ];
 
-function renderTab(items: ConfigFileInfo[] = FILES) {
+const content = (over: Record<string, unknown>) => ({
+  key: "settings",
+  abs_path: "/home/u/.claude/settings.json",
+  format: "json",
+  content: '{"theme":"dark"}',
+  size: 17,
+  truncated: false,
+  binary: false,
+  ...over,
+});
+
+function renderTab(items: ConfigFileInfo[] = FILES, url = "/") {
   vi.mocked(agentsApi.listConfigFiles).mockResolvedValue({ items });
+  vi.mocked(agentsApi.configFileContent).mockImplementation(async (_uid, key, child) => {
+    if (key === "instructions") {
+      return content({ key, abs_path: "/home/u/.claude/CLAUDE.md", content: "Be terse." }) as never;
+    }
+    if (key === "subagents") {
+      return content({
+        key,
+        abs_path: `/home/u/.claude/agents/${child}`,
+        content: `Agent ${child}`,
+      }) as never;
+    }
+    return content({ key }) as never;
+  });
   vi.mocked(fsApi.open).mockResolvedValue(undefined);
   vi.mocked(fsApi.reveal).mockResolvedValue(undefined);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <AgentConfigFilesTab agent={AGENT} />
+      <MemoryRouter initialEntries={[url]}>
+        <AgentConfigFilesTab agent={AGENT} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-const rowOf = async (name: string) =>
-  within((await screen.findByText(name)).closest("li") as HTMLElement);
+const treeItem = (name: string) => screen.findByRole("treeitem", { name: new RegExp(name) });
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -106,77 +131,90 @@ describe("AgentConfigFilesTab", () => {
     "the agent detail page carries six tabs and a More menu",
     async () => {
       renderTab();
-      expect(await screen.findByText("settings.json")).toBeInTheDocument();
+      for (const n of [
+        "settings\\.json",
+        "CLAUDE\\.md",
+        "settings\\.local\\.json",
+        "\\.claude\\.json",
+      ]) {
+        expect(await treeItem(n)).toBeInTheDocument();
+      }
       expect(screen.getByText("Config files · Claude Code")).toBeInTheDocument();
-      expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
-      expect(screen.getByText("settings.local.json")).toBeInTheDocument();
-      expect(screen.getByText(".claude.json")).toBeInTheDocument();
     },
   );
 
-  test("each row names the file, its folder, size and modified time", async () => {
+  test("the tree lists the directory's files under it and the first existing file is open", async () => {
     renderTab();
-    const row = await rowOf("CLAUDE.md");
-    expect(row.getByText("~/.claude")).toBeInTheDocument();
-    expect(row.getByText(/^2 KB · 2026-09-01 /)).toBeInTheDocument();
-    expect(
-      row.getByText("Instructions Claude Code reads at the start of every session."),
-    ).toBeInTheDocument();
-  });
-
-  test("a directory entry lists its files, nested ones by their relative path", async () => {
-    renderTab();
-    const dir = await rowOf("agents/");
-    expect(dir.getByText("Custom subagents, one Markdown file each.")).toBeInTheDocument();
-    expect(dir.queryByRole("button", { name: "Open in editor" })).toBeNull();
-    const child = await rowOf("code-reviewer.md");
-    expect(child.getByText("~/.claude/agents")).toBeInTheDocument();
-    expect(child.getByText(/^2 KB · 2026-09-03 /)).toBeInTheDocument();
-    fireEvent.click(child.getByRole("button", { name: "Open in editor" }));
-    await waitFor(() =>
-      expect(fsApi.open).toHaveBeenCalledWith("/home/u/.claude/agents/code-reviewer.md", undefined),
-    );
-    const nested = await rowOf("team/test-runner.md");
-    fireEvent.click(nested.getByRole("button", { name: "Reveal in Finder" }));
-    await waitFor(() =>
-      expect(fsApi.reveal).toHaveBeenCalledWith("/home/u/.claude/agents/team/test-runner.md"),
+    for (const n of ["agents", "code-reviewer\\.md", "team/test-runner\\.md"]) {
+      expect(await treeItem(n)).toBeInTheDocument();
+    }
+    // The first existing file is previewed without a click.
+    expect(await screen.findByText(/"theme"/)).toBeInTheDocument();
+    expect(agentsApi.configFileContent).toHaveBeenCalledWith("agt_cc", "settings", undefined);
+    expect(screen.getByRole("treeitem", { name: /settings\.json/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
   });
 
-  test("a directory child's name previews it by its relpath; the directory row has no preview", async () => {
-    vi.mocked(agentsApi.configFileContent).mockResolvedValue({
-      key: "subagents",
-      abs_path: "/home/u/.claude/agents/team/test-runner.md",
-      format: "markdown",
-      content: "Runs the tests.",
-      size: 15,
-      truncated: false,
-      binary: false,
-    });
+  test("selecting a file previews it; a directory child is read by its relpath", async () => {
     renderTab();
-    const dir = await rowOf("agents/");
-    expect(dir.queryByRole("button", { name: "agents/" })).toBeNull();
-    fireEvent.click(await screen.findByRole("button", { name: "team/test-runner.md" }));
-    expect(await screen.findByText("Runs the tests.")).toBeInTheDocument();
+    fireEvent.click(await treeItem("CLAUDE\\.md"));
+    expect(await screen.findByText("Be terse.")).toBeInTheDocument();
+    fireEvent.click(await treeItem("team/test-runner\\.md"));
+    expect(await screen.findByText("Agent team/test-runner.md")).toBeInTheDocument();
     expect(agentsApi.configFileContent).toHaveBeenCalledWith(
       "agt_cc",
       "subagents",
       "team/test-runner.md",
     );
-    expect(screen.queryByText(/secret value/)).toBeNull();
   });
 
-  test("an empty or missing directory entry has no rows under it", async () => {
-    renderTab([
-      entry({ key: "subagents", path: "/home/u/.claude/agents", kind: "directory", files: [] }),
-    ]);
-    expect(await screen.findByText("No files yet.")).toBeInTheDocument();
+  test("the selection comes from the URL", async () => {
+    renderTab(FILES, "/?file=subagents/code-reviewer.md");
+    expect(await screen.findByText("Agent code-reviewer.md")).toBeInTheDocument();
+    expect(agentsApi.configFileContent).not.toHaveBeenCalledWith("agt_cc", "settings", undefined);
+  });
+
+  test("a not-created file is marked and cannot be previewed", async () => {
+    renderTab();
+    const missing = await treeItem("settings\\.local\\.json");
+    expect(missing).toHaveTextContent("Not created");
+    await screen.findByText(/"theme"/);
+    fireEvent.click(missing);
+    expect(missing).toHaveAttribute("aria-selected", "false");
+    expect(agentsApi.configFileContent).not.toHaveBeenCalledWith(
+      "agt_cc",
+      "settings_local",
+      expect.anything(),
+    );
+  });
+
+  test("a directory row folds its files", async () => {
+    renderTab();
+    fireEvent.click(await treeItem("agents"));
+    expect(screen.queryByRole("treeitem", { name: /code-reviewer\.md/ })).toBeNull();
+  });
+
+  test("the open file's Open in editor goes through the daemon", async () => {
+    renderTab();
+    await screen.findByText(/"theme"/);
+    fireEvent.click(await screen.findByRole("button", { name: "Open in editor" }));
+    await waitFor(() =>
+      expect(fsApi.open).toHaveBeenCalledWith("/home/u/.claude/settings.json", undefined),
+    );
+  });
+
+  test("with no existing file there is nothing to preview", async () => {
+    renderTab([entry({ exists: false, size: null, modified_at: null })]);
+    expect(await screen.findByText("Select a file to view.")).toBeInTheDocument();
+    expect(agentsApi.configFileContent).not.toHaveBeenCalled();
   });
 
   test("the header reveals the agent's config directory", async () => {
     renderTab();
-    await screen.findByText("settings.json");
-    // The header's icon button comes first, before any row's.
+    await treeItem("settings\\.json");
+    // The header's icon button comes first, before the viewer's.
     fireEvent.click(screen.getAllByRole("button", { name: "Reveal in Finder" })[0]);
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith("/home/u/.claude"));
   });
@@ -186,7 +224,9 @@ describe("AgentConfigFilesTab", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
-        <AgentConfigFilesTab agent={AGENT} />
+        <MemoryRouter>
+          <AgentConfigFilesTab agent={AGENT} />
+        </MemoryRouter>
       </QueryClientProvider>,
     );
     expect(await screen.findByRole("button", { name: /retry/i })).toBeInTheDocument();
