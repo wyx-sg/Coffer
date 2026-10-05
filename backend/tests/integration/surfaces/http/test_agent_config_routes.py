@@ -1,4 +1,4 @@
-"""HTTP coverage for the /api/v1/agents/{uid}/config-files listing.
+"""HTTP coverage for the /api/v1/agents/{uid}/config-files listing and preview.
 
 The route family hangs off the agent's immutable ``uid``, never its name
 (ADR identity-is-the-uid-inside-the-file). ``_register_claude`` therefore
@@ -122,15 +122,82 @@ def test_directory_entry_lists_nested_files_with_absolute_paths(tmp_path, monkey
         ]
 
 
-def test_no_route_serves_or_writes_a_config_file(tmp_path, monkeypatch):
+@pytest.mark.acceptance(spec="agent-registry", scenario="preview a config file as written")
+def test_preview_shows_the_file_as_written_and_writes_nothing(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59720)
+    with _client(app) as c:
+        uid = _register_claude(c, tmp_path)
+        settings = tmp_path / ".claude" / "settings.json"
+        original = '{\n  "theme": "dark",\n  "env": {"ANTHROPIC_AUTH_TOKEN": "sk-live-1"}\n}\n'
+        settings.write_text(original, encoding="utf-8")
+        audit_before = c.get("/api/v1/audit", params={"limit": 200}).json()["entries"]
+
+        r = c.get(f"/api/v1/agents/{uid}/config-files/settings/content")
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["abs_path"] == str(settings)
+        assert body["format"] == "json"
+        assert body["size"] == len(original.encode())
+        assert body["truncated"] is False and body["binary"] is False
+        assert body["content"] == original
+        assert settings.read_text(encoding="utf-8") == original
+        audit_after = c.get("/api/v1/audit", params={"limit": 200}).json()["entries"]
+        assert audit_after == audit_before
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="preview a file under a directory entry only when the listing names it",
+)
+def test_preview_under_a_directory_entry_is_limited_to_listed_files(tmp_path, monkeypatch):
+    app, _ = _app(tmp_path, monkeypatch, 59760)
+    with _client(app) as c:
+        uid = _register_claude(c, tmp_path)
+        agents_dir = tmp_path / ".claude" / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "reviewer.md").write_text("# Reviewer\n", encoding="utf-8")
+        (tmp_path / ".claude" / "settings.json").write_text('{"x": 1}', encoding="utf-8")
+        base = f"/api/v1/agents/{uid}/config-files"
+
+        ok = c.get(f"{base}/subagents/content", params={"child": "reviewer.md"})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["content"] == "# Reviewer\n"
+        assert ok.json()["abs_path"] == str(agents_dir / "reviewer.md")
+
+        for params in ({"child": "../settings.json"}, {}):
+            r = c.get(f"{base}/subagents/content", params=params)
+            assert r.status_code == 404, r.text
+            assert '"x": 1' not in r.text
+        # A file key takes no child, and an unknown key is refused.
+        assert c.get(f"{base}/settings/content", params={"child": "x.md"}).status_code == 404
+        assert c.get(f"{base}/credentials/content").status_code == 404
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="answer a config file not created yet as not found"
+)
+def test_preview_of_a_file_not_created_yet_is_404(tmp_path, monkeypatch):
+    app, _ = _app(tmp_path, monkeypatch, 59770)
+    with _client(app) as c:
+        uid = _register_claude(c, tmp_path)
+        r = c.get(f"/api/v1/agents/{uid}/config-files/instructions/content")
+        assert r.status_code == 404, r.text
+        assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
+
+
+def test_no_route_writes_a_config_file(tmp_path, monkeypatch):
+    app, _ = _app(tmp_path, monkeypatch, 59780)
     with _client(app) as c:
         uid = _register_claude(c, tmp_path)
         settings = tmp_path / ".claude" / "settings.json"
         settings.write_text('{"theme": "light"}', encoding="utf-8")
         base = f"/api/v1/agents/{uid}/config-files"
-        for path in (f"{base}/settings", f"{base}/subagents/files/x.md"):
-            assert c.get(path).status_code in (404, 405), path
+        for path in (
+            f"{base}/settings",
+            f"{base}/settings/content",
+            f"{base}/subagents/files/x.md",
+        ):
             assert c.put(path, json={"content": "{}"}).status_code in (404, 405), path
             assert c.delete(path).status_code in (404, 405), path
         assert settings.read_text(encoding="utf-8") == '{"theme": "light"}'

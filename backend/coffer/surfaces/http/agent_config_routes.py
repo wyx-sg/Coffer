@@ -1,16 +1,17 @@
-"""/api/v1/agents/{uid}/config-files route (spec agent-registry).
+"""/api/v1/agents/{uid}/config-files routes (spec agent-registry).
 
-The listing is the only config-file route: Coffer serves no config file's
-content and writes none on the person's behalf ("List an agent's config files
-with their locations"). ResourceNotFound → 404 is mapped centrally by
-surfaces/http/errors.py.
+The listing ("List an agent's config files with their locations") and one
+file's read-only preview, as written ("Preview an agent's config file
+read-only"). Coffer writes none of
+these files on the person's behalf. ResourceNotFound and ConfigFileNotAllowed
+→ 404 are mapped centrally by surfaces/http/errors.py.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from coffer.application.agent.config_file_service import (
@@ -23,6 +24,7 @@ from coffer.surfaces.http.agent_dependencies import (
 )
 from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.errors import error_response
 
 router = APIRouter(
     prefix="/api/v1/agents",
@@ -55,6 +57,20 @@ class ConfigFileListOut(BaseModel):
     items: list[ConfigFileInfoOut]
 
 
+class ConfigFileContentOut(BaseModel):
+    """One config file's read-only preview. No fingerprint: there is no write."""
+
+    key: str
+    #: Absolute path on disk, for Open in editor / Reveal in Finder.
+    abs_path: str
+    format: ConfigFileFormat
+    #: The file's text as written; empty when ``binary``.
+    content: str
+    size: int
+    truncated: bool
+    binary: bool
+
+
 def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
     return ConfigFileInfoOut(
         key=i.key,
@@ -84,3 +100,32 @@ async def list_config_files(
 ) -> ConfigFileListOut:
     items = await svc.list_files(uid)
     return ConfigFileListOut(items=[_info_out(i) for i in items])
+
+
+@router.get("/{uid}/config-files/{key}/content", response_model=ConfigFileContentOut)
+async def read_config_file_preview(
+    uid: str,
+    key: str,
+    child: str | None = Query(
+        default=None,
+        min_length=1,
+        description="Under a directory entry: a file's relpath as the listing returns it.",
+    ),
+    svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
+) -> ConfigFileContentOut:
+    """One allowlisted config file, as written, for a read-only preview."""
+    try:
+        p = await svc.read_preview(uid, key, child)
+    except FileNotFoundError:
+        return error_response(  # type: ignore[return-value]
+            "NOT_FOUND", "the config file does not exist yet"
+        )
+    return ConfigFileContentOut(
+        key=p.key,
+        abs_path=p.path,
+        format=p.format,
+        content=p.content,
+        size=p.size,
+        truncated=p.truncated,
+        binary=p.binary,
+    )

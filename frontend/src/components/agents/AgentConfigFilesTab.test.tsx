@@ -1,7 +1,9 @@
 // frontend/src/components/agents/AgentConfigFilesTab.test.tsx
 // The Config files tab: every allowlisted file as one read-only row — name,
 // folder, size and modified time, Open in editor and Reveal in Finder — with a
-// directory entry's files under it and a not-created file marked. Only the
+// directory entry's files under it and a not-created file marked; an existing
+// file's name opens its read-only preview, a directory child's by its relpath.
+// Only the
 // network boundary (`agentsApi`, `fsApi`) is mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -14,7 +16,9 @@ import { fsApi } from "@/lib/api/fs";
 import { acceptance } from "@/test/acceptance";
 import "@/i18n";
 
-vi.mock("@/lib/api/agents", () => ({ agentsApi: { listConfigFiles: vi.fn() } }));
+vi.mock("@/lib/api/agents", () => ({
+  agentsApi: { listConfigFiles: vi.fn(), configFileContent: vi.fn() },
+}));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
 
 const AGENT = {
@@ -137,6 +141,29 @@ describe("AgentConfigFilesTab", () => {
     await waitFor(() =>
       expect(fsApi.reveal).toHaveBeenCalledWith("/home/u/.claude/agents/team/test-runner.md"),
     );
+  });
+
+  test("a directory child's name previews it by its relpath; the directory row has no preview", async () => {
+    vi.mocked(agentsApi.configFileContent).mockResolvedValue({
+      key: "subagents",
+      abs_path: "/home/u/.claude/agents/team/test-runner.md",
+      format: "markdown",
+      content: "Runs the tests.",
+      size: 15,
+      truncated: false,
+      binary: false,
+    });
+    renderTab();
+    const dir = await rowOf("agents/");
+    expect(dir.queryByRole("button", { name: "agents/" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "team/test-runner.md" }));
+    expect(await screen.findByText("Runs the tests.")).toBeInTheDocument();
+    expect(agentsApi.configFileContent).toHaveBeenCalledWith(
+      "agt_cc",
+      "subagents",
+      "team/test-runner.md",
+    );
+    expect(screen.queryByText(/secret value/)).toBeNull();
   });
 
   test("an empty or missing directory entry has no rows under it", async () => {
