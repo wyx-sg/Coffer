@@ -14,6 +14,11 @@ deleted*, in an order that leaves the old ref cited until the new one is proven:
    master store's files;
 4. delete the old ref and audit ``secret_migrated``.
 
+A stored ref nothing cites any more is moved too, labelled with its old ref, so
+no secret is left under an old name. A citer's config that still carries a key
+its kind dropped long ago (``auto_enable_new_capabilities``) is written without
+it: the resource service would refuse the repointed config otherwise.
+
 A failure before any citer changed removes the new ref; one part-way keeps the
 old ref in place (and the new one, which something now cites) and logs. A
 second start finds nothing to move. A value is never logged or audited.
@@ -46,6 +51,8 @@ from coffer.domain.secrets import (
 
 _log = logging.getLogger(__name__)
 _ACTOR = "coffer"
+#: Config keys a kind no longer reads that older files still carry.
+_DROPPED_KEYS: dict[str, tuple[str, ...]] = {"mcp_server": ("auto_enable_new_capabilities",)}
 
 
 class RefStore(Protocol):
@@ -87,6 +94,8 @@ def _repointed(
     resource: Resource, resources: ResourceService, old: str, new: str
 ) -> dict[str, Any]:
     config = copy.deepcopy(resource.config)
+    for dropped in _DROPPED_KEYS.get(resource.kind, ()):
+        config.pop(dropped, None)
     for key, ref in resources.secret_slots(resource).items():
         if ref != old:
             continue
@@ -145,9 +154,8 @@ class RefMigrator:
         uids = list(dict.fromkeys(self._citations.resource_citers().get(old, [])))
         name = standalone_name(old)
         extras = [e for e in self._extras if e.ref() == old]
-        if not name and not uids and not extras:
-            _log.info("secret.migrate_left", extra={"ref": old, "reason": "nothing cites it"})
-            return False
+        # Nothing cites an orphan: its old ref is the only hint of what it was.
+        orphan = not name and not uids and not extras
         value = await asyncio.to_thread(self._store.peek, old)
         if value is None:
             return False
@@ -159,7 +167,7 @@ class RefMigrator:
                 raise RuntimeError("the store did not read the value back")
             await asyncio.to_thread(self._store.carry_records, old, new)
             await asyncio.to_thread(self._rebind, old, new)
-            await asyncio.to_thread(self._carry_notes, old, new, name, uids)
+            await asyncio.to_thread(self._carry_notes, old, new, name, uids, orphan)
             for uid in uids:
                 current = await self._resources.get(uid)
                 await self._resources.update_config(
@@ -174,7 +182,7 @@ class RefMigrator:
                 changed += 1
             # Repointing citers one at a time let the first claim the new ref as
             # minted for it; a ref several resources share belongs to none.
-            await asyncio.to_thread(self._carry_notes, old, new, name, uids)
+            await asyncio.to_thread(self._carry_notes, old, new, name, uids, orphan)
             if name:
                 await asyncio.to_thread(self._rewrite_uris, name, mint_name_of(new))
         except BaseException:
@@ -191,16 +199,19 @@ class RefMigrator:
         _log.info("secret.migrated", extra={"from": old, "to": new})
         return True
 
-    def _carry_notes(self, old: str, new: str, name: str | None, uids: list[str]) -> None:
+    def _carry_notes(
+        self, old: str, new: str, name: str | None, uids: list[str], orphan: bool
+    ) -> None:
         before = self._notes.get(old) or SecretNote()
-        label = before.label or (name[:LABEL_MAX] if name else None)
+        hint = name or (old if orphan else None)
+        label = before.label or (hint[:LABEL_MAX] if hint else None)
         created_for = before.created_for or (uids[0] if len(uids) == 1 and not name else None)
         note = SecretNote(
             label=label,
             description=before.description,
             created_for=created_for,
             # A standalone secret was a person's; a resource's was written for it.
-            origin=before.origin or (ORIGIN_PAGE if name else ORIGIN_DIALOG),
+            origin=before.origin or (ORIGIN_PAGE if name or orphan else ORIGIN_DIALOG),
         )
         if not note.empty:
             self._notes.put(new, note, summary=f"carry notes of secret {old}", actor=_ACTOR)
