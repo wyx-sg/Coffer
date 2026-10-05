@@ -108,3 +108,50 @@ async def test_stop_drains_pending_rows_without_loss(tmp_path):
         assert len(rows) == 37, f"stop() lost rows: persisted {len(rows)}/37"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_read_right_after_an_insert_sees_the_row(tmp_path):
+    """A read waits for the rows enqueued before it, however slow the commit.
+
+    The gateway records a call and an agent (or a person on the Activity page)
+    may look at the log at once; the buffer must not make that call invisible.
+    """
+    repo, engine = await _make_repo(tmp_path)
+    commit = repo._commit_batch
+
+    async def slow_commit(batch):
+        await asyncio.sleep(0.3)
+        await commit(batch)
+
+    repo._commit_batch = slow_commit  # type: ignore[method-assign]
+    await repo.start()
+    try:
+        await repo.insert(_inv("just-called"))
+        rows = await repo.query(limit=10)
+        assert [r.capability_key for r in rows] == ["just-called"]
+        assert await repo.count() == 1
+    finally:
+        await repo.stop()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_read_does_not_hang_on_a_stuck_commit(tmp_path):
+    """The wait is bounded: a commit that never finishes slows a read, never hangs it."""
+    repo, engine = await _make_repo(tmp_path)
+    repo.SETTLE_TIMEOUT_S = 0.1  # type: ignore[misc]
+    stuck = asyncio.Event()
+
+    async def stuck_commit(batch):
+        await stuck.wait()
+
+    repo._commit_batch = stuck_commit  # type: ignore[method-assign]
+    await repo.start()
+    try:
+        await repo.insert(_inv("never-lands"))
+        assert await asyncio.wait_for(repo.query(limit=10), timeout=2.0) == []
+    finally:
+        stuck.set()
+        await repo.stop()
+        await engine.dispose()
