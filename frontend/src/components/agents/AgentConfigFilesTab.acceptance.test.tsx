@@ -1,8 +1,8 @@
 // frontend/src/components/agents/AgentConfigFilesTab.acceptance.test.tsx
 // Acceptance scenarios for the Config files tab of spec agent-registry "Open
 // config files in an external editor or reveal them": the daemon-backed open /
-// reveal pair on the open file, a file not created yet marked and not
-// previewable, no edit, new-file, delete or copy-path anywhere; and the
+// reveal pair on the open file, a file not created yet left out of the tree,
+// no edit, new-file, delete or copy-path anywhere; and the
 // read-only preview a selected file shows.
 import { afterEach, describe, expect, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -106,11 +106,8 @@ describe("Config files tab — acceptance", () => {
     fireEvent.click(reveals[reveals.length - 1]);
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(INSTRUCTIONS.path));
 
-    // The file not created yet: marked, and selecting it opens nothing.
-    const missing = screen.getByRole("treeitem", { name: /settings\.local\.json/ });
-    expect(missing).toHaveTextContent("Not created");
-    fireEvent.click(missing);
-    expect(missing).toHaveAttribute("aria-selected", "false");
+    // The file not created yet is not listed, so nothing can open it.
+    expect(screen.queryByRole("treeitem", { name: /settings\.local\.json/ })).toBeNull();
     expect(fsApi.open).toHaveBeenCalledTimes(1);
     expect(agentsApi.configFileContent).toHaveBeenCalledTimes(1);
 

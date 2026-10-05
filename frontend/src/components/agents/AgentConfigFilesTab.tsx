@@ -3,12 +3,13 @@
 // "Preview an agent's config file read-only".
 // The agent detail page's Config files tab: ONE bordered surface with a
 // draggable divider — the curated config-file allowlist as a tree on the left
-// (ConfigFileTree; the directory entry agents/ expands to its files, a file not
-// created yet is greyed and cannot be opened) and the selected file read-only
+// (ConfigFileTree; the directory entry agents/ expands to its files; a file the
+// agent has not written yet is left out, since opening creates nothing) and the
+// selected file read-only
 // on the right (the shared viewer: its path and size, Open in editor, Reveal in
 // Finder). Coffer edits nothing: a config file is changed in the person's own
 // editor, or by their agent. The selected file is in the URL (`?file=`), the
-// first existing file by default. Secret and machine-state files are not on the
+// first file by default. Secret and machine-state files are not on the
 // allowlist, so never here.
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -67,8 +68,10 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
   const agentName = agentTypeLabel(agent.type);
   const files = useAgentConfigFiles(agent.uid);
   const [params, setParams] = useSearchParams();
+  // Only what is on disk is listed: Coffer creates no config file.
+  const present = files.data?.filter((f) => f.exists);
 
-  const openable = files.data ? openableSelections(files.data) : [];
+  const openable = present ? openableSelections(present) : [];
   const wanted = selectionFromParam(params.get("file"));
   const selected =
     openable.find((s) => s.key === wanted?.key && s.child === wanted?.child) ?? openable[0] ?? null;
@@ -84,8 +87,8 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
 
   // The open file's path on disk, from the listing, until its content answers.
   let openPath = "";
-  if (selected && files.data) {
-    const entry = files.data.find((f) => f.key === selected.key);
+  if (selected && present) {
+    const entry = present.find((f) => f.key === selected.key);
     openPath =
       (selected.child
         ? entry?.files?.find((c) => c.relpath === selected.child)?.path
@@ -97,16 +100,11 @@ export function AgentConfigFilesTab({ agent }: { agent: AgentOut }) {
     list = <LoadError className="px-2" error={files.error} onRetry={() => void files.refetch()} />;
   } else if (files.isPending) {
     list = <Skeleton className="h-24 w-full" aria-busy />;
-  } else if (files.data.length === 0) {
+  } else if (!present?.length) {
     list = <p className="px-2 text-sm text-text-muted">{t("agents.config.none")}</p>;
   } else {
     list = (
-      <ConfigFileTree
-        files={files.data}
-        agentName={agentName}
-        selected={selected}
-        onSelect={select}
-      />
+      <ConfigFileTree files={present} agentName={agentName} selected={selected} onSelect={select} />
     );
   }
 
