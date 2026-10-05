@@ -192,7 +192,8 @@ describe("ChangeModelDialog", () => {
     renderDialog({ ...AGENT, uid: "u-cx", type: "codex", config_dir: "/Users/me/.codex" });
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Provider")).toBeInTheDocument();
-    expect(within(dialog).getByText("Default model")).toBeInTheDocument();
+    // The model field renders once the provider's models are read.
+    expect(await within(dialog).findByText("Default model")).toBeInTheDocument();
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
   });
 
