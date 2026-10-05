@@ -32,8 +32,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import type { SecretImport } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
-import { useImportSecrets, useSecretScan } from "@/lib/hooks/useSecrets";
+import { useIgnoreFindings, useImportSecrets, useSecretScan } from "@/lib/hooks/useSecrets";
 import { ScanFindingsStep } from "./ScanFindingsStep";
+import { ScanIgnoredList } from "./ScanIgnoredList";
 import { ScanPreviewStep, ScanResultStep } from "./ScanPreviewStep";
 import { planOf, type ImportPlan } from "./scanPlan";
 
@@ -70,6 +71,7 @@ export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
   const { toast } = useToast();
   const scan = useSecretScan(open);
   const importer = useImportSecrets();
+  const ignorer = useIgnoreFindings();
   const [step, setStep] = useState<Step>({ name: "find" });
   const [ticked, setTicked] = useState<Set<string> | null>(null);
 
@@ -82,9 +84,14 @@ export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
   }, [open, reset]);
 
   const all = scan.data?.findings ?? [];
-  const findings = only ? all.filter((f) => inFiles(f.path, only)) : all;
+  const here = only ? all.filter((f) => inFiles(f.path, only)) : all;
+  // Findings marked not a secret are hidden, never ticked, and never moved.
+  const findings = here.filter((f) => !f.ignored);
+  const ignored = here.filter((f) => f.ignored);
   // Every finding starts ticked, once the scan is in.
-  const chosen = ticked ?? new Set(findings.map((f) => f.id));
+  const chosen = new Set(
+    ticked ? findings.filter((f) => ticked.has(f.id)).map((f) => f.id) : findings.map((f) => f.id),
+  );
   const close = () => onOpenChange(false);
 
   const toggle = (id: string) => {
@@ -93,6 +100,19 @@ export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
     else next.add(id);
     setTicked(next);
   };
+
+  const setIgnored = (id: string, ignore: boolean) => {
+    // A finding reported again comes back ticked, as a fresh one does.
+    if (!ignore && ticked) setTicked(new Set(ticked).add(id));
+    ignorer.mutate({ ids: [id], ignore });
+  };
+  const ignoredList = (
+    <ScanIgnoredList
+      ignored={ignored}
+      busy={ignorer.isPending}
+      onReportAgain={(id) => setIgnored(id, false)}
+    />
+  );
 
   const review = async () => {
     const ids = findings.map((f) => f.id).filter((id) => chosen.has(id));
@@ -175,6 +195,7 @@ export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
       <>
         <Title>{t("secrets.scan.noneHereTitle")}</Title>
         <p className="text-sm text-text-muted">{t("secrets.scan.noneHereBody")}</p>
+        {ignoredList}
         <DialogFooter>
           <Button onClick={close}>{t("common.done")}</Button>
         </DialogFooter>
@@ -192,6 +213,7 @@ export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
             {t("secrets.scan.serversRead", { count: scan.data?.servers_checked ?? 0 })}
           </dd>
         </dl>
+        {ignoredList}
         <DialogFooter>
           <Button onClick={close}>{t("common.done")}</Button>
         </DialogFooter>
@@ -202,6 +224,10 @@ export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
     body = (
       <ScanFindingsStep
         scan={scan.data && { ...scan.data, findings }}
+        ignored={ignored}
+        busy={ignorer.isPending}
+        onIgnore={(id) => setIgnored(id, true)}
+        onReportAgain={(id) => setIgnored(id, false)}
         ticked={chosen}
         onToggle={toggle}
         onToggleAll={(all) => setTicked(new Set(all ? findings.map((f) => f.id) : []))}

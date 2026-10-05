@@ -262,6 +262,9 @@ BOUNDARY_STATE_KEY_CONTEXT = b"coffer-boundary-state-key/v1"
 DAEMON_ATTEST_KEY_CONTEXT = b"coffer-daemon-attest-key/v1"
 #: The model proxy answers the daemon's challenge with it: this is Coffer's proxy.
 PROXY_ATTEST_KEY_CONTEXT = b"coffer-proxy-attest-key/v1"
+#: Fingerprints a plaintext value a person said is not a secret (spec secret
+#: "Remember a value a person says is not a secret"): no value, no plain hash.
+PLAINTEXT_IGNORE_KEY_CONTEXT = b"coffer-plaintext-ignore-key/v1"
 
 
 #: The destination kind of the local-process grant: a standalone secret that

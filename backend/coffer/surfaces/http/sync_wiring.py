@@ -28,6 +28,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.plaintext_ignore import fingerprinter
 from coffer.application.sync.inventory import AgentPluginInventory
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
@@ -42,6 +43,7 @@ from coffer.infrastructure.persistence.sync_runs_repo import SyncRunRepo
 from coffer.infrastructure.platform.host import machine_label
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
+from coffer.infrastructure.secret.plaintext_ignore_store import JsonPlaintextIgnores
 from coffer.infrastructure.secret.plaintext_mask import find_text, mask_text
 from coffer.infrastructure.sync.cloud_folder import synchroniser_of
 from coffer.infrastructure.sync.identity import machine_name, resolve_identity
@@ -131,6 +133,7 @@ def wire_sync(
         key_fingerprint=key.fingerprint,
     )
     git = VaultSyncGit(writer.repo)
+    fingerprint = fingerprinter(lambda: master_key.current)
     deps = RoundDeps(
         git=git,
         state=state,
@@ -139,7 +142,8 @@ def wire_sync(
         scratch=ConflictScratch(),
         validate=_validator_of(writer),
         cloud_folder=lambda: synchroniser_of(vault_root(), home=Path.home()),
-        find_plaintext=find_text,
+        find_plaintext=lambda text, path: find_text(text, path, fingerprint),
+        ignores=JsonPlaintextIgnores(),
         mask_plaintext=mask_text,
     )
     service = SyncService(

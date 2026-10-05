@@ -46,6 +46,12 @@ export const secretsApi = {
     unwrap(getApiClient().PUT("/secrets/notes", { body: { ref, ...notes } })),
   /** Plaintext secrets in skills and MCP servers — where they are, never what they are. */
   scan: () => unwrap(getApiClient().POST("/secrets/scan")),
+  /** Remember the chosen findings' values as not secrets; answers the scan again. */
+  ignoreFindings: (ids: string[]) =>
+    unwrap(getApiClient().POST("/secrets/scan/ignore", { body: { ids } })),
+  /** Forget them, so the scan reports them again; answers the scan again. */
+  unignoreFindings: (ids: string[]) =>
+    unwrap(getApiClient().POST("/secrets/scan/unignore", { body: { ids } })),
   /** Move the chosen findings into the store; `dryRun` writes nothing. */
   importFindings: (ids: string[], dryRun: boolean) =>
     unwrap(getApiClient().POST("/secrets/import", { body: { ids, dry_run: dryRun } })),

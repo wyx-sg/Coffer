@@ -27,6 +27,8 @@ coffer secret [OPTIONS] COMMAND [ARGS]...
 | [`secret describe`](#secret-describe) | Label and describe a secret. |
 | [`secret scan`](#secret-scan) | Find plaintext secrets in skills and MCP servers (values are never shown). |
 | [`secret import`](#secret-import) | Move found plaintext secrets into the store. |
+| [`secret ignore`](#secret-ignore) | Remember found values as not secrets, so scans stop reporting them. |
+| [`secret unignore`](#secret-unignore) | Forget values remembered as not secrets. |
 | [`secret local-access`](#secret-local-access) | Hand a standalone secret to programs `coffer run` starts. |
 | [`secret local-access request`](#secret-local-access-request) | Ask to hand a secret to programs coffer run starts; waits for approval. |
 | [`secret local-access revoke`](#secret-local-access-revoke) | Withdraw the grant. |
@@ -187,6 +189,42 @@ Move found plaintext secrets into the store. Body: ids, dry_run.
 
 ```sh
 coffer secret import [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret ignore
+
+Remember found values as not secrets, so scans stop reporting them. Body: ids.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret ignore [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret unignore
+
+Forget values remembered as not secrets. Body: ids.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer secret unignore [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

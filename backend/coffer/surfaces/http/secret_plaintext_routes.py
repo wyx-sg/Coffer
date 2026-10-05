@@ -9,21 +9,28 @@ reference in where it was.
 from __future__ import annotations
 
 import asyncio
+import pathlib
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret import plaintext_move
+from coffer.application.secret.plaintext_ignore import IgnoredValue, fingerprinter
 from coffer.application.secret.plaintext_move import Hit
 from coffer.domain.audit import AuditEventType
+from coffer.domain.secret_errors import SecretLocked
 from coffer.domain.secrets import LABEL_MAX, ORIGIN_DIALOG, ORIGIN_PAGE, SecretNote, secret_uri
 from coffer.infrastructure.secret import plaintext_findings
+from coffer.infrastructure.secret.plaintext_ignore_store import JsonPlaintextIgnores
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
+from coffer.infrastructure.vault.home import vault_root
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service, get_resource_service
-from coffer.surfaces.http.secret_composition import get_secret_store
+from coffer.surfaces.http.secret_composition import get_master_key_manager, get_secret_store
 from coffer.surfaces.http.secret_notes_wiring import get_secret_notes
 from coffer.surfaces.http.secret_schemas import (
     SecretImportIn,
@@ -35,6 +42,12 @@ from coffer.surfaces.http.secret_schemas import (
 )
 
 router = APIRouter()
+
+
+class SecretIgnoreIn(BaseModel):
+    #: Finding ids to remember (or forget) as not secrets.
+    ids: list[str]
+
 
 #: Skills Coffer renders itself: its guide quotes `coffer run --secret …` on purpose.
 _COFFERS_OWN_SKILLS = frozenset({GUIDE_SKILL_NAME})
@@ -67,17 +80,107 @@ def _finding_fields(h: Hit) -> dict[str, Any]:
     }
 
 
+def _place(h: Hit) -> str:
+    """Where a value was found: a skill file relative to the vault, or the server's slot."""
+    f = h.finding
+    if f.source == "skill":
+        path = pathlib.Path(f.path or "")
+        try:
+            return path.relative_to(vault_root()).as_posix()
+        except ValueError:
+            return path.as_posix()
+    return f"mcp_server/{f.resource}/{f.field}"
+
+
+def _fingerprint_of() -> Any:
+    return fingerprinter(lambda: get_master_key_manager().current)
+
+
+async def _scan_out(resources: ResourceService) -> SecretScanOut:
+    hits, files, servers = await _hits(resources)
+    of = _fingerprint_of()
+    ignored = await asyncio.to_thread(JsonPlaintextIgnores().fingerprints)
+    out: list[SecretScanFindingOut] = []
+    for h in hits:
+        fields = _finding_fields(h)
+        fields["ignored"] = bool(ignored) and of(h.value) in ignored
+        out.append(SecretScanFindingOut(**fields))
+    return SecretScanOut(findings=out, files_checked=files, servers_checked=servers)
+
+
 @router.post("/scan", response_model=SecretScanOut)
 async def scan_plaintext(
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> SecretScanOut:
     """Plaintext secrets in the skill master store and in MCP servers' env / headers."""
-    hits, files, servers = await _hits(resources)
-    return SecretScanOut(
-        findings=[SecretScanFindingOut(**_finding_fields(h)) for h in hits],
-        files_checked=files,
-        servers_checked=servers,
-    )
+    return await _scan_out(resources)
+
+
+async def _chosen(resources: ResourceService, ids: list[str]) -> list[tuple[Hit, str]]:
+    """The findings named by ``ids`` with their fingerprints; locked without a master key."""
+    of = _fingerprint_of()
+    wanted = set(ids)
+    hits, _, _ = await _hits(resources)
+    chosen = [h for h in hits if h.finding.id in wanted]
+    pairs: list[tuple[Hit, str]] = []
+    for h in chosen:
+        fp = of(h.value)
+        if fp is None:
+            raise SecretLocked("the master key is not available")
+        pairs.append((h, fp))
+    if not chosen and of("") is None:
+        raise SecretLocked("the master key is not available")
+    return pairs
+
+
+@router.post("/scan/ignore", response_model=SecretScanOut)
+async def ignore_plaintext(
+    body: SecretIgnoreIn,
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> SecretScanOut:
+    """Remember the chosen values as not secrets: scans keep listing them, marked."""
+    pairs = await _chosen(resources, body.ids)
+    now = datetime.now(UTC).isoformat()
+    entries = [
+        IgnoredValue(
+            fingerprint=fp,
+            rule=h.finding.rule,
+            place=_place(h),
+            key=h.finding.key,
+            actor=actor,
+            ignored_at=now,
+        )
+        for h, fp in pairs
+    ]
+    await asyncio.to_thread(JsonPlaintextIgnores().add, entries)
+    if entries:
+        await audit.record(
+            AuditEventType.SECRET_PLAINTEXT_IGNORED.value,
+            actor=actor,
+            details={"places": [f"{e.place}:{e.rule}" for e in entries]},
+        )
+    return await _scan_out(resources)
+
+
+@router.post("/scan/unignore", response_model=SecretScanOut)
+async def unignore_plaintext(
+    body: SecretIgnoreIn,
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> SecretScanOut:
+    """Report the chosen values again."""
+    pairs = await _chosen(resources, body.ids)
+    await asyncio.to_thread(JsonPlaintextIgnores().remove, [fp for _, fp in pairs])
+    if pairs:
+        await audit.record(
+            AuditEventType.SECRET_PLAINTEXT_UNIGNORED.value,
+            actor=actor,
+            details={"places": [f"{_place(h)}:{h.finding.rule}" for h, _ in pairs]},
+        )
+    return await _scan_out(resources)
 
 
 @router.post("/import", response_model=SecretImportOut)

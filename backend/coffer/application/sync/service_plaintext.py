@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from coffer.application.secret.plaintext_ignore import IgnoredValue
 from coffer.application.sync import round_plaintext_context
 from coffer.domain.audit import AuditEventType
 from coffer.domain.sync.errors import SyncNoPlaintextFound
@@ -55,6 +56,17 @@ class PlaintextMixin:
         last = await self._last_plaintext()
         state = self._engine.d.state
         await asyncio.to_thread(state.allow_plaintext, [f.blob for f in last.plaintext])
+        ignores = self._engine.d.ignores
+        if ignores is not None:
+            at = self._engine.d.now()
+            await asyncio.to_thread(
+                ignores.add,
+                [
+                    IgnoredValue(f.fingerprint, f.rule, f.path, f.key, actor, at)
+                    for f in last.plaintext
+                    if f.fingerprint
+                ],
+            )
         await self._audit.record(
             AuditEventType.SYNC_PLAINTEXT_PUSHED.value,
             actor=actor,

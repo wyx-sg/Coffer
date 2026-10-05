@@ -11,6 +11,7 @@ import random
 import string
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -143,6 +144,29 @@ def test_push_anyway_pushes_the_found_versions_and_records_it(pair: tuple[Box, B
     assert [(f.line, f.key) for f in again.plaintext] == [(1, "token")]
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a value pushed anyway does not stop a later edit of its file"
+)
+def test_a_value_pushed_anyway_does_not_stop_a_later_edit_of_its_file(
+    pair: tuple[Box, Box],
+) -> None:
+    mac, _mini = pair
+    with client_for(mac) as c:
+        _leak(mac)
+        assert c.post("/sync/run").json()["status"] == "plaintext_found"
+        status = c.get("/sync/status").text
+        assert "fingerprint" not in status
+        assert "fingerprint" not in c.post("/sync/run").text
+        pushed = c.post("/sync/plaintext/push-anyway")
+        assert pushed.json()["status"] == "pushed" and "fingerprint" not in pushed.text
+    mac.put(DOC, f"# Orders database\n\nHost: db.other\nDB_PASSWORD={VALUE}\n")
+    assert mac.round().status is RoundStatus.PUSHED
+    mac.put(DOC, f"# Orders database\n\nHost: db.other\nDB_PASSWORD={VALUE}x\n")
+    again = mac.round()
+    assert again.status is RoundStatus.PLAINTEXT_FOUND
+    assert [(f.line, f.key) for f in again.plaintext] == [(4, "DB_PASSWORD")]
+
+
 @pytest.mark.acceptance(spec="vault-sync", scenario="an encrypted secret file is not read")
 def test_ciphertext_is_not_read_as_plaintext(pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
@@ -198,7 +222,9 @@ def test_secret_references_in_a_resource_document_do_not_stop_a_push(
         "Authorization": "secret/" + "".join(_RNG.choices("0123456789abcdef", k=32)),
         "X-Api-Key": "secret/" + "".join(_RNG.choices("0123456789abcdef", k=32)),
     }
-    config = {"transport": {"type": "http", "url": "https://mcp.example.test", "secret_refs": refs}}
+    config: dict[str, Any] = {
+        "transport": {"type": "http", "url": "https://mcp.example.test", "secret_refs": refs}
+    }
     mac.put(
         "resources/mcp_server/billing.json",
         resource("mcp_server", "billing", "a" * 32, config),

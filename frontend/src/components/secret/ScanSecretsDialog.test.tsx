@@ -14,6 +14,8 @@ vi.mock("@/lib/api/secret", () => ({
   secretsApi: {
     scan: vi.fn(),
     importFindings: vi.fn(),
+    ignoreFindings: vi.fn(),
+    unignoreFindings: vi.fn(),
     list: vi.fn(),
     pendingApprovals: vi.fn(),
   },
@@ -36,6 +38,7 @@ const SCAN: SecretScan = {
       key: "GITHUB_TOKEN",
       rule: "github-pat",
       proposed_name: "github-token",
+      ignored: false,
     },
     {
       id: "f2",
@@ -48,6 +51,7 @@ const SCAN: SecretScan = {
       key: "WEATHER_API_KEY",
       rule: "generic-api-key",
       proposed_name: null,
+      ignored: false,
     },
     {
       id: "f3",
@@ -60,6 +64,7 @@ const SCAN: SecretScan = {
       key: "Authorization",
       rule: "generic-api-key",
       proposed_name: null,
+      ignored: false,
     },
   ],
 };
@@ -100,6 +105,54 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("ScanSecretsDialog", () => {
+  acceptance("secret", "the dialog hides what is not a secret", async () => {
+    const two: SecretScan = { ...SCAN, findings: SCAN.findings.slice(0, 2) };
+    const marked: SecretScan = {
+      ...two,
+      findings: [{ ...two.findings[0], ignored: true }, two.findings[1]],
+    };
+    api.scan.mockResolvedValue(two);
+    api.ignoreFindings.mockResolvedValue(marked);
+    api.unignoreFindings.mockResolvedValue(two);
+    api.importFindings.mockImplementation(async (ids, dryRun) => ({
+      dry_run: dryRun,
+      moved: movedOf(ids),
+      skipped: [],
+    }));
+    renderDialog();
+    const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+    fireEvent.click(
+      within(dialog).getByRole("button", {
+        name: "Not a secret: release-notes release-notes/scripts/publish.sh:12",
+      }),
+    );
+    await waitFor(() => expect(api.ignoreFindings).toHaveBeenCalledWith(["f1"]));
+    await waitFor(() =>
+      expect(within(dialog).queryByText("release-notes/scripts/publish.sh:12")).toBeNull(),
+    );
+    expect(within(dialog).getByText("1 of 1 ticked")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Show ignored (1)" }));
+    expect(within(dialog).getByText("release-notes/scripts/publish.sh:12")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review 1 change" }));
+    await screen.findByRole("dialog", { name: "Review changes" });
+    expect(api.importFindings).toHaveBeenCalledWith(["f2"], true);
+  });
+
+  test("Report again brings an ignored finding back", async () => {
+    const marked: SecretScan = {
+      ...SCAN,
+      findings: [{ ...SCAN.findings[0], ignored: true }, ...SCAN.findings.slice(1)],
+    };
+    api.scan.mockResolvedValue(marked);
+    api.unignoreFindings.mockResolvedValue(SCAN);
+    renderDialog();
+    const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Show ignored (1)" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Report again/ }));
+    await waitFor(() => expect(api.unignoreFindings).toHaveBeenCalledWith(["f1"]));
+    expect(await within(dialog).findByText("3 of 3 ticked")).toBeInTheDocument();
+  });
+
   test("groups findings by source with place and what each becomes, all ticked, no value", async () => {
     renderDialog();
     const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });

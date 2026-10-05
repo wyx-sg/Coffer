@@ -50,6 +50,9 @@ class Finding:
     proposed_name: str | None
     #: The id of the detector rule that found the value.
     rule: str
+    #: A person said this value is not a secret (spec secret "Remember a value
+    #: a person says is not a secret"); set by the scan, never by a detector.
+    ignored: bool = False
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

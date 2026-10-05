@@ -202,16 +202,15 @@ class SecretScanFindingOut(BaseModel):
     #: The skill's or the server's name.
     resource: str
     resource_uid: str | None = None
-    #: A skill's file and line.
-    path: str | None = None
+    path: str | None = None  # a skill's file and line
     line: int | None = None
-    #: A server's ``env`` or ``header``.
     field: Literal["env", "header"] | None = None
     key: str
     #: The label a skill's secret gets; its id and a server's ref are minted on import.
     proposed_name: str | None = None
     #: The id of the detector rule that found the value.
     rule: str
+    ignored: bool = False  # a person said it is not a secret
 
 
 class SecretScanOut(BaseModel):

@@ -292,6 +292,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Settings · Secrets · Back up the master key (desktop app, Touch ID) | `POST /desktop/requests` | `coffer secret backup-key` | `test_approval_cli.py` |
 | Secrets · Delete | `DELETE /secrets/{ref}` | `coffer secret delete` | `test_cli_parity.py` |
 | Secrets · Edit label and description | `PUT /secrets/notes` | `coffer secret describe` | `test_cli_parity.py` |
+| Secrets · Not a secret | `POST /secrets/scan/ignore` | `coffer secret ignore` | `test_cli_parity.py` |
 | Secrets · Move into the store | `POST /secrets/import` | `coffer secret import` | `test_cli_parity.py` |
 | Settings · Security · Import a master key (desktop app, Touch ID) | `POST /desktop/requests` | `coffer secret import-key` | `test_cli_parity.py` |
 | Secrets · list | `GET /secrets` | `coffer secret list` | `test_secret_cmd.py` |
@@ -300,6 +301,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Secrets · Reveal (desktop app, Touch ID) | `POST /desktop/requests` | `coffer secret reveal` | `test_approval_cli.py` |
 | Secrets · Find plaintext secrets | `POST /secrets/scan` | `coffer secret scan` | `test_cli_parity.py` |
 | Secrets · Add / Replace value | `POST /secrets` | `coffer secret set` | `test_secret_cmd.py` |
+| Secrets · Report again | `POST /secrets/scan/unignore` | `coffer secret unignore` | `test_cli_parity.py` |
 
 ## `coffer settings` {#settings}
 
