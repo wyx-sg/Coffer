@@ -2414,6 +2414,9 @@ components:
         key:
           title: Key
           type: string
+        rule:
+          title: Rule
+          type: string
         shape:
           $ref: '#/components/schemas/ValueShapeOut'
         start:
@@ -2423,6 +2426,7 @@ components:
       - start
       - end
       - key
+      - rule
       - shape
       title: MaskedValueOut
       type: object
@@ -2470,10 +2474,15 @@ components:
           default: 0
           title: Removed
           type: integer
+        rule:
+          default: ''
+          title: Rule
+          type: string
       required:
       - path
       - line
       - key
+      - rule
       - change
       - on_remote
       - lines
@@ -2484,9 +2493,8 @@ components:
       type: object
     PlaintextFindingOut:
       description: |-
-        Where a round found a plaintext secret: the file, the line and the name
-        the value was assigned to (``token`` for one recognised by its shape).
-        Never the value.
+        Where a round found a plaintext secret: the file, the line, the name the
+        value was assigned to (else the rule's id) and the rule. Never the value.
       properties:
         current:
           title: Current
@@ -2500,10 +2508,15 @@ components:
         path:
           title: Path
           type: string
+        rule:
+          default: ''
+          title: Rule
+          type: string
       required:
       - path
       - line
       - key
+      - rule
       - current
       title: PlaintextFindingOut
       type: object

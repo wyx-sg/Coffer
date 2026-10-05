@@ -210,6 +210,8 @@ class SecretScanFindingOut(BaseModel):
     key: str
     #: The label a skill's secret gets; its id and a server's ref are minted on import.
     proposed_name: str | None = None
+    #: The id of the detector rule that found the value.
+    rule: str
 
 
 class SecretScanOut(BaseModel):

@@ -1149,6 +1149,8 @@ export interface components {
             end: number;
             /** Key */
             key: string;
+            /** Rule */
+            rule: string;
             shape: components["schemas"]["ValueShapeOut"];
             /** Start */
             start: number;
@@ -1189,12 +1191,16 @@ export interface components {
              * @default 0
              */
             removed: number;
+            /**
+             * Rule
+             * @default
+             */
+            rule: string;
         };
         /**
          * PlaintextFindingOut
-         * @description Where a round found a plaintext secret: the file, the line and the name
-         *     the value was assigned to (``token`` for one recognised by its shape).
-         *     Never the value.
+         * @description Where a round found a plaintext secret: the file, the line, the name the
+         *     value was assigned to (else the rule's id) and the rule. Never the value.
          */
         PlaintextFindingOut: {
             /** Current */
@@ -1205,6 +1211,11 @@ export interface components {
             line: number;
             /** Path */
             path: string;
+            /**
+             * Rule
+             * @default
+             */
+            rule: string;
         };
         /** ProblemOut */
         ProblemOut: {

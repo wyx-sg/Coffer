@@ -84,6 +84,13 @@ datas = (
             "coffer/infrastructure/usage/price_list",
             "coffer/infrastructure/usage/price_list",
         ),
+        # The gitleaks detection rules (TOML) and their licence. Data, not a
+        # module, so the import graph cannot see it; a build without it would
+        # detect no plaintext secrets.
+        (
+            "coffer/infrastructure/secret/rules",
+            "coffer/infrastructure/secret/rules",
+        ),
     ]
     + collect_data_files("mcp", include_py_files=False)
 )

@@ -412,6 +412,16 @@ An agent that is tricked by a group member can still say something private. An o
 - **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's audit redactor first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach the audit log. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
 - **The sync history** stores the remote's commit and errors after the push secret has been redacted out.
 
+## Plaintext detection {#plaintext-detection}
+
+One detector finds credentials written in plain text. **Find plaintext keys** on the Secrets page, the MCP server scan and vault sync's push check all call it, so what one flags the others flag, and each finding names the rule that found it.
+
+- **The rules are gitleaks'.** More than 200 credential rules from gitleaks (MIT), pinned to one release and bundled in the build as data with their licence. A script translates them into the regular-expression dialect the daemon runs; Coffer adds its own rules for a password assigned to a password-named key, a password in a URL, and server settings.
+- **Coffer's allowlist runs first.** Secret references (`coffer://secret/<id>`, a bare `secret/<id>`), `$VAR` and `${VAR}`, double-brace templates, placeholders and code that only says where a value comes from are never findings.
+- **Keyword windows bound the cost.** A rule runs only around the keywords it names, so a very long line (minified code, a pasted blob) cannot make a scan expensive.
+- **Decoded content is not scanned.** A base64 or hex value is read as it is written, not decoded first; that trade keeps the scan predictable.
+- **Refreshed by hand at release.** `make refresh-secret-rules` pulls the next gitleaks release; there is no scheduled job and the daemon never fetches rules while running, so a build's rules are fixed and reviewable.
+
 ## Sync carries ciphertext only
 
 Vault sync pulls and pushes the vault repository with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:

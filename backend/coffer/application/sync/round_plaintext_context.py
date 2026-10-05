@@ -7,11 +7,13 @@ history when asked, and nothing is stored:
 
 * the flagged line with a few lines either side, read from the blob the round
   found the value in, every plaintext value on them masked (the value's shape
-  stands in for it — see ``coffer.domain.plaintext_shape``);
+  stands in for it — see ``coffer.domain.plaintext_shape``). The whole file is
+  masked once, by the bundled rules (spec secret "Detect plaintext secrets with
+  the bundled rules"), so a value spanning lines is masked on each;
 * whether the remote holds the file already (``added`` / ``modified``) and
   whether it holds the flagged line already;
-* for a modified file, its change against the remote's copy, masked line by
-  line the same way.
+* for a modified file, its change against the remote's copy, masked the
+  same way, its changed lines taken from the original files.
 
 The remote's copy is the one the round would have pushed on top of: the
 newest commit it pulled, else the commit it recorded as ``from_commit`` — the
@@ -21,19 +23,16 @@ pair "Show what a round changed in each file" reads for a push.
 from __future__ import annotations
 
 import difflib
-from collections.abc import Callable
 
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_diff import MAX_BYTES, MAX_LINES
-from coffer.domain.plaintext_shape import MaskedValue
+from coffer.domain.plaintext_shape import split_rows
 from coffer.domain.sync.errors import SyncPlaintextNotListed, SyncRoundDiffUnavailable
 from coffer.domain.sync.plaintext import MaskedLine, PlaintextContext, PlaintextFinding
 from coffer.domain.sync.rounds import RoundRecord
 
 #: Lines shown on each side of the flagged one.
 CONTEXT = 3
-
-Masker = Callable[[str], tuple[str, tuple[MaskedValue, ...]]]
 
 
 def _text(raw: bytes | None) -> str | None:
@@ -49,28 +48,41 @@ def _remote_commit(record: RoundRecord) -> str | None:
     return record.pulled[0].version if record.pulled else record.from_commit
 
 
-def _masked_diff(old: str, new: str, path: str, masker: Masker) -> tuple[str | None, int, int]:
-    lines = list(
-        difflib.unified_diff(
-            old.splitlines(keepends=True),
-            new.splitlines(keepends=True),
-            fromfile=f"remote/{path}",
-            tofile=f"local/{path}",
-        )
-    )
-    if len(lines) > MAX_LINES:
-        return None, 0, 0
-    out: list[str] = []
+def _range(start: int, size: int) -> str:
+    """A unified-diff hunk range, as ``difflib`` writes it."""
+    begin = start + 1
+    if size == 1:
+        return str(begin)
+    return f"{begin - 1 if size == 0 else begin},{size}"
+
+
+def _masked_diff(
+    old: list[str], new: list[str], path: str, masked: tuple[list[str], list[str]]
+) -> tuple[str | None, int, int]:
+    """The unified diff of ``old`` against ``new`` — their opcodes decide which
+    lines changed — showing each line masked (``masked`` is the two files'
+    lines, masked as whole files)."""
+    old_masked, new_masked = masked
+    out = [f"--- remote/{path}\n", f"+++ local/{path}\n"]
     added = removed = 0
-    for line in lines:
-        if line.startswith(("---", "+++", "@@")) or not line:
-            out.append(line)
-            continue
-        mark, body = line[0], line[1:]
-        end = "\n" if body.endswith("\n") else ""
-        out.append(mark + masker(body.removesuffix("\n"))[0] + end)
-        added += mark == "+"
-        removed += mark == "-"
+    for group in difflib.SequenceMatcher(None, old, new).get_grouped_opcodes(3):
+        first, last = group[0], group[-1]
+        out.append(
+            f"@@ -{_range(first[1], last[2] - first[1])} "
+            f"+{_range(first[3], last[4] - first[3])} @@\n"
+        )
+        for tag, i1, i2, j1, j2 in group:
+            if tag == "equal":
+                out.extend(" " + line + "\n" for line in new_masked[j1:j2])
+                continue
+            if tag in ("replace", "delete"):
+                out.extend("-" + line + "\n" for line in old_masked[i1:i2])
+                removed += i2 - i1
+            if tag in ("replace", "insert"):
+                out.extend("+" + line + "\n" for line in new_masked[j1:j2])
+                added += j2 - j1
+        if len(out) > MAX_LINES:
+            return None, 0, 0
     return "".join(out), added, removed
 
 
@@ -83,27 +95,29 @@ def context(d: RoundDeps, record: RoundRecord, path: str, line: int) -> Plaintex
         raise SyncPlaintextNotListed(path, line)
     if d.mask_plaintext is None:
         raise SyncRoundDiffUnavailable
-    masker = d.mask_plaintext
+    mask = d.mask_plaintext
     text = _text(d.git.blobs([found.blob]).get(found.blob))
     if text is None:
         raise SyncRoundDiffUnavailable
-    rows = text.splitlines()
+    rows = split_rows(text)
+    new_masked = mask(text, path)
     lo, hi = max(1, line - CONTEXT), min(len(rows), line + CONTEXT)
-    shown = []
-    for n in range(lo, hi + 1):
-        masked, values = masker(rows[n - 1])
-        shown.append(MaskedLine(n, masked, values))
+    shown = [MaskedLine(n, *new_masked[n - 1]) for n in range(lo, hi + 1)]
 
     remote = _remote_commit(record)
     old_raw = d.git.read(remote, path) if remote and d.git.files(remote) else None
     if old_raw is None:
         return PlaintextContext(found, "added", False, tuple(shown))
     old = _text(old_raw) if len(old_raw) <= MAX_BYTES else None
-    on_remote = old is not None and 0 < line <= len(rows) and rows[line - 1] in old.splitlines()
+    old_rows = split_rows(old) if old is not None else []
+    on_remote = old is not None and 0 < line <= len(rows) and rows[line - 1] in old_rows
     diff: str | None = None
     added = removed = 0
     if old is not None and len(text.encode()) <= MAX_BYTES:
-        diff, added, removed = _masked_diff(old, text, path, masker)
+        old_masked = [m for m, _ in mask(old, path)]
+        diff, added, removed = _masked_diff(
+            old_rows, rows, path, (old_masked, [m for m, _ in new_masked])
+        )
     return PlaintextContext(found, "modified", on_remote, tuple(shown), diff, added, removed)
 
 

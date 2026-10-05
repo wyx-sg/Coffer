@@ -1198,6 +1198,8 @@ export interface components {
             resource: string;
             /** Resource Uid */
             resource_uid: string | null;
+            /** Rule */
+            rule: string;
             /**
              * Source
              * @enum {string}

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import random
+import string
 import subprocess
 from pathlib import Path
 
@@ -16,13 +18,17 @@ from coffer.application.sync.attention import SyncAttentionSource
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
 
+from ..sync_thin.machines import resource
 from .conftest import client_for
 from .harness import Box
 
 DOC = "knowledge/team/db.md"
 #: Built at run time so no secret-shaped literal sits in the source.
 VALUE = "q7" * 8
-TOKEN = "ghp_" + "Z9" * 18
+_RNG = random.Random(20261005)
+TOKEN = "ghp_" + "".join(_RNG.choices(string.ascii_letters + string.digits, k=36))
+#: A Stripe secret key, put together at run time: no vendor-shaped literal.
+STRIPE = "sk_" + "live_" + "".join(_RNG.choices(string.ascii_letters + string.digits, k=28))
 
 
 def _remote_objects(url: str) -> bytes:
@@ -51,7 +57,13 @@ def test_a_plaintext_secret_stops_the_round_and_is_named_without_its_value(
     got = mac.round()
     assert got.status is RoundStatus.PLAINTEXT_FOUND
     (found,) = got.plaintext
-    assert (found.path, found.line, found.key, found.current) == (DOC, 4, "DB_PASSWORD", True)
+    assert (found.path, found.line, found.key, found.rule, found.current) == (
+        DOC,
+        4,
+        "DB_PASSWORD",
+        "coffer-password-assignment",
+        True,
+    )
     assert mac.git.fetch("main", None) == before, "nothing was pushed"
     assert VALUE.encode() not in _remote_objects(mac.url)
     assert VALUE not in str(got.to_json())
@@ -68,7 +80,13 @@ def test_a_plaintext_secret_stops_the_round_and_is_named_without_its_value(
         body = c.get("/sync/status").json()["problem"]
         assert body["kind"] == "plaintext_found" and body["handoff"] is None
         assert body["plaintext"] == [
-            {"path": DOC, "line": 4, "key": "DB_PASSWORD", "current": True}
+            {
+                "path": DOC,
+                "line": 4,
+                "key": "DB_PASSWORD",
+                "rule": "coffer-password-assignment",
+                "current": True,
+            }
         ]
     mini.round()
     assert mini.disk(DOC) is None, "the other machine never received it"
@@ -150,3 +168,41 @@ def test_the_detection_runs_over_every_unpushed_version(tmp_path: Path) -> None:
     assert head is not None
     (found,) = round_plaintext.findings(mac.deps, tip, head)
     assert found.current is False and found.key == "DB_PASSWORD"
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a vendor token in a knowledge note stops the round"
+)
+def test_a_vendor_token_in_prose_stops_the_round(pair: tuple[Box, Box]) -> None:
+    mac, _mini = pair
+    before = mac.git.fetch("main", None)
+    mac.put(DOC, f"# Billing\n\nWe charge cards with {STRIPE} from the dashboard.\n")
+    got = mac.round()
+    assert got.status is RoundStatus.PLAINTEXT_FOUND
+    (found,) = got.plaintext
+    assert (found.path, found.line, found.rule) == (DOC, 3, "stripe-access-token")
+    assert found.key == "stripe-access-token"
+    assert mac.git.fetch("main", None) == before, "nothing was pushed"
+    assert STRIPE.encode() not in _remote_objects(mac.url)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a resource document's secret references do not stop a push",
+)
+def test_secret_references_in_a_resource_document_do_not_stop_a_push(
+    pair: tuple[Box, Box],
+) -> None:
+    mac, _mini = pair
+    refs = {
+        "Authorization": "secret/" + "".join(_RNG.choices("0123456789abcdef", k=32)),
+        "X-Api-Key": "secret/" + "".join(_RNG.choices("0123456789abcdef", k=32)),
+    }
+    config = {"transport": {"type": "http", "url": "https://mcp.example.test", "secret_refs": refs}}
+    mac.put(
+        "resources/mcp_server/billing.json",
+        resource("mcp_server", "billing", "a" * 32, config),
+    )
+    got = mac.round()
+    assert got.status is RoundStatus.PUSHED, got.detail
+    assert "resources/mcp_server/billing.json" in {c.path for c in got.pushed}

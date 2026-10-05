@@ -29,6 +29,7 @@ def _finding(fid: str, key: str, field: str) -> Finding:
         field=field,
         key=key,
         proposed_name=None,
+        rule="coffer-server-setting",
     )
 
 

@@ -5,12 +5,13 @@ The remote is a repository the person owns, but a value pushed there is out of
 Coffer's hands for good: it is in the remote's history, in every clone, and in
 any backup of either. So before a round pushes, every file the push would
 publish — each blob the remote does not already hold, from every commit since
-the remote's head — is read for a plaintext secret, with the same detection
-the Secrets page's scan uses. An encrypted ``secret/<ref>.enc`` file is
+the remote's head — is read for a plaintext secret, with the detector
+the Secrets page's scan uses (spec secret "Detect plaintext secrets with the
+bundled rules"). An encrypted ``secret/<ref>.enc`` file is
 ciphertext and is not read.
 
-A finding names the file, the line and the name the value was assigned to,
-and the blob it was found in. It never carries the value.
+A finding names the file, the line, the name the value was assigned to and the
+rule that found it, and the blob it was found in. It never carries the value.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ class PlaintextFinding:
     path: str
     #: 1-based.
     line: int
-    #: The name the value is assigned to (``DB_PASSWORD``), or ``token`` for
-    #: a value recognised by its shape alone.
+    #: The name the value is assigned to (``DB_PASSWORD``), or the rule's id
+    #: for a value with no name before it.
     key: str
     #: The blob the value is in. "Push anyway" allows exactly these blobs, so
     #: a file changed since is read again.
@@ -34,6 +35,9 @@ class PlaintextFinding:
     #: Whether the file still holds it at the commit being pushed. A value
     #: that is only in an earlier, unpushed commit is not in any file any more.
     current: bool = True
+    #: The bundled rule that found it; ``""`` for a round recorded before
+    #: rules were named.
+    rule: str = ""
 
 
 @dataclass(frozen=True)

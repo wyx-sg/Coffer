@@ -48,13 +48,16 @@ class Finding:
     key: str
     #: A skill's secret's label; its id and a server's ref are minted on import.
     proposed_name: str | None
+    #: The id of the detector rule that found the value.
+    rule: str
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Hit:
     finding: Finding
     value: str = dataclasses.field(repr=False)
-    #: Where the value sits on its line (skills only).
+    #: Where the value sits in its file's text, as offsets (skills only): a
+    #: value that spans lines (a PEM private key) is replaced whole.
     start: int = -1
     end: int = -1
     #: The server's config as it was read (servers only).

@@ -34,6 +34,7 @@ const SCAN: SecretScan = {
       line: 12,
       field: null,
       key: "GITHUB_TOKEN",
+      rule: "github-pat",
       proposed_name: "github-token",
     },
     {
@@ -45,6 +46,7 @@ const SCAN: SecretScan = {
       line: null,
       field: "env",
       key: "WEATHER_API_KEY",
+      rule: "generic-api-key",
       proposed_name: null,
     },
     {
@@ -56,6 +58,7 @@ const SCAN: SecretScan = {
       line: null,
       field: "header",
       key: "Authorization",
+      rule: "generic-api-key",
       proposed_name: null,
     },
   ],
@@ -107,6 +110,7 @@ describe("ScanSecretsDialog", () => {
     expect(within(dialog).getByText("coffer://secret/github-token")).toBeInTheDocument();
     expect(within(dialog).getByText("env WEATHER_API_KEY")).toBeInTheDocument();
     expect(within(dialog).getByText("header Authorization")).toBeInTheDocument();
+    expect(within(dialog).getByText("github-pat")).toBeInTheDocument();
     expect(within(dialog).getAllByText("The server's own secret")).toHaveLength(2);
     expect(within(dialog).getByText("3 of 3 ticked")).toBeInTheDocument();
   });

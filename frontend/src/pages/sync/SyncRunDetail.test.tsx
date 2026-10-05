@@ -119,7 +119,7 @@ describe("SyncRunDetail", () => {
       makeRound({
         status: "plaintext_found",
         detail: "a plaintext secret in skills/x/run.mjs; nothing was pushed",
-        plaintext: [{ path: "skills/x/run.mjs", line: 12, key: "TOKEN", current: true }],
+        plaintext: [{ path: "skills/x/run.mjs", line: 12, key: "TOKEN", current: true, rule: "generic-api-key" }],
       }),
     );
     expect(drawer.getByTestId("sync-run-stop")).toHaveTextContent("skills/x/run.mjs:12 · TOKEN");
