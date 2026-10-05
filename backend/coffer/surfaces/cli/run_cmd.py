@@ -15,11 +15,13 @@ child's environment**. The shell that ran this, and its other children, never
 hold the value. The child's stdout and stderr pass through a filter that
 replaces each exact value with ``***``.
 
-What this does not do, stated where it is used: the agent that runs
-``coffer run`` is the child's parent, so it can read the child's environment
-(``ps eww``) or run ``coffer run --secret X -- env``. This keeps secrets out of
-files, transcripts and the agent's own environment by accident; it does not
-hide them from an agent that wants them.
+Only secrets a person granted to local programs in the desktop app resolve;
+any other is refused, nothing starts and the request waits in the app. The
+grant is the line that matters: whoever runs ``coffer run`` — an agent too —
+owns the child and can read its environment or run ``coffer run --secret X --
+env``, so masking only keeps a value out of transcripts, files and git by
+accident. A secret an agent should only *use* stays without the grant and
+reaches its service through Coffer (an MCP server or custom tool).
 """
 
 from __future__ import annotations
@@ -106,10 +108,11 @@ def run(
 ) -> None:
     """Run a command with secrets set only in its environment.
 
-    Each resolution is audited. Output is masked: exact secret values print as
-    ***. This guards against accidents — a value landing in a transcript, a
-    file or git — and does not hide a secret from an agent that runs the
-    command: the agent is the command's parent and can read its environment.
+    Only a secret granted to local programs in the Coffer app resolves; any
+    other is refused and the request waits there. Each resolution is audited.
+    Output is masked: exact secret values print as ***. Masking guards against
+    accidents — a value landing in a transcript, a file or git — and does not
+    hide a granted secret from an agent that runs the command.
 
     \f
     Spec secret "Resolve standalone secrets into one child with coffer run".

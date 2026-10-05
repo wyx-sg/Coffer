@@ -15,9 +15,12 @@ Three kinds of route live here:
   counterpart on purpose: the CLI and the browser get "open the Coffer app".
 * **Open** — listing and refusing approvals. Neither returns a value.
 * **`coffer run`'s resolve** — answers standalone ``secret/<name>`` values
-  only, each audited as ``secret_resolved``. The value is handed to the child
-  the CLI starts, which is readable by the agent that ran the command; the docs
-  and the UI say so.
+  only, and only those a person granted to local programs in the desktop app
+  (the ``local_process`` binding, presence-gated, never a default); each answer
+  is audited as ``secret_resolved``. The value is handed to the child the CLI
+  starts, which is readable by whoever started it — an agent included — which
+  is exactly why the grant is a person's decision. Asking for the grant, or
+  withdrawing it, needs no presence: asking only waits, withdrawing only narrows.
 """
 
 from __future__ import annotations
@@ -34,11 +37,19 @@ from coffer.application.secret.presence import CHALLENGE_TTL_SECONDS
 from coffer.domain.audit import AuditEventType
 from coffer.domain.secret_errors import (
     PresenceGrantInvalid,
+    SecretBindingPending,
+    SecretBindingRejected,
     SecretMissing,
     SecretNameInvalid,
     SecretNotFound,
 )
-from coffer.domain.secrets import is_valid_secret_name, secret_ref
+from coffer.domain.secrets import (
+    LOCAL_PROCESS_SLOT,
+    SecretApproval,
+    is_valid_secret_name,
+    local_process_destination,
+    secret_ref,
+)
 from coffer.domain.sync.errors import MasterKeyPassphraseTooShort
 from coffer.infrastructure.secret import key_backup
 from coffer.surfaces.http.auth import require_token
@@ -46,6 +57,7 @@ from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.secret_approval_routes import router as approval_router
 from coffer.surfaces.http.secret_boundary_wiring import (
     get_presence_grants,
+    get_secret_boundary,
 )
 from coffer.surfaces.http.secret_composition import (
     get_master_key_manager,
@@ -53,6 +65,8 @@ from coffer.surfaces.http.secret_composition import (
 )
 from coffer.surfaces.http.secret_plaintext_routes import router as plaintext_router
 from coffer.surfaces.http.secret_schemas import (
+    LocalAccessIn,
+    LocalAccessOut,
     MasterKeyExportIn,
     MasterKeyExportOut,
     PresenceChallengeIn,
@@ -165,6 +179,37 @@ def _write_new_file(directory: pathlib.Path, name: str, text: str) -> pathlib.Pa
 # --- coffer run ------------------------------------------------------------------
 
 
+async def _ask_local(names: list[str], actor: str, audit: AuditService) -> list[SecretApproval]:
+    """The local-process approvals ``names`` still wait on (empty: all granted).
+    A request made here for the first time is audited as asked for."""
+    boundary = get_secret_boundary()
+    dest = local_process_destination()
+    before = {a.id for a in await asyncio.to_thread(boundary.list, status="pending")}
+    waiting: list[SecretApproval] = []
+    for name in names:
+        waiting += await asyncio.to_thread(
+            boundary.check, dest, {LOCAL_PROCESS_SLOT: secret_ref(name)}, actor=actor
+        )
+    for approval in waiting:
+        if approval.status == "pending" and approval.id not in before:
+            await audit.record(
+                AuditEventType.SECRET_APPROVAL_REQUESTED.value,
+                actor=actor,
+                details={"approval_id": approval.id, "op": approval.op, "ref": approval.ref},
+            )
+    return waiting
+
+
+def _check_names(names: list[str], store: Any) -> list[str]:
+    wanted = list(dict.fromkeys(names))
+    for name in wanted:
+        if not is_valid_secret_name(name):
+            raise SecretNameInvalid(name)
+        if not store.exists(secret_ref(name)):
+            raise SecretNotFound(name)
+    return wanted
+
+
 @router.post("/resolve", response_model=ResolvedSecretsOut)
 async def resolve_for_run(
     body: ResolveSecretsIn,
@@ -172,16 +217,27 @@ async def resolve_for_run(
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> ResolvedSecretsOut:
-    """Standalone secrets for one `coffer run` child — never a resource's secret.
+    """Standalone secrets for one `coffer run` child — never a resource's secret,
+    and only those a person granted to local programs.
 
     A resource's secret (an MCP token, a provider key, a channel token) is not
     a ``secret/`` name and so is not answerable here: it goes only to the
-    destination it was approved for.
+    destination it was approved for. A standalone secret without the
+    local-process grant is refused (``SECRET_BINDING_PENDING``, the request now
+    waiting in the desktop app; ``SECRET_BINDING_REJECTED`` once refused) and no
+    value is read. The grant does not depend on the approval switch or the
+    build: whoever runs ``coffer run`` — an agent too — can read what it is
+    handed, so only a person's approval lets a value out this way.
     """
+    wanted = await asyncio.to_thread(_check_names, body.names, store)
+    waiting = await _ask_local(wanted, actor, audit)
+    refused = [a for a in waiting if a.status == "rejected"]
+    if refused:
+        raise SecretBindingRejected([a.id for a in refused], [a.describe() for a in refused])
+    if waiting:
+        raise SecretBindingPending([a.id for a in waiting], [a.describe() for a in waiting])
     values: dict[str, str] = {}
-    for name in dict.fromkeys(body.names):
-        if not is_valid_secret_name(name):
-            raise SecretNameInvalid(name)
+    for name in wanted:
         value = await asyncio.to_thread(store.get, secret_ref(name))
         if value is None:
             raise SecretNotFound(name)
@@ -198,3 +254,40 @@ async def resolve_for_run(
             },
         )
     return ResolvedSecretsOut(values=values)
+
+
+@router.post("/local-access/request", response_model=LocalAccessOut)
+async def request_local_access(
+    body: LocalAccessIn,
+    store: Any = Depends(get_secret_store),  # noqa: B008
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> LocalAccessOut:
+    """Ask for a standalone secret's local-process grant. Only records the
+    request: the grant takes a person's approval in the desktop app."""
+    (name,) = await asyncio.to_thread(_check_names, [body.name], store)
+    waiting = await _ask_local([name], actor, audit)
+    if not waiting:
+        return LocalAccessOut(local_access="on")
+    if waiting[0].status == "rejected":
+        raise SecretBindingRejected([waiting[0].id], [waiting[0].describe()])
+    return LocalAccessOut(local_access="pending", approval_id=waiting[0].id)
+
+
+@router.post("/local-access/revoke", response_model=LocalAccessOut)
+async def revoke_local_access(
+    body: LocalAccessIn,
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> LocalAccessOut:
+    """Withdraw a standalone secret's local-process grant (and any request for
+    it). Needs no presence: it only narrows."""
+    if not is_valid_secret_name(body.name):
+        raise SecretNameInvalid(body.name)
+    ref = secret_ref(body.name)
+    had = await asyncio.to_thread(get_secret_boundary().revoke_local, ref)
+    if had:
+        await audit.record(
+            AuditEventType.SECRET_LOCAL_ACCESS_REVOKED.value, actor=actor, details={"ref": ref}
+        )
+    return LocalAccessOut(local_access="off")

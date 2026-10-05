@@ -819,6 +819,7 @@
       "secret_imported": "导入了密钥",
       "secret_notes_updated": "修改了密钥的名称或描述",
       "secret_protection_enabled": "重新开启了密钥审批",
+      "secret_local_access_revoked": "撤销了 coffer run 把密钥交给程序的授权",
       "storage_cache_cleared": "清除了可重建的缓存",
       "vault_file_edited": "在磁盘上编辑了一个保险库文件",
       "vault_file_restored": "恢复了一个保险库文件的早期版本",
@@ -5286,6 +5287,7 @@
       "addValue": "添加值"
     },
     "kind": {
+      "local_process": "coffer run（本机程序）",
       "mcp_server": "MCP 服务器",
       "custom_tool": "自定义工具",
       "skill": "Skill",
@@ -5299,6 +5301,15 @@
     "usedBy": {
       "nothing": "无",
       "title": "使用方"
+    },
+    "localAccess": {
+      "on": "coffer run 可把它交给本机程序（包括智能体启动的程序）",
+      "off": "只由 Coffer 使用，coffer run 不能交给程序",
+      "pending": "等待你在 Coffer 应用中批准",
+      "allow": "允许 coffer run…",
+      "revoke": "撤销",
+      "revoked": "coffer run 不能再把这个密钥交给程序",
+      "help": "在你允许之前，coffer run 会拒绝使用这个密钥。允许会生成一条请求，需在 Coffer 应用中批准；批准后，coffer run 启动的任何程序都能读到它的值，包括智能体启动的程序。撤销立即生效。"
     },
     "menu": {
       "label": "{{name}} 的操作",

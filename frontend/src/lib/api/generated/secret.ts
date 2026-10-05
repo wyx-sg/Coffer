@@ -191,6 +191,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/local-access/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Local Access
+         * @description Ask for a standalone secret's local-process grant. Only records the
+         *     request: the grant takes a person's approval in the desktop app.
+         */
+        post: operations["request_local_access_api_v1_secrets_local_access_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/local-access/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Local Access
+         * @description Withdraw a standalone secret's local-process grant (and any request for
+         *     it). Needs no presence: it only narrows.
+         */
+        post: operations["revoke_local_access_api_v1_secrets_local_access_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/notes": {
         parameters: {
             query?: never;
@@ -308,11 +350,17 @@ export interface paths {
         put?: never;
         /**
          * Resolve For Run
-         * @description Standalone secrets for one `coffer run` child — never a resource's secret.
+         * @description Standalone secrets for one `coffer run` child — never a resource's secret,
+         *     and only those a person granted to local programs.
          *
          *     A resource's secret (an MCP token, a provider key, a channel token) is not
          *     a ``secret/`` name and so is not answerable here: it goes only to the
-         *     destination it was approved for.
+         *     destination it was approved for. A standalone secret without the
+         *     local-process grant is refused (``SECRET_BINDING_PENDING``, the request now
+         *     waiting in the desktop app; ``SECRET_BINDING_REJECTED`` once refused) and no
+         *     value is read. The grant does not depend on the approval switch or the
+         *     build: whoever runs ``coffer run`` — an agent too — can read what it is
+         *     handed, so only a person's approval lets a value out this way.
          */
         post: operations["resolve_for_run_api_v1_secrets_resolve_post"];
         delete?: never;
@@ -565,6 +613,24 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * LocalAccessIn
+         * @description A standalone secret's local-process grant to ask for or withdraw.
+         */
+        LocalAccessIn: {
+            /** Name */
+            name: string;
+        };
+        /** LocalAccessOut */
+        LocalAccessOut: {
+            /** Approval Id */
+            approval_id: string | null;
+            /**
+             * Local Access
+             * @enum {string}
+             */
+            local_access: "on" | "pending" | "off";
         };
         /** MasterKeyExportIn */
         MasterKeyExportIn: {
@@ -853,6 +919,8 @@ export interface components {
             label: string | null;
             /** Last Used At */
             last_used_at: string | null;
+            /** Local Access */
+            local_access: ("on" | "pending" | "off") | null;
             /**
              * Locked
              * @default false
@@ -1364,6 +1432,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretImportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    request_local_access_api_v1_secrets_local_access_request_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAccessIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAccessOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_local_access_api_v1_secrets_local_access_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAccessIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAccessOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

@@ -65,6 +65,13 @@ export const secretsApi = {
         body: { require_approval: requireApproval },
       }),
     ),
+  /** Ask to let `coffer run` hand a standalone secret to local programs; records an approval a
+   *  person applies in the desktop app. */
+  requestLocalAccess: (name: string) =>
+    unwrap(getApiClient().POST("/secrets/local-access/request", { body: { name } })),
+  /** Withdraw that grant. Needs no presence: revoking only narrows. */
+  revokeLocalAccess: (name: string) =>
+    unwrap(getApiClient().POST("/secrets/local-access/revoke", { body: { name } })),
   /** Refuse one. Needs no presence: refusing only narrows what is sent. */
   rejectApproval: (id: string) =>
     unwrap(

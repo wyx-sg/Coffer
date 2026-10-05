@@ -64,6 +64,14 @@ class BoundaryDaemon:
         assert r.status_code == 200, r.text
         return r.json()
 
+    def grant_local(self, name: str) -> None:
+        """Grant a standalone secret to local programs (`coffer run`) the way a
+        person does: ask, then approve in the desktop app with a presence grant."""
+        r = self.client.post("/api/v1/secrets/local-access/request", json={"name": name})
+        assert r.status_code == 200, r.text
+        if r.json()["local_access"] == "pending":
+            self.approve(r.json()["approval_id"])
+
     # --- convenience ---------------------------------------------------------
 
     def store(self, ref: str, value: str) -> None:

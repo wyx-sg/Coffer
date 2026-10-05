@@ -54,6 +54,8 @@ A real line looks like this:
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
+The daemon does not write the HTTP client libraries' INFO request lines (`httpx`, `httpcore`) to `daemon.log`: they carry the full request URL, and a Telegram bot token travels in the URL path.
+
 `structlog` is also configured to route through the same handlers, so future code that logs through structlog's own API produces the same shape rather than printing to stdout.
 
 The timestamp is the moment the record was created, not the clock at format time. That keeps one record at one time even when two handlers format it, and it keeps timestamps lexically sortable, which the readers rely on for their `since` filter.
@@ -172,7 +174,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
 | Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
@@ -188,6 +190,7 @@ Three events are no longer recorded, because the web UI no longer edits an agent
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
+- `secret_local_access_revoked` — a person revoked a standalone secret's grant to local programs, so `coffer run` can no longer resolve it. Granting is recorded as an ordinary approval.
 - `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` — a secret waited to be sent somewhere new (or a value in use waited to be replaced, or the protection waited to be switched off), and a person answered. See [Secrets](/guides/secrets#approvals).
 - `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
 

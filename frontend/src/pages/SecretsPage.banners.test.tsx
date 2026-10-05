@@ -66,6 +66,7 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     created_at: "2026-08-12T09:00:00Z",
     last_used_at: null,
     readable_by_local_processes: false,
+    local_access: null,
     unreferenced: false,
     uri: null,
     label: null,

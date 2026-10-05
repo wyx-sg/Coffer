@@ -455,7 +455,9 @@ def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryD
     rows = {r["ref"]: r for r in d.client.get("/api/v1/secrets").json()["refs"]}
 
     assert rows["secret/lonely"]["unreferenced"] is True
-    assert rows["secret/lonely"]["readable_by_local_processes"] is True
+    # No local program reads a standalone secret until a person grants it.
+    assert rows["secret/lonely"]["readable_by_local_processes"] is False
+    assert rows["secret/lonely"]["local_access"] == "off"
     assert rows["secret/lonely"]["uri"] == "coffer://secret/lonely"
     assert rows["secret/used-one"]["mentioned_by_skills"] == ["db-tools"]
     assert rows["secret/used-one"]["unreferenced"] is False

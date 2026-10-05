@@ -634,12 +634,26 @@ env file and every such value in its own environment through
 `POST /api/v1/secrets/resolve`, which MUST answer standalone names
 only and MUST record one `secret_resolved` entry per name carrying the ref, the name,
 the program and the working directory and never the value or the rest of the
-arguments. The values MUST be set only in the child's environment; the child's
+arguments. It MUST answer only a secret a person granted to local programs: the
+`local_process` destination (uid `coffer-run`, slot `env`), approved in the
+desktop app with a presence grant like any other destination, and never approved
+by the build's default, by the approval switch being off, or by a value having
+just been supplied — whoever runs `coffer run`, an agent included, owns the
+child and can read what it is handed. A resolve naming any secret without the
+grant MUST read no value, MUST start nothing, and MUST answer
+`SECRET_BINDING_PENDING` with the request waiting in the desktop app
+(`SECRET_BINDING_REJECTED` once a person refused it). `POST
+/api/v1/secrets/local-access/request {name}` MUST record that request without
+granting it, and `POST /api/v1/secrets/local-access/revoke {name}` MUST withdraw
+the grant and any request at once, without a presence grant, and record
+`secret_local_access_revoked`. A request MUST keep waiting when approvals are
+brought up to the configuration, since no configuration asks for it. The values MUST be set only in the child's environment; the child's
 standard output and error MUST have every exact value of eight characters or
 more replaced by `***`, including a value split across two reads, unless
 `--no-masking` is given; the child's exit status MUST pass through. The docs
-MUST say that this guards against accidents and does not hide a secret from an
-agent that runs the command.
+MUST say that masking guards against accidents and does not hide a granted
+secret from an agent that runs the command, and that a secret an agent should
+only use stays without the grant and reaches its service through Coffer.
 
 #### Scenario: coffer run sets a secret only in the child
 - **GIVEN** a standalone secret `db-password`
@@ -651,6 +665,23 @@ agent that runs the command.
 - **GIVEN** a standalone secret whose value the child prints, split across two writes
 - **WHEN** it runs under `coffer run`
 - **THEN** the output shows `***` where the value was and never the value
+
+#### Scenario: coffer run gets nothing until a person grants the secret
+- **GIVEN** a standalone secret never granted to local programs, on a build whose approval switch is on or off
+- **WHEN** a resolve names it
+- **THEN** it is refused with `SECRET_BINDING_PENDING`, no value is returned and no `secret_resolved` entry is recorded
+- **AND** a pending approval for the `local_process` destination waits in the desktop app, saying an agent's program could read the value
+
+#### Scenario: coffer run without a grant starts nothing and prints no value
+- **GIVEN** a standalone secret without the grant, named by `--secret` or by a `coffer://secret/` value in the environment
+- **WHEN** `coffer run` is asked to start a command with it
+- **THEN** the command does not start, the exit status is not zero, and the output points to the Coffer app and holds no value
+
+#### Scenario: a granted secret reaches coffer run until the grant is withdrawn
+- **GIVEN** a standalone secret whose local-process request a person approved with a presence grant
+- **WHEN** a resolve names it, the grant is revoked, and a resolve names it again
+- **THEN** the first resolve returns the value and the second is refused
+- **AND** the listing marks it readable by local processes only while the grant stands, and the revoke is audited
 
 #### Scenario: a resource's secret cannot be resolved by coffer run
 - **GIVEN** an MCP server's token stored under its minted ref
@@ -665,8 +696,10 @@ stored (`created_at`) and when a consumer last had it decrypted on this Mac
 (`last_used_at`, stamped at most once a minute and not by a reveal), the resources that cite it with the slot each cites it under (and the sync remote, as kind `sync_remote`, for its push token), its label, description and
 `created_for`, its `coffer://secret/<id>` and the skills whose files cite that URI, whether
 nothing references it, the sync remote's push token included (`unreferenced`), the destinations it is approved for or
-waits on, and whether another process of this user can read the value where
-Coffer puts it (a standalone secret, or a stdio MCP server's environment). The
+waits on, a standalone secret's local-process grant (`local_access`: `on`,
+`pending` or `off`), and whether another process of this user can read the value where
+Coffer puts it (a standalone secret granted to local programs, or a stdio MCP
+server's environment). The
 listing reads what cites each secret from the citation index (see "Keep an index of what cites each secret"), decrypts nothing and records no audit entry; who used a secret is audited, not listed here (see "Audit every use of a secret by who used it"). It MUST leave out an
 agent's model-proxy token (`proxy-token/<agent name>`): Coffer mints it and the
 agent fetches it itself, so no person enters, replaces or cites it. A delete MUST also be
@@ -683,12 +716,12 @@ MUST forget its approved destinations.
 #### Scenario: a secret nothing references is listed as unreferenced
 - **GIVEN** a standalone secret no resource and no skill cites, and another that a skill cites by URI
 - **WHEN** the secrets are listed
-- **THEN** the first is marked unreferenced and readable by local processes
+- **THEN** the first is marked unreferenced, with no local-process grant and not readable by local processes
 - **AND** the second names the skill, and deleting it is refused naming that skill
 
 #### Scenario: the list says when each secret was created and last used
 - **GIVEN** a standalone secret stored and never used
-- **WHEN** the secrets are listed, then `coffer run` resolves it, then they are listed again
+- **WHEN** the secrets are listed, then `coffer run` resolves it after a person granted it, then they are listed again
 - **THEN** the first listing carries its `created_at` and no `last_used_at`
 - **AND** the second carries a `last_used_at` no later than now
 

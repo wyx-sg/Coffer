@@ -102,9 +102,10 @@ delete it. See [Skills](/guides/skills).
 
 The command that hands [standalone secrets](#standalone-secret) to one child process:
 `coffer run --secret ENV=<id> -- cmd`. The values are set only in that child's environment and
-masked as `***` in its output, and each resolve is audited as `secret_resolved`. It keeps a
-secret out of files and transcripts by accident; it does not hide it from an agent that runs
-the command, which is the child's parent. See [Secrets](/guides/secrets#run-a-command-with-a-secret).
+masked as `***` in its output, and each resolve is audited as `secret_resolved`. It resolves only a
+secret a person allowed local programs to use, in the desktop app. It keeps a secret out of
+files and transcripts by accident; it does not hide it from whoever runs the command, which is
+the child's parent, so the allowance is what guards it. See [Secrets](/guides/secrets#run-a-command-with-a-secret).
 
 ### Connection
 
