@@ -526,10 +526,8 @@ parse, the agent, the source path, the reason and when that agent's memory was l
 nothing failing, if known. The answer MUST be read from the `memory_aggregated` audit events,
 which therefore carry each failure's agent, path and reason, so it is the same whoever started
 the read — the timer or Update memory — and survives a daemon restart. Only
-the newest read decides what failed. The Memory page's header MUST say "Reads automatically every hour · 14 min ago" (just "Read 14 min ago" while
-automatic reading is off), with
-"· 1 agent failed" when the last read left an agent unread, and the page MUST then show a
-warning banner naming the agent and the path, saying that agent's memories stay as its last full read
+the newest read decides what failed. When the last read left an agent unread the Memory page MUST
+show a warning banner naming the agent and the path, saying that agent's memories stay as its last full read
 left them, with **Retry** (Update memory) and **Ask an agent ▾**, whose prompt asks the agent to fix
 the path's read permission.
 
@@ -543,10 +541,9 @@ the path's read permission.
 ### Requirement: Show Update memory's progress
 While Update memory runs, `GET /api/v1/upkeep/runs` MUST list it as one `memory` run named
 `update` beside the per-partition claims: with no count while it is reading the agents' memory,
-then with `done` and `total` over the partitions it has to distil. The Memory page's header MUST
-read "Reading agents' memory…" and then "Distilling 2 of 5 partitions" from it, the Update
-memory button MUST read "Updating…" while it is listed, and each partition row whose distil pass
-is in flight MUST read "Distilling…".
+then with `done` and `total` over the partitions it has to distil. The Update memory button MUST
+read "Updating…" while it is listed, and each partition row whose distil pass is in flight MUST
+read "Distilling…"; the Memory page's header carries no status line beside the button.
 
 #### Scenario: update memory reports how many partitions it has distilled
 - **GIVEN** four partitions, three of them holding entries no pass has distilled

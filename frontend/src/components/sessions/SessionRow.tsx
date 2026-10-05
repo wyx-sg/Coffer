@@ -6,31 +6,30 @@
 // directory, when it was last active, an inline Stop while a turn runs and a
 // ⋯ menu with Rename and Delete…. Rename edits the title in place — Enter
 // saves, Esc cancels. The row's primary action is `onPrimaryAction` (Open in
-// terminal, spec chat "Open a conversation in the terminal"): pressing the row
-// or the main part of its split button runs it, and the ▾ menu holds Copy
-// command. A row with no native session yet shows the split button disabled,
-// with the reason in a tooltip. A list that has no primary action leaves the
-// row inert.
+// <terminal>, spec chat "Open a conversation in the terminal"): pressing the
+// row or the main part of its split button runs it in the preferred terminal,
+// named on the button; the ▾ menu holds Open in <other terminal> for each
+// other terminal on this machine, then Copy command — the same shape as Hand
+// off to <Agent>. The row's actions always show. A row with no native session
+// yet shows the split button disabled, with the reason in a tooltip. A list
+// that has no primary action leaves the row inert.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Pencil, Square, SquareTerminal, Trash2 } from "lucide-react";
+import { Pencil, Square, Trash2 } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
-import { SplitButton } from "@/components/ui/split-button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { rowTime } from "@/lib/conversations/time";
 import type { SessionRowData } from "@/lib/sessions/rows";
+import type { TerminalChoice } from "@/lib/hooks/useTerminals";
 import { cn } from "@/lib/utils";
 import { GRID, type SessionColumns } from "./columns";
+import { SessionOpenButton } from "./SessionOpenButton";
 import { SourceBadge } from "./SourceBadge";
-
-// Hidden (its space kept) until the pointer or focus is on the row.
-const REVEAL =
-  "opacity-0 transition-opacity duration-fast group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-within:opacity-100";
 
 interface Props {
   row: SessionRowData;
@@ -38,8 +37,13 @@ interface Props {
   /** The agent's display name, from the registry. */
   agentName?: string;
   now: Date;
-  /** What pressing the row does; leave out and the row is inert. */
-  onPrimaryAction?: (row: SessionRowData) => void;
+  /** What pressing the row does; leave out and the row is inert. Given a
+   *  `terminal`, it is the ▾ pick of another terminal than the preferred one. */
+  onPrimaryAction?: (row: SessionRowData, terminal?: string) => void;
+  /** The preferred terminal's name, on the main part of the split button. */
+  terminalLabel?: string;
+  /** The other terminals the ▾ menu offers to open in. */
+  otherTerminals?: readonly TerminalChoice[];
   /** Copies the row's resume command (the split button's ▾ menu). */
   onCopyCommand?: (row: SessionRowData) => void;
   /** Whether the row has a session to open; a row that has none is disabled. Default: it does. */
@@ -58,6 +62,8 @@ export function SessionRow({
   agentName,
   now,
   onPrimaryAction,
+  terminalLabel,
+  otherTerminals = [],
   onCopyCommand,
   canOpen = () => true,
   onRename,
@@ -211,36 +217,16 @@ export function SessionRow({
           </Button>
         ) : null}
         {onPrimaryAction ? (
-          <span className={cn("inline-flex", REVEAL)}>
-            <SplitButton
-              size="sm"
-              icon={<SquareTerminal aria-hidden />}
-              label={t("sessions.row.open")}
-              disabled={!openable}
-              tooltip={openable ? undefined : t("sessions.row.noSession")}
-              onClick={() => onPrimaryAction(row)}
-              menuLabel={t("sessions.row.openOptions", { title: row.title })}
-              actions={
-                openable && onCopyCommand
-                  ? [
-                      {
-                        key: "copy-command",
-                        label: t("sessions.row.copyCommand"),
-                        icon: Copy,
-                        onSelect: () => onCopyCommand(row),
-                      },
-                    ]
-                  : []
-              }
-            />
-          </span>
-        ) : null}
-        <span className={cn("inline-flex", REVEAL)}>
-          <ActionMenu
-            label={t("sessions.row.moreActions", { title: row.title })}
-            actions={actions}
+          <SessionOpenButton
+            row={row}
+            openable={openable}
+            terminalLabel={terminalLabel}
+            otherTerminals={otherTerminals}
+            onOpen={onPrimaryAction}
+            onCopyCommand={onCopyCommand}
           />
-        </span>
+        ) : null}
+        <ActionMenu label={t("sessions.row.moreActions", { title: row.title })} actions={actions} />
       </span>
     </li>
   );

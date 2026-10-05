@@ -120,7 +120,7 @@ The theme, preferred editor, preferred terminal and hand-off agent are stored in
 
 ### Preferred terminal and hand-off agent {#preferred-terminal}
 
-Two choices under **Settings › General › Tables and files** decide where an agent opens when Coffer hands you off to it: a conversation or session row (**Open in terminal**), the hand-off button (**Hand off to &lt;Agent&gt;**), and **Tidy** and **Tidy all** on Knowledge and Memory. Both are kept in this browser, like **Open files with**.
+Two choices under **Settings › General › Tables and files** decide where an agent opens when Coffer hands you off to it: a conversation or session row (**Open in &lt;terminal&gt;**), the hand-off button (**Hand off to &lt;Agent&gt;**), and **Tidy** and **Tidy all** on Knowledge and Memory. Both are kept in this browser, like **Open files with**.
 
 **Preferred terminal** is built like the preferred editor:
 
