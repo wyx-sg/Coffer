@@ -28,7 +28,7 @@ back and forth. Each state change is logged once, never per attempt. The
 supervision loop itself runs under the daemon's task supervisor, which restarts
 it should it ever crash. ``state()`` is what the status surface reads and must
 not flatter: ``connected`` only while the socket is up, and
-``sdk_missing``/``error`` carry the text of what went wrong.
+``sdk_missing``/``rejected``/``error`` carry the text of what went wrong.
 """
 
 from __future__ import annotations
@@ -44,6 +44,7 @@ from typing import Any
 
 from coffer.application.runtime.supervisor import spawn, spawn_restarting
 from coffer.infrastructure.channel.seatalk_sdk import SeaTalkSdkMissingError, load_sdk
+from coffer.infrastructure.channel.seatalk_ws_errors import is_kick, is_refusal
 from coffer.infrastructure.channel.seatalk_ws_thread import listen_on_thread, require
 
 _logger = logging.getLogger(__name__)
@@ -64,17 +65,6 @@ _HEALTHY_AFTER_SECONDS = 30.0
 # the envelope to the adapter's one ingest seam.
 IngestFn = Callable[[str, dict[str, Any]], Awaitable[None]]
 SdkLoader = Callable[[], ModuleType]
-
-
-def _is_kick(error: BaseException) -> bool:
-    """Whether this exception is the SDK's ``KickError``.
-
-    Matched by class name rather than ``isinstance``: the SDK is imported
-    dynamically from an operator-supplied directory, so its error classes are
-    not importable at module scope here and its internal module layout is not
-    part of any contract we can pin.
-    """
-    return type(error).__name__ == "KickError"
 
 
 class SeaTalkWebSocketConnector:
@@ -127,7 +117,9 @@ class SeaTalkWebSocketConnector:
 
     def state(self) -> tuple[str, str | None]:
         """``(state, last error text)`` — one of
-        ``connecting | connected | kicked | sdk_missing | error``."""
+        ``connecting | connected | kicked | sdk_missing | rejected | error``:
+        ``rejected`` is SeaTalk refusing the app's credentials, ``error`` any
+        other failed attempt (the network, a dropped socket)."""
         with self._lock:
             return self._state, self._error
 
@@ -212,9 +204,14 @@ class SeaTalkWebSocketConnector:
                 # A kick arrives BOTH ways: the dispatcher calls ``on_kick`` and
                 # then raises ``KickError`` out of ``listen()``. The backoff
                 # decision belongs here, where the connection has actually ended.
-                kicked = _is_kick(e) or self._was_kicked()
+                kicked = is_kick(e) or self._was_kicked()
                 if kicked:
                     self._set_state("kicked", self._kick_detail(e))
+                elif is_refusal(e):
+                    # Still retried on the ladder: a secret replaced under the
+                    # same ref, or an app re-enabled on the platform, recovers
+                    # with no restart.
+                    self._set_state("rejected", f"{type(e).__name__}: {e}")
                 else:
                     self._set_state("error", f"{type(e).__name__}: {e}")
             if self._stopping.is_set():

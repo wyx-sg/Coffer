@@ -191,12 +191,24 @@ describe("the header says what state the channel is in", () => {
       "Retry",
     ],
     [
-      "connection error",
+      "app refused by seatalk",
       TEAM,
-      makeStatus(TEAM, { inbound: { websocket_state: "error", websocket_error: "auth failed" } }),
+      makeStatus(TEAM, {
+        inbound: { websocket_state: "rejected", websocket_error: "RegisterError: code=1" },
+      }),
       "Token rejected",
       "connectFailed",
       "Replace secret",
+    ],
+    [
+      "network error",
+      TEAM,
+      makeStatus(TEAM, {
+        inbound: { websocket_state: "error", websocket_error: "gaierror: [Errno 8] not known" },
+      }),
+      "Network problem",
+      "unreachable",
+      "Reconnect now",
     ],
     [
       "telegram stopped",
@@ -275,6 +287,11 @@ describe("the header says what state the channel is in", () => {
       const box = screen.getByTestId(testId);
       expect(within(box).getByRole("button", { name: primary })).toBeInTheDocument();
     }
+    // Replacing the secret is offered only where the secret is the problem.
+    if (primary !== "Replace secret" && primary !== "Replace token" && !quiet && banner) {
+      const box = screen.getByTestId(testId);
+      expect(within(box).queryByRole("button", { name: /Replace/ })).toBeNull();
+    }
   });
 });
 
@@ -317,7 +334,10 @@ acceptance(
       [
         TEAM,
         makeStatus(TEAM, {
-          inbound: { websocket_state: "error", websocket_error: "register rejected: bad app id" },
+          inbound: {
+            websocket_state: "rejected",
+            websocket_error: "register rejected: bad app id",
+          },
           diagnostics: [{ code: "privacy_mode", message: "Privacy mode is on in BotFather." }],
         }),
       ],

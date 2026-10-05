@@ -76,7 +76,7 @@ async def test_connecting_websocket_is_a_reconnecting_warning() -> None:
     assert item.since is None
 
 
-@pytest.mark.parametrize("state", ["kicked", "error"])
+@pytest.mark.parametrize("state", ["kicked", "rejected", "error"])
 async def test_a_down_websocket_is_an_error_carrying_the_recorded_text(state: str) -> None:
     [item] = await _source(_status("c1", ws=(state, "another   process\nholds it"))).items()
     assert item.reason_code == "channel_disconnected"

@@ -89,6 +89,7 @@ export function useSendTestBlockedReason(channel: ResourceOut, view: ChannelView
     case "approvalRefused":
       return t("channels.header.sendTestWhy.waitingApproval");
     case "connecting":
+    case "unreachable":
     case "loading":
       return t("channels.header.sendTestWhy.reconnecting");
     default:

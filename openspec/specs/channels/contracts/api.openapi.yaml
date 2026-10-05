@@ -598,6 +598,7 @@ components:
             - connected
             - kicked
             - sdk_missing
+            - rejected
             - error
             type: string
           - type: 'null'

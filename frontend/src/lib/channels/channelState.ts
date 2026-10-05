@@ -25,6 +25,7 @@ export type ChannelStateKey =
   | "kicked"
   | "sdkMissing"
   | "connectFailed"
+  | "unreachable"
   | "waitingApproval"
   | "approvalRefused"
   | "stopped"
@@ -82,6 +83,7 @@ const TONE: Record<ChannelStateKey, StatusTone> = {
   kicked: "err",
   sdkMissing: "err",
   connectFailed: "err",
+  unreachable: "warn",
   waitingApproval: "warn",
   approvalRefused: "err",
   stopped: "err",
@@ -101,6 +103,7 @@ const PRIMARY: Record<ChannelStateKey, ChannelPrimaryAction> = {
   kicked: "takeBack",
   sdkMissing: "retryStart",
   connectFailed: "replaceSecret",
+  unreachable: "reconnect",
   waitingApproval: "openSecrets",
   approvalRefused: "openSecrets",
   stopped: "replaceSecret",
@@ -117,7 +120,11 @@ function localState(status: ChannelStatus): ChannelStateKey {
   const ws = status.inbound?.websocket_state ?? null;
   if (ws === "kicked") return "kicked";
   if (ws === "sdk_missing") return "sdkMissing";
-  if (ws === "error") return "connectFailed";
+  // Only SeaTalk refusing the app's credentials is a rejected secret; any
+  // other failed attempt (DNS, a timeout, a dropped socket) is the network,
+  // which retrying fixes and a new secret would not.
+  if (ws === "rejected") return "connectFailed";
+  if (ws === "error") return "unreachable";
   // A secret waiting on the owner's approval is the cause of a stopped adapter
   // that no connection state explains, so it is named before "stopped".
   if (!status.running && status.secret_approval) {

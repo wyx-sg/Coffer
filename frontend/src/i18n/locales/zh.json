@@ -3358,6 +3358,10 @@
         "word": "连接中",
         "line": "正在连接…"
       },
+      "unreachable": {
+        "word": "网络问题",
+        "line": "连不上平台——正在重试"
+      },
       "reconnecting": {
         "word": "重新连接中",
         "line": "正在重新连接…"
@@ -3422,6 +3426,10 @@
       "unknownMachine": {
         "title": "设置为在一台不在你同步组里的 Mac 上运行",
         "body": "你同步的 Mac 里没有一台接手这个渠道，所以没有 Mac 会启动机器人，它永远不会回话。在本机运行它，或在「设置」里选择应该运行它的 Mac。"
+      },
+      "unreachable": {
+        "title": "连不上 {{platform}}——正在重试",
+        "body": "上一次尝试在途中失败（网络、DNS 或超时），不是 {{platform}} 拒绝了这个应用。Coffer 会一直重试，不需要更换任何东西。"
       },
       "reconnecting": {
         "title": "与 {{platform}} 的连接已断开——正在重新连接",

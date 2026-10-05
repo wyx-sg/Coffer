@@ -42,7 +42,24 @@ describe("describeChannel", () => {
     ],
     ["kicked", ws("kicked"), "kicked", "attention", "err", "takeBack"],
     ["sdk missing", ws("sdk_missing"), "sdkMissing", "attention", "err", "retryStart"],
-    ["error", ws("error", "bad id"), "connectFailed", "attention", "err", "replaceSecret"],
+    // spec channels/seatalk "Report the websocket connection as the channel's inbound state":
+    // only SeaTalk refusing the app is a rejected secret; a network failure is not.
+    [
+      "rejected",
+      ws("rejected", "RegisterError: code=1"),
+      "connectFailed",
+      "attention",
+      "err",
+      "replaceSecret",
+    ],
+    [
+      "network error",
+      ws("error", "gaierror: nodename nor servname provided"),
+      "unreachable",
+      "attention",
+      "warn",
+      "reconnect",
+    ],
     ["stopped", { running: false, inbound: null }, "stopped", "attention", "err", "replaceSecret"],
     [
       "secret waiting for approval",

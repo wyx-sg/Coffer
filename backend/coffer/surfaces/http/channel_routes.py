@@ -96,7 +96,11 @@ class InboundInfoOut(BaseModel):
     report, so the connection state is the whole health answer.
     """
 
-    websocket_state: Literal["connecting", "connected", "kicked", "sdk_missing", "error"] | None
+    #: ``rejected`` is SeaTalk refusing the app's credentials at register;
+    #: ``error`` any other failed attempt (DNS, a timeout, a dropped socket).
+    websocket_state: (
+        Literal["connecting", "connected", "kicked", "sdk_missing", "rejected", "error"] | None
+    )
     websocket_error: str | None
 
 

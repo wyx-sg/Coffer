@@ -26,8 +26,8 @@ class WebSocketControllerPort(Protocol):
     socket is up — a connection that is retrying is still running, and the
     reconciler must not respawn it every tick. ``state(uid)`` is the honest
     answer about the socket: ``(state, last error)`` where state is one of
-    ``connecting | connected | kicked | sdk_missing | error``, and ``None`` when
-    this channel has no connector at all.
+    ``connecting | connected | kicked | sdk_missing | rejected | error``, and
+    ``None`` when this channel has no connector at all.
 
     Channels are identified here by **uid** — see the note in
     ``runtime_supervision``.

@@ -30,8 +30,8 @@ class InboundInfo:
     exists — so the connection state is the whole health answer.
     """
 
-    # connecting | connected | kicked | sdk_missing | error — None before the
-    # first connection attempt (and on a channel that is not running at all).
+    # connecting | connected | kicked | sdk_missing | rejected | error — None
+    # before the first connection attempt (and on a channel that is not running at all).
     websocket_state: str | None = None
     # The last thing that went wrong on the connection, verbatim, because the
     # two failures that matter (no SDK, another process holds the connection)

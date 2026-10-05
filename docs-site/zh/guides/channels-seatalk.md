@@ -88,7 +88,8 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 | `connected` | **已连接** | 事件正在流入。 |
 | `kicked` | **被挤下线** — 连接被另一个进程占用 | 另一个进程登记了同一个应用。Coffer 会等 60 秒再试，而不是去抢连接。 |
 | `sdk_missing` | **无法启动** — 未找到 SeaTalk SDK | 无法导入 `seatalk_oapi_sdk`。错误信息会写明搜索过的目录。 |
-| `error` | **无法连接** — 连接被拒绝 | 上一次尝试失败；`websocket_error` 原样保存错误信息。Coffer 以 1 到 30 秒的退避重试。 |
+| `rejected` | **Token 被拒** — 连接被拒绝 | SeaTalk 在注册握手时拒绝了这个应用：App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。横幅提供**更换密钥**；`websocket_error` 原样保存 SeaTalk 的回答。Coffer 会继续重试，所以在同一引用下更换密钥后会自行恢复。 |
+| `error` | **网络问题** — 连不上平台——正在重试 | 上一次尝试在途中失败（DNS 失败、超时、连接断开），不是 SeaTalk 拒绝了这个应用；`websocket_error` 原样保存错误信息。Coffer 以 1 到 30 秒的退避重试，横幅提供**立即重新连接**，不会让你更换密钥。 |
 
 第一次尝试之前没有连接状态：消息渠道打开后约两秒内守护进程就会启动它，在那之前 `status.starting` 为 true，页面显示**连接中**，不会显示失败。连接断开期间 SeaTalk 发来的事件，Coffer 不会在任何地方排队保存。
 

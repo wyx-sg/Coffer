@@ -273,7 +273,7 @@ export interface components {
             /** Websocket Error */
             websocket_error: string | null;
             /** Websocket State */
-            websocket_state: ("connecting" | "connected" | "kicked" | "sdk_missing" | "error") | null;
+            websocket_state: ("connecting" | "connected" | "kicked" | "sdk_missing" | "rejected" | "error") | null;
         };
         /** NotifyIn */
         NotifyIn: {
