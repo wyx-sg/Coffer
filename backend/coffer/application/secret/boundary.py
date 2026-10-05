@@ -19,6 +19,11 @@ the value. A binding is approved when:
   unused value may be, it is no longer a race to the first use;
 * or the protection is switched off, which itself takes an approval.
 
+The local-process grant (``coffer run`` handing a standalone secret to a program
+on this machine) is the exception to the last two: a program an agent starts can
+read what it is given, so that grant is only ever a person's approval — never
+the build's default, never a value just supplied — and revoking it needs nobody.
+
 Everything else becomes a pending approval, and nothing is injected. A
 destination reached only at the moment of use (:meth:`require`, :meth:`refresh`)
 never counts as supplied: whatever arrived behind Coffer's back waits.
@@ -42,6 +47,9 @@ from coffer.domain.secret_errors import (
     SecretBindingRejected,
 )
 from coffer.domain.secrets import (
+    LOCAL_PROCESS_KIND,
+    LOCAL_PROCESS_SLOT,
+    LOCAL_PROCESS_UID,
     ORIGIN_DIALOG,
     SecretApproval,
     SecretBinding,
@@ -212,11 +220,15 @@ class SecretBoundary:
         pending: list[SecretApproval] = []
         fp = dest.target_fingerprint
         on = self.protections_on()
+        # Handing a value to a program on this machine is a person's decision only.
+        person_only = dest.kind == LOCAL_PROCESS_KIND
         for slot, ref in refs.items():
             bound = self._store.get_binding(ref, dest.kind, dest.uid, slot)
             if bound is not None and bound.target_fingerprint == fp:
                 continue
-            if not on or (supplied and bound is None and self._supplied(ref, dest.uid)):
+            if not person_only and (
+                not on or (supplied and bound is None and self._supplied(ref, dest.uid))
+            ):
                 self._supersede_bind(ref, dest.kind, dest.uid, slot)
                 self._approve_binding(ref, dest, slot, None)
                 continue
@@ -284,12 +296,17 @@ class SecretBoundary:
                     created.append(approval)
             for slot, ref in refs.items():
                 wanted.add((ref, dest.kind, dest.uid, slot, dest.target_fingerprint))
+        # A local-process request is asked by `coffer run`, not by any configuration:
+        # it waits for the person until decided, whatever the configuration holds.
+        undecided_kinds = {LOCAL_PROCESS_KIND}
         # Pending and refused bindings alike: a refusal of a target that has since
         # changed no longer says anything about the current one.
         undecided = self._store.pending_of_op("bind") + [
             a for a in self._store.list_approvals(status="rejected") if a.op == "bind"
         ]
         for approval in undecided:
+            if approval.destination_kind in undecided_kinds:
+                continue
             key = (
                 approval.ref or "",
                 approval.destination_kind or "",
@@ -353,6 +370,20 @@ class SecretBoundary:
 
     def bindings(self, ref: str | None = None) -> builtins.list[SecretBinding]:
         return self._store.bindings(ref)
+
+    def revoke_local(self, ref: str) -> bool:
+        """Withdraw ``ref``'s local-process grant, and any request for it. Needs
+        nobody: it only narrows. Answers whether there was a grant to withdraw."""
+        had = self._store.delete_binding(
+            ref, LOCAL_PROCESS_KIND, LOCAL_PROCESS_UID, LOCAL_PROCESS_SLOT
+        )
+        self._supersede_bind(ref, LOCAL_PROCESS_KIND, LOCAL_PROCESS_UID, LOCAL_PROCESS_SLOT)
+        for approval in self._store.list_approvals(status="rejected"):
+            if approval.ref == ref and approval.destination_kind == LOCAL_PROCESS_KIND:
+                self._store.decide(
+                    approval.id, "superseded", by="system", at=self._stamp(), only_from="rejected"
+                )
+        return had
 
     def forget(self, ref: str) -> None:
         """A deleted secret takes its bindings with it; a new value is a new secret."""

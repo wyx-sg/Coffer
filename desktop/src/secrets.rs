@@ -209,10 +209,12 @@ pub async fn approve_pending_batch(
 }
 
 /// Whether an approval read from the daemon can be one of several: it waits,
-/// and it is not the switch that turns the protection off.
+/// it is not the switch that turns the protection off, and it is not a grant to
+/// local programs (which an agent can start, so each takes its own prompt).
 fn is_batchable(approval: &Value) -> bool {
     approval.get("status").and_then(Value::as_str) == Some("pending")
         && approval.get("op").and_then(Value::as_str) != Some("disable_protection")
+        && approval.get("destination_kind").and_then(Value::as_str) != Some("local_process")
 }
 
 /// Run blocking work on Tauri's blocking pool.
@@ -367,6 +369,8 @@ mod tests {
         assert!(is_batchable(&a("pending", "bind")));
         assert!(is_batchable(&a("pending", "replace_value")));
         assert!(!is_batchable(&a("pending", "disable_protection")));
+        let local = json!({"status": "pending", "op": "bind", "destination_kind": "local_process"});
+        assert!(!is_batchable(&local));
         assert!(!is_batchable(&a("superseded", "bind")));
         assert!(!is_batchable(&json!({})));
     }

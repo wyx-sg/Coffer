@@ -213,6 +213,11 @@ class SecretApproval:
 
     def describe(self) -> str:
         """One line a person can approve or refuse on sight."""
+        if self.op == "bind" and self.destination_kind == LOCAL_PROCESS_KIND:
+            return (
+                f"let coffer run hand secret {self.ref!r} to programs on this Mac, "
+                "including ones an agent starts, which can read it"
+            )
         if self.op == "bind":
             return (
                 f"send secret {self.ref!r} to {self.destination_kind} "
@@ -250,6 +255,26 @@ BOUNDARY_STATE_KEY_CONTEXT = b"coffer-boundary-state-key/v1"
 DAEMON_ATTEST_KEY_CONTEXT = b"coffer-daemon-attest-key/v1"
 #: The model proxy answers the daemon's challenge with it: this is Coffer's proxy.
 PROXY_ATTEST_KEY_CONTEXT = b"coffer-proxy-attest-key/v1"
+
+
+#: The destination kind of the local-process grant: a standalone secret that
+#: ``coffer run`` may hand to a program on this machine.
+LOCAL_PROCESS_KIND = "local_process"
+#: Its one uid and slot: there is one such destination per secret.
+LOCAL_PROCESS_UID = "coffer-run"
+LOCAL_PROCESS_SLOT = "env"
+
+
+def local_process_destination() -> SecretDestination:
+    """Any program on this Mac that ``coffer run`` starts — including one an agent
+    starts, which can then read the value. A high-trust grant: a person approves it
+    in the desktop app, never the build's default or a value just supplied."""
+    return SecretDestination(
+        kind=LOCAL_PROCESS_KIND,
+        uid=LOCAL_PROCESS_UID,
+        target="any program coffer run starts on this Mac, which can read the value",
+        label="coffer run",
+    )
 
 
 def sync_remote_destination(url: str) -> SecretDestination:

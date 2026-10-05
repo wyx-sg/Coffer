@@ -2155,7 +2155,10 @@ close it and return to the page underneath.
 Secrets live only in Coffer, so wherever a form takes a secret it MUST use the
 one **secret field**: a single picker, "🔑 name ▾", that never shows the value
 and offers no plain-text password input. The menu lists the stored secrets with
-how many things use each and a **New secret…** item; pasting into the empty field
+how many things use each and a **New secret…** item, under a search box that
+matches a secret's name or description; however many secrets are stored the menu
+fits the window, the list scrolling between the search box and the menu's items,
+which stay in view. Pasting into the empty field
 makes a new secret named after the thing being configured (with a suffix when the
 name is taken) that is written to Secrets only when the form is saved; a chosen
 name this Mac holds no value for reads **Missing**. Header and environment rows —
@@ -2172,6 +2175,11 @@ has no prefix field and no Secret | Plain toggle, so a bearer token is stored as
 - **GIVEN** a secret field named for the thing being configured, whose default name is already taken
 - **WHEN** the user pastes a value into it
 - **THEN** it reads a new secret under the default name with a suffix, saved on Add, the value is not shown and nothing is written to Secrets until the form submits
+
+#### Scenario: a long secret menu scrolls under its search box
+- **GIVEN** more stored secrets than the window has room for
+- **WHEN** the user opens a secret field's menu and types part of a secret's name
+- **THEN** the menu fits the window with the search box and New secret… in view, the list scrolls between them, and it narrows to the secrets that match
 
 #### Scenario: a header row's value is plain until a secret is picked
 - **GIVEN** a header row `Authorization` with an empty value

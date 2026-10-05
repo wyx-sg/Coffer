@@ -54,6 +54,8 @@ Coffer 自己的模块通过 Python 标准库的 logging 记日志。根 logger 
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
+守护进程不把 HTTP 客户端库（`httpx`、`httpcore`）的 INFO 请求行写进 `daemon.log`：它们带着完整的请求 URL，而 Telegram 机器人令牌就在 URL 路径里。
+
 `structlog` 也配置成走同一组 handler，所以将来通过 structlog 自己的 API 记日志的代码也会产出同样的形状，而不是打印到 stdout。
 
 时间戳是记录被创建的那一刻，而不是格式化时的时钟。这样即使两个 handler 格式化同一条记录，它也只有一个时间，而且时间戳可以按字典序排序，读取方的 `since` 过滤依赖这一点。
@@ -172,7 +174,7 @@ sequenceDiagram
 | 资源 | `resource_created`、`resource_updated`、`resource_enabled`、`resource_disabled`、`resource_deleted`、`resource_renamed`、`resource_scope_updated` |
 | MCP 能力 | `capability_enabled`、`capability_disabled` |
 | 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`internal_engine_model_set` |
-| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
+| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_local_access_revoked`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
 | 智能体 | `agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
@@ -188,6 +190,7 @@ sequenceDiagram
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
+- `secret_local_access_revoked`——有人撤销了某个独立密钥对本机程序的授权，`coffer run` 此后不能再解析它。授权本身记为一条普通的审批。
 - `secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`——一个密钥等待被发往新的地方（或者一个正在使用的值等待被替换，或者保护等待被关闭），然后有人做了答复。见[密钥](/zh/guides/secrets#approvals)。
 - `master_key_exported`——桌面应用在经过在场验证后写出了一份密钥备份。没有任何命令或路由能导出密钥。
 
@@ -222,7 +225,7 @@ sequenceDiagram
 
 记录按 uid 而不是名字作键，所以一个服务器的历史属于那一次注册，而不属于之后以同名注册的服务器，已删除服务器的记录也仍然可读。出于同样的原因，这张表没有外键。
 
-写入是缓冲的：一个内存队列（最多 5,000 行）由一个写入任务每 50 毫秒或每 50 行刷一次，以先到者为准，所以一个大量调用工具的会话不必每次调用都付出一次 SQLite 提交的代价。队列满时，调用方会等待，而不是丢弃记录。
+写入是缓冲的：一个内存队列（最多 5,000 行）由一个写入任务每 50 毫秒或每 50 行刷一次，以先到者为准，所以一个大量调用工具的会话不必每次调用都付出一次 SQLite 提交的代价。队列满时，调用方会等待，而不是丢弃记录。读取日志前会先等待（最多两秒），直到在它之前排队的每一行都已提交，所以刚调用完就去看日志，也能看到这次调用。
 
 你可以在「活动」页的「工具调用」标签页、在服务器详情页按服务器、用 `coffer log mcp [--server <name>]`，或通过 `GET /api/v1/mcp/invocations` 和 `GET /api/v1/resources/mcp_server/{uid}/invocations` 读取它。两个路由都按游标分页、最新的在前，接受 `agent_uid` 以只显示某个智能体的调用、`trace_id` 以只显示某个请求的调用，并在每行返回它的 `id`。它们的回答和审计日志一样带有 `total`：所有分页中匹配过滤条件的行数，这样过滤后的视图不用翻到最后一页就能说出有多大。
 

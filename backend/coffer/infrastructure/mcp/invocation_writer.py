@@ -8,6 +8,10 @@ every ``flush_interval_seconds`` or once ``flush_batch_size`` rows
 accumulate — whichever fires first. The writer is owned by the composition
 root (``app.py``) which calls ``start()`` on startup and ``stop()`` on
 shutdown to drain the queue cleanly.
+
+Reads see every row enqueued before them: each reader first waits (bounded)
+until the writer has committed up to the last row enqueued when the read began,
+so a call followed at once by a look at the log finds that call.
 """
 
 from __future__ import annotations
@@ -46,6 +50,9 @@ class MCPInvocationRepo:
     DEFAULT_QUEUE_MAX = 5000
     DEFAULT_BATCH_SIZE = 50
     DEFAULT_FLUSH_INTERVAL_S = 0.05
+    #: How long a read waits for rows enqueued before it to commit. Bounded so a
+    #: stuck database slows a read rather than hanging it.
+    SETTLE_TIMEOUT_S = 2.0
 
     def __init__(
         self,
@@ -66,6 +73,12 @@ class MCPInvocationRepo:
         self._queue: asyncio.Queue[MCPInvocation] | None = None
         self._writer_task: asyncio.Task[None] | None = None
         self._stopping = False
+        # Rows enqueued / rows the writer is done with (committed or dropped),
+        # both counted since start(); a read waits until done reaches the
+        # enqueued count it saw.
+        self._enqueued = 0
+        self._done = 0
+        self._progress: asyncio.Condition | None = None
 
     # --- lifecycle (called by composition root) -------------------------- #
 
@@ -74,6 +87,8 @@ class MCPInvocationRepo:
             return
         self._queue = asyncio.Queue(maxsize=self._queue_max)
         self._stopping = False
+        self._enqueued = self._done = 0
+        self._progress = asyncio.Condition()
         self._writer_task = spawn(self._run(), name="mcp-invocation-writer")
 
     async def stop(self) -> None:
@@ -92,6 +107,7 @@ class MCPInvocationRepo:
                 await self._writer_task
         self._writer_task = None
         self._queue = None
+        self._progress = None
 
     # --- public API ------------------------------------------------------ #
 
@@ -103,12 +119,32 @@ class MCPInvocationRepo:
             # called by the composition root.
             await self._commit_one(inv)
             return
+        self._enqueued += 1
         try:
             self._queue.put_nowait(inv)
         except asyncio.QueueFull:
             # The queue is sized far beyond any reasonable burst; if it's
             # full we'd rather block briefly than drop audit rows.
             await self._queue.put(inv)
+
+    async def _settle(self) -> None:
+        """Wait until every row enqueued before this call is committed."""
+        progress = self._progress
+        if progress is None or self._done >= self._enqueued:
+            return
+        target = self._enqueued
+        async with progress:
+            with suppress(TimeoutError):
+                await asyncio.wait_for(
+                    progress.wait_for(lambda: self._done >= target), self.SETTLE_TIMEOUT_S
+                )
+
+    async def _finished(self, n: int) -> None:
+        """Record ``n`` rows the writer is done with and wake waiting reads."""
+        self._done += n
+        if self._progress is not None:
+            async with self._progress:
+                self._progress.notify_all()
 
     async def query(
         self,
@@ -123,6 +159,7 @@ class MCPInvocationRepo:
         q: str | None = None,
         q_resource_uids: Sequence[str] = (),
     ) -> list[MCPInvocation]:
+        await self._settle()
         async with self._sm() as session:
             # Newest first, the id breaking ties, so ``after`` (the previous
             # page's last row) names one place in the order.
@@ -159,6 +196,7 @@ class MCPInvocationRepo:
         q_resource_uids: Sequence[str] = (),
     ) -> int:
         """How many rows match these filters across every page (no cursor)."""
+        await self._settle()
         async with self._sm() as session:
             stmt = filtered(
                 select(func.count()).select_from(MCPInvocationModel),
@@ -200,6 +238,7 @@ class MCPInvocationRepo:
         count is attributed to the wrong server, and nothing is hidden by their
         absence — tiering only ever decides an ORDER among tools that exist.
         """
+        await self._settle()
         async with self._sm() as session:
             stmt = (
                 select(
@@ -222,6 +261,7 @@ class MCPInvocationRepo:
 
     async def summary(self, *, resource_uid: str, since: datetime) -> InvocationSummary:
         """One server's call counts since ``since`` (``invocation_summary``)."""
+        await self._settle()
         return await summarize(self._sm, MCPInvocationModel, resource_uid=resource_uid, since=since)
 
     # --- internals ------------------------------------------------------- #
@@ -238,6 +278,7 @@ class MCPInvocationRepo:
         if not resource_uids:
             return {}
         failed = case((MCPInvocationModel.status.in_(("error", "timeout")), 1), else_=0)
+        await self._settle()
         async with self._sm() as session:
             stmt = (
                 select(
@@ -260,6 +301,7 @@ class MCPInvocationRepo:
     async def last_tool_call(self, resource_uid: str, *, since: datetime) -> MCPInvocation | None:
         """The newest tool call on one server at or after ``since`` that
         reached it (a ``denied`` call never did)."""
+        await self._settle()
         async with self._sm() as session:
             stmt = (
                 select(MCPInvocationModel)
@@ -303,6 +345,7 @@ class MCPInvocationRepo:
                     batch.append(queue.get_nowait())
                 with suppress(Exception):
                     await self._commit_batch(batch)
+                self._done += len(batch)
                 raise
             # Greedily pull up to batch_size-1 more without waiting.
             while len(batch) < self._flush_batch_size and not queue.empty():
@@ -316,5 +359,6 @@ class MCPInvocationRepo:
                 _logger.exception(
                     "mcp.invocation_writer.commit_failed", extra={"batch_size": len(batch)}
                 )
+            await self._finished(len(batch))
             if self._stopping and queue.empty():
                 return

@@ -7,7 +7,7 @@ description: How Coffer encrypts every secret it holds, how to store, cite, rota
 
 Coffer keeps every secret it needs — an MCP server's token, a provider's API key, a channel bot's token, a sync remote's push token — in one encrypted store, and everything else refers to a secret by its id. This page covers storing and citing secrets, rotating and deleting them, where the master key lives, and how to back it up or move it to another machine.
 
-No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there. [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to hand a secret to a command you run with `coffer run`.
+No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there. [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to allow a standalone secret to be handed to a command you run with `coffer run`.
 
 ## How secrets are stored
 
@@ -53,7 +53,7 @@ Most of the time you do not run this by hand. The dialogs that ask for a secret 
 | Model provider | the **API key** field of **Add provider** |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |
 | Sync remote | the push secret on the **Sync** page |
-| A command you run, a skill, an env file | `coffer://secret/<id>`, for a standalone secret stored as `secret/<id>` — see [Secrets](/guides/secrets) |
+| A command you run, a skill, an env file | `coffer://secret/<id>`, for a standalone secret stored as `secret/<id>` — resolved by `coffer run` only after you allow it; see [Secrets](/guides/secrets#allow-coffer-run-to-use-it) |
 
 Registering a resource that cites a ref the store does not hold fails, naming the missing secret, and nothing is saved.
 
@@ -82,7 +82,7 @@ The list shows every ref the store holds and every ref a registered resource cit
 - **Name** — the secret's name, or empty if it has none.
 - **Present in store** — whether the store holds a value. After restoring a vault without its secrets, the `no` rows are the ones to set again.
 - **Used by** — the resources that cite the ref, the skills whose files cite a standalone secret's `coffer://secret/<id>`, and how many destinations wait for approval. `(unreferenced)` marks a secret nothing uses: a candidate to delete.
-- **Readable by local processes** — whether another program running as you can read the value where Coffer puts it: a stdio MCP server's environment, or a standalone secret handed to a command. See [what stays exposed](/architecture/security#what-stays-exposed).
+- **Readable by local processes** — whether another program running as you can read the value where Coffer puts it: a stdio MCP server's environment, or a standalone secret you have allowed `coffer run` to use. See [what stays exposed](/architecture/security#what-stays-exposed).
 
 It decrypts nothing and is not audited. `--json` gives the same data, with each secret's `label`, `description` and `created_for` (the uid of the resource it was made for), the slot each citer uses (`cited_by`), and the approved and pending destinations of each ref. The [Secrets page](/guides/secrets#the-secrets-page) in the web UI shows the same list.
 

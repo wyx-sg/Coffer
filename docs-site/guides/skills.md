@@ -289,7 +289,7 @@ requires:
 
 Each entry is a secret's name in Coffer's secret store, never its value. Only the mapping form carries `secrets:`; the list form (`requires: [jq, gh]`) names commands only. A name the secret store would not accept, or one given twice, is skipped with a warning, and a key other than `commands`, `secrets` and `tools` is refused: Coffer reports it as a warning and reads nothing under it.
 
-You set the value yourself on the [Secrets page](/guides/secrets); the skill's commands receive it when they run under `coffer run --secret`, which sets it only in that command's environment:
+You set the value yourself on the [Secrets page](/guides/secrets), and allow `coffer run` to use that secret there once ([Secrets → Allow `coffer run` to use it](/guides/secrets#allow-coffer-run-to-use-it)). The skill's commands then receive it when they run under `coffer run --secret`, which sets it only in that command's environment:
 
 ```sh
 coffer run --secret GITHUB_TOKEN -- gh issue list

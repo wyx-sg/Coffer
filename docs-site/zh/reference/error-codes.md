@@ -69,8 +69,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥文件不存在或不是有效的主密钥，或者 `.cfk` 备份的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
-| `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 在 Coffer 桌面应用中批准，或在**设置 › 安全**（**审阅**）里拒绝。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
-| `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，问题会重新摆到你面前。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 在 Coffer 桌面应用中批准，或在**设置 › 安全**（**审阅**）里拒绝。`coffer run` 遇到无人允许它使用的独立密钥时也会返回它，见[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)。 |
+| `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，问题会重新摆到你面前（对 `coffer run`，在该密钥上再次点 **允许 `coffer run`…**）。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `APPROVAL_NOT_FOUND` | 404 | 没有这个 id 的审批。 | 在**设置 › 安全**（**审阅**）里列出。 |
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
 | `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |

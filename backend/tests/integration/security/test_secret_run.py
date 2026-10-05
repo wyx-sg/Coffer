@@ -42,6 +42,7 @@ def _run(*argv: str) -> object:
 def test_coffer_run_sets_a_secret_only_in_the_child(cli: BoundaryDaemon) -> None:
     d = cli
     d.store("secret/db-password", "correct-horse-battery")
+    d.grant_local("db-password")
     probe = (
         "import os; print('child-sees', os.environ.get('DB_PASSWORD') == 'correct-horse-battery')"
     )
@@ -64,6 +65,7 @@ def test_coffer_run_resolves_env_file_references_and_named_variables(
 ) -> None:
     d = cli
     d.store("secret/api-token", "tok-0123456789")
+    d.grant_local("api-token")
     env_file = tmp_path / "app.env"
     env_file.write_text("MODE=test\nAPI=coffer://secret/api-token\n")
     probe = (
@@ -94,6 +96,7 @@ def test_coffer_run_resolves_env_file_references_and_named_variables(
 def test_coffer_run_masks_a_value_split_across_writes(cli: BoundaryDaemon) -> None:
     d = cli
     d.store("secret/db-password", "correct-horse-battery")
+    d.grant_local("db-password")
     probe = (
         "import os, sys, time; v = os.environ['DB_PASSWORD']; "
         "sys.stdout.write('pw=' + v[:7]); sys.stdout.flush(); time.sleep(0.2); "
@@ -112,6 +115,7 @@ def test_coffer_run_masks_a_value_split_across_writes(cli: BoundaryDaemon) -> No
 
 def test_coffer_run_passes_the_exit_status_through(cli: BoundaryDaemon) -> None:
     cli.store("secret/x-token", "value-long-enough")
+    cli.grant_local("x-token")
     result = _runner.invoke(
         cli_app,
         ["run", "--secret", "x-token", "--", sys.executable, "-c", "raise SystemExit(7)"],
@@ -144,6 +148,7 @@ def test_a_resources_secret_cannot_be_resolved_by_coffer_run(cli: BoundaryDaemon
 def test_coffer_run_accepts_the_uri_form_a_skill_cites(cli: BoundaryDaemon) -> None:
     d = cli
     d.store("secret/0123456789abcdef0123456789abcdef", "tok-0123456789")
+    d.grant_local("0123456789abcdef0123456789abcdef")
     uri = "coffer://secret/0123456789abcdef0123456789abcdef"
     probe = "import os; v = 'tok-0123456789'; print(os.environ['API'] == v, os.environ['DEF'] == v)"
 

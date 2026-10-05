@@ -78,6 +78,7 @@ def test_the_list_says_when_each_secret_was_created_and_last_used(d: BoundaryDae
     row = _listed(d)["secret/db-password"]
     assert row["created_at"] and row["last_used_at"] is None
 
+    d.grant_local("db-password")
     r = d.client.post(
         "/api/v1/secrets/resolve",
         json={"names": ["db-password"], "argv0": "psql", "cwd": "/tmp"},

@@ -162,6 +162,19 @@ class ResolvedSecretsOut(BaseModel):
     values: dict[str, str]
 
 
+class LocalAccessIn(BaseModel):
+    """A standalone secret's local-process grant to ask for or withdraw."""
+
+    name: str = Field(min_length=1, max_length=128)
+
+
+class LocalAccessOut(BaseModel):
+    #: ``on`` (granted), ``pending`` (a request waits in the desktop app) or ``off``.
+    local_access: Literal["on", "pending", "off"]
+    #: The approval that would grant it, while one waits.
+    approval_id: str | None = None
+
+
 class SecretBoundarySettingsOut(BaseModel):
     #: Whether a secret waits for approval before going somewhere new.
     require_approval: bool
@@ -368,6 +381,10 @@ class SecretRefOut(BaseModel):
     #: Whether another process of this user can read the value where Coffer
     #: puts it: a stdio MCP server's environment, or a ``coffer run`` child.
     readable_by_local_processes: bool = False
+    #: A standalone secret's local-process grant (`coffer run`): ``on``,
+    #: ``pending`` (a request waits in the desktop app) or ``off``; ``None`` for
+    #: a resource's secret, which `coffer run` never answers.
+    local_access: Literal["on", "pending", "off"] | None = None
 
 
 class SecretListOut(BaseModel):
