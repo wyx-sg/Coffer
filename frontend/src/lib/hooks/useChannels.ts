@@ -11,6 +11,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
+import { withInlineApproval } from "@/lib/inlineApproval";
 import { getChannelStatus, notifyChannel, restartChannel } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { describeChannel, type ChannelView } from "@/lib/channels/channelState";
@@ -154,7 +155,10 @@ export function useChannelAutoSave(channel: ResourceOut) {
           values: { default_agent: agent, ...values },
         });
         try {
-          await applyChannelEdit(plan);
+          await withInlineApproval(
+            () => applyChannelEdit(plan),
+            (written) => written.uid,
+          );
           latest.current = plan.config;
           void qc.invalidateQueries({ queryKey: resourcesKey });
           void qc.invalidateQueries({ queryKey: channelStatusKey(channel.uid) });
@@ -184,6 +188,7 @@ export function useUpdateChannel() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: (plan: ChannelEditPlan) => applyChannelEdit(plan),
+    meta: { secretDestination: (data: unknown) => (data as { uid: string }).uid },
     // The apply hands back the channel it wrote: the uid to refresh the status
     // under, and the name to put in the toast. Two answers, two fields — the
     // one string that used to serve both is exactly what this change split.
@@ -259,6 +264,7 @@ export function useCreateChannel() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: (plan: ChannelPlan) => createChannel(plan),
+    meta: { secretDestination: (data: unknown) => (data as ResourceOut).uid },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: pendingApprovalsKey });

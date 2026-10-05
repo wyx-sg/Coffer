@@ -20,6 +20,11 @@ export function useSaveMcpServerEdit() {
   const { t } = useTranslation();
   return useMutation({
     mutationFn: (args: Omit<SaveArgs, "t">) => saveMcpServerEdit({ ...args, t }),
+    // A changed command or URL sends the server's secrets somewhere new.
+    meta: {
+      secretDestination: (_data: unknown, vars: unknown) =>
+        (vars as Omit<SaveArgs, "t">).resource.uid,
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
       // A changed command or URL waits for approval from the save on.
