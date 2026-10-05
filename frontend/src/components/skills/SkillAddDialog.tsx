@@ -1,7 +1,7 @@
 // src/components/skills/SkillAddDialog.tsx
 // The Add skill dialog: a folder, an archive or a Git repository is staged, what it holds is shown, and only the confirm adds anything.
 //
-// Spec skill-manager "Cover skill management on REST and the web" (the
+// Spec skill-manager "Cover skill management on REST and on the Skills page" (the
 // dialog), "Import a skill from a local path", "Add skills from an archive" and
 // "Add skills from a Git repository". The stage (useSkillAddStage) is cancelled whenever it leaves the screen.
 import { useEffect, useRef, useState, type DragEvent } from "react";

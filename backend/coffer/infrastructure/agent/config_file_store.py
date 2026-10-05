@@ -7,8 +7,8 @@ content to Coffer's own folder,
 name says it is Coffer's wherever the copy ends up — so a bad edit, or a run of
 them, is always recoverable. Nothing is written next to the agent's file; the
 ``config_backups`` retention policy bounds the folder and always keeps each
-file's newest backup (spec agent-registry "Write config files atomically with a
-backup and an audit entry").
+file's newest backup (spec agent-registry "Back up and compare-and-swap every
+write Coffer makes to an agent's config").
 
 A write may carry the fingerprint of the content the caller read before
 deciding what to write. The store then refuses (``ConfigFileStale``) when the
@@ -156,6 +156,7 @@ class ConfigFileStore:
             out.append(
                 DirEntryInfo(
                     relpath=p.relative_to(root).as_posix(),
+                    path=str(p),
                     size=st.st_size,
                     modified_at=datetime.fromtimestamp(st.st_mtime, tz=UTC),
                 )
@@ -175,29 +176,3 @@ class ConfigFileStore:
             # as "already absent".
             return False
         return True
-
-    def remove_tree(self, path: pathlib.Path) -> bool:
-        """Remove a directory tree entirely. False when already absent.
-
-        No backup: used only for content Coffer itself rendered and can
-        regenerate byte-identically (a Coffer-owned package directory) —
-        a package dir kept beside it would still be discovered by the agent's
-        extension scanner, so tidier to leave nothing behind.
-        """
-        if not path.is_dir():
-            return False
-        shutil.rmtree(path, ignore_errors=True)
-        return True
-
-    def resolved_within(self, path: pathlib.Path, root: pathlib.Path) -> bool:
-        """Whether ``path`` resolves (following symlinks) inside ``root``.
-
-        The containment re-check behind `validate_child_relpath`'s pure path
-        math: a symlinked child pointing outside the entry's directory fails
-        here even though its relpath looked legal (spec agent-registry "Read,
-        write and delete files inside a directory entry").
-        """
-        try:
-            return path.resolve().is_relative_to(root.resolve())
-        except OSError:
-            return False

@@ -4,9 +4,10 @@
 // deletion breaker held a round that would delete more than it lets through
 // without a person (spec vault-sync "Hold a round that would lose too much").
 // The page has no back link; the summary rides in the description line. It
-// lists every held file by folder, then offers the two answers —
-// delete them here too (asked again, snapshot first) or restore them — and
-// either one continues the round and goes back to Sync.
+// lists every held file by folder, then offers the two answers as two buttons —
+// Keep the files or Delete N files — each acting at once, because the list
+// above already names what a delete removes. Either continues the round and
+// goes back to Sync.
 //
 // The board draws a hold that came in from another Mac; a hold this Mac would
 // push out (`direction: "outgoing"`) reads the same way with its own words.

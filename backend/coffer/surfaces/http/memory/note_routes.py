@@ -1,7 +1,7 @@
 """``/api/v1/memory/partitions/{uid}/notes`` and ``/retired``.
 
 What a distil pass produced, read back: the index of live notes, one note
-whole (and a person's edit of its body), and the record of what has been
+whole, and the record of what has been
 retired. The reads are of files on disk at call time — this layer keeps no
 cache of them, which is what makes a note that left ``notes/`` disappear from
 the list rather than have to be filtered out of it ("Record retirements so they stick").
@@ -16,7 +16,6 @@ from coffer.application.memory.service import MemoryService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.retired import RetiredNote
-from coffer.infrastructure.memory import note_edit
 from coffer.infrastructure.memory import store as memory_store
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_resource_service
@@ -25,7 +24,6 @@ from coffer.surfaces.http.memory.lookup import require_partition
 from coffer.surfaces.http.memory.schemas import (
     NoteListOut,
     NoteOut,
-    NoteSave,
     NoteSummaryOut,
     OriginOut,
     RetiredListOut,
@@ -55,7 +53,7 @@ def _note_summary(note: Note) -> NoteSummaryOut:
     )
 
 
-def _note_out(note: Note, fingerprint: str) -> NoteOut:
+def _note_out(note: Note) -> NoteOut:
     return NoteOut(
         **_note_summary(note).model_dump(),
         body=note.body,
@@ -69,7 +67,6 @@ def _note_out(note: Note, fingerprint: str) -> NoteOut:
             )
             for o in note.origins
         ],
-        fingerprint=fingerprint,
     )
 
 
@@ -121,30 +118,7 @@ async def get_note(
     """
     partition = await require_partition(uid, resources)
     note = memory_store.read_note(partition.name, slug)
-    return _note_out(note, note_edit.note_fingerprint(partition.name, slug))
-
-
-@router.put("/partitions/{uid}/notes/{slug}", response_model=NoteOut)
-async def save_note(
-    uid: str,
-    slug: str,
-    body: NoteSave,
-    svc: MemoryService = Depends(get_memory_service),  # noqa: B008
-    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
-) -> NoteOut:
-    """A person's edit from the page's editor ("Edit a memory in the web UI or in an editor"): the
-    body is replaced, the frontmatter kept, ``updated_at``
-    stamped, and a stale fingerprint is a 409 ``MEMORY_NOTE_CONFLICT`` that
-    carries the note as it is now and leaves the file alone."""
-    partition = await require_partition(uid, resources)
-    fingerprint = await svc.edit_note(
-        uid,
-        slug,
-        body.body,
-        expected_fingerprint=body.expected_fingerprint,
-        actor="user",
-    )
-    return _note_out(memory_store.read_note(partition.name, slug), fingerprint)
+    return _note_out(note)
 
 
 @router.delete("/partitions/{uid}/notes/{slug}", status_code=204, response_class=Response)

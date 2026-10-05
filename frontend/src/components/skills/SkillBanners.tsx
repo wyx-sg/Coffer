@@ -3,7 +3,8 @@
 // per attention item (lib/skills/attention.ts): a folder is in the way of an
 // agent's link (Review…), the Git source cannot be reached (Check again, then Ask
 // an agent ▾ and its "?" — a network, VPN or credential problem on this
-// machine), an update is waiting (Review update…, an outline button). The master
+// machine), an update is waiting (SkillUpdateBanner: the hand-off to an
+// agent, I merged it, and ways to look at the change outside Coffer). The master
 // folder's and the dependencies' banners are drawn by the detail pane itself
 // (SkillMasterBanner, SkillDependencyBanners). A fix button lives in the banner
 // that states the problem.
@@ -20,15 +21,14 @@ import { useAgents } from "@/lib/hooks/useAgents";
 import { useCheckSkillSource } from "@/lib/hooks/useSkills";
 import type { SkillAttention } from "@/lib/skills/attention";
 import { repoLabel } from "@/components/skills/skillSourceHelpers";
-import { clockTime, folderLabel } from "@/lib/skills/format";
+import { clockTime } from "@/lib/skills/format";
+import { SkillUpdateBanner } from "./SkillUpdateBanner";
 
 interface Props {
   skill: SkillOut;
   items: SkillAttention[];
   /** Review… on a folder in the way: opens the compare dialog for that copy. */
   onReviewCopy: (entry: SkillDriftEntry) => void;
-  /** Review update… on a Git skill with an update waiting. */
-  onReviewUpdate: () => void;
 }
 
 function Banner({
@@ -59,7 +59,7 @@ function Banner({
   );
 }
 
-export function SkillBanners({ skill, items, onReviewCopy, onReviewUpdate }: Props) {
+export function SkillBanners({ skill, items, onReviewCopy }: Props) {
   const { t, i18n } = useTranslation();
   const { data: agents = [] } = useAgents();
   const check = useCheckSkillSource();
@@ -131,27 +131,7 @@ export function SkillBanners({ skill, items, onReviewCopy, onReviewUpdate }: Pro
               </Banner>
             );
           case "updateAvailable":
-            return (
-              <Banner
-                key="update"
-                tone="info"
-                testId="skill-banner-update"
-                title={t("skills.banner.updateTitle", { repo: src ? repoLabel(src.url) : "" })}
-                action={
-                  <Button variant="outline" size="sm" onClick={onReviewUpdate}>
-                    {t("skills.banner.reviewUpdate")}
-                  </Button>
-                }
-              >
-                {t("skills.banner.updateBody", {
-                  ref: src?.ref ?? t("skills.banner.defaultBranch"),
-                  count: status?.commits_ahead ?? 0,
-                  commit: src?.commit.slice(0, 7) ?? "",
-                  files: status?.files_changed ?? 0,
-                  folder: (src && folderLabel(src.subpath)) ?? t("skills.banner.repoTop"),
-                })}
-              </Banner>
-            );
+            return src ? <SkillUpdateBanner key="update" skill={skill} source={src} /> : null;
         }
       })}
     </>

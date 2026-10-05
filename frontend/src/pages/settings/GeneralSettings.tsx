@@ -5,8 +5,8 @@
 // each a segmented choice applied at once), Speech-to-text (the connection and
 // model that transcribe voice; spec internal-engine "Show the speech-to-text
 // pair in Settings › General", built by its own work item and mounted unchanged
-// here), and Tables and files (the default rows per page every list table seeds
-// from, and the editor Coffer opens managed files with). Everything saves as it
+// here), and Tables and files (the editor Coffer opens managed files with, and the
+// terminal and hand-off agent). Everything saves as it
 // changes; there is no Save button. (The experimental features are switched on
 // the dev-only Features tab, not here.)
 //
@@ -21,11 +21,14 @@
 // the terminals the daemon detected, and "Custom…", a command template that
 // must hold `{command}` (and may hold `{cwd}`) or it is not saved. Beside it the
 // hand-off agent (spec web-ui "Let the user choose the hand-off agent"): Claude
-// Code or Codex, among the managed ones.
+// Code or Codex, among the managed ones. Check skills for updates (spec
+// skill-manager "Hand a Git-imported skill's update to an agent") sits there
+// too: how often this Mac fetches the sources of skills added from Git.
 import { useTranslation } from "react-i18next";
 
 import { EditorPicker } from "@/components/settings/general/EditorPicker";
 import { HandoffAgentPicker } from "@/components/settings/general/HandoffAgentPicker";
+import { SkillUpdateCheckPicker } from "@/components/settings/general/SkillUpdateCheckPicker";
 import { TerminalPicker } from "@/components/settings/general/TerminalPicker";
 import {
   SETTINGS_STACK,
@@ -34,14 +37,6 @@ import {
   SettingsTabHeader,
 } from "@/components/settings/SettingsLayout";
 import { Segmented } from "@/components/ui/segmented";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { PAGE_SIZE_OPTIONS, useDefaultPageSize, useSetDefaultPageSize } from "@/lib/preferences";
 import { useSetThemePreference, useThemePreference, type ThemePreference } from "@/lib/theme";
 import { EngineSettings } from "./EngineSettings";
 
@@ -57,8 +52,6 @@ type Language = "en" | "zh";
 
 export function GeneralSettings() {
   const { t, i18n } = useTranslation();
-  const pageSize = useDefaultPageSize();
-  const setPageSize = useSetDefaultPageSize();
   const theme = useThemePreference();
   const setTheme = useSetThemePreference();
   const language: Language = i18n.language?.startsWith("zh") ? "zh" : "en";
@@ -99,23 +92,6 @@ export function GeneralSettings() {
 
         <SettingsSection title={t("settings.general.tablesAndFiles")}>
           <SettingRow
-            label={t("settings.general.pageSize")}
-            description={t("settings.general.pageSizeHelp")}
-          >
-            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-              <SelectTrigger className="w-24" aria-label={t("settings.general.pageSize")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </SettingRow>
-          <SettingRow
             label={t("settings.general.preferredEditor")}
             description={t("settings.general.preferredEditorHelp")}
           >
@@ -135,6 +111,12 @@ export function GeneralSettings() {
             description={t("settings.general.handoffAgentHelp")}
           >
             <HandoffAgentPicker />
+          </SettingRow>
+          <SettingRow
+            label={t("settings.general.skillUpdateCheck")}
+            description={t("settings.general.skillUpdateCheckHelp")}
+          >
+            <SkillUpdateCheckPicker />
           </SettingRow>
         </SettingsSection>
       </div>

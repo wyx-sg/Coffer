@@ -1,8 +1,7 @@
-"""Restoring a deleted collection or document, a collection's description, and
-a collection's missing title, observed through the routes (spec knowledge
-"Restore a deleted collection or document from Recent changes", "Read a
-collection's description from its README", "Cover knowledge management on
-REST and the CLI").
+"""Undoing a delete of a collection or a document, a collection's description,
+and a collection's missing title, observed through the routes (spec knowledge
+"Undo a knowledge delete from its toast", "Read a collection's description
+from its README", "Cover knowledge management on REST and the CLI").
 
 ``client`` (from ``conftest.py``) boots the full app with the knowledge root
 under ``tmp_path``; the history is real git under it.
@@ -35,9 +34,7 @@ def _edited(client) -> list[dict[str, Any]]:  # type: ignore[no-untyped-def]
     return list(r.json()["entries"])
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="restore a deleted collection from Recent changes"
-)
+@pytest.mark.acceptance(spec="knowledge", scenario="undo a collection delete")
 def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type: ignore[no-untyped-def]
     client, tmp_path
 ) -> None:
@@ -52,7 +49,7 @@ def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type:
     assert deleted.status_code in (200, 204), deleted.text
     assert not (knowledge_root() / "shopee").exists()
 
-    # Recent changes lists the delete, with every document it removed.
+    # The changes feed lists the delete, with every document it removed.
     removal = _change(client, "remove")
     assert removal["collections"] == ["shopee"]
     assert doc in [d["path"] for d in removal["documents"]]
@@ -78,7 +75,7 @@ def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type:
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="a collection restore that fails part-way leaves nothing behind"
+    spec="knowledge", scenario="a collection undo that fails part-way leaves nothing behind"
 )
 def test_a_failed_collection_restore_leaves_no_row_and_no_directory(  # type: ignore[no-untyped-def]
     client, monkeypatch
@@ -116,7 +113,7 @@ def test_a_failed_collection_restore_leaves_no_row_and_no_directory(  # type: ig
     assert (knowledge_root() / "shopee").is_dir()
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="restore a deleted document")
+@pytest.mark.acceptance(spec="knowledge", scenario="undo a document delete")
 def test_a_deleted_document_comes_back_as_a_new_version(client) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     doc = _submit(client, collection="shopee", title="Cache", description="d", body="first")
@@ -129,11 +126,12 @@ def test_a_deleted_document_comes_back_as_a_new_version(client) -> None:  # type
     read = client.get("/api/v1/knowledge/file", params={"path": doc})
     assert read.status_code == 200 and read.json()["body"].strip() == "first"
 
-    versions = client.get("/api/v1/knowledge/history", params={"path": doc}).json()["versions"]
-    assert [v["change"]["operation"] for v in versions] == ["restore", "delete", "promote"]
+    feed = client.get("/api/v1/knowledge/changes", params={"collection": "shopee"}).json()
+    ops = [c["operation"] for c in feed["changes"] if doc in [d["path"] for d in c["documents"]]]
+    assert ops == ["restore", "delete", "promote"]
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a restore that would overwrite is refused")
+@pytest.mark.acceptance(spec="knowledge", scenario="an undo that would overwrite is refused")
 def test_a_restore_over_a_document_that_exists_again_is_refused(client) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     doc = _submit(client, collection="shopee", title="Cache", description="d", body="first")
@@ -153,6 +151,10 @@ def test_a_restore_over_a_document_that_exists_again_is_refused(client) -> None:
     not_a_delete = client.post(f"/api/v1/knowledge/changes/{promote['version']}/restore")
     assert not_a_delete.status_code == 400, not_a_delete.text
     assert not_a_delete.json()["error"]["code"] == "KNOWLEDGE_NOT_A_DELETE"
+    # A version that is no knowledge change at all is not a delete either.
+    unknown = client.post(f"/api/v1/knowledge/changes/{'0' * 40}/restore")
+    assert unknown.status_code == 400, unknown.text
+    assert unknown.json()["error"]["code"] == "KNOWLEDGE_NOT_A_DELETE"
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="edit a collection's description in place")
@@ -193,20 +195,3 @@ def test_a_collection_has_no_title_on_any_route(client) -> None:  # type: ignore
     refused = client.patch(f"/api/v1/resources/{row['uid']}", json={"title": "Team notes"})
     assert refused.status_code == 422, refused.text
     assert client.get(f"/api/v1/resources/{row['uid']}").json()["title"] is None
-
-
-def test_a_versions_body_is_what_compare_with_current_reads(client) -> None:  # type: ignore[no-untyped-def]
-    _create_collection(client, "shopee")
-    doc = _submit(client, collection="shopee", title="Cache", description="d", body="first")
-    read = client.get("/api/v1/knowledge/file", params={"path": doc}).json()
-    client.put(
-        "/api/v1/knowledge/file",
-        json={"path": doc, "body": "second", "expected_fingerprint": read["fingerprint"]},
-    )
-    oldest = client.get("/api/v1/knowledge/history", params={"path": doc}).json()["versions"][-1]
-    version = oldest["change"]["version"]
-
-    r = client.get("/api/v1/knowledge/history/version", params={"path": doc, "version": version})
-    assert r.status_code == 200, r.text
-    assert r.json()["body"].strip() == "first"
-    assert "title:" not in r.json()["body"]

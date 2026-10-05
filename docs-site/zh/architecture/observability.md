@@ -173,16 +173,18 @@ sequenceDiagram
 | MCP 能力 | `capability_enabled`、`capability_disabled` |
 | 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`internal_engine_model_set` |
 | 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
-| 智能体 | `agent_config_file_written`、`agent_config_file_deleted`、`agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
+| 智能体 | `agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
 | 记忆 | `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_trigger_added`、`memory_trigger_proposed`、`memory_trigger_armed`、`memory_trigger_disarmed`、`memory_trigger_deleted` |
 | 消息渠道 | `channel_pairing_issued`、`channel_paired` |
-| 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交）、`vault_file_restored` |
+| 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交） |
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |
 | 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused` |
 
 没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
+
+有四个事件不再被记录，因为 Web 界面不再编辑智能体的配置文件、记忆笔记或保险库文件，也不再恢复保险库的版本：`agent_config_file_written`、`agent_config_file_deleted`、`memory_note_edited` 和 `vault_file_restored`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。智能体提交的一次恢复是一个写明 `Coffer-Writer: agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。

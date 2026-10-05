@@ -1,23 +1,17 @@
-"""AgentConfigFileService — list / read / write an agent's curated config files.
+"""AgentConfigFileService — list an agent's curated config files.
 
-Exposes list + read + write over the per-type config-file allowlist. Writes are
-atomic (temp file + rename) and keep a backup copy of the prior content in Coffer's own folder, so a
-bad edit is always recoverable. (The same atomic-write/backup machinery on the
-`ConfigFileStorePort` is also reused by the Coffer-MCP install/uninstall flow in
-`mcp_service.py`.)
+Lists the per-type config-file allowlist with each file's location, size and
+modified time (spec agent-registry "List an agent's config files with their
+locations"). Coffer serves no file's content and writes none on the person's
+behalf; the person opens a file in their own editor.
 
-Resolves an agent to its `AgentType`, then operates on that type's config-file
-allowlist (`domain/agent/config_files.py`). Filesystem access goes through a
+Resolves an agent to its `AgentType`, then lists that type's allowlist
+(`domain/agent/config_files.py`). Filesystem access goes through a
 `ConfigFileStorePort` (Protocol) whose concrete implementation lives in
 `infrastructure/agent/config_file_store.py` (Contract 2b: application defines
-the port, infrastructure implements it).
-
-The allowlist is the security boundary: every read/write resolves a
-`ConfigFileSpec` via `spec_for`, which raises `ConfigFileNotAllowed` for an
-unknown key *before* any filesystem call — so a caller can never address an
-arbitrary path. Writes additionally run `validate_content` so malformed
-JSON/TOML is rejected (`ConfigFileFormatInvalid` → 422) before the file is
-touched, leaving the on-disk file unchanged.
+the port, infrastructure implements it). The port's atomic write, backup and
+fingerprint are what Coffer's own writers reuse (spec agent-registry "Back up
+and compare-and-swap every write Coffer makes to an agent's config").
 """
 
 from __future__ import annotations
@@ -27,7 +21,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
-from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import (
     ConfigFileFormat,
@@ -36,14 +29,8 @@ from coffer.domain.agent.config_files import (
     DirEntryInfo,
     FileStat,
     config_files_for,
-    spec_for,
-    validate_child_relpath,
-    validate_content,
 )
-from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ConfigFileNotAllowed
 from coffer.domain.resource import Resource
-from coffer.domain.workspace_errors import ConfigFileStale
 
 
 class ConfigFileStorePort(Protocol):
@@ -68,8 +55,7 @@ class ConfigFileStorePort(Protocol):
 
         The adapter also accepts an ``expected_fingerprint`` keyword for an
         optimistic staleness check; it is absent from this port because the
-        callers that want it (``ConfigFileService.write``,
-        ``application.provider.projector``) declare their own narrower port
+        callers that want it (``application.provider.projector``) declare their own narrower port
         that includes it.
         """
         ...
@@ -90,19 +76,8 @@ class ConfigFileStorePort(Protocol):
         """
         ...
 
-    def remove_tree(self, path: pathlib.Path) -> bool:
-        """Remove a directory tree entirely (no backup — used only for content
-        Coffer itself rendered and can regenerate byte-identically, e.g. the
-        a Coffer-owned package directory). ``False`` when already absent.
-        """
-        ...
-
     def fingerprint(self, text: str | None) -> str:
         """sha256 hex-digest of the content; ``""`` for a missing file (text=None)."""
-        ...
-
-    def resolved_within(self, path: pathlib.Path, root: pathlib.Path) -> bool:
-        """Whether ``path`` resolves (following symlinks) inside ``root``."""
         ...
 
 
@@ -122,19 +97,6 @@ class ConfigFileInfo:
     files: list[DirEntryInfo] | None = field(default=None)
 
 
-@dataclass(frozen=True)
-class ConfigFileContent:
-    """Content view of one config file."""
-
-    key: str
-    path: str
-    folder_path: str
-    format: ConfigFileFormat
-    exists: bool
-    content: str
-    fingerprint: str
-
-
 # Structural type for the agent-lookup dependency — avoids a hard import of
 # AgentService (and keeps this service unit-testable with a fake). Keyed on the
 # agent's uid: every method here is reached from a surface that has already
@@ -144,45 +106,13 @@ class _AgentLookup(Protocol):
 
 
 class AgentConfigFileService:
-    def __init__(
-        self,
-        *,
-        agent_service: _AgentLookup,
-        audit: AuditService,
-        store: ConfigFileStorePort,
-    ) -> None:
+    def __init__(self, *, agent_service: _AgentLookup, store: ConfigFileStorePort) -> None:
         self._agents = agent_service
-        self._audit = audit
         self._store = store
 
-    async def _agent(self, uid: str) -> tuple[Resource, AgentConfig]:
-        """The agent row and its parsed config.
-
-        Both halves, because the write paths need the row itself for the audit
-        entry — ``AuditService.record`` is handed the resource, not an
-        identifier it would have to resolve a second time.
-
-        Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        """
-        resource = await self._agents.get(uid)
-        return resource, AgentConfig.model_validate(resource.config)
-
     async def _config_for(self, uid: str) -> AgentConfig:
-        return (await self._agent(uid))[1]
-
-    def _child_path(self, spec: ConfigFileSpec, relpath: str) -> pathlib.Path:
-        """Validated child path: pure relpath rules + resolved containment.
-
-        `validate_child_relpath` covers traversal/extension by path math; the
-        store's `resolved_within` then re-checks with symlinks resolved so a
-        symlinked child pointing outside the entry's directory is rejected
-        (spec agent-registry "Read, write and delete files inside a directory entry": no
-        symlink escape).
-        """
-        path = validate_child_relpath(spec.path, relpath)
-        if not self._store.resolved_within(path, spec.path):
-            raise ConfigFileNotAllowed("child", relpath)
-        return path
+        """The agent's parsed config. Raises ResourceNotFound (→ 404) when it doesn't exist."""
+        return AgentConfig.model_validate((await self._agents.get(uid)).config)
 
     def _info(self, spec: ConfigFileSpec) -> ConfigFileInfo:
         if spec.kind is ConfigFileKind.DIRECTORY:
@@ -215,133 +145,3 @@ class AgentConfigFileService:
     async def list_files(self, uid: str) -> list[ConfigFileInfo]:
         cfg = await self._config_for(uid)
         return [self._info(spec) for spec in config_files_for(cfg.type, cfg.resolved_config_dir())]
-
-    async def read_file(self, uid: str, key: str) -> ConfigFileContent:
-        cfg = await self._config_for(uid)
-        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
-        if spec.kind is ConfigFileKind.DIRECTORY:
-            raise ConfigFileNotAllowed(cfg.type.value, key)
-        text = self._store.read_text(spec.path)
-        return ConfigFileContent(
-            key=spec.key,
-            path=str(spec.path),
-            folder_path=str(spec.path.parent),
-            format=spec.format,
-            exists=text is not None,
-            content=text or "",
-            fingerprint=self._store.fingerprint(text),
-        )
-
-    async def write_file(
-        self,
-        uid: str,
-        key: str,
-        content: str,
-        *,
-        expected_fingerprint: str | None = None,
-        actor: str = "api",
-    ) -> ConfigFileInfo:
-        """Atomically write `content` to the allowlisted config file `key`.
-
-        Resolves the spec via `spec_for` (unknown key → `ConfigFileNotAllowed`
-        → 404, before any filesystem access). DIRECTORY specs → `ConfigFileNotAllowed`.
-        When `expected_fingerprint` is supplied, reads the current content and
-        checks for staleness before any write (`ConfigFileStale` → 409).
-        Validates `content` against the file's format (malformed JSON/TOML →
-        `ConfigFileFormatInvalid` → 422, before any write so the on-disk file is
-        left unchanged), writes atomically keeping a backup of the prior content,
-        records an audit entry, and returns the refreshed metadata view.
-        """
-        agent, cfg = await self._agent(uid)
-        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
-        if spec.kind is ConfigFileKind.DIRECTORY:
-            raise ConfigFileNotAllowed(cfg.type.value, key)
-        if expected_fingerprint is not None:
-            current = self._store.read_text(spec.path)
-            if self._store.fingerprint(current) != expected_fingerprint:
-                raise ConfigFileStale(key)
-        validate_content(spec.format, content)  # raises ConfigFileFormatInvalid → 422
-        self._store.write_text_atomic(spec.path, content)  # atomic + backup in Coffer's folder
-        await self._audit.record(
-            AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value,
-            resource=agent,
-            actor=actor,
-            details={"key": spec.key},
-        )
-        return self._info(spec)
-
-    async def read_child(self, uid: str, key: str, relpath: str) -> ConfigFileContent:
-        """Read a child file of a DIRECTORY-type config entry.
-
-        Returns ``exists=False``, empty content, and ``fingerprint=""`` when the
-        child is missing; never creates the file.
-        """
-        cfg = await self._config_for(uid)
-        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
-        if spec.kind is not ConfigFileKind.DIRECTORY:
-            raise ConfigFileNotAllowed(cfg.type.value, key)
-        path = self._child_path(spec, relpath)  # ConfigFileNotAllowed on traversal/escape
-        text = self._store.read_text(path)
-        return ConfigFileContent(
-            key=key,
-            path=str(path),
-            folder_path=str(path.parent),
-            format=spec.format,
-            exists=text is not None,
-            content=text or "",
-            fingerprint=self._store.fingerprint(text),
-        )
-
-    async def write_child(
-        self,
-        uid: str,
-        key: str,
-        relpath: str,
-        content: str,
-        *,
-        expected_fingerprint: str | None = None,
-        actor: str = "api",
-    ) -> ConfigFileInfo:
-        """Write a child file of a DIRECTORY-type config entry.
-
-        Performs an optional stale check, validates content, writes atomically,
-        records an audit entry, and returns the refreshed directory listing.
-        """
-        agent, cfg = await self._agent(uid)
-        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
-        if spec.kind is not ConfigFileKind.DIRECTORY:
-            raise ConfigFileNotAllowed(cfg.type.value, key)
-        path = self._child_path(spec, relpath)  # ConfigFileNotAllowed on traversal/escape
-        if expected_fingerprint is not None:
-            current = self._store.read_text(path)
-            if self._store.fingerprint(current) != expected_fingerprint:
-                raise ConfigFileStale(key)
-        validate_content(spec.format, content)  # markdown → no-op, kept for symmetry
-        self._store.write_text_atomic(path, content)
-        await self._audit.record(
-            AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value,
-            resource=agent,
-            actor=actor,
-            details={"key": key, "child": relpath},
-        )
-        return self._info(spec)
-
-    async def delete_child(self, uid: str, key: str, relpath: str, *, actor: str = "api") -> None:
-        """Delete a child file of a DIRECTORY-type config entry (with backup).
-
-        Raises `ConfigFileNotAllowed` when the child is missing.
-        """
-        agent, cfg = await self._agent(uid)
-        spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
-        if spec.kind is not ConfigFileKind.DIRECTORY:
-            raise ConfigFileNotAllowed(cfg.type.value, key)
-        path = self._child_path(spec, relpath)  # ConfigFileNotAllowed on traversal/escape
-        deleted = self._store.delete_with_backup(path)
-        if not deleted:
-            raise ConfigFileNotAllowed("child", relpath)
-        await self._audit.record(
-            AuditEventType.AGENT_CONFIG_FILE_DELETED.value,
-            resource=agent,
-            actor=actor,
-            details={"key": key, "child": relpath},
-        )

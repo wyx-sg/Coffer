@@ -1,16 +1,16 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Present a
-// partition as its memories").
+// frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Show a partition's memories read-only").
 //
 // Coffer reads each agent's own memory and distils it into
 // one memory per subject, in partitions — `global` plus one per repository
 // (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created (a person only edits a memory's body),
-// so the header's one action is Update memory: read every agent's latest
-// memory and distil what is new (spec memory "Update memory in one action"),
-// the page's one primary button, beside Tidy all (hands every partition to the
-// default managed agent and sends the prompt at once; spec memory "Hand a
-// partition's tidying to the agent"), the Automatic control that does the same
-// on a timer and a quiet line saying when the agents' memory was last read, or
-// how far Update memory is. When the last read left an agent unread,
+// so the header groups its controls in two: Tidy all (hands every partition to
+// the default managed agent and sends the prompt at once; spec memory "Hand a
+// partition's tidying to the agent") on the left, then, after a divider, the
+// read group — a quiet line saying when the agents' memory was last read (and
+// that it is read automatically), or how far Update memory is, and Update
+// memory itself, the page's one primary button, a split button whose ▾ opens
+// the automatic-read schedule (spec memory "Update memory in one action"). When
+// the last read left an agent unread,
 // a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
 //
 // The body is the partitions table, untitled, or the first-run state while
@@ -21,7 +21,6 @@ import { Brain } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
 import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
@@ -66,10 +65,10 @@ export function MemoryPage() {
           // would be the page asking twice.
           firstRun ? null : (
             <>
-              <MemoryHeaderStatus />
-              <MemoryAutomaticPopover />
               <AgentHandoff prompt={tidyAllPrompt} label={t("memory.tidy.all")} help={false} />
-              <MemoryUpdateButton running={updating} />
+              <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+              <MemoryHeaderStatus />
+              <MemoryUpdateButton running={updating} schedule />
             </>
           )
         }

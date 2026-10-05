@@ -66,50 +66,6 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
     assert refused.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="save an edited body and refuse a stale one")
-def test_a_save_keeps_frontmatter_and_a_stale_one_is_refused(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    _create_collection(client, "shopee")
-    written = fs.write_file(
-        directory="shopee/infra",
-        title="Cache",
-        description="How the cache works",
-        body="first",
-    )
-    assert written.path == "shopee/infra/cache.md"
-    loaded = client.get("/api/v1/knowledge/file", params={"path": written.path}).json()
-
-    first = client.put(
-        "/api/v1/knowledge/file",
-        json={
-            "path": written.path,
-            "body": "second",
-            "expected_fingerprint": loaded["fingerprint"],
-        },
-    )
-    assert first.status_code == 200, first.text
-    saved = first.json()
-    assert (saved["title"], saved["description"]) == ("Cache", "How the cache works")
-    assert saved["body"].strip() == "second"
-    assert saved["fingerprint"] not in ("", loaded["fingerprint"])
-
-    stale = client.put(
-        "/api/v1/knowledge/file",
-        json={
-            "path": written.path,
-            "body": "third",
-            "expected_fingerprint": loaded["fingerprint"],
-        },
-    )
-    assert stale.status_code == 409, stale.text
-    assert stale.json()["error"]["code"] == "KNOWLEDGE_FILE_CONFLICT"
-    on_disk = (tmp_path / ".coffer" / "vault" / "knowledge" / written.path).read_text(
-        encoding="utf-8"
-    )
-    frontmatter, body = split_frontmatter(on_disk)
-    assert body.strip() == "second"
-    assert frontmatter["title"] == "Cache"
-
-
 @pytest.mark.acceptance(
     spec="knowledge", scenario="a read answers with the file's and its folder's absolute paths"
 )

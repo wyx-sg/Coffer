@@ -6,7 +6,7 @@
 // when the source is unreachable the banner carries Check again, so this bar
 // drops it and the "Checked at" beside it.
 //
-// Spec skill-manager "Update a Git-imported skill from its source": a check
+// Spec skill-manager "Hand a Git-imported skill's update to an agent": a check
 // writes nothing; an update shows as available with its commit range; an
 // unreachable source is reported and the skill keeps working from its pinned
 // copy. Change source… checks the new source and shows the change before

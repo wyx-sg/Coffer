@@ -19,7 +19,6 @@ import {
   useAgent,
   usePatchAgent,
   useAgentConfigFiles,
-  useAgentConfigFile,
   useAgentConnection,
   useAgentConnect,
 } from "./useAgents";
@@ -131,36 +130,6 @@ describe("useAgentConfigFiles", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0].key).toBe("settings");
     expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/u-cur\/config-files$/);
-  });
-});
-
-describe("useAgentConfigFile", () => {
-  test("GETs one config file and stays idle until both uid and key are present", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, {
-        key: "settings",
-        format: "json",
-        exists: true,
-        content: "{}",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    // null key → disabled.
-    const off = renderHook(() => useAgentConfigFile("u-cur", null), {
-      wrapper: wrapperFor(makeClient()),
-    });
-    expect(off.result.current.fetchStatus).toBe("idle");
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    const { result } = renderHook(() => useAgentConfigFile("u-cur", "settings"), {
-      wrapper: wrapperFor(makeClient()),
-    });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.content).toBe("{}");
-    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(
-      /\/agents\/u-cur\/config-files\/settings$/,
-    );
   });
 });
 

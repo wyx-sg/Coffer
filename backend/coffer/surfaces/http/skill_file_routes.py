@@ -1,8 +1,9 @@
-"""/api/v1/skills/{uid}/files* — skill master-folder viewer + editor.
+"""/api/v1/skills/{uid}/files* — skill master-folder viewer, read-only (spec skill-manager
+"Show a skill's master folder read-only").
 
-Split out of ``skill_routes.py`` (component size cap): the file-tree, single-file
-read, and single-file write endpoints plus their wire schemas. Shares the actor
-header dependency with the main skills router.
+Split out of ``skill_routes.py`` (component size cap): the file-tree and single-file
+read endpoints plus their wire schemas. A skill's files are changed on disk, in the
+person's own editor; no route writes one.
 
 The skill is addressed by ``{uid}``; the ``path`` query parameter is still a
 relative path inside the master folder and is still checked by ``file_ops``,
@@ -17,14 +18,10 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from coffer.application.skill import content_ops, file_ops
+from coffer.application.skill import file_ops
 from coffer.application.skill.service import SkillService
-from coffer.domain.vault.writers import OP_EDIT
-from coffer.infrastructure.vault.actor_meta import commit_meta
-from coffer.infrastructure.vault.instance import vault_writer
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.skill_dependencies import get_skill_service
-from coffer.surfaces.http.skill_routes import _actor
 
 router = APIRouter(
     prefix="/api/v1/skills",
@@ -59,20 +56,6 @@ class SkillFileContentOut(BaseModel):
     truncated: bool
     binary: bool
     size: int
-    # sha256 of the file's raw on-disk bytes — NOT of ``content``, which is
-    # truncated past the read cap and empty for a binary file. Echo it back as
-    # ``expected_fingerprint`` on a write to make that write conditional.
-    fingerprint: str
-
-
-class SkillFileWriteRequest(BaseModel):
-    path: str = Field(min_length=1)  # POSIX, relative to the master folder root
-    content: str  # full new file contents (UTF-8)
-    # The fingerprint from the read that seeded this edit; required, because
-    # every vault write compares (ADR every-vault-write-is-a-validated-commit-
-    # naming-its-writer). The write is refused with 409 SKILL_FILE_STALE when
-    # the file changed underneath it (the user's own editor also writes here).
-    expected_fingerprint: str
 
 
 # ---------- helpers ----------
@@ -83,8 +66,7 @@ def _abs_paths(root: pathlib.Path, relpath: str) -> tuple[str, str]:
 
     ``relpath`` is POSIX-relative to the master folder ``root`` (``""`` for the
     root node itself). Returns ``(abs_path, folder_abs_path)`` as strings, which
-    back the viewer's open-in-external-editor / reveal-in-file-manager actions
-    alongside in-app editing.
+    back the viewer's open-in-external-editor / reveal-in-file-manager actions.
     """
     target = root if relpath == "" else root / relpath
     return str(target), str(target.parent)
@@ -114,7 +96,6 @@ def _content_out(result: file_ops.FileContent, root: pathlib.Path) -> SkillFileC
         truncated=result.truncated,
         binary=result.binary,
         size=result.size,
-        fingerprint=result.fingerprint,
     )
 
 
@@ -162,42 +143,4 @@ async def read_skill_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"no such file in skill: {path}",
         ) from exc
-    return _content_out(result, master)
-
-
-@router.put("/{uid}/files/content", response_model=SkillFileContentOut)
-async def write_skill_file(
-    uid: str,
-    body: SkillFileWriteRequest,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> SkillFileContentOut:
-    """Overwrite one existing text file in the skill's master folder, as one
-    vault commit naming the writer.
-
-    The write is conditional on ``expected_fingerprint``: ``SkillFileStale``
-    propagates to the shared error handler as 409 ``SKILL_FILE_STALE`` with
-    the file left untouched.
-    """
-    skill = await svc.get_skill(uid)  # 404 before anything is written.
-    try:
-        result = await content_ops.write_skill_file(
-            svc,
-            uid=uid,
-            relpath=body.path,
-            content=body.content,
-            expected_fingerprint=body.expected_fingerprint,
-            writer=vault_writer(),
-            commit_for=lambda summary: commit_meta(OP_EDIT, summary, actor),
-            actor=actor,
-        )
-    except ValueError as exc:
-        # Path escapes the folder, content too large, or a binary target.
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except (FileNotFoundError, IsADirectoryError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"no such file in skill: {body.path}",
-        ) from exc
-    master = pathlib.Path(svc.master_path(skill.name)).resolve()
     return _content_out(result, master)

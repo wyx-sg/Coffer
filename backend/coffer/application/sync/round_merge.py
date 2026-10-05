@@ -11,7 +11,6 @@ answer. Nothing here writes into the vault.
 
 from __future__ import annotations
 
-import difflib
 import re
 from dataclasses import dataclass
 
@@ -62,30 +61,11 @@ def merge_info(d: RoundDeps, found: ConflictFile) -> MergeInfo | None:
     return MergeInfo(MERGED_BY_AGENT, merged_at=d.scratch.modified(found.path))
 
 
-def merge_diff(d: RoundDeps, found: ConflictFile, merged: bytes) -> str | None:
-    """The unified diff from this machine's version to ``merged``; ``None``
-    for a binary file."""
-    ours = d.git.blobs([found.ours]).get(found.ours, b"") if found.ours else b""
-    try:
-        before, after = ours.decode("utf-8"), merged.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-    return "".join(
-        difflib.unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
-            fromfile=f"this machine/{found.path}",
-            tofile=f"merged/{found.path}",
-        )
-    )
-
-
 __all__ = [
     "HANDED_OFF",
     "MERGED_BY_AGENT",
     "MergeInfo",
     "marked_up",
     "marker_line",
-    "merge_diff",
     "merge_info",
 ]

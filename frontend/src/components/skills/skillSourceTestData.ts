@@ -1,6 +1,6 @@
 // src/components/skills/skillSourceTestData.ts
-// Test fixtures for the Git source panel and the update dialog: a Git-imported skill and an update preview.
-import type { SkillOut, SkillSourceStatus, SkillUpdatePreview } from "@/lib/api/skills";
+// Test fixtures for the Git source panel and the update dialog: a Git-imported skill, one with an update waiting, and a change of source.
+import type { SkillOut, SkillSourceChange, SkillSourceStatus } from "@/lib/api/skills";
 
 export function gitSkill(status: Partial<SkillSourceStatus> | null = {}): SkillOut {
   return {
@@ -39,46 +39,40 @@ export function gitSkill(status: Partial<SkillSourceStatus> | null = {}): SkillO
             latest_commit: "a1b2c3d4e5f6",
             commits_ahead: 0,
             files_changed: 0,
-            dismissed_commit: null,
             update_available: false,
+            commits: [],
+            compare_url: null,
             ...status,
           },
   };
 }
 
-export function updatePreview(over: Partial<SkillUpdatePreview> = {}): SkillUpdatePreview {
-  return {
-    staging_id: "upd-1",
-    from_commit: "a1b2c3d4e5f6",
-    to_commit: "f9e8d7c6b5a4",
-    up_to_date: false,
-    conflict: false,
+/** A skill with an update waiting: `a1b2c3d` → `f9e8d7c`, on a host with a compare page by default. */
+export function updatableSkill(status: Partial<SkillSourceStatus> = {}): SkillOut {
+  return gitSkill({
+    latest_commit: "f9e8d7c6b5a4",
+    commits_ahead: 2,
+    files_changed: 2,
+    update_available: true,
     commits: [
       { id: "f9e8d7c6b5a4", subject: "Ask before backend changes" },
       { id: "0011223344", subject: "Add plan.sh" },
     ],
-    changes: [
-      {
-        path: "SKILL.md",
-        status: "modified",
-        diff: "--- a/SKILL.md\n+++ b/SKILL.md\n@@ -6,2 +6,2 @@ Steps\n ## Steps\n-- List replace or destroy.\n+- List replace, destroy or move.\n",
-        binary: false,
-        additions: 1,
-        deletions: 1,
-        truncated: false,
-      },
-      {
-        path: "scripts/plan.sh",
-        status: "added",
-        diff: "@@ -0,0 +1,1 @@\n+terraform plan\n",
-        binary: false,
-        additions: 1,
-        deletions: 0,
-        truncated: false,
-      },
+    compare_url: "https://github.com/acme/agent-skills/compare/a1b2c3d4e5f6...f9e8d7c6b5a4",
+    ...status,
+  });
+}
+
+/** What Change source answers: names and status, no diff. */
+export function sourceChange(over: Partial<SkillSourceChange> = {}): SkillSourceChange {
+  return {
+    staging_id: "chg-1",
+    commit: "f9e8d7c6b5a4",
+    files: [
+      { path: "SKILL.md", status: "modified" },
+      { path: "scripts/plan.sh", status: "added" },
+      { path: "old.txt", status: "removed" },
     ],
-    local_changes: [],
-    handoff: null,
     ...over,
   };
 }

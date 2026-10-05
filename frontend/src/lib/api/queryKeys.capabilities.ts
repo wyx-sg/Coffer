@@ -20,9 +20,8 @@ export const skillOrphansKey = ["skills", "orphans"] as const;
 export const skillOrphanFilesKey = (name: string) => ["skills", "orphans", name, "files"] as const;
 export const skillOrphanFileKey = (name: string, path: string) =>
   ["skills", "orphans", name, "file", path] as const;
-/** One file's three versions in a staged update (local, pinned, incoming). */
-export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
-  ["skills", uid, "compare", stagingId, path] as const;
+/** How often this machine checks skills for updates in the background. */
+export const skillUpdateCheckKey = ["skills", "update-check"] as const;
 
 // --- mcp — per-server discovery, health and invocation log -----------------
 /** The built-in `coffer` server; the dry-run plan of importing chosen agent entries. */

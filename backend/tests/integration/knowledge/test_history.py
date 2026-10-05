@@ -1,5 +1,5 @@
-"""Every write to a collection is a version naming its writer (spec knowledge
-"Keep every document's history", "Follow edits across
+"""Every write to a collection is a commit naming its writer (spec knowledge
+"Commit every knowledge write naming its writer", "Follow edits across
 collections in one feed").
 
 Integration tier because the history is real git over a real directory — the
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from coffer.application.knowledge.history_service import KnowledgeHistoryService
+from coffer.application.knowledge.change_service import KnowledgeChangeService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
@@ -104,7 +104,7 @@ class _World:
             audit=self.audit,  # type: ignore[arg-type]
             history=self.history,
         )
-        self.histories = KnowledgeHistoryService(
+        self.changes = KnowledgeChangeService(
             knowledge=self.knowledge,
             history=self.history,
             audit=self.audit,  # type: ignore[arg-type]
@@ -122,77 +122,70 @@ def _body(relpath: str) -> str:
     return fs.read_file(relpath).body.strip()
 
 
-def _bytes(relpath: str) -> bytes:
-    return paths.resolve(relpath).read_bytes()
+def _edit_on_disk(relpath: str, old: str, new: str) -> None:
+    """A person's own editor, or an agent's file tools, outside Coffer."""
+    target = paths.resolve(relpath)
+    target.write_text(target.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
 
 
-async def _save(world: _World, relpath: str, body: str) -> None:
-    current = fs.read_file(relpath)
-    await world.knowledge.save_document(
-        relpath, body, expected_fingerprint=current.fingerprint, actor=ACTOR_USER
+async def _upload(world: _World, title: str, body: str = "b") -> str:
+    """A person's upload: material that becomes a document at once."""
+    added = await world.knowledge.submit(
+        collection="shopee",
+        title=title,
+        description="d",
+        body=body,
+        actor_kind=ACTOR_USER,
+        actor=ACTOR_USER,
     )
+    return added.document.path
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="a document's history lists its versions with their writers"
+    spec="knowledge", scenario="knowledge writes are commits naming their writers"
 )
-async def test_a_documents_history_names_the_agent_and_the_user(world: _World) -> None:
+async def test_knowledge_writes_are_commits_naming_their_writers(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    # Claude Code submits material, which becomes a document at once.
-    added = await world.knowledge.submit(
-        collection="shopee",
-        title="Session ownership",
-        description="who owns login",
-        body="The account service owns sessions.",
-        actor_kind=ACTOR_AGENT,
-        actor="claude-code",
-    )
-    doc = added.document.path
+    first = await _upload(world, "Session ownership", "The account service owns sessions.")
+    # An agent edits it with its own file tools, outside Coffer.
+    _edit_on_disk(first, "owns sessions.", "owns sessions, which last 30 days.")
 
-    # And the user edits it.
-    await _save(world, doc, "The account service owns sessions, which last 30 days.")
+    second = await _upload(world, "Gateway", "Routes by region.")
 
-    versions = await world.histories.versions(doc)
-    assert [(v.change.meta.writer, v.change.meta.operation) for v in versions] == [
-        ("user", "save"),
-        ("agent", "promote"),
+    commits = vault_repository().log(paths.vault_path(first))
+    assert [(c.meta.writer, c.meta.operation) for c in commits] == [
+        ("disk", "edit"),
+        ("user", "promote"),
     ]
-    assert versions[1].change.meta.agent == "claude-code"
-    for version in versions:
-        diff = await world.histories.version_diff(doc, version.change.version)
-        assert diff.diff.startswith("diff --git"), diff
-    assert versions[0].change.time >= versions[-1].change.time
-
-    # Restoring the first version is a new commit; the history keeps both.
-    first = versions[-1].change.version
-    await world.histories.restore(doc, first, actor=ACTOR_USER)
-    after = await world.histories.versions(doc)
-    assert [v.change.meta.operation for v in after] == ["restore", "save", "promote"]
-    assert after[0].change.meta.restored_from == first
-    assert _body(doc) == "The account service owns sessions."
+    [upload] = vault_repository().log(paths.vault_path(second))
+    assert upload.meta.writer == "user"
+    assert [pc.path for pc in upload.paths] == [paths.vault_path(second)]
+    # The same commits, read back knowledge-root-relative through the feed.
+    feed = await world.changes.changes()
+    assert [c.meta.writer for c in feed.changes if first in {d.path for d in c.documents}] == [
+        "disk",
+        "user",
+    ]
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="an edit on disk becomes a version of its own")
+@pytest.mark.acceptance(spec="knowledge", scenario="an edit on disk becomes a commit of its own")
 async def test_an_edit_on_disk_is_committed_before_coffers_next_write(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    edited = fs.write_file(directory="shopee", title="By hand", description="d", body="v1").path
-    saved = fs.write_file(directory="shopee", title="By the page", description="d", body="v1").path
-    await world.histories.changes()  # history has seen both
+    edited = await _upload(world, "By hand", "v1")
 
-    # A person's own editor, outside Coffer.
-    target = paths.resolve(edited)
-    target.write_text(target.read_text(encoding="utf-8").replace("v1", "v2"), encoding="utf-8")
-    await _save(world, saved, "saved from the page")
+    # A person's own editor, outside Coffer; then Coffer's next knowledge write.
+    _edit_on_disk(edited, "v1", "v2")
+    uploaded = await _upload(world, "By the page", "page")
 
-    [edit, *_] = await world.histories.versions(edited)
-    assert (edit.change.meta.writer, edit.change.meta.operation) == ("disk", "edit")
-    [save, *_] = await world.histories.versions(saved)
-    assert save.change.meta.writer == "user"
-    assert [d.path for d in save.change.documents] == [saved]
-    # Two vault commits, the disk edit first: the save names only its own path.
+    [edit, *_] = vault_repository().log(paths.vault_path(edited))
+    assert (edit.meta.writer, edit.meta.operation) == ("disk", "edit")
+    [upload] = vault_repository().log(paths.vault_path(uploaded))
+    assert upload.meta.writer == "user"
+    assert [pc.path for pc in upload.paths] == [paths.vault_path(uploaded)]
+    # Two vault commits, the disk edit first: Coffer's holds only its own path.
     [newest, before] = vault_repository().log("knowledge", limit=2)
-    assert newest.version == save.change.version
-    assert before.version == edit.change.version
+    assert newest.version == upload.version
+    assert before.version == edit.version
     assert [pc.path for pc in before.paths] == [paths.vault_path(edited)]
 
 
@@ -200,46 +193,20 @@ async def test_knowledge_history_is_the_vault_repositorys(world: _World) -> None
     """There is no knowledge repository of its own: every commit lands in the
     vault's, under ``knowledge/``, authored by its writer."""
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    added = await world.knowledge.submit(
-        collection="shopee",
-        title="T",
-        description="d",
-        body="b",
-        actor_kind=ACTOR_USER,
-        actor=ACTOR_USER,
-    )
-    assert added.document is not None
+    path = await _upload(world, "T")
     assert not (paths.knowledge_root() / ".git").exists()
     assert (vault_root() / ".git").is_dir()
-    [commit] = vault_repository().log(paths.vault_path(added.document.path))
+    [commit] = vault_repository().log(paths.vault_path(path))
     assert commit.meta.writer == "user"
     assert commit.meta.operation == "promote"
     assert all(pc.path.startswith("knowledge/shopee/") for pc in commit.paths)
     # And the knowledge view hands the same commit back knowledge-root-relative.
-    [version] = await world.histories.versions(added.document.path)
-    assert version.change.version == commit.version
-    assert {d.path for d in version.change.documents} == {
+    change = world.history.change(commit.version)
+    assert change is not None
+    assert {d.path for d in change.documents} == {
         pc.path.removeprefix("knowledge/") for pc in commit.paths
     }
-    diff = await world.histories.version_diff(added.document.path, commit.version)
-    assert f"b/{added.document.path}" in diff.diff
-
-
-async def test_a_save_over_a_change_it_did_not_see_is_refused(world: _World) -> None:
-    from coffer.domain.knowledge.errors import KnowledgeFileConflict
-
-    await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    doc = fs.write_file(directory="shopee", title="Doc", description="d", body="v1").path
-    stale = fs.read_file(doc).fingerprint
-    target = paths.resolve(doc)
-    target.write_text(target.read_text(encoding="utf-8").replace("v1", "v2"), encoding="utf-8")
-
-    with pytest.raises(KnowledgeFileConflict) as refused:
-        await world.knowledge.save_document(
-            doc, "from the page", expected_fingerprint=stale, actor=ACTOR_USER
-        )
-    assert "v2" in str(refused.value.error_details["current_body"])
-    assert _body(doc) == "v2"
+    assert f"b/{path}" in world.history.diff(commit.version, path)
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="recent changes lists edits across collections")
@@ -255,14 +222,24 @@ async def test_recent_changes_across_collections(world: _World) -> None:
         actor_kind=ACTOR_AGENT,
         actor="codex",
     )
-    await _save(world, note, "one\ntwo\nthree")
+    # An agent's edit on disk in the other collection, found before the next write.
+    _edit_on_disk(note, "one", "one\ntwo\nthree")
+    await world.knowledge.submit(
+        collection="personal",
+        title="Upload",
+        description="d",
+        body="uploaded",
+        actor_kind=ACTOR_USER,
+        actor=ACTOR_USER,
+    )
 
-    feed = await world.histories.changes()
-    edit, added = feed.changes[0], feed.changes[1]
+    feed = await world.changes.changes()
+    upload, edit, added = feed.changes[0], feed.changes[1], feed.changes[2]
+    assert (upload.collections, upload.meta.writer) == (("personal",), "user")
     assert (edit.collections, edit.meta.writer, edit.meta.operation) == (
         ("personal",),
-        "user",
-        "save",
+        "disk",
+        "edit",
     )
     assert (added.collections, added.meta.writer, added.meta.agent) == (
         ("shopee",),
@@ -275,32 +252,33 @@ async def test_recent_changes_across_collections(world: _World) -> None:
     [changed] = edit.documents
     assert (changed.status, changed.added, changed.removed) == ("modified", 2, 0)
 
-    shopee = await world.histories.changes(collection="shopee")
+    shopee = await world.changes.changes(collection="shopee")
     assert all(c.collections == ("shopee",) for c in shopee.changes)
     assert shopee.changes[0].version == added.version
-    personal = await world.histories.changes(collection="personal")
-    assert personal.changes[0].version == edit.version
+    personal = await world.changes.changes(collection="personal")
+    assert personal.changes[0].version == upload.version
 
-    detail = await world.histories.version_diff("shopee/gateway.md", added.version)
-    assert detail.path == "shopee/gateway.md"
-    assert "+Routes by region." in detail.diff
+    # One change read in full: every document it touched, with its diff.
+    in_full = world.history.change(added.version)
+    assert in_full is not None
+    [diffed] = [world.history.diff(in_full.version, d.path) for d in in_full.documents]
+    assert "+Routes by region." in diffed
 
 
 async def test_the_feed_pages_by_cursor(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    doc = fs.write_file(directory="shopee", title="Doc", description="d", body="0").path
-    for n in range(1, 5):
-        await _save(world, doc, str(n))
+    for n in range(4):
+        await _upload(world, f"Doc {n}")
 
-    first = await world.histories.changes(limit=2)
-    second = await world.histories.changes(limit=2, cursor=first.next_cursor)
+    first = await world.changes.changes(limit=2)
+    second = await world.changes.changes(limit=2, cursor=first.next_cursor)
     assert first.next_cursor is not None
     seen = [c.version for c in (*first.changes, *second.changes)]
     assert len(seen) == len(set(seen)) == 4
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="no git hands installing it to an agent")
-async def test_without_git_writes_work_and_history_says_so(
+async def test_without_git_writes_work_and_the_feed_says_so(
     world: _World, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
     from coffer.domain.knowledge.errors import KnowledgeHistoryUnavailable
@@ -314,7 +292,7 @@ async def test_without_git_writes_work_and_history_says_so(
     assert added.document is not None
     assert not (vault_root() / ".git").exists()
     with pytest.raises(KnowledgeHistoryUnavailable) as refused:
-        await world.histories.versions(added.document.path)
+        await world.changes.changes()
     # The refusal carries the install hand-off: the machine, what needed git,
     # and how to confirm it — never an install command.
     details = refused.value.error_details

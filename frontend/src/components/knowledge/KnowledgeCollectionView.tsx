@@ -3,7 +3,7 @@
 // A collection with no document open (boards 5.1.10, 5.1.11, 5.1.14). The pane
 // bar is the collection's name with a ⋯ menu — Reveal in Finder · Copy path ·
 // Rename… (a dialog; the folder moves with the name, board 5.1.31) · Delete
-// collection…, which runs at once with an Undo toast; beside it **Tidy**, which
+// collection…, which asks first and then offers Undo in a toast; beside it **Tidy**, which
 // hands the collection to the default managed agent and sends the prompt at
 // once (spec knowledge "Hand a tidy to the agent"). The body is one
 // 720-wide page: the folder name as the heading, its description — the opening
@@ -18,7 +18,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { useDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
+import { KnowledgeDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeRenameDialog } from "@/components/knowledge/KnowledgeRenameDialog";
 import { KnowledgeStatsLine } from "@/components/knowledge/KnowledgeStatsLine";
@@ -28,7 +28,7 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { useFsActions } from "@/lib/fsActions";
-import { useDescribeCollection } from "@/lib/hooks/useKnowledgeHistory";
+import { useDescribeCollection } from "@/lib/hooks/useKnowledge";
 
 interface Props {
   collection: CollectionOut;
@@ -38,9 +38,9 @@ export function KnowledgeCollectionView({ collection }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { reveal } = useFsActions();
-  const deleteCollection = useDeleteCollection(collection);
   const [editing, setEditing] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const empty = collection.document_count === 0;
 
   const revealFolder = () =>
@@ -48,7 +48,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
   const copyPath = () =>
     void navigator.clipboard.writeText(collection.folder_path).then(
       () => toast.success(t("common.copied")),
-      () => toast.error(t("knowledge.editor.copyFailed")),
+      () => toast.error(t("knowledge.collection.copyFailed")),
     );
 
   return (
@@ -81,7 +81,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
                 {
                   key: "delete",
                   label: t("knowledge.deleteCollection.menu"),
-                  onSelect: deleteCollection,
+                  onSelect: () => setDeleting(true),
                   destructive: true,
                   separated: true,
                 },
@@ -91,6 +91,11 @@ export function KnowledgeCollectionView({ collection }: Props) {
         }
       />
       <KnowledgeRenameDialog collection={collection} open={renaming} onOpenChange={setRenaming} />
+      <KnowledgeDeleteCollection
+        collection={collection}
+        open={deleting}
+        onOpenChange={setDeleting}
+      />
 
       <div className="min-h-0 flex-1 overflow-auto px-8 py-7">
         <div className="mx-auto flex max-w-[720px] flex-col gap-5">

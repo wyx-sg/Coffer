@@ -1,32 +1,21 @@
-// src/components/agents/hooks/FileLink.tsx — a hook's file: a link to it in the Config files tab when that tab holds it.
+// src/components/agents/hooks/FileLink.tsx — a hook's file, opened in the person's editor.
 //
-// The path is the hook file's real one; the link goes to the Config files tab
-// with that file open (`?file=<key>`). A plugin's hooks.json is not a Config
-// files entry, so it reads as plain text.
-import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
-
+// The path is the hook file's real one. Choosing it asks the daemon to open it
+// in the preferred editor (spec agent-registry "Open config files in an
+// external editor or reveal them"); a plugin's hooks.json opens the same way.
 import { abbreviateHomePath } from "@/lib/agents/display";
-import { agentTabPath } from "@/lib/agents/routes";
+import { useFileActionItems } from "@/lib/fileActionItems";
 
-interface Props {
-  agentType: string;
-  path: string;
-  /** The Config files key that holds `path`, when one does. */
-  fileKey: string | null;
-}
-
-export function FileLink({ agentType, path, fileKey }: Props) {
-  const { t } = useTranslation();
-  const label = abbreviateHomePath(path);
-  if (!fileKey) return <span className="break-all font-mono text-xs text-text-muted">{label}</span>;
+export function FileLink({ path }: { path: string }) {
+  const [open] = useFileActionItems(path);
   return (
-    <Link
-      to={agentTabPath(agentType, "config", `?${new URLSearchParams({ file: fileKey })}`)}
-      title={t("agents.hooks.openInConfig")}
-      className="break-all font-mono text-xs text-text-muted underline decoration-border underline-offset-2 hover:text-text hover:decoration-text-muted"
+    <button
+      type="button"
+      title={open.label}
+      onClick={open.onClick}
+      className="break-all text-left font-mono text-xs text-text-muted underline decoration-border underline-offset-2 hover:text-text hover:decoration-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
     >
-      {label}
-    </Link>
+      {abbreviateHomePath(path)}
+    </button>
   );
 }

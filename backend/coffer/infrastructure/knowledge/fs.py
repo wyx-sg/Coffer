@@ -21,7 +21,6 @@ Two kinds of file live under a collection, and this module is where they meet:
 
 from __future__ import annotations
 
-import hashlib
 import os
 import pathlib
 import shutil
@@ -29,20 +28,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
-from coffer.domain.knowledge.errors import (
-    KnowledgeFileConflict,
-    KnowledgeFileNotFound,
-    UnsafeKnowledgePath,
-)
-from coffer.domain.vault.errors import VaultFileStale
+from coffer.domain.knowledge.errors import KnowledgeFileNotFound
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.knowledge.catalogue import is_markdown
-from coffer.infrastructure.knowledge.frontmatter import (
-    render_frontmatter,
-    replace_body,
-    split_frontmatter,
-)
-from coffer.infrastructure.knowledge.history import Transaction
+from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
 from coffer.infrastructure.knowledge.naming import slugify, unique_name
 
 #: The frontmatter keys this layer writes, in render order (see "Carry title,
@@ -54,16 +42,6 @@ _ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at")
 
 def timestamp() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def fingerprint(raw: bytes) -> str:
-    """sha256 hex of a file's bytes — the same digest a skill file's read carries.
-
-    What an edit hands back (see "Save a document edited in the web UI"): a
-    file whose bytes moved since the editor loaded them is refused, not
-    overwritten.
-    """
-    return hashlib.sha256(raw).hexdigest()
 
 
 def decode(raw: bytes) -> str:
@@ -89,7 +67,6 @@ def read_file(relpath: str) -> KnowledgeFile:
         body=body,
         file_path=str(path),
         folder_path=str(path.parent),
-        fingerprint=fingerprint(raw),
     )
 
 
@@ -176,60 +153,6 @@ def write_file(
     text = render(frontmatter, body)
     atomic_write(target, text)
     return read_file(paths.relative_of(target))
-
-
-def save_body(
-    relpath: str, body: str, *, expected_fingerprint: str, tx: Transaction | None = None
-) -> KnowledgeFile:
-    """Replace a document's body, keeping its frontmatter as it stands.
-
-    A person's edit from the web UI (see "Save a document edited in the web
-    UI"). ``expected_fingerprint`` is what the editor's read carried: a file
-    whose bytes moved since — a person's own editor, an agent — is
-    refused with ``KnowledgeFileConflict`` and left untouched. The write goes
-    through the operation's vault transaction (``tx``), which compares the
-    fingerprint again under the vault's write lock, so a change that lands
-    between this read and the write is refused the same way.
-
-    Only a Markdown document can be saved: ``require_document`` keeps the
-    collection, its README and the inbox out of reach, and a file a person
-    dropped in that is not Markdown is bytes this route has no business
-    rewriting as text.
-    """
-    paths.require_document(relpath)
-    path = paths.resolve(relpath)
-    if not path.is_file():
-        raise KnowledgeFileNotFound(relpath)
-    if not is_markdown(path.name):
-        raise UnsafeKnowledgePath(relpath, "only a Markdown document can be edited")
-    raw = path.read_bytes()
-    if fingerprint(raw) != expected_fingerprint:
-        raise _conflict(relpath, raw)
-    text = replace_body(decode(raw), body)
-    if tx is None:
-        atomic_write(path, text)
-        return read_file(relpath)
-    try:
-        tx.write(relpath, text.encode("utf-8"), expected_fingerprint)
-    except VaultFileStale as exc:
-        raise _conflict(relpath, path.read_bytes() if path.is_file() else b"") from exc
-    return read_file(relpath)
-
-
-def _conflict(relpath: str, raw: bytes) -> KnowledgeFileConflict:
-    """The refusal carries the document as it is now, so the editor can Reload,
-    Compare or Copy the person's text without a second save over it."""
-    _, current = split_frontmatter(decode(raw))
-    return KnowledgeFileConflict(
-        relpath, current_body=current, current_fingerprint=fingerprint(raw)
-    )
-
-
-def write_bytes(relpath: str, raw: bytes) -> None:
-    """Put a document's exact bytes back — a restored version."""
-    paths.require_document(relpath)
-    path = paths.resolve(relpath)
-    atomic_write(path, decode(raw))
 
 
 def delete_file(relpath: str) -> None:

@@ -1,20 +1,20 @@
 // src/components/providers/ProviderEndpoint.tsx — the Endpoint section: protocol, runtime, base URL and the API key's secret.
 //
-// The key is never shown — only the secret reference it is stored under
-// (its reference, as the Secrets page shows it), write-only, with Replace key — which a rejected
+// The key is never shown — only the name of the secret it is stored under
+// (a link to that secret's page), write-only, with Replace key — which a rejected
 // key moves into the problem box above the rows. The
 // protocol is locked while an agent runs on the provider (spec
 // provider-switching "Refuse to move the wire of a live connection"). Route
 // says agents reach it through Coffer's proxy.
 // Problems of the endpoint show here, in a box above the rows: Unreachable
 // (Hand off to <Agent>) and Key rejected (Replace key…).
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Lock } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
+import { SecretNameLink } from "@/components/secret/SecretNameLink";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import type { Provider } from "@/lib/api/providers";
 import { useProxyAddress } from "@/lib/hooks/useProviderPrices";
@@ -25,9 +25,6 @@ import { Section } from "@/components/Section";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { ProblemBox } from "./ProblemBox";
 import { useLockedBy } from "./useLockedBy";
-import { secretReferenceOf } from "@/lib/secretValue";
-
-const LINK = "font-label text-accent-text no-underline hover:underline";
 
 interface Props {
   provider: Provider;
@@ -141,26 +138,18 @@ export function ProviderEndpoint({
         <SettingRow
           label={t("providers.fields.apiKey")}
           description={
-            provider.secret_ref ? (
-              <>
-                {t("providers.key.stored")}{" "}
-                <Link to="/secrets" className={LINK}>
-                  {t("providers.key.manage")}
-                </Link>
-              </>
-            ) : runtime ? (
-              t("providers.key.noneLocal")
-            ) : (
-              t("providers.key.none")
-            )
+            provider.secret_ref
+              ? t("providers.key.stored")
+              : runtime
+                ? t("providers.key.noneLocal")
+                : t("providers.key.none")
           }
         >
           {provider.secret_ref ? (
             <>
-              <TruncatedText
-                text={secretReferenceOf(provider.secret_ref)}
-                mono
-                className="max-w-[260px] text-xs"
+              <SecretNameLink
+                secretRef={provider.secret_ref}
+                className="max-w-[260px] truncate text-sm"
               />
               {rejected ? <StatusWord tone="err">{t("providers.key.rejected")}</StatusWord> : null}
               {rejected ? null : (

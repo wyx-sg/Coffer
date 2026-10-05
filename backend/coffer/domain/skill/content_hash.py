@@ -1,8 +1,8 @@
 """A skill folder's content, as one digest.
 
 What a Git-imported skill is pinned to is a commit *and* the content that
-commit gave its folder (spec skill-manager "Update a Git-imported skill from
-its source"). Comparing the master folder's digest with the pinned one is how
+commit gave its folder (spec skill-manager "Hand a Git-imported skill's update
+to an agent"). Comparing the master folder's digest with the pinned one is how
 Coffer knows the person edited the skill since the pin, without keeping a
 checkout of the pinned commit around.
 

@@ -1,20 +1,16 @@
-"""Merge an upstream update into a skill's local edits, with an agent.
+"""Record an update the person's agent merged into the master folder.
 
-Spec skill-manager "Update a Git-imported skill from its source" offers two
-answers to an update that meets local edits — keep mine, take theirs — and
-neither merges. The merge itself is a chore for the person's agent: the
-preview's conflict carries a hand-off (``update_handoff``) that names the
-master folder, the edited files, the commit range and where upstream can be
-read; the agent edits the master folder only, and the person then records it
-with **I merged it** (:func:`mark_merged`, spec skill-manager "Record an
-update merged into local edits").
+Spec skill-manager "Record an update merged into local edits". The agent
+brings the update in after the hand-off of "Hand a Git-imported skill's update
+to an agent" (``update_handoff``); the person then records it with **I merged
+it** (:func:`mark_merged`).
 
 Recording moves the pin to the upstream commit the merge was made against and
 nothing else: the master's files stay as the agent left them. The pin's
 content hash becomes that commit's own content, so the merged folder still
 reads as edited against its new base — which is what it is: the person's
-edits, carried onto upstream. A later update is then a conflict again, with
-exactly those edits listed, rather than one that silently overwrites them.
+edits, carried onto upstream. The next update's hand-off then lists exactly
+those edits, rather than the update silently overwriting them.
 """
 
 from __future__ import annotations
@@ -98,7 +94,10 @@ async def mark_merged(
         status = await svc.status_repo.get(skill.uid) or SourceStatus(skill_uid=skill.uid)
         await svc.status_repo.put(
             status.with_(
-                latest_commit=latest, commits_ahead=0, files_changed=0, dismissed_commit=None
+                latest_commit=latest,
+                commits_ahead=0,
+                files_changed=0,
+                commits=(),
             )
         )
     else:

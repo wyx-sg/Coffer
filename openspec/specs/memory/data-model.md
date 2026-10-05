@@ -151,13 +151,11 @@ underneath. An agent that tidies the partition may rewrite or merge it.
 | `partition` | string | `global` or a repository slug. |
 | `origins` | list of Origin | Every raw entry this note was built from, and through them every contributing agent ("Store each note as one Markdown file with frontmatter"). A merge appends the merged note's origins to the survivor's ("Teach tidying in the coffer-guide's memory section"). |
 | `search_terms` | list of string | Carried up from the entries that supplied them, and restated in the index line so the next agent does not have to guess a word. |
-| `created_at` / `updated_at` | string | `updated_at` moves when an agent rewrites the note or a person saves an edit. |
+| `created_at` / `updated_at` | string | `updated_at` moves when an agent rewrites the note or a person edits the file in their own editor. |
 | `retired` / `replaced_by` | string | Optional. Written by an agent to retire the note: `retired` carries the reason, `replaced_by` the surviving note's slug. The next distil pass records the note in `RETIRED.md`, deletes its file and re-renders the index ("Retire a note an agent marked retired"). |
 
-A note's read also carries a `fingerprint` (sha256 of the file's bytes). It is
-not stored in the file: it is what a save in the web UI sends back, so a note
-changed since the read (by an agent or on disk) is refused instead of overwritten
-(see "Edit a memory in the web UI or in an editor").
+A note's read carries no fingerprint: the web UI shows a note read-only and no
+route saves one (see "Edit a memory in the person's own editor").
 
 There is **no** `status`, no `superseded_by` and no `conflicts_with`. A note
 marked `retired` is only transiently in `notes/`: the next distil pass removes
@@ -342,7 +340,7 @@ every kind shares.
 | `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by applying its drift item |
 | `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it |
 | `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start` or `prompt`), the `session_id` and the `notes` it carried; never their text ("Audit every delivery fire") |
-| `memory_note_edited` | a person saves an edit to a note in the web UI, naming the partition, the note and the actor |
+| `memory_note_edited` | no longer recorded (the web UI saves no note); the value stays so earlier rows still read |
 | `memory_note_deleted` | a person deletes a note by hand in the web UI, naming the partition, the note and the actor ("Delete a memory by hand") |
 
 Prompt-time retrieval (`POST /api/v1/memory/hook`) records one

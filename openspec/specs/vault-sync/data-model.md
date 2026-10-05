@@ -94,7 +94,10 @@ when it has nothing to say.
 An `edited` answer is prepared from an editor copy under
 `derived/sync-conflicts/<path>` — the person's, or an agent's merge written into
 it; the directory is cleared when the round continues. Going back to two choices
-deletes one copy and clears the file's hand-off and answer.
+deletes one copy and clears the file's hand-off and answer. The file-versions
+answer carries `ours` and `theirs` (and, for the take-theirs diff, what they change
+here) but not the base, the person's edited text or a diff of an agent's merge: the
+copy is read in the person's editor.
 
 ## Machine descriptor — `vault/machines/<machine_id>.json`
 

@@ -70,7 +70,7 @@ export function KnowledgeCollectionNode({ collection, expanded, onToggle, curren
             path={name}
             depth={1}
             selectedPath={current ? file : null}
-            onSelect={(path) => navigate(collectionPath(collection.uid, "document", path))}
+            onSelect={(path) => navigate(collectionPath(collection.uid, path))}
             emptyLabel={t("knowledge.tree.empty")}
           />
         </div>

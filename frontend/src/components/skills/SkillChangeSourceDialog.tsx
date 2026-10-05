@@ -2,15 +2,15 @@
 // "Change source of terraform-plan" (canvas 4.3.24; spec skill-manager "Change
 // a Git-imported skill's source"): the repository URL, branch or tag and folder
 // of the new source, prefilled with the current one, in a 480 form. Check source
-// clones it and opens the 1060 review of the change against the current version
-// — nothing is replaced until the person takes it; Cancel, or closing, drops the
-// stage. The name stays the skill's.
-import { useEffect, useMemo, useRef, useState } from "react";
+// clones it and lists the names of the files that would change against the
+// current version (SkillSourceChangeReview) — nothing is replaced until the
+// person takes it; Cancel, or closing, drops the stage. The name stays the
+// skill's.
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
-import { DialogErrorBanner } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -22,15 +22,13 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { errorHandoff } from "@/lib/api/errorHandoff";
 import { ApiError, translateApiError } from "@/lib/api/errors";
-import type { SkillOut, SkillUpdatePreview } from "@/lib/api/skills";
+import type { SkillOut, SkillSourceChange } from "@/lib/api/skills";
 import { useChangeSkillSource } from "@/lib/hooks/useSkillCopies";
-import { useApplySkillUpdate, useCancelSkillStage } from "@/lib/hooks/useSkills";
+import { useApplySkillSourceChange, useCancelSkillStage } from "@/lib/hooks/useSkills";
 import { folderLabel } from "@/lib/skills/format";
-import { SkillChangeDialog } from "./SkillChangeDialog";
 import { SourceField as Field } from "./SkillSourceField";
-import { useHolderSummaries } from "./skillSummaries";
+import { SkillSourceChangeReview } from "./SkillSourceChangeReview";
 import { repoLabel, shortCommit } from "./skillSourceHelpers";
-import { updateItems } from "./updateItems";
 
 interface Props {
   skill: SkillOut;
@@ -48,22 +46,13 @@ export function SkillChangeSourceDialog({ skill, open, onOpenChange }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const change = useChangeSkillSource();
-  const apply = useApplySkillUpdate();
+  const apply = useApplySkillSourceChange();
   const cancelStage = useCancelSkillStage();
   const source = skill.source.type === "git_import" ? skill.source : null;
   const [loc, setLoc] = useState<Location>({ url: "", ref: "", path: "" });
-  const [preview, setPreview] = useState<SkillUpdatePreview | null>(null);
+  const [preview, setPreview] = useState<SkillSourceChange | null>(null);
   const staged = useRef<string | null>(null);
-  const to = shortCommit(preview?.to_commit);
-  const summaries = useHolderSummaries(
-    skill,
-    t("skills.changeSource.cofferTakes", { name: skill.name, to }),
-    t("skills.update.agentSees"),
-  );
-  const items = useMemo(
-    () => (preview ? updateItems(preview, skill.name) : null),
-    [preview, skill.name],
-  );
+  const to = shortCommit(preview?.commit);
 
   useEffect(() => {
     if (!open || !source) return;
@@ -100,7 +89,7 @@ export function SkillChangeSourceDialog({ skill, open, onOpenChange }: Props) {
   const take = () =>
     preview &&
     apply.mutate(
-      { uid: skill.uid, stagingId: preview.staging_id, discardLocalEdits: true },
+      { uid: skill.uid, stagingId: preview.staging_id },
       {
         onSuccess: () => {
           staged.current = null;
@@ -114,25 +103,16 @@ export function SkillChangeSourceDialog({ skill, open, onOpenChange }: Props) {
 
   if (preview) {
     return (
-      <SkillChangeDialog
+      <SkillSourceChangeReview
         open={open}
-        onOpenChange={(next) => (next ? onOpenChange(true) : close())}
         title={t("skills.changeSource.title", { name: skill.name })}
-        subtitle={`${repoLabel(loc.url)} · ${folderLabel(loc.path) ?? t("skills.banner.repoTop")} · ${shortCommit(preview.from_commit)} → ${to}`}
-        items={items}
-        summaries={summaries}
-        note={t("skills.changeSource.note")}
-        confirmLabel={t("skills.changeSource.take", { commit: to })}
-        onConfirm={take}
+        subtitle={`${repoLabel(loc.url)} · ${folderLabel(loc.path) ?? t("skills.banner.repoTop")} · ${to}`}
+        change={preview}
+        takeLabel={t("skills.changeSource.take", { commit: to })}
         pending={apply.isPending}
-        error={
-          apply.error ? (
-            <DialogErrorBanner
-              title={t("skills.changeSource.failed")}
-              message={translateApiError(t, apply.error)}
-            />
-          ) : null
-        }
+        error={apply.error}
+        onTake={take}
+        onCancel={close}
       />
     );
   }

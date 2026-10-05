@@ -1,12 +1,14 @@
 """/api/v1/skills/stage/git and /api/v1/skills/{uid}/source/* (spec
-skill-manager "Add skills from a Git repository", "Update a Git-imported skill
-from its source", "Show the commands a skill declares it needs").
+skill-manager "Add skills from a Git repository", "Hand a Git-imported skill's
+update to an agent", "Show the commands a skill declares it needs").
 
 Every repository is a bare one under ``tmp_path`` over ``file://``.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import pathlib
 import shutil
 from collections.abc import Iterator
@@ -160,11 +162,10 @@ def _move(up: Upstream) -> str:
     return up.commit("v2 change")
 
 
-@pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="update a Git-imported skill from its source preview",
-)
-def test_check_preview_compare_and_apply_over_rest(c: TestClient, up: Upstream) -> None:
+@pytest.mark.acceptance(spec="skill-manager", scenario="a newer commit shows update available")
+def test_check_reports_the_update_with_its_range_and_compare_link(
+    c: TestClient, up: Upstream
+) -> None:
     item = _add(c, up, path="skills/review")
     uid, first = item["uid"], item["source"]["commit"]
     new = _move(up)
@@ -178,105 +179,59 @@ def test_check_preview_compare_and_apply_over_rest(c: TestClient, up: Upstream) 
         new,
     )
     assert status["files_changed"] == 2 and status["error"] is None
+    assert [cm["subject"] for cm in status["commits"]] == ["v2 change"]
+    assert status["compare_url"] is None  # a file:// repository has no host page
     listed = {i["name"]: i for i in c.get("/api/v1/skills").json()["items"]}
     assert listed["review"]["source_status"]["update_available"] is True
     assert "v1" in (_master() / "SKILL.md").read_text()
-
-    p = c.post(f"/api/v1/skills/{uid}/source/preview").json()
-    assert (p["from_commit"], p["to_commit"], p["up_to_date"], p["conflict"]) == (
-        first,
-        new,
-        False,
-        False,
-    )
-    assert [cm["subject"] for cm in p["commits"]] == ["v2 change"]
-    assert sorted((ch["path"], ch["status"]) for ch in p["changes"]) == [
-        ("SKILL.md", "modified"),
-        ("extra.txt", "added"),
-    ]
-    r = c.get(
-        f"/api/v1/skills/{uid}/source/compare",
-        params={"staging_id": p["staging_id"], "path": "SKILL.md"},
-    )
-    assert r.status_code == 200, r.text
-    view = r.json()
-    assert "v1" in view["local"]["text"] and "v1" in view["pinned"]["text"]
-    assert "v2" in view["incoming"]["text"]
-    r = c.get(
-        f"/api/v1/skills/{uid}/source/compare",
-        params={"staging_id": p["staging_id"], "path": "../c.db"},
-    )
-    assert r.status_code == 422
-
-    r = c.post(f"/api/v1/skills/{uid}/source/apply", json={"staging_id": p["staging_id"]})
-    assert r.status_code == 200, r.text
-    applied = r.json()
-    assert applied["uid"] == uid and applied["source"]["commit"] == new
-    assert applied["source_status"]["update_available"] is False
-    assert "v2" in (_master() / "SKILL.md").read_text()
-    audit = c.get("/api/v1/audit", params={"event_type": "skill_updated"}).json()
-    [event] = [e for e in audit["entries"] if e["resource_name"] == "review"]
-    assert (event["details"]["from_commit"], event["details"]["to_commit"]) == (first, new)
-    assert stage_dirs(get_skill_source_service()) == []
-    r = c.post(f"/api/v1/skills/{uid}/source/apply", json={"staging_id": p["staging_id"]})
-    assert r.status_code == 404 and r.json()["error"]["code"] == "SKILL_STAGING_NOT_FOUND"
-
-
-def test_closing_a_preview_leaves_the_pin(c: TestClient, up: Upstream) -> None:
-    item = _add(c, up, path="skills/review")
-    _move(up)
-    p = c.post(f"/api/v1/skills/{item['uid']}/source/preview").json()
-    assert c.delete(f"/api/v1/skills/stage/{p['staging_id']}").status_code == 204
-    again = c.get(f"/api/v1/skills/{item['uid']}").json()
-    assert again["source"]["commit"] == item["source"]["commit"]
-    assert "v1" in (_master() / "SKILL.md").read_text()
-    assert stage_dirs(get_skill_source_service()) == []
+    assert c.get(f"/api/v1/skills/{uid}").json()["source"]["commit"] == first
 
 
 @pytest.mark.acceptance(
     spec="skill-manager",
-    scenario="update a Git-imported skill from its source preview",
+    scenario="the update is offered only as a hand-off while an update is available",
 )
-def test_a_local_edit_is_409_until_taken_or_kept(c: TestClient, up: Upstream) -> None:
+def test_the_update_hand_off_over_rest(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid, first = item["uid"], item["source"]["commit"]
+
+    # Up to date: refused, and nothing is staged.
+    r = c.post(f"/api/v1/skills/{uid}/source/handoff")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "SKILL_UPDATE_NOT_PENDING"
+
     (_master() / "SKILL.md").write_text(skill_md("review", "mine"))
     new = _move(up)
-    c.post(f"/api/v1/skills/{uid}/source/check")
-
-    p = c.post(f"/api/v1/skills/{uid}/source/preview").json()
-    assert p["conflict"] is True
-    assert [(ch["path"], ch["status"]) for ch in p["local_changes"]] == [("SKILL.md", "modified")]
-    r = c.post(f"/api/v1/skills/{uid}/source/apply", json={"staging_id": p["staging_id"]})
-    assert r.status_code == 409 and r.json()["error"]["code"] == "SKILL_UPDATE_CONFLICT"
+    r = c.post(f"/api/v1/skills/{uid}/source/handoff")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    prompt = body["handoff"]["prompt"]
+    assert body["commit"] == new
+    assert str(_master()) in prompt and first in prompt and new in prompt
+    assert "Files I edited since the pin: SKILL.md" in prompt and "v2 change" in prompt
     assert "mine" in (_master() / "SKILL.md").read_text()
-
-    r = c.post(f"/api/v1/skills/{uid}/source/keep", json={})
-    assert r.status_code == 200, r.text
-    assert (r.json()["dismissed_commit"], r.json()["update_available"]) == (new, False)
     assert c.get(f"/api/v1/skills/{uid}").json()["source"]["commit"] == first
+    assert stage_dirs(get_skill_source_service()) == []
 
-    r = c.post(
-        f"/api/v1/skills/{uid}/source/apply",
-        json={"staging_id": p["staging_id"], "discard_local_edits": True},
-    )
-    assert r.status_code == 200, r.text
-    assert r.json()["source"]["commit"] == new
-    assert "mine" not in (_master() / "SKILL.md").read_text()
+    # The removed routes are gone.
+    for method, path in (
+        ("post", "preview"),
+        ("get", "compare"),
+        ("post", "keep"),
+        ("post", "apply"),
+    ):
+        r = getattr(c, method)(f"/api/v1/skills/{uid}/source/{path}")
+        assert r.status_code in (404, 405), (path, r.status_code)
 
 
-def test_a_conflict_hands_off_the_merge_and_merged_moves_the_pin(
-    c: TestClient, up: Upstream
-) -> None:
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="recording a merge moves the pin and keeps the merged files",
+)
+def test_merged_moves_the_pin_and_keeps_the_files(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid, first = item["uid"], item["source"]["commit"]
     (_master() / "SKILL.md").write_text(skill_md("review", "mine"))
     new = _move(up)
-
-    p = c.post(f"/api/v1/skills/{uid}/source/preview").json()
-    assert p["conflict"] is True
-    assert str(_master()) in p["handoff"]["prompt"] and new in p["handoff"]["prompt"]
-    assert c.delete(f"/api/v1/skills/stage/{p['staging_id']}").status_code == 204
 
     # Not the update: the pinned commit is refused with a coded error.
     r = c.post(f"/api/v1/skills/{uid}/source/merged", json={"commit": first})
@@ -293,6 +248,24 @@ def test_a_conflict_hands_off_the_merge_and_merged_moves_the_pin(
     assert stage_dirs(get_skill_source_service()) == []
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="the update check follows this machine's setting"
+)
+def test_the_update_check_setting_over_rest(c: TestClient, up: Upstream) -> None:
+    config = pathlib.Path(os.environ["HOME"]) / ".coffer" / "daemon-config.json"
+    assert c.get("/api/v1/skills/update-check").json() == {"interval": "6h"}
+    for choice in ("1d", "7d", "manual", "6h"):
+        r = c.put("/api/v1/skills/update-check", json={"interval": choice})
+        assert r.status_code == 200 and r.json() == {"interval": choice}
+        assert json.loads(config.read_text())["skill_update_check"] == choice
+        assert c.get("/api/v1/skills/update-check").json() == {"interval": choice}
+    assert c.put("/api/v1/skills/update-check", json={"interval": "hourly"}).status_code == 422
+    # Check for updates on a skill works whatever the choice.
+    item = _add(c, up, path="skills/review")
+    c.put("/api/v1/skills/update-check", json={"interval": "manual"})
+    assert c.post(f"/api/v1/skills/{item['uid']}/source/check").status_code == 200
+
+
 def test_an_unreachable_source_on_check_is_reported_not_raised(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid = item["uid"]
@@ -305,7 +278,7 @@ def test_an_unreachable_source_on_check_is_reported_not_raised(c: TestClient, up
     assert status["last_success_at"] == ok["last_success_at"]
     assert status["update_available"] is False
     assert c.get(f"/api/v1/skills/{uid}").json()["source"] == item["source"]
-    r = c.post(f"/api/v1/skills/{uid}/source/preview")
+    r = c.post(f"/api/v1/skills/{uid}/source/handoff")
     assert r.status_code == 502 and r.json()["error"]["code"] == "SKILL_SOURCE_UNREACHABLE"
 
 
@@ -314,6 +287,6 @@ def test_update_routes_refuse_a_skill_not_from_git(c: TestClient, tmp_path: path
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(skill_md("plain"))
     uid = c.post("/api/v1/skills/import", json={"path": str(src)}).json()["uid"]
-    for path in ("check", "preview"):
+    for path in ("check", "handoff"):
         r = c.post(f"/api/v1/skills/{uid}/source/{path}")
         assert r.status_code == 409 and r.json()["error"]["code"] == "SKILL_NOT_FROM_GIT"

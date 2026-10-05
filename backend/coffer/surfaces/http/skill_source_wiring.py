@@ -1,10 +1,11 @@
 """Wire skill sources (spec skill-manager "Add skills from an archive", "Add
-skills from a Git repository", "Update a Git-imported skill from its source").
+skills from a Git repository", "Hand a Git-imported skill's update to an agent").
 
 Called from ``agent_skill_wiring`` once the skill service exists: builds the
 source service over the machine's ``git``, the archive reader and the
 machine-local check record (``local/skill-source-status.json``), publishes it
-to the routes, and starts the six-hourly update worker. ``stop`` is the shutdown half.
+to the routes, and starts the update worker, which follows this machine's
+schedule. ``stop`` is the shutdown half.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.source_service import SkillSourceService, SkillUpdateWorker
+from coffer.infrastructure.daemon.skill_update_setting import DaemonConfigUpdateCheck
 from coffer.infrastructure.skill.archive_reader import ZipArchiveReader
 from coffer.infrastructure.skill.git_source import GitSource
 from coffer.infrastructure.skill.source_status_repo import SkillSourceStatusRepo
@@ -35,6 +37,7 @@ def wire_skill_sources(skill_svc: SkillService) -> SkillSources:
         git=GitSource(),
         archives=ZipArchiveReader(),
         status_repo=SkillSourceStatusRepo(),
+        update_check=DaemonConfigUpdateCheck(),
     )
     set_skill_source_service(service)
     worker = SkillUpdateWorker(service)

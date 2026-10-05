@@ -30,14 +30,10 @@ import type {
   ChangesOut,
   CollectionListOut,
   CollectionOut,
-  DocumentHistoryOut,
   FileOut,
-  FileSave,
   HandoffOut,
   IngestedDocumentOut,
-  VersionBodyOut,
   TreeOut,
-  VersionDiffOut,
 } from "./knowledgeTypes";
 
 // Re-export the wire types so `import { … } from "./api"` sees one surface.
@@ -74,20 +70,9 @@ export function getTree(path: string): Promise<TreeOut> {
   return unwrap(getApiClient().GET("/knowledge/tree", { params: { query: { path } } }));
 }
 
-/** One document, whole. Carries the `fingerprint` a save hands back. */
+/** One document, whole. */
 export function getFile(path: string): Promise<FileOut> {
   return unwrap(getApiClient().GET("/knowledge/file", { params: { query: { path } } }));
-}
-
-/**
- * Save an edited document's body; its frontmatter is kept as it is on disk
- * (see "Save a document edited in the web UI"). `expected_fingerprint` is the
- * `fingerprint` the read carried: a file changed since is refused with 409
- * `KNOWLEDGE_FILE_CONFLICT` and left untouched. Resolves with the file as saved, new fingerprint
- * included.
- */
-export function saveFile(payload: FileSave): Promise<FileOut> {
-  return unwrap(getApiClient().PUT("/knowledge/file", { body: payload }));
 }
 
 /**
@@ -95,9 +80,9 @@ export function saveFile(payload: FileSave): Promise<FileOut> {
  * root, the same string the tree and `getFile` use, and the daemon refuses anything that
  * escapes it.
  *
- * A document is the only copy: there is no index to fall out of step and
- * nothing to restore it from but the sync remote's history, which is why every
- * caller confirms first. 204, so nothing comes back.
+ * The delete is one commit in the vault's history, so its toast offers Undo
+ * (`restoreDeleted`); after that, git brings the file back. 204, so nothing
+ * comes back.
  */
 export function deleteFile(path: string): Promise<void> {
   return unwrapVoid(getApiClient().DELETE("/knowledge/file", { params: { query: { path } } }));
@@ -112,11 +97,12 @@ export function getTidyHandoff(): Promise<HandoffOut> {
   return unwrap(getApiClient().GET("/knowledge/tidy-handoff"));
 }
 
-// --- history ------------------------------------------------------------------
+// --- changes ------------------------------------------------------------------
 
 /**
  * Recent changes across every collection, or one (`collection` is its NAME),
- * newest first (see "Follow edits across collections in one feed").
+ * newest first (see "Follow edits across collections in one feed"). The page
+ * reads it only to find the delete its Undo restores.
  */
 export function listChanges(params: {
   collection?: string | null;
@@ -132,25 +118,6 @@ export function listChanges(params: {
         },
       },
     }),
-  );
-}
-
-/** A document's versions, newest first, each with its writer and time. */
-export function getHistory(path: string): Promise<DocumentHistoryOut> {
-  return unwrap(getApiClient().GET("/knowledge/history", { params: { query: { path } } }));
-}
-
-/** What one version did to the document, against the version before it. */
-export function getVersionDiff(path: string, version: string): Promise<VersionDiffOut> {
-  return unwrap(
-    getApiClient().GET("/knowledge/history/diff", { params: { query: { path, version } } }),
-  );
-}
-
-/** A document's body as one version left it — what Compare with current reads. */
-export function getVersionBody(path: string, version: string): Promise<VersionBodyOut> {
-  return unwrap(
-    getApiClient().GET("/knowledge/history/version", { params: { query: { path, version } } }),
   );
 }
 
@@ -177,11 +144,6 @@ export function describeCollection(uid: string, description: string): Promise<Co
       body: { description },
     }),
   );
-}
-
-/** Put one version back, as a NEW version naming the user — the past is never rewritten. */
-export function restoreVersion(payload: { path: string; version: string }): Promise<FileOut> {
-  return unwrap(getApiClient().POST("/knowledge/history/restore", { body: payload }));
 }
 
 // --- ingestion ----------------------------------------------------------------

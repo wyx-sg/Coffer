@@ -94,7 +94,6 @@ function stub(skill: UnmanagedSkillDetailOut = GOOD) {
     truncated: false,
     binary: false,
     size: 30,
-    fingerprint: "f",
   });
   api.adoptUnmanagedSkill.mockResolvedValue({ uid: "u-new", name: "loose" });
   api.deleteUnmanagedSkill.mockResolvedValue(undefined);

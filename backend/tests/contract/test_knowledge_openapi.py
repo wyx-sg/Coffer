@@ -31,31 +31,21 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
     ("DELETE", "/api/v1/knowledge/file"),
-    # The one document write: a person's edited body, kept frontmatter, and a
-    # fingerprint guard (see "Save a document edited in the web UI"). New
-    # knowledge arrives as material: an upload (see "Promote submitted
-    # material at once"). There is no material route and no route that creates a document at a path
-    # (see "Manage knowledge in the web UI").
-    ("PUT", "/api/v1/knowledge/file"),
+    # New knowledge arrives as material: an upload (see "Promote submitted
+    # material at once"). There is no route that saves a document, no material
+    # route and no route that creates a document at a path (see "Manage
+    # knowledge in the web UI").
     # The prompt that hands tidying every collection to the person's agent. The
     # file routes above stay name-addressed on purpose: their arguments are
     # filesystem paths.
     ("GET", "/api/v1/knowledge/tidy-handoff"),
     ("POST", "/api/v1/knowledge/upload"),
-    # History (see "Keep every document's history",
-    # "Follow edits across collections in one feed"): a document's versions and
-    # one version's diff, restoring one, the recent changes and one change in
-    # full. None creates a document at a path.
-    ("GET", "/api/v1/knowledge/history"),
-    ("GET", "/api/v1/knowledge/history/diff"),
-    ("POST", "/api/v1/knowledge/history/restore"),
+    # The changes feed (see "Follow edits across collections in one feed"),
+    # which a delete's Undo reads; putting back what a delete removed (see "Undo
+    # a knowledge delete from its toast"); and a collection's description, its
+    # README's opening paragraph (see "Name a collection by its folder and edit
+    # its description in place"). No route lists, diffs or restores a version.
     ("GET", "/api/v1/knowledge/changes"),
-    # One version's body, for Compare with current; putting back what a delete
-    # removed (see "Restore a deleted collection or document from Recent
-    # changes"); and a collection's description, its README's opening
-    # paragraph (see "Name a collection by its folder and edit its description
-    # in place").
-    ("GET", "/api/v1/knowledge/history/version"),
     ("POST", "/api/v1/knowledge/changes/{version}/restore"),
     ("PUT", "/api/v1/knowledge/collections/{uid}/description"),
 }
@@ -92,7 +82,8 @@ def test_the_routes_carry_no_material_or_create_at_path_route(app_with_knowledge
     routes = _knowledge_routes(app_with_knowledge)
     assert routes, "the route table must not be empty"
     assert not {path for _, path in routes if path.endswith("/material")}
-    assert {m for m, p in routes if p == "/api/v1/knowledge/file"} == {"GET", "PUT", "DELETE"}
+    assert {m for m, p in routes if p == "/api/v1/knowledge/file"} == {"GET", "DELETE"}
+    assert not {path for _, path in routes if "/history" in path}
 
 
 def test_no_material_wire_model_remains() -> None:

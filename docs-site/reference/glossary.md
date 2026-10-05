@@ -132,8 +132,7 @@ name and the experimental-feature switches. See [Files and directories](/referen
 
 The [vault sync](#vault-sync) safeguard that holds a [sync round](#sync-round) that would
 lose 20 or more files, or more than 20% of an area, in either direction, until you answer
-it on the **Sync** page: **Delete n files** or **Restore n files**
-(keep them). Moves and renames are not losses. See
+it on the **Sync** page: **Delete N files** or **Keep the files**. Moves and renames are not losses. See
 [Vault sync](/architecture/vault-sync#the-deletion-breaker).
 
 ### Delivery
@@ -458,7 +457,7 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 Mechanical work Coffer does on a timer, without being asked: `aggregate` and `distil` for
 memory, and the sweep for knowledge (re-render the guide, adopt files left in the
 [inbox](#inbox), commit edits made on disk). None of them calls a model. Each can be switched
-off or retimed from the **Automatic** control on the Knowledge and Memory pages.
+off or retimed from the automatic-read schedule on the Memory page (the **▾** on **Update memory**).
 See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/architecture/knowledge#the-sweep).
 
 ## V
@@ -489,5 +488,5 @@ The API protocol a [connection](#connection) speaks: `anthropic`, `openai` or
 
 Who made a commit in the [vault](#vault), named in its `Coffer-Writer` trailer: `user` (you,
 through a Coffer surface), `disk` (a file edited in an editor, a shell or an agent's own file
-tools), `agent`, `daemon`, `curation` (older history only) or `sync`. A skill's
-**History** tab shows it. See [Editing the vault by hand](/guides/vault-files).
+tools), `agent`, `daemon`, `curation` (older history only) or `sync`. `git log`
+in the vault shows it. See [Editing the vault by hand](/guides/vault-files).

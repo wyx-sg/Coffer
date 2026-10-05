@@ -2,7 +2,7 @@
 without anyone pressing a button.
 
 Three duties, in this order (spec knowledge "Adopt a file
-dropped into the inbox", "Keep every document's history"):
+dropped into the inbox", "Commit every knowledge write naming its writer"):
 
 1. **Adopt and promote** every file waiting in a collection's hidden ``.inbox/``
    — one an agent outside Coffer wrote, another machine synced, or an older guide

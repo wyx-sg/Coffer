@@ -336,11 +336,6 @@ test.describe("knowledge collection", () => {
       "knowledge-document",
       () => `/knowledge/${uid}?file=${encodeURIComponent(document)}`,
     ],
-    [
-      "knowledge-history",
-      () => `/knowledge/${uid}/history?file=${encodeURIComponent(document)}`,
-    ],
-    ["knowledge-recent", () => "/knowledge"],
   ];
 
   for (const [name, address] of VIEWS) {

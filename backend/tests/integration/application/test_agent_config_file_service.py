@@ -1,8 +1,8 @@
 """Integration tests for AgentConfigFileService over a real ConfigFileStore.
 
-Covers spec agent-registry acceptance scenarios: list/read/write config files, missing file
-reads empty, malformed content rejected (file unchanged), and unknown key
-rejected.
+Covers spec agent-registry acceptance scenarios for the config-file listing:
+each file's location and existence, and a directory entry's files. The service
+serves no content and writes nothing.
 """
 
 from __future__ import annotations
@@ -12,13 +12,7 @@ import pathlib
 import pytest
 
 from coffer.domain.agent.types import AgentType
-from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
-    ConfigFileFormatInvalid,
-    ConfigFileNotAllowed,
-    ResourceNotFound,
-)
-from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.domain.errors import ResourceNotFound
 
 pytestmark = pytest.mark.asyncio
 
@@ -29,7 +23,9 @@ async def _register_claude(bundle, home: pathlib.Path):
     return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, actor="cli")
 
 
-@pytest.mark.acceptance(spec="agent-registry/claude-code", scenario="list an agent's config files")
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="report each config file's path, folder and existence"
+)
 async def test_list_files_reports_existence(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
@@ -67,195 +63,30 @@ async def test_list_files_reports_existence(agent_bundle, tmp_path, monkeypatch)
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="list a directory config entry's files")
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="list nested subagent files in the agents directory",
+)
 async def test_list_files_subagents_directory_with_children(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
     agents_dir = tmp_path / ".claude" / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
     (agents_dir / "helper.md").write_text("# Helper", encoding="utf-8")
+    (agents_dir / "team").mkdir()
+    (agents_dir / "team" / "reviewer.md").write_text("# Reviewer", encoding="utf-8")
 
     files = await agent_bundle.config_files.list_files(agent.uid)
     by_key = {f.key: f for f in files}
     entry = by_key["subagents"]
     assert entry.exists is True
     assert entry.files is not None
-    assert len(entry.files) == 1
-    assert entry.files[0].relpath == "helper.md"
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="read an existing config file")
-async def test_read_existing(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    (tmp_path / ".claude" / "settings.json").write_text('{"a": 1}', encoding="utf-8")
-
-    out = await agent_bundle.config_files.read_file(agent.uid, "settings")
-    assert out.exists is True
-    assert out.content == '{"a": 1}'
-    assert out.format.value == "json"
-    assert out.fingerprint != ""
-    # The content view carries the file's absolute path + containing folder so
-    # the read-only viewer can open/reveal (see "Open config files in an external
-    # editor or reveal them").
-    assert out.path == str(tmp_path / ".claude" / "settings.json")
-    assert out.folder_path == str(tmp_path / ".claude")
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="read a not-yet-created config file")
-async def test_read_missing_is_empty_and_no_create(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-
-    out = await agent_bundle.config_files.read_file(agent.uid, "instructions")
-    assert out.exists is False
-    assert out.content == ""
-    assert out.fingerprint == ""
-    assert not (tmp_path / ".claude" / "CLAUDE.md").exists()
-
-
-async def test_read_file_directory_key_rejected(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    with pytest.raises(ConfigFileNotAllowed):
-        await agent_bundle.config_files.read_file(agent.uid, "subagents")
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="save a config file with valid content")
-async def test_write_valid_atomic_with_backup_and_audit(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    settings = tmp_path / ".claude" / "settings.json"
-    settings.write_text('{"theme": "light"}', encoding="utf-8")
-
-    info = await agent_bundle.config_files.write_file(
-        agent.uid, "settings", '{"theme": "dark"}', actor="cli"
-    )
-
-    # File holds the new content; a backup in Coffer's folder preserves the prior version.
-    assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
-    backup = ConfigFileStore().latest_backup(settings)
-    assert backup is not None and backup.read_text(encoding="utf-8") == '{"theme": "light"}'
-    assert not (tmp_path / ".claude" / "settings.json.bak").exists()
-    # Returned metadata reflects the refreshed file.
-    assert info.key == "settings"
-    assert info.exists is True
-    assert info.size == len('{"theme": "dark"}')
-    assert info.kind == "file"
-    # Read-back through the service agrees.
-    out = await agent_bundle.config_files.read_file(agent.uid, "settings")
-    assert out.content == '{"theme": "dark"}'
-    # An audit entry was recorded.
-    entries = await agent_bundle.audit.query(
-        event_type=AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value
-    )
-    assert len(entries) == 1
-    assert entries[0].resource_kind == "agent"
-    assert entries[0].resource_name == "claude-code"
-    assert entries[0].actor == "cli"
-    assert entries[0].details == {"key": "settings"}
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="reject malformed config-file content")
-async def test_write_malformed_rejected_file_unchanged(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    settings = tmp_path / ".claude" / "settings.json"
-    settings.write_text('{"theme": "light"}', encoding="utf-8")
-
-    with pytest.raises(ConfigFileFormatInvalid):
-        await agent_bundle.config_files.write_file(agent.uid, "settings", "{not json")
-
-    # The on-disk file is untouched and no backup was created.
-    assert settings.read_text(encoding="utf-8") == '{"theme": "light"}'
-    assert ConfigFileStore().latest_backup(settings) is None
-    # No audit entry for the rejected write.
-    entries = await agent_bundle.audit.query(
-        event_type=AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value
-    )
-    assert entries == []
-
-
-async def test_write_unknown_key_rejected_no_fs_access(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    with pytest.raises(ConfigFileNotAllowed):
-        await agent_bundle.config_files.write_file(agent.uid, "nope", "x")
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="reject config-file key outside the allowlist"
-)
-async def test_unknown_key_rejected_no_fs_access(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    with pytest.raises(ConfigFileNotAllowed):
-        await agent_bundle.config_files.read_file(agent.uid, "../../etc/passwd")
-    with pytest.raises(ConfigFileNotAllowed):
-        await agent_bundle.config_files.read_file(agent.uid, "config")  # codex key, not claude_code
+    assert entry.kind == "directory"
+    assert [f.relpath for f in entry.files] == ["helper.md", "team/reviewer.md"]
+    assert entry.files[1].path == str(agents_dir / "team" / "reviewer.md")
 
 
 async def test_unknown_agent_raises_not_found(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     with pytest.raises(ResourceNotFound):
         await agent_bundle.config_files.list_files("no-such-uid")
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="create a file inside a directory entry")
-async def test_write_child_and_read_child(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-
-    info = await agent_bundle.config_files.write_child(
-        agent.uid, "subagents", "helper.md", "# Helper agent", actor="cli"
-    )
-    # Returns refreshed directory info.
-    assert info.kind == "directory"
-    assert info.exists is True
-    assert info.files is not None
-    assert any(e.relpath == "helper.md" for e in info.files)
-
-    # Read back the child.
-    out = await agent_bundle.config_files.read_child(agent.uid, "subagents", "helper.md")
-    assert out.exists is True
-    assert out.content == "# Helper agent"
-    assert out.fingerprint != ""
-
-    # Audit entry recorded.
-    entries = await agent_bundle.audit.query(
-        event_type=AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value
-    )
-    assert len(entries) == 1
-    assert entries[0].details == {"key": "subagents", "child": "helper.md"}
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="delete a file inside a directory entry")
-async def test_delete_child(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    agents_dir = tmp_path / ".claude" / "agents"
-    agents_dir.mkdir(parents=True, exist_ok=True)
-    (agents_dir / "old.md").write_text("# Old", encoding="utf-8")
-
-    await agent_bundle.config_files.delete_child(agent.uid, "subagents", "old.md", actor="cli")
-
-    assert not (agents_dir / "old.md").exists()
-    entries = await agent_bundle.audit.query(
-        event_type=AuditEventType.AGENT_CONFIG_FILE_DELETED.value
-    )
-    assert len(entries) == 1
-    assert entries[0].details == {"key": "subagents", "child": "old.md"}
-
-
-async def test_child_symlink_escape_rejected_on_real_fs(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    agents_dir = tmp_path / ".claude" / "agents"
-    agents_dir.mkdir(parents=True, exist_ok=True)
-    outside = tmp_path / "outside.md"
-    outside.write_text("# secret")
-    (agents_dir / "evil.md").symlink_to(outside)
-    with pytest.raises(ConfigFileNotAllowed):
-        await agent_bundle.config_files.read_child(agent.uid, "subagents", "evil.md")
-    with pytest.raises(ConfigFileNotAllowed):
-        await agent_bundle.config_files.delete_child(agent.uid, "subagents", "evil.md", actor="cli")
-    assert outside.read_text() == "# secret"

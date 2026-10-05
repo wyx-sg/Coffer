@@ -19,6 +19,7 @@ from typing import Any, Protocol
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.scan import ScanEntry
 from coffer.domain.skill.source_status import SourceStatus
+from coffer.domain.skill.update_check import UpdateCheckChoice
 
 
 class MasterStorePort(Protocol):
@@ -166,3 +167,12 @@ class SourceStatusRepoPort(Protocol):
     async def put(self, status: SourceStatus) -> SourceStatus: ...
 
     async def delete(self, skill_uid: str) -> None: ...
+
+
+class UpdateCheckSettingPort(Protocol):
+    """This machine's choice of how often skills are checked for updates in the
+    background (``infrastructure.daemon.skill_update_setting``)."""
+
+    def read(self) -> UpdateCheckChoice: ...
+
+    def write(self, choice: UpdateCheckChoice) -> None: ...

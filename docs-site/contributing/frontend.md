@@ -101,7 +101,7 @@ export function useRemoveSkill() {
 | --- | --- |
 | Anything from the daemon | TanStack Query, through a `useX` hook |
 | Ephemeral UI (open, collapsed, draft input) | `useState` in the component |
-| A preference that survives reload | `localStorage`, guarded with try/catch so blocked storage falls back to the default (`src/lib/preferences.ts` for page size and editor) |
+| A preference that survives reload | `localStorage`, guarded with try/catch so blocked storage falls back to the default (`src/lib/preferences.ts` for the editor, terminal and hand-off agent) |
 | Which item is open | A route parameter: `/conversations/:id`, `/agents/:type` |
 | Which detail tab is selected | The last path segment: `/<kind>/<id>/<tab>`, the default tab at the bare path (`src/lib/detailTabs.ts`) |
 | Which file is selected | A search parameter (`?file=`) through `useSearchParams` |
@@ -138,7 +138,7 @@ When a token is missing, add it to the Tailwind config in the same pull request 
 | `Skeleton` | Loading states keep the real shape of the surface. Never show a blank screen or a "Loading…" card |
 | `ConfirmDialog` | Every irreversible confirmation, never `window.confirm`; a delete that can be restored (a knowledge document or collection) skips it and shows a toast with **Undo**. It receives `pending` while the mutation runs and closes only in `onSuccess`, so a failed delete stays open with its error under `errorTitle` ("Couldn’t delete sentry"); the resting `confirmLabel` never changes, `pendingLabel` is the working text |
 | `Alert` (`warning` variant) | A non-fatal caution, such as an unusual but working configuration. Not a toast, and not a destructive alert |
-| Save on change | Settings, reach and providers write as the control changes and report a failed write under the control; there are no Save buttons. Only document editors (`SKILL.md`, knowledge documents, raw agent config files) keep an explicit Save and the unsaved-changes guard (`useUnsavedGuard`, one dialog mounted around the shell). A dialog's Cancel is a ghost button |
+| Save on change | Settings, reach and providers write as the control changes and report a failed write under the control; there are no Save buttons and no unsaved-changes guard, because the web UI has no document editor: a file is shown read-only with Open in editor and Reveal in Finder. A dialog's Cancel is a ghost button |
 | Tabs in the URL | Detail pages keep their tab in the path, `/<kind>/<id>/<tab>` |
 | Title over name | A resource of a kind that carries a title (provider, channel) shows its `title` when set and its `name` otherwise. Agents, MCP servers, skills, knowledge collections and memory partitions carry no title and always show their name: an MCP server's and a skill's name is fixed once registered (`409 NAME_IMMUTABLE`), and an agent's is its type, so their edit forms offer neither a rename nor a title |
 

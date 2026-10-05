@@ -7,6 +7,8 @@
 **Deciders**: Yuxing Wu
 **Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research note [knowledge curation](../research/knowledge-curation.md), spec knowledge "Teach writing and tidying in the guide", spec knowledge "Hand a tidy to the agent", spec knowledge "Promote submitted material at once", spec memory "Distil each raw entry into a note mechanically", spec memory "Retire a note an agent marked retired", spec memory "Hand a partition's tidying to the agent"
 
+**Partly superseded** (2026-10-05): the web UI has no History tab, Recent changes or Restore button; a tidy that went wrong is repaired by handing the restore of an earlier version to an agent from the document's History… dialog, see the OpenSpec change `hand-files-to-external-tools`.
+
 ## Context
 
 Knowledge and memory both rot unless something tidies them. Knowledge documents

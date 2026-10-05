@@ -1,5 +1,5 @@
 // frontend/src/pages/MemoryDetailPage.tsx — one partition, at /memory/<uid>[/delivered]
-// (spec memory "Present a partition as its memories").
+// (spec memory "Show a partition's memories read-only").
 //
 // The header is the partition's name alone (no back link, no Experimental tag,
 // no Automatic control) over one description line: the repository it is keyed

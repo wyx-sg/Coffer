@@ -25,11 +25,6 @@ export type AgentType = Schemas["AgentType"];
 
 export type ConfigFileInfo = Schemas["ConfigFileInfoOut"];
 
-/** Body of a config-file save. `expected_fingerprint` makes the write
- *  conditional: the daemon refuses it with 409 CONFIG_FILE_STALE when the file
- *  changed on disk since the read that produced the fingerprint. */
-export type ConfigFileWrite = Schemas["ConfigFileWrite"];
-
 /** An agent's Coffer connection: every part Coffer writes into the agent
  *  that applies now (`mcp` always, `memory_hook` while memory is on), and a
  *  state derived from them — `partial` is "needs repair". */
@@ -60,23 +55,9 @@ export const agentsApi = {
   // One row per supported type, registered or not.
   types: () => unwrap(getApiClient().GET("/agents/types")),
 
-  // Config files are read AND written in-app. A write carries the fingerprint
-  // from the read that seeded the editor, so a file changed underneath the
-  // editor is refused (409) rather than overwritten.
+  // Config files are listed only: Coffer serves no content and writes none.
   listConfigFiles: (uid: string) =>
     unwrap(getApiClient().GET("/agents/{uid}/config-files", { params: { path: { uid } } })),
-  readConfigFile: (uid: string, key: string) =>
-    unwrap(
-      getApiClient().GET("/agents/{uid}/config-files/{key}", { params: { path: { uid, key } } }),
-    ),
-  writeConfigFile: (uid: string, key: string, body: ConfigFileWrite) =>
-    unwrap(
-      getApiClient().PUT("/agents/{uid}/config-files/{key}", {
-        params: { path: { uid, key } },
-        body,
-      }),
-    ),
-
   // Read-only: every hook the agent's own files and enabled plugins declare.
   hooks: (uid: string) =>
     unwrap(getApiClient().GET("/agents/{uid}/hooks", { params: { path: { uid } } })),
@@ -138,30 +119,6 @@ export const agentsApi = {
     unwrapVoid(
       getApiClient().DELETE("/agents/{uid}/plugins/{plugin_id}", {
         params: { path: { uid, plugin_id: id } },
-      }),
-    ),
-
-  // Config-file child (per-file inside a directory-backed config key). The
-  // relpath is a POSIX path; the client escapes its separators into one path
-  // segment and the daemon's `:path` route reads it back as the path.
-  readConfigChild: (uid: string, key: string, relpath: string) =>
-    unwrap(
-      getApiClient().GET("/agents/{uid}/config-files/{key}/files/{relpath}", {
-        params: { path: { uid, key, relpath } },
-      }),
-    ),
-  writeConfigChild: (uid: string, key: string, relpath: string, body: ConfigFileWrite) =>
-    unwrap(
-      getApiClient().PUT("/agents/{uid}/config-files/{key}/files/{relpath}", {
-        params: { path: { uid, key, relpath } },
-        body,
-      }),
-    ),
-  // Deletes one file inside a directory entry (the daemon keeps a backup copy).
-  deleteConfigChild: (uid: string, key: string, relpath: string) =>
-    unwrapVoid(
-      getApiClient().DELETE("/agents/{uid}/config-files/{key}/files/{relpath}", {
-        params: { path: { uid, key, relpath } },
       }),
     ),
 

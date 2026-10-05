@@ -141,14 +141,7 @@ export interface paths {
          *     by.
          */
         get: operations["get_note_api_v1_memory_partitions__uid__notes__slug__get"];
-        /**
-         * Save Note
-         * @description A person's edit from the page's editor ("Edit a memory in the web UI or in an editor"): the
-         *     body is replaced, the frontmatter kept, ``updated_at``
-         *     stamped, and a stale fingerprint is a 409 ``MEMORY_NOTE_CONFLICT`` that
-         *     carries the note as it is now and leaves the file alone.
-         */
-        put: operations["save_note_api_v1_memory_partitions__uid__notes__slug__put"];
+        put?: never;
         post?: never;
         /**
          * Delete Note
@@ -327,8 +320,7 @@ export interface components {
         };
         /**
          * FileNodeOut
-         * @description One entry in a partition's own directory ("Present a partition as its
-         *     memories").
+         * @description One entry in a partition's own directory ("Show a partition's memories read-only").
          *
          *     Same shape as the skill kind's file tree so the two surfaces render through
          *     one component on the frontend. ``path`` is POSIX and relative to the
@@ -439,11 +431,6 @@ export interface components {
              * @default
              */
             file_path: string;
-            /**
-             * Fingerprint
-             * @default
-             */
-            fingerprint: string;
             /** Key */
             key: string;
             /** Origins */
@@ -460,16 +447,6 @@ export interface components {
             type: string;
             /** Updated At */
             updated_at: string;
-        };
-        /**
-         * NoteSave
-         * @description A note's new body, from the web UI's editor. The frontmatter is kept.
-         */
-        NoteSave: {
-            /** Body */
-            body: string;
-            /** Expected Fingerprint */
-            expected_fingerprint: string;
         };
         /**
          * NoteSummaryOut
@@ -909,53 +886,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    save_note_api_v1_memory_partitions__uid__notes__slug__put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                uid: string;
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NoteSave"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {

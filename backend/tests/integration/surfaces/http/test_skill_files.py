@@ -1,4 +1,5 @@
-"""HTTP coverage for the skill file viewer + editor (spec skill-manager).
+"""HTTP coverage for the read-only skill file viewer (spec skill-manager "Show a skill's master
+folder read-only").
 
 Boots the app exactly like ``test_skill_routes.py``: a temp ``HOME`` so the
 master store lands under ``tmp_path/.coffer/vault/skills`` and a temp SQLite DB.
@@ -6,12 +7,9 @@ Imports a skill with a nested folder, then exercises the endpoints:
 
 - ``GET /skills/{uid}/files`` — tree shape
 - ``GET /skills/{uid}/files/content`` — single-file read, path-escape
-  rejection, binary detection, oversize truncation, content fingerprint.
-- ``PUT /skills/{uid}/files/content`` — save, guards, and the optimistic
-  ``expected_fingerprint`` concurrency check ("Save an existing skill file
-  conditionally"). The master folder is
-  also the user's own working copy, so the stale case is exercised by mutating
-  the file on disk behind the API — exactly what an external editor does.
+  rejection, binary detection, oversize truncation.
+- ``PUT /skills/{uid}/files/content`` is gone: a skill's files are changed on
+  disk, in the person's own editor.
 
 The skill is addressed by its ``uid``, taken straight off the import response
 (ADR identity-is-the-uid-inside-the-file). Its NAME still appears in the
@@ -23,7 +21,6 @@ file inside it. Three different questions; the tests keep them apart.
 
 from __future__ import annotations
 
-import hashlib
 import pathlib
 import textwrap
 
@@ -231,208 +228,6 @@ def test_binary_file_returns_binary_true(tmp_path, monkeypatch):
         assert body["binary"] is True
         assert body["content"] == ""
         assert body["size"] == len(b"\x00\x01\x02PNG\x00")
-        # Fingerprint is of the raw bytes, so a binary file (empty `content`)
-        # still gets a usable one.
-        assert body["fingerprint"] == hashlib.sha256(b"\x00\x01\x02PNG\x00").hexdigest()
-
-
-@pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="edit and save a skill file",
-)
-def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59760)
-    src = tmp_path / "src"
-    _write_nested_skill_folder(src, name="edit-skill")
-
-    with _client(app) as c:
-        uid = _import(c, src)["uid"]
-
-        # An editor first reads the file; the read hands back the fingerprint
-        # that makes the eventual save conditional.
-        r = c.get(
-            f"/api/v1/skills/{uid}/files/content",
-            params={"path": "scripts/run.py"},
-        )
-        assert r.status_code == 200, r.text
-        read_fp = r.json()["fingerprint"]
-        # sha256 of the RAW BYTES on disk, not of the returned text.
-        assert read_fp == hashlib.sha256(b"print('hi')\n").hexdigest()
-
-        new_body = "print('edited')\n"
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "scripts/run.py",
-                "content": new_body,
-                "expected_fingerprint": read_fp,
-            },
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["content"] == new_body
-        assert body["binary"] is False
-        assert body["size"] == len(new_body)
-        # The write response carries the NEW fingerprint, so a still-open
-        # editor can save again without re-reading.
-        assert body["fingerprint"] == hashlib.sha256(new_body.encode()).hexdigest()
-        assert body["fingerprint"] != read_fp
-
-        # The change is persisted — a fresh read returns the new content and
-        # the same fingerprint the write reported.
-        r = c.get(
-            f"/api/v1/skills/{uid}/files/content",
-            params={"path": "scripts/run.py"},
-        )
-        assert r.json()["content"] == new_body
-        assert r.json()["fingerprint"] == body["fingerprint"]
-
-        # A second save using that returned fingerprint round-trips too.
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "scripts/run.py",
-                "content": "print('again')\n",
-                "expected_fingerprint": body["fingerprint"],
-            },
-        )
-        assert r.status_code == 200, r.text
-
-
-@pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="reject a stale save of a skill file",
-)
-def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59790)
-    src = tmp_path / "src"
-    _write_nested_skill_folder(src, name="stale-skill")
-    master = tmp_path / ".coffer" / "vault" / "skills" / "stale-skill"
-
-    with _client(app) as c:
-        uid = _import(c, src)["uid"]
-
-        r = c.get(
-            f"/api/v1/skills/{uid}/files/content",
-            params={"path": "scripts/run.py"},
-        )
-        stale_fp = r.json()["fingerprint"]
-
-        # The user edits the same file in their own editor while the in-app
-        # buffer still holds the content from the read above.
-        external = "print('from my editor')\n"
-        (master / "scripts" / "run.py").write_text(external, encoding="utf-8")
-
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "scripts/run.py",
-                "content": "print('from the app')\n",
-                "expected_fingerprint": stale_fp,
-            },
-        )
-        assert r.status_code == 409, r.text
-        assert r.json()["error"]["code"] == "SKILL_FILE_STALE"
-
-        # The refusal left the external edit byte-identical on disk.
-        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == external
-
-        # Re-reading yields the current fingerprint, and the retry succeeds.
-        r = c.get(
-            f"/api/v1/skills/{uid}/files/content",
-            params={"path": "scripts/run.py"},
-        )
-        fresh_fp = r.json()["fingerprint"]
-        assert fresh_fp != stale_fp
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "scripts/run.py",
-                "content": "print('merged')\n",
-                "expected_fingerprint": fresh_fp,
-            },
-        )
-        assert r.status_code == 200, r.text
-        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('merged')\n"
-
-
-@pytest.mark.acceptance(spec="skill-manager", scenario="a save without a fingerprint is refused")
-def test_a_write_without_a_fingerprint_is_refused(tmp_path, monkeypatch):
-    """Every vault write compares; there is no unconditional mode (ADR
-    every-vault-write-is-a-validated-commit-naming-its-writer), so a body
-    without ``expected_fingerprint`` is invalid and changes nothing."""
-    app = _app(tmp_path, monkeypatch, 59800)
-    src = tmp_path / "src"
-    _write_nested_skill_folder(src, name="uncond-skill")
-    master = tmp_path / ".coffer" / "vault" / "skills" / "uncond-skill"
-
-    with _client(app) as c:
-        uid = _import(c, src)["uid"]
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={"path": "scripts/run.py", "content": "print('cli')\n"},
-        )
-        assert r.status_code == 422, r.text
-        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('hi')\n"
-
-
-def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59770)
-    src = tmp_path / "src"
-    _write_nested_skill_folder(src, name="edit-guard")
-
-    with _client(app) as c:
-        uid = _import(c, src)["uid"]
-
-        # A file that does not exist cannot be written (no create-file).
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={"path": "scripts/new.py", "content": "x", "expected_fingerprint": "0" * 64},
-        )
-        assert r.status_code == 404, r.text
-
-        # Path traversal out of the master folder is rejected.
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={"path": "../../etc/passwd", "content": "x", "expected_fingerprint": "0" * 64},
-        )
-        assert r.status_code == 400, r.text
-
-    # A uid no resource carries is a 404 — checked before anything is written.
-    with _client(app) as c:
-        r = c.put(
-            f"/api/v1/skills/{'0' * 32}/files/content",
-            json={"path": "SKILL.md", "content": "x", "expected_fingerprint": "0" * 64},
-        )
-        assert r.status_code == 404, r.text
-
-
-def test_write_skill_file_rejects_binary_and_oversize(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59780)
-    src = tmp_path / "src"
-    _write_nested_skill_folder(src, name="edit-limits")
-    (src / "blob.bin").write_bytes(b"\x00\x01PNG\x00")
-
-    with _client(app) as c:
-        uid = _import(c, src)["uid"]
-
-        # Refuse to overwrite a binary file with text.
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={"path": "blob.bin", "content": "text", "expected_fingerprint": "0" * 64},
-        )
-        assert r.status_code == 400, r.text
-
-        # Content over the byte cap is rejected.
-        r = c.put(
-            f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "SKILL.md",
-                "content": "a" * (MAX_FILE_BYTES + 1),
-                "expected_fingerprint": "0" * 64,
-            },
-        )
-        assert r.status_code == 400, r.text
 
 
 def test_oversize_file_is_truncated(tmp_path, monkeypatch):
@@ -455,62 +250,19 @@ def test_oversize_file_is_truncated(tmp_path, monkeypatch):
         # Content is capped at the byte limit; size reports the true length.
         assert len(body["content"]) == MAX_FILE_BYTES
         assert body["size"] == len(big)
-        # The fingerprint digests the WHOLE file, not the truncated content —
-        # otherwise an edit past the cap would slip through the stale check.
-        assert body["fingerprint"] == hashlib.sha256(big.encode()).hexdigest()
-        assert body["fingerprint"] != hashlib.sha256(body["content"].encode()).hexdigest()
 
 
-def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
-    """A builtin skill's master folder is rewritten from the build at every
-    start, so a REST/CLI save there would be silently lost. The service refuses
-    it (409 RESOURCE_PROTECTED, saying why) and the file is left untouched,
-    while an imported skill's files stay writable (spec skill-manager
-    "Regenerate Coffer's builtin skill from the build": an edit to a builtin
-    skill does not survive, and the surfaces MUST say so)."""
-    app = _app(tmp_path, monkeypatch, 59830)
+def test_no_route_writes_a_skill_file(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59760)
     src = tmp_path / "src"
-    _write_nested_skill_folder(src, name="mine-skill")
+    _write_nested_skill_folder(src, name="ro-skill")
 
     with _client(app) as c:
-        r = c.get("/api/v1/resources", params={"kind": "skill", "name": "coffer-guide"})
-        assert r.status_code == 200, r.text
-        (guide,) = r.json()["resources"]
-        guide_uid = guide["uid"]
-        before = c.get(f"/api/v1/skills/{guide_uid}/files/content", params={"path": "SKILL.md"})
-        assert before.status_code == 200, before.text
-
-        for body in (
-            {"path": "SKILL.md", "content": "hijacked\n", "expected_fingerprint": "0" * 64},
-            {
-                "path": "SKILL.md",
-                "content": "hijacked\n",
-                "expected_fingerprint": before.json()["fingerprint"],
-            },
-        ):
-            r = c.put(f"/api/v1/skills/{guide_uid}/files/content", json=body)
-            assert r.status_code == 409, r.text
-            err = r.json()["error"]
-            assert err["code"] == "RESOURCE_PROTECTED"
-            assert "coffer-guide" in err["message"]
-            assert "rewritten" in err["message"]
-
-        after = c.get(f"/api/v1/skills/{guide_uid}/files/content", params={"path": "SKILL.md"})
-        assert after.json()["content"] == before.json()["content"]
-        assert after.json()["fingerprint"] == before.json()["fingerprint"]
-        master = tmp_path / ".coffer" / "derived" / "skills" / "coffer-guide" / "SKILL.md"
-        assert "hijacked" not in master.read_text(encoding="utf-8")
-
-        # An imported skill is the user's own: still writable.
         uid = _import(c, src)["uid"]
-        mine = c.get(f"/api/v1/skills/{uid}/files/content", params={"path": "scripts/run.py"})
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={
-                "path": "scripts/run.py",
-                "content": "print('mine')\n",
-                "expected_fingerprint": mine.json()["fingerprint"],
-            },
+            json={"path": "SKILL.md", "content": "x", "expected_fingerprint": "f"},
         )
-        assert r.status_code == 200, r.text
-        assert r.json()["content"] == "print('mine')\n"
+        assert r.status_code == 405, r.text
+        read = c.get(f"/api/v1/skills/{uid}/files/content", params={"path": "SKILL.md"})
+        assert "fingerprint" not in read.json()

@@ -37,7 +37,24 @@ vi.mock("@/lib/api/resources", () => ({
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
 vi.mock("@/lib/api/secret", () => ({
-  secretsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
+  secretsApi: {
+    pendingApprovals: vi.fn(),
+    secretBoundary: vi.fn(),
+    rejectApproval: vi.fn(),
+    // The key's secret, stored under a minted id and named by its label.
+    list: vi.fn(async () => ({
+      refs: [
+        {
+          ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          label: "Acme key",
+          present: true,
+          cited_by: [],
+          mentioned_by_skills: [],
+          bindings: [],
+        },
+      ],
+    })),
+  },
 }));
 
 type EndpointState = {
@@ -87,7 +104,7 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   title: null,
   protocol: "openai",
   base_url: "https://gw/v1",
-  secret_ref: "provider/acme",
+  secret_ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
   local_runtime: null,
   compatible_agents: ["codex"],
   transcribe_default: false,
@@ -203,9 +220,13 @@ describe("ProviderDetailPage", () => {
 
     expect(screen.getByText("Reachable")).toBeInTheDocument();
     expect(screen.getByText("locked while Codex runs on it")).toBeInTheDocument();
-    // An opaque ref shows as itself; only a standalone secret has a coffer:// URI.
-    expect(screen.getByText("provider/acme")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
+    // The key shows as its secret's name, linked to that secret; never the ref or its URI.
+    expect(await screen.findByRole("link", { name: "Acme key" })).toHaveAttribute(
+      "href",
+      "/secrets/secret%2Fb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    );
+    expect(screen.queryByText(/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Secrets" })).not.toBeInTheDocument();
     expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
     // One column, no tabs: the Models section sits under Used by and Endpoint.
     // Only the page header's Providers | Usage tabs: the provider itself has none.
@@ -393,7 +414,7 @@ describe("ProviderDetailPage", () => {
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByText("Locked while Codex runs on it.")).toBeInTheDocument();
     expect(dialog.getByRole("combobox", { name: "Protocol" })).toBeDisabled();
-    expect(dialog.getByText("provider/acme")).toBeInTheDocument();
+    expect(await dialog.findByRole("link", { name: "Acme key" })).toBeInTheDocument();
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "acme-eu" } });
     fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
     fireEvent.click(dialog.getByRole("button", { name: "Save" }));
@@ -526,7 +547,7 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "More actions for acme" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
     const dialog = within(await screen.findByRole("dialog"));
-    expect(dialog.getByText(/provider\/acme is deleted from this Mac too/)).toBeInTheDocument();
+    expect(await dialog.findByText(/Acme key is deleted from this Mac too/)).toBeInTheDocument();
     fireEvent.click(dialog.getByRole("button", { name: "Delete provider" }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
     await waitFor(() => expect(where()).toBe("/model-providers"));

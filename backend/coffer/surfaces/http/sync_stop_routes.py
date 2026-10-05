@@ -165,12 +165,8 @@ async def file_versions(path: str = Query(min_length=1)) -> FileVersionsOut:
         path=found.path,
         ours=found.ours,
         theirs=found.theirs,
-        base=found.base,
         take_theirs=found.take_theirs,
         binary=found.binary,
-        edited=found.edited,
-        merged=found.merged,
-        merged_diff=found.merged_diff,
     )
 
 

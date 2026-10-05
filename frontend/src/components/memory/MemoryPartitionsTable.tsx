@@ -1,6 +1,6 @@
 // frontend/src/components/memory/MemoryPartitionsTable.tsx
 //
-// The partitions list (spec memory "Present a partition as its memories"): one
+// The partitions list (spec memory "Show a partition's memories read-only"): one
 // row per repository partition plus `global`, each a `memory` Resource. A row
 // carries its name, the repository path it is keyed on ("Every project" for
 // global), how many memories it holds, its sources and its distil state. A

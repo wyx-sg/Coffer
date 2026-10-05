@@ -2,14 +2,14 @@
 
 Same ``set_*`` / ``get_*`` singleton shape as ``surfaces.http.dependencies``,
 typed concretely. Three services: the directory itself, document ingestion
-over it, and its history. There is no search service to provide — the layer keeps no
+over it, and its changes feed. There is no search service to provide — the layer keeps no
 index and offers no retrieval, on this surface or any other (spec knowledge
 "Expose no knowledge tool"), so the module that used to be wired here no longer exists.
 """
 
 from __future__ import annotations
 
-from coffer.application.knowledge.history_service import KnowledgeHistoryService
+from coffer.application.knowledge.change_service import KnowledgeChangeService
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.service import KnowledgeService
 
@@ -45,18 +45,19 @@ def get_ingest_service() -> IngestService:
     return _ingest_service
 
 
-_history_service: KnowledgeHistoryService | None = None
+_change_service: KnowledgeChangeService | None = None
 
 
-def set_history_service(svc: KnowledgeHistoryService) -> None:
+def set_change_service(svc: KnowledgeChangeService) -> None:
     """Called by the composition root once on startup."""
-    global _history_service
-    _history_service = svc
+    global _change_service
+    _change_service = svc
 
 
-def get_history_service() -> KnowledgeHistoryService:
-    """FastAPI Depends() target: a collection's history (spec knowledge "Keep every
-    document's history")."""
-    if _history_service is None:
-        raise RuntimeError("knowledge history service not initialised")
-    return _history_service
+def get_change_service() -> KnowledgeChangeService:
+    """FastAPI Depends() target: the changes feed, undoing a delete and a
+    collection's description (spec knowledge "Follow edits across collections in
+    one feed")."""
+    if _change_service is None:
+        raise RuntimeError("knowledge change service not initialised")
+    return _change_service

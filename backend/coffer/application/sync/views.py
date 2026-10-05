@@ -130,16 +130,9 @@ class FileVersions:
     path: str
     ours: str | None
     theirs: str | None
-    base: str | None
     #: The unified diff taking the other machine's version makes here.
     take_theirs: str
     binary: bool = False
-    #: The hand-merge copy as saved, once it exists (never for a secret).
-    edited: str | None = None
-    #: An agent's merge of it (the saved copy, no marker left), and the diff
-    #: from this machine's version to it.
-    merged: str | None = None
-    merged_diff: str | None = None
 
 
 @dataclass(frozen=True)

@@ -64,7 +64,7 @@ async function submitItem(page: Page, collection: string, body: string) {
   return (await res.json()) as { path: string };
 }
 
-test("a collection is one tree; a document is read, edited and shows up in its History", async ({
+test("a collection is one tree; a document is read, opened in the editor and has a History… hand-off", async ({
   page,
 }) => {
   const name = `e2e-tree-${Date.now()}`;
@@ -99,41 +99,24 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   await expect(page).toHaveURL(/\?file=/);
   await expect(page.getByText("The first body.")).toBeVisible();
 
-  // The body-only editor: title and description read-only above it.
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  const editor = page.getByRole("textbox", { name: `Edit ${submitted.path}` });
-  await expect(editor).toBeVisible();
-  await editor.fill("The edited body.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("The edited body.")).toBeVisible();
-  // The editor closes once the save lands; leaving before that would meet the
-  // unsaved-edits prompt.
+  // The pane is read-only: Open in editor is a visible button, there is no Edit.
+  await expect(
+    page.getByRole("button", { name: "Open in editor", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Edit", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 
-  // The save is a version naming you, in the document's History.
-  await page.getByRole("link", { name: /^History/ }).click();
-  await expect(page).toHaveURL(
-    new RegExp(`/knowledge/${collection.uid}/history\\?file=`),
-  );
-  // One list of versions, newest first: the save on top, marked Current.
-  const versions = page.getByRole("list", { name: "Versions" });
-  await expect(versions.getByRole("listitem").first()).toContainText(
-    "Edited in Coffer",
-  );
-  await expect(
-    page.getByRole("button", { name: /^You.*Current/ }),
-  ).toBeVisible();
-
-  // …and on the cross-collection timeline.
+  // History… hands the restore to git or an agent: the path and the git command.
   await page
-    .getByRole("link", { name: /Recent changes/ })
-    .first()
+    .getByRole("button", { name: `More actions for ${submitted.path}` })
     .click();
-  await expect(page).toHaveURL(/\/knowledge$/);
-  await expect(page.getByText("edited", { exact: true }).first()).toBeVisible();
+  await page.getByRole("menuitem", { name: "History…" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByTestId("vault-history-path")).toHaveText(
+    `knowledge/${submitted.path}`,
+  );
   await expect(
-    page.getByRole("link", { name: fileName, exact: true }).first(),
+    dialog.getByRole("button", { name: "Copy git command" }),
   ).toBeVisible();
 });

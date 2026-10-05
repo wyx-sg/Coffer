@@ -1832,29 +1832,9 @@ components:
       type: object
     FileVersionsOut:
       properties:
-        base:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Base
         binary:
           title: Binary
           type: boolean
-        edited:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Edited
-        merged:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Merged
-        merged_diff:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Merged Diff
         ours:
           anyOf:
           - type: string
@@ -1875,12 +1855,8 @@ components:
       - path
       - ours
       - theirs
-      - base
       - take_theirs
       - binary
-      - edited
-      - merged
-      - merged_diff
       title: FileVersionsOut
       type: object
     HandoffIn:

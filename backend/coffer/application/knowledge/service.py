@@ -42,7 +42,6 @@ from coffer.domain.knowledge.history import (
     OP_PROMOTE,
     OP_REMOVE,
     OP_RENAME,
-    OP_SAVE,
     WRITER_USER,
 )
 from coffer.domain.resource import Resource
@@ -72,8 +71,8 @@ class KnowledgeService:
     ) -> None:
         # Told a collection's uid when its files change outside a resource write.
         self._announce = announce
-        # Every write below is one commit naming its writer (see "Keep every
-        # document's history"); None records nothing.
+        # Every write below is one commit naming its writer (see "Commit every
+        # knowledge write naming its writer"); None records nothing.
         self.history = history
         self._resources = resources
         self._audit = audit
@@ -208,28 +207,6 @@ class KnowledgeService:
         is refused by the path guard."""
         await self.require_collection(relpath)
         return fs.read_file(relpath)
-
-    async def save_document(
-        self, relpath: str, body: str, *, expected_fingerprint: str, actor: str
-    ) -> KnowledgeFile:
-        """Replace a document's body from the web UI, keeping its frontmatter.
-
-        See "Save a document edited in the web UI". ``require_collection`` runs
-        the path through the guard first, so anything hidden, the inbox included, is
-        refused before the file is looked at.
-        """
-        collection = await self.require_collection(relpath)
-        meta = CommitMeta(WRITER_USER, OP_SAVE, f"Edit {relpath}", actor=actor)
-        async with recording(self.history, meta) as tx:
-            # Compared again under the vault's write lock (``fs.save_body``).
-            saved = fs.save_body(relpath, body, expected_fingerprint=expected_fingerprint, tx=tx)
-        await self._audit.record(
-            AuditEventType.KNOWLEDGE_EDITED.value,
-            resource=collection,
-            actor=actor,
-            details={"path": relpath},
-        )
-        return saved
 
     async def catalogue(self) -> list[tuple[CollectionEntry, tuple[FileEntry, ...]]]:
         """Every registered collection with every document in it.

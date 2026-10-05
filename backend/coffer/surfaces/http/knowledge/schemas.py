@@ -99,22 +99,6 @@ class FileOut(BaseModel):
     #: absolute paths on reads").
     file_path: str
     folder_path: str
-    #: sha256 hex of the file's bytes as read; hand it back as
-    #: ``expected_fingerprint`` to save an edit ("Save a document edited in the
-    #: web UI").
-    fingerprint: str
-
-
-class FileSave(BaseModel):
-    """A document's new body, from the web UI's editor ("Save a document edited
-    in the web UI"). The frontmatter is kept as it is on disk."""
-
-    #: Knowledge-root-relative document path, name-led like every path here.
-    path: str = Field(min_length=1)
-    body: str
-    #: The ``fingerprint`` the editor's read carried. A file changed since is
-    #: refused with 409 ``KNOWLEDGE_FILE_CONFLICT``.
-    expected_fingerprint: str = Field(min_length=1)
 
 
 class IngestedDocumentOut(BaseModel):

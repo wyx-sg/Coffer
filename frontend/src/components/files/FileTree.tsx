@@ -32,8 +32,6 @@ export interface FileTreeRow {
   /** A file that is not on disk yet: italic, muted, with `note`. */
   missing?: boolean;
   note?: string;
-  /** Unsaved edits in this file. */
-  dirty?: boolean;
   /** Read-only: a lock at the row's right. */
   locked?: boolean;
   /** Mono for a folder whose name is a path (`~/.claude`), sans is the default. */
@@ -100,7 +98,6 @@ export function FileTree({
   /** A row was clicked (a folder toggles / opens, a file opens). */
   onActivate: (row: FileTreeRow) => void;
 }) {
-  const { t } = useTranslation();
   return (
     <ul role="tree" aria-label={label} className="flex flex-col gap-px">
       {rows.map((row) => {
@@ -154,19 +151,12 @@ export function FileTree({
                   {row.note}
                 </span>
               ) : null}
-              {row.dirty ? (
-                <span
-                  role="img"
-                  aria-label={t("files.unsaved")}
-                  className="ml-auto size-[7px] shrink-0 rounded-full bg-accent"
-                />
-              ) : null}
               {row.locked ? (
                 <Lock
                   aria-hidden
                   className={cn(
                     "size-3 shrink-0 text-text-subtle",
-                    !row.dirty && !(row.missing && row.note) && "ml-auto",
+                    !(row.missing && row.note) && "ml-auto",
                   )}
                 />
               ) : null}

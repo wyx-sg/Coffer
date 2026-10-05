@@ -1,7 +1,7 @@
 // frontend/src/components/memory/partitionFacts.tsx
 //
 // The small facts the partitions table and a partition's page both print
-// (design 5.2.01 / 5.2.04, spec memory "Present a partition as its memories"):
+// (design 5.2.01 / 5.2.04, spec memory "Show a partition's memories read-only"):
 // which agents a partition or a memory came from — "All agents" when that is
 // every agent in play — and where its distilling stands.
 import { useTranslation } from "react-i18next";
