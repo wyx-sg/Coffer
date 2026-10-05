@@ -205,6 +205,11 @@ export interface components {
             title: string | null;
             /** Uid */
             uid: string;
+            /**
+             * Workspace Directory
+             * @default
+             */
+            workspace_directory: string;
         };
         /** CredentialCheckOut */
         CredentialCheckOut: {

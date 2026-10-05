@@ -463,6 +463,10 @@ components:
         uid:
           title: Uid
           type: string
+        workspace_directory:
+          default: ''
+          title: Workspace Directory
+          type: string
       required:
       - uid
       - name
@@ -480,6 +484,7 @@ components:
       - handoff
       - settings
       - commands
+      - workspace_directory
       title: ChannelStatusOut
       type: object
     CredentialCheckOut:
