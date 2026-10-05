@@ -11,7 +11,9 @@ import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSecretChoices } from "./useSecretChoices";
-import { looksLikeSecret, mintSecretName, type KeyValueSecretRow } from "./secretValue";
+import { schemeOfRow, storePlainRow, withScheme } from "@/lib/authScheme";
+import { looksLikeSecret, type KeyValueSecretRow } from "./secretValue";
+import { AuthSchemeSelect } from "./AuthSchemeSelect";
 import { SecretValueButton } from "./SecretValueButton";
 
 interface Props {
@@ -28,12 +30,14 @@ interface Props {
   secretLabelFor?: (key: string) => string;
   /** Index of a row whose value takes focus when first shown. */
   focusRow?: number;
+  /** HTTP headers: a secret row names the auth scheme Coffer puts in front of it when sending. */
+  schemes?: boolean;
 }
 
 const GRID = "grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_26px] items-center gap-2";
 
 export function KeyValueSecretRows(props: Props) {
-  const { rows, onChange, label, keyPlaceholder, readOnly = false, focusRow } = props;
+  const { rows, onChange, label, keyPlaceholder, readOnly = false, focusRow, schemes } = props;
   const { t } = useTranslation();
   const { displayOf } = useSecretChoices();
   const labelFor = (key: string) => props.secretLabelFor?.(key) ?? key;
@@ -81,13 +85,34 @@ export function KeyValueSecretRows(props: Props) {
                 className="font-mono text-xs"
                 onChange={(e) => update(i, { key: e.target.value })}
               />
-              <SecretValueButton
-                rowKey={row.key}
-                value={row.value}
-                defaultLabel={labelFor(row.key)}
-                autoFocus={focusRow === i}
-                onChange={(value) => update(i, { value })}
-              />
+              {schemes && row.value.kind !== "plain" ? (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <AuthSchemeSelect
+                    rowKey={key}
+                    value={schemeOfRow(row)}
+                    onChange={(scheme) =>
+                      onChange(rows.map((r, j) => (j === i ? withScheme(r, scheme) : r)))
+                    }
+                  />
+                  <div className="min-w-0 flex-1">
+                    <SecretValueButton
+                      rowKey={row.key}
+                      value={row.value}
+                      defaultLabel={labelFor(row.key)}
+                      autoFocus={focusRow === i}
+                      onChange={(value) => update(i, { value })}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <SecretValueButton
+                  rowKey={row.key}
+                  value={row.value}
+                  defaultLabel={labelFor(row.key)}
+                  autoFocus={focusRow === i}
+                  onChange={(value) => update(i, { value })}
+                />
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -107,14 +132,11 @@ export function KeyValueSecretRows(props: Props) {
                   size="sm"
                   className="h-auto p-0"
                   onClick={() =>
-                    update(i, {
-                      value: {
-                        kind: "new",
-                        name: mintSecretName(),
-                        label: labelFor(row.key),
-                        value: row.value.kind === "plain" ? row.value.value : "",
-                      },
-                    })
+                    onChange(
+                      rows.map((r, j) =>
+                        j === i ? storePlainRow(r, labelFor(row.key), schemes === true) : r,
+                      ),
+                    )
                   }
                 >
                   {t("secretRows.storeIt", { key })}

@@ -4,6 +4,7 @@
 // user confirms or flips each one in the review step; this only picks the
 // starting position of the toggle.
 
+import { splitScheme } from "@/lib/authScheme";
 import type { ParsedEnvVar } from "./pasteTypes";
 
 /** Env var / header names whose value Coffer treats as a secret by default. */
@@ -27,6 +28,15 @@ function looksSecret(key: string, value: string): boolean {
 /** One reviewable pair, its Secret toggle defaulted by `looksSecret`. */
 export function envVar(key: string, value: string): ParsedEnvVar {
   return { key, value, isSecret: looksSecret(key, value) };
+}
+
+/** The header pairs of an HTTP server with the scheme split off every secret value that starts
+ *  with one: `Authorization: Bearer abc` is the secret `abc` under the scheme Bearer. */
+export function withHeaderSchemes(vars: ParsedEnvVar[]): ParsedEnvVar[] {
+  return vars.map((v) => {
+    const split = v.isSecret && !v.ref ? splitScheme(v.value) : null;
+    return split ? { ...v, value: split.rest, scheme: split.scheme } : v;
+  });
 }
 
 /** `base` entries overlaid by `over` entries of the same key (`over` wins). */

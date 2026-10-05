@@ -49,6 +49,7 @@ const grafana = makeGroup({
     {
       name: "Authorization",
       value: null,
+      scheme: null,
       secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
       secret_state: "missing",
     },

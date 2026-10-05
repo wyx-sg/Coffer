@@ -15,7 +15,12 @@ import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import { scopeApi } from "@/lib/api/scope";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
-import { missingSecretKeys, plainMapOfRows, secretRefsOfRows } from "@/lib/mcp/serverRows";
+import {
+  authSchemesField,
+  missingSecretKeys,
+  plainMapOfRows,
+  secretRefsOfRows,
+} from "@/lib/mcp/serverRows";
 
 /** One server as the dialog confirmed it: the parsed shape with its rows as the
  *  form holds them, plus the note and working directory the form may carry
@@ -59,7 +64,13 @@ function configOf(srv: NewServer): Record<string, unknown> {
           secret_refs: secretRefs,
           ...(srv.cwd?.trim() ? { cwd: srv.cwd.trim() } : {}),
         }
-      : { type: "http", url: srv.url, headers: plain, secret_refs: secretRefs };
+      : {
+          type: "http",
+          url: srv.url,
+          headers: plain,
+          secret_refs: secretRefs,
+          ...authSchemesField(srv.env),
+        };
   return { transport };
 }
 

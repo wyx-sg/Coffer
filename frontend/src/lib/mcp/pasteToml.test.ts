@@ -79,7 +79,7 @@ describe("parseTomlPaste", () => {
     );
     expect(r.kind === "servers" && r.servers[0].env).toEqual([
       { key: "X-Region", value: "eu", isSecret: false },
-      { key: "Authorization", value: "", isSecret: true },
+      { key: "Authorization", value: "", isSecret: true, scheme: "Bearer" },
     ]);
   });
 
@@ -94,7 +94,7 @@ describe("parseTomlPaste", () => {
       ].join("\n"),
     );
     expect(r.kind === "servers" && r.servers[0].env).toEqual([
-      { key: "Authorization", value: "Bearer abc", isSecret: true },
+      { key: "Authorization", value: "abc", isSecret: true, scheme: "Bearer" },
     ]);
   });
 

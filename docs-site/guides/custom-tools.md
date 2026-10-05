@@ -31,7 +31,7 @@ On **Custom tools**, choose **Add custom tool**. The group comes first, in a sel
 2. Give the spec as a **URL** or a **File** (JSON or YAML, OpenAPI 3.0 or 3.1, up to 5 MB) and press **Load**. Coffer lists every operation it found, grouped by the spec's tags. A spec it cannot read is reported with the line where it breaks; a URL it cannot reach is reported with the host and why (the name did not resolve, the connection was refused, the request timed out), so you can check the URL, your network, VPN or proxy, or switch to **File** and choose a local copy.
 3. Check the group's **Description**: it starts as the spec's own description (`info.description`), which you can rewrite for the agent.
 4. Tick the **operations** that become tools. Reads start ticked; operations that change data start unticked. **Reads only** goes back to that choice; the filter narrows a long list.
-5. Check the **Headers** the spec's security scheme fills in (an `Authorization` header for a Bearer scheme): the value is a stored secret that holds the whole header value, or you paste one and Coffer saves it to Secrets with the group. Then set **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
+5. Check the **Headers** the spec's security scheme fills in (an `Authorization` header for a Bearer scheme): the value is a stored secret that holds the key, or you paste the key and Coffer saves it to Secrets with the group; a Bearer scheme starts as **Bearer**. Then set **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
 6. Optionally **Try an operation**: run one ticked operation once against the spec's base URL, before anything exists (see [Test before you save](#test-before-you-save)).
 7. **Review N tools** shows the group as it will be made, the ticked operations as its tools, each with the piece of the spec it comes from, and the rest as **Skipped**. Nothing is saved until **Create group with N tools**.
 
@@ -48,7 +48,7 @@ A group made by an import shows its spec and when it was fetched, with **Re-impo
 Choose **Add custom tool** and pick the group it goes in from the select (type to narrow it):
 
 - **An existing group** — **Continue** opens **Add a request**, which uses that group's base URL and secret. A group's own **Add request** button, in the row above its tools table, opens the same form.
-- **New group** — pick **Add one request by hand**, then fill in the group: name, description, base URL, headers (the auth header is a row whose value is a stored secret), and default reach. **Create group** moves on to its first request; the group is saved together with that request.
+- **New group** — pick **Add one request by hand**, then fill in the group: name, description, base URL, headers (the auth header is a row whose value is a stored secret, with an auth scheme), and default reach. **Create group** moves on to its first request; the group is saved together with that request.
 
 The request form asks for:
 
@@ -70,10 +70,10 @@ A request of a group that is **not saved yet** is tested without its secret: a s
 
 ## Secrets and approval
 
-A group header is a name and a value. The auth header is a header row like any other: its value is a stored secret that holds the **whole** header value — store `Bearer <token>`, not the token alone, because Coffer puts nothing in front of it. Pick the secret with the row's 🔑 button, or paste a new value and it is saved to Secrets with the group. Coffer adds each secret header to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
+A group header is a name and a value. The auth header is a header row like any other: its value is a stored secret that holds **only the key** the API gave you, and the row has an **auth scheme**: **Bearer**, **Token** or **None**. Coffer sends `<scheme> <key>`, so `Authorization: Bearer <key>` for Bearer; with **None** (for a header such as `X-Api-Key`) the key goes out as is. A new `Authorization` row starts on **Bearer**. See [Auth scheme](/guides/mcp-servers#register-an-http-server) for why the key is stored without the word `Bearer`. Pick the secret with the row's 🔑 button, or paste a new value and it is saved to Secrets with the group. Coffer adds each secret header to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
 
-::: warning A group made before this change needs its secret replaced
-Coffer no longer puts `Bearer ` in front of a secret. A group whose secret held only the token must have that secret's value replaced with the full header value, for example `Bearer <token>`, on the [Secrets page](/guides/secrets); until then the API is likely to reject the call, typically with a 401.
+::: tip A group whose secret already says `Bearer …` keeps working
+A header with no scheme sends its secret unchanged, so an older secret that holds `Bearer <key>` still works. To switch it over, open the group's edit dialog, set the `Authorization` row's scheme to **Bearer** and **Replace** the value with the raw key in the same save. Doing only one of the two sends `Bearer Bearer …` or no `Bearer` at all, and the API usually answers 401.
 :::
 
 Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or a secret header asks again.

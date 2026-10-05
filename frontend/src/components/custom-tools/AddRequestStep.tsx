@@ -58,6 +58,7 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
           name: h.name,
           value: h.value ?? null,
           secret: h.secret ?? null,
+          scheme: h.scheme ?? null,
           secret_state: "none",
         }))
       : [];

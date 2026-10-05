@@ -116,6 +116,7 @@ def test_to_transport_config_http() -> None:
         "url": "https://gas.example/mcp",
         "headers": {},
         "secret_refs": {"Authorization": "mcp/gas/Authorization"},
+        "auth_schemes": {"Authorization": "Bearer"},
     }
 
 

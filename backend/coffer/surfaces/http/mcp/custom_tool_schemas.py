@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.domain.auth_scheme import AuthScheme
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -81,13 +82,16 @@ class CustomToolOut(BaseModel):
 
 
 class CustomToolHeaderIn(BaseModel):
-    """One group header row: a plain value, or a stored secret that holds the
-    WHOLE value (no ``Bearer`` prefix is put around it). Send one of the two."""
+    """One group header row: a plain value, or a stored secret holding the
+    credential alone. Send one of the two."""
 
     name: str
     value: str | None = None
     #: The secret's name on the Secrets page.
     secret: str | None = None
+    #: A secret row's scheme, sent in front of the secret (``Bearer <key>``);
+    #: ``null`` sends the secret as it is.
+    scheme: AuthScheme | None = None
 
 
 class CustomToolHeaderOut(BaseModel):
@@ -95,6 +99,8 @@ class CustomToolHeaderOut(BaseModel):
     #: The plain value; ``null`` when the value is a secret.
     value: str | None
     secret: str | None
+    #: A secret row's scheme; ``null`` for a plain row or a secret sent as is.
+    scheme: AuthScheme | None = None
     #: ``none`` for a plain row.
     secret_state: SecretStateName
 

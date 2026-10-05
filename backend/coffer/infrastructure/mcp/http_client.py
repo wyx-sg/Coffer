@@ -47,6 +47,7 @@ from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.types import ServerNotification
 
 from coffer.application.runtime.supervisor import spawn
+from coffer.domain.auth_scheme import with_schemes
 from coffer.domain.errors import UpstreamAuthRejected, UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.dispatch import dispatch_method
@@ -153,7 +154,10 @@ class HttpUpstreamConnection:
         shutdown is never mistaken for an upstream failure.
         """
         # Combine static headers from config with materialised secrets.
-        merged_headers: dict[str, str] = {**self._transport.headers, **self._header_overlay}
+        merged_headers: dict[str, str] = {
+            **self._transport.headers,
+            **with_schemes(self._header_overlay, self._transport.auth_schemes),
+        }
 
         # httpx2.Timeout: connect/write/pool use spawn_timeout_seconds; the
         # read window is the post-init SSE streaming budget (see module note).

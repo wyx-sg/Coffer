@@ -626,9 +626,9 @@ async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring)
 
     resource = await svc.adopt(_CX_UID, "gas", secrets={"Authorization": "mcp/gas/auth"})
 
-    # Keychain received the raw value.
+    # The store received the key alone; the scheme stays on the slot.
     (minted, value) = keyring.set_calls[0]
-    assert re.fullmatch(r"secret/[0-9a-f]{32}", minted) and value == "Bearer abc"
+    assert re.fullmatch(r"secret/[0-9a-f]{32}", minted) and value == "abc"
 
     # Registered transport: headers empty, secret_refs set.
     (_, name, config, _) = rs.register_calls[0]
@@ -638,6 +638,7 @@ async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring)
     assert transport["url"] == "https://gas.example/mcp"
     assert transport["headers"] == {}
     assert transport["secret_refs"] == {"Authorization": minted}
+    assert transport["auth_schemes"] == {"Authorization": "Bearer"}
 
     # Entry removed from file; coffer survives.
     new_text = store._files[_CODEX_CONFIG]

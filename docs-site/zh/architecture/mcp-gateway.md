@@ -245,7 +245,7 @@ sequenceDiagram
 
 ### 密钥具体化 {#secret-materialisation}
 
-服务器配置里从不保存密钥。stdio 服务器的 `env` 和 HTTP 服务器的 `headers` 拒绝看起来像令牌的值（`Bearer …`、`ghp_…`、`sk-…`、JWT 前缀等）。密钥在 `secret_refs` 里指名，这是一个从环境变量名或 header 名到密钥引用的映射。
+服务器配置里从不保存密钥。stdio 服务器的 `env` 和 HTTP 服务器的 `headers` 拒绝看起来像令牌的值（`Bearer …`、`ghp_…`、`sk-…`、JWT 前缀等）。密钥在 `secret_refs` 里指名，这是一个从环境变量名或 header 名到密钥引用的映射。保存密钥的 header 里只存凭据；该 header 的认证方案（Bearer、Token 或无）与引用并排保存，发请求时放在密钥前面，没有方案的 header 则原样发送密钥。
 
 拉起时，密钥解析器在一个 worker 线程里运行，从加密存储中把引用变成明文：
 
@@ -327,7 +327,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ## 自定义工具：HTTP API 传输 {#custom-tools-the-http-api-transport}
 
-一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一个基础 URL、静态 header、一个认证 header 及其前缀、这个 header 携带的那一个密钥引用、一个超时和一张工具列表；每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
+一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一个基础 URL、静态 header、一个认证 header 及其认证方案、这个 header 携带的那一个密钥引用（只存凭据，方案在发请求时加上）、一个超时和一张工具列表；每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
 
 ### 原则 {#principles}
 

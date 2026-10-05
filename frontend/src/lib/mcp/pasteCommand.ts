@@ -9,7 +9,7 @@
 import { jsonSyntaxError } from "./pasteJson";
 import type { ParsedEnvVar, ParsedServer, PasteResult, Unreadable } from "./pasteTypes";
 import { unreadable } from "./pasteTypes";
-import { envVar, mergeByKey } from "./secretDetection";
+import { envVar, mergeByKey, withHeaderSchemes } from "./secretDetection";
 import { parseServerConfig } from "./serverConfig";
 import { nameFromCommand } from "./serverNames";
 import { ASSIGNMENT_RE, looksLikeProgram, looksLikeProse } from "./commandLine";
@@ -105,9 +105,12 @@ function fromAdd(tool: string, a: Args): ParsedServer | Unreadable {
     const url = a.url ?? a.rest[0];
     if (url === undefined) return unreadable("errCommandNoTarget", { tool });
     // Codex's --bearer-token-env-var names an env var Coffer cannot read; the
-    // header is offered empty and secret for the user to fill (see pasteToml.ts).
-    const bearer = a.bearer ? [{ ...envVar("Authorization", ""), isSecret: true }] : [];
-    const headers = mergeByKey(a.env, [...bearer, ...a.headers]);
+    // header is offered empty and secret, under the scheme Bearer, for the user to fill with the
+    // token alone (see pasteToml.ts).
+    const bearer = a.bearer
+      ? [{ ...envVar("Authorization", ""), isSecret: true, scheme: "Bearer" as const }]
+      : [];
+    const headers = withHeaderSchemes(mergeByKey(a.env, [...bearer, ...a.headers]));
     return { name, transportType: "http", command: "", args: [], url, env: headers };
   }
   const [command, ...args] = a.rest;

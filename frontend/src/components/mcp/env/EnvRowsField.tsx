@@ -29,10 +29,11 @@ export function EnvRowsField({ http, rows, onChange, focusRow }: Props) {
         keyPlaceholder={http ? "Authorization" : "API_KEY"}
         addLabel={http ? t("mcp.env.addHeader") : t("mcp.env.addVariable")}
         focusRow={focusRow}
+        schemes={http}
       />
       <p className="text-xs text-text-muted">
         {rows.length === 0 ? `${t("mcp.env.none")} ` : ""}
-        {t("mcp.env.hint")}
+        {t(http ? "mcp.env.hintHeaders" : "mcp.env.hint")}
       </p>
     </div>
   );

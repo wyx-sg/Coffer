@@ -18,7 +18,13 @@ import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import type { components } from "@/lib/api/types";
 import { persistNewSecrets, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
-import { keptRows, plainMapOfRows, secretRefsForSave, secretRefsOf } from "@/lib/mcp/serverRows";
+import {
+  authSchemesField,
+  keptRows,
+  plainMapOfRows,
+  secretRefsForSave,
+  secretRefsOf,
+} from "@/lib/mcp/serverRows";
 import { withTimeouts, type Timeouts } from "@/lib/mcp/serverTimeouts";
 
 type ResourceOut = components["schemas"]["ResourceOut"];
@@ -28,7 +34,10 @@ type ResourceOut = components["schemas"]["ResourceOut"];
 function configWithoutOwnControls(config: unknown): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(config ?? {})) as Record<string, unknown>;
   const transport = clone.transport as Record<string, unknown> | undefined;
-  if (transport) delete transport.secret_refs;
+  if (transport) {
+    delete transport.secret_refs;
+    delete transport.auth_schemes;
+  }
   delete clone.spawn_timeout_seconds;
   delete clone.request_timeout_seconds;
   return clone;
@@ -90,6 +99,7 @@ export function configTextFrom(config: unknown, form: TransportForm): string {
   const plain = plainMapOfRows(form.rows);
   if (form.type === "http") {
     Object.assign(transport, { url: form.url.trim(), headers: plain });
+    Object.assign(transport, authSchemesField(form.rows));
   } else {
     Object.assign(transport, { command: form.command.trim(), args: form.args, env: plain });
     const cwd = form.cwd.trim();

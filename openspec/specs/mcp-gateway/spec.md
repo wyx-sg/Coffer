@@ -248,12 +248,29 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a
 secret reference for its authorization header, and the secret MUST NOT leak into any log or stored
-field.
+field. A secret header — on an HTTP server or a custom-tool group — MUST store only the credential
+(the key a provider hands out), and its slot MAY name an auth scheme, `Bearer` or `Token`
+(`auth_schemes`, keyed by header, allowed only on a header that cites a secret), which the request
+puts in front of the credential: `Authorization: Bearer <key>`. A slot without a scheme MUST send the
+stored value as it is. A header value that arrives as `Bearer <key>` or `Token <key>` — adopted from
+an agent's own MCP entry, moved by the plaintext import, or pasted into a form — MUST be stored as
+`<key>` with the scheme set on its slot.
 
 #### Scenario: register an HTTP MCP server
 - **GIVEN** the coffer daemon is running,
 - **WHEN** the user registers an HTTP MCP server with a URL and (optionally) a secret reference for an authorization header,
 - **THEN** the server is persisted and its capabilities are discovered without leaking the secret into any log or stored field.
+
+#### Scenario: a secret header is sent behind its scheme
+- **GIVEN** a server whose `Authorization` header cites a secret holding `<key>`, with the scheme `Bearer`, and an `X-Api-Key` header citing a secret with no scheme
+- **WHEN** a request is made to it
+- **THEN** it carries `Authorization: Bearer <key>` and `X-Api-Key` with the stored value unchanged
+- **AND** a scheme on a header that cites no secret, or a scheme other than `Bearer` or `Token`, is refused when the config is saved
+
+#### Scenario: an adopted Bearer header stores the key alone
+- **GIVEN** an agent's own MCP entry whose `Authorization` header reads `Bearer <key>`
+- **WHEN** it is adopted into Coffer with that header mapped to a secret
+- **THEN** the secret holds `<key>`, the server's slot carries the scheme `Bearer`, and the value appears nowhere in the config
 
 #### Scenario: HTTP-transport MCP server round trip
 - **GIVEN** an HTTP MCP server is running and registered with coffer,
@@ -567,8 +584,9 @@ gateway makes itself, with no process to run and no MCP server at the other
 end. A group MUST carry a base URL (`http` or `https`), optional **header
 rows**, a per-request timeout between 1 and 300 seconds (30 by default) and its
 tools. A header row is a name and a value: plain text, or a stored secret that
-holds the WHOLE header value — nothing is put around it, so a bearer token is
-stored as `Bearer <token>`. A row carries a value or a secret, never both, and a
+holds the credential alone, sent behind the row's scheme when it has one (see
+"Support stdio and HTTP upstreams"), so a bearer token is stored as `<token>`
+with the scheme `Bearer`. A row carries a value or a secret, never both, and a
 header name appears once. Each tool MUST carry a name unique in
 the group, a description, a method (GET, POST, PUT, PATCH or DELETE), a path
 template relative to the base URL whose `{argument}` holes may sit in the path
@@ -585,7 +603,7 @@ nothing persisted.
 - **WHEN** an agent lists the gateway's tools
 - **THEN** it is offered `billing__list_invoices` with the tool's description and argument schema
 
-#### Scenario: a group's headers are rows whose value is plain or a whole secret
+#### Scenario: a group's headers are rows whose value is plain or a secret
 - **GIVEN** a stored secret `billing-token`
 - **WHEN** a group is created with the headers `X-Team` = `billing` and `Authorization` bound to `billing-token`, then its headers are replaced with `X-Team` = `ops`
 - **THEN** the group first lists both rows, the secret one naming `billing-token` and its state and never its value, and a row giving both a value and a secret is refused
@@ -633,7 +651,7 @@ record: an occurrence in the response is masked as `***`. Every call MUST be
 recorded like any other tool call ("Record invocations without content").
 
 #### Scenario: a custom tool call sends the rendered request with the secret
-- **GIVEN** a group with base URL `https://api.example/v2`, an `Authorization` header bound to an approved secret holding `Bearer <token>`, and a tool `GET /invoices/{id}?status={status}`
+- **GIVEN** a group with base URL `https://api.example/v2`, an `Authorization` header bound to an approved secret holding `<token>` with the scheme `Bearer`, and a tool `GET /invoices/{id}?status={status}`
 - **WHEN** an agent calls it with `id` = `a/b` and no `status`
 - **THEN** the gateway sends `GET https://api.example/v2/invoices/a%2Fb` with `Authorization: Bearer <secret>`
 - **AND** the agent receives `HTTP 200 OK` and the body, and the invocation log records one `ok` call with no arguments or content
@@ -765,7 +783,7 @@ approval, `healthy` after a successful last call, and `idle` with no call in
 
 #### Scenario: create a custom-tool group and add a tool
 - **GIVEN** the daemon is running and a stored secret `deploy-token` whose binding is approved
-- **WHEN** the user creates a group `deploy` with `POST /api/v1/custom-tools` (base URL `https://deploy.example/v1`, an `Authorization` header with the prefix `Bearer ` and the secret `deploy-token`), then adds a `rollback` tool with `POST /api/v1/custom-tools/deploy/tools` (method `POST`, path `/services/{service}/rollback`, a required string argument `service`)
+- **WHEN** the user creates a group `deploy` with `POST /api/v1/custom-tools` (base URL `https://deploy.example/v1`, an `Authorization` header with the scheme `Bearer` and the secret `deploy-token`), then adds a `rollback` tool with `POST /api/v1/custom-tools/deploy/tools` (method `POST`, path `/services/{service}/rollback`, a required string argument `service`)
 - **THEN** reading the group lists the `rollback` tool with the changes-data flag on
 - **AND** `POST /api/v1/custom-tools/deploy/test` for that tool with the argument `service=web` returns the upstream's status line
 

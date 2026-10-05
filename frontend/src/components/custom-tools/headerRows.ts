@@ -1,13 +1,14 @@
 // src/components/custom-tools/headerRows.ts — a group's header rows between the wire (`headers`: a plain value or a
 // Secrets-page name that holds the WHOLE value) and the shared header-row form (`KeyValueSecretRow`).
 import type { KeyValueSecretRow } from "@/components/secret/secretValue";
+import { schemeOfRow } from "@/lib/authScheme";
 import type { CustomToolGroup, CustomToolHeaderIn } from "@/lib/api/customTools";
 
 /** The rows an edit form starts from. */
 export function headerRowsOf(group: Pick<CustomToolGroup, "headers">): KeyValueSecretRow[] {
   return group.headers.map((h) =>
     h.secret
-      ? { key: h.name, value: { kind: "stored", name: h.secret } }
+      ? { key: h.name, value: { kind: "stored", name: h.secret }, scheme: h.scheme }
       : { key: h.name, value: { kind: "plain", value: h.value ?? "" } },
   );
 }
@@ -20,7 +21,7 @@ export function headersIn(rows: readonly KeyValueSecretRow[]): CustomToolHeaderI
     .map((r) =>
       r.value.kind === "plain"
         ? { name: r.key.trim(), value: r.value.value }
-        : { name: r.key.trim(), secret: r.value.name },
+        : { name: r.key.trim(), secret: r.value.name, scheme: schemeOfRow(r) },
     );
 }
 
@@ -52,9 +53,9 @@ export function headersWithSecret(
 ): CustomToolHeaderIn[] {
   return group.headers.map((h) =>
     h.name === header
-      ? { name: h.name, secret: id }
+      ? { name: h.name, secret: id, scheme: h.scheme }
       : h.secret
-        ? { name: h.name, secret: h.secret }
+        ? { name: h.name, secret: h.secret, scheme: h.scheme }
         : { name: h.name, value: h.value ?? "" },
   );
 }

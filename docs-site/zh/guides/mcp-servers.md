@@ -106,10 +106,20 @@ HTTP 服务器是一个使用 streamable HTTP 传输的远程 MCP 端点。Coffe
 ### 完整示例：带 bearer 令牌的 HTTP 服务器 {#worked-example-an-http-server-with-a-bearer-token}
 
 1. 打开 **MCP 服务器**，点**添加服务器**，把 `https://api.githubcopilot.com/mcp/` 粘贴进输入框。
-2. 在请求头里添加 `Authorization`，并把完整的请求头值粘贴为它的值（从字段菜单里选一个已存的密钥，或粘贴一个会存为新密钥的值），包含方案（`Bearer …`）。
+2. 在请求头里添加 `Authorization`，把服务商给你的原始密钥粘贴为它的值（从字段菜单里选一个已存的密钥，或粘贴一个会存为新密钥的值）。这一行的**认证方案**保持为 **Bearer**。
 3. 点**测试**，然后点**添加服务器**。
 
-对 HTTP 服务器，每个值是密钥的请求头都会变成一个请求头：解密后的密钥作为该请求头的**完整**值发送，所以当服务器要求 `Bearer …` 形式时，就把它原样存进去。非密钥的请求头放在传输配置的 `headers` 映射里（在 Web 界面编辑配置 JSON）。
+对 HTTP 服务器，每个值是密钥的请求头都会变成一个请求头。密钥里**只存凭据**，也就是服务商发给你的原始密钥；这一行有一个**认证方案**，Coffer 发请求时会把它放在密钥前面。非密钥的请求头放在传输配置的 `headers` 映射里（在 Web 界面编辑配置 JSON）。
+
+**认证方案。** 保存密钥的请求头行有三种方案：
+
+| 方案 | Coffer 发送 | 适用于 |
+| --- | --- | --- |
+| **Bearer** | `Authorization: Bearer <key>` | 大多数 API。新的 `Authorization` 行默认是它。 |
+| **Token** | `Authorization: Token <key>` | 要求用 `Token` 这个词的 API。 |
+| **None** | 原样发送密钥 | `X-Api-Key` 这类请求头，密钥就是整个值。 |
+
+*Bearer* 是 HTTP 认证方案的名字（RFC 6750），不是密钥的一部分，所以存密钥时不带它。这样同一个密钥在哪里用都行，也和服务商给你的形式一致。在这之前创建、密钥里已经写着 `Bearer …` 的服务器照常工作：没有方案的请求头会原样发送它的密钥。要切换过去，打开它的**编辑**对话框，把 `Authorization` 行的方案设为 **Bearer**，并在同一次保存里**替换**值为原始密钥。
 
 Coffer 存储的配置：
 
@@ -119,7 +129,8 @@ Coffer 存储的配置：
     "type": "http",
     "url": "https://api.githubcopilot.com/mcp/",
     "headers": {},
-    "secret_refs": { "Authorization": "github/authorization" }
+    "secret_refs": { "Authorization": "github/authorization" },
+    "auth_schemes": { "Authorization": "Bearer" }
   },
   "spawn_timeout_seconds": 30,
   "request_timeout_seconds": 120
@@ -132,6 +143,8 @@ Coffer 存储的配置：
 
 ::: info 粘贴带 `headers` 的 HTTP 服务器
 **添加服务器**的粘贴框会读取 HTTP 服务器（`"url": …`）的 `headers` 对象，并像对待 `env` 一样逐个检查值是否是密钥：名字或内容看起来像密钥的值（例如 `Authorization` 请求头）会提示存进密钥存储并从 `secret_refs` 引用；其余的留在传输配置的 `headers` 里。HTTP 服务器上的 `env` 对象也会作为请求头发送；两者有同名键时，以 `headers` 的值为准。
+
+像 `Authorization: Bearer abc…` 这样的请求头在导入时会被拆开：`abc…` 存为密钥，这一行的方案设为 **Bearer**。导入 Claude 或 Cursor 的 JSON、Codex 的 TOML（它的 `bearer_token_env_var` 现在只要令牌）、接管智能体自己的条目，或用**查找明文密钥**迁移明文密钥时，都是如此。
 :::
 
 ## 服务器名字和描述 {#server-names-and-descriptions}
