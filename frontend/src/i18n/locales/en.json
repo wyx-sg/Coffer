@@ -5167,15 +5167,14 @@
       },
       "startsWith": "starts with {{launcher}}",
       "neededBy": "needed by {{needed}}",
-      "addedByYou": "added by you",
-      "description": "Description",
-      "descriptionPlaceholder": "What this tool is for"
+      "addedByYou": "added by you"
     },
     "add": {
       "title": "Add CLI",
       "body": "Name a command, or the path to an executable.",
       "editTitle": "Edit {{command}}",
       "editBody": "Change what Coffer checks for this tool.",
+      "describeBody": "Say what this tool is for. Its minimum version and login check come from the skills and MCP servers that need it.",
       "command": "Command",
       "commandPlaceholder": "jq, or /opt/tools/bin/jq",
       "fixed": "Fixed — Coffer finds the tool by it.",
@@ -5185,8 +5184,8 @@
       "notFound": "{{command}} isn’t on this machine yet. You can still add it — it shows as Not found until an agent installs it.",
       "alreadyAdded": "{{command}} is already added.",
       "alsoRequired": "Already listed — a skill or MCP server needs it. Adding it keeps it listed even if they stop.",
-      "titleField": "Title",
-      "titlePlaceholder": "Shown under the command",
+      "titleField": "Display name",
+      "titlePlaceholder": "e.g. GitHub CLI",
       "minVersion": "Minimum version",
       "description": "Description",
       "descriptionPlaceholder": "What it’s for, in a sentence",

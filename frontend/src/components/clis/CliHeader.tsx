@@ -1,9 +1,9 @@
-// src/components/clis/CliHeader.tsx — the open command's header (board CliHeader): a state tile, the name with its status pill, one meta line, and Edit · ⋯ for a tool the person added.
+// src/components/clis/CliHeader.tsx — the open command's header (board CliHeader): a state tile, the name with its status pill, one meta line, the description, and Edit (· ⋯ for a tool the person added).
 //
 // The meta line is "<title> · needed by 2 skills" or "<title> · added by you"
-// (the title is left out when there is none); under it the description, edited
-// in place for any command. A command only a skill or MCP
-// server requires has nothing on the right: it is not Coffer's to change.
+// (the title is the command's display name, left out when there is none);
+// under it the description, and nothing when there is none. Edit
+// opens the dialog for any command; only a tool the person added has ⋯ › Remove.
 import { CircleAlert, Terminal, TriangleAlert, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -12,7 +12,6 @@ import type { Cli } from "@/lib/api/clis";
 import { cliTone, neededByCount, neededTotal } from "@/lib/clis/format";
 import { cn } from "@/lib/utils";
 import { CliActions } from "./CliActions";
-import { CliDescriptionField } from "./CliDescriptionField";
 
 const TILE: Record<Cli["status"], { icon: LucideIcon; className: string }> = {
   missing: { icon: CircleAlert, className: "bg-danger-soft text-danger" },
@@ -57,13 +56,15 @@ export function CliHeader({ cli, onRemoved }: { cli: Cli; onRemoved: () => void 
           <StatusPill tone={cliTone(cli.status)}>{t(`clis.status.${cli.status}`)}</StatusPill>
         </div>
         <p className="min-w-0 truncate text-xs text-text-muted first-letter:uppercase">{meta}</p>
-        <CliDescriptionField cli={cli} />
+        {cli.description ? (
+          <p className="min-w-0 break-words text-xs text-text-muted" data-testid="cli-description">
+            {cli.description}
+          </p>
+        ) : null}
       </div>
-      {cli.added ? (
-        <span className="inline-flex shrink-0 items-center gap-2 pt-0.5">
-          <CliActions cli={cli} onRemoved={onRemoved} />
-        </span>
-      ) : null}
+      <span className="inline-flex shrink-0 items-center gap-2 pt-0.5">
+        <CliActions cli={cli} onRemoved={onRemoved} />
+      </span>
     </header>
   );
 }

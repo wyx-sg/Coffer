@@ -5167,15 +5167,14 @@
       },
       "startsWith": "用 {{launcher}} 启动",
       "neededBy": "{{needed}}需要",
-      "addedByYou": "你添加的",
-      "description": "描述",
-      "descriptionPlaceholder": "这个工具用来做什么"
+      "addedByYou": "你添加的"
     },
     "add": {
       "title": "添加命令行工具",
       "body": "填写命令名，或可执行文件的路径。",
       "editTitle": "编辑 {{command}}",
       "editBody": "更改 Coffer 对这个工具的检查内容。",
+      "describeBody": "写下这个工具用来做什么。最低版本和登录检查由需要它的技能和 MCP 服务器决定。",
       "command": "命令",
       "commandPlaceholder": "jq，或 /opt/tools/bin/jq",
       "fixed": "不可更改——Coffer 靠它找到这个工具。",
@@ -5185,8 +5184,8 @@
       "notFound": "这台机器上还没有 {{command}}。仍可添加——在 智能体装好之前会显示为未找到。",
       "alreadyAdded": "{{command}} 已添加。",
       "alsoRequired": "已在列表中——有技能或 MCP 服务器需要它。添加后，即使它们不再需要，也会保留在列表里。",
-      "titleField": "标题",
-      "titlePlaceholder": "显示在命令下方",
+      "titleField": "显示名称",
+      "titlePlaceholder": "例如 GitHub CLI",
       "minVersion": "最低版本",
       "description": "描述",
       "descriptionPlaceholder": "用一句话说明用途",
