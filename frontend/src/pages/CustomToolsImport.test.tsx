@@ -8,6 +8,11 @@ import { acceptance } from "@/test/acceptance";
 import { api, billing, location, renderAt, resetCustomToolMocks } from "./customToolsTestHarness";
 import { makeGroup } from "@/components/custom-tools/testFixtures";
 
+vi.mock("@/lib/api/mcpServers", () => ({
+  mcpServersApi: Object.fromEntries(
+    ["summary", "tiering", "setToolExposure"].map((name) => [name, vi.fn()]),
+  ),
+}));
 vi.mock("@/lib/api/customTools", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/customTools")>()),
   customToolsApi: Object.fromEntries(

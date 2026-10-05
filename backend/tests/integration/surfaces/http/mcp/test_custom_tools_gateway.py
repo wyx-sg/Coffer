@@ -243,3 +243,53 @@ def test_moving_the_base_url_asks_again(daemon: BoundaryDaemon, api: FakeHttpApi
     assert api.seen == []
     [pending] = daemon.pending(destination_uid=moved["uid"])
     assert pending["target"] == f"http_api {api.base_url}/v3"
+
+
+def _set_exposure(daemon: BoundaryDaemon, uid: str, tool_name: str, mode: str) -> None:
+    r = daemon.client.patch(
+        f"/api/v1/resources/mcp_server/{uid}/tools/{tool_name}/exposure", json={"mode": mode}
+    )
+    assert r.status_code == 204, r.text
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a custom tool's exposure is honoured like any server's tool"
+)
+def test_a_custom_tools_exposure_is_honoured_by_the_gateway(
+    daemon: BoundaryDaemon, api: FakeHttpApi, monkeypatch: pytest.MonkeyPatch
+):
+    group = create_group(
+        daemon,
+        "billing",
+        api.base_url,
+        [
+            tool("list_invoices", "GET", "/invoices", description="List every invoice"),
+            tool("get_invoice", "GET", "/invoices/{id}"),
+            tool("void_invoice", "POST", "/invoices/{id}/void"),
+        ],
+    )
+    # No agent has listed the group yet: its tools are its config.
+    _set_exposure(daemon, group["uid"], "list_invoices", "search")
+    agent = Agent(daemon, CLAUDE)
+    listed = agent.tools()
+    assert "billing__list_invoices" not in listed
+    assert {"billing__get_invoice", "billing__void_invoice"} <= set(listed)
+
+    # Search only: coffer__search_tools still finds it, and it can still be called.
+    found = text_of(agent.call("coffer__search_tools", {"query": "list every invoice"}))
+    assert json.loads(found)["tools"][0]["name"] == "billing__list_invoices"
+    assert text_of(agent.call("billing__list_invoices")).startswith("HTTP 200")
+
+    # Always listed survives a budget too small for the rest of the group.
+    monkeypatch.setenv("COFFER_TOOL_TIERING_BUDGET", "1")
+    _set_exposure(daemon, group["uid"], "void_invoice", "listed")
+    narrow = {n for n in Agent(daemon, CLAUDE).tools() if n.startswith("billing__")}
+    assert narrow == {"billing__void_invoice"}
+
+    tiering = daemon.client.get(f"/api/v1/resources/mcp_server/{group['uid']}/tiering").json()
+    modes = {t["tool"]: (t["mode"], t["effective"]) for t in tiering["tools"]}
+    assert modes == {
+        "list_invoices": ("search", "search"),
+        "get_invoice": ("auto", "search"),
+        "void_invoice": ("listed", "listed"),
+    }

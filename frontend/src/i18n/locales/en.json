@@ -4613,6 +4613,10 @@
   "customTools": {
     "subtitle": "HTTP API requests Coffer makes for your agents, in groups that share a base URL and a secret.",
     "title": "Custom tools",
+    "tabs": {
+      "overview": "Overview",
+      "tools": "Tools"
+    },
     "pendingApprovalSaved": "Saved. The secret waits for approval in the Coffer app before calls can use it.",
     "list": {
       "toolCount_one": "{{count}} tool",
