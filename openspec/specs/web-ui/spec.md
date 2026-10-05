@@ -1585,7 +1585,7 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 #### Scenario: a rejected key reads Replace key
 - **GIVEN** an MCP server whose status reads failing with `failure_reason` `auth_rejected`, and an Overview item with the verb `replace_key`
 - **WHEN** the server's page opens and the Overview lists the item
-- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the edit dialog on its secret, and the Overview row's action reads Replace key and opens the server's page
+- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the Replace value dialog on the secret its env or headers cite (the edit dialog when the key is typed into the config itself), and the Overview row's action reads Replace key and opens the server's page
 
 #### Scenario: a failed test offers a diagnosis hand-off beside View log
 - **GIVEN** an MCP server whose test just failed with an error and a `handoff`

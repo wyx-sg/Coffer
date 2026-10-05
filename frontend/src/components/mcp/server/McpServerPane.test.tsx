@@ -263,14 +263,32 @@ describe("McpServerPane", () => {
   });
 
   acceptance("web-ui", "a rejected key reads Replace key", async () => {
-    api.status = { status: "failing", failure_reason: "auth_rejected" };
+    api.status = {
+      status: "failing",
+      failure_reason: "auth_rejected",
+      requires: [
+        { kind: "secret", name: "Authorization", secret: SENTRY_REF, status: "set", version: null },
+      ],
+    };
     renderPane();
     const callout = await screen.findByTestId("mcp-callout-key-rejected");
     expect(callout).toHaveTextContent("The key was rejected");
     expect(callout).toHaveTextContent(/rejected with 401 Unauthorized/);
+    // Replace key opens the Secrets dialog on the secret it cites, not the server's edit dialog.
+    await screen.findByRole("link", { name: "Sentry token" });
+    fireEvent.click(within(callout).getByRole("button", { name: "Replace key" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Sentry token");
+    expect(dialog).not.toHaveTextContent("edit dialog");
+    expect(actionLabelKey("replace_key")).toBe("overview.actions.replace_key");
+  });
+
+  test("a rejected key typed into the config itself is changed in the edit dialog", async () => {
+    api.status = { status: "failing", failure_reason: "auth_rejected" };
+    renderPane();
+    const callout = await screen.findByTestId("mcp-callout-key-rejected");
     fireEvent.click(within(callout).getByRole("button", { name: "Replace key" }));
     expect(await screen.findByText("edit dialog")).toBeInTheDocument();
-    expect(actionLabelKey("replace_key")).toBe("overview.actions.replace_key");
   });
 
   acceptance(
