@@ -4,8 +4,8 @@
 // Turn on; a secret this Mac does not hold, Add secret (the Secrets page's own
 // dialog for that name); a missing launcher, the install hand-off; a failing
 // server's last error, since when, who can't call it and its last successful
-// call, with View log (stdio) or View errors (HTTP: the Invocations tab on its
-// errors) and the diagnosis hand-off; a rejected key, with Replace key (the
+// call, with View log (stdio) or View errors (HTTP: the Activity page on its
+// failed calls) and the diagnosis hand-off; a rejected key, with Replace key (the
 // edit dialog on its secret). A test the user just ran speaks here only when
 // it failed (a pass is a toast). Nothing for a healthy server.
 import { useState, type ReactNode } from "react";

@@ -23,7 +23,7 @@ Open **Activity** in the sidebar. The header carries a **Live** mark (a dot and 
 
 - **Everything** — changes, tool calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
 - **Changes** — the audit log: **Time**, **Event** (the change as a sentence, such as "Stored a secret") and **By** (who made it).
-- **Tool calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**. A server's own **Invocations** tab reads the same log for that one server.
+- **Tool calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**.
 - **Daemon log** — the tail of `daemon.log`: **Time**, **Level**, **Logger** and **Message**. Open it when Coffer itself misbehaves rather than something it proxied. The line above the rows names the file, says "newest first" and "following" while the feed is open, and **Open in Finder** reveals the file.
 
 Rows are grouped under a heading for their day ("Today · Sep 29"), and there is no summary line above them. The active tab is part of the URL (`/activity?tab=mcp`, `/activity?tab=daemon`; Everything is `/activity`).

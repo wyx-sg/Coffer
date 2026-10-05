@@ -1,7 +1,7 @@
 // src/components/mcp/server/McpLogDrawer.tsx — "<name> · Server log", a 640 drawer over the MCP servers page (design 4.1.16).
 //
 // stdio servers only: what the server printed on stderr and how Coffer started
-// and stopped it. No tabs — a server's calls are the Invocations tab.
+// and stopped it. No tabs — a server's calls are on the Activity page.
 import type { ResourceOut } from "@/lib/api/resources";
 import { useTranslation } from "react-i18next";
 

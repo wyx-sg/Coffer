@@ -32,7 +32,6 @@ import { useTestMcpServer } from "@/lib/hooks/useMcpServerMutations";
 import { useMcpServerStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { useSecrets } from "@/lib/hooks/useSecrets";
-import { McpCallsLog, type CallsFilter } from "./McpCallsLog";
 import { McpCapabilityTab } from "./McpCapabilityTab";
 import { McpDeleteDialog } from "./McpDeleteDialog";
 import { McpLogDrawer } from "./McpLogDrawer";
@@ -80,7 +79,6 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [addingSecret, setAddingSecret] = useState(false);
-  const [callsFilter, setCallsFilter] = useState<CallsFilter>("all");
 
   const toolCount = caps.data?.tools?.length || tiering?.tool_count || 0;
   const agentNames = joinNames(
@@ -136,11 +134,10 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       toast.error(err instanceof Error ? err.message : String(err));
     }
   };
-  // "View errors" (a server Coffer does not start has no log): the Invocations tab on its errors.
-  const viewErrors = () => {
-    setCallsFilter("errors");
-    navigate(`${basePath}/invocations`);
-  };
+  // The Activity page on this server's calls (its search matches the server name).
+  const activityHref = `/activity?tab=mcp&q=${encodeURIComponent(resource.name)}`;
+  // "View errors" (a server Coffer does not start has no log): Activity on its failed calls.
+  const viewErrors = () => navigate(`${activityHref}&status=failed`);
   const missingRow = secrets.data?.refs.find((r) => r.ref === detail?.missing_secret_ref) ?? null;
   const capsProps = {
     serverUid: uid,
@@ -167,7 +164,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         basePath={basePath}
         overview={
           <McpOverviewTab
-            invocationsHref={`${basePath}/invocations`}
+            activityHref={activityHref}
             name={resource.name}
             enabled={resource.enabled}
             state={state}
@@ -206,17 +203,6 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         tools={<McpToolsTab {...capsProps} state={state} detail={detail} tiering={tiering} />}
         resources={<McpCapabilityTab {...capsProps} kind="resource" />}
         prompts={<McpCapabilityTab {...capsProps} kind="prompt" />}
-        invocations={
-          <McpCallsLog
-            serverUid={uid}
-            serverName={resource.name}
-            transport={transport.type}
-            agents={agents}
-            only={callsFilter}
-            onOnlyChange={setCallsFilter}
-            onViewLog={() => setLogOpen(true)}
-          />
-        }
       />
 
       {edit ? (

@@ -51,8 +51,8 @@ interface Props {
   tools: ReactNode;
   /** The built-in server's one-line description of the 24-hour block. */
   builtin?: boolean;
-  /** This server's own Invocations tab, where "View invocations" goes. */
-  invocationsHref: string;
+  /** The Activity page on this server's calls, where "View in Activity" goes. */
+  activityHref: string;
 }
 
 export function McpOverviewTab({
@@ -66,7 +66,7 @@ export function McpOverviewTab({
   callout,
   tools,
   builtin = false,
-  invocationsHref,
+  activityHref,
 }: Props) {
   const { t } = useTranslation();
   const agentOf = (uid: string | null | undefined) => agents.find((a) => a.uid === uid);
@@ -103,10 +103,10 @@ export function McpOverviewTab({
           actions={
             enabled ? (
               <Link
-                to={invocationsHref}
+                to={activityHref}
                 className="text-xs font-label text-accent-text hover:underline"
               >
-                {t("mcp.page.viewInvocations")}
+                {t("mcp.page.viewInActivity")}
               </Link>
             ) : null
           }

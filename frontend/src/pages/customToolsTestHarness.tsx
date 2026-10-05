@@ -68,7 +68,6 @@ export function renderAt(path: string) {
         <Routes>
           <Route path="/custom-tools" element={<CustomToolsPage />} />
           <Route path="/custom-tools/:group" element={<CustomToolsPage />} />
-          <Route path="/custom-tools/:group/:tab" element={<CustomToolsPage />} />
         </Routes>
         <LocationProbe />
       </MemoryRouter>

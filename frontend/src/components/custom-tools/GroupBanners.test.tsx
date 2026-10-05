@@ -71,7 +71,7 @@ describe("group banners", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View calls" })).toHaveAttribute(
       "href",
-      "/custom-tools/status-page/invocations",
+      "/activity?tab=mcp&q=status-page",
     );
     expect(screen.getByRole("button", { name: /Hand off to|Copy prompt/ })).toBeInTheDocument();
   });

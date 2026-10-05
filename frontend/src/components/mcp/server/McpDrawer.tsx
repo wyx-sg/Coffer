@@ -1,4 +1,4 @@
-// src/components/mcp/server/McpDrawer.tsx — the 640 right-hand drawer of the MCP servers page: the server log and one invocation (Foundations 0.4.02).
+// src/components/mcp/server/McpDrawer.tsx — the 640 right-hand drawer of the MCP servers page: the server log (Foundations 0.4.02).
 //
 // The shared drawer (ui/sheet), which starts below the window title bar (the
 // scrim too), so the window's own controls stay reachable. A title and one

@@ -112,17 +112,6 @@ export function shortDate(iso: string): string {
     : at.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** A call's tone: OK quiet, a problem in its status colour. */
-export function callTone(status: "ok" | "error" | "timeout" | "denied"): StatusTone {
-  return status === "ok"
-    ? "ok"
-    : status === "denied"
-      ? "off"
-      : status === "timeout"
-        ? "warn"
-        : "err";
-}
-
 /** A duration the way the page says it: "412 ms", "1.2 s". */
 export function seconds(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;

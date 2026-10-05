@@ -1,7 +1,6 @@
-// src/components/custom-tools/GroupPane.tsx — the selected group: header and banners, then the tabs
-// Overview (definition) · Tools (tools table) · Invocations (its calls), the tab in the path
-// (`/custom-tools/<group>/tools`; spec web-ui "Lay out every detail page's tabs alike"); the tool
-// drawer, Edit group, Re-import and Delete over it.
+// src/components/custom-tools/GroupPane.tsx — the selected group: header and banners, then one page with no tabs:
+// the definition, then the tools table under it (spec web-ui "Lay out every detail page's tabs alike"
+// does not apply: a group has too little to split); the tool drawer, Edit group, Re-import and Delete over it.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -9,14 +8,9 @@ import { Wrench } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
-import { McpCallsLog } from "@/components/mcp/server/McpCallsLog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError, translateApiError } from "@/lib/api/errors";
-import { useDetailTab } from "@/lib/detailTabs";
-import { useAgents } from "@/lib/hooks/useAgents";
 import { useCustomToolGroup } from "@/lib/hooks/useCustomTools";
-import { CUSTOM_TOOL_TABS } from "./customToolTabs";
 import { DeleteGroupDialog } from "./DeleteGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { GroupDefinition } from "./GroupDefinition";
@@ -40,11 +34,6 @@ export function GroupPane({ name, onAddRequest }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [reimportOpen, setReimportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const { data: agents = [] } = useAgents();
-  const basePath = `/custom-tools/${encodeURIComponent(name)}`;
-  const [tab, setTab] = useDetailTab(CUSTOM_TOOL_TABS, "overview", basePath, {
-    enabled: group !== undefined,
-  });
 
   if (isPending) {
     return (
@@ -77,28 +66,8 @@ export function GroupPane({ name, onAddRequest }: Props) {
         onDelete={() => setDeleteOpen(true)}
       />
       <GroupBanners group={group} onChooseAnother={() => setEditOpen(true)} />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="overview">{t("customTools.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="tools">{t("customTools.tabs.tools")}</TabsTrigger>
-          <TabsTrigger value="invocations">{t("customTools.tabs.invocations")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="pt-5">
-          <GroupDefinition group={group} onReimport={() => setReimportOpen(true)} />
-        </TabsContent>
-        <TabsContent value="tools" className="pt-5">
-          <ToolsTable group={group} onOpenTool={setTool} onAddRequest={onAddRequest} />
-        </TabsContent>
-        <TabsContent value="invocations" className="pt-5">
-          <McpCallsLog
-            serverUid={group.uid}
-            serverName={group.name}
-            transport="http"
-            agents={agents}
-            group
-          />
-        </TabsContent>
-      </Tabs>
+      <GroupDefinition group={group} onReimport={() => setReimportOpen(true)} />
+      <ToolsTable group={group} onOpenTool={setTool} onAddRequest={onAddRequest} />
       <ToolEditorDrawer
         group={group}
         toolName={tool}

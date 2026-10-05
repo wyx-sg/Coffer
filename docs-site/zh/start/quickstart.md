@@ -98,7 +98,7 @@ Claude Code 会给每个 MCP 工具再加一层自己的前缀，所以在它的
 > Use the filesystem tools to list what is in ~/projects.
 ```
 
-Claude Code 调用 `filesystem__list_directory`。Coffer 把这次调用以原名 `list_directory` 路由给 filesystem 服务器，并记录下来。你可以在该服务器的**调用记录** tab 上查看记录，也可以用 `coffer log mcp --server filesystem`。记录包含工具、时间、耗时和结果，从不包含参数或返回内容。
+Claude Code 调用 `filesystem__list_directory`。Coffer 把这次调用以原名 `list_directory` 路由给 filesystem 服务器，并记录下来。你可以在**活动**页面（搜索该服务器的名字）查看记录，也可以用 `coffer log mcp --server filesystem`。记录包含工具、时间、耗时和结果，从不包含参数或返回内容。
 
 你在第 3 步连接的每个智能体现在都能用这个服务器。你没有再改过 Claude Code 的 MCP 配置，下一个服务器也不需要改。
 

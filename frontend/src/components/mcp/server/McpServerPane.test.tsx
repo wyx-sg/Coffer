@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
@@ -161,6 +161,11 @@ const DUCKDB = {
   config: { transport: { type: "stdio", command: "uvx", args: ["mcp-server-duckdb"] } },
 } as unknown as ResourceOut;
 
+function ActivityProbe() {
+  const { pathname, search } = useLocation();
+  return <div data-testid="activity-probe">{pathname + search}</div>;
+}
+
 function renderPane(resource: ResourceOut = SENTRY, path = `/mcp-servers/${resource.name}`) {
   const onDeleted = vi.fn();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -180,6 +185,7 @@ function renderPane(resource: ResourceOut = SENTRY, path = `/mcp-servers/${resou
                   />
                 }
               />
+              <Route path="/activity" element={<ActivityProbe />} />
             </Routes>
           </MemoryRouter>
         </ToastProvider>
@@ -229,24 +235,22 @@ describe("McpServerPane", () => {
       // The header never changes with the state: Test, not Test again.
       expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /test again/i })).toBeNull();
-      // A server Coffer does not start has no log: View errors opens the Invocations tab on its errors.
+      // A server Coffer does not start has no log: View errors opens Activity on its failed calls.
       expect(within(callout).queryByRole("button", { name: /view log/i })).toBeNull();
       fireEvent.click(within(callout).getByRole("button", { name: /view errors/i }));
-      expect(await screen.findByRole("button", { name: /^Errors/ })).toHaveAttribute(
-        "aria-pressed",
-        "true",
+      expect(await screen.findByTestId("activity-probe")).toHaveTextContent(
+        "/activity?tab=mcp&q=sentry&status=failed",
       );
     },
   );
 
   acceptance("web-ui", "the 24-hour block opens the server's own call history", async () => {
     renderPane();
-    const link = await screen.findByRole("link", { name: "View invocations" });
-    expect(link).toHaveAttribute("href", "/mcp-servers/sentry/invocations");
+    const link = await screen.findByRole("link", { name: "View in Activity" });
+    expect(link).toHaveAttribute("href", "/activity?tab=mcp&q=sentry");
     fireEvent.click(link);
-    expect(await screen.findByRole("tab", { name: "Invocations" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    expect(await screen.findByTestId("activity-probe")).toHaveTextContent(
+      "/activity?tab=mcp&q=sentry",
     );
   });
 
@@ -670,32 +674,5 @@ describe("McpServerPane", () => {
       target: { value: "resolve" },
     });
     expect(within(table).getAllByRole("row")).toHaveLength(2);
-  });
-
-  acceptance("web-ui", "a call opens in a drawer with its attributes", async () => {
-    api.invocations = [
-      {
-        id: 7,
-        timestamp: new Date().toISOString(),
-        capability_key: "list_issues",
-        capability_type: "tool",
-        agent_uid: "a-cc",
-        status: "error",
-        duration_ms: 3000,
-        error_message: "connect ECONNREFUSED 34.120.195.249:443",
-        session_id: "s1",
-        resource_uid: "u-sentry",
-        resource_name: "sentry",
-      },
-    ];
-    renderPane(SENTRY, "/mcp-servers/sentry/invocations");
-    fireEvent.click(await screen.findByText("list_issues"));
-    const drawer = await screen.findByTestId("mcp-call-drawer");
-    const detail = within(drawer).getByTestId("mcp-call-detail");
-    expect(detail).toHaveTextContent("Errorconnect ECONNREFUSED");
-    expect(detail).toHaveTextContent("sentry · Streamable HTTP");
-    expect(detail).toHaveTextContent("Called byClaude Code");
-    expect(within(drawer).getByText(/never the arguments or the result/i)).toBeInTheDocument();
-    expect(within(drawer).queryByRole("button", { name: /view server log/i })).toBeNull();
   });
 });
