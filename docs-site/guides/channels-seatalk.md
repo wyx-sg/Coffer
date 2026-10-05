@@ -161,7 +161,7 @@ The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an
 
 ## Rotate the app secret
 
-On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Secrets**.
+On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. Under **Settings** → **Secrets** the App Secret shows as the secret's name, linking to its page, with **Replace key…** beside it; **Use another secret** there points the channel at a different stored secret and restarts the adapter on it. The **App ID** is edited in place under **Settings** → **Secrets**.
 
 ## Limits
 

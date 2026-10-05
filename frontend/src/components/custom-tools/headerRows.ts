@@ -43,3 +43,18 @@ export function secretInState(
   if (state === "pending_approval" && group.pending_secrets[0]) return group.pending_secrets[0];
   return group.headers.find((h) => h.secret_state === state)?.secret ?? firstSecret(group);
 }
+
+/** The group's headers as a save sends them, with `header` reading from the secret `id` instead. */
+export function headersWithSecret(
+  group: Pick<CustomToolGroup, "headers">,
+  header: string,
+  id: string,
+): CustomToolHeaderIn[] {
+  return group.headers.map((h) =>
+    h.name === header
+      ? { name: h.name, secret: id }
+      : h.secret
+        ? { name: h.name, secret: h.secret }
+        : { name: h.name, value: h.value ?? "" },
+  );
+}

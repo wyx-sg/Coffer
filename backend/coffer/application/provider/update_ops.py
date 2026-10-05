@@ -1,7 +1,9 @@
 """Partial-update path for ``ProviderService`` (spec provider-switching).
 
-``secret_ref`` is immutable — it is the vault address the connection owns,
-and nothing about the connection moves it. ``protocol`` is NOT immutable:
+``secret_ref`` may be re-pointed to ANOTHER stored secret (the "use another
+stored secret" half of Replace key); a new value for the current secret is
+``secret_value``, and the two never travel together. A connection without a key
+(a local runtime) takes neither. ``protocol`` is NOT immutable:
 an endpoint that turns out to speak a different wire than the probe guessed is
 corrected in place rather than deleted and re-entered, key and all.
 
@@ -66,13 +68,22 @@ async def update(
     protocol: Protocol | None = None,
     base_url: str | None = None,
     secret_value: str | None = None,
+    secret_ref: str | None = None,
     models: _CuratedModels | None = None,
     description: str | None = None,
     actor: str = "api",
 ) -> Resource:
     """Apply a partial update; see the module docstring for what may move."""
+    if secret_ref is not None and secret_value is not None:
+        raise ProviderSecretSourceInvalid()
     current = await service.get(uid)
     config = dict(current.config)
+    if secret_ref is not None:
+        if not config.get("secret_ref"):
+            raise ProviderSecretSourceInvalid()
+        # ``update_config`` probes the new ref (``SecretMissing`` when nothing
+        # is stored there) and ``settle_bindings`` holds it for approval.
+        config["secret_ref"] = secret_ref
     # Re-sending the stored wire is not a move, so a connection that already
     # holds the retired value can still be edited.
     if protocol is Protocol.OLLAMA and config.get("protocol") != protocol.value:

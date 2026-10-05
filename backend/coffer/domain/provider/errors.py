@@ -7,7 +7,8 @@ from coffer.domain.error_base import CofferError
 
 class ProviderSecretSourceInvalid(CofferError):  # noqa: N818
     """A provider create must supply EXACTLY one of ``secret_value`` /
-    ``secret_ref`` — not both, not neither. Maps to 422."""
+    ``secret_ref`` — not both, not neither. A PATCH that sends both, or sends
+    either to a connection with no key, is refused with it too. Maps to 422."""
 
     code = "PROVIDER_SECRET_SOURCE_INVALID"
 

@@ -933,8 +933,10 @@ export interface components {
         };
         /**
          * ProviderPatch
-         * @description Partial update. ``secret_ref`` is immutable (it is the vault address
-         *     the connection owns); ``protocol`` is not — the probe that guessed the wire
+         * @description Partial update. The key moves one of two ways, never both at once:
+         *     ``secret_value`` stores a new value for the secret the connection already
+         *     cites, ``secret_ref`` (``secret/<id>``) re-points it at ANOTHER stored
+         *     secret. ``protocol`` is mutable too — the probe that guessed the wire
          *     can be wrong, so it is corrected in place rather than by re-entering the
          *     connection, key and all.
          *
@@ -959,6 +961,8 @@ export interface components {
             /** Models */
             models?: components["schemas"]["ProviderModel"][] | null;
             protocol?: components["schemas"]["Protocol"] | null;
+            /** Secret Ref */
+            secret_ref?: string | null;
             /** Secret Value */
             secret_value?: string | null;
         };

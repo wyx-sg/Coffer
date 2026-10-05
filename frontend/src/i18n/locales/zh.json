@@ -716,7 +716,6 @@
         "secret": "密钥",
         "foundVersion": "已找到 · {{version}}",
         "viewClis": "在 CLI 中查看",
-        "viewSecrets": "在密钥中查看",
         "status": {
           "found": "已找到",
           "not_found": "未找到",
@@ -6088,5 +6087,17 @@
     "workspacePlaceholder": "~/.coffer/content/workspace",
     "openIn": "在 {{terminal}} 中打开",
     "moreTerminals": "在其他终端中打开"
+  },
+  "secretRef": {
+    "replaceOpen": "更换密钥…",
+    "source": "密钥来源",
+    "newValue": "输入新值",
+    "useExisting": "改用其他密钥",
+    "pickPlaceholder": "选择一个已存的密钥",
+    "pickEmpty": "没有其他已存的密钥。",
+    "existingHint": "只有这里改用所选密钥；当前密钥和它的值保持不变。",
+    "title": "更换 {{field}}",
+    "current": "当前密钥",
+    "useSubmit": "改用此密钥"
   }
 }

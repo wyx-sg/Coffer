@@ -7,9 +7,12 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ui/toast";
 import { makeChannel } from "@/test/channelKit";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
+
+vi.mock("@/lib/hooks/useSecrets", () => ({ useSecrets: () => ({ data: { refs: [] } }) }));
 
 const h = vi.hoisted(() => ({ check: {} as Record<string, unknown> }));
 
@@ -41,9 +44,11 @@ function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <ToastProvider>
-        <ChannelReplaceSecretDialog channel={CH} open onOpenChange={() => {}} />
-      </ToastProvider>
+      <MemoryRouter>
+        <ToastProvider>
+          <ChannelReplaceSecretDialog channel={CH} open onOpenChange={() => {}} />
+        </ToastProvider>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
   fireEvent.change(screen.getByLabelText(/^bot token/i), { target: { value: "7314:AAHnewtoken" } });
