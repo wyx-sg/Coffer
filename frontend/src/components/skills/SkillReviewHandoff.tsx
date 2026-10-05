@@ -11,17 +11,20 @@ import { skillsApi } from "@/lib/api/skills";
 interface Props {
   /** The skills to review, in one prompt. */
   uids: string[];
-  /** The main part's name, e.g. "Check with an agent". */
-  label: string;
+  /** The main part's name, given the agent's name, e.g. "Check with Claude Code". */
+  label: (agent: string) => string;
+  /** A note for a row the button stands alone in. */
+  description?: (agent: string | null) => string;
   size?: "sm" | "default";
   help?: boolean;
 }
 
-export function SkillReviewHandoff({ uids, label, size = "sm", help = false }: Props) {
+export function SkillReviewHandoff({ uids, label, description, size = "sm", help = false }: Props) {
   return (
     <AgentHandoff
       prompt={() => skillsApi.reviewHandoff(uids).then((r) => r.prompt)}
       label={label}
+      description={description}
       size={size}
       help={help}
     />

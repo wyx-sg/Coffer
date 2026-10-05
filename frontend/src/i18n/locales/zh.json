@@ -2683,7 +2683,7 @@
     "checkCopies": "检查副本",
     "bulk": {
       "label": "已选技能",
-      "review": "让智能体检查规范",
+      "review": "让 {{agent}} 检查规范",
       "deleteTitle_one": "删除 {{count}} 个技能？",
       "deleteTitle_other": "删除 {{count}} 个技能？",
       "deleteBody": "删除 {{names}} 的主文件夹，并从所有拥有它们的智能体中移除链接。",
@@ -2755,8 +2755,10 @@
     "requires": {
       "unknownTitle": "依赖未知",
       "unknownBody": "依赖未知：这个技能没有声明它需要什么，所以 Coffer 不知道。可以让智能体建议一份声明。",
-      "reviewDeclared": "让智能体检查规范",
-      "reviewUndeclared": "让智能体补充依赖声明",
+      "reviewDeclared": "让 {{agent}} 检查规范",
+      "reviewUndeclared": "让 {{agent}} 补充依赖声明",
+      "reviewNote": "{{agent}} 会读取这个技能，建议它该声明哪些依赖，只改你同意的部分。",
+      "reviewNoteCopy": "复制提示词，让智能体检查这个技能并建议该声明哪些依赖。",
       "emptyTitle": "没有依赖",
       "emptyBody": "这个技能声明了它不需要命令、密钥、工具或技能。",
       "commandsTitle": "命令",

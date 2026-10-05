@@ -196,6 +196,28 @@ describe("AgentHandoff", () => {
     expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
   });
 
+  test("picking the other agent in the menu makes the label name it", async () => {
+    renderHandoff(["claude_code", "codex"], {
+      label: (agent) => `Check with ${agent}`,
+    });
+    expect(await screen.findByRole("button", { name: "Check with Claude Code" })).toBeVisible();
+    const menu = await openMenu();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /^Hand off to Codex/ }));
+    expect(await screen.findByRole("button", { name: "Check with Codex" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Check with Claude Code" })).toBeNull();
+  });
+
+  test("a description names the agent beside the button, and is generic without one", async () => {
+    const description = (agent: string | null) =>
+      agent ? `${agent} reads it.` : "An agent reads it.";
+    const first = renderHandoff(["claude_code"], { description });
+    expect(await screen.findByText("Claude Code reads it.")).toBeVisible();
+    first.unmount();
+    renderHandoff([], { description });
+    expect(await screen.findByText("An agent reads it.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  });
+
   test("the main part names the terminal in its tooltip", async () => {
     renderHandoff(["claude_code"]);
     const main = await screen.findByRole("button", { name: "Hand off to Claude Code" });

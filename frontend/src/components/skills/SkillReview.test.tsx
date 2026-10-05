@@ -77,7 +77,7 @@ describe("reviewing skills with an agent", () => {
         screen.getByText(/doesn’t declare what it needs, so Coffer doesn’t know/),
       ).toBeVisible();
       expect(screen.queryByText("Nothing required")).toBeNull();
-      fireEvent.click(await screen.findByRole("button", { name: "Add requires with an agent" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Add requires with Claude Code" }));
       await waitFor(() => expect(review).toHaveBeenCalledWith(["sk-a"]));
       await waitFor(() =>
         expect(vi.mocked(fsApi.openTerminal)).toHaveBeenCalledWith(
@@ -91,7 +91,9 @@ describe("reviewing skills with an agent", () => {
     tab({ requires_declared: true });
     expect(await screen.findByText("Nothing required")).toBeInTheDocument();
     expect(screen.queryByText("What this skill needs is unknown")).toBeNull();
-    expect(await screen.findByRole("button", { name: "Check with an agent" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Check with Claude Code" }),
+    ).toBeInTheDocument();
   });
 
   acceptance(
@@ -103,8 +105,19 @@ describe("reviewing skills with an agent", () => {
         makeSkill({ uid: "sk-2", name: "two" }),
       ];
       wrap(<SkillsBulkBar skills={skills} total={5} onDone={vi.fn()} />);
-      fireEvent.click(await screen.findByRole("button", { name: "Check with an agent" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Check with Claude Code" }));
       await waitFor(() => expect(review).toHaveBeenCalledWith(["sk-1", "sk-2"]));
     },
   );
+
+  it("names the agent the review goes to and says what it does beside a lone button", async () => {
+    tab({
+      requires_declared: true,
+      requires: [{ command: "jq", min_version: null, profiles: [] }],
+    });
+    expect(await screen.findByRole("button", { name: "Check with Claude Code" })).toBeVisible();
+    expect(
+      screen.getByText(/Claude Code reads this skill and suggests what to declare/),
+    ).toBeVisible();
+  });
 });
